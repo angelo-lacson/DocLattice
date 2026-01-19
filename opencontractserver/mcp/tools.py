@@ -1,9 +1,13 @@
 """MCP Tool implementations for OpenContracts.
 
 Tools provide dynamic operations - they execute queries and return results.
+Supports both global mode (all public corpuses) and corpus-scoped mode
+(single corpus, for shareable MCP links).
 """
 
 from __future__ import annotations
+
+from typing import Any, Callable
 
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Count, Q
@@ -383,4 +387,112 @@ def get_thread_messages(
         "thread_id": str(thread.id),
         "title": thread.title or "",
         "messages": [format_message_with_replies(m, anonymous) for m in root_messages],
+    }
+
+
+# =============================================================================
+# CORPUS-SCOPED TOOL SUPPORT
+# =============================================================================
+# These functions support corpus-scoped MCP endpoints where a corpus_slug is
+# pre-defined in the URL (e.g., /mcp/corpus/{corpus_slug}/) and automatically
+# injected into tool calls.
+
+
+def get_corpus_info(corpus_slug: str) -> dict:
+    """
+    Get detailed information about the scoped corpus.
+
+    This is the scoped equivalent of list_public_corpuses - instead of listing
+    all corpuses, it returns detailed information about the single scoped corpus.
+
+    Args:
+        corpus_slug: Corpus identifier (injected from scoped endpoint)
+
+    Returns:
+        Dict with detailed corpus information including label set
+    """
+    from opencontractserver.corpuses.models import Corpus
+
+    anonymous = AnonymousUser()
+    corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
+
+    # Get label set info if available
+    label_set_data = None
+    if corpus.label_set:
+        labels = []
+        for label in corpus.label_set.annotation_labels.all()[:50]:
+            labels.append(
+                {
+                    "text": label.text,
+                    "color": label.color or "#000000",
+                    "label_type": label.label_type,
+                    "description": label.description or "",
+                }
+            )
+        label_set_data = {
+            "title": corpus.label_set.title or "",
+            "description": corpus.label_set.description or "",
+            "labels": labels,
+        }
+
+    return {
+        "slug": corpus.slug,
+        "title": corpus.title,
+        "description": corpus.description or "",
+        "document_count": corpus.document_count(),
+        "created": corpus.created.isoformat() if corpus.created else None,
+        "modified": corpus.modified.isoformat() if corpus.modified else None,
+        "label_set": label_set_data,
+        "allow_comments": corpus.allow_comments,
+    }
+
+
+def create_scoped_tool_wrapper(
+    tool_func: Callable[..., Any], corpus_slug: str, corpus_slug_param: str = "corpus_slug"
+) -> Callable[..., Any]:
+    """
+    Create a wrapper function that auto-injects corpus_slug into tool calls.
+
+    This allows scoped MCP endpoints to use the same tool implementations
+    while automatically providing the corpus context.
+
+    Args:
+        tool_func: The original tool function
+        corpus_slug: The corpus slug to inject
+        corpus_slug_param: The parameter name for corpus_slug (default: "corpus_slug")
+
+    Returns:
+        Wrapped function that auto-injects corpus_slug
+    """
+    def wrapper(**kwargs: Any) -> Any:
+        # Always inject the scoped corpus_slug, ignoring any provided value
+        kwargs[corpus_slug_param] = corpus_slug
+        return tool_func(**kwargs)
+
+    return wrapper
+
+
+def get_scoped_tool_handlers(corpus_slug: str) -> dict[str, Callable[..., Any]]:
+    """
+    Get tool handlers for a corpus-scoped MCP endpoint.
+
+    Returns a mapping of tool names to handler functions where corpus_slug
+    is automatically injected.
+
+    Args:
+        corpus_slug: The corpus slug to scope all tools to
+
+    Returns:
+        Dict mapping tool names to scoped handler functions
+    """
+    return {
+        # Scoped version: returns info about this specific corpus
+        "get_corpus_info": create_scoped_tool_wrapper(get_corpus_info, corpus_slug),
+        # These tools have corpus_slug auto-injected
+        "list_documents": create_scoped_tool_wrapper(list_documents, corpus_slug),
+        "get_document_text": create_scoped_tool_wrapper(get_document_text, corpus_slug),
+        "list_annotations": create_scoped_tool_wrapper(list_annotations, corpus_slug),
+        "search_corpus": create_scoped_tool_wrapper(search_corpus, corpus_slug),
+        "list_threads": create_scoped_tool_wrapper(list_threads, corpus_slug),
+        "get_thread_messages": create_scoped_tool_wrapper(get_thread_messages, corpus_slug),
     }

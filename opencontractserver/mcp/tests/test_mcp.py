@@ -2564,3 +2564,600 @@ class MCPTelemetryIntegrationTest(TestCase):
             self.assertIsNotNone(result)
         finally:
             loop.close()
+
+
+# =============================================================================
+# CORPUS-SCOPED MCP TESTS
+# =============================================================================
+
+
+class MCPScopedToolsTest(TestCase):
+    """Tests for corpus-scoped MCP tool functionality."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Create test data with documents."""
+        from django.core.files.base import ContentFile
+
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        cls.owner = User.objects.create_user(
+            username="scopedtoolsowner",
+            email="scopedtools@test.com",
+            password="testpass123",
+        )
+
+        # Create public corpus
+        cls.corpus = Corpus.objects.create(
+            title="Scoped Test Corpus",
+            description="Test corpus for scoped tools",
+            creator=cls.owner,
+            is_public=True,
+            allow_comments=True,
+        )
+
+        # Create private corpus (should not be accessible)
+        cls.private_corpus = Corpus.objects.create(
+            title="Private Scoped Corpus",
+            creator=cls.owner,
+            is_public=False,
+        )
+
+        # Create documents
+        cls.doc1 = Document.objects.create(
+            title="Scoped Document One",
+            description="First scoped document",
+            creator=cls.owner,
+            is_public=True,
+            page_count=5,
+        )
+        cls.doc1.txt_extract_file.save(
+            "scoped_doc1.txt", ContentFile(b"Scoped document text content.")
+        )
+
+        cls.doc2 = Document.objects.create(
+            title="Scoped Document Two",
+            description="Second scoped document",
+            creator=cls.owner,
+            is_public=True,
+            page_count=10,
+        )
+
+        # Link documents to corpus via DocumentPath
+        DocumentPath.objects.create(
+            document=cls.doc1,
+            corpus=cls.corpus,
+            path="/scoped_doc1.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=cls.owner,
+        )
+        DocumentPath.objects.create(
+            document=cls.doc2,
+            corpus=cls.corpus,
+            path="/scoped_doc2.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=cls.owner,
+        )
+
+    def test_get_corpus_info(self):
+        """Test get_corpus_info tool returns detailed corpus information."""
+        from opencontractserver.mcp.tools import get_corpus_info
+
+        result = get_corpus_info(self.corpus.slug)
+
+        self.assertEqual(result["slug"], self.corpus.slug)
+        self.assertEqual(result["title"], "Scoped Test Corpus")
+        self.assertEqual(result["description"], "Test corpus for scoped tools")
+        self.assertEqual(result["document_count"], 2)
+        self.assertTrue(result["allow_comments"])
+        self.assertIn("created", result)
+        self.assertIn("modified", result)
+
+    def test_get_corpus_info_private_denied(self):
+        """Test get_corpus_info denies access to private corpus."""
+        from opencontractserver.mcp.tools import get_corpus_info
+
+        with self.assertRaises(Corpus.DoesNotExist):
+            get_corpus_info(self.private_corpus.slug)
+
+    def test_create_scoped_tool_wrapper(self):
+        """Test scoped tool wrapper auto-injects corpus_slug."""
+        from opencontractserver.mcp.tools import (
+            create_scoped_tool_wrapper,
+            list_documents,
+        )
+
+        # Create a wrapper that auto-injects corpus_slug
+        wrapped = create_scoped_tool_wrapper(list_documents, self.corpus.slug)
+
+        # Call without corpus_slug - should work because it's auto-injected
+        result = wrapped(limit=10)
+
+        self.assertIn("total_count", result)
+        self.assertEqual(result["total_count"], 2)
+
+    def test_create_scoped_tool_wrapper_overrides_provided_slug(self):
+        """Test scoped wrapper overrides any provided corpus_slug."""
+        from opencontractserver.mcp.tools import (
+            create_scoped_tool_wrapper,
+            list_documents,
+        )
+
+        wrapped = create_scoped_tool_wrapper(list_documents, self.corpus.slug)
+
+        # Try to provide a different corpus_slug - should be ignored
+        result = wrapped(corpus_slug="some-other-corpus", limit=10)
+
+        # Should still return results from the scoped corpus
+        self.assertEqual(result["total_count"], 2)
+
+    def test_get_scoped_tool_handlers(self):
+        """Test get_scoped_tool_handlers returns all expected tools."""
+        from opencontractserver.mcp.tools import get_scoped_tool_handlers
+
+        handlers = get_scoped_tool_handlers(self.corpus.slug)
+
+        # Should have all scoped tools
+        expected_tools = [
+            "get_corpus_info",
+            "list_documents",
+            "get_document_text",
+            "list_annotations",
+            "search_corpus",
+            "list_threads",
+            "get_thread_messages",
+        ]
+
+        for tool in expected_tools:
+            self.assertIn(tool, handlers)
+            self.assertTrue(callable(handlers[tool]))
+
+    def test_scoped_list_documents(self):
+        """Test scoped list_documents works without explicit corpus_slug."""
+        from opencontractserver.mcp.tools import get_scoped_tool_handlers
+
+        handlers = get_scoped_tool_handlers(self.corpus.slug)
+
+        # Call list_documents without corpus_slug
+        result = handlers["list_documents"](limit=50)
+
+        self.assertIn("documents", result)
+        self.assertEqual(result["total_count"], 2)
+
+    def test_scoped_get_document_text(self):
+        """Test scoped get_document_text works without explicit corpus_slug."""
+        from opencontractserver.mcp.tools import get_scoped_tool_handlers
+
+        handlers = get_scoped_tool_handlers(self.corpus.slug)
+
+        # Call get_document_text with only document_slug
+        result = handlers["get_document_text"](document_slug=self.doc1.slug)
+
+        self.assertEqual(result["document_slug"], self.doc1.slug)
+        self.assertEqual(result["page_count"], 5)
+
+
+class MCPScopedServerTest(TestCase):
+    """Tests for corpus-scoped MCP server functionality."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Create test data."""
+        cls.owner = User.objects.create_user(
+            username="scopedserverowner",
+            email="scopedserver@test.com",
+            password="testpass123",
+        )
+
+        cls.corpus = Corpus.objects.create(
+            title="Scoped Server Test Corpus",
+            description="Test corpus for scoped server",
+            creator=cls.owner,
+            is_public=True,
+        )
+
+    def test_create_scoped_mcp_server(self):
+        """Test creating a scoped MCP server."""
+        from opencontractserver.mcp.server import create_scoped_mcp_server
+
+        server = create_scoped_mcp_server(self.corpus.slug)
+
+        self.assertIsNotNone(server)
+        self.assertEqual(server.name, f"opencontracts-corpus-{self.corpus.slug}")
+
+    def test_get_scoped_tool_definitions(self):
+        """Test scoped tool definitions don't require corpus_slug."""
+        from opencontractserver.mcp.server import get_scoped_tool_definitions
+
+        tools = get_scoped_tool_definitions(self.corpus.slug)
+
+        # Should have the expected tools
+        tool_names = [t.name for t in tools]
+        self.assertIn("get_corpus_info", tool_names)
+        self.assertIn("list_documents", tool_names)
+        self.assertIn("search_corpus", tool_names)
+
+        # list_documents should not require corpus_slug
+        list_docs_tool = next(t for t in tools if t.name == "list_documents")
+        required = list_docs_tool.inputSchema.get("required", [])
+        self.assertNotIn("corpus_slug", required)
+
+        # search_corpus should only require query
+        search_tool = next(t for t in tools if t.name == "search_corpus")
+        self.assertEqual(search_tool.inputSchema.get("required", []), ["query"])
+
+    def test_get_scoped_resource_definitions(self):
+        """Test scoped resource definitions include corpus slug."""
+        from opencontractserver.mcp.server import get_scoped_resource_definitions
+
+        resources = get_scoped_resource_definitions(self.corpus.slug)
+
+        # Should have resources
+        self.assertTrue(len(resources) >= 4)
+
+        # Corpus resource should have the scoped slug
+        corpus_resource = next(r for r in resources if r.name == "Corpus")
+        self.assertEqual(corpus_resource.uri, f"corpus://{self.corpus.slug}")
+
+    def test_get_scoped_session_manager(self):
+        """Test getting/creating scoped session manager."""
+        from opencontractserver.mcp.server import get_scoped_session_manager
+
+        manager = get_scoped_session_manager(self.corpus.slug)
+        self.assertIsNotNone(manager)
+
+        # Getting it again should return the same instance
+        manager2 = get_scoped_session_manager(self.corpus.slug)
+        self.assertIs(manager, manager2)
+
+    def test_get_scoped_lifespan_manager(self):
+        """Test getting/creating scoped lifespan manager."""
+        from opencontractserver.mcp.server import get_scoped_lifespan_manager
+
+        manager = get_scoped_lifespan_manager(self.corpus.slug)
+        self.assertIsNotNone(manager)
+        self.assertEqual(manager.corpus_slug, self.corpus.slug)
+
+        # Getting it again should return the same instance
+        manager2 = get_scoped_lifespan_manager(self.corpus.slug)
+        self.assertIs(manager, manager2)
+
+    def test_validate_corpus_slug_valid(self):
+        """Test validate_corpus_slug returns True for valid public corpus."""
+        import asyncio
+
+        from opencontractserver.mcp.server import validate_corpus_slug
+
+        async def run_test():
+            return await validate_corpus_slug(self.corpus.slug)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertTrue(result)
+        finally:
+            loop.close()
+
+    def test_validate_corpus_slug_invalid(self):
+        """Test validate_corpus_slug returns False for nonexistent corpus."""
+        import asyncio
+
+        from opencontractserver.mcp.server import validate_corpus_slug
+
+        async def run_test():
+            return await validate_corpus_slug("nonexistent-corpus-slug")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            self.assertFalse(result)
+        finally:
+            loop.close()
+
+
+class MCPScopedASGIRoutingTest(TestCase):
+    """Tests for corpus-scoped ASGI routing."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Create test data."""
+        cls.owner = User.objects.create_user(
+            username="scopedasgiowner",
+            email="scopedasgi@test.com",
+            password="testpass123",
+        )
+
+        cls.corpus = Corpus.objects.create(
+            title="ASGI Routing Test Corpus",
+            description="Test corpus for ASGI routing",
+            creator=cls.owner,
+            is_public=True,
+        )
+
+        cls.private_corpus = Corpus.objects.create(
+            title="Private ASGI Corpus",
+            creator=cls.owner,
+            is_public=False,
+        )
+
+    def test_asgi_routes_scoped_corpus_path(self):
+        """Test ASGI app routes /mcp/corpus/{slug}/ to scoped handler."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            # Mock the scoped handlers to verify they're called
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock()
+
+            mock_manager = AsyncMock()
+            mock_manager.handle_request = AsyncMock()
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.corpus.slug}/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            with patch(
+                "opencontractserver.mcp.server.get_scoped_lifespan_manager",
+                return_value=mock_lifespan,
+            ), patch(
+                "opencontractserver.mcp.server.get_scoped_session_manager",
+                return_value=mock_manager,
+            ):
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+            # Verify scoped handlers were called
+            mock_lifespan.ensure_started.assert_called_once()
+            mock_manager.handle_request.assert_called_once()
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_asgi_returns_404_for_private_corpus(self):
+        """Test ASGI app returns 404 for private corpus."""
+        import asyncio
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.private_corpus.slug}/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            app = create_mcp_asgi_app()
+            await app(scope, mock_receive, mock_send)
+
+            return received_messages
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            # Should get a 404 response
+            self.assertTrue(len(result) >= 2)
+            self.assertEqual(result[0]["type"], "http.response.start")
+            self.assertEqual(result[0]["status"], 404)
+            body = json.loads(result[1]["body"])
+            self.assertIn("not found or not public", body["error"])
+        finally:
+            loop.close()
+
+    def test_asgi_returns_404_for_nonexistent_corpus(self):
+        """Test ASGI app returns 404 for nonexistent corpus."""
+        import asyncio
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            scope = {
+                "type": "http",
+                "path": "/mcp/corpus/nonexistent-corpus-slug/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            app = create_mcp_asgi_app()
+            await app(scope, mock_receive, mock_send)
+
+            return received_messages
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            # Should get a 404 response
+            self.assertEqual(result[0]["status"], 404)
+            body = json.loads(result[1]["body"])
+            self.assertIn("not found or not public", body["error"])
+        finally:
+            loop.close()
+
+    def test_asgi_handles_corpus_path_without_trailing_slash(self):
+        """Test ASGI app handles /mcp/corpus/{slug} without trailing slash."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock()
+
+            mock_manager = AsyncMock()
+            mock_manager.handle_request = AsyncMock()
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.corpus.slug}",  # No trailing slash
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                pass
+
+            with patch(
+                "opencontractserver.mcp.server.get_scoped_lifespan_manager",
+                return_value=mock_lifespan,
+            ), patch(
+                "opencontractserver.mcp.server.get_scoped_session_manager",
+                return_value=mock_manager,
+            ):
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+            # Verify scoped handlers were still called
+            mock_lifespan.ensure_started.assert_called_once()
+            mock_manager.handle_request.assert_called_once()
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_http_router_routes_corpus_scoped_to_mcp(self):
+        """Test HTTP router routes /mcp/corpus/* to MCP app."""
+        import asyncio
+
+        from config.asgi import create_http_router
+
+        mcp_called = []
+
+        async def mock_mcp_app(scope, receive, send):
+            mcp_called.append(scope["path"])
+
+        async def mock_django_app(scope, receive, send):
+            pass
+
+        router = create_http_router(mock_django_app, mock_mcp_app)
+
+        async def run_test():
+            async def mock_receive():
+                return {"type": "http.disconnect"}
+
+            async def mock_send(message):
+                pass
+
+            # Test /mcp/corpus/{slug}/ routes to MCP
+            await router(
+                {"type": "http", "path": f"/mcp/corpus/{self.corpus.slug}/"},
+                mock_receive,
+                mock_send,
+            )
+            await router(
+                {"type": "http", "path": f"/mcp/corpus/{self.corpus.slug}"},
+                mock_receive,
+                mock_send,
+            )
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+        self.assertIn(f"/mcp/corpus/{self.corpus.slug}/", mcp_called)
+        self.assertIn(f"/mcp/corpus/{self.corpus.slug}", mcp_called)
+
+
+class MCPScopedEndpointInfoTest(TestCase):
+    """Tests for scoped endpoint info in 404 responses."""
+
+    def test_404_includes_corpus_scoped_endpoint_info(self):
+        """Test 404 response includes corpus-scoped endpoint info."""
+        import asyncio
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.disconnect"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            scope = {
+                "type": "http",
+                "path": "/unknown/path",
+                "method": "GET",
+                "query_string": b"",
+                "headers": [],
+            }
+
+            app = create_mcp_asgi_app()
+            await app(scope, mock_receive, mock_send)
+
+            return received_messages
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_test())
+            body = json.loads(result[1]["body"])
+
+            # Should include corpus_scoped endpoint info
+            self.assertIn("corpus_scoped", body["endpoints"])
+            corpus_scoped = body["endpoints"]["corpus_scoped"]
+            self.assertEqual(corpus_scoped["path"], "/mcp/corpus/{corpus_slug}/")
+            self.assertIn("shareable", corpus_scoped["description"].lower())
+        finally:
+            loop.close()

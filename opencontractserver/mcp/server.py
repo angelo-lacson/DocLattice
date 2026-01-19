@@ -44,7 +44,9 @@ from .telemetry import (
     set_request_context,
 )
 from .tools import (
+    get_corpus_info,
     get_document_text,
+    get_scoped_tool_handlers,
     get_thread_messages,
     list_annotations,
     list_documents,
@@ -365,6 +367,288 @@ def create_mcp_server() -> Server:
 # Create the global MCP server instance
 mcp_server = create_mcp_server()
 
+
+# =============================================================================
+# CORPUS-SCOPED MCP SERVER SUPPORT
+# =============================================================================
+# Supports scoped MCP endpoints at /mcp/corpus/{corpus_slug}/ where all tools
+# are automatically scoped to a specific corpus.
+
+
+def get_scoped_tool_definitions(corpus_slug: str) -> list[Tool]:
+    """
+    Get tool definitions for a corpus-scoped MCP endpoint.
+
+    These tools have corpus_slug removed from required parameters since it's
+    auto-injected from the URL path.
+
+    Args:
+        corpus_slug: The corpus slug this endpoint is scoped to
+
+    Returns:
+        List of Tool definitions for the scoped endpoint
+    """
+    return [
+        Tool(
+            name="get_corpus_info",
+            description=f"Get detailed information about the '{corpus_slug}' corpus",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="list_documents",
+            description=f"List documents in the '{corpus_slug}' corpus",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 50},
+                    "offset": {"type": "integer", "default": 0},
+                    "search": {"type": "string", "default": ""},
+                },
+            },
+        ),
+        Tool(
+            name="get_document_text",
+            description="Get full extracted text from a document",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "document_slug": {
+                        "type": "string",
+                        "description": "Document identifier",
+                    },
+                },
+                "required": ["document_slug"],
+            },
+        ),
+        Tool(
+            name="list_annotations",
+            description="List annotations on a document",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "document_slug": {"type": "string"},
+                    "page": {
+                        "type": "integer",
+                        "description": "Filter to page number",
+                    },
+                    "label_text": {
+                        "type": "string",
+                        "description": "Filter by label text",
+                    },
+                    "limit": {"type": "integer", "default": 100},
+                    "offset": {"type": "integer", "default": 0},
+                },
+                "required": ["document_slug"],
+            },
+        ),
+        Tool(
+            name="search_corpus",
+            description=f"Semantic search within the '{corpus_slug}' corpus",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "limit": {"type": "integer", "default": 10},
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="list_threads",
+            description=f"List discussion threads in the '{corpus_slug}' corpus",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "document_slug": {
+                        "type": "string",
+                        "description": "Optional document filter",
+                    },
+                    "limit": {"type": "integer", "default": 20},
+                    "offset": {"type": "integer", "default": 0},
+                },
+            },
+        ),
+        Tool(
+            name="get_thread_messages",
+            description="Get messages in a thread",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "thread_id": {"type": "integer"},
+                    "flatten": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Return flat list",
+                    },
+                },
+                "required": ["thread_id"],
+            },
+        ),
+    ]
+
+
+def get_scoped_resource_definitions(corpus_slug: str) -> list[Resource]:
+    """
+    Get resource definitions for a corpus-scoped MCP endpoint.
+
+    Args:
+        corpus_slug: The corpus slug this endpoint is scoped to
+
+    Returns:
+        List of Resource definitions for the scoped endpoint
+    """
+    return [
+        Resource(
+            uri=f"corpus://{corpus_slug}",
+            name="Corpus",
+            description=f"Access the '{corpus_slug}' corpus metadata and contents",
+            mimeType="application/json",
+        ),
+        Resource(
+            uri=f"document://{corpus_slug}/{{document_slug}}",
+            name="Document",
+            description="Access document with extracted text",
+            mimeType="application/json",
+        ),
+        Resource(
+            uri=f"annotation://{corpus_slug}/{{document_slug}}/{{annotation_id}}",
+            name="Annotation",
+            description="Access specific annotation on a document",
+            mimeType="application/json",
+        ),
+        Resource(
+            uri=f"thread://{corpus_slug}/threads/{{thread_id}}",
+            name="Discussion Thread",
+            description="Access discussion thread with messages",
+            mimeType="application/json",
+        ),
+    ]
+
+
+def create_scoped_mcp_server(corpus_slug: str) -> Server:
+    """
+    Create an MCP server instance scoped to a specific corpus.
+
+    All tools will automatically operate within the context of the specified corpus.
+
+    Args:
+        corpus_slug: The corpus slug to scope the server to
+
+    Returns:
+        Configured MCP Server instance scoped to the corpus
+    """
+    scoped_server = Server(f"opencontracts-corpus-{corpus_slug}")
+
+    # Get scoped tool handlers
+    scoped_handlers = get_scoped_tool_handlers(corpus_slug)
+
+    @scoped_server.list_resources()
+    async def list_resources() -> list[Resource]:
+        """List available resources for this scoped corpus."""
+        return get_scoped_resource_definitions(corpus_slug)
+
+    # Resource handler - reuse the global handler (it validates corpus access)
+    scoped_server.read_resource()(read_resource_handler)
+
+    @scoped_server.list_tools()
+    async def list_tools() -> list[Tool]:
+        """List available tools for this scoped corpus."""
+        return get_scoped_tool_definitions(corpus_slug)
+
+    @scoped_server.call_tool()
+    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+        """Execute scoped tool and return results."""
+        handler = scoped_handlers.get(name)
+        if not handler:
+            record_mcp_tool_call(name, success=False, error_type="UnknownTool")
+            raise ValueError(f"Unknown tool: {name}")
+
+        try:
+            # Run synchronous Django ORM handlers in thread pool
+            result = await sync_to_async(handler)(**arguments)
+            record_mcp_tool_call(name, success=True)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        except Exception as e:
+            record_mcp_tool_call(name, success=False, error_type=type(e).__name__)
+            raise
+
+    return scoped_server
+
+
+# Cache for scoped session managers to avoid creating multiple instances
+_scoped_session_managers: dict[str, StreamableHTTPSessionManager] = {}
+_scoped_lifespan_managers: dict[str, "ScopedMCPLifespanManager"] = {}
+
+
+class ScopedMCPLifespanManager:
+    """
+    Manages the lifecycle of a scoped MCP session manager.
+    """
+
+    def __init__(self, corpus_slug: str):
+        self.corpus_slug = corpus_slug
+        self._started = False
+        self._run_context = None
+        self._lock = asyncio.Lock()
+
+    async def ensure_started(self):
+        """Ensure the scoped session manager is running."""
+        async with self._lock:
+            if not self._started:
+                manager = get_scoped_session_manager(self.corpus_slug)
+                self._run_context = manager.run()
+                await self._run_context.__aenter__()
+                self._started = True
+                logger.info(
+                    f"MCP Scoped StreamableHTTP session manager started for corpus: {self.corpus_slug}"
+                )
+
+
+def get_scoped_session_manager(corpus_slug: str) -> StreamableHTTPSessionManager:
+    """Get or create a session manager for a corpus-scoped MCP endpoint."""
+    global _scoped_session_managers
+    if corpus_slug not in _scoped_session_managers:
+        scoped_server = create_scoped_mcp_server(corpus_slug)
+        _scoped_session_managers[corpus_slug] = StreamableHTTPSessionManager(
+            app=scoped_server,
+            event_store=None,
+            json_response=False,
+            stateless=True,
+        )
+    return _scoped_session_managers[corpus_slug]
+
+
+def get_scoped_lifespan_manager(corpus_slug: str) -> ScopedMCPLifespanManager:
+    """Get or create a lifespan manager for a corpus-scoped MCP endpoint."""
+    global _scoped_lifespan_managers
+    if corpus_slug not in _scoped_lifespan_managers:
+        _scoped_lifespan_managers[corpus_slug] = ScopedMCPLifespanManager(corpus_slug)
+    return _scoped_lifespan_managers[corpus_slug]
+
+
+async def validate_corpus_slug(corpus_slug: str) -> bool:
+    """
+    Validate that a corpus slug exists and is publicly accessible.
+
+    Args:
+        corpus_slug: The corpus slug to validate
+
+    Returns:
+        True if the corpus exists and is public, False otherwise
+    """
+    from django.contrib.auth.models import AnonymousUser
+
+    from opencontractserver.corpuses.models import Corpus
+
+    def _check():
+        anonymous = AnonymousUser()
+        return Corpus.objects.visible_to_user(anonymous).filter(slug=corpus_slug).exists()
+
+    return await sync_to_async(_check)()
+
 # Session manager for stateless HTTP transport
 # Stateless mode = no session handshake required, each request is independent
 # This avoids the "Received request before initialization was complete" bug
@@ -449,13 +733,17 @@ def create_mcp_asgi_app():
     """
     Create an ASGI application that handles MCP requests.
 
-    Supports two transports:
+    Supports multiple transports and scoping modes:
     - Streamable HTTP at /mcp (recommended, stateless mode)
+    - Corpus-scoped HTTP at /mcp/corpus/{corpus_slug}/ (scoped to single corpus)
     - SSE at /sse (deprecated, for backward compatibility)
 
     All requests are delegated to the appropriate transport handler.
     Telemetry context is set for each request to track client IP and transport.
     """
+    # Regex to match corpus-scoped endpoints: /mcp/corpus/{slug}/ or /mcp/corpus/{slug}
+    import re
+    corpus_path_pattern = re.compile(r"^/mcp/corpus/([A-Za-z0-9\-]+)/?$")
 
     async def app(scope, receive, send):
         if scope["type"] != "http":
@@ -463,7 +751,78 @@ def create_mcp_asgi_app():
 
         path = scope.get("path", "")
 
-        # Handle Streamable HTTP endpoint (recommended)
+        # Check for corpus-scoped endpoint: /mcp/corpus/{corpus_slug}/
+        corpus_match = corpus_path_pattern.match(path)
+        if corpus_match:
+            corpus_slug = corpus_match.group(1)
+
+            # Set telemetry context for this request
+            client_ip = get_client_ip_from_scope(scope)
+            set_request_context(client_ip=client_ip, transport="streamable_http_scoped")
+
+            # Validate the corpus exists and is public
+            if not await validate_corpus_slug(corpus_slug):
+                try:
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 404,
+                            "headers": [[b"content-type", b"application/json"]],
+                        }
+                    )
+                    await send(
+                        {
+                            "type": "http.response.body",
+                            "body": json.dumps(
+                                {
+                                    "error": f"Corpus '{corpus_slug}' not found or not public",
+                                    "hint": "Use /mcp/corpus/{corpus_slug}/ with a valid public corpus slug",
+                                }
+                            ).encode(),
+                        }
+                    )
+                finally:
+                    clear_request_context()
+                return
+
+            # Ensure scoped session manager is running
+            scoped_lifespan = get_scoped_lifespan_manager(corpus_slug)
+            await scoped_lifespan.ensure_started()
+
+            scoped_manager = get_scoped_session_manager(corpus_slug)
+            try:
+                await scoped_manager.handle_request(scope, receive, send)
+                record_mcp_request(
+                    f"/mcp/corpus/{corpus_slug}",
+                    method=scope.get("method", "POST"),
+                    success=True,
+                )
+            except Exception as e:
+                logger.error(f"MCP Scoped Streamable HTTP request error: {e}")
+                record_mcp_request(
+                    f"/mcp/corpus/{corpus_slug}",
+                    method=scope.get("method", "POST"),
+                    success=False,
+                    error_type=type(e).__name__,
+                )
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 500,
+                        "headers": [[b"content-type", b"application/json"]],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": json.dumps({"error": str(e)}).encode(),
+                    }
+                )
+            finally:
+                clear_request_context()
+            return
+
+        # Handle global Streamable HTTP endpoint (recommended)
         if path == "/mcp/" or path == "/mcp":
             # Set telemetry context for this request
             client_ip = get_client_ip_from_scope(scope)
@@ -564,6 +923,11 @@ def create_mcp_asgi_app():
                                         "path": "/mcp",
                                         "methods": ["POST", "GET"],
                                         "description": "MCP Streamable HTTP endpoint (recommended)",
+                                    },
+                                    "corpus_scoped": {
+                                        "path": "/mcp/corpus/{corpus_slug}/",
+                                        "methods": ["POST", "GET"],
+                                        "description": "Corpus-scoped MCP endpoint (shareable link for single corpus)",
                                     },
                                     "sse": {
                                         "path": "/sse",
