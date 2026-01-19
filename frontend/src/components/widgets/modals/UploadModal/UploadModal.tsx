@@ -133,10 +133,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setSelectedCorpus(null);
       uploadState.reset();
 
-      // Load preloaded files if provided
-      if (preloadedFiles && preloadedFiles.length > 0) {
-        uploadState.addFiles(preloadedFiles);
-      }
+      // Note: preloadedFiles are handled in a separate effect to handle
+      // timing issues with React batching (files may arrive after modal opens)
 
       // Set mode based on force or default
       setMode(forceMode || "single");
@@ -146,7 +144,29 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       // Clean up on close
       setError(null);
     }
-  }, [open, forceMode, preloadedFiles]);
+  }, [open, forceMode]);
+
+  // Handle preloaded files arriving (may come after modal opens due to React batching)
+  // This is separate from the open transition effect to handle timing issues
+  const preloadedFilesProcessedRef = useRef(false);
+
+  useEffect(() => {
+    // Only process preloaded files once per modal open, and only when modal is open
+    if (
+      open &&
+      preloadedFiles &&
+      preloadedFiles.length > 0 &&
+      !preloadedFilesProcessedRef.current
+    ) {
+      preloadedFilesProcessedRef.current = true;
+      uploadState.addFiles(preloadedFiles);
+    }
+
+    // Reset the processed flag when modal closes
+    if (!open) {
+      preloadedFilesProcessedRef.current = false;
+    }
+  }, [open, preloadedFiles, uploadState]);
 
   // Handle file selection
   const handleFilesSelected = useCallback(
