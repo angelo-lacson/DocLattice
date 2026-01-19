@@ -66,6 +66,20 @@ export const UPLOAD = {
   MAX_FILE_SIZE_BYTES: 100 * 1024 * 1024,
   /** Maximum file size display string */
   MAX_FILE_SIZE_DISPLAY: "100MB",
+  /** Progress percentage shown while bulk upload is in flight (before completion) */
+  BULK_PROGRESS_INITIAL: 50,
+  /** Maximum number of corpuses to show in the inline selector preview */
+  CORPUS_PREVIEW_LIMIT: 5,
+} as const;
+
+// Document metadata constraints
+export const DOCUMENT_METADATA = {
+  /** Maximum title length in characters */
+  MAX_TITLE_LENGTH: 255,
+  /** Maximum description length in characters */
+  MAX_DESCRIPTION_LENGTH: 2000,
+  /** Maximum slug length in characters */
+  MAX_SLUG_LENGTH: 100,
 } as const;
 
 // Polling constants (legacy - most polling replaced by WebSocket notifications)

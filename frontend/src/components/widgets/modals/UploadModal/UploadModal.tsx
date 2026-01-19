@@ -24,6 +24,8 @@ import {
   EditPanel,
   EditPanelHeader,
   ErrorMessage,
+  InlineCorpusItem,
+  CorpusListContainer,
 } from "./UploadModalStyles";
 import {
   FileDropZone,
@@ -42,6 +44,10 @@ import {
   FileDetails,
 } from "./hooks";
 import { CorpusType } from "../../../../types/graphql-api";
+import {
+  UPLOAD,
+  DOCUMENT_METADATA,
+} from "../../../../assets/configurations/constants";
 
 export interface UploadModalProps {
   open: boolean;
@@ -99,7 +105,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const prevOpenRef = useRef(false);
 
   // File upload state for single mode
+  // Destructure to avoid dependency array issues (uploadState object changes every render)
   const uploadState = useUploadState();
+  const {
+    addFiles: uploadStateAddFiles,
+    reset: uploadStateReset,
+    setFileStatus: uploadStateSetFileStatus,
+  } = uploadState;
 
   // Corpus search hook - needed for both single mode (corpus step) and bulk mode (inline selector)
   const corpusSearch = useCorpusSearch({
@@ -109,9 +121,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   // Upload mutations
   const uploadMutations = useUploadMutations({
-    corpusId: corpusId || selectedCorpus?.id || undefined,
-    folderId: folderId || undefined,
-    onFileStatusChange: uploadState.setFileStatus,
+    corpusId: corpusId ?? selectedCorpus?.id ?? undefined,
+    folderId: folderId ?? undefined,
+    onFileStatusChange: uploadStateSetFileStatus,
     onComplete: () => {
       onUploadComplete?.();
       refetch?.();
@@ -131,7 +143,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setZipFile(null);
       setZipUploadProgress(0);
       setSelectedCorpus(null);
-      uploadState.reset();
+      uploadStateReset();
 
       // Note: preloadedFiles are handled in a separate effect to handle
       // timing issues with React batching (files may arrive after modal opens)
@@ -159,14 +171,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       !preloadedFilesProcessedRef.current
     ) {
       preloadedFilesProcessedRef.current = true;
-      uploadState.addFiles(preloadedFiles);
+      uploadStateAddFiles(preloadedFiles);
     }
 
     // Reset the processed flag when modal closes
     if (!open) {
       preloadedFilesProcessedRef.current = false;
     }
-  }, [open, preloadedFiles, uploadState]);
+  }, [open, preloadedFiles, uploadStateAddFiles]);
 
   // Handle file selection
   const handleFilesSelected = useCallback(
@@ -211,13 +223,26 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const isFormValid = useCallback(() => {
     if (!uploadState.hasFiles) return false;
 
-    // Check all files have required fields (with null guards)
-    return uploadState.files.every(
-      (pkg) =>
-        pkg.formData &&
-        pkg.formData.title?.trim().length > 0 &&
-        pkg.formData.description?.trim().length > 0
-    );
+    // Check all files have required fields with length constraints
+    return uploadState.files.every((pkg) => {
+      if (!pkg.formData) return false;
+
+      const title = pkg.formData.title?.trim() ?? "";
+      const description = pkg.formData.description?.trim() ?? "";
+      const slug = pkg.formData.slug?.trim() ?? "";
+
+      // Required fields must be non-empty and within limits
+      const titleValid =
+        title.length > 0 && title.length <= DOCUMENT_METADATA.MAX_TITLE_LENGTH;
+      const descriptionValid =
+        description.length > 0 &&
+        description.length <= DOCUMENT_METADATA.MAX_DESCRIPTION_LENGTH;
+      // Slug is optional but if provided must be within limits
+      const slugValid =
+        slug.length === 0 || slug.length <= DOCUMENT_METADATA.MAX_SLUG_LENGTH;
+
+      return titleValid && descriptionValid && slugValid;
+    });
   }, [uploadState.files, uploadState.hasFiles]);
 
   // Handle step navigation
@@ -265,7 +290,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     if (!zipFile) return;
 
     setError(null);
-    setZipUploadProgress(50);
+    setZipUploadProgress(UPLOAD.BULK_PROGRESS_INITIAL);
 
     const success = await uploadMutations.uploadZipFile(
       zipFile,
@@ -279,6 +304,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       onClose();
     } else {
       setZipUploadProgress(0);
+      // Show visible error in modal (toast is also shown in mutation hook)
+      setError("Upload failed. Please check the file and try again.");
     }
   }, [
     zipFile,
@@ -394,34 +421,25 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   fullWidth
                 />
                 {corpusSearch.corpuses.length > 0 && (
-                  <div style={{ marginTop: "var(--oc-spacing-sm)" }}>
-                    {corpusSearch.corpuses.slice(0, 5).map((corpus) => (
-                      <div
-                        key={corpus.id}
-                        onClick={() =>
-                          setSelectedCorpus(
-                            selectedCorpus?.id === corpus.id ? null : corpus
-                          )
-                        }
-                        style={{
-                          padding: "var(--oc-spacing-sm)",
-                          cursor: "pointer",
-                          borderRadius: "var(--oc-radius-md)",
-                          background:
-                            selectedCorpus?.id === corpus.id
-                              ? "rgba(15, 118, 110, 0.1)"
-                              : "transparent",
-                          border:
-                            selectedCorpus?.id === corpus.id
-                              ? "1px solid var(--oc-accent)"
-                              : "1px solid transparent",
-                          marginBottom: "var(--oc-spacing-xs)",
-                        }}
-                      >
-                        <div style={{ fontWeight: 500 }}>{corpus.title}</div>
-                      </div>
-                    ))}
-                  </div>
+                  <CorpusListContainer>
+                    {corpusSearch.corpuses
+                      .slice(0, UPLOAD.CORPUS_PREVIEW_LIMIT)
+                      .map((corpus) => (
+                        <InlineCorpusItem
+                          key={corpus.id}
+                          $selected={selectedCorpus?.id === corpus.id}
+                          onClick={() =>
+                            setSelectedCorpus(
+                              selectedCorpus?.id === corpus.id ? null : corpus
+                            )
+                          }
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className="corpus-title">{corpus.title}</div>
+                        </InlineCorpusItem>
+                      ))}
+                  </CorpusListContainer>
                 )}
               </FormSection>
 

@@ -145,10 +145,12 @@ export function useUploadMutations({
           toast.error(result.data?.uploadDocument?.message || "Upload failed");
           return false;
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("[UPLOAD] Upload error:", error);
         onFileStatusChange(index, "failed");
-        toast.error(error.message || "Upload failed");
+        const message =
+          error instanceof Error ? error.message : "Upload failed";
+        toast.error(message);
         return false;
       }
     },
@@ -205,10 +207,12 @@ export function useUploadMutations({
               result.data?.uploadDocument?.message || "Upload failed"
             );
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error("[UPLOAD] Upload error:", error);
           onFileStatusChange(index, "failed");
-          toast.error(error.message || "Upload failed");
+          const message =
+            error instanceof Error ? error.message : "Upload failed";
+          toast.error(message);
         }
       }
 
@@ -266,12 +270,20 @@ export function useUploadMutations({
             result.data?.uploadDocumentsZip.message || "Upload failed"
           );
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("[UPLOAD] ZIP upload error:", error);
-        const errorMessage =
-          error.graphQLErrors?.[0]?.message ||
-          error.message ||
-          "An unexpected error occurred";
+        // Handle GraphQL errors and standard errors
+        let errorMessage = "An unexpected error occurred";
+        if (error instanceof Error) {
+          // Check for Apollo GraphQL error structure
+          const apolloError = error as Error & {
+            graphQLErrors?: Array<{ message: string }>;
+          };
+          errorMessage =
+            apolloError.graphQLErrors?.[0]?.message ||
+            error.message ||
+            errorMessage;
+        }
         toast.error(`Upload failed: ${errorMessage}`);
         return false;
       }

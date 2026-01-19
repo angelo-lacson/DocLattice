@@ -696,3 +696,31 @@ export const EmptyState = styled.div`
     font-size: var(--oc-font-size-sm);
   }
 `;
+
+// Inline corpus item for bulk mode selector (simpler than CorpusCard)
+export const InlineCorpusItem = styled.div<{ $selected?: boolean }>`
+  padding: var(--oc-spacing-sm);
+  cursor: pointer;
+  border-radius: var(--oc-radius-md);
+  background: ${(props) =>
+    props.$selected ? "rgba(15, 118, 110, 0.1)" : "transparent"};
+  border: 1px solid
+    ${(props) => (props.$selected ? "var(--oc-accent)" : "transparent")};
+  margin-bottom: var(--oc-spacing-xs);
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${(props) =>
+      props.$selected ? "rgba(15, 118, 110, 0.15)" : "var(--oc-bg-subtle)"};
+  }
+
+  .corpus-title {
+    font-weight: 500;
+    color: var(--oc-fg-primary);
+  }
+`;
+
+// Container for corpus list with margin
+export const CorpusListContainer = styled.div`
+  margin-top: var(--oc-spacing-sm);
+`;
