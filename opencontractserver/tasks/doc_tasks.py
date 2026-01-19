@@ -227,9 +227,14 @@ def ingest_doc(self, user_id: int, doc_id: int) -> None:
     # Attempt to load parser kwargs
     parser_kwargs = {}
     if hasattr(settings, "PARSER_KWARGS"):
+        from opencontractserver.utils.logging import redact_sensitive_kwargs
+
         kwargs = getattr(settings, "PARSER_KWARGS", {})
         parser_kwargs = kwargs.get(parser_name, {})
-        logger.debug(f"Resolved parser kwargs for '{parser_name}': {parser_kwargs}")
+        logger.debug(
+            f"Resolved parser kwargs for '{parser_name}': "
+            f"{redact_sensitive_kwargs(parser_kwargs)}"
+        )
 
     # Get the parser class using get_component_by_name
     try:

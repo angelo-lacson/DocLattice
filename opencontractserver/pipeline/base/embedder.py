@@ -5,6 +5,7 @@ from typing import Optional
 
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.types.enums import ContentModality
+from opencontractserver.utils.logging import redact_sensitive_kwargs
 
 from .base_component import PipelineComponentBase
 
@@ -160,7 +161,10 @@ class BaseEmbedder(PipelineComponentBase, ABC):
             )
             return None
         merged_kwargs = {**self.get_component_settings(), **direct_kwargs}
-        logger.info(f"Calling _embed_text_impl with merged kwargs: {merged_kwargs}")
+        logger.info(
+            f"Calling _embed_text_impl with merged kwargs: "
+            f"{redact_sensitive_kwargs(merged_kwargs)}"
+        )
         return self._embed_text_impl(text, **merged_kwargs)
 
     def embed_image(
@@ -187,7 +191,10 @@ class BaseEmbedder(PipelineComponentBase, ABC):
             )
             return None
         merged_kwargs = {**self.get_component_settings(), **direct_kwargs}
-        logger.info(f"Calling _embed_image_impl with merged kwargs: {merged_kwargs}")
+        logger.info(
+            f"Calling _embed_image_impl with merged kwargs: "
+            f"{redact_sensitive_kwargs(merged_kwargs)}"
+        )
         return self._embed_image_impl(image_base64, image_format, **merged_kwargs)
 
     def embed_text_and_image(

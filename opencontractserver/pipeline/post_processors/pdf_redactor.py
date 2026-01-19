@@ -13,6 +13,7 @@ from opencontractserver.types.dicts import (
     OpenContractsExportDataJsonPythonType,
     OpenContractsSinglePageAnnotationType,
 )
+from opencontractserver.utils.logging import redact_sensitive_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,10 @@ class PDFRedactor(BasePostProcessor):
         with redacted PDFs.
         Settings (like 'labels_to_redact') are sourced from all_kwargs.
         """
-        logger.debug(f"PDFRedactor processing export. Effective kwargs: {all_kwargs}")
+        logger.debug(
+            f"PDFRedactor processing export. Effective kwargs: "
+            f"{redact_sensitive_kwargs(all_kwargs)}"
+        )
         try:
             labels_to_redact = all_kwargs.get("labels_to_redact", [])
 

@@ -231,6 +231,44 @@ docker compose -f production.yml up
 
 ## Testing Patterns
 
+### Manual Test Scripts
+
+**Location**: `docs/test_scripts/`
+
+When performing manual testing (e.g., testing migrations, verifying database state, testing API endpoints interactively), **always document the test steps** in a markdown file under `docs/test_scripts/`. These scripts will later be used to build automated integration tests.
+
+**Format**:
+```markdown
+# Test: [Brief description]
+
+## Purpose
+What this test verifies.
+
+## Prerequisites
+- Required state (e.g., "migration at 0058")
+- Required data (e.g., "at least one document exists")
+
+## Steps
+1. Step one with exact command
+   ```bash
+   docker compose -f local.yml run --rm django python manage.py shell -c "..."
+   ```
+2. Step two...
+
+## Expected Results
+- What should happen after each step
+- Success criteria
+
+## Cleanup
+Commands to restore original state if needed.
+```
+
+**When to document**:
+- Migration testing (rollback, create test data, migrate forward)
+- Database constraint validation
+- Race condition verification
+- Any manual verification requested during code review
+
 ### Backend Tests
 
 **Location**: `opencontractserver/tests/`

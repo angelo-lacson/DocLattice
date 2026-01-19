@@ -135,13 +135,11 @@ class LlamaParseParser(BaseParser):
         Returns:
             OpenContractDocExport with the parsed document data, or None if parsing failed.
         """
-        # Redact sensitive keys before logging
-        safe_kwargs = {
-            k: ("***" if k == "api_key" else v) for k, v in all_kwargs.items()
-        }
+        from opencontractserver.utils.logging import redact_sensitive_kwargs
+
         logger.info(
             f"LlamaParseParser - Parsing doc {doc_id} for user {user_id} "
-            f"with effective kwargs: {safe_kwargs}"
+            f"with effective kwargs: {redact_sensitive_kwargs(all_kwargs)}"
         )
 
         # Override settings with kwargs if provided
