@@ -382,6 +382,21 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
 
         label_set_id = corpus.label_set_id
 
+        # Collect folder IDs (in tree order for proper parent mapping)
+        folder_ids = list(
+            CorpusFolder.objects.filter(corpus_id=corpus.pk)
+            .order_by("tree_depth", "pk")
+            .values_list("id", flat=True)
+        )
+
+        # Collect relationship IDs (user relationships only)
+        relationship_ids = list(
+            Relationship.objects.filter(
+                corpus_id=corpus.pk,
+                analysis__isnull=True,
+            ).values_list("id", flat=True)
+        )
+
         # Create the forked corpus shell
         forked_corpus = Corpus.objects.create(
             title=f"[FORK] {corpus.title}",
@@ -400,6 +415,8 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             doc_ids=doc_ids,
             label_set_id=label_set_id,
             annotation_ids=annotation_ids,
+            folder_ids=folder_ids,
+            relationship_ids=relationship_ids,
             user_id=self.user.pk,
         )
 
@@ -537,8 +554,8 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             title="Multi-Gen Test",
             num_documents=3,
             num_annotations_per_doc=3,
-            num_relationships=0,  # Not yet implemented in fork
-            num_folders=0,  # Not yet implemented in fork
+            num_relationships=2,  # Now implemented in fork
+            num_folders=2,  # Now implemented in fork
             num_notes_per_doc=0,  # Not yet implemented in fork
         )
         original_snapshot = CorpusSnapshot.from_corpus(original)
@@ -590,6 +607,22 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                 f"{current_snapshot.label_count} -> {next_snapshot.label_count}",
             )
 
+            # Folder count should be stable
+            self.assertEqual(
+                current_snapshot.folder_count,
+                next_snapshot.folder_count,
+                f"Folder count degraded at generation {i + 1}: "
+                f"{current_snapshot.folder_count} -> {next_snapshot.folder_count}",
+            )
+
+            # Relationship count should be stable
+            self.assertEqual(
+                current_snapshot.relationship_count,
+                next_snapshot.relationship_count,
+                f"Relationship count degraded at generation {i + 1}: "
+                f"{current_snapshot.relationship_count} -> {next_snapshot.relationship_count}",
+            )
+
         # Verify final generation matches original (for copied data)
         final_snapshot = snapshots[-1]
 
@@ -607,6 +640,16 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             original_snapshot.label_count,
             final_snapshot.label_count,
             f"After {num_generations} generations, label count should match original",
+        )
+        self.assertEqual(
+            original_snapshot.folder_count,
+            final_snapshot.folder_count,
+            f"After {num_generations} generations, folder count should match original",
+        )
+        self.assertEqual(
+            original_snapshot.relationship_count,
+            final_snapshot.relationship_count,
+            f"After {num_generations} generations, relationship count should match original",
         )
 
     def test_fork_chain_maintains_ancestry(self):
@@ -796,28 +839,26 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
         )
 
 
-class CorpusForkCurrentLimitationsTest(TransactionTestCase):
+class CorpusForkPreservationTest(TransactionTestCase):
     """
-    Tests that document current limitations in fork functionality.
+    Tests that verify folders and relationships ARE copied during fork.
 
-    These tests verify that certain data is NOT copied (as expected with
-    current implementation) and will fail once the limitations are fixed,
-    serving as a reminder to update documentation.
+    These tests validate that the fork implementation correctly preserves
+    folder structure and annotation relationships.
     """
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username="limitations_test_user",
+            username="preservation_test_user",
             password="testpass123",
         )
 
-    def test_relationships_not_copied_limitation(self):
+    def test_relationships_are_copied(self):
         """
-        LIMITATION: Relationships are not currently copied during fork.
+        Test that relationships are correctly copied during fork.
 
-        This test documents the current behavior. Once relationships are
-        implemented in forking, this test should be updated to verify
-        relationships ARE copied.
+        Verifies that relationship count, labels, and annotation connections
+        are preserved in the forked corpus.
         """
         # Create corpus with relationships
         corpus = Corpus.objects.create(
@@ -889,9 +930,11 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
         original_rel_count = Relationship.objects.filter(corpus=corpus).count()
         self.assertEqual(original_rel_count, 1)
 
-        # Fork
+        # Fork - include relationship_ids
         doc_ids = [doc.pk]
         annotation_ids = [ann1.pk, ann2.pk]
+        folder_ids = []
+        relationship_ids = [relationship.pk]
 
         forked = Corpus.objects.create(
             title="[FORK] Relationship Test",
@@ -906,26 +949,51 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             doc_ids=doc_ids,
             label_set_id=label_set.pk,
             annotation_ids=annotation_ids,
+            folder_ids=folder_ids,
+            relationship_ids=relationship_ids,
             user_id=self.user.pk,
         )
 
         forked.refresh_from_db()
 
-        # CURRENT LIMITATION: Relationships are NOT copied
+        # Verify relationships ARE copied
         forked_rel_count = Relationship.objects.filter(corpus=forked).count()
         self.assertEqual(
             forked_rel_count,
-            0,
-            "LIMITATION: Relationships are not currently copied during fork. "
-            "If this test fails, the limitation may have been fixed - update accordingly!",
+            1,
+            "Relationships should be copied during fork",
         )
 
-    def test_folders_not_copied_limitation(self):
-        """
-        LIMITATION: Folder structure is not currently copied during fork.
+        # Verify the relationship has correct annotations
+        forked_rel = Relationship.objects.filter(corpus=forked).first()
+        self.assertEqual(
+            forked_rel.source_annotations.count(),
+            1,
+            "Forked relationship should have source annotation",
+        )
+        self.assertEqual(
+            forked_rel.target_annotations.count(),
+            1,
+            "Forked relationship should have target annotation",
+        )
 
-        This test documents the current behavior. Once folder copying is
-        implemented, this test should be updated to verify folders ARE copied.
+        # Verify relationship label was mapped correctly
+        self.assertIsNotNone(
+            forked_rel.relationship_label,
+            "Forked relationship should have a label",
+        )
+        self.assertEqual(
+            forked_rel.relationship_label.text,
+            "Related",
+            "Forked relationship label text should match original",
+        )
+
+    def test_folders_are_copied(self):
+        """
+        Test that folder structure is correctly copied during fork.
+
+        Verifies that folder count, names, and hierarchy are preserved
+        in the forked corpus.
         """
         corpus = Corpus.objects.create(
             title="Folder Test",
@@ -949,7 +1017,13 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
         original_folder_count = CorpusFolder.objects.filter(corpus=corpus).count()
         self.assertEqual(original_folder_count, 2)
 
-        # Fork
+        # Fork - include folder_ids
+        folder_ids = list(
+            CorpusFolder.objects.filter(corpus=corpus)
+            .order_by("tree_depth", "pk")
+            .values_list("id", flat=True)
+        )
+
         forked = Corpus.objects.create(
             title="[FORK] Folder Test",
             creator=self.user,
@@ -963,18 +1037,122 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             doc_ids=[],
             label_set_id=None,
             annotation_ids=[],
+            folder_ids=folder_ids,
+            relationship_ids=[],
             user_id=self.user.pk,
         )
 
         forked.refresh_from_db()
 
-        # CURRENT LIMITATION: Folders are NOT copied
+        # Verify folders ARE copied
         forked_folder_count = CorpusFolder.objects.filter(corpus=forked).count()
         self.assertEqual(
             forked_folder_count,
-            0,
-            "LIMITATION: Folders are not currently copied during fork. "
-            "If this test fails, the limitation may have been fixed - update accordingly!",
+            2,
+            "Folders should be copied during fork",
+        )
+
+        # Verify folder names are preserved
+        forked_folder_names = set(
+            CorpusFolder.objects.filter(corpus=forked).values_list("name", flat=True)
+        )
+        self.assertEqual(
+            forked_folder_names,
+            {"Root Folder", "Child Folder"},
+            "Folder names should be preserved",
+        )
+
+        # Verify hierarchy is preserved
+        forked_child = CorpusFolder.objects.get(corpus=forked, name="Child Folder")
+        self.assertIsNotNone(
+            forked_child.parent,
+            "Child folder should have a parent",
+        )
+        self.assertEqual(
+            forked_child.parent.name,
+            "Root Folder",
+            "Child folder's parent should be Root Folder",
+        )
+
+    def test_document_folder_assignment_preserved(self):
+        """
+        Test that documents maintain their folder assignments after fork.
+        """
+        corpus = Corpus.objects.create(
+            title="Doc Folder Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create folder
+        folder = CorpusFolder.objects.create(
+            name="My Folder",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        # Create document in folder
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            folder=folder,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Verify original setup
+        original_path = DocumentPath.objects.get(
+            corpus=corpus, document=doc, is_current=True
+        )
+        self.assertEqual(original_path.folder, folder)
+
+        # Fork
+        folder_ids = [folder.pk]
+
+        forked = Corpus.objects.create(
+            title="[FORK] Doc Folder Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=folder_ids,
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify folder was copied
+        forked_folder = CorpusFolder.objects.filter(corpus=forked).first()
+        self.assertIsNotNone(forked_folder)
+        self.assertEqual(forked_folder.name, "My Folder")
+
+        # Verify document is in the forked folder
+        forked_doc = forked.get_documents().first()
+        self.assertIsNotNone(forked_doc)
+
+        forked_path = DocumentPath.objects.filter(
+            corpus=forked, document=forked_doc, is_current=True, is_deleted=False
+        ).first()
+        self.assertIsNotNone(forked_path)
+        self.assertEqual(
+            forked_path.folder,
+            forked_folder,
+            "Document should be in the forked folder",
         )
 
     def test_notes_not_copied_limitation(self):
@@ -1030,6 +1208,8 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             doc_ids=[doc.pk],
             label_set_id=None,
             annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
             user_id=self.user.pk,
         )
 

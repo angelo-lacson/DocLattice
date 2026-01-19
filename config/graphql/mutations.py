@@ -1177,11 +1177,26 @@ class StartCorpusFork(graphene.Mutation):
             doc_ids = list(corpus.get_documents().values_list("id", flat=True))
             label_set_id = corpus.label_set.pk if corpus.label_set else None
 
+            # Collect folder IDs for cloning (in tree order for proper parent mapping)
+            folder_ids = list(
+                CorpusFolder.objects.filter(corpus_id=corpus_pk)
+                .order_by("tree_depth", "pk")
+                .values_list("id", flat=True)
+            )
+
+            # Collect relationship IDs (user relationships only, not analysis-generated)
+            relationship_ids = list(
+                Relationship.objects.filter(
+                    corpus_id=corpus_pk,
+                    analysis__isnull=True,
+                ).values_list("id", flat=True)
+            )
+
             # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
             corpus.pk = None
 
             # Adjust the title to indicate it's a fork
-            corpus.title = f"{corpus.title}"
+            corpus.title = f"[FORK] {corpus.title}"
 
             # lock the corpus which will tell frontend to show this as loading and disable selection
             corpus.backend_lock = True
@@ -1198,10 +1213,16 @@ class StartCorpusFork(graphene.Mutation):
             corpus.documents.clear()
             corpus.label_set = None
 
-            # Copy docs and annotations using async task to avoid massive lag if we have large dataset or lots of
-            # users requesting copies.
+            # Copy docs, annotations, folders, and relationships using async task to avoid
+            # massive lag if we have large dataset or lots of users requesting copies.
             fork_corpus.si(
-                corpus.id, doc_ids, label_set_id, annotation_ids, info.context.user.id
+                corpus.id,
+                doc_ids,
+                label_set_id,
+                annotation_ids,
+                folder_ids,
+                relationship_ids,
+                info.context.user.id,
             ).apply_async()
 
             ok = True
