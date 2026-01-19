@@ -109,15 +109,14 @@ class CorpusSnapshot:
             folder_count=folders.count(),
             note_count=notes.count(),
             document_titles=set(documents.values_list("title", flat=True)),
-            annotation_texts=set(
-                annotations.values_list("raw_text", flat=True)
-            ),
-            label_texts=set(label.text for label in labels),
+            annotation_texts=set(annotations.values_list("raw_text", flat=True)),
+            label_texts={label.text for label in labels},
             folder_names=set(folders.values_list("name", flat=True)),
             note_titles=set(notes.values_list("title", flat=True)),
             relationship_label_texts=set(
-                relationships.exclude(relationship_label__isnull=True)
-                .values_list("relationship_label__text", flat=True)
+                relationships.exclude(relationship_label__isnull=True).values_list(
+                    "relationship_label__text", flat=True
+                )
             ),
             has_description=bool(corpus.description),
             has_icon=bool(corpus.icon and corpus.icon.name),
@@ -275,7 +274,8 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                 parent=root_folder if i > 0 else None,
                 creator=self.user,
             )
-            set_permissions_for_obj_to_user(self.user, folder, [PermissionTypes.ALL])
+            # Note: CorpusFolder inherits permissions from parent Corpus
+            # No individual permissions needed
             folders.append(folder)
             if i == 0:
                 root_folder = folder
@@ -382,6 +382,22 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
 
         label_set_id = corpus.label_set_id
 
+        # Collect folder IDs (in tree order for proper parent mapping)
+        # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
+        folder_ids = list(
+            CorpusFolder.objects.filter(corpus_id=corpus.pk)
+            .with_tree_fields()
+            .values_list("id", flat=True)
+        )
+
+        # Collect relationship IDs (user relationships only)
+        relationship_ids = list(
+            Relationship.objects.filter(
+                corpus_id=corpus.pk,
+                analysis__isnull=True,
+            ).values_list("id", flat=True)
+        )
+
         # Create the forked corpus shell
         forked_corpus = Corpus.objects.create(
             title=f"[FORK] {corpus.title}",
@@ -390,9 +406,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             creator=self.user,
             parent_id=corpus.pk,
         )
-        set_permissions_for_obj_to_user(
-            self.user, forked_corpus, [PermissionTypes.ALL]
-        )
+        set_permissions_for_obj_to_user(self.user, forked_corpus, [PermissionTypes.ALL])
 
         # Execute the fork task synchronously
         result = fork_corpus(
@@ -400,6 +414,8 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             doc_ids=doc_ids,
             label_set_id=label_set_id,
             annotation_ids=annotation_ids,
+            folder_ids=folder_ids,
+            relationship_ids=relationship_ids,
             user_id=self.user.pk,
         )
 
@@ -537,8 +553,8 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             title="Multi-Gen Test",
             num_documents=3,
             num_annotations_per_doc=3,
-            num_relationships=0,  # Not yet implemented in fork
-            num_folders=0,  # Not yet implemented in fork
+            num_relationships=2,  # Now implemented in fork
+            num_folders=2,  # Now implemented in fork
             num_notes_per_doc=0,  # Not yet implemented in fork
         )
         original_snapshot = CorpusSnapshot.from_corpus(original)
@@ -590,6 +606,22 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                 f"{current_snapshot.label_count} -> {next_snapshot.label_count}",
             )
 
+            # Folder count should be stable
+            self.assertEqual(
+                current_snapshot.folder_count,
+                next_snapshot.folder_count,
+                f"Folder count degraded at generation {i + 1}: "
+                f"{current_snapshot.folder_count} -> {next_snapshot.folder_count}",
+            )
+
+            # Relationship count should be stable
+            self.assertEqual(
+                current_snapshot.relationship_count,
+                next_snapshot.relationship_count,
+                f"Relationship count degraded at generation {i + 1}: "
+                f"{current_snapshot.relationship_count} -> {next_snapshot.relationship_count}",
+            )
+
         # Verify final generation matches original (for copied data)
         final_snapshot = snapshots[-1]
 
@@ -607,6 +639,16 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             original_snapshot.label_count,
             final_snapshot.label_count,
             f"After {num_generations} generations, label count should match original",
+        )
+        self.assertEqual(
+            original_snapshot.folder_count,
+            final_snapshot.folder_count,
+            f"After {num_generations} generations, folder count should match original",
+        )
+        self.assertEqual(
+            original_snapshot.relationship_count,
+            final_snapshot.relationship_count,
+            f"After {num_generations} generations, relationship count should match original",
         )
 
     def test_fork_chain_maintains_ancestry(self):
@@ -708,9 +750,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             description="A corpus with no documents",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(
-            self.user, empty_corpus, [PermissionTypes.ALL]
-        )
+        set_permissions_for_obj_to_user(self.user, empty_corpus, [PermissionTypes.ALL])
 
         forked = self._execute_fork(empty_corpus)
         self.assertIsNotNone(forked, "Fork of empty corpus should succeed")
@@ -735,21 +775,23 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
         )
 
         # Create an analyzer and analysis
+        # Note: Analyzer requires either host_gremlin or task_name to be set (not both null)
         analyzer = Analyzer.objects.create(
             id="test-analyzer",
             description="Test analyzer",
+            task_name="test_task",
             creator=self.user,
         )
 
         analysis = Analysis.objects.create(
             analyzer=analyzer,
-            corpus=original,
+            analyzed_corpus=original,
             creator=self.user,
         )
 
         # Create analysis-generated annotation
         doc = original.get_documents().first()
-        analysis_annotation = Annotation.objects.create(
+        _analysis_annotation = Annotation.objects.create(  # noqa: F841
             page=1,
             raw_text="Analysis generated annotation",
             document=doc,
@@ -796,28 +838,26 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
         )
 
 
-class CorpusForkCurrentLimitationsTest(TransactionTestCase):
+class CorpusForkPreservationTest(TransactionTestCase):
     """
-    Tests that document current limitations in fork functionality.
+    Tests that verify folders and relationships ARE copied during fork.
 
-    These tests verify that certain data is NOT copied (as expected with
-    current implementation) and will fail once the limitations are fixed,
-    serving as a reminder to update documentation.
+    These tests validate that the fork implementation correctly preserves
+    folder structure and annotation relationships.
     """
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username="limitations_test_user",
+            username="preservation_test_user",
             password="testpass123",
         )
 
-    def test_relationships_not_copied_limitation(self):
+    def test_relationships_are_copied(self):
         """
-        LIMITATION: Relationships are not currently copied during fork.
+        Test that relationships are correctly copied during fork.
 
-        This test documents the current behavior. Once relationships are
-        implemented in forking, this test should be updated to verify
-        relationships ARE copied.
+        Verifies that relationship count, labels, and annotation connections
+        are preserved in the forked corpus.
         """
         # Create corpus with relationships
         corpus = Corpus.objects.create(
@@ -889,9 +929,11 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
         original_rel_count = Relationship.objects.filter(corpus=corpus).count()
         self.assertEqual(original_rel_count, 1)
 
-        # Fork
+        # Fork - include relationship_ids
         doc_ids = [doc.pk]
         annotation_ids = [ann1.pk, ann2.pk]
+        folder_ids = []
+        relationship_ids = [relationship.pk]
 
         forked = Corpus.objects.create(
             title="[FORK] Relationship Test",
@@ -906,26 +948,51 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             doc_ids=doc_ids,
             label_set_id=label_set.pk,
             annotation_ids=annotation_ids,
+            folder_ids=folder_ids,
+            relationship_ids=relationship_ids,
             user_id=self.user.pk,
         )
 
         forked.refresh_from_db()
 
-        # CURRENT LIMITATION: Relationships are NOT copied
+        # Verify relationships ARE copied
         forked_rel_count = Relationship.objects.filter(corpus=forked).count()
         self.assertEqual(
             forked_rel_count,
-            0,
-            "LIMITATION: Relationships are not currently copied during fork. "
-            "If this test fails, the limitation may have been fixed - update accordingly!",
+            1,
+            "Relationships should be copied during fork",
         )
 
-    def test_folders_not_copied_limitation(self):
-        """
-        LIMITATION: Folder structure is not currently copied during fork.
+        # Verify the relationship has correct annotations
+        forked_rel = Relationship.objects.filter(corpus=forked).first()
+        self.assertEqual(
+            forked_rel.source_annotations.count(),
+            1,
+            "Forked relationship should have source annotation",
+        )
+        self.assertEqual(
+            forked_rel.target_annotations.count(),
+            1,
+            "Forked relationship should have target annotation",
+        )
 
-        This test documents the current behavior. Once folder copying is
-        implemented, this test should be updated to verify folders ARE copied.
+        # Verify relationship label was mapped correctly
+        self.assertIsNotNone(
+            forked_rel.relationship_label,
+            "Forked relationship should have a label",
+        )
+        self.assertEqual(
+            forked_rel.relationship_label.text,
+            "Related",
+            "Forked relationship label text should match original",
+        )
+
+    def test_folders_are_copied(self):
+        """
+        Test that folder structure is correctly copied during fork.
+
+        Verifies that folder count, names, and hierarchy are preserved
+        in the forked corpus.
         """
         corpus = Corpus.objects.create(
             title="Folder Test",
@@ -939,7 +1006,7 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             corpus=corpus,
             creator=self.user,
         )
-        child = CorpusFolder.objects.create(
+        _child = CorpusFolder.objects.create(  # noqa: F841
             name="Child Folder",
             corpus=corpus,
             parent=root,
@@ -949,7 +1016,14 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
         original_folder_count = CorpusFolder.objects.filter(corpus=corpus).count()
         self.assertEqual(original_folder_count, 2)
 
-        # Fork
+        # Fork - include folder_ids
+        # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
+        folder_ids = list(
+            CorpusFolder.objects.filter(corpus=corpus)
+            .with_tree_fields()
+            .values_list("id", flat=True)
+        )
+
         forked = Corpus.objects.create(
             title="[FORK] Folder Test",
             creator=self.user,
@@ -963,18 +1037,122 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             doc_ids=[],
             label_set_id=None,
             annotation_ids=[],
+            folder_ids=folder_ids,
+            relationship_ids=[],
             user_id=self.user.pk,
         )
 
         forked.refresh_from_db()
 
-        # CURRENT LIMITATION: Folders are NOT copied
+        # Verify folders ARE copied
         forked_folder_count = CorpusFolder.objects.filter(corpus=forked).count()
         self.assertEqual(
             forked_folder_count,
-            0,
-            "LIMITATION: Folders are not currently copied during fork. "
-            "If this test fails, the limitation may have been fixed - update accordingly!",
+            2,
+            "Folders should be copied during fork",
+        )
+
+        # Verify folder names are preserved
+        forked_folder_names = set(
+            CorpusFolder.objects.filter(corpus=forked).values_list("name", flat=True)
+        )
+        self.assertEqual(
+            forked_folder_names,
+            {"Root Folder", "Child Folder"},
+            "Folder names should be preserved",
+        )
+
+        # Verify hierarchy is preserved
+        forked_child = CorpusFolder.objects.get(corpus=forked, name="Child Folder")
+        self.assertIsNotNone(
+            forked_child.parent,
+            "Child folder should have a parent",
+        )
+        self.assertEqual(
+            forked_child.parent.name,
+            "Root Folder",
+            "Child folder's parent should be Root Folder",
+        )
+
+    def test_document_folder_assignment_preserved(self):
+        """
+        Test that documents maintain their folder assignments after fork.
+        """
+        corpus = Corpus.objects.create(
+            title="Doc Folder Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create folder
+        folder = CorpusFolder.objects.create(
+            name="My Folder",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        # Create document in folder
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            folder=folder,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Verify original setup
+        original_path = DocumentPath.objects.get(
+            corpus=corpus, document=doc, is_current=True
+        )
+        self.assertEqual(original_path.folder, folder)
+
+        # Fork
+        folder_ids = [folder.pk]
+
+        forked = Corpus.objects.create(
+            title="[FORK] Doc Folder Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=folder_ids,
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify folder was copied
+        forked_folder = CorpusFolder.objects.filter(corpus=forked).first()
+        self.assertIsNotNone(forked_folder)
+        self.assertEqual(forked_folder.name, "My Folder")
+
+        # Verify document is in the forked folder
+        forked_doc = forked.get_documents().first()
+        self.assertIsNotNone(forked_doc)
+
+        forked_path = DocumentPath.objects.filter(
+            corpus=forked, document=forked_doc, is_current=True, is_deleted=False
+        ).first()
+        self.assertIsNotNone(forked_path)
+        self.assertEqual(
+            forked_path.folder,
+            forked_folder,
+            "Document should be in the forked folder",
         )
 
     def test_notes_not_copied_limitation(self):
@@ -1005,7 +1183,7 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
         corpus.documents.add(doc)
 
         # Create note
-        note = Note.objects.create(
+        _note = Note.objects.create(  # noqa: F841
             title="Test Note",
             content="Note content",
             document=doc,
@@ -1030,6 +1208,8 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             doc_ids=[doc.pk],
             label_set_id=None,
             annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
             user_id=self.user.pk,
         )
 
@@ -1043,3 +1223,800 @@ class CorpusForkCurrentLimitationsTest(TransactionTestCase):
             "LIMITATION: Notes are not currently copied during fork. "
             "If this test fails, the limitation may have been fixed - update accordingly!",
         )
+
+    def test_labelset_icon_copied(self):
+        """
+        Test that label set icon is copied during fork.
+        """
+        from django.core.files.base import ContentFile
+
+        corpus = Corpus.objects.create(
+            title="Icon Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create label set with icon
+        label_set = LabelSet.objects.create(
+            title="Labeled Set",
+            creator=self.user,
+        )
+        # Create a simple icon file
+        icon_content = b"fake icon content for testing"
+        label_set.icon.save("test_icon.png", ContentFile(icon_content))
+        label_set.save()
+
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Fork
+        forked = Corpus.objects.create(
+            title="[FORK] Icon Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],
+            label_set_id=label_set.pk,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify label set was created with icon
+        self.assertIsNotNone(forked.label_set, "Forked corpus should have a label set")
+        self.assertTrue(
+            forked.label_set.icon and forked.label_set.icon.name,
+            "Forked label set should have an icon",
+        )
+
+    def test_document_files_copied(self):
+        """
+        Test that document txt_extract_file and pawls_parse_file are copied during fork.
+        """
+        from django.core.files.base import ContentFile
+
+        corpus = Corpus.objects.create(
+            title="File Copy Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create document with txt_extract_file and pawls_parse_file
+        doc = Document.objects.create(
+            title="Test Doc With Files",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+
+        # Add txt extract file
+        txt_content = b"This is extracted text content."
+        doc.txt_extract_file.save("test_extract.txt", ContentFile(txt_content))
+
+        # Add pawls parse file
+        pawls_content = b'[{"page": 1, "tokens": []}]'
+        doc.pawls_parse_file.save("test_doc.pawls", ContentFile(pawls_content))
+        doc.save()
+
+        # Add document to corpus
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Fork
+        forked = Corpus.objects.create(
+            title="[FORK] File Copy Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify document was forked with files
+        forked_doc = forked.get_documents().first()
+        self.assertIsNotNone(forked_doc, "Forked corpus should have a document")
+        self.assertTrue(
+            forked_doc.txt_extract_file and forked_doc.txt_extract_file.name,
+            "Forked document should have txt_extract_file",
+        )
+        self.assertTrue(
+            forked_doc.pawls_parse_file and forked_doc.pawls_parse_file.name,
+            "Forked document should have pawls_parse_file",
+        )
+
+    def test_relationship_skipped_when_no_mapped_annotations(self):
+        """
+        Test that relationships are skipped when their source/target annotations
+        are not in the annotation_ids list passed to fork.
+        """
+        corpus = Corpus.objects.create(
+            title="Relationship Skip Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create label set
+        label_set = LabelSet.objects.create(title="Test Labels", creator=self.user)
+        token_label = AnnotationLabel.objects.create(
+            text="Token", label_type=TOKEN_LABEL, creator=self.user
+        )
+        rel_label = AnnotationLabel.objects.create(
+            text="Related", label_type=RELATIONSHIP_LABEL, creator=self.user
+        )
+        label_set.annotation_labels.add(token_label, rel_label)
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Create document
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create annotations
+        ann1 = Annotation.objects.create(
+            page=1,
+            raw_text="First",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+        ann2 = Annotation.objects.create(
+            page=1,
+            raw_text="Second",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+
+        # Create relationship between annotations
+        relationship = Relationship.objects.create(
+            relationship_label=rel_label,
+            corpus=corpus,
+            document=doc,
+            creator=self.user,
+        )
+        relationship.source_annotations.add(ann1)
+        relationship.target_annotations.add(ann2)
+
+        # Fork - but DON'T include the annotations, only the relationship
+        forked = Corpus.objects.create(
+            title="[FORK] Relationship Skip Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=label_set.pk,
+            annotation_ids=[],  # Empty - no annotations being forked
+            folder_ids=[],
+            relationship_ids=[relationship.pk],  # But include relationship
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify relationship was skipped (no mapped annotations)
+        forked_rel_count = Relationship.objects.filter(corpus=forked).count()
+        self.assertEqual(
+            forked_rel_count,
+            0,
+            "Relationship should be skipped when no source/target annotations are mapped",
+        )
+
+    def test_annotation_without_label_set(self):
+        """
+        Test that annotations are correctly forked when there's no label_map
+        (i.e., when the annotation has a label but there's no label set being forked).
+        """
+        corpus = Corpus.objects.create(
+            title="No Label Set Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create document
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create annotation WITH a label, but we won't fork the label set
+        token_label = AnnotationLabel.objects.create(
+            text="Token", label_type=TOKEN_LABEL, creator=self.user
+        )
+        annotation = Annotation.objects.create(
+            page=1,
+            raw_text="Test annotation",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,  # Has a label
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.ALL])
+
+        # Fork WITHOUT label_set_id - this tests the annotation_label_id = None path
+        forked = Corpus.objects.create(
+            title="[FORK] No Label Set Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,  # No label set being forked
+            annotation_ids=[annotation.pk],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify annotation was forked without label
+        forked_annotations = Annotation.objects.filter(corpus=forked)
+        self.assertEqual(forked_annotations.count(), 1)
+
+        forked_ann = forked_annotations.first()
+        self.assertEqual(forked_ann.raw_text, "Test annotation")
+        self.assertIsNone(
+            forked_ann.annotation_label,
+            "Forked annotation should have no label when label set is not forked",
+        )
+
+
+class CorpusForkExceptionHandlingTest(TransactionTestCase):
+    """
+    Tests that verify exception handling paths in fork_corpus.
+
+    These tests use mocking to force exceptions and verify that:
+    1. Exceptions are properly raised (not silently swallowed)
+    2. The corpus is marked with error=True when fork fails
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="exception_test_user",
+            password="testpass123",
+        )
+
+    def test_label_set_fork_exception_propagates(self):
+        """
+        Test that exceptions during label set forking are handled correctly.
+
+        This covers lines 92-96 in fork_tasks.py (the exception handler for
+        label set cloning errors).
+        """
+        from unittest.mock import patch
+
+        corpus = Corpus.objects.create(
+            title="Label Set Exception Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create a label set
+        label_set = LabelSet.objects.create(
+            title="Test Labels",
+            creator=self.user,
+        )
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Label Set Exception Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        # Mock LabelSet.objects.get to raise an exception
+        with patch(
+            "doclatticeserver.tasks.fork_tasks.LabelSet.objects.get"
+        ) as mock_get:
+            mock_get.side_effect = Exception("Simulated label set error")
+
+            # Fork should fail and return None
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[],
+                label_set_id=label_set.pk,
+                annotation_ids=[],
+                folder_ids=[],
+                relationship_ids=[],
+                user_id=self.user.pk,
+            )
+
+            # Fork should fail and return None
+            self.assertIsNone(result)
+
+            # Corpus should be marked with error
+            forked.refresh_from_db()
+            self.assertTrue(forked.error, "Corpus should be marked with error=True")
+            self.assertFalse(
+                forked.backend_lock, "Corpus should be unlocked after error"
+            )
+
+    def test_label_population_outer_exception_propagates(self):
+        """
+        Test that exceptions during label population (outer try block) are handled.
+
+        This covers lines 134-139 in fork_tasks.py (the outer exception handler
+        for populating labels after individual labels are cloned).
+        """
+        from unittest.mock import patch
+
+        corpus = Corpus.objects.create(
+            title="Label Population Exception Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create a label set with labels
+        label_set = LabelSet.objects.create(
+            title="Test Labels",
+            creator=self.user,
+        )
+        token_label = AnnotationLabel.objects.create(
+            text="Token",
+            label_type=TOKEN_LABEL,
+            creator=self.user,
+        )
+        label_set.annotation_labels.add(token_label)
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Label Population Exception Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        # We need to make the second label_set.save() call fail (line 129)
+        # The first save() at line 77 should succeed, but the second at line 129 should fail
+        save_call_count = [0]
+        original_save = LabelSet.save
+
+        def mock_save(self, *args, **kwargs):
+            save_call_count[0] += 1
+            # Let the first save succeed (line 77), fail on the second (line 129)
+            if save_call_count[0] == 2:
+                raise Exception("Simulated label_set save error on second call")
+            return original_save(self, *args, **kwargs)
+
+        with patch.object(LabelSet, "save", mock_save):
+            # Fork should fail
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[],
+                label_set_id=label_set.pk,
+                annotation_ids=[],
+                folder_ids=[],
+                relationship_ids=[],
+                user_id=self.user.pk,
+            )
+
+            # Fork should fail and return None
+            self.assertIsNone(result)
+
+            # Corpus should be marked with error
+            forked.refresh_from_db()
+            self.assertTrue(forked.error, "Corpus should be marked with error=True")
+
+    def test_individual_label_clone_exception_logged(self):
+        """
+        Test that exceptions during individual label cloning are logged
+        but don't stop the fork process.
+
+        This covers lines 122-127 in fork_tasks.py (the inner exception handler
+        for individual label cloning errors).
+        """
+        from unittest.mock import patch
+
+        corpus = Corpus.objects.create(
+            title="Label Clone Exception Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create a label set with a label
+        label_set = LabelSet.objects.create(
+            title="Test Labels",
+            creator=self.user,
+        )
+        token_label = AnnotationLabel.objects.create(
+            text="Token",
+            label_type=TOKEN_LABEL,
+            creator=self.user,
+        )
+        label_set.annotation_labels.add(token_label)
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Label Clone Exception Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        # Mock AnnotationLabel constructor to raise an exception
+        original_init = AnnotationLabel.__init__
+
+        def mock_init(self, *args, **kwargs):
+            if (
+                kwargs.get("label_type") == TOKEN_LABEL
+                and kwargs.get("text") == "Token"
+            ):
+                raise Exception("Simulated label clone error")
+            return original_init(self, *args, **kwargs)
+
+        with patch.object(AnnotationLabel, "__init__", mock_init):
+            # Fork should complete (inner exception is caught and logged)
+            # but the label won't be in the label_map
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[],
+                label_set_id=label_set.pk,
+                annotation_ids=[],
+                folder_ids=[],
+                relationship_ids=[],
+                user_id=self.user.pk,
+            )
+
+            # Fork should still succeed (inner exception is caught)
+            self.assertIsNotNone(result)
+
+    def test_document_fork_exception_propagates(self):
+        """
+        Test that exceptions during document forking are properly raised.
+
+        This covers lines 266-268 in fork_tasks.py (the exception handler for
+        document forking errors).
+        """
+        from unittest.mock import patch
+
+        corpus = Corpus.objects.create(
+            title="Document Exception Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create a document
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Document Exception Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        # Mock corpus.add_document to raise an exception
+        with patch.object(Corpus, "add_document") as mock_add:
+            mock_add.side_effect = Exception("Simulated document fork error")
+
+            # Fork should fail and propagate the exception
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[doc.pk],
+                label_set_id=None,
+                annotation_ids=[],
+                folder_ids=[],
+                relationship_ids=[],
+                user_id=self.user.pk,
+            )
+
+            # Fork should fail and return None
+            self.assertIsNone(result)
+
+            # Corpus should be marked with error
+            forked.refresh_from_db()
+            self.assertTrue(forked.error, "Corpus should be marked with error=True")
+            self.assertFalse(
+                forked.backend_lock, "Corpus should be unlocked after error"
+            )
+
+    def test_annotation_fork_exception_propagates(self):
+        """
+        Test that exceptions during annotation forking are properly raised.
+
+        This covers lines 312-314 in fork_tasks.py (the exception handler for
+        annotation forking errors).
+        """
+        corpus = Corpus.objects.create(
+            title="Annotation Exception Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create a document
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create an annotation
+        annotation = Annotation.objects.create(
+            page=1,
+            raw_text="Test annotation",
+            document=doc,
+            corpus=corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.ALL])
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Annotation Exception Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        # Create a fake annotation ID that doesn't exist in the doc_map
+        # This will cause a KeyError when trying to look up the document
+        # We'll use a doc_map that doesn't contain our document's ID
+
+        # Fork with a document that won't be in the doc_map (empty doc_ids)
+        # but include the annotation - this causes a KeyError
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],  # No docs - doc_map will be empty
+            label_set_id=None,
+            annotation_ids=[annotation.pk],  # But include annotation that refs a doc
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        # Fork should fail due to KeyError when annotation's document is not in doc_map
+        self.assertIsNone(result)
+
+        # Corpus should be marked with error
+        forked.refresh_from_db()
+        self.assertTrue(forked.error, "Corpus should be marked with error=True")
+
+    def test_folder_fork_exception_propagates(self):
+        """
+        Test that exceptions during folder forking are properly raised.
+
+        This covers lines 174-176 in fork_tasks.py (the exception handler for
+        folder cloning errors).
+        """
+        from unittest.mock import patch
+
+        corpus = Corpus.objects.create(
+            title="Folder Exception Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create a folder
+        folder = CorpusFolder.objects.create(
+            name="Test Folder",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Folder Exception Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        # Mock CorpusFolder save to raise an exception
+        original_save = CorpusFolder.save
+
+        def mock_save(self, *args, **kwargs):
+            if self.corpus_id == forked.pk:
+                raise Exception("Simulated folder fork error")
+            return original_save(self, *args, **kwargs)
+
+        with patch.object(CorpusFolder, "save", mock_save):
+            # Fork should fail
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[],
+                label_set_id=None,
+                annotation_ids=[],
+                folder_ids=[folder.pk],
+                relationship_ids=[],
+                user_id=self.user.pk,
+            )
+
+            # Fork should fail and return None
+            self.assertIsNone(result)
+
+            # Corpus should be marked with error
+            forked.refresh_from_db()
+            self.assertTrue(forked.error)
+
+    def test_relationship_fork_exception_propagates(self):
+        """
+        Test that exceptions during relationship forking are properly raised.
+
+        This covers lines 389-393 in fork_tasks.py (the exception handler for
+        relationship cloning errors).
+        """
+        from unittest.mock import patch
+
+        corpus = Corpus.objects.create(
+            title="Relationship Exception Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create label set
+        label_set = LabelSet.objects.create(title="Test Labels", creator=self.user)
+        token_label = AnnotationLabel.objects.create(
+            text="Token", label_type=TOKEN_LABEL, creator=self.user
+        )
+        rel_label = AnnotationLabel.objects.create(
+            text="Related", label_type=RELATIONSHIP_LABEL, creator=self.user
+        )
+        label_set.annotation_labels.add(token_label, rel_label)
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Create document
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create annotations
+        ann1 = Annotation.objects.create(
+            page=1,
+            raw_text="First",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+        ann2 = Annotation.objects.create(
+            page=1,
+            raw_text="Second",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, ann1, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, ann2, [PermissionTypes.ALL])
+
+        # Create relationship
+        relationship = Relationship.objects.create(
+            relationship_label=rel_label,
+            corpus=corpus,
+            document=doc,
+            creator=self.user,
+        )
+        relationship.source_annotations.add(ann1)
+        relationship.target_annotations.add(ann2)
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Relationship Exception Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        # Mock Relationship.save to raise an exception for the forked corpus
+        original_rel_save = Relationship.save
+
+        def mock_rel_save(self, *args, **kwargs):
+            if self.corpus_id == forked.pk:
+                raise Exception("Simulated relationship fork error")
+            return original_rel_save(self, *args, **kwargs)
+
+        with patch.object(Relationship, "save", mock_rel_save):
+            # Fork should fail
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[doc.pk],
+                label_set_id=label_set.pk,
+                annotation_ids=[ann1.pk, ann2.pk],
+                folder_ids=[],
+                relationship_ids=[relationship.pk],
+                user_id=self.user.pk,
+            )
+
+            # Fork should fail and return None
+            self.assertIsNone(result)
+
+            # Corpus should be marked with error
+            forked.refresh_from_db()
+            self.assertTrue(forked.error)
