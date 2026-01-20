@@ -609,7 +609,12 @@ class UpdateMetadataColumn(graphene.Mutation):
 
 
 class SetMetadataValue(graphene.Mutation):
-    """Set a metadata value for a document."""
+    """Set a metadata value for a document.
+
+    Permission model:
+    - Requires UPDATE permission on BOTH document AND corpus (MIN logic)
+    - Uses MetadataQueryOptimizer for consistent permission checking
+    """
 
     class Arguments:
         document_id = graphene.ID(required=True)
@@ -625,7 +630,7 @@ class SetMetadataValue(graphene.Mutation):
     def mutate(root, info, document_id, corpus_id, column_id, value):
         from django.utils import timezone
 
-        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
         from opencontractserver.types.enums import PermissionTypes
         from opencontractserver.utils.permissioning import (
             set_permissions_for_obj_to_user,
@@ -633,34 +638,26 @@ class SetMetadataValue(graphene.Mutation):
 
         try:
             user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
-            column = Column.objects.get(pk=from_global_id(column_id)[1])
+            local_doc_id = int(from_global_id(document_id)[1])
+            local_corpus_id = int(from_global_id(corpus_id)[1])
+            local_column_id = int(from_global_id(column_id)[1])
 
-            # Check permissions on document
-            if not user_has_permission_for_obj(
-                user, document, PermissionTypes.UPDATE, include_group_permissions=True
-            ):
-                return SetMetadataValue(
-                    ok=False,
-                    message="You don't have permission to update this document",
-                )
+            # Check document + corpus permissions using optimizer (MIN logic)
+            has_perm, error_msg = MetadataQueryOptimizer.check_metadata_mutation_permission(
+                user, local_doc_id, local_corpus_id, "UPDATE"
+            )
+            if not has_perm:
+                return SetMetadataValue(ok=False, message=error_msg)
 
-            # Ensure column belongs to corpus metadata schema
-            if not (
-                column.fieldset
-                and hasattr(column.fieldset, "corpus")
-                and column.fieldset.corpus_id == corpus.id
-            ):
-                return SetMetadataValue(
-                    ok=False, message="Column does not belong to corpus metadata schema"
-                )
+            # Validate column belongs to corpus metadata schema
+            is_valid, error_msg, column = MetadataQueryOptimizer.validate_metadata_column(
+                local_column_id, local_corpus_id
+            )
+            if not is_valid:
+                return SetMetadataValue(ok=False, message=error_msg)
 
-            # Ensure it's a manual entry column
-            if not column.is_manual_entry:
-                return SetMetadataValue(
-                    ok=False, message="Only manual entry columns can be set"
-                )
+            # Get document for foreign key
+            document = Document.objects.get(pk=local_doc_id)
 
             # Find or create datacell
             datacell, created = Datacell.objects.update_or_create(
@@ -681,10 +678,8 @@ class SetMetadataValue(graphene.Mutation):
                 ok=True, message="Metadata value set successfully", obj=datacell
             )
 
-        except (Document.DoesNotExist, Corpus.DoesNotExist, Column.DoesNotExist):
-            return SetMetadataValue(
-                ok=False, message="Document, corpus, or column not found"
-            )
+        except Document.DoesNotExist:
+            return SetMetadataValue(ok=False, message="Document not found")
         except Exception as e:
             return SetMetadataValue(
                 ok=False, message=f"Error setting metadata value: {str(e)}"
@@ -692,7 +687,12 @@ class SetMetadataValue(graphene.Mutation):
 
 
 class DeleteMetadataValue(graphene.Mutation):
-    """Delete a metadata value for a document."""
+    """Delete a metadata value for a document.
+
+    Permission model:
+    - Requires DELETE permission on BOTH document AND corpus (MIN logic)
+    - Uses MetadataQueryOptimizer for consistent permission checking
+    """
 
     class Arguments:
         document_id = graphene.ID(required=True)
@@ -704,32 +704,37 @@ class DeleteMetadataValue(graphene.Mutation):
 
     @login_required
     def mutate(root, info, document_id, corpus_id, column_id):
-        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
         try:
             user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            # corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
-            column = Column.objects.get(pk=from_global_id(column_id)[1])
+            local_doc_id = int(from_global_id(document_id)[1])
+            local_corpus_id = int(from_global_id(corpus_id)[1])
+            local_column_id = int(from_global_id(column_id)[1])
 
-            # Find the datacell
+            # Check document + corpus permissions using optimizer (MIN logic)
+            has_perm, error_msg = MetadataQueryOptimizer.check_metadata_mutation_permission(
+                user, local_doc_id, local_corpus_id, "DELETE"
+            )
+            if not has_perm:
+                return DeleteMetadataValue(ok=False, message=error_msg)
+
+            # Get document and column for lookup
+            document = Document.objects.get(pk=local_doc_id)
+            column = Column.objects.get(pk=local_column_id)
+
+            # Find and delete the datacell
             datacell = Datacell.objects.get(document=document, column=column)
-
-            # Check permissions
-            if not user_has_permission_for_obj(
-                user, datacell, PermissionTypes.DELETE, include_group_permissions=True
-            ):
-                return DeleteMetadataValue(
-                    ok=False,
-                    message="You don't have permission to delete this metadata value",
-                )
-
             datacell.delete()
 
             return DeleteMetadataValue(
                 ok=True, message="Metadata value deleted successfully"
             )
 
+        except Document.DoesNotExist:
+            return DeleteMetadataValue(ok=False, message="Document not found")
+        except Column.DoesNotExist:
+            return DeleteMetadataValue(ok=False, message="Column not found")
         except Datacell.DoesNotExist:
             return DeleteMetadataValue(ok=False, message="Metadata value not found")
         except Exception as e:
