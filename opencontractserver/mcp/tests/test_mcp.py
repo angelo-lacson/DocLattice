@@ -3739,3 +3739,555 @@ class MCPSendErrorHandlingTest(TestCase):
             loop.run_until_complete(run_test())
         finally:
             loop.close()
+
+
+class MCPTTLLRUCacheNoCallbackTest(TestCase):
+    """Tests for TTLLRUCache without cleanup callback."""
+
+    def test_cache_without_cleanup_callback(self):
+        """Test cache operations work without cleanup callback."""
+        import asyncio
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        async def run_test():
+            # Create cache without cleanup callback
+            cache = TTLLRUCache(maxsize=2, ttl_seconds=3600, cleanup_callback=None)
+
+            # Add items
+            await cache.set("key1", "value1")
+            await cache.set("key2", "value2")
+
+            # Get items
+            self.assertEqual(await cache.get("key1"), "value1")
+            self.assertEqual(await cache.get("key2"), "value2")
+
+            # Eviction should work without callback
+            await cache.set("key3", "value3")  # Should evict key1
+            self.assertIsNone(await cache.get("key1"))
+            self.assertEqual(await cache.get("key3"), "value3")
+
+            # Remove should work without callback
+            result = await cache.remove("key2")
+            self.assertTrue(result)
+
+            # Clear should work without callback
+            await cache.clear()
+            self.assertEqual(len(cache), 0)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_cache_ttl_expiration_without_callback(self):
+        """Test TTL expiration works without cleanup callback."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        async def run_test():
+            cache = TTLLRUCache(maxsize=10, ttl_seconds=60, cleanup_callback=None)
+
+            with patch("opencontractserver.mcp.server.time") as mock_time:
+                mock_time.time.return_value = 1000
+                await cache.set("key1", "value1")
+
+                # Fast forward past TTL
+                mock_time.time.return_value = 1061
+
+                # Should return None (expired) without crashing
+                result = await cache.get("key1")
+                self.assertIsNone(result)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPScopedLifespanManagerShutdownTest(TransactionTestCase):
+    """Tests for ScopedMCPLifespanManager shutdown error handling."""
+
+    def setUp(self):
+        """Create test data."""
+        self.owner = User.objects.create_user(
+            username="shutdowntestowner",
+            email="shutdowntest@test.com",
+            password="testpass123",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Shutdown Test Corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+
+    def test_lifespan_manager_shutdown_error_handling(self):
+        """Test ScopedMCPLifespanManager handles shutdown errors gracefully."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from opencontractserver.mcp.server import ScopedMCPLifespanManager
+
+        async def run_test():
+            manager = ScopedMCPLifespanManager(self.corpus.slug)
+
+            # Manually set state as if started
+            manager._started = True
+
+            # Create a mock run_context that raises on __aexit__
+            mock_context = MagicMock()
+            mock_context.__aexit__ = AsyncMock(side_effect=Exception("Shutdown error"))
+            manager._run_context = mock_context
+
+            with patch("opencontractserver.mcp.server.logger") as mock_logger:
+                # Should not raise, just log warning
+                await manager.shutdown()
+
+                # Verify warning was logged
+                mock_logger.warning.assert_called_once()
+                call_args = mock_logger.warning.call_args[0][0]
+                self.assertIn("Error shutting down", call_args)
+
+            # State should be reset
+            self.assertFalse(manager._started)
+            self.assertIsNone(manager._run_context)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPScopedASGIErrorHandlingTest(TransactionTestCase):
+    """Tests for scoped ASGI endpoint error handling."""
+
+    def setUp(self):
+        """Create test data."""
+        self.owner = User.objects.create_user(
+            username="scopederrorowner",
+            email="scopederror@test.com",
+            password="testpass123",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Scoped Error Test Corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+
+    def test_scoped_asgi_error_returns_500(self):
+        """Test scoped ASGI endpoint returns 500 on internal error."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received_messages = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received_messages.append(message)
+
+            # Mock the scoped session manager to raise an exception
+            mock_manager = AsyncMock()
+            mock_manager.handle_request.side_effect = Exception("Scoped test error")
+
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock(return_value=mock_manager)
+
+            async def mock_get_lifespan(slug):
+                return mock_lifespan
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.corpus.slug}/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            with patch(
+                "opencontractserver.mcp.server.get_scoped_lifespan_manager",
+                side_effect=mock_get_lifespan,
+            ), patch(
+                "opencontractserver.mcp.server.validate_corpus_slug",
+                return_value=True,
+            ):
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+            # Should get a 500 error response
+            self.assertTrue(len(received_messages) >= 2)
+            self.assertEqual(received_messages[0]["type"], "http.response.start")
+            self.assertEqual(received_messages[0]["status"], 500)
+            body = json.loads(received_messages[1]["body"])
+            self.assertIn("error", body)
+            self.assertEqual(body["error"], "Scoped test error")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_scoped_asgi_send_failure_logged(self):
+        """Test scoped ASGI logs send failures during error response."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            # Mock send to fail
+            async def mock_send_fails(message):
+                raise ConnectionError("Client disconnected")
+
+            # Mock the scoped session manager to raise an exception
+            mock_manager = AsyncMock()
+            mock_manager.handle_request.side_effect = Exception("Scoped test error")
+
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock(return_value=mock_manager)
+
+            async def mock_get_lifespan(slug):
+                return mock_lifespan
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.corpus.slug}/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            with patch(
+                "opencontractserver.mcp.server.get_scoped_lifespan_manager",
+                side_effect=mock_get_lifespan,
+            ), patch(
+                "opencontractserver.mcp.server.validate_corpus_slug",
+                return_value=True,
+            ), patch(
+                "opencontractserver.mcp.server.logger"
+            ) as mock_logger:
+                app = create_mcp_asgi_app()
+                # Should not raise, even though send fails
+                await app(scope, mock_receive, mock_send_fails)
+
+                # Should have logged both the original error and the send failure
+                self.assertTrue(mock_logger.error.called)
+                self.assertTrue(mock_logger.warning.called)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPScopedToolCallPermissionTest(TransactionTestCase):
+    """Tests for scoped tool call permission errors via ASGI endpoint."""
+
+    def setUp(self):
+        """Create test data."""
+        self.owner = User.objects.create_user(
+            username="scopedpermowner",
+            email="scopedperm@test.com",
+            password="testpass123",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Scoped Permission Test Corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+
+    def test_scoped_server_validates_corpus_on_creation(self):
+        """Test that scoped server is created correctly for valid corpus."""
+        from opencontractserver.mcp.server import create_scoped_mcp_server
+
+        server = create_scoped_mcp_server(self.corpus.slug)
+        self.assertIsNotNone(server)
+        self.assertEqual(server.name, f"opencontracts-corpus-{self.corpus.slug}")
+
+    def test_get_scoped_tool_definitions_has_no_corpus_slug_required(self):
+        """Test scoped tool definitions don't require corpus_slug argument."""
+        from opencontractserver.mcp.server import get_scoped_tool_definitions
+
+        tools = get_scoped_tool_definitions(self.corpus.slug)
+
+        # Find the list_documents tool
+        list_docs_tool = next((t for t in tools if t.name == "list_documents"), None)
+        self.assertIsNotNone(list_docs_tool)
+
+        # Verify corpus_slug is not required
+        required_params = list_docs_tool.inputSchema.get("required", [])
+        self.assertNotIn("corpus_slug", required_params)
+
+    def test_get_scoped_tool_definitions_includes_get_corpus_info(self):
+        """Test scoped tool definitions include get_corpus_info tool."""
+        from opencontractserver.mcp.server import get_scoped_tool_definitions
+
+        tools = get_scoped_tool_definitions(self.corpus.slug)
+
+        # Find the get_corpus_info tool
+        corpus_info_tool = next((t for t in tools if t.name == "get_corpus_info"), None)
+        self.assertIsNotNone(corpus_info_tool)
+
+        # get_corpus_info should have no required params
+        required_params = corpus_info_tool.inputSchema.get("required", [])
+        self.assertEqual(required_params, [])
+
+
+class MCPScopedToolsWithLabelSetTest(TestCase):
+    """Tests for get_corpus_info with label set."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Create test data with label set."""
+        from opencontractserver.annotations.models import AnnotationLabel, LabelSet
+
+        cls.owner = User.objects.create_user(
+            username="scopedlabelowner",
+            email="scopedlabel@test.com",
+            password="testpass123",
+        )
+
+        cls.label_set = LabelSet.objects.create(
+            title="Scoped Test Label Set",
+            description="Label set for scoped tool tests",
+            creator=cls.owner,
+            is_public=True,
+        )
+
+        cls.label1 = AnnotationLabel.objects.create(
+            text="Scoped Label A",
+            color="#111111",
+            label_type="TOKEN_LABEL",
+            description="First scoped label",
+            creator=cls.owner,
+            is_public=True,
+        )
+
+        cls.label2 = AnnotationLabel.objects.create(
+            text="Scoped Label B",
+            color="#222222",
+            label_type="SPAN_LABEL",
+            description="Second scoped label",
+            creator=cls.owner,
+            is_public=True,
+        )
+
+        cls.label_set.annotation_labels.add(cls.label1, cls.label2)
+
+        cls.corpus = Corpus.objects.create(
+            title="Scoped Corpus With Labels",
+            description="Test corpus with label set for scoped tools",
+            creator=cls.owner,
+            is_public=True,
+            label_set=cls.label_set,
+            allow_comments=True,
+        )
+
+    def test_get_corpus_info_with_label_set(self):
+        """Test get_corpus_info returns label set data."""
+        from opencontractserver.mcp.tools import get_corpus_info
+
+        result = get_corpus_info(self.corpus.slug)
+
+        self.assertEqual(result["slug"], self.corpus.slug)
+        self.assertEqual(result["title"], "Scoped Corpus With Labels")
+
+        # Verify label set data
+        self.assertIsNotNone(result["label_set"])
+        self.assertEqual(result["label_set"]["title"], "Scoped Test Label Set")
+        self.assertEqual(
+            result["label_set"]["description"], "Label set for scoped tool tests"
+        )
+        self.assertEqual(len(result["label_set"]["labels"]), 2)
+
+        # Verify label details
+        label_texts = [label["text"] for label in result["label_set"]["labels"]]
+        self.assertIn("Scoped Label A", label_texts)
+        self.assertIn("Scoped Label B", label_texts)
+
+        # Verify label properties
+        label_a = next(
+            lbl
+            for lbl in result["label_set"]["labels"]
+            if lbl["text"] == "Scoped Label A"
+        )
+        self.assertEqual(label_a["color"], "#111111")
+        self.assertEqual(label_a["label_type"], "TOKEN_LABEL")
+        self.assertEqual(label_a["description"], "First scoped label")
+
+    def test_get_corpus_info_without_label_set(self):
+        """Test get_corpus_info returns None for label_set when not present."""
+        # Create corpus without label set
+        corpus_no_labels = Corpus.objects.create(
+            title="Corpus Without Labels",
+            creator=self.owner,
+            is_public=True,
+        )
+
+        from opencontractserver.mcp.tools import get_corpus_info
+
+        result = get_corpus_info(corpus_no_labels.slug)
+
+        self.assertEqual(result["slug"], corpus_no_labels.slug)
+        self.assertIsNone(result["label_set"])
+
+
+class MCPAnnotationResourceDocumentNotFoundTest(TestCase):
+    """Tests for annotation resource when document is not found."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Create test data."""
+        cls.owner = User.objects.create_user(
+            username="annnotfoundowner",
+            email="annnotfound@test.com",
+            password="testpass123",
+        )
+
+        cls.corpus = Corpus.objects.create(
+            title="Annotation Not Found Test Corpus",
+            creator=cls.owner,
+            is_public=True,
+        )
+
+    def test_get_annotation_resource_document_not_found(self):
+        """Test get_annotation_resource raises when document not in corpus."""
+        from opencontractserver.documents.models import Document
+        from opencontractserver.mcp.resources import get_annotation_resource
+
+        with self.assertRaises(Document.DoesNotExist) as context:
+            get_annotation_resource(self.corpus.slug, "nonexistent-document-slug", 123)
+
+        self.assertIn("not found in corpus", str(context.exception))
+
+
+class MCPCleanupSessionManagerTest(TestCase):
+    """Tests for _cleanup_session_manager function."""
+
+    def test_cleanup_session_manager_logs(self):
+        """Test _cleanup_session_manager logs info message."""
+        from unittest.mock import MagicMock, patch
+
+        from opencontractserver.mcp.server import _cleanup_session_manager
+
+        mock_manager = MagicMock()
+
+        with patch("opencontractserver.mcp.server.logger") as mock_logger:
+            _cleanup_session_manager("test-key", mock_manager)
+
+            # Should log info message
+            mock_logger.info.assert_called_once()
+            call_args = mock_logger.info.call_args[0][0]
+            self.assertIn("Cleaning up session manager", call_args)
+            self.assertIn("test-key", call_args)
+
+
+class MCPScopedResourceDefinitionsEmptyCorpusTest(TestCase):
+    """Tests for scoped resource definitions with nonexistent corpus."""
+
+    def test_get_scoped_resource_definitions_nonexistent_corpus(self):
+        """Test get_scoped_resource_definitions returns empty for nonexistent corpus."""
+        from opencontractserver.mcp.server import get_scoped_resource_definitions
+
+        resources = get_scoped_resource_definitions("nonexistent-corpus-slug")
+
+        # Should return empty list for nonexistent corpus
+        self.assertEqual(len(resources), 0)
+
+
+class MCPCacheUpdateExistingKeyTest(TestCase):
+    """Tests for TTLLRUCache update behavior."""
+
+    def test_cache_set_updates_existing_key(self):
+        """Test cache set updates value and timestamp for existing key."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        async def run_test():
+            cache = TTLLRUCache(maxsize=10, ttl_seconds=60, cleanup_callback=None)
+
+            with patch("opencontractserver.mcp.server.time") as mock_time:
+                # Set initial value
+                mock_time.time.return_value = 1000
+                await cache.set("key1", "value1")
+
+                # Update the value
+                mock_time.time.return_value = 1030
+                await cache.set("key1", "value2")
+
+                # Value should be updated
+                self.assertEqual(await cache.get("key1"), "value2")
+
+                # TTL should be reset, so not expired yet at 1089
+                mock_time.time.return_value = 1089
+                self.assertEqual(await cache.get("key1"), "value2")
+
+                # But should expire at 1091 (61 seconds after update)
+                mock_time.time.return_value = 1091
+                self.assertIsNone(await cache.get("key1"))
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPCleanupLifespanManagerEventLoopRunningTest(TestCase):
+    """Tests for _cleanup_lifespan_manager when event loop is running."""
+
+    def test_cleanup_schedules_shutdown_task(self):
+        """Test _cleanup_lifespan_manager schedules shutdown task when loop running."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from opencontractserver.mcp.server import _cleanup_lifespan_manager
+
+        mock_manager = MagicMock()
+        mock_manager.shutdown = AsyncMock()
+        mock_manager.corpus_slug = "test-corpus"
+
+        # Create a mock loop that is running
+        mock_loop = MagicMock()
+        mock_loop.is_running.return_value = True
+        mock_loop.create_task = MagicMock()
+
+        with patch("asyncio.get_event_loop", return_value=mock_loop), patch(
+            "opencontractserver.mcp.server.logger"
+        ) as mock_logger:
+            _cleanup_lifespan_manager("test-key", mock_manager)
+
+            # Should log info
+            mock_logger.info.assert_called_once()
+
+            # Should schedule shutdown task
+            mock_loop.create_task.assert_called_once()
+            # The argument should be the coroutine from manager.shutdown()
+            call_args = mock_loop.create_task.call_args[0][0]
+            self.assertIsNotNone(call_args)
