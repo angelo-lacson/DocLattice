@@ -3005,198 +3005,89 @@ class Query(graphene.ObjectType):
     )
 
     def resolve_corpus_metadata_columns(self, info, corpus_id):
-        """Get metadata columns for a corpus."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata columns for a corpus using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
-                return []
-
-            # Get metadata fieldset
-            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
-                return corpus.metadata_schema.columns.filter(
-                    is_manual_entry=True
-                ).order_by("display_order")
-
-            return []
-
-        except Corpus.DoesNotExist:
-            return []
+        return MetadataQueryOptimizer.get_corpus_metadata_columns(
+            user, local_corpus_id, manual_only=True
+        )
 
     def resolve_document_metadata_datacells(self, info, document_id, corpus_id):
-        """Get metadata datacells for a document in a corpus."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata datacells for a document using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_doc_id = int(from_global_id(document_id)[1])
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, document, PermissionTypes.READ):
-                return []
-
-            # Get metadata datacells
-            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
-                return Datacell.objects.filter(
-                    document=document,
-                    column__fieldset=corpus.metadata_schema,
-                    column__is_manual_entry=True,
-                ).select_related("column")
-
-            return []
-
-        except (Document.DoesNotExist, Corpus.DoesNotExist):
-            return []
+        return MetadataQueryOptimizer.get_document_metadata(
+            user, local_doc_id, local_corpus_id, manual_only=True
+        )
 
     def resolve_metadata_completion_status_v2(self, info, document_id, corpus_id):
-        """Get metadata completion status using column/datacell system."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata completion status using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_doc_id = int(from_global_id(document_id)[1])
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, document, PermissionTypes.READ):
-                return None
-
-            # Get metadata columns and datacells
-            if not hasattr(corpus, "metadata_schema") or not corpus.metadata_schema:
-                return {
-                    "total_fields": 0,
-                    "filled_fields": 0,
-                    "missing_fields": 0,
-                    "percentage": 100.0,
-                    "missing_required": [],
-                }
-
-            columns = corpus.metadata_schema.columns.filter(is_manual_entry=True)
-            total_fields = columns.count()
-
-            if total_fields == 0:
-                return {
-                    "total_fields": 0,
-                    "filled_fields": 0,
-                    "missing_fields": 0,
-                    "percentage": 100.0,
-                    "missing_required": [],
-                }
-
-            # Get filled datacells
-            filled_datacells = Datacell.objects.filter(
-                document=document, column__in=columns
-            ).exclude(data__value__isnull=True)
-
-            filled_count = filled_datacells.count()
-            filled_column_ids = set(
-                filled_datacells.values_list("column_id", flat=True)
-            )
-
-            # Find missing required fields
-            missing_required = []
-            for column in columns:
-                if column.id not in filled_column_ids:
-                    config = column.validation_config or {}
-                    if config.get("required", False):
-                        missing_required.append(column.name)
-
-            # Calculate percentage
-            percentage = (filled_count / total_fields * 100) if total_fields > 0 else 0
-
-            return {
-                "total_fields": total_fields,
-                "filled_fields": filled_count,
-                "missing_fields": total_fields - filled_count,
-                "percentage": percentage,
-                "missing_required": missing_required,
-            }
-
-        except (Corpus.DoesNotExist, Document.DoesNotExist):
-            return None
+        return MetadataQueryOptimizer.get_metadata_completion_status(
+            user, local_doc_id, local_corpus_id
+        )
 
     def resolve_documents_metadata_datacells_batch(self, info, document_ids, corpus_id):
         """
-        Get metadata datacells for multiple documents in a single query.
+        Get metadata datacells for multiple documents using MetadataQueryOptimizer.
 
         This batch query solves the N+1 problem when loading metadata for a grid view.
-        Instead of fetching metadata for each document individually, this fetches
-        all metadata for all requested documents in one database query.
+        Uses the centralized MetadataQueryOptimizer which applies proper permission
+        filtering: Effective Permission = MIN(document_permission, corpus_permission)
         """
-        from collections import defaultdict
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        from graphql_relay import to_global_id
+        user = info.context.user
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-        from opencontractserver.corpuses.models import Corpus
+        # Convert global IDs to local IDs
+        local_doc_ids = []
+        global_id_map = {}  # local_id -> global_id
+        for global_id in document_ids:
+            _, local_id = from_global_id(global_id)
+            local_doc_ids.append(int(local_id))
+            global_id_map[int(local_id)] = global_id
 
-        try:
-            user = info.context.user
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        # Use optimizer to get batch metadata with proper permissions
+        datacells_by_doc = MetadataQueryOptimizer.get_documents_metadata_batch(
+            user,
+            local_doc_ids,
+            local_corpus_id,
+            manual_only=True,
+            context=info.context,
+        )
 
-            # Check corpus permission
-            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
-                return []
+        # Build response - maintain order of requested document_ids
+        # The optimizer returns a dict with keys for all readable documents,
+        # so we only include documents the user has permission to read
+        results = []
+        for global_id in document_ids:
+            local_id = global_id_map.get(int(from_global_id(global_id)[1]))
+            if local_id is None:
+                local_id = int(from_global_id(global_id)[1])
 
-            # Check if corpus has metadata schema
-            if not hasattr(corpus, "metadata_schema") or not corpus.metadata_schema:
-                return []
+            # Only include documents that are in the result (user has permission)
+            if local_id in datacells_by_doc:
+                results.append(
+                    {
+                        "document_id": global_id,
+                        "datacells": datacells_by_doc[local_id],
+                    }
+                )
 
-            # Convert global IDs to local IDs
-            local_doc_ids = []
-            global_id_map = {}  # local_id -> global_id
-            for global_id in document_ids:
-                _, local_id = from_global_id(global_id)
-                local_doc_ids.append(int(local_id))
-                global_id_map[int(local_id)] = global_id
-
-            # Fetch all documents and check permissions in bulk
-            documents = Document.objects.filter(pk__in=local_doc_ids)
-
-            # For non-superusers, filter to readable documents
-            if not user.is_superuser:
-                readable_doc_ids = set()
-                for doc in documents:
-                    if user_has_permission_for_obj(
-                        user, doc, PermissionTypes.READ, include_group_permissions=True
-                    ):
-                        readable_doc_ids.add(doc.pk)
-            else:
-                readable_doc_ids = set(local_doc_ids)
-
-            # Single query for all datacells with related column data
-            datacells = Datacell.objects.filter(
-                document_id__in=readable_doc_ids,
-                column__fieldset=corpus.metadata_schema,
-                column__is_manual_entry=True,
-            ).select_related("column", "document", "creator")
-
-            # Group datacells by document
-            datacells_by_doc = defaultdict(list)
-            for datacell in datacells:
-                datacells_by_doc[datacell.document_id].append(datacell)
-
-            # Build response - maintain order of requested document_ids
-            results = []
-            for global_id in document_ids:
-                _, local_id = from_global_id(global_id)
-                local_id = int(local_id)
-                if local_id in readable_doc_ids:
-                    results.append(
-                        {
-                            "document_id": global_id,
-                            "datacells": datacells_by_doc.get(local_id, []),
-                        }
-                    )
-
-            return results
-
-        except Corpus.DoesNotExist:
-            return []
+        return results
 
     # BADGE RESOLVERS ####################################
     badges = DjangoFilterConnectionField(BadgeType, filterset_class=BadgeFilter)
