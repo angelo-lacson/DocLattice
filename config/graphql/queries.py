@@ -130,9 +130,8 @@ from opencontractserver.documents.query_optimizer import (
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.notifications.models import Notification
-from opencontractserver.types.enums import LabelType, PermissionTypes
+from opencontractserver.types.enums import LabelType
 from opencontractserver.users.models import Assignment, UserExport, UserImport
-from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +150,9 @@ class DocumentMetadataResultType(graphene.ObjectType):
     """Type for batch metadata query results - groups datacells by document."""
 
     document_id = graphene.ID(description="The document's global ID")
-    datacells = graphene.List(DatacellType, description="Metadata datacells for this document")
+    datacells = graphene.List(
+        DatacellType, description="Metadata datacells for this document"
+    )
 
 
 class Query(graphene.ObjectType):
