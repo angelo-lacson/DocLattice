@@ -414,13 +414,21 @@ def get_corpus_info(corpus_slug: str) -> dict:
     from opencontractserver.corpuses.models import Corpus
 
     anonymous = AnonymousUser()
-    corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
+    # Use select_related for label_set and prefetch_related for annotation_labels
+    # to avoid N+1 queries when accessing label data
+    corpus = (
+        Corpus.objects.visible_to_user(anonymous)
+        .select_related("label_set")
+        .prefetch_related("label_set__annotation_labels")
+        .get(slug=corpus_slug)
+    )
 
     # Get label set info if available
     label_set_data = None
     if corpus.label_set:
         labels = []
-        for label in corpus.label_set.annotation_labels.all()[:50]:
+        # annotation_labels is already prefetched, slicing in Python to avoid new query
+        for label in list(corpus.label_set.annotation_labels.all())[:50]:
             labels.append(
                 {
                     "text": label.text,
@@ -448,7 +456,9 @@ def get_corpus_info(corpus_slug: str) -> dict:
 
 
 def create_scoped_tool_wrapper(
-    tool_func: Callable[..., Any], corpus_slug: str, corpus_slug_param: str = "corpus_slug"
+    tool_func: Callable[..., Any],
+    corpus_slug: str,
+    corpus_slug_param: str = "corpus_slug",
 ) -> Callable[..., Any]:
     """
     Create a wrapper function that auto-injects corpus_slug into tool calls.
@@ -464,6 +474,7 @@ def create_scoped_tool_wrapper(
     Returns:
         Wrapped function that auto-injects corpus_slug
     """
+
     def wrapper(**kwargs: Any) -> Any:
         # Always inject the scoped corpus_slug, ignoring any provided value
         kwargs[corpus_slug_param] = corpus_slug
@@ -494,5 +505,7 @@ def get_scoped_tool_handlers(corpus_slug: str) -> dict[str, Callable[..., Any]]:
         "list_annotations": create_scoped_tool_wrapper(list_annotations, corpus_slug),
         "search_corpus": create_scoped_tool_wrapper(search_corpus, corpus_slug),
         "list_threads": create_scoped_tool_wrapper(list_threads, corpus_slug),
-        "get_thread_messages": create_scoped_tool_wrapper(get_thread_messages, corpus_slug),
+        "get_thread_messages": create_scoped_tool_wrapper(
+            get_thread_messages, corpus_slug
+        ),
     }
