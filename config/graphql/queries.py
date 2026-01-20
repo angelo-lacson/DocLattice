@@ -3053,13 +3053,14 @@ class Query(graphene.ObjectType):
         user = info.context.user
         local_corpus_id = int(from_global_id(corpus_id)[1])
 
-        # Convert global IDs to local IDs
+        # Convert global IDs to local IDs (single pass)
         local_doc_ids = []
-        global_id_map = {}  # local_id -> global_id
+        local_id_by_global = {}  # global_id -> local_id
         for global_id in document_ids:
             _, local_id = from_global_id(global_id)
-            local_doc_ids.append(int(local_id))
-            global_id_map[int(local_id)] = global_id
+            local_id_int = int(local_id)
+            local_doc_ids.append(local_id_int)
+            local_id_by_global[global_id] = local_id_int
 
         # Use optimizer to get batch metadata with proper permissions
         datacells_by_doc = MetadataQueryOptimizer.get_documents_metadata_batch(
@@ -3075,9 +3076,7 @@ class Query(graphene.ObjectType):
         # so we only include documents the user has permission to read
         results = []
         for global_id in document_ids:
-            local_id = global_id_map.get(int(from_global_id(global_id)[1]))
-            if local_id is None:
-                local_id = int(from_global_id(global_id)[1])
+            local_id = local_id_by_global[global_id]
 
             # Only include documents that are in the result (user has permission)
             if local_id in datacells_by_doc:

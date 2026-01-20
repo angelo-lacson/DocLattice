@@ -7,6 +7,8 @@ Follows the same pattern as AnnotationQueryOptimizer:
 - No caching layer - just optimized queries
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
 
 from django.db.models import QuerySet
@@ -105,6 +107,69 @@ class MetadataQueryOptimizer:
             )
         except Corpus.DoesNotExist:
             return False, False, False, False
+
+    @classmethod
+    def _get_readable_document_ids_bulk(
+        cls, user, document_ids: list[int], documents_queryset
+    ) -> set[int]:
+        """
+        Bulk check which documents the user can read.
+
+        This method avoids O(n) individual permission checks by querying
+        guardian permission tables directly.
+
+        Returns: Set of document IDs the user has read access to
+        """
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+
+        from opencontractserver.documents.models import (
+            DocumentGroupObjectPermission,
+            DocumentUserObjectPermission,
+        )
+
+        # Get the read_document permission ID
+        content_type = ContentType.objects.get(app_label="documents", model="document")
+        read_perm = Permission.objects.filter(
+            codename="read_document", content_type=content_type
+        ).first()
+
+        if not read_perm:
+            # Fallback to empty if permission doesn't exist
+            return set()
+
+        # Bulk query: documents the user has direct read permission on
+        user_permitted_ids = set(
+            DocumentUserObjectPermission.objects.filter(
+                permission_id=read_perm.id,
+                user_id=user.id,
+                content_object_id__in=document_ids,
+            ).values_list("content_object_id", flat=True)
+        )
+
+        # Bulk query: documents the user has read permission on via groups
+        user_group_ids = list(user.groups.values_list("id", flat=True))
+        if user_group_ids:
+            group_permitted_ids = set(
+                DocumentGroupObjectPermission.objects.filter(
+                    permission_id=read_perm.id,
+                    group_id__in=user_group_ids,
+                    content_object_id__in=document_ids,
+                ).values_list("content_object_id", flat=True)
+            )
+        else:
+            group_permitted_ids = set()
+
+        # Documents where user is creator or document is public
+        creator_public_ids = set(
+            documents_queryset.filter(
+                Q(creator_id=user.id) | Q(is_public=True)
+            ).values_list("id", flat=True)
+        )
+
+        # Union all sources of read permission
+        return user_permitted_ids | group_permitted_ids | creator_public_ids
 
     @classmethod
     def get_corpus_metadata_columns(
@@ -261,7 +326,7 @@ class MetadataQueryOptimizer:
         if not hasattr(corpus, "metadata_schema") or not corpus.metadata_schema:
             return result
 
-        # Get all documents and check permissions
+        # Get all documents and check permissions using bulk queries
         documents = Document.objects.filter(pk__in=document_ids)
 
         if user.is_superuser:
@@ -272,14 +337,11 @@ class MetadataQueryOptimizer:
                 documents.filter(is_public=True).values_list("id", flat=True)
             )
         else:
-            # Check document permissions for each document
-            # This is still O(n) permission checks, but documents are fetched in one query
-            readable_doc_ids = set()
-            for doc in documents:
-                if user_has_permission_for_obj(
-                    user, doc, PermissionTypes.READ, include_group_permissions=True
-                ):
-                    readable_doc_ids.add(doc.pk)
+            # Bulk permission check using guardian tables directly
+            # This avoids O(n) individual permission checks for large document lists
+            readable_doc_ids = cls._get_readable_document_ids_bulk(
+                user, document_ids, documents
+            )
 
         if not readable_doc_ids:
             return result
@@ -345,8 +407,9 @@ class MetadataQueryOptimizer:
                 "missing_required": [],
             }
 
-        columns = corpus.metadata_schema.columns.filter(is_manual_entry=True)
-        total_fields = columns.count()
+        # Force evaluation once to avoid multiple queries
+        columns = list(corpus.metadata_schema.columns.filter(is_manual_entry=True))
+        total_fields = len(columns)
 
         if total_fields == 0:
             return {
@@ -357,15 +420,18 @@ class MetadataQueryOptimizer:
                 "missing_required": [],
             }
 
-        # Get filled datacells
+        # Get column IDs for filtering
+        column_ids = [c.id for c in columns]
+
+        # Get filled datacells - use column_ids to avoid passing queryset
         filled_datacells = Datacell.objects.filter(
-            document_id=document_id, column__in=columns
+            document_id=document_id, column_id__in=column_ids
         ).exclude(data__value__isnull=True)
 
         filled_count = filled_datacells.count()
         filled_column_ids = set(filled_datacells.values_list("column_id", flat=True))
 
-        # Find missing required fields
+        # Find missing required fields (no additional queries - columns already evaluated)
         missing_required = []
         for column in columns:
             if column.id not in filled_column_ids:
@@ -463,7 +529,7 @@ class MetadataQueryOptimizer:
         cls,
         column_id: int,
         corpus_id: int,
-    ) -> tuple[bool, str, "Column | None"]:
+    ) -> tuple[bool, str, Column | None]:
         """
         Validate that a column belongs to the corpus's metadata schema and is manual entry.
 
