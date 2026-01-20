@@ -50,6 +50,31 @@ export const GET_METADATA_COMPLETION_STATUS = gql`
   }
 `;
 
+export const GET_DOCUMENTS_METADATA_BATCH = gql`
+  query GetDocumentsMetadataBatch($documentIds: [ID]!, $corpusId: ID!) {
+    documentsMetadataDatacellsBatch(documentIds: $documentIds, corpusId: $corpusId) {
+      documentId
+      datacells {
+        id
+        data
+        dataDefinition
+        column {
+          id
+          name
+          dataType
+          validationConfig
+          helpText
+          isManualEntry
+        }
+        creator {
+          id
+          email
+        }
+      }
+    }
+  }
+`;
+
 // Mutations
 export const CREATE_METADATA_COLUMN = gql`
   mutation CreateMetadataColumn(
@@ -230,6 +255,36 @@ export interface GetMetadataCompletionStatusOutput {
     percentage: number;
     missingRequired: string[];
   };
+}
+
+export interface GetDocumentsMetadataBatchInput {
+  documentIds: string[];
+  corpusId: string;
+}
+
+export interface DocumentMetadataResult {
+  documentId: string;
+  datacells: {
+    id: string;
+    data: any;
+    dataDefinition: string;
+    column: {
+      id: string;
+      name: string;
+      dataType: string;
+      validationConfig?: any;
+      helpText?: string;
+      isManualEntry: boolean;
+    };
+    creator: {
+      id: string;
+      email: string;
+    };
+  }[];
+}
+
+export interface GetDocumentsMetadataBatchOutput {
+  documentsMetadataDatacellsBatch: DocumentMetadataResult[];
 }
 
 export interface CreateMetadataColumnInput {

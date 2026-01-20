@@ -462,6 +462,12 @@ class Datacell(BaseOCModel):
             ("comment_datacell", "comment datacell"),
             ("publish_datacell", "publish datacell"),
         )
+        indexes = [
+            # Index for batch metadata queries (filtering by document)
+            django.db.models.Index(fields=["document"]),
+            # Composite index for document + column lookups
+            django.db.models.Index(fields=["document", "column"]),
+        ]
         constraints = [
             django.db.models.UniqueConstraint(
                 fields=["document", "column"],
