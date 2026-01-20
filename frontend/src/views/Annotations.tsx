@@ -502,6 +502,23 @@ export const Annotations = () => {
     }
   }, [sourceFilter]);
 
+  // Re-execute semantic search when filters change (fixes race condition)
+  // This ensures search results stay in sync with filter selections
+  useEffect(() => {
+    if (searchValue.trim()) {
+      // Reset pagination and re-search with new filters
+      setSemanticSearchOffset(0);
+      setSemanticSearchResults([]);
+      setHasMoreSemanticResults(true);
+      // Use a small delay to let state settle before searching
+      const timeoutId = setTimeout(() => {
+        performSemanticSearch(searchValue, 0);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered_to_corpus?.id, sourceFilter, typeFilter]);
+
   // Get raw items from query - handles both browse mode and semantic search
   const rawItems: ServerAnnotationType[] = useMemo(() => {
     if (isSemanticSearchActive) {
@@ -611,6 +628,13 @@ export const Annotations = () => {
       }
     }, 500)
   );
+
+  // Cleanup debounce on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      debouncedSearch.current.cancel();
+    };
+  }, []);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -891,6 +915,25 @@ export const Annotations = () => {
                 : "Loading Annotations..."
             }
           />
+
+          {/* Error display for semantic search failures */}
+          {semanticSearchError && (
+            <div
+              style={{
+                padding: "16px 24px",
+                marginBottom: "16px",
+                backgroundColor: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                color: "#dc2626",
+                fontSize: "14px",
+              }}
+            >
+              <strong>Search failed:</strong>{" "}
+              {semanticSearchError.message ||
+                "An error occurred while searching. Please try again."}
+            </div>
+          )}
 
           <AnnotationsGrid>
             {filteredItems.length > 0 ? (
