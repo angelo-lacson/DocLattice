@@ -147,6 +147,13 @@ class MetadataCompletionStatusType(graphene.ObjectType):
     missing_required = graphene.List(graphene.String)
 
 
+class DocumentMetadataResultType(graphene.ObjectType):
+    """Type for batch metadata query results - groups datacells by document."""
+
+    document_id = graphene.ID(description="The document's global ID")
+    datacells = graphene.List(DatacellType, description="Metadata datacells for this document")
+
+
 class Query(graphene.ObjectType):
 
     # USER RESOLVERS #####################################
@@ -2990,6 +2997,13 @@ class Query(graphene.ObjectType):
         description="Get metadata completion status for a document using column/datacell system",
     )
 
+    documents_metadata_datacells_batch = graphene.List(
+        DocumentMetadataResultType,
+        document_ids=graphene.List(graphene.ID, required=True),
+        corpus_id=graphene.ID(required=True),
+        description="Get metadata datacells for multiple documents in a single query (batch)",
+    )
+
     def resolve_corpus_metadata_columns(self, info, corpus_id):
         """Get metadata columns for a corpus."""
         from opencontractserver.corpuses.models import Corpus
@@ -3105,6 +3119,84 @@ class Query(graphene.ObjectType):
 
         except (Corpus.DoesNotExist, Document.DoesNotExist):
             return None
+
+    def resolve_documents_metadata_datacells_batch(self, info, document_ids, corpus_id):
+        """
+        Get metadata datacells for multiple documents in a single query.
+
+        This batch query solves the N+1 problem when loading metadata for a grid view.
+        Instead of fetching metadata for each document individually, this fetches
+        all metadata for all requested documents in one database query.
+        """
+        from collections import defaultdict
+
+        from graphql_relay import to_global_id
+
+        from opencontractserver.corpuses.models import Corpus
+
+        try:
+            user = info.context.user
+            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+
+            # Check corpus permission
+            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+                return []
+
+            # Check if corpus has metadata schema
+            if not hasattr(corpus, "metadata_schema") or not corpus.metadata_schema:
+                return []
+
+            # Convert global IDs to local IDs
+            local_doc_ids = []
+            global_id_map = {}  # local_id -> global_id
+            for global_id in document_ids:
+                _, local_id = from_global_id(global_id)
+                local_doc_ids.append(int(local_id))
+                global_id_map[int(local_id)] = global_id
+
+            # Fetch all documents and check permissions in bulk
+            documents = Document.objects.filter(pk__in=local_doc_ids)
+
+            # For non-superusers, filter to readable documents
+            if not user.is_superuser:
+                readable_doc_ids = set()
+                for doc in documents:
+                    if user_has_permission_for_obj(
+                        user, doc, PermissionTypes.READ, include_group_permissions=True
+                    ):
+                        readable_doc_ids.add(doc.pk)
+            else:
+                readable_doc_ids = set(local_doc_ids)
+
+            # Single query for all datacells with related column data
+            datacells = Datacell.objects.filter(
+                document_id__in=readable_doc_ids,
+                column__fieldset=corpus.metadata_schema,
+                column__is_manual_entry=True,
+            ).select_related("column", "document", "creator")
+
+            # Group datacells by document
+            datacells_by_doc = defaultdict(list)
+            for datacell in datacells:
+                datacells_by_doc[datacell.document_id].append(datacell)
+
+            # Build response - maintain order of requested document_ids
+            results = []
+            for global_id in document_ids:
+                _, local_id = from_global_id(global_id)
+                local_id = int(local_id)
+                if local_id in readable_doc_ids:
+                    results.append(
+                        {
+                            "document_id": global_id,
+                            "datacells": datacells_by_doc.get(local_id, []),
+                        }
+                    )
+
+            return results
+
+        except Corpus.DoesNotExist:
+            return []
 
     # BADGE RESOLVERS ####################################
     badges = DjangoFilterConnectionField(BadgeType, filterset_class=BadgeFilter)
