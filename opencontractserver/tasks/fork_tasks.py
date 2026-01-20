@@ -129,7 +129,8 @@ def fork_corpus(
             folder_map = {}  # old_folder_id -> new_folder_id
 
             logger.info(f"Cloning {len(folder_ids)} folders")
-            for old_folder in CorpusFolder.objects.filter(pk__in=folder_ids).order_by(
+            # Note: .with_tree_fields() is required to use tree_depth as it's a CTE-computed field
+            for old_folder in CorpusFolder.objects.filter(pk__in=folder_ids).with_tree_fields().order_by(
                 "tree_depth", "pk"
             ):
                 try:
@@ -287,7 +288,10 @@ def fork_corpus(
             # ============================================================
             logger.info(f"Cloning {len(relationship_ids)} relationships")
 
-            for old_relationship in Relationship.objects.filter(pk__in=relationship_ids):
+            # Use prefetch_related to avoid N+1 queries when accessing M2M fields
+            for old_relationship in Relationship.objects.filter(pk__in=relationship_ids).prefetch_related(
+                "source_annotations", "target_annotations"
+            ):
                 try:
                     # Get source and target annotation IDs
                     old_source_ids = list(

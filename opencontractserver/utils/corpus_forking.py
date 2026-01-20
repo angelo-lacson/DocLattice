@@ -40,8 +40,10 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
     label_set_id = corpus_copy.label_set.pk if corpus_copy.label_set else None
 
     # Collect folder IDs (in tree order for proper parent mapping)
+    # Note: .with_tree_fields() is required to use tree_depth as it's a CTE-computed field
     folder_ids = list(
         CorpusFolder.objects.filter(corpus_id=corpus_pk_to_fork)
+        .with_tree_fields()
         .order_by("tree_depth", "pk")
         .values_list("id", flat=True)
     )
@@ -64,7 +66,7 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
     corpus_copy.parent_id = corpus_pk_to_fork
     corpus_copy.save()
 
-    set_permissions_for_obj_to_user(user, corpus_copy, [PermissionTypes.ALL])
+    set_permissions_for_obj_to_user(user, corpus_copy, [PermissionTypes.CRUD])
 
     # Now remove references to related objects on our new object, as these point to original docs and labels
     corpus_copy.documents.clear()

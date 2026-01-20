@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Corpus Forking: Folder and Relationship Preservation
+- **Folder hierarchy preservation during fork**: Forked corpora now maintain the complete folder structure
+  - Folders cloned in tree-depth order to preserve parent-child relationships
+  - Documents retain their folder assignments in the forked corpus
+  - Uses `tree_queries` CTE with `.with_tree_fields()` for proper ordering
+  - Files: `opencontractserver/tasks/fork_tasks.py:126-159`, `config/graphql/mutations.py:1180-1187`
+- **Relationship preservation during fork**: Annotation relationships are now copied
+  - Source and target annotations remapped to forked annotation IDs
+  - Relationship labels preserved via label_map
+  - Uses `prefetch_related()` for efficient M2M loading
+  - Files: `opencontractserver/tasks/fork_tasks.py:286-356`
+- **Fork task signature extended**: Added `folder_ids` and `relationship_ids` parameters
+  - Files: `opencontractserver/tasks/fork_tasks.py:29-38`
+- **Round-trip test suite**: Comprehensive tests validating fork data integrity across generations
+  - Files: `opencontractserver/tests/test_corpus_fork_round_trip.py`
+
+### Fixed
+- **Corpus title not getting [FORK] prefix**: Fixed f-string that did nothing (`f"{corpus.title}"` → `f"[FORK] {corpus.title}"`)
+  - Files: `config/graphql/mutations.py:1199`
+- **tree_depth ordering error**: Added `.with_tree_fields()` before ordering by `tree_depth` (CTE-computed field)
+  - Files: `config/graphql/mutations.py:1184`, `opencontractserver/tasks/fork_tasks.py:133`, `opencontractserver/utils/corpus_forking.py:46`, `opencontractserver/tests/test_corpus_fork_round_trip.py:389`
+- **Test assertion bug**: Fixed comparison of count to queryset (`forked_labelset_labels.count() == original_labelset_labels.all()` → `.count() == .count()`)
+  - Files: `opencontractserver/tests/test_corpus_forking.py:99`
+
+### Changed
+- **Permission consistency**: Utility function `build_fork_corpus_task()` now uses `PermissionTypes.CRUD` (was `ALL`) to match mutation
+  - Files: `opencontractserver/utils/corpus_forking.py:69`
+
+### Technical Details
+- Documentation consolidated from separate remediation/edit plan files into `docs/architecture/corpus_forking.md`
+- Removed obsolete files: `corpus_forking_edit_plan.md`, `corpus_forking_remediation_plan.md`
+
 #### Unified Upload Modal with @os-legal/ui Design System
 - **Consolidated `BulkUploadModal` and `DocumentUploadModal`** into single `UploadModal` component
   - Auto-detects upload mode: ZIP files → bulk mode, PDFs → single mode
