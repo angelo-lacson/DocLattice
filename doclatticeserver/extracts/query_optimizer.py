@@ -7,10 +7,11 @@ Follows the same pattern as AnnotationQueryOptimizer:
 - No caching layer - just optimized queries
 """
 
-from collections import defaultdict
-from typing import Optional
+from __future__ import annotations
 
-from django.db.models import QuerySet, Value
+from collections import defaultdict
+
+from django.db.models import QuerySet
 
 from doclatticeserver.extracts.models import Column, Datacell
 
@@ -106,6 +107,69 @@ class MetadataQueryOptimizer:
             )
         except Corpus.DoesNotExist:
             return False, False, False, False
+
+    @classmethod
+    def _get_readable_document_ids_bulk(
+        cls, user, document_ids: list[int], documents_queryset
+    ) -> set[int]:
+        """
+        Bulk check which documents the user can read.
+
+        This method avoids O(n) individual permission checks by querying
+        guardian permission tables directly.
+
+        Returns: Set of document IDs the user has read access to
+        """
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Q
+
+        from doclatticeserver.documents.models import (
+            DocumentGroupObjectPermission,
+            DocumentUserObjectPermission,
+        )
+
+        # Get the read_document permission ID
+        content_type = ContentType.objects.get(app_label="documents", model="document")
+        read_perm = Permission.objects.filter(
+            codename="read_document", content_type=content_type
+        ).first()
+
+        if not read_perm:
+            # Fallback to empty if permission doesn't exist
+            return set()
+
+        # Bulk query: documents the user has direct read permission on
+        user_permitted_ids = set(
+            DocumentUserObjectPermission.objects.filter(
+                permission_id=read_perm.id,
+                user_id=user.id,
+                content_object_id__in=document_ids,
+            ).values_list("content_object_id", flat=True)
+        )
+
+        # Bulk query: documents the user has read permission on via groups
+        user_group_ids = list(user.groups.values_list("id", flat=True))
+        if user_group_ids:
+            group_permitted_ids = set(
+                DocumentGroupObjectPermission.objects.filter(
+                    permission_id=read_perm.id,
+                    group_id__in=user_group_ids,
+                    content_object_id__in=document_ids,
+                ).values_list("content_object_id", flat=True)
+            )
+        else:
+            group_permitted_ids = set()
+
+        # Documents where user is creator or document is public
+        creator_public_ids = set(
+            documents_queryset.filter(
+                Q(creator_id=user.id) | Q(is_public=True)
+            ).values_list("id", flat=True)
+        )
+
+        # Union all sources of read permission
+        return user_permitted_ids | group_permitted_ids | creator_public_ids
 
     @classmethod
     def get_corpus_metadata_columns(
@@ -262,7 +326,7 @@ class MetadataQueryOptimizer:
         if not hasattr(corpus, "metadata_schema") or not corpus.metadata_schema:
             return result
 
-        # Get all documents and check permissions
+        # Get all documents and check permissions using bulk queries
         documents = Document.objects.filter(pk__in=document_ids)
 
         if user.is_superuser:
@@ -273,14 +337,11 @@ class MetadataQueryOptimizer:
                 documents.filter(is_public=True).values_list("id", flat=True)
             )
         else:
-            # Check document permissions for each document
-            # This is still O(n) permission checks, but documents are fetched in one query
-            readable_doc_ids = set()
-            for doc in documents:
-                if user_has_permission_for_obj(
-                    user, doc, PermissionTypes.READ, include_group_permissions=True
-                ):
-                    readable_doc_ids.add(doc.pk)
+            # Bulk permission check using guardian tables directly
+            # This avoids O(n) individual permission checks for large document lists
+            readable_doc_ids = cls._get_readable_document_ids_bulk(
+                user, document_ids, documents
+            )
 
         if not readable_doc_ids:
             return result
@@ -346,8 +407,9 @@ class MetadataQueryOptimizer:
                 "missing_required": [],
             }
 
-        columns = corpus.metadata_schema.columns.filter(is_manual_entry=True)
-        total_fields = columns.count()
+        # Force evaluation once to avoid multiple queries
+        columns = list(corpus.metadata_schema.columns.filter(is_manual_entry=True))
+        total_fields = len(columns)
 
         if total_fields == 0:
             return {
@@ -358,15 +420,18 @@ class MetadataQueryOptimizer:
                 "missing_required": [],
             }
 
-        # Get filled datacells
+        # Get column IDs for filtering
+        column_ids = [c.id for c in columns]
+
+        # Get filled datacells - use column_ids to avoid passing queryset
         filled_datacells = Datacell.objects.filter(
-            document_id=document_id, column__in=columns
+            document_id=document_id, column_id__in=column_ids
         ).exclude(data__value__isnull=True)
 
         filled_count = filled_datacells.count()
         filled_column_ids = set(filled_datacells.values_list("column_id", flat=True))
 
-        # Find missing required fields
+        # Find missing required fields (no additional queries - columns already evaluated)
         missing_required = []
         for column in columns:
             if column.id not in filled_column_ids:
@@ -383,3 +448,120 @@ class MetadataQueryOptimizer:
             "percentage": percentage,
             "missing_required": missing_required,
         }
+
+    @classmethod
+    def check_metadata_mutation_permission(
+        cls,
+        user,
+        document_id: int,
+        corpus_id: int,
+        permission_type: str = "UPDATE",
+    ) -> tuple[bool, str]:
+        """
+        Check if user has permission to mutate metadata on a document.
+
+        This applies the MIN(document_permission, corpus_permission) model
+        for metadata mutations (create, update, delete).
+
+        Args:
+            user: The requesting user
+            document_id: The document ID (local, not global)
+            corpus_id: The corpus ID (local, not global)
+            permission_type: "UPDATE" or "DELETE" (default: "UPDATE")
+
+        Returns:
+            Tuple of (has_permission: bool, error_message: str)
+            If has_permission is True, error_message will be empty.
+        """
+        from doclatticeserver.corpuses.models import Corpus
+        from doclatticeserver.documents.models import Document
+        from doclatticeserver.types.enums import PermissionTypes
+        from doclatticeserver.utils.permissioning import user_has_permission_for_obj
+
+        # Anonymous users cannot mutate
+        if user.is_anonymous:
+            return False, "Authentication required"
+
+        # Superusers can do anything
+        if user.is_superuser:
+            return True, ""
+
+        # Check document exists
+        try:
+            document = Document.objects.get(id=document_id)
+        except Document.DoesNotExist:
+            return False, "Document not found"
+
+        # Check corpus exists
+        try:
+            corpus = Corpus.objects.get(id=corpus_id)
+        except Corpus.DoesNotExist:
+            return False, "Corpus not found"
+
+        # Determine which permission to check
+        perm_type = (
+            PermissionTypes.DELETE
+            if permission_type == "DELETE"
+            else PermissionTypes.UPDATE
+        )
+
+        # Check document permission (primary)
+        doc_has_perm = user_has_permission_for_obj(
+            user, document, perm_type, include_group_permissions=True
+        )
+        if not doc_has_perm:
+            return (
+                False,
+                f"You don't have {permission_type} permission on this document",
+            )
+
+        # Check corpus permission (secondary) - MIN logic
+        corpus_has_perm = user_has_permission_for_obj(
+            user, corpus, perm_type, include_group_permissions=True
+        )
+        if not corpus_has_perm:
+            return False, f"You don't have {permission_type} permission on this corpus"
+
+        return True, ""
+
+    @classmethod
+    def validate_metadata_column(
+        cls,
+        column_id: int,
+        corpus_id: int,
+    ) -> tuple[bool, str, Column | None]:
+        """
+        Validate that a column belongs to the corpus's metadata schema and is manual entry.
+
+        Args:
+            column_id: The column ID (local, not global)
+            corpus_id: The corpus ID (local, not global)
+
+        Returns:
+            Tuple of (is_valid: bool, error_message: str, column: Column | None)
+        """
+        from doclatticeserver.corpuses.models import Corpus
+
+        try:
+            column = Column.objects.get(pk=column_id)
+        except Column.DoesNotExist:
+            return False, "Column not found", None
+
+        try:
+            corpus = Corpus.objects.get(pk=corpus_id)
+        except Corpus.DoesNotExist:
+            return False, "Corpus not found", None
+
+        # Check column belongs to corpus metadata schema
+        if not (
+            column.fieldset
+            and hasattr(column.fieldset, "corpus")
+            and column.fieldset.corpus_id == corpus.id
+        ):
+            return False, "Column does not belong to corpus metadata schema", None
+
+        # Check it's a manual entry column
+        if not column.is_manual_entry:
+            return False, "Only manual entry columns can be modified", None
+
+        return True, "", column
