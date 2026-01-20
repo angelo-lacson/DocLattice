@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase, TransactionTestCase
@@ -3536,8 +3537,14 @@ class MCPUppercaseSlugTest(TransactionTestCase):
             loop.close()
 
 
+@pytest.mark.serial
 class MCPPermissionChangeTest(TransactionTestCase):
-    """Tests for corpus permission changes during active sessions."""
+    """Tests for corpus permission changes during active sessions.
+
+    Marked as serial because these tests use sync_to_async with Django ORM
+    in manually created event loops, which can cause database connection
+    corruption when run in parallel with pytest-xdist.
+    """
 
     def setUp(self):
         """Create test data."""
