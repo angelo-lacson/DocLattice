@@ -40,11 +40,10 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
     label_set_id = corpus_copy.label_set.pk if corpus_copy.label_set else None
 
     # Collect folder IDs (in tree order for proper parent mapping)
-    # Note: .with_tree_fields() is required to use tree_depth as it's a CTE-computed field
+    # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
     folder_ids = list(
         CorpusFolder.objects.filter(corpus_id=corpus_pk_to_fork)
         .with_tree_fields()
-        .order_by("tree_depth", "pk")
         .values_list("id", flat=True)
     )
 

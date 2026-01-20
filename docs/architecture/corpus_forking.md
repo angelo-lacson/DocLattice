@@ -54,16 +54,19 @@ These maps ensure that:
 - New folders maintain parent-child hierarchy
 - Documents are assigned to the correct new folders
 
-### Tree Depth Ordering
+### Tree Ordering for Folder Hierarchy
 
-Folders use TreeNode from `tree_queries` for hierarchical storage. The `tree_depth` field is CTE-computed and requires `.with_tree_fields()`:
+Folders use TreeNode from `tree_queries` for hierarchical storage. When cloning folders, parents must be created before children to maintain proper hierarchy.
+
+The `with_tree_fields()` method provides a default `tree_ordering` that ensures correct parent-before-child ordering:
 
 ```python
-# Correct: includes CTE for tree_depth field
-CorpusFolder.objects.filter(corpus_id=pk).with_tree_fields().order_by("tree_depth", "pk")
+# Correct: with_tree_fields() provides default tree_ordering (parents before children)
+CorpusFolder.objects.filter(corpus_id=pk).with_tree_fields().values_list("id", flat=True)
 
-# Incorrect: tree_depth not available
-CorpusFolder.objects.filter(corpus_id=pk).order_by("tree_depth", "pk")  # FieldError
+# Important: Do NOT use explicit order_by("tree_depth", "pk") as tree_depth is
+# a CTE-computed field that's only available at SQL execution time, not during
+# Django's order_by() validation.
 ```
 
 ## What Gets Copied

@@ -28,10 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Corpus title not getting [FORK] prefix**: Fixed f-string that did nothing (`f"{corpus.title}"` → `f"[FORK] {corpus.title}"`)
   - Files: `config/graphql/mutations.py:1199`
-- **tree_depth ordering error**: Added `.with_tree_fields()` before ordering by `tree_depth` (CTE-computed field)
+- **tree_depth ordering error**: Removed explicit `order_by("tree_depth", "pk")` and rely on default `tree_ordering` from `with_tree_fields()`. The `tree_depth` field is CTE-computed and only available at SQL execution time, not during Django's `order_by()` validation.
   - Files: `config/graphql/mutations.py:1184`, `opencontractserver/tasks/fork_tasks.py:133`, `opencontractserver/utils/corpus_forking.py:46`, `opencontractserver/tests/test_corpus_fork_round_trip.py:389`
+- **Fork fails with corpuses without label_set**: Added conditional handling to skip label set cloning when corpus has no label_set
+  - Files: `opencontractserver/tasks/fork_tasks.py:56-136`
+- **Document slug uniqueness violation during fork**: Clear slug before saving forked document so save() generates a new unique slug
+  - Files: `opencontractserver/tasks/fork_tasks.py:186`
+- **Annotation label mapping error**: Gracefully handle annotations without labels or when label_map is empty
+  - Files: `opencontractserver/tasks/fork_tasks.py:279-285`
 - **Test assertion bug**: Fixed comparison of count to queryset (`forked_labelset_labels.count() == original_labelset_labels.all()` → `.count() == .count()`)
   - Files: `opencontractserver/tests/test_corpus_forking.py:99`
+- **Incorrect CorpusFolder permission setting in tests**: Removed `set_permissions_for_obj_to_user()` call for folders - CorpusFolder inherits permissions from parent Corpus, not individual permissions per the consolidated permissioning guide
+  - Files: `opencontractserver/tests/test_corpus_fork_round_trip.py:277`
 
 ### Changed
 - **Permission consistency**: Utility function `build_fork_corpus_task()` now uses `PermissionTypes.CRUD` (was `ALL`) to match mutation

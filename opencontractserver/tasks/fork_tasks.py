@@ -1,4 +1,5 @@
 import logging
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +46,10 @@ def fork_corpus(
     # We need reference to corpus model so we can unlock it upon completion
     corpus = Corpus.objects.get(pk=new_corpus_id)
 
+    # Get the User object for operations that need it (e.g., add_document)
+    User = get_user_model()
+    user = User.objects.get(pk=user_id)
+
     with transaction.atomic():
 
         try:
@@ -53,75 +58,87 @@ def fork_corpus(
             doc_map = {}
             label_ids = []
 
-            try:
-                # Create the label set copy first.
-                old_label_set = LabelSet.objects.get(pk=label_set_id)
-                label_ids = list(
-                    old_label_set.annotation_labels.all().values_list("id", flat=True)
-                )
-
-                label_set = LabelSet(
-                    creator_id=user_id,
-                    title=f"[FORK] {old_label_set.title}",
-                    description=old_label_set.description,
-                )
-                label_set.save()
-                logger.info(f"Cloned labelset: {label_set}")
-
-                # If there's an icon... copy it to a new file
-                if old_label_set.icon:
-                    icon_obj = default_storage.open(old_label_set.icon.name)
-                    icon_file = ContentFile(icon_obj.read())
-                    logger.info(
-                        f"Label set icon name: {Path(old_label_set.icon.name).name}"
+            # Only clone label set if one exists
+            if label_set_id:
+                try:
+                    # Create the label set copy first.
+                    old_label_set = LabelSet.objects.get(pk=label_set_id)
+                    label_ids = list(
+                        old_label_set.annotation_labels.all().values_list(
+                            "id", flat=True
+                        )
                     )
-                    label_set.icon.save(Path(old_label_set.icon.name).name, icon_file)
+
+                    label_set = LabelSet(
+                        creator_id=user_id,
+                        title=f"[FORK] {old_label_set.title}",
+                        description=old_label_set.description,
+                    )
+                    label_set.save()
+                    logger.info(f"Cloned labelset: {label_set}")
+
+                    # If there's an icon... copy it to a new file
+                    if old_label_set.icon:
+                        icon_obj = default_storage.open(old_label_set.icon.name)
+                        icon_file = ContentFile(icon_obj.read())
+                        logger.info(
+                            f"Label set icon name: {Path(old_label_set.icon.name).name}"
+                        )
+                        label_set.icon.save(
+                            Path(old_label_set.icon.name).name, icon_file
+                        )
+                        label_set.save()
+
+                except Exception as e:
+                    logger.error(
+                        f"ERROR forking label_set for corpus {new_corpus_id}: {e}"
+                    )
+                    raise e
+
+                # Get old label objs (can't just get these earlier as manytomany
+                # values are cleared by django when we call clear(), it seems)
+                # Copy labels and add new labels to label_set
+                logger.info("Cloning labels")
+                try:
+                    for old_label in AnnotationLabel.objects.filter(pk__in=label_ids):
+
+                        try:
+                            new_label = AnnotationLabel(
+                                creator_id=user_id,
+                                label_type=old_label.label_type,
+                                color=old_label.color,
+                                description=old_label.description,
+                                icon=old_label.icon,
+                                text=old_label.text,
+                            )
+                            new_label.save()
+
+                            # store map of old id to new id
+                            label_map[old_label.id] = new_label.id
+
+                            # Add to new labelset
+                            label_set.annotation_labels.add(new_label)
+
+                        except Exception as e:
+                            logger.error(
+                                f"ERROR - could not fork label for labelset "
+                                f"{label_set_id}: {e}"
+                            )
+
+                    # Save label_set
                     label_set.save()
 
-            except Exception as e:
-                logger.error(f"ERROR forking label_set for corpus {new_corpus_id}: {e}")
-                raise e
+                    # Update corpus LabelSet to point to cloned copy of original:
+                    corpus.label_set = label_set
 
-            # Get old label objs (can't just get these earlier as manytomany values are cleared by django when we call
-            # clear(), it seems)
-            # Copy labels and add new labels to label_set
-            logger.info("Cloning labels")
-            try:
-                for old_label in AnnotationLabel.objects.filter(pk__in=label_ids):
-
-                    try:
-                        new_label = AnnotationLabel(
-                            creator_id=user_id,
-                            label_type=old_label.label_type,
-                            color=old_label.color,
-                            description=old_label.description,
-                            icon=old_label.icon,
-                            text=old_label.text,
-                        )
-                        new_label.save()
-
-                        # store map of old id to new id
-                        label_map[old_label.id] = new_label.id
-
-                        # Add to new labelset
-                        label_set.annotation_labels.add(new_label)
-
-                    except Exception as e:
-                        logger.error(
-                            f"ERROR - could not fork label for labelset {label_set_id}: {e}"
-                        )
-
-                # Save label_set
-                label_set.save()
-
-                # Update corpus LabelSet to point to cloned copy of original labelset:
-                corpus.label_set = label_set
-
-            except Exception as e:
-                logger.error(
-                    f"ERROR - could not populate labels for labelset {label_set_id}: {e}"
-                )
-                raise e
+                except Exception as e:
+                    logger.error(
+                        f"ERROR - could not populate labels for labelset "
+                        f"{label_set_id}: {e}"
+                    )
+                    raise e
+            else:
+                logger.info("No label set to clone - corpus has no label set")
 
             # ============================================================
             # Clone folder structure (must be before documents)
@@ -129,10 +146,10 @@ def fork_corpus(
             folder_map = {}  # old_folder_id -> new_folder_id
 
             logger.info(f"Cloning {len(folder_ids)} folders")
-            # Note: .with_tree_fields() is required to use tree_depth as it's a CTE-computed field
-            for old_folder in CorpusFolder.objects.filter(pk__in=folder_ids).with_tree_fields().order_by(
-                "tree_depth", "pk"
-            ):
+            # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
+            for old_folder in CorpusFolder.objects.filter(
+                pk__in=folder_ids
+            ).with_tree_fields():
                 try:
                     new_folder = CorpusFolder(
                         name=old_folder.name,
@@ -173,6 +190,11 @@ def fork_corpus(
                     # except as modified
                     document.pk = None
                     document.title = f"[FORK] {document.title}"
+                    document.slug = (
+                        ""  # Clear slug so save() generates a new unique one
+                    )
+                    # New version tree for forked document (it's a new logical document)
+                    document.version_tree_id = uuid.uuid4()
                     document.creator_id = user_id
                     document.backend_lock = True  # Lock doc while we process stuff
                     document.save()
@@ -224,18 +246,22 @@ def fork_corpus(
                         if original_path.folder_id:
                             new_folder_id = folder_map.get(original_path.folder_id)
                             if new_folder_id:
-                                target_folder = CorpusFolder.objects.get(pk=new_folder_id)
+                                target_folder = CorpusFolder.objects.get(
+                                    pk=new_folder_id
+                                )
 
                     # Add document with preserved folder and path
-                    corpus.add_document(
+                    # add_document creates a NEW corpus-isolated document and returns it
+                    corpus_doc, status, doc_path = corpus.add_document(
                         document=document,
-                        user=user_id,
+                        user=user,
                         folder=target_folder,
                         path=original_path_str,
                     )
 
-                    # Store map of old id to new id
-                    doc_map[old_id] = document.pk
+                    # Store map of old id to new corpus document id
+                    # (corpus.add_document creates a new document, we must use its pk)
+                    doc_map[old_id] = corpus_doc.pk
 
                 except Exception as e:
                     logger.error(f"ERROR - could not fork document {document}: {e}")
@@ -265,9 +291,15 @@ def fork_corpus(
                     annotation.creator_id = user_id
                     annotation.corpus_id = new_corpus_id
                     annotation.document_id = doc_map[annotation.document.id]
-                    annotation.annotation_label_id = label_map[
-                        annotation.annotation_label.id
-                    ]
+
+                    # Map annotation label if it exists and has a mapping
+                    if annotation.annotation_label_id and label_map:
+                        annotation.annotation_label_id = label_map.get(
+                            annotation.annotation_label_id
+                        )
+                    else:
+                        annotation.annotation_label_id = None
+
                     annotation.save()
 
                     # Track mapping for relationship cloning
@@ -289,9 +321,9 @@ def fork_corpus(
             logger.info(f"Cloning {len(relationship_ids)} relationships")
 
             # Use prefetch_related to avoid N+1 queries when accessing M2M fields
-            for old_relationship in Relationship.objects.filter(pk__in=relationship_ids).prefetch_related(
-                "source_annotations", "target_annotations"
-            ):
+            for old_relationship in Relationship.objects.filter(
+                pk__in=relationship_ids
+            ).prefetch_related("source_annotations", "target_annotations"):
                 try:
                     # Get source and target annotation IDs
                     old_source_ids = list(
@@ -327,7 +359,9 @@ def fork_corpus(
 
                     new_label_id = None
                     if old_relationship.relationship_label_id:
-                        new_label_id = label_map.get(old_relationship.relationship_label_id)
+                        new_label_id = label_map.get(
+                            old_relationship.relationship_label_id
+                        )
 
                     # Create new relationship
                     new_relationship = Relationship(
@@ -353,7 +387,9 @@ def fork_corpus(
                     )
 
                 except Exception as e:
-                    logger.error(f"ERROR cloning relationship {old_relationship.pk}: {e}")
+                    logger.error(
+                        f"ERROR cloning relationship {old_relationship.pk}: {e}"
+                    )
                     raise e
 
             logger.info("Relationships completed...")

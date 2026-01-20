@@ -109,15 +109,14 @@ class CorpusSnapshot:
             folder_count=folders.count(),
             note_count=notes.count(),
             document_titles=set(documents.values_list("title", flat=True)),
-            annotation_texts=set(
-                annotations.values_list("raw_text", flat=True)
-            ),
-            label_texts=set(label.text for label in labels),
+            annotation_texts=set(annotations.values_list("raw_text", flat=True)),
+            label_texts={label.text for label in labels},
             folder_names=set(folders.values_list("name", flat=True)),
             note_titles=set(notes.values_list("title", flat=True)),
             relationship_label_texts=set(
-                relationships.exclude(relationship_label__isnull=True)
-                .values_list("relationship_label__text", flat=True)
+                relationships.exclude(relationship_label__isnull=True).values_list(
+                    "relationship_label__text", flat=True
+                )
             ),
             has_description=bool(corpus.description),
             has_icon=bool(corpus.icon and corpus.icon.name),
@@ -275,7 +274,8 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                 parent=root_folder if i > 0 else None,
                 creator=self.user,
             )
-            set_permissions_for_obj_to_user(self.user, folder, [PermissionTypes.ALL])
+            # Note: CorpusFolder inherits permissions from parent Corpus
+            # No individual permissions needed
             folders.append(folder)
             if i == 0:
                 root_folder = folder
@@ -383,11 +383,10 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
         label_set_id = corpus.label_set_id
 
         # Collect folder IDs (in tree order for proper parent mapping)
-        # Note: .with_tree_fields() is required to use tree_depth as it's a CTE-computed field
+        # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
         folder_ids = list(
             CorpusFolder.objects.filter(corpus_id=corpus.pk)
             .with_tree_fields()
-            .order_by("tree_depth", "pk")
             .values_list("id", flat=True)
         )
 
@@ -407,9 +406,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             creator=self.user,
             parent_id=corpus.pk,
         )
-        set_permissions_for_obj_to_user(
-            self.user, forked_corpus, [PermissionTypes.ALL]
-        )
+        set_permissions_for_obj_to_user(self.user, forked_corpus, [PermissionTypes.ALL])
 
         # Execute the fork task synchronously
         result = fork_corpus(
@@ -753,9 +750,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             description="A corpus with no documents",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(
-            self.user, empty_corpus, [PermissionTypes.ALL]
-        )
+        set_permissions_for_obj_to_user(self.user, empty_corpus, [PermissionTypes.ALL])
 
         forked = self._execute_fork(empty_corpus)
         self.assertIsNotNone(forked, "Fork of empty corpus should succeed")
@@ -780,21 +775,23 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
         )
 
         # Create an analyzer and analysis
+        # Note: Analyzer requires either host_gremlin or task_name to be set (not both null)
         analyzer = Analyzer.objects.create(
             id="test-analyzer",
             description="Test analyzer",
+            task_name="test_task",
             creator=self.user,
         )
 
         analysis = Analysis.objects.create(
             analyzer=analyzer,
-            corpus=original,
+            analyzed_corpus=original,
             creator=self.user,
         )
 
         # Create analysis-generated annotation
         doc = original.get_documents().first()
-        analysis_annotation = Annotation.objects.create(
+        _analysis_annotation = Annotation.objects.create(  # noqa: F841
             page=1,
             raw_text="Analysis generated annotation",
             document=doc,
@@ -1009,7 +1006,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             corpus=corpus,
             creator=self.user,
         )
-        child = CorpusFolder.objects.create(
+        _child = CorpusFolder.objects.create(  # noqa: F841
             name="Child Folder",
             corpus=corpus,
             parent=root,
@@ -1020,9 +1017,10 @@ class CorpusForkPreservationTest(TransactionTestCase):
         self.assertEqual(original_folder_count, 2)
 
         # Fork - include folder_ids
+        # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
         folder_ids = list(
             CorpusFolder.objects.filter(corpus=corpus)
-            .order_by("tree_depth", "pk")
+            .with_tree_fields()
             .values_list("id", flat=True)
         )
 
@@ -1185,7 +1183,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
         corpus.documents.add(doc)
 
         # Create note
-        note = Note.objects.create(
+        _note = Note.objects.create(  # noqa: F841
             title="Test Note",
             content="Note content",
             document=doc,
