@@ -210,9 +210,10 @@ test.describe("Annotations Semantic Search", () => {
       />
     );
 
-    // Verify the hero section renders
-    await expect(page.getByText("Browse")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("annotations")).toBeVisible({ timeout: 5000 });
+    // Verify the hero section renders - use heading role for specificity
+    await expect(
+      page.getByRole("heading", { name: /Browse.*annotations/ })
+    ).toBeVisible({ timeout: 10000 });
 
     await component.unmount();
   });
@@ -225,14 +226,29 @@ test.describe("Annotations Semantic Search", () => {
       />
     );
 
-    // Verify filter tabs are visible
-    await expect(page.getByText("All Types")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("Doc Labels")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("Text Labels")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("All Sources")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("Human")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("AI Agent")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("Structural")).toBeVisible({ timeout: 5000 });
+    // Verify filter tabs are visible - use role="tab" for specificity
+    // This distinguishes tabs from stats labels with the same text
+    await expect(page.getByRole("tab", { name: "All Types" })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByRole("tab", { name: "Doc Labels" })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByRole("tab", { name: "Text Labels" })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByRole("tab", { name: "All Sources" })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByRole("tab", { name: "Human" })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByRole("tab", { name: "AI Agent" })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByRole("tab", { name: "Structural" })).toBeVisible({
+      timeout: 5000,
+    });
 
     await component.unmount();
   });
@@ -248,15 +264,19 @@ test.describe("Annotations Semantic Search", () => {
       />
     );
 
-    // Verify stats section elements
+    // Verify stats section elements - these are NOT tabs, just stat labels
+    // Stats have a specific structure: value + label
     await expect(page.getByText("Total Annotations")).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByText("Doc Labels")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("Text Labels")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Human Annotated")).toBeVisible({
       timeout: 5000,
     });
+
+    // Verify the stats show zero counts - look for "0" text that appears
+    // multiple times (once for each stat)
+    const zeroValues = page.getByText("0", { exact: true });
+    await expect(zeroValues.first()).toBeVisible({ timeout: 5000 });
 
     await component.unmount();
   });
@@ -271,7 +291,7 @@ test.describe("Annotations Filter Tabs", () => {
       ...mockAnnotation,
       annotationLabel: {
         ...mockAnnotation.annotationLabel,
-        text: "Text Label",
+        text: "Text Annotation Label",
         labelType: "TOKEN_LABEL",
       },
     };
@@ -282,7 +302,7 @@ test.describe("Annotations Filter Tabs", () => {
       annotationLabel: {
         ...mockAnnotation.annotationLabel,
         id: "QW5ub3RhdGlvbkxhYmVsVHlwZToy",
-        text: "Doc Label",
+        text: "Doc Annotation Label",
         labelType: "DOC_TYPE_LABEL",
       },
     };
@@ -294,11 +314,14 @@ test.describe("Annotations Filter Tabs", () => {
       />
     );
 
-    // Initially both should be visible
-    await expect(page.getByText("Text Label")).toBeVisible({ timeout: 15000 });
-    await expect(
-      page.locator('[class*="Card"]').filter({ hasText: "Doc Label" })
-    ).toBeVisible({ timeout: 5000 });
+    // Initially both should be visible - use unique label names that don't
+    // conflict with tab labels
+    await expect(page.getByText("Text Annotation Label")).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByText("Doc Annotation Label")).toBeVisible({
+      timeout: 5000,
+    });
 
     await component.unmount();
   });

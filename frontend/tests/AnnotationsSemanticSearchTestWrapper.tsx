@@ -2,13 +2,14 @@
  * Test wrapper for Annotations semantic search component tests.
  *
  * Provides:
- * - MockedProvider with configurable GraphQL responses
+ * - MockedProvider with wildcard link for flexible query matching
  * - Proper cache configuration
  * - React Router context
- * - Authentication state setup
+ * - Authentication state setup (synchronous, before render)
  */
 import React, { useEffect } from "react";
-import { MockedProvider, MockedResponse } from "@apollo/client/testing";
+import { MockedProvider, MockLink } from "@apollo/client/testing";
+import { ApolloLink, Observable } from "@apollo/client";
 import { MemoryRouter } from "react-router-dom";
 import { GraphQLError } from "graphql";
 import { Annotations } from "../src/views/Annotations";
@@ -51,30 +52,13 @@ interface AnnotationsSemanticSearchTestWrapperProps {
 }
 
 /**
- * Inner component that handles reactive var setup.
+ * Inner component that handles reactive var cleanup on unmount.
  */
 const InnerWrapper: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   useEffect(() => {
-    // Initialize authentication state
-    authStatusVar("AUTHENTICATED");
-    authToken("test-token");
-    userObj({
-      id: "VXNlclR5cGU6MQ==",
-      email: "test@example.com",
-      username: "testuser",
-    });
-
-    // Initialize filter state
-    filterToCorpus(null);
-    filterToLabelsetId("");
-    filterToLabelId("");
-    openedCorpus(null);
-    filterToStructuralAnnotations("INCLUDE");
-    selectedAnnotationIds([]);
-
-    // Cleanup
+    // Cleanup on unmount
     return () => {
       filterToCorpus(null);
       filterToLabelsetId("");
@@ -89,49 +73,31 @@ const InnerWrapper: React.FC<{ children: React.ReactNode }> = ({
 };
 
 /**
- * Creates semantic search mocks that match any query variables.
- * We need to create multiple mocks since each mock can only be used once.
+ * Creates a wildcard ApolloLink that responds to queries regardless of variables.
+ * This approach is more flexible than exact mock matching and handles:
+ * - Repeated queries (Apollo MockLink consumes mocks on first use)
+ * - Variable variations (different filter combinations)
+ * - Refetches triggered by reactive var changes
  */
-const createSemanticSearchMock = (
+const createAnnotationsWildcardLink = (
+  browseAnnotations: any[],
   semanticSearchResults: SemanticSearchResult[],
   simulateSearchError?: string,
   simulateSearchDelay: number = 0
-): MockedResponse => ({
-  request: {
-    query: SEMANTIC_SEARCH_ANNOTATIONS,
-  },
-  variableMatcher: () => true,
-  delay: simulateSearchDelay,
-  result: simulateSearchError
-    ? {
-        errors: [new GraphQLError(simulateSearchError)],
-      }
-    : {
-        data: {
-          semanticSearch: semanticSearchResults,
-        },
-      },
-});
-
-/**
- * Creates browse mode mocks for GET_ANNOTATIONS query.
- */
-const createBrowseMock = (browseAnnotations: any[]): MockedResponse => ({
-  request: {
-    query: GET_ANNOTATIONS,
-    variables: {
-      label_Type: "TEXT_LABEL",
-    },
-  },
-  result: {
+) => {
+  // Build the response for GET_ANNOTATIONS
+  const annotationsResponse = {
     data: {
       annotations: {
+        __typename: "AnnotationTypeConnection",
         totalCount: browseAnnotations.length,
         edges: browseAnnotations.map((annotation) => ({
+          __typename: "AnnotationTypeEdge",
           node: annotation,
           cursor: annotation.id,
         })),
         pageInfo: {
+          __typename: "PageInfo",
           hasNextPage: false,
           hasPreviousPage: false,
           startCursor: browseAnnotations[0]?.id || null,
@@ -140,8 +106,63 @@ const createBrowseMock = (browseAnnotations: any[]): MockedResponse => ({
         },
       },
     },
-  },
-});
+  };
+
+  // Build the response for SEMANTIC_SEARCH_ANNOTATIONS
+  const semanticSearchResponse = simulateSearchError
+    ? { errors: [new GraphQLError(simulateSearchError)] }
+    : { data: { semanticSearch: semanticSearchResults } };
+
+  // Build the response for GET_CORPUS_LABELSET_AND_LABELS (returns null when no corpus)
+  const corpusLabelsetResponse = {
+    data: {
+      corpus: null,
+    },
+  };
+
+  return new ApolloLink((operation) => {
+    const opName = operation.operationName;
+    const query = operation.query;
+
+    console.log(`[MOCK] Processing: ${opName}`, operation.variables);
+
+    // Match GET_ANNOTATIONS query (any variables)
+    if (query === GET_ANNOTATIONS || opName === "GetAnnotations") {
+      console.log("[MOCK] Returning annotations response");
+      return Observable.of(annotationsResponse);
+    }
+
+    // Match SEMANTIC_SEARCH_ANNOTATIONS query (any variables)
+    if (
+      query === SEMANTIC_SEARCH_ANNOTATIONS ||
+      opName === "SemanticSearchAnnotations"
+    ) {
+      console.log("[MOCK] Returning semantic search response");
+      if (simulateSearchDelay > 0) {
+        return new Observable((observer) => {
+          setTimeout(() => {
+            observer.next(semanticSearchResponse);
+            observer.complete();
+          }, simulateSearchDelay);
+        });
+      }
+      return Observable.of(semanticSearchResponse);
+    }
+
+    // Match GET_CORPUS_LABELSET_AND_LABELS query (any variables)
+    if (
+      query === GET_CORPUS_LABELSET_AND_LABELS ||
+      opName === "GetCorpusLabelsetAndLabels"
+    ) {
+      console.log("[MOCK] Returning corpus labelset response");
+      return Observable.of(corpusLabelsetResponse);
+    }
+
+    // For any unhandled queries, return null data to prevent errors
+    console.log(`[MOCK] Unhandled query: ${opName}`);
+    return Observable.of({ data: null });
+  });
+};
 
 /**
  * Test wrapper for Annotations component with semantic search mocks.
@@ -154,61 +175,35 @@ export const AnnotationsSemanticSearchTestWrapper: React.FC<
   simulateSearchError,
   simulateSearchDelay = 0,
 }) => {
-  // Create mocks array - each mock can only be consumed once
-  const mocks: MockedResponse[] = [
-    // Browse mode queries (multiple for refetches)
-    createBrowseMock(browseAnnotations),
-    createBrowseMock(browseAnnotations),
-    createBrowseMock(browseAnnotations),
-    createBrowseMock(browseAnnotations),
+  // Set up authentication state SYNCHRONOUSLY before render
+  // This ensures auth is available when components first render
+  authToken("test-token");
+  userObj({
+    id: "VXNlclR5cGU6MQ==",
+    email: "test@example.com",
+    username: "testuser",
+  } as any);
+  authStatusVar("AUTHENTICATED");
 
-    // Semantic search queries (multiple for repeat searches)
-    createSemanticSearchMock(
-      semanticSearchResults,
-      simulateSearchError,
-      simulateSearchDelay
-    ),
-    createSemanticSearchMock(
-      semanticSearchResults,
-      simulateSearchError,
-      simulateSearchDelay
-    ),
-    createSemanticSearchMock(
-      semanticSearchResults,
-      simulateSearchError,
-      simulateSearchDelay
-    ),
-    createSemanticSearchMock(
-      semanticSearchResults,
-      simulateSearchError,
-      simulateSearchDelay
-    ),
-    createSemanticSearchMock(
-      semanticSearchResults,
-      simulateSearchError,
-      simulateSearchDelay
-    ),
+  // Initialize filter state synchronously
+  filterToCorpus(null);
+  filterToLabelsetId("");
+  filterToLabelId("");
+  openedCorpus(null);
+  filterToStructuralAnnotations("INCLUDE");
+  selectedAnnotationIds([]);
 
-    // Corpus labelset query (skipped when no corpus selected)
-    {
-      request: {
-        query: GET_CORPUS_LABELSET_AND_LABELS,
-        variables: {
-          corpusId: "",
-        },
-      },
-      result: {
-        data: {
-          corpus: null,
-        },
-      },
-    },
-  ];
+  const link = createAnnotationsWildcardLink(
+    browseAnnotations,
+    semanticSearchResults,
+    simulateSearchError,
+    simulateSearchDelay
+  );
 
   const cache = createTestCache();
 
   return (
-    <MockedProvider mocks={mocks} addTypename={false} cache={cache}>
+    <MockedProvider link={link} cache={cache} addTypename={false}>
       <MemoryRouter initialEntries={["/annotations"]}>
         <InnerWrapper>
           <Annotations />
