@@ -1,16 +1,13 @@
 import { test, expect } from "@playwright/experimental-ct-react";
-import { MemoryRouter } from "react-router-dom";
-import { MockedProvider } from "@apollo/client/testing";
 import { CreateThreadButton } from "../src/components/threads/CreateThreadButton";
+import { CreateThreadButtonTestWrapper } from "./CreateThreadButtonTestWrapper";
 
 test.describe("CreateThreadButton", () => {
   test("renders primary button variant by default", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" />
+      </CreateThreadButtonTestWrapper>
     );
 
     const button = page.getByRole("button", {
@@ -22,11 +19,9 @@ test.describe("CreateThreadButton", () => {
 
   test("renders secondary button variant", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" variant="secondary" />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" variant="secondary" />
+      </CreateThreadButtonTestWrapper>
     );
 
     const button = page.getByRole("button", {
@@ -37,11 +32,9 @@ test.describe("CreateThreadButton", () => {
 
   test("renders floating action button variant", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" floating={true} />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" floating={true} />
+      </CreateThreadButtonTestWrapper>
     );
 
     const button = page.getByRole("button", {
@@ -55,11 +48,9 @@ test.describe("CreateThreadButton", () => {
 
   test("opens CreateThreadForm modal when clicked", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" />
+      </CreateThreadButtonTestWrapper>
     );
 
     const button = page.getByRole("button", {
@@ -76,11 +67,9 @@ test.describe("CreateThreadButton", () => {
 
   test("closes modal when close button clicked", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" />
+      </CreateThreadButtonTestWrapper>
     );
 
     // Open modal
@@ -102,11 +91,9 @@ test.describe("CreateThreadButton", () => {
 
   test("respects disabled prop", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" disabled={true} />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" disabled={true} />
+      </CreateThreadButtonTestWrapper>
     );
 
     const button = page.getByRole("button", {
@@ -118,11 +105,9 @@ test.describe("CreateThreadButton", () => {
 
   test("does not open modal when disabled", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" disabled={true} />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" disabled={true} />
+      </CreateThreadButtonTestWrapper>
     );
 
     const button = page.getByRole("button", {
@@ -137,11 +122,9 @@ test.describe("CreateThreadButton", () => {
 
   test("displays icon in button", async ({ mount, page }) => {
     await mount(
-      <MemoryRouter>
-        <MockedProvider>
-          <CreateThreadButton corpusId="test-corpus-1" />
-        </MockedProvider>
-      </MemoryRouter>
+      <CreateThreadButtonTestWrapper>
+        <CreateThreadButton corpusId="test-corpus-1" />
+      </CreateThreadButtonTestWrapper>
     );
 
     const button = page.getByRole("button", {

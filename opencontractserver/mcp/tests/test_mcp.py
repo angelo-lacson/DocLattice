@@ -707,9 +707,12 @@ class MCPToolsSearchTest(TestCase):
 
         from opencontractserver.mcp.tools import search_corpus
 
-        # Mock embed_text to raise exception, forcing text search fallback
+        # Mock embed_text to raise RuntimeError, forcing text search fallback
+        # (RuntimeError is explicitly caught by search_corpus to trigger fallback)
         with patch.object(
-            self.corpus.__class__, "embed_text", side_effect=Exception("No embeddings")
+            self.corpus.__class__,
+            "embed_text",
+            side_effect=RuntimeError("No embeddings"),
         ):
             result = search_corpus(self.corpus.slug, "Contract")
 
@@ -3221,5 +3224,511 @@ class MCPScopedEndpointInfoTest(TestCase):
             corpus_scoped = body["endpoints"]["corpus_scoped"]
             self.assertEqual(corpus_scoped["path"], "/mcp/corpus/{corpus_slug}/")
             self.assertIn("shareable", corpus_scoped["description"].lower())
+        finally:
+            loop.close()
+
+
+# =============================================================================
+# CACHE BEHAVIOR TESTS
+# =============================================================================
+
+
+class MCPTTLLRUCacheTest(TestCase):
+    """Tests for TTLLRUCache behavior including eviction and TTL expiration."""
+
+    def test_cache_lru_eviction(self):
+        """Test cache evicts least recently used items when maxsize is reached."""
+        import asyncio
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        evicted_keys = []
+
+        def cleanup_callback(key, value):
+            evicted_keys.append(key)
+
+        async def run_test():
+            cache = TTLLRUCache(
+                maxsize=3, ttl_seconds=3600, cleanup_callback=cleanup_callback
+            )
+
+            # Add 3 items (at capacity)
+            await cache.set("key1", "value1")
+            await cache.set("key2", "value2")
+            await cache.set("key3", "value3")
+
+            self.assertEqual(len(cache), 3)
+            self.assertEqual(len(evicted_keys), 0)
+
+            # Add a 4th item - should evict key1 (LRU)
+            await cache.set("key4", "value4")
+
+            self.assertEqual(len(cache), 3)
+            self.assertIn("key1", evicted_keys)
+
+            # Verify key1 is gone and key4 is present
+            self.assertIsNone(await cache.get("key1"))
+            self.assertEqual(await cache.get("key4"), "value4")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_cache_lru_access_updates_order(self):
+        """Test that accessing an item updates its LRU position."""
+        import asyncio
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        evicted_keys = []
+
+        def cleanup_callback(key, value):
+            evicted_keys.append(key)
+
+        async def run_test():
+            cache = TTLLRUCache(
+                maxsize=3, ttl_seconds=3600, cleanup_callback=cleanup_callback
+            )
+
+            # Add 3 items
+            await cache.set("key1", "value1")
+            await cache.set("key2", "value2")
+            await cache.set("key3", "value3")
+
+            # Access key1, making it most recently used
+            await cache.get("key1")
+
+            # Add a 4th item - should evict key2 (now LRU since key1 was accessed)
+            await cache.set("key4", "value4")
+
+            self.assertIn("key2", evicted_keys)
+            self.assertNotIn("key1", evicted_keys)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_cache_ttl_expiration(self):
+        """Test cache entries expire after TTL."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        cleanup_called = []
+
+        def cleanup_callback(key, value):
+            cleanup_called.append(key)
+
+        async def run_test():
+            cache = TTLLRUCache(
+                maxsize=10, ttl_seconds=60, cleanup_callback=cleanup_callback
+            )
+
+            # Mock time to simulate TTL expiration
+            with patch("opencontractserver.mcp.server.time") as mock_time:
+                # Set initial time
+                mock_time.time.return_value = 1000
+
+                await cache.set("key1", "value1")
+                self.assertEqual(await cache.get("key1"), "value1")
+
+                # Fast forward past TTL
+                mock_time.time.return_value = 1061  # 61 seconds later
+
+                # Should return None and call cleanup
+                result = await cache.get("key1")
+                self.assertIsNone(result)
+                self.assertIn("key1", cleanup_called)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_cache_clear_calls_cleanup(self):
+        """Test cache clear calls cleanup for all items."""
+        import asyncio
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        cleanup_called = []
+
+        def cleanup_callback(key, value):
+            cleanup_called.append(key)
+
+        async def run_test():
+            cache = TTLLRUCache(
+                maxsize=10, ttl_seconds=3600, cleanup_callback=cleanup_callback
+            )
+
+            await cache.set("key1", "value1")
+            await cache.set("key2", "value2")
+            await cache.set("key3", "value3")
+
+            await cache.clear()
+
+            self.assertEqual(len(cache), 0)
+            self.assertEqual(set(cleanup_called), {"key1", "key2", "key3"})
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_cache_remove_calls_cleanup(self):
+        """Test cache remove calls cleanup for the removed item."""
+        import asyncio
+
+        from opencontractserver.mcp.server import TTLLRUCache
+
+        cleanup_called = []
+
+        def cleanup_callback(key, value):
+            cleanup_called.append((key, value))
+
+        async def run_test():
+            cache = TTLLRUCache(
+                maxsize=10, ttl_seconds=3600, cleanup_callback=cleanup_callback
+            )
+
+            await cache.set("key1", "value1")
+            await cache.set("key2", "value2")
+
+            # Remove key1
+            result = await cache.remove("key1")
+            self.assertTrue(result)
+            self.assertIn(("key1", "value1"), cleanup_called)
+
+            # Try to remove non-existent key
+            result = await cache.remove("nonexistent")
+            self.assertFalse(result)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPUppercaseSlugTest(TransactionTestCase):
+    """Tests for uppercase/mixed-case corpus slug handling."""
+
+    def setUp(self):
+        """Create test data with mixed-case slug."""
+        self.owner = User.objects.create_user(
+            username="uppercaseowner",
+            email="uppercase@test.com",
+            password="testpass123",
+        )
+
+        # Create corpus - Django will generate a slug
+        self.corpus = Corpus.objects.create(
+            title="Legal-Contracts-2024",  # Mixed case title
+            description="Test corpus with mixed case",
+            creator=self.owner,
+            is_public=True,
+        )
+
+    def test_uri_parser_accepts_uppercase_slugs(self):
+        """Test URIParser accepts uppercase letters in slugs."""
+        from opencontractserver.mcp.server import URIParser
+
+        # Test with uppercase
+        result = URIParser.parse_corpus("corpus://Legal-Contracts-2024")
+        self.assertEqual(result, "Legal-Contracts-2024")
+
+        # Test with mixed case
+        result = URIParser.parse_document("document://MyCorpus/MyDoc")
+        self.assertEqual(result, ("MyCorpus", "MyDoc"))
+
+        # Test annotation with uppercase
+        result = URIParser.parse_annotation("annotation://Corp/Doc/123")
+        self.assertEqual(result, ("Corp", "Doc", 123))
+
+        # Test thread with uppercase
+        result = URIParser.parse_thread("thread://MyCorpus/threads/456")
+        self.assertEqual(result, ("MyCorpus", 456))
+
+    def test_asgi_path_regex_accepts_uppercase(self):
+        """Test ASGI routing regex accepts uppercase corpus slugs."""
+        import re
+
+        # This is the pattern from create_mcp_asgi_app
+        corpus_path_pattern = re.compile(r"^/mcp/corpus/([A-Za-z0-9\-]+)/?$")
+
+        # Test uppercase
+        match = corpus_path_pattern.match("/mcp/corpus/Legal-Contracts-2024/")
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "Legal-Contracts-2024")
+
+        # Test mixed case without trailing slash
+        match = corpus_path_pattern.match("/mcp/corpus/MyCorpus")
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "MyCorpus")
+
+    def test_scoped_endpoint_with_uppercase_slug(self):
+        """Test scoped endpoint works with uppercase corpus slug."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            # Mock the managers
+            mock_manager = AsyncMock()
+            mock_manager.handle_request = AsyncMock()
+
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock(return_value=mock_manager)
+
+            async def mock_get_lifespan(slug):
+                return mock_lifespan
+
+            # Use uppercase slug in path
+            scope = {
+                "type": "http",
+                "path": "/mcp/corpus/Legal-Contracts-2024/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            received = []
+
+            async def mock_send(message):
+                received.append(message)
+
+            with patch(
+                "opencontractserver.mcp.server.get_scoped_lifespan_manager",
+                side_effect=mock_get_lifespan,
+            ), patch(
+                "opencontractserver.mcp.server.validate_corpus_slug",
+                return_value=True,
+            ):
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+            # Verify the handler was called (not 404)
+            mock_lifespan.ensure_started.assert_called_once()
+            mock_manager.handle_request.assert_called_once()
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPPermissionChangeTest(TransactionTestCase):
+    """Tests for corpus permission changes during active sessions."""
+
+    def setUp(self):
+        """Create test data."""
+        self.owner = User.objects.create_user(
+            username="permchangeowner",
+            email="permchange@test.com",
+            password="testpass123",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Permission Change Test Corpus",
+            description="Test corpus for permission changes",
+            creator=self.owner,
+            is_public=True,  # Start as public
+        )
+
+    def test_scoped_server_revalidates_permissions_on_tool_call(self):
+        """Test that scoped server re-validates corpus permissions on each tool call."""
+        import asyncio
+
+        from asgiref.sync import sync_to_async
+
+        async def run_test():
+            # Test via the validation function which is called on each request
+            from opencontractserver.mcp.server import validate_corpus_slug
+
+            # Initially should be valid (corpus is public)
+            is_valid = await validate_corpus_slug(self.corpus.slug)
+            self.assertTrue(is_valid)
+
+            # Make corpus private - use sync_to_async for DB operations
+            @sync_to_async
+            def make_private():
+                self.corpus.is_public = False
+                self.corpus.save()
+
+            await make_private()
+
+            # Should now be invalid - validates permission on each call
+            is_valid = await validate_corpus_slug(self.corpus.slug)
+            self.assertFalse(is_valid)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_asgi_rejects_request_after_corpus_becomes_private(self):
+        """Test ASGI endpoint rejects requests after corpus becomes private."""
+        import asyncio
+
+        from asgiref.sync import sync_to_async
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received.append(message)
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.corpus.slug}/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            app = create_mcp_asgi_app()
+
+            # Make corpus private before request - use sync_to_async for DB operations
+            @sync_to_async
+            def make_private():
+                self.corpus.is_public = False
+                self.corpus.save()
+
+            await make_private()
+
+            await app(scope, mock_receive, mock_send)
+
+            # Should get 404 (corpus not found/not public)
+            self.assertEqual(received[0]["type"], "http.response.start")
+            self.assertEqual(received[0]["status"], 404)
+            body = json.loads(received[1]["body"])
+            self.assertIn("not found or not public", body["error"])
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPCleanupCallbackErrorTest(TestCase):
+    """Tests for cleanup callback error handling."""
+
+    def test_cleanup_callback_error_logged(self):
+        """Test that cleanup callback errors are logged, not swallowed."""
+        import asyncio
+        from unittest.mock import patch
+
+        from opencontractserver.mcp.server import _cleanup_lifespan_manager
+
+        async def run_test():
+            # Create a mock manager
+            from unittest.mock import AsyncMock, MagicMock
+
+            mock_manager = MagicMock()
+            mock_manager.shutdown = AsyncMock()
+            mock_manager.corpus_slug = "test-corpus"
+
+            # Mock asyncio.get_event_loop to raise RuntimeError
+            with patch("asyncio.get_event_loop", side_effect=RuntimeError("No loop")):
+                with patch("opencontractserver.mcp.server.logger") as mock_logger:
+                    # This should log a warning, not raise
+                    _cleanup_lifespan_manager("test-key", mock_manager)
+
+                    # Verify warning was logged
+                    mock_logger.warning.assert_called_once()
+                    call_args = mock_logger.warning.call_args[0][0]
+                    self.assertIn("Could not schedule cleanup", call_args)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPSendErrorHandlingTest(TestCase):
+    """Tests for error handling when send() fails."""
+
+    def test_mcp_error_response_send_failure_logged(self):
+        """Test that send() failures during error response are logged."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            # Mock send to fail
+            async def mock_send_fails(message):
+                raise ConnectionError("Client disconnected")
+
+            scope = {
+                "type": "http",
+                "path": "/mcp",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [[b"content-type", b"application/json"]],
+                "client": ("127.0.0.1", 12345),
+            }
+
+            # Mock the session manager to raise an error
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock()
+
+            mock_manager = AsyncMock()
+            mock_manager.handle_request.side_effect = Exception("Test error")
+
+            with patch(
+                "opencontractserver.mcp.server.lifespan_manager", mock_lifespan
+            ), patch(
+                "opencontractserver.mcp.server.get_session_manager",
+                return_value=mock_manager,
+            ), patch(
+                "opencontractserver.mcp.server.logger"
+            ) as mock_logger:
+                app = create_mcp_asgi_app()
+                # This should not raise, even though send fails
+                await app(scope, mock_receive, mock_send_fails)
+
+                # Should have logged both the original error and the send failure
+                self.assertTrue(mock_logger.error.called)
+                self.assertTrue(mock_logger.warning.called)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
         finally:
             loop.close()

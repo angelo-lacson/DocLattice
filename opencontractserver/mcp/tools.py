@@ -69,8 +69,8 @@ def list_documents(
     Returns:
         Dict with total_count and list of document summaries
     """
+    from opencontractserver.corpuses.folder_service import DocumentFolderService
     from opencontractserver.corpuses.models import Corpus
-    from opencontractserver.documents.models import Document
 
     limit = min(limit, 100)
     anonymous = AnonymousUser()
@@ -78,9 +78,11 @@ def list_documents(
     # Get corpus (raises Corpus.DoesNotExist if not found or not public)
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
-    # Get documents in corpus via DocumentPath (source of truth), filtered by visibility
-    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
-    qs = Document.objects.visible_to_user(anonymous).filter(id__in=corpus_doc_ids)
+    # Use DocumentFolderService for optimized single-query document retrieval
+    # This handles corpus membership and visibility in one query
+    qs = DocumentFolderService.get_corpus_documents(
+        user=anonymous, corpus=corpus, include_deleted=False
+    )
 
     if search:
         qs = qs.filter(Q(title__icontains=search) | Q(description__icontains=search))
@@ -237,8 +239,14 @@ def search_corpus(corpus_slug: str, query: str, limit: int = 10) -> dict:
                 )
 
             return {"query": query, "results": results}
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
+        # Expected when embeddings are not configured or embed_text returns invalid data
         pass
+    except RuntimeError as e:
+        # Embedding service or model loading errors
+        import logging
+
+        logging.getLogger(__name__).debug(f"Vector search unavailable: {e}")
 
     # Fallback to text search
     return _text_search_fallback(corpus, query, limit, anonymous)

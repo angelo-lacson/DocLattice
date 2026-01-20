@@ -717,6 +717,23 @@ class TTLLRUCache:
 
     Thread-safe for concurrent access via asyncio.Lock.
     Calls cleanup_callback when items are evicted.
+
+    Thread Safety / Event Loop Notes:
+    ---------------------------------
+    The asyncio.Lock is created lazily on first use within an async context.
+    This cache is designed for use within a single event loop (the ASGI server's
+    main event loop). The lock provides safety for concurrent coroutines within
+    that loop.
+
+    Important limitations:
+    - All async methods (get, set, remove, clear) must be called from async contexts
+    - The cache should be instantiated at module level (as done for _scoped_session_managers
+      and _scoped_lifespan_managers) and used within the ASGI application
+    - __len__ is not async-safe and should only be used for monitoring/debugging
+
+    The cleanup_callback runs synchronously within the lock, so it should be fast.
+    For async cleanup (like shutting down MCP session managers), the callback
+    should schedule async work via loop.create_task() rather than awaiting directly.
     """
 
     def __init__(
@@ -796,9 +813,13 @@ def _cleanup_lifespan_manager(key: str, manager: ScopedMCPLifespanManager) -> No
         loop = asyncio.get_event_loop()
         if loop.is_running():
             loop.create_task(manager.shutdown())
-    except RuntimeError:
-        # No event loop - skip async cleanup
-        pass
+    except RuntimeError as e:
+        # No event loop available - log and skip async cleanup
+        # This can happen during interpreter shutdown or when called from non-async context
+        logger.warning(
+            f"Could not schedule cleanup for lifespan manager '{key}': {e}. "
+            "Resources may not be fully released."
+        )
 
 
 def _cleanup_session_manager(key: str, manager: StreamableHTTPSessionManager) -> None:
@@ -1017,8 +1038,8 @@ def create_mcp_asgi_app():
     Telemetry context is set for each request to track client IP and transport.
     """
     # Regex to match corpus-scoped endpoints: /mcp/corpus/{slug}/ or /mcp/corpus/{slug}
-    # Uses Django SlugField pattern: lowercase letters, numbers, and hyphens only
-    corpus_path_pattern = re.compile(r"^/mcp/corpus/([a-z0-9\-]+)/?$")
+    # Matches the URIParser.SLUG_PATTERN: letters (case-insensitive), numbers, and hyphens
+    corpus_path_pattern = re.compile(r"^/mcp/corpus/([A-Za-z0-9\-]+)/?$")
 
     async def app(scope, receive, send):
         if scope["type"] != "http":
@@ -1079,19 +1100,25 @@ def create_mcp_asgi_app():
                     success=False,
                     error_type=type(e).__name__,
                 )
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 500,
-                        "headers": [[b"content-type", b"application/json"]],
-                    }
-                )
-                await send(
-                    {
-                        "type": "http.response.body",
-                        "body": json.dumps({"error": str(e)}).encode(),
-                    }
-                )
+                # Try to send error response; if this fails (client disconnect), log it
+                try:
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 500,
+                            "headers": [[b"content-type", b"application/json"]],
+                        }
+                    )
+                    await send(
+                        {
+                            "type": "http.response.body",
+                            "body": json.dumps({"error": str(e)}).encode(),
+                        }
+                    )
+                except Exception as send_error:
+                    logger.warning(
+                        f"Failed to send error response for scoped MCP request: {send_error}"
+                    )
             finally:
                 clear_request_context()
             return
@@ -1121,20 +1148,25 @@ def create_mcp_asgi_app():
                     success=False,
                     error_type=type(e).__name__,
                 )
-                # Return error response
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 500,
-                        "headers": [[b"content-type", b"application/json"]],
-                    }
-                )
-                await send(
-                    {
-                        "type": "http.response.body",
-                        "body": json.dumps({"error": str(e)}).encode(),
-                    }
-                )
+                # Try to send error response; if this fails (client disconnect), log it
+                try:
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 500,
+                            "headers": [[b"content-type", b"application/json"]],
+                        }
+                    )
+                    await send(
+                        {
+                            "type": "http.response.body",
+                            "body": json.dumps({"error": str(e)}).encode(),
+                        }
+                    )
+                except Exception as send_error:
+                    logger.warning(
+                        f"Failed to send error response for MCP request: {send_error}"
+                    )
             finally:
                 clear_request_context()
 
@@ -1159,20 +1191,25 @@ def create_mcp_asgi_app():
                     success=False,
                     error_type=type(e).__name__,
                 )
-                # Return error response
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 500,
-                        "headers": [[b"content-type", b"application/json"]],
-                    }
-                )
-                await send(
-                    {
-                        "type": "http.response.body",
-                        "body": json.dumps({"error": str(e)}).encode(),
-                    }
-                )
+                # Try to send error response; if this fails (client disconnect), log it
+                try:
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 500,
+                            "headers": [[b"content-type", b"application/json"]],
+                        }
+                    )
+                    await send(
+                        {
+                            "type": "http.response.body",
+                            "body": json.dumps({"error": str(e)}).encode(),
+                        }
+                    )
+                except Exception as send_error:
+                    logger.warning(
+                        f"Failed to send error response for SSE request: {send_error}"
+                    )
             finally:
                 clear_request_context()
 
