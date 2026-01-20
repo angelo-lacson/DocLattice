@@ -383,3 +383,117 @@ class MetadataQueryOptimizer:
             "percentage": percentage,
             "missing_required": missing_required,
         }
+
+    @classmethod
+    def check_metadata_mutation_permission(
+        cls,
+        user,
+        document_id: int,
+        corpus_id: int,
+        permission_type: str = "UPDATE",
+    ) -> tuple[bool, str]:
+        """
+        Check if user has permission to mutate metadata on a document.
+
+        This applies the MIN(document_permission, corpus_permission) model
+        for metadata mutations (create, update, delete).
+
+        Args:
+            user: The requesting user
+            document_id: The document ID (local, not global)
+            corpus_id: The corpus ID (local, not global)
+            permission_type: "UPDATE" or "DELETE" (default: "UPDATE")
+
+        Returns:
+            Tuple of (has_permission: bool, error_message: str)
+            If has_permission is True, error_message will be empty.
+        """
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import Document
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        # Anonymous users cannot mutate
+        if user.is_anonymous:
+            return False, "Authentication required"
+
+        # Superusers can do anything
+        if user.is_superuser:
+            return True, ""
+
+        # Check document exists
+        try:
+            document = Document.objects.get(id=document_id)
+        except Document.DoesNotExist:
+            return False, "Document not found"
+
+        # Check corpus exists
+        try:
+            corpus = Corpus.objects.get(id=corpus_id)
+        except Corpus.DoesNotExist:
+            return False, "Corpus not found"
+
+        # Determine which permission to check
+        perm_type = (
+            PermissionTypes.DELETE
+            if permission_type == "DELETE"
+            else PermissionTypes.UPDATE
+        )
+
+        # Check document permission (primary)
+        doc_has_perm = user_has_permission_for_obj(
+            user, document, perm_type, include_group_permissions=True
+        )
+        if not doc_has_perm:
+            return False, f"You don't have {permission_type} permission on this document"
+
+        # Check corpus permission (secondary) - MIN logic
+        corpus_has_perm = user_has_permission_for_obj(
+            user, corpus, perm_type, include_group_permissions=True
+        )
+        if not corpus_has_perm:
+            return False, f"You don't have {permission_type} permission on this corpus"
+
+        return True, ""
+
+    @classmethod
+    def validate_metadata_column(
+        cls,
+        column_id: int,
+        corpus_id: int,
+    ) -> tuple[bool, str, "Column | None"]:
+        """
+        Validate that a column belongs to the corpus's metadata schema and is manual entry.
+
+        Args:
+            column_id: The column ID (local, not global)
+            corpus_id: The corpus ID (local, not global)
+
+        Returns:
+            Tuple of (is_valid: bool, error_message: str, column: Column | None)
+        """
+        from opencontractserver.corpuses.models import Corpus
+
+        try:
+            column = Column.objects.get(pk=column_id)
+        except Column.DoesNotExist:
+            return False, "Column not found", None
+
+        try:
+            corpus = Corpus.objects.get(pk=corpus_id)
+        except Corpus.DoesNotExist:
+            return False, "Corpus not found", None
+
+        # Check column belongs to corpus metadata schema
+        if not (
+            column.fieldset
+            and hasattr(column.fieldset, "corpus")
+            and column.fieldset.corpus_id == corpus.id
+        ):
+            return False, "Column does not belong to corpus metadata schema", None
+
+        # Check it's a manual entry column
+        if not column.is_manual_entry:
+            return False, "Only manual entry columns can be modified", None
+
+        return True, "", column
