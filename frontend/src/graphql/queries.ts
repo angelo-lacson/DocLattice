@@ -925,6 +925,145 @@ export const GET_ANNOTATIONS = gql`
   }
 `;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEMANTIC SEARCH QUERY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface SemanticSearchInput {
+  query: string;
+  corpusId?: string;
+  documentId?: string;
+  modalities?: string[];
+  labelText?: string;
+  rawTextContains?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SemanticSearchResult {
+  annotation: ServerAnnotationType;
+  similarityScore: number;
+  document: DocumentType | null;
+  corpus: RawCorpusType | null;
+}
+
+export interface SemanticSearchOutput {
+  semanticSearch: SemanticSearchResult[];
+}
+
+export const SEMANTIC_SEARCH_ANNOTATIONS = gql`
+  query SemanticSearchAnnotations(
+    $query: String!
+    $corpusId: ID
+    $documentId: ID
+    $modalities: [String]
+    $labelText: String
+    $rawTextContains: String
+    $limit: Int
+    $offset: Int
+  ) {
+    semanticSearch(
+      query: $query
+      corpusId: $corpusId
+      documentId: $documentId
+      modalities: $modalities
+      labelText: $labelText
+      rawTextContains: $rawTextContains
+      limit: $limit
+      offset: $offset
+    ) {
+      annotation {
+        id
+        tokensJsons
+        json
+        page
+        created
+        creator {
+          id
+          email
+          username
+          slug
+          __typename
+        }
+        corpus {
+          id
+          slug
+          icon
+          title
+          description
+          preferredEmbedder
+          creator {
+            id
+            slug
+            __typename
+          }
+          labelSet {
+            id
+            title
+            __typename
+          }
+          __typename
+        }
+        document {
+          id
+          slug
+          title
+          description
+          backendLock
+          pdfFile
+          txtExtractFile
+          pawlsParseFile
+          icon
+          fileType
+          creator {
+            id
+            slug
+            __typename
+          }
+          __typename
+        }
+        analysis {
+          id
+          analyzer {
+            analyzerId
+            __typename
+          }
+          __typename
+        }
+        annotationLabel {
+          id
+          text
+          color
+          icon
+          description
+          labelType
+          __typename
+        }
+        annotationType
+        structural
+        rawText
+        isPublic
+        myPermissions
+        contentModalities
+        __typename
+      }
+      similarityScore
+      document {
+        id
+        slug
+        title
+        __typename
+      }
+      corpus {
+        id
+        slug
+        title
+        __typename
+      }
+    }
+  }
+`;
+
 export interface GetAnnotationLabelsInput {
   corpusId?: string;
   labelsetId?: string;
