@@ -1223,3 +1223,290 @@ class CorpusForkPreservationTest(TransactionTestCase):
             "LIMITATION: Notes are not currently copied during fork. "
             "If this test fails, the limitation may have been fixed - update accordingly!",
         )
+
+    def test_labelset_icon_copied(self):
+        """
+        Test that label set icon is copied during fork.
+        """
+        from django.core.files.base import ContentFile
+
+        corpus = Corpus.objects.create(
+            title="Icon Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create label set with icon
+        label_set = LabelSet.objects.create(
+            title="Labeled Set",
+            creator=self.user,
+        )
+        # Create a simple icon file
+        icon_content = b"fake icon content for testing"
+        label_set.icon.save("test_icon.png", ContentFile(icon_content))
+        label_set.save()
+
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Fork
+        forked = Corpus.objects.create(
+            title="[FORK] Icon Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],
+            label_set_id=label_set.pk,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify label set was created with icon
+        self.assertIsNotNone(forked.label_set, "Forked corpus should have a label set")
+        self.assertTrue(
+            forked.label_set.icon and forked.label_set.icon.name,
+            "Forked label set should have an icon",
+        )
+
+    def test_document_files_copied(self):
+        """
+        Test that document txt_extract_file and pawls_parse_file are copied during fork.
+        """
+        from django.core.files.base import ContentFile
+
+        corpus = Corpus.objects.create(
+            title="File Copy Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create document with txt_extract_file and pawls_parse_file
+        doc = Document.objects.create(
+            title="Test Doc With Files",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+
+        # Add txt extract file
+        txt_content = b"This is extracted text content."
+        doc.txt_extract_file.save("test_extract.txt", ContentFile(txt_content))
+
+        # Add pawls parse file
+        pawls_content = b'[{"page": 1, "tokens": []}]'
+        doc.pawls_parse_file.save("test_doc.pawls", ContentFile(pawls_content))
+        doc.save()
+
+        # Add document to corpus
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Fork
+        forked = Corpus.objects.create(
+            title="[FORK] File Copy Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify document was forked with files
+        forked_doc = forked.get_documents().first()
+        self.assertIsNotNone(forked_doc, "Forked corpus should have a document")
+        self.assertTrue(
+            forked_doc.txt_extract_file and forked_doc.txt_extract_file.name,
+            "Forked document should have txt_extract_file",
+        )
+        self.assertTrue(
+            forked_doc.pawls_parse_file and forked_doc.pawls_parse_file.name,
+            "Forked document should have pawls_parse_file",
+        )
+
+    def test_relationship_skipped_when_no_mapped_annotations(self):
+        """
+        Test that relationships are skipped when their source/target annotations
+        are not in the annotation_ids list passed to fork.
+        """
+        corpus = Corpus.objects.create(
+            title="Relationship Skip Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create label set
+        label_set = LabelSet.objects.create(title="Test Labels", creator=self.user)
+        token_label = AnnotationLabel.objects.create(
+            text="Token", label_type=TOKEN_LABEL, creator=self.user
+        )
+        rel_label = AnnotationLabel.objects.create(
+            text="Related", label_type=RELATIONSHIP_LABEL, creator=self.user
+        )
+        label_set.annotation_labels.add(token_label, rel_label)
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Create document
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create annotations
+        ann1 = Annotation.objects.create(
+            page=1,
+            raw_text="First",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+        ann2 = Annotation.objects.create(
+            page=1,
+            raw_text="Second",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+
+        # Create relationship between annotations
+        relationship = Relationship.objects.create(
+            relationship_label=rel_label,
+            corpus=corpus,
+            document=doc,
+            creator=self.user,
+        )
+        relationship.source_annotations.add(ann1)
+        relationship.target_annotations.add(ann2)
+
+        # Fork - but DON'T include the annotations, only the relationship
+        forked = Corpus.objects.create(
+            title="[FORK] Relationship Skip Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=label_set.pk,
+            annotation_ids=[],  # Empty - no annotations being forked
+            folder_ids=[],
+            relationship_ids=[relationship.pk],  # But include relationship
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify relationship was skipped (no mapped annotations)
+        forked_rel_count = Relationship.objects.filter(corpus=forked).count()
+        self.assertEqual(
+            forked_rel_count,
+            0,
+            "Relationship should be skipped when no source/target annotations are mapped",
+        )
+
+    def test_annotation_without_label_set(self):
+        """
+        Test that annotations are correctly forked when there's no label_map
+        (i.e., when the annotation has a label but there's no label set being forked).
+        """
+        corpus = Corpus.objects.create(
+            title="No Label Set Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+
+        # Create document
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create annotation WITH a label, but we won't fork the label set
+        token_label = AnnotationLabel.objects.create(
+            text="Token", label_type=TOKEN_LABEL, creator=self.user
+        )
+        annotation = Annotation.objects.create(
+            page=1,
+            raw_text="Test annotation",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,  # Has a label
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.ALL])
+
+        # Fork WITHOUT label_set_id - this tests the annotation_label_id = None path
+        forked = Corpus.objects.create(
+            title="[FORK] No Label Set Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,  # No label set being forked
+            annotation_ids=[annotation.pk],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify annotation was forked without label
+        forked_annotations = Annotation.objects.filter(corpus=forked)
+        self.assertEqual(forked_annotations.count(), 1)
+
+        forked_ann = forked_annotations.first()
+        self.assertEqual(forked_ann.raw_text, "Test annotation")
+        self.assertIsNone(
+            forked_ann.annotation_label,
+            "Forked annotation should have no label when label set is not forked",
+        )

@@ -57,6 +57,7 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
 
     # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
     corpus_copy.pk = None
+    corpus_copy.slug = ""  # Clear slug so save() generates a new unique one
 
     # Adjust the title to indicate it's a fork
     corpus_copy.title = f"[FORK] {corpus_copy.title}"
