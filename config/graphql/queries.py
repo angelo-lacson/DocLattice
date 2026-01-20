@@ -130,9 +130,8 @@ from doclatticeserver.documents.query_optimizer import (
 from doclatticeserver.extracts.models import Column, Datacell, Fieldset
 from doclatticeserver.feedback.models import UserFeedback
 from doclatticeserver.notifications.models import Notification
-from doclatticeserver.types.enums import LabelType, PermissionTypes
+from doclatticeserver.types.enums import LabelType
 from doclatticeserver.users.models import Assignment, UserExport, UserImport
-from doclatticeserver.utils.permissioning import user_has_permission_for_obj
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +150,9 @@ class DocumentMetadataResultType(graphene.ObjectType):
     """Type for batch metadata query results - groups datacells by document."""
 
     document_id = graphene.ID(description="The document's global ID")
-    datacells = graphene.List(DatacellType, description="Metadata datacells for this document")
+    datacells = graphene.List(
+        DatacellType, description="Metadata datacells for this document"
+    )
 
 
 class Query(graphene.ObjectType):
@@ -3052,13 +3053,14 @@ class Query(graphene.ObjectType):
         user = info.context.user
         local_corpus_id = int(from_global_id(corpus_id)[1])
 
-        # Convert global IDs to local IDs
+        # Convert global IDs to local IDs (single pass)
         local_doc_ids = []
-        global_id_map = {}  # local_id -> global_id
+        local_id_by_global = {}  # global_id -> local_id
         for global_id in document_ids:
             _, local_id = from_global_id(global_id)
-            local_doc_ids.append(int(local_id))
-            global_id_map[int(local_id)] = global_id
+            local_id_int = int(local_id)
+            local_doc_ids.append(local_id_int)
+            local_id_by_global[global_id] = local_id_int
 
         # Use optimizer to get batch metadata with proper permissions
         datacells_by_doc = MetadataQueryOptimizer.get_documents_metadata_batch(
@@ -3074,9 +3076,7 @@ class Query(graphene.ObjectType):
         # so we only include documents the user has permission to read
         results = []
         for global_id in document_ids:
-            local_id = global_id_map.get(int(from_global_id(global_id)[1]))
-            if local_id is None:
-                local_id = int(from_global_id(global_id)[1])
+            local_id = local_id_by_global[global_id]
 
             # Only include documents that are in the result (user has permission)
             if local_id in datacells_by_doc:

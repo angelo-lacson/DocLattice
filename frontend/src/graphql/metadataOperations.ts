@@ -52,7 +52,10 @@ export const GET_METADATA_COMPLETION_STATUS = gql`
 
 export const GET_DOCUMENTS_METADATA_BATCH = gql`
   query GetDocumentsMetadataBatch($documentIds: [ID]!, $corpusId: ID!) {
-    documentsMetadataDatacellsBatch(documentIds: $documentIds, corpusId: $corpusId) {
+    documentsMetadataDatacellsBatch(
+      documentIds: $documentIds
+      corpusId: $corpusId
+    ) {
       documentId
       datacells {
         id
