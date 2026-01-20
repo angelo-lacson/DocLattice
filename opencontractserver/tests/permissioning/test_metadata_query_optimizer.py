@@ -369,6 +369,10 @@ class MetadataQueryOptimizerTestCase(TestCase):
     def test_get_columns_no_schema(self):
         """Should return empty for corpus without metadata schema."""
         corpus_no_schema = Corpus.objects.create(title="No Schema", creator=self.owner)
+        # Grant permissions so we hit the "no schema" branch, not the "no permission" branch
+        set_permissions_for_obj_to_user(
+            self.owner, corpus_no_schema, [PermissionTypes.READ]
+        )
         columns = MetadataQueryOptimizer.get_corpus_metadata_columns(
             self.owner, corpus_no_schema.id
         )
@@ -654,3 +658,272 @@ class MetadataQueryOptimizerTestCase(TestCase):
         self.assertFalse(is_valid)
         self.assertIn("Corpus not found", msg)
         self.assertIsNone(column)
+
+    # =========================================================================
+    # Additional coverage tests for edge cases
+    # =========================================================================
+
+    def test_compute_permissions_anonymous_nonexistent_document(self):
+        """Anonymous user with nonexistent document should get no permissions."""
+        can_read, can_create, can_update, can_delete = (
+            MetadataQueryOptimizer._compute_effective_permissions(
+                self.anonymous, 99999, self.public_corpus.id
+            )
+        )
+        self.assertFalse(can_read)
+        self.assertFalse(can_create)
+        self.assertFalse(can_update)
+        self.assertFalse(can_delete)
+
+    def test_compute_permissions_anonymous_nonexistent_corpus(self):
+        """Anonymous user with nonexistent corpus should get no permissions."""
+        can_read, can_create, can_update, can_delete = (
+            MetadataQueryOptimizer._compute_effective_permissions(
+                self.anonymous, self.public_doc.id, 99999
+            )
+        )
+        self.assertFalse(can_read)
+        self.assertFalse(can_create)
+        self.assertFalse(can_update)
+        self.assertFalse(can_delete)
+
+    def test_get_columns_anonymous_private_corpus(self):
+        """Anonymous user should not see columns for private corpus."""
+        columns = MetadataQueryOptimizer.get_corpus_metadata_columns(
+            self.anonymous, self.corpus.id
+        )
+        self.assertEqual(columns.count(), 0)
+
+    def test_get_columns_nonexistent_corpus(self):
+        """Should return empty queryset for nonexistent corpus."""
+        columns = MetadataQueryOptimizer.get_corpus_metadata_columns(self.owner, 99999)
+        self.assertEqual(columns.count(), 0)
+
+    def test_get_document_metadata_no_schema(self):
+        """Should return empty for corpus without metadata schema."""
+        corpus_no_schema = Corpus.objects.create(
+            title="No Schema Corpus", creator=self.owner
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, corpus_no_schema, [PermissionTypes.CRUD]
+        )
+
+        datacells = MetadataQueryOptimizer.get_document_metadata(
+            self.owner, self.doc1.id, corpus_no_schema.id
+        )
+        self.assertEqual(datacells.count(), 0)
+
+    def test_get_document_metadata_nonexistent_corpus(self):
+        """Should return empty for nonexistent corpus."""
+        datacells = MetadataQueryOptimizer.get_document_metadata(
+            self.owner, self.doc1.id, 99999
+        )
+        self.assertEqual(datacells.count(), 0)
+
+    def test_batch_nonexistent_corpus(self):
+        """Should return empty for nonexistent corpus."""
+        result = MetadataQueryOptimizer.get_documents_metadata_batch(
+            self.owner, [self.doc1.id], 99999
+        )
+        self.assertEqual(len(result), 0)
+
+    def test_batch_anonymous_private_corpus(self):
+        """Anonymous user should not see documents for private corpus."""
+        result = MetadataQueryOptimizer.get_documents_metadata_batch(
+            self.anonymous, [self.doc1.id], self.corpus.id
+        )
+        self.assertEqual(len(result), 0)
+
+    def test_batch_no_metadata_schema(self):
+        """Should return empty for corpus without metadata schema."""
+        corpus_no_schema = Corpus.objects.create(
+            title="Batch No Schema", creator=self.owner
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, corpus_no_schema, [PermissionTypes.CRUD]
+        )
+
+        result = MetadataQueryOptimizer.get_documents_metadata_batch(
+            self.owner, [self.doc1.id], corpus_no_schema.id
+        )
+        self.assertEqual(len(result), 0)
+
+    def test_batch_anonymous_public_documents(self):
+        """Anonymous user should see public documents in public corpus."""
+        # Create datacell for public document
+        Datacell.objects.create(
+            document=self.public_doc,
+            column=self.public_column,
+            data={"value": "Public Value"},
+            data_definition="string",
+            creator=self.owner,
+        )
+
+        result = MetadataQueryOptimizer.get_documents_metadata_batch(
+            self.anonymous, [self.public_doc.id], self.public_corpus.id
+        )
+        self.assertIn(self.public_doc.id, result)
+        self.assertEqual(len(result[self.public_doc.id]), 1)
+
+    def test_batch_anonymous_public_corpus_private_documents(self):
+        """Anonymous user should not see private documents even in public corpus."""
+        # Add a private document to the public corpus
+        private_doc = self._create_document("Private in Public", self.owner)
+        self.public_corpus.add_document(document=private_doc, user=self.owner)
+
+        result = MetadataQueryOptimizer.get_documents_metadata_batch(
+            self.anonymous, [private_doc.id], self.public_corpus.id
+        )
+        # Private document should not be in result for anonymous user
+        self.assertNotIn(private_doc.id, result)
+
+    def test_completion_status_nonexistent_corpus(self):
+        """Should return None for nonexistent corpus."""
+        status = MetadataQueryOptimizer.get_metadata_completion_status(
+            self.owner, self.doc1.id, 99999
+        )
+        self.assertIsNone(status)
+
+    def test_completion_status_zero_manual_columns(self):
+        """Corpus with only non-manual columns should return 100%."""
+        # Create a corpus with only non-manual entry columns
+        corpus_auto = Corpus.objects.create(title="Auto Only", creator=self.owner)
+        set_permissions_for_obj_to_user(self.owner, corpus_auto, [PermissionTypes.CRUD])
+
+        fieldset_auto = Fieldset.objects.create(
+            name="Auto Fieldset",
+            corpus=corpus_auto,
+            creator=self.owner,
+        )
+        Column.objects.create(
+            name="Auto Column",
+            fieldset=fieldset_auto,
+            data_type="STRING",
+            output_type="string",
+            is_manual_entry=False,  # Not manual entry
+            creator=self.owner,
+        )
+
+        doc = self._create_document("Auto Doc", self.owner)
+        corpus_auto.add_document(document=doc, user=self.owner)
+
+        status = MetadataQueryOptimizer.get_metadata_completion_status(
+            self.owner, doc.id, corpus_auto.id
+        )
+        self.assertEqual(status["total_fields"], 0)
+        self.assertEqual(status["percentage"], 100.0)
+
+    def test_batch_user_with_no_groups(self):
+        """User with no group memberships should still work via direct permissions."""
+        # Create a user and remove from all groups to test the no-groups code path
+        solo_user = User.objects.create_user(username="solo", password="test123")
+        # Remove from auto-assigned groups to test the no-groups branch (line 162)
+        solo_user.groups.clear()
+        self.assertEqual(solo_user.groups.count(), 0)
+
+        # Grant direct permissions
+        set_permissions_for_obj_to_user(solo_user, self.doc1, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(solo_user, self.corpus, [PermissionTypes.READ])
+
+        result = MetadataQueryOptimizer.get_documents_metadata_batch(
+            solo_user, [self.doc1.id], self.corpus.id
+        )
+        self.assertIn(self.doc1.id, result)
+
+
+class MetadataQueryOptimizerDefensiveCodeTestCase(TestCase):
+    """
+    Tests for defensive code paths in MetadataQueryOptimizer.
+
+    These tests use mocking to hit code paths that are normally unreachable
+    due to prior permission checks, but exist for defensive purposes
+    (e.g., race conditions where corpus is deleted between checks).
+    """
+
+    def setUp(self):
+        """Set up minimal test data."""
+        self.user = User.objects.create_user(username="testuser", password="test123")
+        self.superuser = User.objects.create_superuser(
+            username="superadmin", password="admin"
+        )
+
+        # Create a document
+        with open(SAMPLE_PDF_FILE_ONE_PATH, "rb") as f:
+            pdf_content = f.read()
+        self.doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+            pdf_file=ContentFile(pdf_content, name="test.pdf"),
+        )
+
+    def test_get_document_metadata_corpus_deleted_after_permission_check(self):
+        """
+        Test defensive code path when corpus is deleted after permission check.
+
+        This simulates a race condition where corpus exists during permission
+        check but is deleted before the subsequent get().
+        """
+        from unittest.mock import patch
+
+        # Mock _compute_effective_permissions to return True for can_read
+        with patch.object(
+            MetadataQueryOptimizer,
+            "_compute_effective_permissions",
+            return_value=(True, False, False, False),
+        ):
+            # Call with non-existent corpus ID - this should hit lines 264-265
+            datacells = MetadataQueryOptimizer.get_document_metadata(
+                self.user, self.doc.id, 99999
+            )
+            self.assertEqual(datacells.count(), 0)
+
+    def test_completion_status_corpus_deleted_after_permission_check(self):
+        """
+        Test defensive code path when corpus is deleted after permission check.
+
+        This simulates a race condition where corpus exists during permission
+        check but is deleted before the subsequent get().
+        """
+        from unittest.mock import patch
+
+        # Mock _compute_effective_permissions to return True for can_read
+        with patch.object(
+            MetadataQueryOptimizer,
+            "_compute_effective_permissions",
+            return_value=(True, False, False, False),
+        ):
+            # Call with non-existent corpus ID - this should hit lines 397-398
+            status = MetadataQueryOptimizer.get_metadata_completion_status(
+                self.user, self.doc.id, 99999
+            )
+            self.assertIsNone(status)
+
+    def test_readable_document_ids_bulk_missing_permission(self):
+        """
+        Test defensive code path when read_document permission doesn't exist.
+
+        This is an edge case that could occur if migrations haven't been run.
+        """
+        from unittest.mock import MagicMock, patch
+
+        from opencontractserver.documents.models import Document
+
+        # Create corpus for testing
+        corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.READ])
+
+        # Mock Permission.objects.filter().first() to return None (no permission found)
+        # The Permission is imported locally inside the method from django.contrib.auth.models
+        with patch(
+            "django.contrib.auth.models.Permission.objects"
+        ) as mock_perm_objects:
+            mock_filter = MagicMock()
+            mock_filter.first.return_value = None
+            mock_perm_objects.filter.return_value = mock_filter
+
+            # Call _get_readable_document_ids_bulk directly - should return empty set
+            documents = Document.objects.filter(pk=self.doc.id)
+            result = MetadataQueryOptimizer._get_readable_document_ids_bulk(
+                self.user, [self.doc.id], documents
+            )
+            self.assertEqual(result, set())
