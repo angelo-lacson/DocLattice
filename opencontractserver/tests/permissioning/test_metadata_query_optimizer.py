@@ -79,7 +79,9 @@ class MetadataQueryOptimizerTestCase(TestCase):
         # Create documents
         self.doc1 = self._create_document("Doc 1", self.owner)
         self.doc2 = self._create_document("Doc 2", self.owner)
-        self.public_doc = self._create_document("Public Doc", self.owner, is_public=True)
+        self.public_doc = self._create_document(
+            "Public Doc", self.owner, is_public=True
+        )
 
         # Create corpus (private by default)
         self.corpus = Corpus.objects.create(
@@ -359,9 +361,7 @@ class MetadataQueryOptimizerTestCase(TestCase):
 
     def test_get_columns_no_schema(self):
         """Should return empty for corpus without metadata schema."""
-        corpus_no_schema = Corpus.objects.create(
-            title="No Schema", creator=self.owner
-        )
+        corpus_no_schema = Corpus.objects.create(title="No Schema", creator=self.owner)
         columns = MetadataQueryOptimizer.get_corpus_metadata_columns(
             self.owner, corpus_no_schema.id
         )
@@ -517,9 +517,7 @@ class MetadataQueryOptimizerTestCase(TestCase):
 
     def test_completion_status_no_schema(self):
         """Corpus without schema should return 100% completion."""
-        corpus_no_schema = Corpus.objects.create(
-            title="No Schema", creator=self.owner
-        )
+        corpus_no_schema = Corpus.objects.create(title="No Schema", creator=self.owner)
         doc = self._create_document("Test", self.owner)
         corpus_no_schema.add_document(document=doc, user=self.owner)
         set_permissions_for_obj_to_user(

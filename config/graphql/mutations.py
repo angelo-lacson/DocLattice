@@ -643,15 +643,19 @@ class SetMetadataValue(graphene.Mutation):
             local_column_id = int(from_global_id(column_id)[1])
 
             # Check document + corpus permissions using optimizer (MIN logic)
-            has_perm, error_msg = MetadataQueryOptimizer.check_metadata_mutation_permission(
-                user, local_doc_id, local_corpus_id, "UPDATE"
+            has_perm, error_msg = (
+                MetadataQueryOptimizer.check_metadata_mutation_permission(
+                    user, local_doc_id, local_corpus_id, "UPDATE"
+                )
             )
             if not has_perm:
                 return SetMetadataValue(ok=False, message=error_msg)
 
             # Validate column belongs to corpus metadata schema
-            is_valid, error_msg, column = MetadataQueryOptimizer.validate_metadata_column(
-                local_column_id, local_corpus_id
+            is_valid, error_msg, column = (
+                MetadataQueryOptimizer.validate_metadata_column(
+                    local_column_id, local_corpus_id
+                )
             )
             if not is_valid:
                 return SetMetadataValue(ok=False, message=error_msg)
@@ -713,15 +717,25 @@ class DeleteMetadataValue(graphene.Mutation):
             local_column_id = int(from_global_id(column_id)[1])
 
             # Check document + corpus permissions using optimizer (MIN logic)
-            has_perm, error_msg = MetadataQueryOptimizer.check_metadata_mutation_permission(
-                user, local_doc_id, local_corpus_id, "DELETE"
+            has_perm, error_msg = (
+                MetadataQueryOptimizer.check_metadata_mutation_permission(
+                    user, local_doc_id, local_corpus_id, "DELETE"
+                )
             )
             if not has_perm:
                 return DeleteMetadataValue(ok=False, message=error_msg)
 
-            # Get document and column for lookup
+            # Validate column belongs to corpus metadata schema
+            is_valid, error_msg, column = (
+                MetadataQueryOptimizer.validate_metadata_column(
+                    local_column_id, local_corpus_id
+                )
+            )
+            if not is_valid:
+                return DeleteMetadataValue(ok=False, message=error_msg)
+
+            # Get document for lookup
             document = Document.objects.get(pk=local_doc_id)
-            column = Column.objects.get(pk=local_column_id)
 
             # Find and delete the datacell
             datacell = Datacell.objects.get(document=document, column=column)
@@ -733,8 +747,6 @@ class DeleteMetadataValue(graphene.Mutation):
 
         except Document.DoesNotExist:
             return DeleteMetadataValue(ok=False, message="Document not found")
-        except Column.DoesNotExist:
-            return DeleteMetadataValue(ok=False, message="Column not found")
         except Datacell.DoesNotExist:
             return DeleteMetadataValue(ok=False, message="Metadata value not found")
         except Exception as e:

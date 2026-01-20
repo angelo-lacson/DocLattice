@@ -8,9 +8,8 @@ Follows the same pattern as AnnotationQueryOptimizer:
 """
 
 from collections import defaultdict
-from typing import Optional
 
-from django.db.models import QuerySet, Value
+from django.db.models import QuerySet
 
 from opencontractserver.extracts.models import Column, Datacell
 
@@ -445,7 +444,10 @@ class MetadataQueryOptimizer:
             user, document, perm_type, include_group_permissions=True
         )
         if not doc_has_perm:
-            return False, f"You don't have {permission_type} permission on this document"
+            return (
+                False,
+                f"You don't have {permission_type} permission on this document",
+            )
 
         # Check corpus permission (secondary) - MIN logic
         corpus_has_perm = user_has_permission_for_obj(
