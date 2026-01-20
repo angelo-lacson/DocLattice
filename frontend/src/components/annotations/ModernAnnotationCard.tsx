@@ -13,6 +13,7 @@ import {
   Users,
   Lock,
   AlignLeft,
+  Sparkles,
 } from "lucide-react";
 
 import { ServerAnnotationType } from "../../types/graphql-api";
@@ -33,6 +34,8 @@ export interface ModernAnnotationCardProps {
   annotation: ServerAnnotationType;
   onClick?: () => void;
   isSelected?: boolean;
+  /** Similarity score from semantic search (0.0-1.0, higher is more similar) */
+  similarityScore?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -139,6 +142,27 @@ const TypeBadge = styled.div<{ $type: "doc" | "text" }>`
   border-radius: 4px;
   background: ${(props) => (props.$type === "doc" ? "#dbeafe" : "#f0fdfa")};
   color: ${(props) => (props.$type === "doc" ? "#2563eb" : "#0f766e")};
+`;
+
+const SimilarityBadge = styled.div<{ $score: number }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: ${(props) => {
+    // Color gradient based on score: green for high, yellow for medium, gray for low
+    if (props.$score >= 0.8) return "#dcfce7"; // green
+    if (props.$score >= 0.6) return "#fef9c3"; // yellow
+    return "#f1f5f9"; // gray
+  }};
+  color: ${(props) => {
+    if (props.$score >= 0.8) return "#166534"; // green
+    if (props.$score >= 0.6) return "#854d0e"; // yellow
+    return "#64748b"; // gray
+  }};
 `;
 
 const LabelsetTag = styled.div`
@@ -413,6 +437,7 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
   annotation,
   onClick,
   isSelected = false,
+  similarityScore,
 }) => {
   const source = getAnnotationSource(annotation);
   const labelType = getAnnotationLabelType(annotation);
@@ -451,6 +476,15 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
           <LabelName>{labelName}</LabelName>
         </LabelContainer>
         <BadgesContainer>
+          {similarityScore !== undefined && (
+            <SimilarityBadge
+              $score={similarityScore}
+              title={`${Math.round(similarityScore * 100)}% semantic match`}
+            >
+              <Sparkles size={12} />
+              {Math.round(similarityScore * 100)}%
+            </SimilarityBadge>
+          )}
           <SourceBadgeComponent source={source} />
           <ModalityBadge modalities={contentModalities} />
           <TypeBadge $type={labelType}>
