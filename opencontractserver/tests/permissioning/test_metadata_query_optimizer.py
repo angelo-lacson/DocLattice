@@ -89,12 +89,18 @@ class MetadataQueryOptimizerTestCase(TestCase):
         )
         self.corpus.add_document(document=self.doc1, user=self.owner)
         self.corpus.add_document(document=self.doc2, user=self.owner)
+        # Owner needs explicit permissions on corpus
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         # Create public corpus
         self.public_corpus = Corpus.objects.create(
             title="Public Corpus", creator=self.owner, is_public=True
         )
         self.public_corpus.add_document(document=self.public_doc, user=self.owner)
+        # Owner needs explicit permissions on public corpus too
+        set_permissions_for_obj_to_user(
+            self.owner, self.public_corpus, [PermissionTypes.CRUD]
+        )
 
         # Set up permissions for collaborator on doc1 and corpus
         set_permissions_for_obj_to_user(
@@ -144,6 +150,7 @@ class MetadataQueryOptimizerTestCase(TestCase):
         # Create public corpus metadata schema
         self.public_fieldset = Fieldset.objects.create(
             name="Public Metadata Schema",
+            description="Public metadata schema",
             corpus=self.public_corpus,
             creator=self.owner,
         )
