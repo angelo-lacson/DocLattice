@@ -2,46 +2,17 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import { Cable, Copy, Check, ExternalLink } from "lucide-react";
 import { toast } from "react-toastify";
+import { Button, Input } from "@os-legal/ui";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS
+// Note: Using custom popover since @os-legal/ui doesn't have a Popover component.
+// Button and Input components use the design system.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const Container = styled.div`
   position: relative;
   display: inline-flex;
-`;
-
-const TriggerButton = styled.button<{ $size: "sm" | "md" }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: ${(props) => (props.$size === "sm" ? "4px 8px" : "6px 12px")};
-  background: transparent;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  color: #64748b;
-  font-size: ${(props) => (props.$size === "sm" ? "12px" : "13px")};
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-
-  &:hover {
-    background: #f0fdfa;
-    border-color: #0f766e;
-    color: #0f766e;
-  }
-
-  &:active {
-    transform: scale(0.98);
-  }
-
-  svg {
-    width: ${(props) => (props.$size === "sm" ? "14px" : "16px")};
-    height: ${(props) => (props.$size === "sm" ? "14px" : "16px")};
-  }
 `;
 
 const Popover = styled.div<{ $visible: boolean }>`
@@ -110,51 +81,30 @@ const UrlContainer = styled.div`
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
-`;
+  align-items: stretch;
 
-const UrlInput = styled.input`
-  flex: 1;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 13px;
-  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
-  color: #334155;
-  min-width: 0;
+  /* Style the Input component wrapper */
+  & > div:first-child {
+    flex: 1;
+    min-width: 0;
+  }
 
-  &:focus {
-    outline: none;
-    border-color: #0f766e;
-    background: white;
+  /* Style the input inside */
+  input {
+    font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+    font-size: 13px;
   }
 `;
 
-const CopyButton = styled.button<{ $copied: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: ${(props) => (props.$copied ? "#10b981" : "#0f766e")};
-  border: none;
-  border-radius: 8px;
-  color: white;
-  cursor: pointer;
-  transition: all 0.15s ease;
+const CopyButtonWrapper = styled.div`
   flex-shrink: 0;
 
-  &:hover {
-    background: ${(props) => (props.$copied ? "#059669" : "#0d6560")};
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  svg {
-    width: 18px;
-    height: 18px;
+  /* Override Button sizing for square copy button */
+  button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    min-width: unset;
   }
 `;
 
@@ -299,17 +249,18 @@ export const MCPShareButton: React.FC<MCPShareButtonProps> = ({
 
   return (
     <Container ref={containerRef} data-testid={testId}>
-      <TriggerButton
-        $size={size}
+      <Button
+        variant="secondary"
+        size={size}
+        leftIcon={<Cable size={size === "sm" ? 14 : 16} />}
         onClick={handleToggle}
         aria-label="Share MCP endpoint"
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         data-testid={`${testId}-trigger`}
       >
-        <Cable />
-        {showLabel && "MCP"}
-      </TriggerButton>
+        {showLabel ? "MCP" : undefined}
+      </Button>
 
       <Popover
         $visible={isOpen}
@@ -331,7 +282,7 @@ export const MCPShareButton: React.FC<MCPShareButtonProps> = ({
         <PopoverContent>
           <UrlLabel htmlFor={`${testId}-url-input`}>Endpoint URL</UrlLabel>
           <UrlContainer>
-            <UrlInput
+            <Input
               id={`${testId}-url-input`}
               ref={inputRef}
               type="text"
@@ -340,14 +291,16 @@ export const MCPShareButton: React.FC<MCPShareButtonProps> = ({
               onClick={(e) => (e.target as HTMLInputElement).select()}
               data-testid={`${testId}-url-input`}
             />
-            <CopyButton
-              $copied={copied}
-              onClick={handleCopy}
-              aria-label={copied ? "Copied" : "Copy URL"}
-              data-testid={`${testId}-copy-button`}
-            >
-              {copied ? <Check /> : <Copy />}
-            </CopyButton>
+            <CopyButtonWrapper>
+              <Button
+                variant={copied ? "primary" : "primary"}
+                onClick={handleCopy}
+                aria-label={copied ? "Copied" : "Copy URL"}
+                data-testid={`${testId}-copy-button`}
+              >
+                {copied ? <Check size={18} /> : <Copy size={18} />}
+              </Button>
+            </CopyButtonWrapper>
           </UrlContainer>
 
           <SetupHint>
