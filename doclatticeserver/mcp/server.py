@@ -31,6 +31,7 @@ from starlette.applications import Starlette
 from starlette.responses import Response
 from starlette.routing import Mount, Route
 
+from .permissions import RateLimiter
 from .resources import (
     get_annotation_resource,
     get_corpus_resource,
@@ -377,6 +378,10 @@ def create_mcp_server() -> Server:
 
 # Create the global MCP server instance
 mcp_server = create_mcp_server()
+
+# Rate limiter for MCP endpoints (100 requests per minute per IP)
+# This provides defense-in-depth alongside infrastructure-level rate limiting
+mcp_rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
 
 
 # =============================================================================
@@ -1038,11 +1043,39 @@ def create_mcp_asgi_app():
     Telemetry context is set for each request to track client IP and transport.
     """
     # Regex to match corpus-scoped endpoints: /mcp/corpus/{slug}/ or /mcp/corpus/{slug}
-    # Matches the URIParser.SLUG_PATTERN: letters (case-insensitive), numbers, and hyphens
-    corpus_path_pattern = re.compile(r"^/mcp/corpus/([A-Za-z0-9\-]+)/?$")
+    # Reuses URIParser.SLUG_PATTERN to ensure consistency
+    corpus_path_pattern = re.compile(rf"^/mcp/corpus/({URIParser.SLUG_PATTERN})/?$")
 
     async def app(scope, receive, send):
         if scope["type"] != "http":
+            return
+
+        # Rate limiting check (before any path processing)
+        client_ip = get_client_ip_from_scope(scope) or "unknown"
+        is_allowed = await sync_to_async(mcp_rate_limiter.check_rate_limit)(client_ip)
+        if not is_allowed:
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [
+                        [b"content-type", b"application/json"],
+                        [b"retry-after", b"60"],
+                    ],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": json.dumps(
+                        {
+                            "error": "Too many requests",
+                            "hint": "Please wait before making more requests",
+                            "retry_after": 60,
+                        }
+                    ).encode(),
+                }
+            )
             return
 
         path = scope.get("path", "")
