@@ -5,7 +5,7 @@ import json
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 
 from opencontractserver.corpuses.models import Corpus
 
@@ -2745,11 +2745,19 @@ class MCPScopedToolsTest(TestCase):
         self.assertEqual(result["page_count"], 5)
 
 
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
 class MCPScopedServerTest(TransactionTestCase):
     """Tests for corpus-scoped MCP server functionality.
 
     Uses TransactionTestCase because async tests with sync_to_async
     need data committed to be visible across database connections.
+
+    Marked as serial because these tests use sync_to_async with Django ORM
+    in manually created event loops, which can cause database connection
+    corruption when run in parallel with pytest-xdist.
+
+    CONN_MAX_AGE=0 prevents connection pooling issues with asyncio.run().
     """
 
     def setUp(self):
@@ -2905,11 +2913,19 @@ class MCPScopedServerTest(TransactionTestCase):
             loop.close()
 
 
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
 class MCPScopedASGIRoutingTest(TransactionTestCase):
     """Tests for corpus-scoped ASGI routing.
 
     Uses TransactionTestCase because async tests with sync_to_async
     need data committed to be visible across database connections.
+
+    Marked as serial because these tests use sync_to_async with Django ORM
+    in manually created event loops, which can cause database connection
+    corruption when run in parallel with pytest-xdist.
+
+    CONN_MAX_AGE=0 prevents connection pooling issues with asyncio.run().
     """
 
     def setUp(self):
@@ -3423,8 +3439,20 @@ class MCPTTLLRUCacheTest(TestCase):
             loop.close()
 
 
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
 class MCPUppercaseSlugTest(TransactionTestCase):
-    """Tests for uppercase/mixed-case corpus slug handling."""
+    """Tests for uppercase/mixed-case corpus slug handling.
+
+    Uses TransactionTestCase because async tests with sync_to_async
+    need data committed to be visible across database connections.
+
+    Marked as serial because these tests use sync_to_async with Django ORM
+    in manually created event loops, which can cause database connection
+    corruption when run in parallel with pytest-xdist.
+
+    CONN_MAX_AGE=0 prevents connection pooling issues with asyncio.run().
+    """
 
     def setUp(self):
         """Create test data with mixed-case slug."""
@@ -3538,12 +3566,15 @@ class MCPUppercaseSlugTest(TransactionTestCase):
 
 
 @pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
 class MCPPermissionChangeTest(TransactionTestCase):
     """Tests for corpus permission changes during active sessions.
 
     Marked as serial because these tests use sync_to_async with Django ORM
     in manually created event loops, which can cause database connection
     corruption when run in parallel with pytest-xdist.
+
+    CONN_MAX_AGE=0 prevents connection pooling issues with asyncio.run().
     """
 
     def setUp(self):
@@ -3811,8 +3842,20 @@ class MCPTTLLRUCacheNoCallbackTest(TestCase):
             loop.close()
 
 
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
 class MCPScopedLifespanManagerShutdownTest(TransactionTestCase):
-    """Tests for ScopedMCPLifespanManager shutdown error handling."""
+    """Tests for ScopedMCPLifespanManager shutdown error handling.
+
+    Uses TransactionTestCase because async tests with sync_to_async
+    need data committed to be visible across database connections.
+
+    Marked as serial because these tests use sync_to_async with Django ORM
+    in manually created event loops, which can cause database connection
+    corruption when run in parallel with pytest-xdist.
+
+    CONN_MAX_AGE=0 prevents connection pooling issues with asyncio.run().
+    """
 
     def setUp(self):
         """Create test data."""
@@ -3867,8 +3910,20 @@ class MCPScopedLifespanManagerShutdownTest(TransactionTestCase):
             loop.close()
 
 
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
 class MCPScopedASGIErrorHandlingTest(TransactionTestCase):
-    """Tests for scoped ASGI endpoint error handling."""
+    """Tests for scoped ASGI endpoint error handling.
+
+    Uses TransactionTestCase because async tests with sync_to_async
+    need data committed to be visible across database connections.
+
+    Marked as serial because these tests use sync_to_async with Django ORM
+    in manually created event loops, which can cause database connection
+    corruption when run in parallel with pytest-xdist.
+
+    CONN_MAX_AGE=0 prevents connection pooling issues with asyncio.run().
+    """
 
     def setUp(self):
         """Create test data."""
