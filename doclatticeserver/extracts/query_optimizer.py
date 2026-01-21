@@ -460,8 +460,17 @@ class MetadataQueryOptimizer:
         """
         Check if user has permission to mutate metadata on a document.
 
-        This applies the MIN(document_permission, corpus_permission) model
-        for metadata mutations (create, update, delete).
+        Permission model for metadata (different from annotations):
+        - Metadata is a CORPUS-LEVEL feature (columns defined at corpus level)
+        - Requires: Corpus UPDATE/DELETE permission + Document READ permission
+        - This allows corpus owners/editors to manage metadata for any document
+          they can see in their corpus, without needing explicit document permissions
+
+        This differs from the annotation model (MIN of doc + corpus) because:
+        - Metadata schemas are owned by the corpus, not the document
+        - Corpus editors should be able to fill in metadata without explicit
+          document UPDATE permissions (which aren't always assigned for
+          corpus-scoped documents for performance reasons)
 
         Args:
             user: The requesting user
@@ -486,38 +495,33 @@ class MetadataQueryOptimizer:
         if user.is_superuser:
             return True, ""
 
-        # Check document exists
-        try:
-            document = Document.objects.get(id=document_id)
-        except Document.DoesNotExist:
-            return False, "Document not found"
-
-        # Check corpus exists
+        # Check corpus exists first (needed for document visibility check)
         try:
             corpus = Corpus.objects.get(id=corpus_id)
         except Corpus.DoesNotExist:
             return False, "Corpus not found"
 
-        # Determine which permission to check
-        perm_type = (
+        # Check document visibility using the query resolver pattern.
+        # IMPORTANT: We use visible_to_user() instead of user_has_permission_for_obj()
+        # because corpus-scoped documents may not have explicit guardian permissions.
+        # visible_to_user() handles: creator access, is_public, guardian permissions,
+        # and corpus membership - the full visibility model.
+        doc_visible = (
+            Document.objects.visible_to_user(user).filter(id=document_id).exists()
+        )
+        if not doc_visible:
+            return False, "Document not found or not accessible"
+
+        # Check corpus permission (UPDATE or DELETE based on operation)
+        # For corpus, we DO use user_has_permission_for_obj because corpus permissions
+        # are always explicit (not inherited from a parent context).
+        corpus_perm_type = (
             PermissionTypes.DELETE
             if permission_type == "DELETE"
             else PermissionTypes.UPDATE
         )
-
-        # Check document permission (primary)
-        doc_has_perm = user_has_permission_for_obj(
-            user, document, perm_type, include_group_permissions=True
-        )
-        if not doc_has_perm:
-            return (
-                False,
-                f"You don't have {permission_type} permission on this document",
-            )
-
-        # Check corpus permission (secondary) - MIN logic
         corpus_has_perm = user_has_permission_for_obj(
-            user, corpus, perm_type, include_group_permissions=True
+            user, corpus, corpus_perm_type, include_group_permissions=True
         )
         if not corpus_has_perm:
             return False, f"You don't have {permission_type} permission on this corpus"
