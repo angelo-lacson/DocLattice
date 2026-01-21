@@ -5,6 +5,7 @@ import { Provider as JotaiProvider } from "jotai";
 import { DocumentDiscussionsContent } from "../src/components/discussions/DocumentDiscussionsContent";
 import { GET_CONVERSATIONS } from "../src/graphql/queries";
 import { selectedThreadId } from "../src/graphql/cache";
+import { DocumentDiscussionsContentTestWrapper } from "./DocumentDiscussionsContentTestWrapper";
 
 // Mock thread data
 const mockThreads = {
@@ -106,16 +107,9 @@ test.describe("DocumentDiscussionsContent", () => {
     ];
 
     await mount(
-      <MemoryRouter initialEntries={["/"]}>
-        <MockedProvider mocks={mocks} addTypename={true}>
-          <JotaiProvider>
-            <DocumentDiscussionsContent
-              documentId="doc-1"
-              corpusId="corpus-1"
-            />
-          </JotaiProvider>
-        </MockedProvider>
-      </MemoryRouter>
+      <DocumentDiscussionsContentTestWrapper mocks={mocks}>
+        <DocumentDiscussionsContent documentId="doc-1" corpusId="corpus-1" />
+      </DocumentDiscussionsContentTestWrapper>
     );
 
     // Should show header
@@ -203,22 +197,15 @@ test.describe("DocumentDiscussionsContent", () => {
     ];
 
     await mount(
-      <MemoryRouter>
-        <MockedProvider mocks={mocks} addTypename={true}>
-          <JotaiProvider>
-            <DocumentDiscussionsContent
-              documentId="doc-1"
-              corpusId="corpus-1"
-            />
-          </JotaiProvider>
-        </MockedProvider>
-      </MemoryRouter>
+      <DocumentDiscussionsContentTestWrapper mocks={mocks}>
+        <DocumentDiscussionsContent documentId="doc-1" corpusId="corpus-1" />
+      </DocumentDiscussionsContentTestWrapper>
     );
 
     // Header should say "Document Discussions"
     await expect(page.getByText("Document Discussions")).toBeVisible();
 
-    // Create button should be visible
+    // Create button should be visible (only for authenticated users)
     await expect(
       page.getByRole("button", { name: /start new discussion/i })
     ).toBeVisible();
@@ -242,16 +229,9 @@ test.describe("DocumentDiscussionsContent", () => {
     ];
 
     await mount(
-      <MemoryRouter>
-        <MockedProvider mocks={mocks} addTypename={true}>
-          <JotaiProvider>
-            <DocumentDiscussionsContent
-              documentId="doc-1"
-              corpusId="corpus-1"
-            />
-          </JotaiProvider>
-        </MockedProvider>
-      </MemoryRouter>
+      <DocumentDiscussionsContentTestWrapper mocks={mocks}>
+        <DocumentDiscussionsContent documentId="doc-1" corpusId="corpus-1" />
+      </DocumentDiscussionsContentTestWrapper>
     );
 
     // Create button should be visible (implies props were passed correctly)

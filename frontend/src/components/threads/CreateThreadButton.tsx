@@ -6,7 +6,7 @@ import { useReactiveVar } from "@apollo/client";
 import { CreateThreadForm } from "./CreateThreadForm";
 import { color } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { openedCorpus } from "../../graphql/cache";
+import { authToken, openedCorpus } from "../../graphql/cache";
 import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
 const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
@@ -136,6 +136,13 @@ export function CreateThreadButton({
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
   const corpus = useReactiveVar(openedCorpus);
+  const token = useReactiveVar(authToken);
+
+  // Anonymous users cannot create threads (requires authentication)
+  const isAuthenticated = Boolean(token);
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const handleSuccess = (conversationId: string) => {
     setShowModal(false);
