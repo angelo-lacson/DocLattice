@@ -612,7 +612,8 @@ class SetMetadataValue(graphene.Mutation):
     """Set a metadata value for a document.
 
     Permission model:
-    - Requires UPDATE permission on BOTH document AND corpus (MIN logic)
+    - Requires Corpus UPDATE permission + Document READ permission
+    - Metadata is a corpus-level feature, so corpus permission controls editing
     - Uses MetadataQueryOptimizer for consistent permission checking
     """
 
@@ -642,7 +643,7 @@ class SetMetadataValue(graphene.Mutation):
             local_corpus_id = int(from_global_id(corpus_id)[1])
             local_column_id = int(from_global_id(column_id)[1])
 
-            # Check document + corpus permissions using optimizer (MIN logic)
+            # Check permissions: Corpus UPDATE + Document READ
             has_perm, error_msg = (
                 MetadataQueryOptimizer.check_metadata_mutation_permission(
                     user, local_doc_id, local_corpus_id, "UPDATE"
@@ -694,7 +695,8 @@ class DeleteMetadataValue(graphene.Mutation):
     """Delete a metadata value for a document.
 
     Permission model:
-    - Requires DELETE permission on BOTH document AND corpus (MIN logic)
+    - Requires Corpus DELETE permission + Document READ permission
+    - Metadata is a corpus-level feature, so corpus permission controls deletion
     - Uses MetadataQueryOptimizer for consistent permission checking
     """
 
