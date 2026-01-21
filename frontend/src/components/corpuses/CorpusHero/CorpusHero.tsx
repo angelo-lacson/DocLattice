@@ -22,6 +22,7 @@ import {
   MetadataSeparator,
   AccessBadge,
 } from "./styles";
+import { MCPShareButton } from "../../common/MCPShareButton";
 
 // Mobile menu button (kebab) - only visible on mobile, positioned inline with title
 const MobileMenuButton = styled.button`
@@ -68,6 +69,7 @@ const TitleWithMenu = styled.div`
 /** Minimal corpus data required for CorpusHero */
 export interface CorpusHeroData {
   id: string;
+  slug?: string | null;
   title?: string;
   isPublic?: boolean;
   created?: string | null;
@@ -181,6 +183,18 @@ export const CorpusHero: React.FC<CorpusHeroProps> = ({
                 </>
               )}
             </AccessBadge>
+
+            {/* MCP Share button - only shown for public corpuses */}
+            {corpus.isPublic && corpus.slug && (
+              <>
+                <MetadataSeparator />
+                <MCPShareButton
+                  corpusSlug={corpus.slug}
+                  size="sm"
+                  testId={`${testId}-mcp-share`}
+                />
+              </>
+            )}
 
             <MetadataSeparator />
 
