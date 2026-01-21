@@ -1662,6 +1662,16 @@ class UploadDocument(graphene.Mutation):
                 try:
                     corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
 
+                    # Check if user has permission to add documents to this corpus
+                    if not user_has_permission_for_obj(
+                        user, corpus, PermissionTypes.EDIT
+                    ):
+                        return UploadDocument(
+                            message="You don't have permission to add documents to this corpus",
+                            ok=False,
+                            document=None,
+                        )
+
                     # Resolve folder if provided
                     folder = None
                     if add_to_folder_id is not None:

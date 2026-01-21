@@ -501,6 +501,35 @@ can_edit = thread.can_moderate(alice)  # True
 - Annotations: `permissioning.py:297-303`
 - Relationships: `permissioning.py:388-394`
 
+### Discussion Thread Permissions
+
+Discussions follow a **visibility-based participation model**: if you can READ a resource, you can participate in discussions about it.
+
+| Action | Permission Required | Code Location |
+|--------|---------------------|---------------|
+| Create thread on corpus | READ on corpus | `conversation_mutations.py:122` |
+| Create thread on document | READ on document | `conversation_mutations.py:142` |
+| Create thread on both | READ on corpus AND document | `conversation_mutations.py:122,142` |
+| Post message in thread | READ on conversation | `conversation_mutations.py:232` |
+| Reply to message | READ on conversation | `conversation_mutations.py:330` |
+| Vote on message/thread | READ on conversation | Visibility-based |
+| Edit own message | Creator OR moderator | `conversation_mutations.py:488` |
+| Delete own message | Creator OR moderator | `conversation_mutations.py:676` |
+| Moderate thread (lock/pin/delete) | See below | `moderation_mutations.py` |
+
+**Moderator Access:**
+A user can moderate a thread if any of the following are true:
+- User is a superuser
+- User is the thread creator
+- User owns the corpus (`chat_with_corpus.creator == user`)
+- User owns the document (`chat_with_document.creator == user`)
+- User has EDIT permission on the corpus
+- User has EDIT permission on the document
+
+**Rationale**: Discussions are meant to be collaborative. Anyone who can view a resource should be able to ask questions and participate in conversations about it. This encourages engagement and knowledge sharing while still maintaining moderation controls for resource owners.
+
+**Anonymous Users**: Can only view threads on public resources (`is_public=True`). Cannot create threads or post messages (requires authentication).
+
 ## COMMENT Permission System
 
 ### Overview

@@ -37,6 +37,7 @@ import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { MCPShareButton } from "../common/MCPShareButton";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS - Following DiscoveryLanding patterns
@@ -195,6 +196,25 @@ const EmptyStateWrapper = styled.div`
 // Wrapper to handle right-click context menu on cards
 const CardWrapper = styled.div`
   position: relative;
+`;
+
+// MCP button overlay for public corpus cards
+const MCPButtonOverlay = styled.div`
+  position: absolute;
+  top: 12px;
+  right: 48px; /* Position left of the kebab menu */
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  ${CardWrapper}:hover & {
+    opacity: 1;
+  }
+
+  /* Always visible on touch devices */
+  @media (hover: none) {
+    opacity: 1;
+  }
 `;
 
 // Floating context menu (similar to old CorpusItem)
@@ -651,6 +671,17 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
                       key={corpus.id}
                       onContextMenu={(e) => handleOpenContextMenu(e, corpus.id)}
                     >
+                      {/* MCP Share button overlay for public corpuses */}
+                      {corpus.isPublic && corpus.slug && (
+                        <MCPButtonOverlay>
+                          <MCPShareButton
+                            corpusSlug={corpus.slug}
+                            size="sm"
+                            showLabel={false}
+                            testId={`mcp-share-${corpus.id}`}
+                          />
+                        </MCPButtonOverlay>
+                      )}
                       <CollectionCard
                         type={mapCategoryToType(corpus)}
                         badge={getCategoryBadge(corpus)}
@@ -742,6 +773,22 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
                             handleCloseMenu();
                           }}
                         />
+                        {corpus.isPublic && corpus.slug && (
+                          <Menu.Item
+                            icon="linkify"
+                            content="MCP Endpoint"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const mcpUrl = `${window.location.origin}/mcp/corpus/${corpus.slug}`;
+                              navigator.clipboard.writeText(mcpUrl).then(() => {
+                                toast.success(
+                                  "MCP endpoint URL copied to clipboard"
+                                );
+                              });
+                              handleCloseMenu();
+                            }}
+                          />
+                        )}
                         {canRemove && (
                           <Menu.Item
                             className="danger"

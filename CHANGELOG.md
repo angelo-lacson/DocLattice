@@ -5,9 +5,33 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-18
+## [Unreleased] - 2026-01-19
 
 ### Added
+
+#### Corpus-Scoped MCP Endpoints for Shareable Links
+- **New `/mcp/corpus/{corpus_slug}/` endpoint**: Scoped MCP endpoint for single-corpus access
+  - All tools automatically operate within the specified corpus context
+  - No need for explicit `corpus_slug` parameters in tool calls
+  - Validates corpus exists and is publicly accessible before accepting requests
+  - Returns 404 with helpful message for private/nonexistent corpuses
+  - Files: `opencontractserver/mcp/server.py:371-651`, `config/asgi.py`
+- **New `get_corpus_info` tool**: Returns detailed corpus information for scoped endpoints
+  - Replaces `list_public_corpuses` for scoped context
+  - Includes label set information, document count, and metadata
+  - Files: `opencontractserver/mcp/tools.py:401-447`
+- **Scoped tool wrappers**: Auto-inject corpus_slug into existing tools
+  - Creates corpus-specific tool handlers that wrap global tool implementations
+  - Files: `opencontractserver/mcp/tools.py:450-498`
+- **TTL-based cache with eviction**: Scoped session managers cached with 1-hour TTL
+  - LRU eviction at 100 entries to prevent unbounded memory growth
+  - Cache invalidation logging for monitoring
+  - Files: `opencontractserver/mcp/server.py:583-630`
+- **Comprehensive test coverage**: 15+ tests for scoped endpoint functionality
+  - Tests for validation, tool execution, cache behavior, error handling
+  - Files: `opencontractserver/mcp/tests/test_mcp.py`
+- **Updated MCP documentation**: Usage examples for both global and scoped endpoints
+  - Files: `docs/mcp/README.md`
 
 #### Unified Upload Modal with @os-legal/ui Design System
 - **Consolidated `BulkUploadModal` and `DocumentUploadModal`** into single `UploadModal` component
