@@ -290,9 +290,31 @@ def user_has_permission_for_obj(
     include_group_permissions: bool = False,
 ) -> bool:
     """
-    Helper method to see make it easier to check if a given user has a certain permission type
-    for a given object. Uses database queries to quickly query what permissions on the model for
-    provided users intersect with permission defined in specified PermissionType.
+    Check if user has a specific permission on an object via django-guardian.
+
+    ⚠️  IMPORTANT LIMITATION - READ THIS BEFORE USING ⚠️
+
+    This function checks ONLY for explicit object-level permissions:
+    - Django-guardian user/group permissions on the object
+    - is_public flag (grants READ)
+    - Superuser status
+
+    It does NOT consider:
+    - Creator status (for models with guardian permissions)
+    - Corpus context / inherited permissions
+    - Complex visibility rules from query resolvers
+
+    FOR CORPUS-SCOPED OBJECTS (documents in a corpus, metadata, etc.):
+    Do NOT use this function for READ/visibility checks. Instead use:
+        Model.objects.visible_to_user(user).filter(id=obj_id).exists()
+
+    The visible_to_user() pattern handles the full permission model including
+    creator access, corpus membership, and other context-dependent rules.
+
+    USE THIS FUNCTION FOR:
+    - Top-level objects with explicit permissions (Corpus, Analysis, Extract)
+    - Write permission checks where explicit guardian permissions are required
+    - Annotation/Relationship permission checks (has special handling built-in)
 
     Special handling for Annotations:
     - Annotations with created_by_analysis or created_by_extract fields require permission

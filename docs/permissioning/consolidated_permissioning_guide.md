@@ -344,6 +344,7 @@ This section provides a comprehensive reference for how permissions work across 
 | **CorpusFolder** | Inherited (Corpus) | Parent corpus permissions | None | No individual permissions; write requires UPDATE on corpus |
 | **Annotation** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
 | **Relationship** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
+| **Metadata (Datacell)** | Corpus-primary | Corpus permissions | Document READ required | Corpus UPDATE + Doc READ = can edit; corpus-level feature |
 | **Analysis** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
 | **Extract** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
 | **Conversation (CHAT)** | Context-based | `chat_with_corpus` OR `chat_with_document` | `is_public` flag | Only ONE context field can be set |
@@ -412,6 +413,35 @@ Privacy Filter = IF created_by_analysis/extract THEN require source permission
 Can See Object = has_object_permission AND can_read_corpus
 Can See Content = can_see_object AND can_read_document
 ```
+
+#### Metadata (Datacell) - Corpus-Primary Model
+
+Metadata values (Datacells) follow a **corpus-primary** permission model, which differs from annotations:
+
+```
+READ Check:
+  can_read = can_read_document AND can_read_corpus
+
+UPDATE Check:
+  can_update = can_read_document AND has_UPDATE_permission_on_corpus
+
+DELETE Check:
+  can_delete = can_read_document AND has_DELETE_permission_on_corpus
+```
+
+**Why this differs from annotations:**
+- Metadata schemas (columns) are defined at the **corpus level**, not document level
+- Corpus owners/editors should be able to fill in metadata for any document they can see
+- Explicit document UPDATE permissions aren't always assigned for corpus-scoped documents (performance optimization)
+- This aligns with CorpusFolder's permission model (inherits from corpus)
+
+**Key characteristics:**
+- Requires only Document READ (not UPDATE) - user just needs to see the document
+- Corpus permission determines write access - UPDATE to edit, DELETE to remove
+- Anonymous users: READ-only access if both document and corpus are public
+- Superusers: Full access to all metadata
+
+**Implementation**: `MetadataQueryOptimizer.check_metadata_mutation_permission()` in `opencontractserver/extracts/query_optimizer.py`
 
 #### Conversations (THREAD Type) - Document-in-Corpus Model
 ```
@@ -1999,9 +2029,20 @@ user_has_permission_for_obj(
 **Problem**: Using `annotations` instead of `allAnnotations` in queries
 **Solution**: Always use `allAnnotations` field name for querying document annotations
 
-### Pitfall 7: Bypassing user_has_permission_for_obj
-**Problem**: Implementing custom permission logic that doesn't handle all cases
-**Solution**: ALWAYS use `user_has_permission_for_obj` - it's the single source of truth
+### Pitfall 7: Using user_has_permission_for_obj for corpus-scoped visibility
+**Problem**: `user_has_permission_for_obj` only checks explicit guardian permissions, not corpus context
+**Solution**: For corpus-scoped objects (documents in corpus, metadata), use `visible_to_user()` pattern:
+```python
+# WRONG - misses creator access, corpus context
+has_read = user_has_permission_for_obj(user, document, PermissionTypes.READ)
+
+# CORRECT - handles full visibility model
+is_visible = Document.objects.visible_to_user(user).filter(id=doc_id).exists()
+```
+
+**When to use each:**
+- `user_has_permission_for_obj`: Top-level objects (Corpus, Analysis), write permissions, annotations (has special handling)
+- `Model.objects.visible_to_user()`: READ/visibility checks for corpus-scoped objects
 
 ## @ Mention Permissions (NEW)
 

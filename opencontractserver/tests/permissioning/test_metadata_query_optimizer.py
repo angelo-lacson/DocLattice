@@ -4,7 +4,7 @@ Comprehensive tests for MetadataQueryOptimizer permission filtering.
 This test suite covers:
 
 1. MetadataQueryOptimizer._compute_effective_permissions()
-   - Tests MIN(document_permission, corpus_permission) logic
+   - Tests MIN(document_permission, corpus_permission) logic for READ
    - Tests superuser, anonymous, and authenticated user handling
 
 2. MetadataQueryOptimizer.get_corpus_metadata_columns()
@@ -26,7 +26,9 @@ This test suite covers:
 
 6. MetadataQueryOptimizer.check_metadata_mutation_permission()
    - Tests UPDATE/DELETE permission checks
-   - Tests MIN(doc, corpus) logic for mutations
+   - Tests corpus-primary model: Corpus UPDATE + Doc READ = can edit
+   - NOTE: Metadata differs from annotations - corpus permission controls
+     write access, not MIN(doc, corpus) logic
 
 7. MetadataQueryOptimizer.validate_metadata_column()
    - Tests column validation for corpus schema
@@ -583,16 +585,51 @@ class MetadataQueryOptimizerTestCase(TestCase):
         self.assertFalse(has_perm)
         self.assertIn("UPDATE", msg)
 
-    def test_mutation_permission_doc_only_no_corpus(self):
-        """User with doc permission but no corpus permission should be denied."""
+    def test_mutation_permission_doc_read_only_no_corpus_update(self):
+        """User with doc READ but no corpus UPDATE permission should be denied."""
         user = User.objects.create_user(username="docperm", password="test")
-        set_permissions_for_obj_to_user(user, self.doc1, [PermissionTypes.UPDATE])
+        # Give READ on doc (required) but only READ on corpus (not UPDATE)
+        set_permissions_for_obj_to_user(user, self.doc1, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(user, self.corpus, [PermissionTypes.READ])
 
         has_perm, msg = MetadataQueryOptimizer.check_metadata_mutation_permission(
             user, self.doc1.id, self.corpus.id, "UPDATE"
         )
         self.assertFalse(has_perm)
         self.assertIn("corpus", msg.lower())
+
+    def test_mutation_permission_no_doc_visibility(self):
+        """User without document visibility should be denied."""
+        user = User.objects.create_user(username="nodocread", password="test")
+        # Give corpus UPDATE but no doc visibility (user can't see the document)
+        set_permissions_for_obj_to_user(user, self.corpus, [PermissionTypes.UPDATE])
+
+        has_perm, msg = MetadataQueryOptimizer.check_metadata_mutation_permission(
+            user, self.doc1.id, self.corpus.id, "UPDATE"
+        )
+        self.assertFalse(has_perm)
+        # Error message is now "Document not found or not accessible" (IDOR-safe)
+        self.assertIn("not found or not accessible", msg.lower())
+
+    def test_mutation_permission_corpus_update_doc_read_succeeds(self):
+        """
+        User with corpus UPDATE + doc READ should be able to edit metadata.
+
+        This is the key test for the corpus-primary permission model:
+        - Metadata is a corpus-level feature
+        - Corpus UPDATE permission controls write access
+        - Only need doc READ (not UPDATE) to edit metadata
+        """
+        user = User.objects.create_user(username="corpuseditor", password="test")
+        # Give READ on doc and UPDATE on corpus
+        set_permissions_for_obj_to_user(user, self.doc1, [PermissionTypes.READ])
+        set_permissions_for_obj_to_user(user, self.corpus, [PermissionTypes.UPDATE])
+
+        has_perm, msg = MetadataQueryOptimizer.check_metadata_mutation_permission(
+            user, self.doc1.id, self.corpus.id, "UPDATE"
+        )
+        self.assertTrue(has_perm)
+        self.assertEqual(msg, "")
 
     def test_mutation_permission_nonexistent_document(self):
         """Should return error for nonexistent document."""
