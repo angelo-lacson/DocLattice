@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import _ from "lodash";
 
-import { useQuery, useReactiveVar } from "@apollo/client";
+import { useQuery, useLazyQuery, useReactiveVar } from "@apollo/client";
 import {
   SearchBox,
   FilterTabs,
@@ -31,6 +31,7 @@ import {
   Users,
   Lock,
   PenLine,
+  Sparkles,
 } from "lucide-react";
 
 import {
@@ -50,6 +51,10 @@ import {
   GetCorpusLabelsetAndLabelsOutputs,
   GET_ANNOTATIONS,
   GET_CORPUS_LABELSET_AND_LABELS,
+  SemanticSearchInput,
+  SemanticSearchOutput,
+  SemanticSearchResult,
+  SEMANTIC_SEARCH_ANNOTATIONS,
 } from "../graphql/queries";
 import { ServerAnnotationType, PageInfo } from "../types/graphql-api";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
@@ -366,6 +371,14 @@ export const Annotations = () => {
   const [searchValue, setSearchValue] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
+  // Semantic search state
+  const [semanticSearchOffset, setSemanticSearchOffset] = useState(0);
+  const [semanticSearchResults, setSemanticSearchResults] = useState<
+    SemanticSearchResult[]
+  >([]);
+  const [hasMoreSemanticResults, setHasMoreSemanticResults] = useState(true);
+  const SEMANTIC_SEARCH_LIMIT = 20;
+
   // Build query variables
   let annotation_variables: LooseObject = {
     label_Type: "TEXT_LABEL",
@@ -418,6 +431,37 @@ export const Annotations = () => {
     notifyOnNetworkStatusChange: true,
   });
 
+  // Semantic search query (lazy - triggered when user searches)
+  const [
+    executeSemanticSearch,
+    { loading: semanticSearchLoading, error: semanticSearchError },
+  ] = useLazyQuery<SemanticSearchOutput, SemanticSearchInput>(
+    SEMANTIC_SEARCH_ANNOTATIONS,
+    {
+      fetchPolicy: "network-only",
+      notifyOnNetworkStatusChange: true,
+      onCompleted: (data) => {
+        if (data?.semanticSearch) {
+          const newResults = data.semanticSearch;
+          if (semanticSearchOffset === 0) {
+            // Fresh search - replace results
+            setSemanticSearchResults(newResults);
+          } else {
+            // Load more - append results
+            setSemanticSearchResults((prev) => [...prev, ...newResults]);
+          }
+          // Check if there are more results
+          setHasMoreSemanticResults(
+            newResults.length === SEMANTIC_SEARCH_LIMIT
+          );
+        }
+      },
+    }
+  );
+
+  // Determine if we're in semantic search mode (user has entered a search query)
+  const isSemanticSearchActive = searchValue.trim().length > 0;
+
   // Consolidated effect for refetching annotations on filter changes
   // This prevents race conditions from multiple simultaneous filter changes
   useEffect(() => {
@@ -458,13 +502,46 @@ export const Annotations = () => {
     }
   }, [sourceFilter]);
 
-  // Get raw items from query
+  // Re-execute semantic search when filters change (fixes race condition)
+  // This ensures search results stay in sync with filter selections
+  useEffect(() => {
+    if (searchValue.trim()) {
+      // Reset pagination and re-search with new filters
+      setSemanticSearchOffset(0);
+      setSemanticSearchResults([]);
+      setHasMoreSemanticResults(true);
+      // Use a small delay to let state settle before searching
+      const timeoutId = setTimeout(() => {
+        performSemanticSearch(searchValue, 0);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered_to_corpus?.id, sourceFilter, typeFilter]);
+
+  // Get raw items from query - handles both browse mode and semantic search
   const rawItems: ServerAnnotationType[] = useMemo(() => {
+    if (isSemanticSearchActive) {
+      // In semantic search mode, extract annotations from search results
+      return semanticSearchResults.map((result) => result.annotation);
+    }
+    // In browse mode, use the regular annotations query
     if (annotation_data?.annotations) {
       return annotation_data.annotations.edges.map((edge) => edge.node);
     }
     return [];
-  }, [annotation_data]);
+  }, [annotation_data, isSemanticSearchActive, semanticSearchResults]);
+
+  // Create a map of annotation ID to similarity score for display
+  const similarityScoreMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (isSemanticSearchActive) {
+      semanticSearchResults.forEach((result) => {
+        map.set(result.annotation.id, result.similarityScore);
+      });
+    }
+    return map;
+  }, [isSemanticSearchActive, semanticSearchResults]);
 
   // Apply local filters (type and source)
   const filteredItems = useMemo(() => {
@@ -506,34 +583,121 @@ export const Annotations = () => {
     return { total, docLabels, textLabels, humanAnnotated };
   }, [rawItems, annotation_data?.annotations?.totalCount]);
 
-  // Debounced search
-  const debouncedSearch = useRef(
-    _.debounce((searchTerm: string) => {
-      annotationContentSearchTerm(searchTerm);
-    }, 1000)
+  // Execute semantic search with current filters
+  const performSemanticSearch = useCallback(
+    (query: string, offset: number = 0) => {
+      if (!query.trim()) return;
+
+      const variables: SemanticSearchInput = {
+        query: query.trim(),
+        limit: SEMANTIC_SEARCH_LIMIT,
+        offset,
+      };
+
+      // Add corpus filter if set
+      if (filtered_to_corpus?.id) {
+        variables.corpusId = filtered_to_corpus.id;
+      }
+
+      // Add modalities filter based on source filter (semantic search uses modalities)
+      // Note: structural filtering is handled server-side differently
+      if (sourceFilter === "structural") {
+        // For structural, we don't filter by modalities as structural annotations
+        // can have any modality
+      }
+
+      executeSemanticSearch({ variables });
+    },
+    [executeSemanticSearch, filtered_to_corpus, sourceFilter]
   );
 
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchValue(value);
-    debouncedSearch.current(value);
+  // Debounced semantic search
+  const debouncedSearch = useRef(
+    _.debounce((searchTerm: string) => {
+      if (searchTerm.trim()) {
+        // Reset pagination for new search
+        setSemanticSearchOffset(0);
+        setSemanticSearchResults([]);
+        setHasMoreSemanticResults(true);
+        performSemanticSearch(searchTerm, 0);
+      } else {
+        // Clear search - return to browse mode
+        setSemanticSearchResults([]);
+        setSemanticSearchOffset(0);
+        setHasMoreSemanticResults(true);
+      }
+    }, 500)
+  );
+
+  // Cleanup debounce on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      debouncedSearch.current.cancel();
+    };
   }, []);
 
-  const handleSearchSubmit = useCallback((value: string) => {
-    annotationContentSearchTerm(value);
-  }, []);
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchValue(value);
+      debouncedSearch.current(value);
+    },
+    [debouncedSearch]
+  );
 
-  // Handle infinite scroll
+  const handleSearchSubmit = useCallback(
+    (value: string) => {
+      // Cancel any pending debounced search
+      debouncedSearch.current.cancel();
+      setSearchValue(value);
+
+      if (value.trim()) {
+        // Reset pagination and execute search immediately
+        setSemanticSearchOffset(0);
+        setSemanticSearchResults([]);
+        setHasMoreSemanticResults(true);
+        performSemanticSearch(value, 0);
+      } else {
+        // Clear search - return to browse mode
+        setSemanticSearchResults([]);
+        setSemanticSearchOffset(0);
+        setHasMoreSemanticResults(true);
+      }
+    },
+    [performSemanticSearch, debouncedSearch]
+  );
+
+  // Handle infinite scroll - supports both browse mode and semantic search
   const handleFetchMore = useCallback(() => {
-    const pageInfo = annotation_data?.annotations?.pageInfo;
-    if (!annotation_loading && pageInfo?.hasNextPage) {
-      fetchMoreAnnotations({
-        variables: {
-          limit: 20,
-          cursor: pageInfo.endCursor,
-        },
-      });
+    if (isSemanticSearchActive) {
+      // Semantic search pagination (offset-based)
+      if (!semanticSearchLoading && hasMoreSemanticResults) {
+        const newOffset = semanticSearchOffset + SEMANTIC_SEARCH_LIMIT;
+        setSemanticSearchOffset(newOffset);
+        performSemanticSearch(searchValue, newOffset);
+      }
+    } else {
+      // Browse mode pagination (cursor-based)
+      const pageInfo = annotation_data?.annotations?.pageInfo;
+      if (!annotation_loading && pageInfo?.hasNextPage) {
+        fetchMoreAnnotations({
+          variables: {
+            limit: 20,
+            cursor: pageInfo.endCursor,
+          },
+        });
+      }
     }
-  }, [annotation_loading, annotation_data, fetchMoreAnnotations]);
+  }, [
+    isSemanticSearchActive,
+    semanticSearchLoading,
+    hasMoreSemanticResults,
+    semanticSearchOffset,
+    searchValue,
+    performSemanticSearch,
+    annotation_loading,
+    annotation_data,
+    fetchMoreAnnotations,
+  ]);
 
   // Handle annotation click - navigate to document
   // Supports both corpus-linked and standalone documents (e.g., structural annotations)
@@ -738,11 +902,38 @@ export const Annotations = () => {
         {/* Annotations Grid */}
         <AnnotationsListContainer>
           <LoadingOverlay
-            active={annotation_loading}
+            active={
+              isSemanticSearchActive
+                ? semanticSearchLoading
+                : annotation_loading
+            }
             inverted
             size="large"
-            content="Loading Annotations..."
+            content={
+              isSemanticSearchActive
+                ? "Searching annotations..."
+                : "Loading Annotations..."
+            }
           />
+
+          {/* Error display for semantic search failures */}
+          {semanticSearchError && (
+            <div
+              style={{
+                padding: "16px 24px",
+                marginBottom: "16px",
+                backgroundColor: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                color: "#dc2626",
+                fontSize: "14px",
+              }}
+            >
+              <strong>Search failed:</strong>{" "}
+              {semanticSearchError.message ||
+                "An error occurred while searching. Please try again."}
+            </div>
+          )}
 
           <AnnotationsGrid>
             {filteredItems.length > 0 ? (
@@ -752,12 +943,19 @@ export const Annotations = () => {
                   annotation={annotation}
                   onClick={() => handleAnnotationClick(annotation)}
                   isSelected={selected_annotation_ids.includes(annotation.id)}
+                  similarityScore={similarityScoreMap.get(annotation.id)}
                 />
               ))
-            ) : !annotation_loading ? (
+            ) : !(isSemanticSearchActive
+                ? semanticSearchLoading
+                : annotation_loading) ? (
               <EmptyStateWrapper>
                 <AnnotationIconWrapper>
-                  <PenLine size={32} />
+                  {isSemanticSearchActive ? (
+                    <Sparkles size={32} />
+                  ) : (
+                    <PenLine size={32} />
+                  )}
                 </AnnotationIconWrapper>
                 <h3
                   style={{
@@ -767,7 +965,9 @@ export const Annotations = () => {
                     margin: "24px 0 8px",
                   }}
                 >
-                  No annotations found
+                  {isSemanticSearchActive
+                    ? "No matching annotations found"
+                    : "No annotations found"}
                 </h3>
                 <p
                   style={{
@@ -777,8 +977,9 @@ export const Annotations = () => {
                     maxWidth: "300px",
                   }}
                 >
-                  Try adjusting your filters or search query to find what you're
-                  looking for.
+                  {isSemanticSearchActive
+                    ? "Try a different search query or adjust your filters to find semantically similar annotations."
+                    : "Try adjusting your filters or search query to find what you're looking for."}
                 </p>
               </EmptyStateWrapper>
             ) : null}
