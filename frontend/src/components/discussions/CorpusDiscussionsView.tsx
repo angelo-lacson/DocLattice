@@ -12,7 +12,7 @@ import {
   Lightbulb,
   AlertCircle,
 } from "lucide-react";
-import { openedCorpus } from "../../graphql/cache";
+import { authToken, openedCorpus } from "../../graphql/cache";
 import { navigateToCorpusThread } from "../../utils/navigationUtils";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
@@ -330,6 +330,8 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const corpus = useReactiveVar(openedCorpus);
+  const token = useReactiveVar(authToken);
+  const isAuthenticated = Boolean(token);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"list" | "search" | "moderation">(
     "list"
@@ -443,13 +445,15 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
             </Breadcrumb>
             <Title>Discussions</Title>
           </TitleSection>
-          <CreateButton
-            onClick={() => setShowCreateModal(true)}
-            aria-label="Create new discussion"
-          >
-            <Plus />
-            <span>New Discussion</span>
-          </CreateButton>
+          {isAuthenticated && (
+            <CreateButton
+              onClick={() => setShowCreateModal(true)}
+              aria-label="Create new discussion"
+            >
+              <Plus />
+              <span>New Discussion</span>
+            </CreateButton>
+          )}
         </Header>
       )}
 
