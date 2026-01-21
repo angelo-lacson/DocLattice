@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import {
   Table,
   Loader,
@@ -212,6 +218,11 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
   const [savingFields, setSavingFields] = useState<Set<string>>(new Set());
 
+  // Ref to access current validationErrors from debounced callback without
+  // causing the debounced function to be recreated on every change
+  const validationErrorsRef = useRef(validationErrors);
+  validationErrorsRef.current = validationErrors;
+
   // Query metadata columns
   const { data: columnsData, loading: columnsLoading } = useQuery<
     GetCorpusMetadataColumnsOutput,
@@ -339,41 +350,52 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
     debouncedSave(editingCell.documentId, editingCell.columnId, value);
   };
 
-  const debouncedSave = useCallback(
-    debounce(async (documentId: string, columnId: string, value: any) => {
-      const key = getCellKey({ documentId, columnId });
-      const error = validationErrors[key];
+  // Use useMemo instead of useCallback to create a stable debounced function.
+  // We read validationErrors from a ref to avoid recreating the debounced
+  // function on every keystroke (which would defeat the debounce).
+  const debouncedSave = useMemo(
+    () =>
+      debounce(async (documentId: string, columnId: string, value: any) => {
+        const key = getCellKey({ documentId, columnId });
+        const error = validationErrorsRef.current[key];
 
-      if (error) {
-        return; // Don't save if there's a validation error
-      }
+        if (error) {
+          return; // Don't save if there's a validation error
+        }
 
-      // Set saving state
-      setSavingFields((prev) => new Set(prev).add(key));
+        // Set saving state
+        setSavingFields((prev) => new Set(prev).add(key));
 
-      // Save the value
-      try {
-        if (value === null || value === undefined || value === "") {
-          // Delete the datacell if value is empty
-          await deleteMetadataValue({
-            variables: { documentId, corpusId, columnId },
-          });
-        } else {
-          await setMetadataValue({
-            variables: { documentId, corpusId, columnId, value },
+        // Save the value
+        try {
+          if (value === null || value === undefined || value === "") {
+            // Delete the datacell if value is empty
+            await deleteMetadataValue({
+              variables: { documentId, corpusId, columnId },
+            });
+          } else {
+            await setMetadataValue({
+              variables: { documentId, corpusId, columnId, value },
+            });
+          }
+        } catch (error) {
+          // Error handling is done in mutation callbacks
+          setSavingFields((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
           });
         }
-      } catch (error) {
-        // Error handling is done in mutation callbacks
-        setSavingFields((prev) => {
-          const next = new Set(prev);
-          next.delete(key);
-          return next;
-        });
-      }
-    }, DEBOUNCE.METADATA_SAVE_MS),
-    [corpusId, validationErrors, setMetadataValue, deleteMetadataValue]
+      }, DEBOUNCE.METADATA_SAVE_MS),
+    [corpusId, setMetadataValue, deleteMetadataValue]
   );
+
+  // Cancel pending debounced saves on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel();
+    };
+  }, [debouncedSave]);
 
   const handleNavigate = (direction: "next" | "previous" | "down" | "up") => {
     if (!editingCell) return;
