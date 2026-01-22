@@ -49,14 +49,20 @@ test.describe("Metadata Performance", () => {
     let saveRequests = 0;
 
     // Create multiple mocks for different variable combinations
-    const createSaveMock = (docId: string, colId: string) => ({
+    // Columns alternate: STRING (even index) and NUMBER (odd index)
+    // STRING columns receive string values, NUMBER columns receive parseInt values
+    const createSaveMock = (
+      docId: string,
+      colId: string,
+      value: string | number
+    ) => ({
       request: {
         query: SET_METADATA_VALUE,
         variables: {
           documentId: docId,
           corpusId: corpusId,
           columnId: colId,
-          value: 42, // The value typed in the test
+          value, // String for STRING columns, number for NUMBER columns
         },
       },
       result: () => {
@@ -68,12 +74,12 @@ test.describe("Metadata Performance", () => {
               message: "Success",
               obj: {
                 id: `cell-${saveRequests}`,
-                data: { value: 42 },
+                data: { value },
                 dataDefinition: {},
                 column: {
                   id: colId,
                   name: "Test Column",
-                  dataType: "TEXT",
+                  dataType: typeof value === "number" ? "NUMBER" : "TEXT",
                   __typename: "ColumnType",
                 },
                 __typename: "DatacellType",
@@ -86,10 +92,17 @@ test.describe("Metadata Performance", () => {
     });
 
     // Create mocks for all possible combinations we might encounter
+    // generateLargeDataset creates columns with alternating types:
+    // even index = STRING (receives "42" as string)
+    // odd index = NUMBER (receives 42 as parseInt)
     const saveMocks: MockedResponse[] = [];
     for (let docIndex = 0; docIndex < documents.length; docIndex++) {
       for (let colIndex = 0; colIndex < columns.length; colIndex++) {
-        saveMocks.push(createSaveMock(`doc${docIndex}`, `col${colIndex}`));
+        // Column type alternates: even = STRING, odd = NUMBER
+        const value = colIndex % 2 === 0 ? "42" : 42;
+        saveMocks.push(
+          createSaveMock(`doc${docIndex}`, `col${colIndex}`, value)
+        );
       }
     }
 
