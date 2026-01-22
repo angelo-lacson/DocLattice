@@ -303,10 +303,6 @@ def fork_corpus(
                     document.backend_lock = False
                     document.save()
 
-                    set_permissions_for_obj_to_user(
-                        user_id, document, [PermissionTypes.CRUD]
-                    )
-
                     # Get original DocumentPath to preserve folder and path
                     original_corpus_id = corpus.parent_id
                     original_path = DocumentPath.objects.filter(
@@ -340,6 +336,11 @@ def fork_corpus(
                     # Store map of old id to new corpus document id
                     # (corpus.add_document creates a new document, we must use its pk)
                     doc_map[old_id] = corpus_doc.pk
+
+                    # Set permissions on the corpus-isolated document (not the intermediate clone)
+                    set_permissions_for_obj_to_user(
+                        user_id, corpus_doc, [PermissionTypes.CRUD]
+                    )
 
                 except Exception as e:
                     logger.error(f"ERROR - could not fork document {document}: {e}")
