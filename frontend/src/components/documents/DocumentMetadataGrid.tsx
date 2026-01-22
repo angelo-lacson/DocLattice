@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import {
   Table,
   Loader,
@@ -18,13 +24,13 @@ import { debounce } from "lodash";
 
 import {
   GET_CORPUS_METADATA_COLUMNS,
-  GET_DOCUMENT_METADATA_DATACELLS,
+  GET_DOCUMENTS_METADATA_BATCH,
   SET_METADATA_VALUE,
   DELETE_METADATA_VALUE,
   GetCorpusMetadataColumnsInput,
   GetCorpusMetadataColumnsOutput,
-  GetDocumentMetadataDatacellsInput,
-  GetDocumentMetadataDatacellsOutput,
+  GetDocumentsMetadataBatchInput,
+  GetDocumentsMetadataBatchOutput,
   SetMetadataValueInput,
   SetMetadataValueOutput,
   DeleteMetadataValueInput,
@@ -41,6 +47,7 @@ import {
 import { DocumentType, PageInfo } from "../../types/graphql-api";
 import { MetadataCellEditor } from "../metadata/editors/MetadataCellEditor";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
+import { DEBOUNCE } from "../../assets/configurations/constants";
 
 interface DocumentMetadataGridProps {
   corpusId: string;
@@ -211,6 +218,11 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
   const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
   const [savingFields, setSavingFields] = useState<Set<string>>(new Set());
 
+  // Ref to access current validationErrors from debounced callback without
+  // causing the debounced function to be recreated on every change
+  const validationErrorsRef = useRef(validationErrors);
+  validationErrorsRef.current = validationErrors;
+
   // Query metadata columns
   const { data: columnsData, loading: columnsLoading } = useQuery<
     GetCorpusMetadataColumnsOutput,
@@ -338,41 +350,52 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
     debouncedSave(editingCell.documentId, editingCell.columnId, value);
   };
 
-  const debouncedSave = useCallback(
-    debounce(async (documentId: string, columnId: string, value: any) => {
-      const key = getCellKey({ documentId, columnId });
-      const error = validationErrors[key];
+  // Use useMemo instead of useCallback to create a stable debounced function.
+  // We read validationErrors from a ref to avoid recreating the debounced
+  // function on every keystroke (which would defeat the debounce).
+  const debouncedSave = useMemo(
+    () =>
+      debounce(async (documentId: string, columnId: string, value: any) => {
+        const key = getCellKey({ documentId, columnId });
+        const error = validationErrorsRef.current[key];
 
-      if (error) {
-        return; // Don't save if there's a validation error
-      }
+        if (error) {
+          return; // Don't save if there's a validation error
+        }
 
-      // Set saving state
-      setSavingFields((prev) => new Set(prev).add(key));
+        // Set saving state
+        setSavingFields((prev) => new Set(prev).add(key));
 
-      // Save the value
-      try {
-        if (value === null || value === undefined || value === "") {
-          // Delete the datacell if value is empty
-          await deleteMetadataValue({
-            variables: { documentId, corpusId, columnId },
-          });
-        } else {
-          await setMetadataValue({
-            variables: { documentId, corpusId, columnId, value },
+        // Save the value
+        try {
+          if (value === null || value === undefined || value === "") {
+            // Delete the datacell if value is empty
+            await deleteMetadataValue({
+              variables: { documentId, corpusId, columnId },
+            });
+          } else {
+            await setMetadataValue({
+              variables: { documentId, corpusId, columnId, value },
+            });
+          }
+        } catch (error) {
+          // Error handling is done in mutation callbacks
+          setSavingFields((prev) => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
           });
         }
-      } catch (error) {
-        // Error handling is done in mutation callbacks
-        setSavingFields((prev) => {
-          const next = new Set(prev);
-          next.delete(key);
-          return next;
-        });
-      }
-    }, 1500),
-    [corpusId, validationErrors, setMetadataValue, deleteMetadataValue]
+      }, DEBOUNCE.METADATA_SAVE_MS),
+    [corpusId, setMetadataValue, deleteMetadataValue]
   );
+
+  // Cancel pending debounced saves on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel();
+    };
+  }, [debouncedSave]);
 
   const handleNavigate = (direction: "next" | "previous" | "down" | "up") => {
     if (!editingCell) return;
@@ -446,14 +469,13 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
         ((b as any).displayOrder ?? (b as any).orderIndex ?? 0)
     );
 
-  // Lazy query to fetch metadata for documents
-  const [fetchDocumentMetadata] = useLazyQuery<
-    GetDocumentMetadataDatacellsOutput,
-    GetDocumentMetadataDatacellsInput
-  >(GET_DOCUMENT_METADATA_DATACELLS);
+  // Batch query to fetch metadata for all documents at once
+  const [fetchDocumentsMetadataBatch] = useLazyQuery<
+    GetDocumentsMetadataBatchOutput,
+    GetDocumentsMetadataBatchInput
+  >(GET_DOCUMENTS_METADATA_BATCH);
 
-  // Load metadata for each document
-  // TODO: Replace with batch query when available
+  // Load metadata for all documents in a single batch query
   useEffect(() => {
     const loadMetadata = async () => {
       const newDatacellsMap: Record<string, MetadataDatacell[]> = {};
@@ -470,27 +492,26 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
         }
       });
 
-      // If no preloaded data, fetch from backend
+      // If no preloaded data, fetch from backend using batch query
       if (!hasPreloadedData && corpusId && documents.length > 0) {
-        for (const doc of documents) {
-          try {
-            const { data } = await fetchDocumentMetadata({
-              variables: {
-                documentId: doc.id,
-                corpusId: corpusId,
-              },
-            });
+        try {
+          const documentIds = documents.map((doc) => doc.id);
+          const { data } = await fetchDocumentsMetadataBatch({
+            variables: {
+              documentIds,
+              corpusId,
+            },
+          });
 
-            if (data?.documentMetadataDatacells) {
-              newDatacellsMap[doc.id] =
-                data.documentMetadataDatacells as MetadataDatacell[];
+          if (data?.documentsMetadataDatacellsBatch) {
+            // Map results back to documents by documentId
+            for (const result of data.documentsMetadataDatacellsBatch) {
+              newDatacellsMap[result.documentId] =
+                result.datacells as MetadataDatacell[];
             }
-          } catch (error) {
-            console.error(
-              `Failed to fetch metadata for document ${doc.id}:`,
-              error
-            );
           }
+        } catch (error) {
+          console.error("Failed to fetch metadata batch:", error);
         }
       }
 
@@ -500,7 +521,7 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
     };
 
     loadMetadata();
-  }, [documents, corpusId, fetchDocumentMetadata]);
+  }, [documents, corpusId, fetchDocumentsMetadataBatch]);
 
   const loading = columnsLoading || documentsLoading;
 
