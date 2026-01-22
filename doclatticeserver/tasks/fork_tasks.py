@@ -1,5 +1,4 @@
 import logging
-import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -262,47 +261,6 @@ def fork_corpus(
                     logger.info(f"Clone document: {document}")
                     old_id = document.pk
 
-                    # First start by copying the document (the procedure below
-                    # is a trick to get ORM to copy the Django database obj). Resetting
-                    # pk to None will, on save, save a NEW object with old obj properties,
-                    # except as modified
-                    document.pk = None
-                    document.title = f"[FORK] {document.title}"
-                    document.slug = (
-                        ""  # Clear slug so save() generates a new unique one
-                    )
-                    # New version tree for forked document (it's a new logical document)
-                    document.version_tree_id = uuid.uuid4()
-                    document.creator_id = user_id
-                    document.backend_lock = True  # Lock doc while we process stuff
-                    document.save()
-
-                    # If there's a text extract file... copy it to a new file
-                    if document.txt_extract_file:
-                        file_object = default_storage.open(
-                            document.txt_extract_file.name
-                        )
-                        txt_file = ContentFile(file_object.read())
-                        document.txt_extract_file.save(f"{document.id}.txt", txt_file)
-                        document.save()
-                        logger.info("Clone txt layer")
-
-                    # If there's a pawls file... copy it to new file
-                    if document.pawls_parse_file:
-                        file_object = default_storage.open(
-                            document.pawls_parse_file.name
-                        )
-                        pawls_file = ContentFile(file_object.read())
-                        document.pawls_parse_file.save(
-                            f"doc_{document.id}.pawls", pawls_file
-                        )
-                        document.save()
-                        logger.info("Cloned pawls file")
-
-                    # Unlock the document.
-                    document.backend_lock = False
-                    document.save()
-
                     # Get original DocumentPath to preserve folder and path
                     original_corpus_id = corpus.parent_id
                     original_path = DocumentPath.objects.filter(
@@ -324,23 +282,27 @@ def fork_corpus(
                                     pk=new_folder_id
                                 )
 
-                    # Add document with preserved folder and path
-                    # add_document creates a NEW corpus-isolated document and returns it
+                    # Use add_document to create corpus-isolated copy directly from original.
+                    # add_document handles: new version_tree_id, file blob sharing,
+                    # source_document provenance, and DocumentPath creation.
+                    # No intermediate document needed.
                     corpus_doc, status, doc_path = corpus.add_document(
                         document=document,
                         user=user,
                         folder=target_folder,
                         path=original_path_str,
+                        title=f"[FORK] {document.title}",
                     )
 
                     # Store map of old id to new corpus document id
-                    # (corpus.add_document creates a new document, we must use its pk)
                     doc_map[old_id] = corpus_doc.pk
 
-                    # Set permissions on the corpus-isolated document (not the intermediate clone)
+                    # Set permissions on the corpus-isolated document
                     set_permissions_for_obj_to_user(
                         user_id, corpus_doc, [PermissionTypes.CRUD]
                     )
+
+                    logger.info(f"Forked document {old_id} -> {corpus_doc.pk}")
 
                 except Exception as e:
                     logger.error(f"ERROR - could not fork document {document}: {e}")

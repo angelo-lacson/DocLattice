@@ -648,7 +648,10 @@ class StructuralAnnotationSet(BaseOCModel):
         """
         import uuid
 
-        suffix = f"_{corpus_id}" if corpus_id else f"_{uuid.uuid4().hex[:8]}"
+        # Always include UUID to ensure uniqueness, even when multiple documents
+        # share the same structural_annotation_set and are forked into the same corpus
+        unique_id = uuid.uuid4().hex[:8]
+        suffix = f"_{corpus_id}_{unique_id}" if corpus_id else f"_{unique_id}"
 
         new_set = StructuralAnnotationSet.objects.create(
             content_hash=f"{self.content_hash}{suffix}",
