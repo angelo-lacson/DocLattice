@@ -126,7 +126,7 @@ class ConversationQuerySet(SoftDeleteQuerySet):
 
     def visible_to_user(
         self, user: Optional["AbstractBaseUser"] = None
-    ) -> models.QuerySet:
+    ) -> "models.QuerySet[Conversation]":
         """
         Returns queryset filtered to conversations visible to the user.
 
@@ -169,11 +169,11 @@ class ConversationQuerySet(SoftDeleteQuerySet):
 
         # Superusers see everything
         if hasattr(user, "is_superuser") and user.is_superuser:
-            return queryset.order_by("-created")
+            return queryset.distinct().order_by("-created")
 
         # Anonymous users only see public items
         if user.is_anonymous:
-            return queryset.filter(is_public=True).order_by("-created")
+            return queryset.filter(is_public=True).distinct().order_by("-created")
 
         # Get explicitly permitted conversation IDs via guardian
         model_name = self.model._meta.model_name
@@ -339,8 +339,7 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
 
         # Primary visibility: messages in visible conversations
         # This inherits the bifurcated CHAT/THREAD permission logic
-        from opencontractserver.conversations.models import Conversation
-
+        # Note: Conversation is defined in this same module, no import needed
         visible_conversation_ids = Conversation.objects.visible_to_user(
             user
         ).values_list("id", flat=True)
