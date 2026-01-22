@@ -2775,6 +2775,18 @@ class MCPScopedServerTest(TransactionTestCase):
             is_public=True,
         )
 
+    def tearDown(self):
+        """Close all database connections to prevent stale connections.
+
+        Tests in this class use sync_to_async which runs database queries in a
+        thread pool. When the event loop is closed, those threads may have stale
+        connections that can corrupt subsequent tests. Explicitly closing all
+        connections after each test prevents this issue.
+        """
+        from django import db
+
+        db.connections.close_all()
+
     def test_create_scoped_mcp_server(self):
         """Test creating a scoped MCP server."""
         from opencontractserver.mcp.server import create_scoped_mcp_server
@@ -2948,6 +2960,18 @@ class MCPScopedASGIRoutingTest(TransactionTestCase):
             creator=self.owner,
             is_public=False,
         )
+
+    def tearDown(self):
+        """Close all database connections to prevent stale connections.
+
+        Tests in this class use sync_to_async which runs database queries in a
+        thread pool. When the event loop is closed, those threads may have stale
+        connections that can corrupt subsequent tests. Explicitly closing all
+        connections after each test prevents this issue.
+        """
+        from django import db
+
+        db.connections.close_all()
 
     def test_asgi_routes_scoped_corpus_path(self):
         """Test ASGI app routes /mcp/corpus/{slug}/ to scoped handler."""
@@ -3470,6 +3494,12 @@ class MCPUppercaseSlugTest(TransactionTestCase):
             is_public=True,
         )
 
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
+
     def test_uri_parser_accepts_uppercase_slugs(self):
         """Test URIParser accepts uppercase letters in slugs."""
         from opencontractserver.mcp.server import URIParser
@@ -3591,6 +3621,12 @@ class MCPPermissionChangeTest(TransactionTestCase):
             creator=self.owner,
             is_public=True,  # Start as public
         )
+
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
 
     def test_scoped_server_revalidates_permissions_on_tool_call(self):
         """Test that scoped server re-validates corpus permissions on each tool call."""
@@ -3871,6 +3907,12 @@ class MCPScopedLifespanManagerShutdownTest(TransactionTestCase):
             is_public=True,
         )
 
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
+
     def test_lifespan_manager_shutdown_error_handling(self):
         """Test ScopedMCPLifespanManager handles shutdown errors gracefully."""
         import asyncio
@@ -3938,6 +3980,12 @@ class MCPScopedASGIErrorHandlingTest(TransactionTestCase):
             creator=self.owner,
             is_public=True,
         )
+
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
 
     def test_scoped_asgi_error_returns_500(self):
         """Test scoped ASGI endpoint returns 500 on internal error."""
@@ -4074,6 +4122,12 @@ class MCPScopedToolCallPermissionTest(TransactionTestCase):
             creator=self.owner,
             is_public=True,
         )
+
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
 
     def test_scoped_server_validates_corpus_on_creation(self):
         """Test that scoped server is created correctly for valid corpus."""
