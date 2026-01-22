@@ -2775,6 +2775,18 @@ class MCPScopedServerTest(TransactionTestCase):
             is_public=True,
         )
 
+    def tearDown(self):
+        """Close all database connections to prevent stale connections.
+
+        Tests in this class use sync_to_async which runs database queries in a
+        thread pool. When the event loop is closed, those threads may have stale
+        connections that can corrupt subsequent tests. Explicitly closing all
+        connections after each test prevents this issue.
+        """
+        from django import db
+
+        db.connections.close_all()
+
     def test_create_scoped_mcp_server(self):
         """Test creating a scoped MCP server."""
         from opencontractserver.mcp.server import create_scoped_mcp_server
@@ -2839,6 +2851,8 @@ class MCPScopedServerTest(TransactionTestCase):
         """Test getting/creating scoped session manager."""
         import asyncio
 
+        from django import db
+
         from opencontractserver.mcp.server import get_scoped_session_manager
 
         async def run_test():
@@ -2849,16 +2863,23 @@ class MCPScopedServerTest(TransactionTestCase):
             manager2 = await get_scoped_session_manager(self.corpus.slug)
             self.assertIs(manager, manager2)
 
+        # Close any stale connections before creating event loop
+        db.connections.close_all()
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(run_test())
         finally:
             loop.close()
+            # Close connections after async execution to prevent corruption
+            db.connections.close_all()
 
     def test_get_scoped_lifespan_manager(self):
         """Test getting/creating scoped lifespan manager."""
         import asyncio
+
+        from django import db
 
         from opencontractserver.mcp.server import get_scoped_lifespan_manager
 
@@ -2871,21 +2892,31 @@ class MCPScopedServerTest(TransactionTestCase):
             manager2 = await get_scoped_lifespan_manager(self.corpus.slug)
             self.assertIs(manager, manager2)
 
+        # Close any stale connections before creating event loop
+        db.connections.close_all()
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(run_test())
         finally:
             loop.close()
+            # Close connections after async execution to prevent corruption
+            db.connections.close_all()
 
     def test_validate_corpus_slug_valid(self):
         """Test validate_corpus_slug returns True for valid public corpus."""
         import asyncio
 
+        from django import db
+
         from opencontractserver.mcp.server import validate_corpus_slug
 
         async def run_test():
             return await validate_corpus_slug(self.corpus.slug)
+
+        # Close any stale connections before creating event loop
+        db.connections.close_all()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -2894,15 +2925,22 @@ class MCPScopedServerTest(TransactionTestCase):
             self.assertTrue(result)
         finally:
             loop.close()
+            # Close connections after async execution to prevent corruption
+            db.connections.close_all()
 
     def test_validate_corpus_slug_invalid(self):
         """Test validate_corpus_slug returns False for nonexistent corpus."""
         import asyncio
 
+        from django import db
+
         from opencontractserver.mcp.server import validate_corpus_slug
 
         async def run_test():
             return await validate_corpus_slug("nonexistent-corpus-slug")
+
+        # Close any stale connections before creating event loop
+        db.connections.close_all()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -2911,6 +2949,8 @@ class MCPScopedServerTest(TransactionTestCase):
             self.assertFalse(result)
         finally:
             loop.close()
+            # Close connections after async execution to prevent corruption
+            db.connections.close_all()
 
 
 @pytest.mark.serial
@@ -2948,6 +2988,18 @@ class MCPScopedASGIRoutingTest(TransactionTestCase):
             creator=self.owner,
             is_public=False,
         )
+
+    def tearDown(self):
+        """Close all database connections to prevent stale connections.
+
+        Tests in this class use sync_to_async which runs database queries in a
+        thread pool. When the event loop is closed, those threads may have stale
+        connections that can corrupt subsequent tests. Explicitly closing all
+        connections after each test prevents this issue.
+        """
+        from django import db
+
+        db.connections.close_all()
 
     def test_asgi_routes_scoped_corpus_path(self):
         """Test ASGI app routes /mcp/corpus/{slug}/ to scoped handler."""
@@ -3470,6 +3522,12 @@ class MCPUppercaseSlugTest(TransactionTestCase):
             is_public=True,
         )
 
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
+
     def test_uri_parser_accepts_uppercase_slugs(self):
         """Test URIParser accepts uppercase letters in slugs."""
         from opencontractserver.mcp.server import URIParser
@@ -3592,11 +3650,18 @@ class MCPPermissionChangeTest(TransactionTestCase):
             is_public=True,  # Start as public
         )
 
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
+
     def test_scoped_server_revalidates_permissions_on_tool_call(self):
         """Test that scoped server re-validates corpus permissions on each tool call."""
         import asyncio
 
         from asgiref.sync import sync_to_async
+        from django import db
 
         async def run_test():
             # Test via the validation function which is called on each request
@@ -3618,18 +3683,24 @@ class MCPPermissionChangeTest(TransactionTestCase):
             is_valid = await validate_corpus_slug(self.corpus.slug)
             self.assertFalse(is_valid)
 
+        # Close any stale connections before creating event loop
+        db.connections.close_all()
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(run_test())
         finally:
             loop.close()
+            # Close connections after async execution to prevent corruption
+            db.connections.close_all()
 
     def test_asgi_rejects_request_after_corpus_becomes_private(self):
         """Test ASGI endpoint rejects requests after corpus becomes private."""
         import asyncio
 
         from asgiref.sync import sync_to_async
+        from django import db
 
         from opencontractserver.mcp.server import create_mcp_asgi_app
 
@@ -3669,12 +3740,17 @@ class MCPPermissionChangeTest(TransactionTestCase):
             body = json.loads(received[1]["body"])
             self.assertIn("not found or not public", body["error"])
 
+        # Close any stale connections before creating event loop
+        db.connections.close_all()
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(run_test())
         finally:
             loop.close()
+            # Close connections after async execution to prevent corruption
+            db.connections.close_all()
 
 
 class MCPCleanupCallbackErrorTest(TestCase):
@@ -3871,6 +3947,12 @@ class MCPScopedLifespanManagerShutdownTest(TransactionTestCase):
             is_public=True,
         )
 
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
+
     def test_lifespan_manager_shutdown_error_handling(self):
         """Test ScopedMCPLifespanManager handles shutdown errors gracefully."""
         import asyncio
@@ -3938,6 +4020,12 @@ class MCPScopedASGIErrorHandlingTest(TransactionTestCase):
             creator=self.owner,
             is_public=True,
         )
+
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
 
     def test_scoped_asgi_error_returns_500(self):
         """Test scoped ASGI endpoint returns 500 on internal error."""
@@ -4058,8 +4146,18 @@ class MCPScopedASGIErrorHandlingTest(TransactionTestCase):
             loop.close()
 
 
+@pytest.mark.serial
+@override_settings(DATABASES={"default": {"CONN_MAX_AGE": 0}})
 class MCPScopedToolCallPermissionTest(TransactionTestCase):
-    """Tests for scoped tool call permission errors via ASGI endpoint."""
+    """Tests for scoped tool call permission errors via ASGI endpoint.
+
+    Uses TransactionTestCase because tests use database operations.
+
+    Marked as serial to prevent database connection issues when run
+    in parallel with pytest-xdist.
+
+    CONN_MAX_AGE=0 prevents connection pooling issues.
+    """
 
     def setUp(self):
         """Create test data."""
@@ -4074,6 +4172,12 @@ class MCPScopedToolCallPermissionTest(TransactionTestCase):
             creator=self.owner,
             is_public=True,
         )
+
+    def tearDown(self):
+        """Close all database connections to prevent stale connections."""
+        from django import db
+
+        db.connections.close_all()
 
     def test_scoped_server_validates_corpus_on_creation(self):
         """Test that scoped server is created correctly for valid corpus."""

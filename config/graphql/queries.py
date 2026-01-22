@@ -130,9 +130,8 @@ from opencontractserver.documents.query_optimizer import (
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.notifications.models import Notification
-from opencontractserver.types.enums import LabelType, PermissionTypes
+from opencontractserver.types.enums import LabelType
 from opencontractserver.users.models import Assignment, UserExport, UserImport
-from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +144,15 @@ class MetadataCompletionStatusType(graphene.ObjectType):
     missing_fields = graphene.Int()
     percentage = graphene.Float()
     missing_required = graphene.List(graphene.String)
+
+
+class DocumentMetadataResultType(graphene.ObjectType):
+    """Type for batch metadata query results - groups datacells by document."""
+
+    document_id = graphene.ID(description="The document's global ID")
+    datacells = graphene.List(
+        DatacellType, description="Metadata datacells for this document"
+    )
 
 
 class Query(graphene.ObjectType):
@@ -2990,121 +2998,96 @@ class Query(graphene.ObjectType):
         description="Get metadata completion status for a document using column/datacell system",
     )
 
+    documents_metadata_datacells_batch = graphene.List(
+        DocumentMetadataResultType,
+        document_ids=graphene.List(graphene.ID, required=True),
+        corpus_id=graphene.ID(required=True),
+        description="Get metadata datacells for multiple documents in a single query (batch)",
+    )
+
     def resolve_corpus_metadata_columns(self, info, corpus_id):
-        """Get metadata columns for a corpus."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata columns for a corpus using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
-                return []
-
-            # Get metadata fieldset
-            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
-                return corpus.metadata_schema.columns.filter(
-                    is_manual_entry=True
-                ).order_by("display_order")
-
-            return []
-
-        except Corpus.DoesNotExist:
-            return []
+        return MetadataQueryOptimizer.get_corpus_metadata_columns(
+            user, local_corpus_id, manual_only=True
+        )
 
     def resolve_document_metadata_datacells(self, info, document_id, corpus_id):
-        """Get metadata datacells for a document in a corpus."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata datacells for a document using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_doc_id = int(from_global_id(document_id)[1])
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, document, PermissionTypes.READ):
-                return []
-
-            # Get metadata datacells
-            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
-                return Datacell.objects.filter(
-                    document=document,
-                    column__fieldset=corpus.metadata_schema,
-                    column__is_manual_entry=True,
-                ).select_related("column")
-
-            return []
-
-        except (Document.DoesNotExist, Corpus.DoesNotExist):
-            return []
+        return MetadataQueryOptimizer.get_document_metadata(
+            user, local_doc_id, local_corpus_id, manual_only=True
+        )
 
     def resolve_metadata_completion_status_v2(self, info, document_id, corpus_id):
-        """Get metadata completion status using column/datacell system."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata completion status using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_doc_id = int(from_global_id(document_id)[1])
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, document, PermissionTypes.READ):
-                return None
+        return MetadataQueryOptimizer.get_metadata_completion_status(
+            user, local_doc_id, local_corpus_id
+        )
 
-            # Get metadata columns and datacells
-            if not hasattr(corpus, "metadata_schema") or not corpus.metadata_schema:
-                return {
-                    "total_fields": 0,
-                    "filled_fields": 0,
-                    "missing_fields": 0,
-                    "percentage": 100.0,
-                    "missing_required": [],
-                }
+    def resolve_documents_metadata_datacells_batch(self, info, document_ids, corpus_id):
+        """
+        Get metadata datacells for multiple documents using MetadataQueryOptimizer.
 
-            columns = corpus.metadata_schema.columns.filter(is_manual_entry=True)
-            total_fields = columns.count()
+        This batch query solves the N+1 problem when loading metadata for a grid view.
+        Uses the centralized MetadataQueryOptimizer which applies proper permission
+        filtering: Effective Permission = MIN(document_permission, corpus_permission)
+        """
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-            if total_fields == 0:
-                return {
-                    "total_fields": 0,
-                    "filled_fields": 0,
-                    "missing_fields": 0,
-                    "percentage": 100.0,
-                    "missing_required": [],
-                }
+        user = info.context.user
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Get filled datacells
-            filled_datacells = Datacell.objects.filter(
-                document=document, column__in=columns
-            ).exclude(data__value__isnull=True)
+        # Convert global IDs to local IDs (single pass)
+        local_doc_ids = []
+        local_id_by_global = {}  # global_id -> local_id
+        for global_id in document_ids:
+            _, local_id = from_global_id(global_id)
+            local_id_int = int(local_id)
+            local_doc_ids.append(local_id_int)
+            local_id_by_global[global_id] = local_id_int
 
-            filled_count = filled_datacells.count()
-            filled_column_ids = set(
-                filled_datacells.values_list("column_id", flat=True)
-            )
+        # Use optimizer to get batch metadata with proper permissions
+        datacells_by_doc = MetadataQueryOptimizer.get_documents_metadata_batch(
+            user,
+            local_doc_ids,
+            local_corpus_id,
+            manual_only=True,
+            context=info.context,
+        )
 
-            # Find missing required fields
-            missing_required = []
-            for column in columns:
-                if column.id not in filled_column_ids:
-                    config = column.validation_config or {}
-                    if config.get("required", False):
-                        missing_required.append(column.name)
+        # Build response - maintain order of requested document_ids
+        # The optimizer returns a dict with keys for all readable documents,
+        # so we only include documents the user has permission to read
+        results = []
+        for global_id in document_ids:
+            local_id = local_id_by_global[global_id]
 
-            # Calculate percentage
-            percentage = (filled_count / total_fields * 100) if total_fields > 0 else 0
+            # Only include documents that are in the result (user has permission)
+            if local_id in datacells_by_doc:
+                results.append(
+                    {
+                        "document_id": global_id,
+                        "datacells": datacells_by_doc[local_id],
+                    }
+                )
 
-            return {
-                "total_fields": total_fields,
-                "filled_fields": filled_count,
-                "missing_fields": total_fields - filled_count,
-                "percentage": percentage,
-                "missing_required": missing_required,
-            }
-
-        except (Corpus.DoesNotExist, Document.DoesNotExist):
-            return None
+        return results
 
     # BADGE RESOLVERS ####################################
     badges = DjangoFilterConnectionField(BadgeType, filterset_class=BadgeFilter)

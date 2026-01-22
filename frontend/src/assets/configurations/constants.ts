@@ -58,6 +58,8 @@ export const DEBOUNCE = {
   CLICK_OUTSIDE_DELAY_MS: 100,
   CORPUS_SEARCH_MS: 400,
   CORPUS_SEARCH_MAX_WAIT_MS: 1000,
+  /** Debounce time for metadata cell auto-save */
+  METADATA_SAVE_MS: 1500,
 } as const;
 
 // Upload constraints
