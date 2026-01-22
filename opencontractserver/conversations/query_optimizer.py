@@ -43,21 +43,27 @@ class ConversationQueryOptimizer:
         self._visible_document_ids_cache: Optional[set] = None
         self._visible_conversation_ids_cache: Optional[set] = None
 
+    @property
+    def _is_superuser(self) -> bool:
+        """Check if the user is a superuser."""
+        return hasattr(self.user, "is_superuser") and self.user.is_superuser
+
     def _get_visible_corpus_ids(self) -> set:
         """
         Get set of corpus IDs visible to the user (cached).
 
+        Note: For superusers, returns empty set. Callers should check
+        _is_superuser first and bypass set membership checks entirely.
+
         Returns:
-            Set of corpus IDs the user can read.
+            Set of corpus IDs the user can read, or empty set for superusers.
         """
         if self._visible_corpus_ids_cache is None:
             from opencontractserver.corpuses.models import Corpus
 
-            if hasattr(self.user, "is_superuser") and self.user.is_superuser:
-                # Superusers see all - don't cache entire DB
-                self._visible_corpus_ids_cache = set(
-                    Corpus.objects.values_list("id", flat=True)
-                )
+            if self._is_superuser:
+                # Superusers see all - skip caching to avoid memory overhead
+                self._visible_corpus_ids_cache = set()
             elif self.user.is_anonymous:
                 self._visible_corpus_ids_cache = set(
                     Corpus.objects.filter(is_public=True).values_list("id", flat=True)
@@ -74,17 +80,18 @@ class ConversationQueryOptimizer:
         """
         Get set of document IDs visible to the user (cached).
 
+        Note: For superusers, returns empty set. Callers should check
+        _is_superuser first and bypass set membership checks entirely.
+
         Returns:
-            Set of document IDs the user can read.
+            Set of document IDs the user can read, or empty set for superusers.
         """
         if self._visible_document_ids_cache is None:
             from opencontractserver.documents.models import Document
 
-            if hasattr(self.user, "is_superuser") and self.user.is_superuser:
-                # Superusers see all - don't cache entire DB
-                self._visible_document_ids_cache = set(
-                    Document.objects.values_list("id", flat=True)
-                )
+            if self._is_superuser:
+                # Superusers see all - skip caching to avoid memory overhead
+                self._visible_document_ids_cache = set()
             elif self.user.is_anonymous:
                 self._visible_document_ids_cache = set(
                     Document.objects.filter(is_public=True).values_list("id", flat=True)
@@ -101,17 +108,24 @@ class ConversationQueryOptimizer:
         """
         Get set of conversation IDs visible to the user (cached).
 
+        Note: For superusers, returns empty set. Callers should check
+        _is_superuser first and bypass set membership checks entirely.
+
         Returns:
-            Set of conversation IDs the user can see.
+            Set of conversation IDs the user can see, or empty set for superusers.
         """
         if self._visible_conversation_ids_cache is None:
             from opencontractserver.conversations.models import Conversation
 
-            self._visible_conversation_ids_cache = set(
-                Conversation.objects.visible_to_user(self.user).values_list(
-                    "id", flat=True
+            if self._is_superuser:
+                # Superusers see all - skip caching to avoid memory overhead
+                self._visible_conversation_ids_cache = set()
+            else:
+                self._visible_conversation_ids_cache = set(
+                    Conversation.objects.visible_to_user(self.user).values_list(
+                        "id", flat=True
+                    )
                 )
-            )
         return self._visible_conversation_ids_cache
 
     def check_conversation_visibility(self, conversation_id: int) -> bool:
@@ -128,6 +142,11 @@ class ConversationQueryOptimizer:
             True if user can see the conversation, False otherwise.
             Returns False for both non-existent and inaccessible conversations.
         """
+        from opencontractserver.conversations.models import Conversation
+
+        if self._is_superuser:
+            # Superusers see all - just check existence
+            return Conversation.objects.filter(id=conversation_id).exists()
         return conversation_id in self._get_visible_conversation_ids()
 
     def get_threads_for_corpus(self, corpus_id: int) -> QuerySet:

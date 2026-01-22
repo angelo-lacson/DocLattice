@@ -525,17 +525,17 @@ Moderator Conditions (for visibility):
 corpus = Corpus.objects.create(title="Legal Docs", creator=alice)
 assign_perm("read_corpus", bob, corpus)
 
-# User A creates a CHAT (agent conversation) on the corpus
+# Alice creates a CHAT (agent conversation) on the corpus
 chat = Conversation.objects.create(
-    chat_with_corpus=corpus, creator=user_a, conversation_type="chat"
+    chat_with_corpus=corpus, creator=alice, conversation_type="chat"
 )
-chat_msg = ChatMessage.objects.create(conversation=chat, creator=user_a)
+chat_msg = ChatMessage.objects.create(conversation=chat, creator=alice)
 
-# User A creates a THREAD (discussion) on the corpus
+# Alice creates a THREAD (discussion) on the corpus
 thread = Conversation.objects.create(
-    chat_with_corpus=corpus, creator=user_a, conversation_type="thread"
+    chat_with_corpus=corpus, creator=alice, conversation_type="thread"
 )
-thread_msg = ChatMessage.objects.create(conversation=thread, creator=user_a)
+thread_msg = ChatMessage.objects.create(conversation=thread, creator=alice)
 
 # Bob (corpus reader) can see THREAD messages but NOT CHAT messages
 visible_to_bob = ChatMessage.objects.visible_to_user(bob)

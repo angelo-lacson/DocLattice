@@ -1,4 +1,7 @@
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Optional
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser
 
 import django
 from django.contrib.auth import get_user_model
@@ -121,7 +124,9 @@ class ConversationQuerySet(SoftDeleteQuerySet):
     # Use the VectorSearchViaEmbeddingMixin directly within the class
     EMBEDDING_RELATED_NAME = "embedding_set"
 
-    def visible_to_user(self, user=None):
+    def visible_to_user(
+        self, user: Optional["AbstractBaseUser"] = None
+    ) -> models.QuerySet:
         """
         Returns queryset filtered to conversations visible to the user.
 
@@ -137,6 +142,16 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         - If only chat_with_corpus is set: user must have READ on corpus
         - If only chat_with_document is set: user must have READ on document
         - If BOTH are set: user must have READ on corpus AND document (AND logic)
+
+        Note on performance: This method executes subqueries for visible corpus/document
+        IDs on each call. For list queries in GraphQL resolvers, consider using
+        ConversationQueryOptimizer which provides request-level caching.
+
+        Args:
+            user: The user to filter visibility for. None is treated as anonymous.
+
+        Returns:
+            QuerySet of visible conversations, ordered by -created (newest first).
         """
         from django.apps import apps
         from django.contrib.auth.models import AnonymousUser
@@ -154,11 +169,11 @@ class ConversationQuerySet(SoftDeleteQuerySet):
 
         # Superusers see everything
         if hasattr(user, "is_superuser") and user.is_superuser:
-            return queryset.order_by("created")
+            return queryset.order_by("-created")
 
         # Anonymous users only see public items
         if user.is_anonymous:
-            return queryset.filter(is_public=True)
+            return queryset.filter(is_public=True).order_by("-created")
 
         # Get explicitly permitted conversation IDs via guardian
         model_name = self.model._meta.model_name
@@ -218,7 +233,9 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         )
 
         # Combine CHAT and THREAD filters
-        return queryset.filter(chat_filter | thread_filter).distinct()
+        return (
+            queryset.filter(chat_filter | thread_filter).distinct().order_by("-created")
+        )
 
     def search_by_embedding(
         self,
