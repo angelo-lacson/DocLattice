@@ -1235,6 +1235,7 @@ class StartCorpusFork(graphene.Mutation):
 
             # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
             corpus.pk = None
+            corpus.slug = ""  # Clear slug so save() generates a new unique one
 
             # Adjust the title to indicate it's a fork
             corpus.title = f"[FORK] {corpus.title}"
