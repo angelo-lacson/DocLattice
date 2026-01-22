@@ -1257,17 +1257,32 @@ class StartCorpusFork(graphene.Mutation):
 
             # Copy docs, annotations, folders, relationships, and metadata using async task
             # to avoid massive lag if we have large dataset or lots of users requesting copies.
-            fork_corpus.si(
-                corpus.id,
-                doc_ids,
-                label_set_id,
-                annotation_ids,
-                folder_ids,
-                relationship_ids,
-                info.context.user.id,
-                metadata_column_ids,
-                metadata_datacell_ids,
-            ).apply_async()
+            # Use on_commit to ensure corpus is persisted before task runs.
+            # Capture args as defaults to avoid late-binding closure issues.
+            def dispatch_fork_task(
+                _corpus_id=corpus.id,
+                _doc_ids=doc_ids,
+                _label_set_id=label_set_id,
+                _annotation_ids=annotation_ids,
+                _folder_ids=folder_ids,
+                _relationship_ids=relationship_ids,
+                _user_id=info.context.user.id,
+                _metadata_column_ids=metadata_column_ids,
+                _metadata_datacell_ids=metadata_datacell_ids,
+            ):
+                fork_corpus.si(
+                    _corpus_id,
+                    _doc_ids,
+                    _label_set_id,
+                    _annotation_ids,
+                    _folder_ids,
+                    _relationship_ids,
+                    _user_id,
+                    _metadata_column_ids,
+                    _metadata_datacell_ids,
+                ).apply_async()
+
+            transaction.on_commit(dispatch_fork_task)
 
             ok = True
             new_corpus = corpus
