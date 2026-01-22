@@ -326,12 +326,27 @@ def fork_corpus(
                     old_annotation_id = annotation.pk  # Save before clearing
                     logger.info(f"Clone annotation: {annotation}")
 
+                    # Skip annotations without a document reference
+                    if not annotation.document_id:
+                        logger.warning(
+                            f"Skipping annotation {old_annotation_id}: no document_id"
+                        )
+                        continue
+
+                    # Skip annotations whose document wasn't forked
+                    if annotation.document_id not in doc_map:
+                        logger.warning(
+                            f"Skipping annotation {old_annotation_id}: "
+                            f"document {annotation.document_id} not in forked documents"
+                        )
+                        continue
+
                     # Copy the annotation, update label and doc object references using our
                     # object maps of old objs to new objs
                     annotation.pk = None
                     annotation.creator_id = user_id
                     annotation.corpus_id = new_corpus_id
-                    annotation.document_id = doc_map[annotation.document.id]
+                    annotation.document_id = doc_map[annotation.document_id]
 
                     # Map annotation label if it exists and has a mapping
                     if annotation.annotation_label_id and label_map:
