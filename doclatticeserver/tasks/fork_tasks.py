@@ -47,7 +47,6 @@ def fork_corpus(
     corpus = Corpus.objects.get(pk=new_corpus_id)
 
     # Get the User object for operations that need it (e.g., add_document)
-    User = get_user_model()
     user = User.objects.get(pk=user_id)
 
     with transaction.atomic():
@@ -345,10 +344,12 @@ def fork_corpus(
                         if old_id in annotation_map
                     ]
 
-                    # Only create relationship if we have valid mappings
-                    if not new_source_ids and not new_target_ids:
+                    # Only create relationship if we have BOTH source and target mappings
+                    # A relationship with only source OR only target is invalid
+                    if not new_source_ids or not new_target_ids:
                         logger.warning(
-                            f"Skipping relationship {old_relationship.pk}: no mapped annotations"
+                            f"Skipping relationship {old_relationship.pk}: "
+                            f"missing {'source' if not new_source_ids else 'target'} annotations"
                         )
                         continue
 

@@ -261,7 +261,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             creator=self.user,
             is_public=False,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create folders
         folders = []
@@ -291,7 +291,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                 backend_lock=False,
                 processing_started=None,
             )
-            set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+            set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
 
             # Add to corpus with folder assignment
             folder = folders[i % len(folders)] if folders else None
@@ -326,7 +326,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                     creator=self.user,
                 )
                 set_permissions_for_obj_to_user(
-                    self.user, annotation, [PermissionTypes.ALL]
+                    self.user, annotation, [PermissionTypes.CRUD]
                 )
                 annotations.append(annotation)
 
@@ -340,7 +340,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                     page=1,
                     creator=self.user,
                 )
-                set_permissions_for_obj_to_user(self.user, note, [PermissionTypes.ALL])
+                set_permissions_for_obj_to_user(self.user, note, [PermissionTypes.CRUD])
 
         # Create relationships between annotations
         all_annotations = list(
@@ -359,7 +359,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             relationship.source_annotations.add(source_ann)
             relationship.target_annotations.add(target_ann)
             set_permissions_for_obj_to_user(
-                self.user, relationship, [PermissionTypes.ALL]
+                self.user, relationship, [PermissionTypes.CRUD]
             )
 
         return corpus
@@ -406,7 +406,9 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             creator=self.user,
             parent_id=corpus.pk,
         )
-        set_permissions_for_obj_to_user(self.user, forked_corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(
+            self.user, forked_corpus, [PermissionTypes.CRUD]
+        )
 
         # Execute the fork task synchronously
         result = fork_corpus(
@@ -743,6 +745,56 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
 
             current = forked
 
+    def test_multi_generation_title_prefix_stacking(self):
+        """
+        Test that [FORK] prefixes stack in multi-generation forks.
+
+        When forking a fork, the title becomes [FORK] [FORK] Original Title.
+        This is intentional behavior - each fork prepends [FORK] to track lineage.
+        """
+        original = self._create_test_corpus(
+            title="Original Title",
+            num_documents=1,
+            num_annotations_per_doc=0,
+            num_relationships=0,
+            num_folders=0,
+            num_notes_per_doc=0,
+        )
+
+        # First fork
+        gen1 = self._execute_fork(original)
+        self.assertIsNotNone(gen1)
+        self.assertEqual(gen1.title, "[FORK] Original Title")
+
+        # Get the forked document title
+        gen1_doc = gen1.get_documents().first()
+        self.assertEqual(gen1_doc.title, "[FORK] Document 0")
+
+        # Second fork (fork of fork)
+        gen2 = self._execute_fork(gen1)
+        self.assertIsNotNone(gen2)
+        self.assertEqual(
+            gen2.title,
+            "[FORK] [FORK] Original Title",
+            "Second generation should have stacked [FORK] prefix",
+        )
+
+        gen2_doc = gen2.get_documents().first()
+        self.assertEqual(
+            gen2_doc.title,
+            "[FORK] [FORK] Document 0",
+            "Document title should also have stacked [FORK] prefix",
+        )
+
+        # Third fork
+        gen3 = self._execute_fork(gen2)
+        self.assertIsNotNone(gen3)
+        self.assertEqual(
+            gen3.title,
+            "[FORK] [FORK] [FORK] Original Title",
+            "Third generation should have triple [FORK] prefix",
+        )
+
     def test_empty_corpus_fork(self):
         """Test that forking an empty corpus works correctly."""
         empty_corpus = Corpus.objects.create(
@@ -750,7 +802,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
             description="A corpus with no documents",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, empty_corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, empty_corpus, [PermissionTypes.CRUD])
 
         forked = self._execute_fork(empty_corpus)
         self.assertIsNotNone(forked, "Fork of empty corpus should succeed")
@@ -864,7 +916,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="Relationship Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create document and annotations
         doc = Document.objects.create(
@@ -941,7 +993,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -998,7 +1050,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="Folder Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create folder structure
         root = CorpusFolder.objects.create(
@@ -1030,7 +1082,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -1082,7 +1134,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="Doc Folder Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create folder
         folder = CorpusFolder.objects.create(
@@ -1122,7 +1174,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -1166,7 +1218,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="Notes Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         doc = Document.objects.create(
             title="Test Doc",
@@ -1201,7 +1253,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -1234,7 +1286,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="Icon Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create label set with icon
         label_set = LabelSet.objects.create(
@@ -1256,7 +1308,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -1287,14 +1339,14 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="File Copy Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create document with txt_extract_file and pawls_parse_file
         doc = Document.objects.create(
             title="Test Doc With Files",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
 
         # Add txt extract file
         txt_content = b"This is extracted text content."
@@ -1323,7 +1375,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -1358,7 +1410,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="Relationship Skip Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create label set
         label_set = LabelSet.objects.create(title="Test Labels", creator=self.user)
@@ -1419,7 +1471,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -1441,6 +1493,102 @@ class CorpusForkPreservationTest(TransactionTestCase):
             "Relationship should be skipped when no source/target annotations are mapped",
         )
 
+    def test_relationship_skipped_when_only_source_mapped(self):
+        """
+        Test that relationships are skipped when only source annotations are mapped
+        but not target annotations. A valid relationship requires BOTH sides.
+        """
+        corpus = Corpus.objects.create(
+            title="Partial Relationship Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        # Create label set
+        label_set = LabelSet.objects.create(title="Test Labels", creator=self.user)
+        token_label = AnnotationLabel.objects.create(
+            text="Token", label_type=TOKEN_LABEL, creator=self.user
+        )
+        rel_label = AnnotationLabel.objects.create(
+            text="Related", label_type=RELATIONSHIP_LABEL, creator=self.user
+        )
+        label_set.annotation_labels.add(token_label, rel_label)
+        corpus.label_set = label_set
+        corpus.save()
+
+        # Create document
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create two annotations
+        ann_source = Annotation.objects.create(
+            page=1,
+            raw_text="Source",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+        ann_target = Annotation.objects.create(
+            page=1,
+            raw_text="Target",
+            document=doc,
+            corpus=corpus,
+            annotation_label=token_label,
+            creator=self.user,
+        )
+
+        # Create relationship between annotations
+        relationship = Relationship.objects.create(
+            relationship_label=rel_label,
+            corpus=corpus,
+            document=doc,
+            creator=self.user,
+        )
+        relationship.source_annotations.add(ann_source)
+        relationship.target_annotations.add(ann_target)
+
+        # Fork - only include the SOURCE annotation, not the target
+        forked = Corpus.objects.create(
+            title="[FORK] Partial Relationship Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=label_set.pk,
+            annotation_ids=[ann_source.pk],  # Only source, not target
+            folder_ids=[],
+            relationship_ids=[relationship.pk],
+            user_id=self.user.pk,
+        )
+
+        forked.refresh_from_db()
+
+        # Verify relationship was skipped (missing target annotations)
+        forked_rel_count = Relationship.objects.filter(corpus=forked).count()
+        self.assertEqual(
+            forked_rel_count,
+            0,
+            "Relationship should be skipped when only source annotations are mapped",
+        )
+
+        # Verify the source annotation WAS copied
+        forked_ann_count = Annotation.objects.filter(corpus=forked).count()
+        self.assertEqual(forked_ann_count, 1, "Source annotation should be copied")
+
     def test_annotation_without_label_set(self):
         """
         Test that annotations are correctly forked when there's no label_map
@@ -1450,11 +1598,11 @@ class CorpusForkPreservationTest(TransactionTestCase):
             title="No Label Set Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create document
         doc = Document.objects.create(title="Test Doc", creator=self.user)
-        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
         DocumentPath.objects.create(
             document=doc,
             corpus=corpus,
@@ -1477,7 +1625,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             annotation_label=token_label,  # Has a label
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.CRUD])
 
         # Fork WITHOUT label_set_id - this tests the annotation_label_id = None path
         forked = Corpus.objects.create(
@@ -1486,7 +1634,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         fork_corpus(
             new_corpus_id=forked.pk,
@@ -1540,7 +1688,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             title="Label Set Exception Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create a label set
         label_set = LabelSet.objects.create(
@@ -1557,7 +1705,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         # Mock LabelSet.objects.get to raise an exception
         with patch(
@@ -1599,7 +1747,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             title="Label Population Exception Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create a label set with labels
         label_set = LabelSet.objects.create(
@@ -1622,7 +1770,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         # We need to make the second label_set.save() call fail (line 129)
         # The first save() at line 77 should succeed, but the second at line 129 should fail
@@ -1669,7 +1817,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             title="Label Clone Exception Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create a label set with a label
         label_set = LabelSet.objects.create(
@@ -1692,7 +1840,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         # Mock AnnotationLabel constructor to raise an exception
         original_init = AnnotationLabel.__init__
@@ -1734,14 +1882,14 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             title="Document Exception Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create a document
         doc = Document.objects.create(
             title="Test Doc",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
         DocumentPath.objects.create(
             document=doc,
             corpus=corpus,
@@ -1759,7 +1907,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         # Mock corpus.add_document to raise an exception
         with patch.object(Corpus, "add_document") as mock_add:
@@ -1797,14 +1945,14 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             title="Annotation Exception Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create a document
         doc = Document.objects.create(
             title="Test Doc",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
         DocumentPath.objects.create(
             document=doc,
             corpus=corpus,
@@ -1823,7 +1971,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             corpus=corpus,
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.CRUD])
 
         # Create the forked corpus shell
         forked = Corpus.objects.create(
@@ -1832,7 +1980,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         # Create a fake annotation ID that doesn't exist in the doc_map
         # This will cause a KeyError when trying to look up the document
@@ -1870,7 +2018,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             title="Folder Exception Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create a folder
         folder = CorpusFolder.objects.create(
@@ -1886,7 +2034,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         # Mock CorpusFolder save to raise an exception
         original_save = CorpusFolder.save
@@ -1928,7 +2076,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             title="Relationship Exception Test",
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
 
         # Create label set
         label_set = LabelSet.objects.create(title="Test Labels", creator=self.user)
@@ -1944,7 +2092,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
 
         # Create document
         doc = Document.objects.create(title="Test Doc", creator=self.user)
-        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
         DocumentPath.objects.create(
             document=doc,
             corpus=corpus,
@@ -1972,8 +2120,8 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             annotation_label=token_label,
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(self.user, ann1, [PermissionTypes.ALL])
-        set_permissions_for_obj_to_user(self.user, ann2, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, ann1, [PermissionTypes.CRUD])
+        set_permissions_for_obj_to_user(self.user, ann2, [PermissionTypes.CRUD])
 
         # Create relationship
         relationship = Relationship.objects.create(
@@ -1992,7 +2140,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             parent_id=corpus.pk,
             backend_lock=True,
         )
-        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.ALL])
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
         # Mock Relationship.save to raise an exception for the forked corpus
         original_rel_save = Relationship.save
