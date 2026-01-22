@@ -492,10 +492,10 @@ def user_has_permission_for_obj(
         instance=instance,
         include_group_permissions=include_group_permissions,
     )
-    logger.info(
+    logger.debug(
         f"user_has_permission_for_obj - user {user} has model_permissions: {model_permissions_for_user}"
     )
-    logger.info(f"user_has_permission_for_obj - permission: {permission}")
+    logger.debug(f"user_has_permission_for_obj - permission: {permission}")
 
     if permission == PermissionTypes.READ:
         return len(model_permissions_for_user.intersection({f"read_{model_name}"})) > 0
