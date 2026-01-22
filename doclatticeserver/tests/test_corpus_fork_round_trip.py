@@ -2849,3 +2849,193 @@ class CorpusForkMetadataTest(TransactionTestCase):
             "Value 1",
             "Datacell for doc1 should be copied",
         )
+
+
+class CorpusForkRegressionTest(TransactionTestCase):
+    """
+    Regression tests for bugs discovered in corpus forking.
+
+    These tests ensure previously fixed bugs don't regress.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="fork_regression_test_user",
+            password="testpass123",
+        )
+
+    def test_fork_generates_unique_slug(self):
+        """
+        Regression test for slug collision bug.
+
+        Previously, forking a corpus didn't clear the slug before save,
+        causing 'duplicate key value violates unique constraint
+        uniq_corpus_slug_per_creator_cs' errors.
+
+        Fix: Clear corpus.slug before save() so Django generates a new one.
+        """
+        # Create corpus with a specific slug
+        corpus = Corpus.objects.create(
+            title="Slug Test Corpus",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+        original_slug = corpus.slug
+
+        self.assertIsNotNone(original_slug)
+        self.assertTrue(len(original_slug) > 0)
+
+        # Fork the corpus
+        forked = Corpus.objects.create(
+            title="[FORK] Slug Test Corpus",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=[],
+            metadata_datacell_ids=[],
+        )
+
+        self.assertIsNotNone(result)
+        forked.refresh_from_db()
+
+        # Verify forked corpus has a different slug
+        self.assertIsNotNone(forked.slug)
+        self.assertNotEqual(
+            forked.slug,
+            original_slug,
+            "Forked corpus should have a different slug than original",
+        )
+
+    def test_multiple_forks_same_corpus_no_collision(self):
+        """
+        Test that forking the same corpus multiple times doesn't cause collisions.
+
+        This tests both slug uniqueness and general fork stability.
+        """
+        # Create source corpus
+        corpus = Corpus.objects.create(
+            title="Multi-Fork Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        # Fork the same corpus 3 times
+        forked_slugs = set()
+        for i in range(3):
+            forked = Corpus.objects.create(
+                title=f"[FORK] Multi-Fork Test {i}",
+                creator=self.user,
+                parent_id=corpus.pk,
+                backend_lock=True,
+            )
+            set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[],
+                label_set_id=None,
+                annotation_ids=[],
+                folder_ids=[],
+                relationship_ids=[],
+                user_id=self.user.pk,
+                metadata_column_ids=[],
+                metadata_datacell_ids=[],
+            )
+
+            self.assertIsNotNone(result, f"Fork {i} should succeed")
+            forked.refresh_from_db()
+            self.assertFalse(forked.error, f"Fork {i} should not have error")
+
+            # Collect slugs to verify uniqueness
+            forked_slugs.add(forked.slug)
+
+        # All slugs should be unique
+        self.assertEqual(
+            len(forked_slugs),
+            3,
+            "All forked corpora should have unique slugs",
+        )
+
+    def test_fork_with_same_title_different_users(self):
+        """
+        Test that different users can fork a corpus without slug collision.
+
+        The unique constraint is (creator_id, slug), so different users
+        should be able to have the same slug.
+        """
+        # Create another user
+        other_user = User.objects.create_user(
+            username="other_fork_user",
+            password="testpass123",
+        )
+
+        # Create source corpus
+        corpus = Corpus.objects.create(
+            title="Shared Fork Test",
+            creator=self.user,
+            is_public=True,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        # Fork by first user
+        forked1 = Corpus.objects.create(
+            title="[FORK] Shared Fork Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked1, [PermissionTypes.CRUD])
+
+        result1 = fork_corpus(
+            new_corpus_id=forked1.pk,
+            doc_ids=[],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=[],
+            metadata_datacell_ids=[],
+        )
+
+        self.assertIsNotNone(result1)
+
+        # Fork by second user
+        forked2 = Corpus.objects.create(
+            title="[FORK] Shared Fork Test",
+            creator=other_user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(other_user, forked2, [PermissionTypes.CRUD])
+
+        result2 = fork_corpus(
+            new_corpus_id=forked2.pk,
+            doc_ids=[],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=other_user.pk,
+            metadata_column_ids=[],
+            metadata_datacell_ids=[],
+        )
+
+        self.assertIsNotNone(result2)
+
+        # Both forks should succeed
+        forked1.refresh_from_db()
+        forked2.refresh_from_db()
+        self.assertFalse(forked1.error)
+        self.assertFalse(forked2.error)
