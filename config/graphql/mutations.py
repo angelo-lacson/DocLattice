@@ -1212,6 +1212,27 @@ class StartCorpusFork(graphene.Mutation):
                 ).values_list("id", flat=True)
             )
 
+            # Collect metadata column IDs if metadata schema exists
+            metadata_column_ids = []
+            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
+                metadata_column_ids = list(
+                    corpus.metadata_schema.columns.filter(
+                        is_manual_entry=True
+                    ).values_list("id", flat=True)
+                )
+
+            # Collect metadata datacell IDs for documents being forked
+            # Only manual metadata (extract IS NULL)
+            metadata_datacell_ids = []
+            if metadata_column_ids and doc_ids:
+                metadata_datacell_ids = list(
+                    Datacell.objects.filter(
+                        document_id__in=doc_ids,
+                        column_id__in=metadata_column_ids,
+                        extract__isnull=True,
+                    ).values_list("id", flat=True)
+                )
+
             # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
             corpus.pk = None
 
@@ -1233,8 +1254,8 @@ class StartCorpusFork(graphene.Mutation):
             corpus.documents.clear()
             corpus.label_set = None
 
-            # Copy docs, annotations, folders, and relationships using async task to avoid
-            # massive lag if we have large dataset or lots of users requesting copies.
+            # Copy docs, annotations, folders, relationships, and metadata using async task
+            # to avoid massive lag if we have large dataset or lots of users requesting copies.
             fork_corpus.si(
                 corpus.id,
                 doc_ids,
@@ -1243,6 +1264,8 @@ class StartCorpusFork(graphene.Mutation):
                 folder_ids,
                 relationship_ids,
                 info.context.user.id,
+                metadata_column_ids,
+                metadata_datacell_ids,
             ).apply_async()
 
             ok = True

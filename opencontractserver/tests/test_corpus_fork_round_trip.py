@@ -35,6 +35,7 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.tasks.fork_tasks import fork_corpus
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -2168,3 +2169,683 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             # Corpus should be marked with error
             forked.refresh_from_db()
             self.assertTrue(forked.error)
+
+
+class CorpusForkMetadataTest(TransactionTestCase):
+    """
+    Tests for metadata forking functionality.
+
+    These tests verify that metadata schemas (Fieldsets, Columns) and values
+    (Datacells) are correctly copied during corpus forking.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="metadata_fork_test_user",
+            password="testpass123",
+        )
+
+    def test_metadata_schema_copied(self):
+        """
+        Test that metadata schema (Fieldset + Columns) is copied during fork.
+        """
+        # Create corpus
+        corpus = Corpus.objects.create(
+            title="Metadata Schema Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        # Create metadata fieldset linked to corpus
+        fieldset = Fieldset.objects.create(
+            name="Test Metadata Schema",
+            description="Schema for testing",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        # Create columns with different data types
+        col1 = Column.objects.create(
+            name="Text Field",
+            fieldset=fieldset,
+            output_type="str",
+            data_type="STRING",
+            is_manual_entry=True,
+            validation_config={"required": True, "max_length": 100},
+            help_text="Enter text here",
+            display_order=1,
+            creator=self.user,
+        )
+        col2 = Column.objects.create(
+            name="Number Field",
+            fieldset=fieldset,
+            output_type="int",
+            data_type="INTEGER",
+            is_manual_entry=True,
+            validation_config={"min_value": 0, "max_value": 100},
+            default_value=42,
+            display_order=2,
+            creator=self.user,
+        )
+        col3 = Column.objects.create(
+            name="Choice Field",
+            fieldset=fieldset,
+            output_type="str",
+            data_type="CHOICE",
+            is_manual_entry=True,
+            validation_config={"choices": ["Option A", "Option B", "Option C"]},
+            display_order=3,
+            creator=self.user,
+        )
+
+        # Collect column IDs
+        metadata_column_ids = [col1.pk, col2.pk, col3.pk]
+
+        # Create forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Metadata Schema Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        # Execute fork
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=metadata_column_ids,
+            metadata_datacell_ids=[],
+        )
+
+        self.assertIsNotNone(result)
+        forked.refresh_from_db()
+
+        # Verify fieldset was created
+        self.assertTrue(
+            hasattr(forked, "metadata_schema") and forked.metadata_schema,
+            "Forked corpus should have metadata_schema",
+        )
+
+        # Verify fieldset properties
+        self.assertEqual(
+            forked.metadata_schema.name,
+            "[FORK] Test Metadata Schema",
+            "Fieldset name should have [FORK] prefix",
+        )
+
+        # Verify column count
+        forked_columns = forked.metadata_schema.columns.all()
+        self.assertEqual(
+            forked_columns.count(),
+            3,
+            "Forked fieldset should have 3 columns",
+        )
+
+        # Verify column properties preserved
+        forked_col_names = set(forked_columns.values_list("name", flat=True))
+        self.assertEqual(
+            forked_col_names,
+            {"Text Field", "Number Field", "Choice Field"},
+            "Column names should be preserved",
+        )
+
+        # Verify validation config preserved
+        forked_choice_col = forked_columns.get(name="Choice Field")
+        self.assertEqual(
+            forked_choice_col.validation_config["choices"],
+            ["Option A", "Option B", "Option C"],
+            "Validation config should be preserved",
+        )
+
+    def test_metadata_values_copied(self):
+        """
+        Test that metadata values (Datacells) are copied during fork.
+        """
+        # Create corpus with document
+        corpus = Corpus.objects.create(
+            title="Metadata Values Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create metadata schema
+        fieldset = Fieldset.objects.create(
+            name="Test Schema",
+            description="Schema for testing",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        col = Column.objects.create(
+            name="Status",
+            fieldset=fieldset,
+            output_type="str",
+            data_type="STRING",
+            is_manual_entry=True,
+            display_order=1,
+            creator=self.user,
+        )
+
+        # Create datacell (metadata value)
+        datacell = Datacell.objects.create(
+            column=col,
+            document=doc,
+            data={"value": "Active"},
+            data_definition="Document status",
+            extract=None,  # Manual metadata
+            creator=self.user,
+        )
+
+        # Fork
+        forked = Corpus.objects.create(
+            title="[FORK] Metadata Values Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=[col.pk],
+            metadata_datacell_ids=[datacell.pk],
+        )
+
+        self.assertIsNotNone(result)
+        forked.refresh_from_db()
+
+        # Verify datacell was copied
+        forked_doc = forked.get_documents().first()
+        self.assertIsNotNone(forked_doc)
+
+        # Get forked column
+        forked_col = forked.metadata_schema.columns.first()
+        self.assertIsNotNone(forked_col)
+
+        # Get forked datacell
+        forked_datacell = Datacell.objects.filter(
+            document=forked_doc,
+            column=forked_col,
+            extract__isnull=True,
+        ).first()
+
+        self.assertIsNotNone(forked_datacell, "Datacell should be copied")
+        self.assertEqual(
+            forked_datacell.data["value"],
+            "Active",
+            "Datacell value should be preserved",
+        )
+        self.assertEqual(
+            forked_datacell.data_definition,
+            "Document status",
+            "Datacell data_definition should be preserved",
+        )
+
+    def test_metadata_all_data_types_preserved(self):
+        """
+        Test that all metadata data types are correctly preserved during fork.
+        """
+        corpus = Corpus.objects.create(
+            title="Data Types Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        fieldset = Fieldset.objects.create(
+            name="All Types Schema",
+            description="Schema with all data types",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        # Create columns for each data type
+        data_types = [
+            ("STRING", "str"),
+            ("TEXT", "str"),
+            ("BOOLEAN", "bool"),
+            ("INTEGER", "int"),
+            ("FLOAT", "float"),
+            ("DATE", "str"),
+            ("DATETIME", "str"),
+            ("URL", "str"),
+            ("EMAIL", "str"),
+            ("CHOICE", "str"),
+            ("MULTI_CHOICE", "list"),
+            ("JSON", "dict"),
+        ]
+
+        columns = []
+        for i, (data_type, output_type) in enumerate(data_types):
+            validation_config = {}
+            if data_type in ["CHOICE", "MULTI_CHOICE"]:
+                validation_config = {"choices": ["A", "B", "C"]}
+
+            col = Column.objects.create(
+                name=f"{data_type} Column",
+                fieldset=fieldset,
+                output_type=output_type,
+                data_type=data_type,
+                is_manual_entry=True,
+                validation_config=validation_config if validation_config else None,
+                display_order=i,
+                creator=self.user,
+            )
+            columns.append(col)
+
+        column_ids = [c.pk for c in columns]
+
+        # Fork
+        forked = Corpus.objects.create(
+            title="[FORK] Data Types Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=column_ids,
+            metadata_datacell_ids=[],
+        )
+
+        self.assertIsNotNone(result)
+        forked.refresh_from_db()
+
+        # Verify all columns were copied with correct data types
+        forked_columns = forked.metadata_schema.columns.all()
+        self.assertEqual(forked_columns.count(), len(data_types))
+
+        for data_type, _ in data_types:
+            col = forked_columns.filter(data_type=data_type).first()
+            self.assertIsNotNone(col, f"Column with data_type {data_type} should exist")
+            self.assertTrue(
+                col.is_manual_entry, f"{data_type} column should be manual entry"
+            )
+
+    def test_multi_generation_metadata_preservation(self):
+        """
+        Test that metadata is preserved through multiple fork generations.
+        """
+        # Create original corpus with metadata
+        original = Corpus.objects.create(
+            title="Multi-Gen Metadata Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, original, [PermissionTypes.CRUD])
+
+        # Add document
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=original,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        original.documents.add(doc)
+
+        # Add metadata schema
+        fieldset = Fieldset.objects.create(
+            name="Original Schema",
+            description="Original metadata schema",
+            corpus=original,
+            creator=self.user,
+        )
+
+        col = Column.objects.create(
+            name="Important Field",
+            fieldset=fieldset,
+            output_type="str",
+            data_type="STRING",
+            is_manual_entry=True,
+            validation_config={"required": True},
+            display_order=1,
+            creator=self.user,
+        )
+
+        datacell = Datacell.objects.create(
+            column=col,
+            document=doc,
+            data={"value": "Original Value"},
+            data_definition="Test field",
+            extract=None,
+            creator=self.user,
+        )
+
+        # Fork through 3 generations
+        current_corpus = original
+        current_doc_id = doc.pk
+        current_col_id = col.pk
+        current_datacell_id = datacell.pk
+
+        for gen in range(3):
+            forked = Corpus.objects.create(
+                title=f"[FORK] Gen {gen + 1}",
+                creator=self.user,
+                parent_id=current_corpus.pk,
+                backend_lock=True,
+            )
+            set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[current_doc_id],
+                label_set_id=None,
+                annotation_ids=[],
+                folder_ids=[],
+                relationship_ids=[],
+                user_id=self.user.pk,
+                metadata_column_ids=[current_col_id],
+                metadata_datacell_ids=[current_datacell_id],
+            )
+
+            self.assertIsNotNone(result, f"Fork should succeed at gen {gen + 1}")
+            forked.refresh_from_db()
+
+            # Verify metadata exists
+            self.assertTrue(
+                hasattr(forked, "metadata_schema") and forked.metadata_schema,
+                f"Gen {gen + 1} should have metadata_schema",
+            )
+            self.assertEqual(
+                forked.metadata_schema.columns.count(),
+                1,
+                f"Gen {gen + 1} should have 1 column",
+            )
+
+            # Get forked document and datacell for next iteration
+            forked_doc = forked.get_documents().first()
+            forked_col = forked.metadata_schema.columns.first()
+            forked_datacell = Datacell.objects.filter(
+                document=forked_doc,
+                column=forked_col,
+                extract__isnull=True,
+            ).first()
+
+            self.assertIsNotNone(forked_datacell, f"Gen {gen + 1} should have datacell")
+            self.assertEqual(
+                forked_datacell.data["value"],
+                "Original Value",
+                f"Gen {gen + 1} should preserve value",
+            )
+
+            # Update for next iteration
+            current_corpus = forked
+            current_doc_id = forked_doc.pk
+            current_col_id = forked_col.pk
+            current_datacell_id = forked_datacell.pk
+
+    def test_corpus_without_metadata_fork(self):
+        """
+        Test that forking a corpus without metadata succeeds (backward compatibility).
+        """
+        corpus = Corpus.objects.create(
+            title="No Metadata Corpus",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        # Fork with empty metadata lists
+        forked = Corpus.objects.create(
+            title="[FORK] No Metadata Corpus",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=[],
+            metadata_datacell_ids=[],
+        )
+
+        self.assertIsNotNone(result, "Fork should succeed")
+        forked.refresh_from_db()
+
+        # Verify no metadata schema
+        self.assertFalse(
+            hasattr(forked, "metadata_schema") and forked.metadata_schema,
+            "Forked corpus should not have metadata_schema",
+        )
+
+    def test_forked_metadata_fresh_approval_status(self):
+        """
+        Test that forked datacells have fresh approval status (not copied).
+        """
+        corpus = Corpus.objects.create(
+            title="Approval Status Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        fieldset = Fieldset.objects.create(
+            name="Test Schema",
+            description="Schema",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        col = Column.objects.create(
+            name="Field",
+            fieldset=fieldset,
+            output_type="str",
+            data_type="STRING",
+            is_manual_entry=True,
+            display_order=1,
+            creator=self.user,
+        )
+
+        # Create datacell with approval status
+        datacell = Datacell.objects.create(
+            column=col,
+            document=doc,
+            data={"value": "Test"},
+            data_definition="Test",
+            extract=None,
+            creator=self.user,
+            approved_by=self.user,  # Set approval
+        )
+
+        # Fork
+        forked = Corpus.objects.create(
+            title="[FORK] Approval Status Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc.pk],
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=[col.pk],
+            metadata_datacell_ids=[datacell.pk],
+        )
+
+        self.assertIsNotNone(result)
+        forked.refresh_from_db()
+
+        # Get forked datacell
+        forked_doc = forked.get_documents().first()
+        forked_col = forked.metadata_schema.columns.first()
+        forked_datacell = Datacell.objects.filter(
+            document=forked_doc,
+            column=forked_col,
+            extract__isnull=True,
+        ).first()
+
+        self.assertIsNotNone(forked_datacell)
+        self.assertIsNone(
+            forked_datacell.approved_by,
+            "Forked datacell should not have approved_by",
+        )
+        self.assertIsNone(
+            forked_datacell.rejected_by,
+            "Forked datacell should not have rejected_by",
+        )
+
+    def test_datacell_skipped_when_document_not_forked(self):
+        """
+        Test that datacells are skipped when their document is not being forked.
+        """
+        corpus = Corpus.objects.create(
+            title="Partial Fork Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        # Create two documents
+        doc1 = Document.objects.create(title="Doc 1", creator=self.user)
+        doc2 = Document.objects.create(title="Doc 2", creator=self.user)
+        for doc in [doc1, doc2]:
+            set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
+            DocumentPath.objects.create(
+                document=doc,
+                corpus=corpus,
+                path=f"/documents/{doc.pk}",
+                version_number=1,
+                is_current=True,
+                creator=self.user,
+            )
+            corpus.documents.add(doc)
+
+        fieldset = Fieldset.objects.create(
+            name="Test Schema",
+            description="Schema",
+            corpus=corpus,
+            creator=self.user,
+        )
+
+        col = Column.objects.create(
+            name="Field",
+            fieldset=fieldset,
+            output_type="str",
+            data_type="STRING",
+            is_manual_entry=True,
+            display_order=1,
+            creator=self.user,
+        )
+
+        # Create datacells for both documents
+        datacell1 = Datacell.objects.create(
+            column=col,
+            document=doc1,
+            data={"value": "Value 1"},
+            data_definition="Test",
+            extract=None,
+            creator=self.user,
+        )
+        datacell2 = Datacell.objects.create(
+            column=col,
+            document=doc2,
+            data={"value": "Value 2"},
+            data_definition="Test",
+            extract=None,
+            creator=self.user,
+        )
+
+        # Fork - only include doc1, but pass both datacells
+        forked = Corpus.objects.create(
+            title="[FORK] Partial Fork Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[doc1.pk],  # Only doc1
+            label_set_id=None,
+            annotation_ids=[],
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+            metadata_column_ids=[col.pk],
+            metadata_datacell_ids=[datacell1.pk, datacell2.pk],  # Both datacells
+        )
+
+        self.assertIsNotNone(result)
+        forked.refresh_from_db()
+
+        # Verify only one document was forked
+        self.assertEqual(forked.get_documents().count(), 1)
+
+        # Verify only one datacell was created (for doc1)
+        forked_col = forked.metadata_schema.columns.first()
+        forked_datacells = Datacell.objects.filter(
+            column=forked_col,
+            extract__isnull=True,
+        )
+        self.assertEqual(
+            forked_datacells.count(),
+            1,
+            "Only datacell for forked document should be copied",
+        )
+
+        forked_datacell = forked_datacells.first()
+        self.assertEqual(
+            forked_datacell.data["value"],
+            "Value 1",
+            "Datacell for doc1 should be copied",
+        )

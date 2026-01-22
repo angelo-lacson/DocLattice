@@ -17,6 +17,7 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -36,11 +37,21 @@ def fork_corpus(
     folder_ids: list[str],
     relationship_ids: list[str],
     user_id: str,
+    metadata_column_ids: list[str] = None,
+    metadata_datacell_ids: list[str] = None,
 ) -> Optional[str]:
+
+    # Handle None defaults for backward compatibility with queued tasks
+    if metadata_column_ids is None:
+        metadata_column_ids = []
+    if metadata_datacell_ids is None:
+        metadata_datacell_ids = []
 
     logger.info(
         f"Start fork_corpus -----\n\tnew_corpus_id: {new_corpus_id}\n\tdoc_ids: "
-        f"{doc_ids}\n\tannotation_ids: {annotation_ids}\n\tuser_id: {user_id}"
+        f"{doc_ids}\n\tannotation_ids: {annotation_ids}\n\tmetadata_column_ids: "
+        f"{len(metadata_column_ids)}\n\tmetadata_datacell_ids: {len(metadata_datacell_ids)}"
+        f"\n\tuser_id: {user_id}"
     )
 
     # We need reference to corpus model so we can unlock it upon completion
@@ -138,6 +149,74 @@ def fork_corpus(
                     raise e
             else:
                 logger.info("No label set to clone - corpus has no label set")
+
+            # ============================================================
+            # Clone metadata schema (Fieldset + Columns)
+            # ============================================================
+            column_map = {}  # old_column_id -> new_column_id
+
+            if metadata_column_ids:
+                logger.info(
+                    f"Cloning metadata schema with {len(metadata_column_ids)} columns"
+                )
+
+                try:
+                    # Get the source fieldset from the first column
+                    first_column = Column.objects.get(pk=metadata_column_ids[0])
+                    old_fieldset = first_column.fieldset
+
+                    # Create new fieldset for the forked corpus
+                    new_fieldset = Fieldset(
+                        name=f"[FORK] {old_fieldset.name}",
+                        description=old_fieldset.description,
+                        corpus_id=new_corpus_id,  # Link to new corpus
+                        creator_id=user_id,
+                    )
+                    new_fieldset.save()
+
+                    set_permissions_for_obj_to_user(
+                        user_id, new_fieldset, [PermissionTypes.CRUD]
+                    )
+                    logger.info(f"Created metadata fieldset: {new_fieldset.pk}")
+
+                    # Clone columns (preserve display order)
+                    for old_column in Column.objects.filter(
+                        pk__in=metadata_column_ids
+                    ).order_by("display_order"):
+                        new_column = Column(
+                            name=old_column.name,
+                            fieldset_id=new_fieldset.pk,
+                            output_type=old_column.output_type,
+                            data_type=old_column.data_type,
+                            validation_config=(
+                                old_column.validation_config.copy()
+                                if old_column.validation_config
+                                else None
+                            ),
+                            is_manual_entry=True,
+                            default_value=old_column.default_value,
+                            help_text=old_column.help_text,
+                            display_order=old_column.display_order,
+                            creator_id=user_id,
+                            # Extraction fields not needed for metadata columns
+                            query=None,
+                            match_text=None,
+                        )
+                        new_column.save()
+                        column_map[old_column.pk] = new_column.pk
+
+                        set_permissions_for_obj_to_user(
+                            user_id, new_column, [PermissionTypes.CRUD]
+                        )
+                        logger.info(
+                            f"Cloned column {old_column.name} -> {new_column.pk}"
+                        )
+
+                except Exception as e:
+                    logger.error(f"ERROR cloning metadata schema: {e}")
+                    raise e
+            else:
+                logger.info("No metadata schema to clone")
 
             # ============================================================
             # Clone folder structure (must be before documents)
@@ -313,6 +392,58 @@ def fork_corpus(
                     raise e
 
             logger.info("Annotations completed...")
+
+            # ============================================================
+            # Clone metadata datacells
+            # ============================================================
+            if metadata_datacell_ids and column_map:
+                logger.info(f"Cloning {len(metadata_datacell_ids)} metadata datacells")
+
+                for old_datacell in Datacell.objects.filter(
+                    pk__in=metadata_datacell_ids
+                ):
+                    try:
+                        # Map to new document and column
+                        new_doc_id = doc_map.get(old_datacell.document_id)
+                        new_column_id = column_map.get(old_datacell.column_id)
+
+                        if not new_doc_id or not new_column_id:
+                            logger.warning(
+                                f"Skipping datacell {old_datacell.pk}: "
+                                f"missing doc ({new_doc_id}) or column ({new_column_id}) mapping"
+                            )
+                            continue
+
+                        new_datacell = Datacell(
+                            column_id=new_column_id,
+                            document_id=new_doc_id,
+                            data=(
+                                old_datacell.data.copy() if old_datacell.data else None
+                            ),
+                            data_definition=old_datacell.data_definition,
+                            extract=None,  # Manual metadata has no extract
+                            creator_id=user_id,
+                            # Don't copy approval status - forked data starts fresh
+                            approved_by=None,
+                            rejected_by=None,
+                            corrected_data=None,
+                        )
+                        new_datacell.save()
+
+                        set_permissions_for_obj_to_user(
+                            user_id, new_datacell, [PermissionTypes.CRUD]
+                        )
+                        logger.info(
+                            f"Cloned datacell {old_datacell.pk} -> {new_datacell.pk}"
+                        )
+
+                    except Exception as e:
+                        logger.error(f"ERROR cloning datacell {old_datacell.pk}: {e}")
+                        raise e
+
+                logger.info("Metadata datacells completed...")
+            else:
+                logger.info("No metadata datacells to clone")
 
             # ============================================================
             # Clone relationships

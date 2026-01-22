@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 
 from opencontractserver.annotations.models import Annotation, Relationship
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
+from opencontractserver.extracts.models import Datacell
 from opencontractserver.tasks import fork_corpus
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -55,6 +56,27 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
         ).values_list("id", flat=True)
     )
 
+    # Collect metadata column IDs if metadata schema exists
+    metadata_column_ids = []
+    if hasattr(corpus_copy, "metadata_schema") and corpus_copy.metadata_schema:
+        metadata_column_ids = list(
+            corpus_copy.metadata_schema.columns.filter(
+                is_manual_entry=True
+            ).values_list("id", flat=True)
+        )
+
+    # Collect metadata datacell IDs for documents being forked
+    # Only manual metadata (extract IS NULL)
+    metadata_datacell_ids = []
+    if metadata_column_ids and doc_ids:
+        metadata_datacell_ids = list(
+            Datacell.objects.filter(
+                document_id__in=doc_ids,
+                column_id__in=metadata_column_ids,
+                extract__isnull=True,
+            ).values_list("id", flat=True)
+        )
+
     # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
     corpus_copy.pk = None
     corpus_copy.slug = ""  # Clear slug so save() generates a new unique one
@@ -72,7 +94,7 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
     corpus_copy.documents.clear()
     corpus_copy.label_set = None
 
-    # Copy docs, annotations, folders, and relationships using async task
+    # Copy docs, annotations, folders, relationships, and metadata using async task
     return fork_corpus.si(
         corpus_copy.id,
         doc_ids,
@@ -81,4 +103,6 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
         folder_ids,
         relationship_ids,
         user.id,
+        metadata_column_ids,
+        metadata_datacell_ids,
     )
