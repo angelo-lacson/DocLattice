@@ -108,13 +108,17 @@ class ConversationVectorSearchTest(TestCase):
             permissions=[PermissionTypes.ALL],
         )
 
-        # Create a conversation owned by other_user
+        # Create a private CHAT conversation owned by other_user
+        # Note: We use CHAT type (not THREAD) because THREAD type conversations
+        # inherit visibility from their corpus - anyone who can see the corpus
+        # can see its threads. CHAT type uses restrictive permissions (only
+        # creator, explicit guardian permissions, or public).
         self.other_conv = Conversation.objects.create(
             title="Private Discussion",
             description="This should not be visible to main user",
             chat_with_corpus=self.corpus,
             creator=self.other_user,
-            conversation_type="thread",
+            conversation_type="chat",
             is_public=False,
         )
 
@@ -1046,12 +1050,15 @@ class ConversationPermissionTest(TestCase):
         )
 
         # 4. User2's completely private conversation (not accessible to user1)
+        # Note: We use CHAT type (not THREAD) because THREAD type conversations
+        # inherit visibility from their corpus - anyone who can see the corpus
+        # can see its threads. CHAT type uses restrictive permissions.
         self.user2_private_conv = Conversation.objects.create(
-            title="User2 Private Thread",
+            title="User2 Private Chat",
             description="Not visible to user1",
             chat_with_corpus=self.corpus,
             creator=self.user2,
-            conversation_type="thread",
+            conversation_type="chat",
             is_public=False,
         )
         set_permissions_for_obj_to_user(
