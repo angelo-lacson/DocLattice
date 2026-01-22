@@ -1939,9 +1939,11 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
         """
         Test that exceptions during annotation forking are properly raised.
 
-        This covers lines 312-314 in fork_tasks.py (the exception handler for
-        annotation forking errors).
+        This covers the exception handler for annotation forking errors.
+        Uses a mock to simulate an exception during annotation.save().
         """
+        from unittest.mock import patch
+
         corpus = Corpus.objects.create(
             title="Annotation Exception Test",
             creator=self.user,
@@ -1983,28 +1985,98 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
         )
         set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
 
-        # Create a fake annotation ID that doesn't exist in the doc_map
-        # This will cause a KeyError when trying to look up the document
-        # We'll use a doc_map that doesn't contain our document's ID
+        # Mock annotation save to raise an exception
+        with patch.object(
+            Annotation, "save", side_effect=Exception("Simulated save error")
+        ):
+            result = fork_corpus(
+                new_corpus_id=forked.pk,
+                doc_ids=[doc.pk],
+                label_set_id=None,
+                annotation_ids=[annotation.pk],
+                folder_ids=[],
+                relationship_ids=[],
+                user_id=self.user.pk,
+            )
 
-        # Fork with a document that won't be in the doc_map (empty doc_ids)
-        # but include the annotation - this causes a KeyError
-        result = fork_corpus(
-            new_corpus_id=forked.pk,
-            doc_ids=[],  # No docs - doc_map will be empty
-            label_set_id=None,
-            annotation_ids=[annotation.pk],  # But include annotation that refs a doc
-            folder_ids=[],
-            relationship_ids=[],
-            user_id=self.user.pk,
-        )
-
-        # Fork should fail due to KeyError when annotation's document is not in doc_map
+        # Fork should fail due to exception
         self.assertIsNone(result)
 
         # Corpus should be marked with error
         forked.refresh_from_db()
         self.assertTrue(forked.error, "Corpus should be marked with error=True")
+
+    def test_annotation_skipped_when_document_not_forked(self):
+        """
+        Test that annotations referencing documents not in the fork are skipped.
+
+        This covers the case where annotation_ids includes annotations whose
+        document_id is not in doc_ids - these should be skipped gracefully.
+        """
+        corpus = Corpus.objects.create(
+            title="Annotation Skip Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, corpus, [PermissionTypes.CRUD])
+
+        # Create a document
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, doc, [PermissionTypes.CRUD])
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=corpus,
+            path="/documents/test",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+        corpus.documents.add(doc)
+
+        # Create an annotation linked to the document
+        annotation = Annotation.objects.create(
+            page=1,
+            raw_text="Test annotation",
+            document=doc,
+            corpus=corpus,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, annotation, [PermissionTypes.CRUD])
+
+        # Create the forked corpus shell
+        forked = Corpus.objects.create(
+            title="[FORK] Annotation Skip Test",
+            creator=self.user,
+            parent_id=corpus.pk,
+            backend_lock=True,
+        )
+        set_permissions_for_obj_to_user(self.user, forked, [PermissionTypes.CRUD])
+
+        # Fork with NO docs but include the annotation
+        # The annotation should be skipped since its document isn't being forked
+        result = fork_corpus(
+            new_corpus_id=forked.pk,
+            doc_ids=[],  # No docs - annotation's document won't be forked
+            label_set_id=None,
+            annotation_ids=[annotation.pk],  # Include annotation that refs a doc
+            folder_ids=[],
+            relationship_ids=[],
+            user_id=self.user.pk,
+        )
+
+        # Fork should succeed (annotation skipped, not error)
+        self.assertEqual(result, forked.pk)
+
+        # Corpus should NOT have error
+        forked.refresh_from_db()
+        self.assertFalse(forked.error, "Corpus should not have error")
+        self.assertFalse(forked.backend_lock, "Backend lock should be released")
+
+        # No annotations should have been cloned
+        forked_annotations = Annotation.objects.filter(corpus=forked)
+        self.assertEqual(forked_annotations.count(), 0)
 
     def test_folder_fork_exception_propagates(self):
         """

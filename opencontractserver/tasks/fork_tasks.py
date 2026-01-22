@@ -255,6 +255,10 @@ def fork_corpus(
             # ============================================================
             # Clone documents
             # ============================================================
+            # Track duplicated structural_annotation_sets to preserve sharing
+            # (docs with same content hash should share the same set after forking)
+            structural_set_map = {}  # old_structural_set_id -> new_structural_set
+
             for document in Document.objects.filter(pk__in=doc_ids):
 
                 try:
@@ -282,17 +286,37 @@ def fork_corpus(
                                     pk=new_folder_id
                                 )
 
+                    # Check if we should reuse an already-duplicated structural_annotation_set
+                    add_doc_kwargs = {"title": f"[FORK] {document.title}"}
+                    old_struct_set_id = document.structural_annotation_set_id
+                    if old_struct_set_id and old_struct_set_id in structural_set_map:
+                        # Reuse the already-duplicated set
+                        add_doc_kwargs["structural_annotation_set"] = (
+                            structural_set_map[old_struct_set_id]
+                        )
+                        logger.info(
+                            f"Reusing duplicated structural_set for doc {old_id}"
+                        )
+
                     # Use add_document to create corpus-isolated copy directly from original.
                     # add_document handles: new version_tree_id, file blob sharing,
                     # source_document provenance, and DocumentPath creation.
-                    # No intermediate document needed.
                     corpus_doc, status, doc_path = corpus.add_document(
                         document=document,
                         user=user,
                         folder=target_folder,
                         path=original_path_str,
-                        title=f"[FORK] {document.title}",
+                        **add_doc_kwargs,
                     )
+
+                    # Track the duplicated structural_annotation_set for future docs
+                    if (
+                        old_struct_set_id
+                        and old_struct_set_id not in structural_set_map
+                    ):
+                        structural_set_map[old_struct_set_id] = (
+                            corpus_doc.structural_annotation_set
+                        )
 
                     # Store map of old id to new corpus document id
                     doc_map[old_id] = corpus_doc.pk
