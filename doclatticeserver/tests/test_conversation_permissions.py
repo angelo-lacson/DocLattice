@@ -652,7 +652,7 @@ class TestEdgeCases(TestCase):
         visible = Conversation.objects.visible_to_user(self.alice)
 
         # Should have exactly one result, not duplicates
-        self.assertEqual(list(visible.filter(id=thread.id)).count(thread), 1)
+        self.assertEqual(visible.filter(id=thread.id).count(), 1)
 
     def test_soft_deleted_conversations_not_visible(self):
         """
