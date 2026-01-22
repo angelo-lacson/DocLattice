@@ -909,7 +909,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
     # Pre-extracted image content for IMAGE modality annotations
     # Stores base64 image data to avoid re-loading PAWLs at embedding time
     image_content_file = django.db.models.FileField(
-        upload_to=calc_oc_file_path,
+        upload_to=functools.partial(calc_oc_file_path, sub_folder="annotation_images"),
         blank=True,
         null=True,
         help_text="JSON file containing extracted image data for IMAGE modality annotations",
