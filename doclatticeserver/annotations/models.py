@@ -648,7 +648,10 @@ class StructuralAnnotationSet(BaseOCModel):
         """
         import uuid
 
-        suffix = f"_{corpus_id}" if corpus_id else f"_{uuid.uuid4().hex[:8]}"
+        # Always include UUID to ensure uniqueness, even when multiple documents
+        # share the same structural_annotation_set and are forked into the same corpus
+        unique_id = uuid.uuid4().hex[:8]
+        suffix = f"_{corpus_id}_{unique_id}" if corpus_id else f"_{unique_id}"
 
         new_set = StructuralAnnotationSet.objects.create(
             content_hash=f"{self.content_hash}{suffix}",
@@ -909,7 +912,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
     # Pre-extracted image content for IMAGE modality annotations
     # Stores base64 image data to avoid re-loading PAWLs at embedding time
     image_content_file = django.db.models.FileField(
-        upload_to=calc_oc_file_path,
+        upload_to=functools.partial(calc_oc_file_path, sub_folder="annotation_images"),
         blank=True,
         null=True,
         help_text="JSON file containing extracted image data for IMAGE modality annotations",
