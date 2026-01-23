@@ -1196,11 +1196,49 @@ class StartCorpusFork(graphene.Mutation):
             doc_ids = list(corpus.get_documents().values_list("id", flat=True))
             label_set_id = corpus.label_set.pk if corpus.label_set else None
 
+            # Collect folder IDs for cloning (in tree order for proper parent mapping)
+            # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
+            folder_ids = list(
+                CorpusFolder.objects.filter(corpus_id=corpus_pk)
+                .with_tree_fields()
+                .values_list("id", flat=True)
+            )
+
+            # Collect relationship IDs (user relationships only, not analysis-generated)
+            relationship_ids = list(
+                Relationship.objects.filter(
+                    corpus_id=corpus_pk,
+                    analysis__isnull=True,
+                ).values_list("id", flat=True)
+            )
+
+            # Collect metadata column IDs if metadata schema exists
+            metadata_column_ids = []
+            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
+                metadata_column_ids = list(
+                    corpus.metadata_schema.columns.filter(
+                        is_manual_entry=True
+                    ).values_list("id", flat=True)
+                )
+
+            # Collect metadata datacell IDs for documents being forked
+            # Only manual metadata (extract IS NULL)
+            metadata_datacell_ids = []
+            if metadata_column_ids and doc_ids:
+                metadata_datacell_ids = list(
+                    Datacell.objects.filter(
+                        document_id__in=doc_ids,
+                        column_id__in=metadata_column_ids,
+                        extract__isnull=True,
+                    ).values_list("id", flat=True)
+                )
+
             # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
             corpus.pk = None
+            corpus.slug = ""  # Clear slug so save() generates a new unique one
 
             # Adjust the title to indicate it's a fork
-            corpus.title = f"{corpus.title}"
+            corpus.title = f"[FORK] {corpus.title}"
 
             # lock the corpus which will tell frontend to show this as loading and disable selection
             corpus.backend_lock = True
@@ -1217,11 +1255,34 @@ class StartCorpusFork(graphene.Mutation):
             corpus.documents.clear()
             corpus.label_set = None
 
-            # Copy docs and annotations using async task to avoid massive lag if we have large dataset or lots of
-            # users requesting copies.
-            fork_corpus.si(
-                corpus.id, doc_ids, label_set_id, annotation_ids, info.context.user.id
-            ).apply_async()
+            # Copy docs, annotations, folders, relationships, and metadata using async task
+            # to avoid massive lag if we have large dataset or lots of users requesting copies.
+            # Use on_commit to ensure corpus is persisted before task runs.
+            # Capture args as defaults to avoid late-binding closure issues.
+            def dispatch_fork_task(
+                _corpus_id=corpus.id,
+                _doc_ids=doc_ids,
+                _label_set_id=label_set_id,
+                _annotation_ids=annotation_ids,
+                _folder_ids=folder_ids,
+                _relationship_ids=relationship_ids,
+                _user_id=info.context.user.id,
+                _metadata_column_ids=metadata_column_ids,
+                _metadata_datacell_ids=metadata_datacell_ids,
+            ):
+                fork_corpus.si(
+                    _corpus_id,
+                    _doc_ids,
+                    _label_set_id,
+                    _annotation_ids,
+                    _folder_ids,
+                    _relationship_ids,
+                    _user_id,
+                    _metadata_column_ids,
+                    _metadata_datacell_ids,
+                ).apply_async()
+
+            transaction.on_commit(dispatch_fork_task)
 
             ok = True
             new_corpus = corpus
