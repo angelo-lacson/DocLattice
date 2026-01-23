@@ -604,7 +604,7 @@ class StructuralAnnotationSetDuplicateTests(TestCase):
         self.label = AnnotationLabel.objects.create(text="Section", creator=self.user)
 
     def test_duplicate_creates_new_set_with_corpus_suffix(self):
-        """Test that duplicate() creates a new set with corpus_id suffix."""
+        """Test that duplicate() creates a new set with corpus_id and UUID suffix."""
         original = StructuralAnnotationSet.objects.create(
             content_hash=self.content_hash,
             creator=self.user,
@@ -617,7 +617,15 @@ class StructuralAnnotationSetDuplicateTests(TestCase):
         copy = original.duplicate(corpus_id=123)
 
         self.assertNotEqual(original.id, copy.id)
-        self.assertEqual(copy.content_hash, f"{self.content_hash}_123")
+        # Content hash format: {original_hash}_{corpus_id}_{uuid8}
+        self.assertTrue(
+            copy.content_hash.startswith(f"{self.content_hash}_123_"),
+            f"Expected hash to start with '{self.content_hash}_123_', "
+            f"got '{copy.content_hash}'",
+        )
+        # Verify UUID suffix is 8 hex chars
+        suffix = copy.content_hash.split("_")[-1]
+        self.assertEqual(len(suffix), 8, "UUID suffix should be 8 characters")
         self.assertEqual(copy.parser_name, "TestParser")
         self.assertEqual(copy.parser_version, "1.0")
         self.assertEqual(copy.page_count, 5)
