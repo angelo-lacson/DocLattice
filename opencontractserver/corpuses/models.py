@@ -468,11 +468,15 @@ class Corpus(TreeNode):
                 is_current=True,
                 parent=None,  # Root of NEW content tree
                 source_document=document,  # Provenance tracking (Rule I2)
-                # Duplicate structural annotations for corpus isolation (per-corpus embeddings)
+                # Use provided structural_annotation_set if given (for sharing duplicates),
+                # otherwise duplicate for corpus isolation (per-corpus embeddings)
                 structural_annotation_set=(
-                    document.structural_annotation_set.duplicate(corpus_id=self.pk)
-                    if document.structural_annotation_set
-                    else None
+                    doc_kwargs.get("structural_annotation_set")
+                    or (
+                        document.structural_annotation_set.duplicate(corpus_id=self.pk)
+                        if document.structural_annotation_set
+                        else None
+                    )
                 ),
                 creator=user,
                 # CRITICAL: Set processing_started to prevent ingest signal from firing
@@ -482,7 +486,13 @@ class Corpus(TreeNode):
                 **{
                     k: v
                     for k, v in doc_kwargs.items()
-                    if k not in ["title", "description", "file_type"]
+                    if k
+                    not in [
+                        "title",
+                        "description",
+                        "file_type",
+                        "structural_annotation_set",
+                    ]
                 },
             )
 

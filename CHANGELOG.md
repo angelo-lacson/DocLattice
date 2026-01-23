@@ -5,9 +5,25 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-19
+## [Unreleased] - 2026-01-21
 
 ### Added
+
+#### Corpus Forking: Folder and Relationship Preservation
+- **Folder hierarchy preservation during fork**: Forked corpora now maintain the complete folder structure
+  - Folders cloned in tree-depth order to preserve parent-child relationships
+  - Documents retain their folder assignments in the forked corpus
+  - Uses `tree_queries` CTE with `.with_tree_fields()` for proper ordering
+  - Files: `opencontractserver/tasks/fork_tasks.py:126-159`, `config/graphql/mutations.py:1180-1187`
+- **Relationship preservation during fork**: Annotation relationships are now copied
+  - Source and target annotations remapped to forked annotation IDs
+  - Relationship labels preserved via label_map
+  - Uses `prefetch_related()` for efficient M2M loading
+  - Files: `opencontractserver/tasks/fork_tasks.py:286-356`
+- **Fork task signature extended**: Added `folder_ids` and `relationship_ids` parameters
+  - Files: `opencontractserver/tasks/fork_tasks.py:29-38`
+- **Round-trip test suite**: Comprehensive tests validating fork data integrity across generations
+  - Files: `opencontractserver/tests/test_corpus_fork_round_trip.py`
 
 #### Corpus-Scoped MCP Endpoints for Shareable Links
 - **New `/mcp/corpus/{corpus_slug}/` endpoint**: Scoped MCP endpoint for single-corpus access
@@ -50,20 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Manual test documentation**: `docs/manual-test-scripts/upload-modal.md`
 - **Upload constants**: Added `UPLOAD.MAX_FILE_SIZE_BYTES` and `DEBOUNCE.CORPUS_SEARCH_MS` to `frontend/src/assets/configurations/constants.ts`
 
-### Changed
-- **`BulkUploadModal`** is now a thin wrapper: `<UploadModal forceMode="bulk" />`
-- **`DocumentUploadModal`** is now a thin wrapper: `<UploadModal forceMode="single" />`
-- Backward compatibility maintained via existing props
-
-### Removed
-- **Deleted unused components**: `DocumentUploadList.tsx`, `DocumentListItem.tsx`
-
-### Technical Details
-- Migrated from Semantic UI to `@os-legal/ui` design system (Modal, Button, Input, Progress, etc.)
-- Uses `--oc-*` CSS design tokens for consistent theming
-- Debounce cleanup on unmount to prevent memory leaks
-- Sequential uploads to avoid server overload (documented trade-off)
-
 #### Pre-extracted Image Content for Annotations
 - **`image_content_file` FileField on Annotation model**: Stores pre-extracted image data as JSON files
   - Eliminates need to reload full PAWLs file (~10MB) for each image embedding request
@@ -87,6 +89,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `opencontractserver/tasks/doc_tasks.py:203-248`, `opencontractserver/pipeline/base/parser.py:130-143`
 
 ### Fixed
+- **Corpus title not getting [FORK] prefix**: Fixed f-string that did nothing (`f"{corpus.title}"` → `f"[FORK] {corpus.title}"`)
+  - Files: `config/graphql/mutations.py:1199`
+- **tree_depth ordering error**: Removed explicit `order_by("tree_depth", "pk")` and rely on default `tree_ordering` from `with_tree_fields()`. The `tree_depth` field is CTE-computed and only available at SQL execution time, not during Django's `order_by()` validation.
+  - Files: `config/graphql/mutations.py:1184`, `opencontractserver/tasks/fork_tasks.py:133`, `opencontractserver/utils/corpus_forking.py:46`, `opencontractserver/tests/test_corpus_fork_round_trip.py:389`
+- **Fork fails with corpuses without label_set**: Added conditional handling to skip label set cloning when corpus has no label_set
+  - Files: `opencontractserver/tasks/fork_tasks.py:56-136`
+- **Document slug uniqueness violation during fork**: Clear slug before saving forked document so save() generates a new unique slug
+  - Files: `opencontractserver/tasks/fork_tasks.py:186`
+- **Annotation label mapping error**: Gracefully handle annotations without labels or when label_map is empty
+  - Files: `opencontractserver/tasks/fork_tasks.py:279-285`
+- **Test assertion bug**: Fixed comparison of count to queryset (`forked_labelset_labels.count() == original_labelset_labels.all()` → `.count() == .count()`)
+  - Files: `opencontractserver/tests/test_corpus_forking.py:99`
+- **Incorrect CorpusFolder permission setting in tests**: Removed `set_permissions_for_obj_to_user()` call for folders - CorpusFolder inherits permissions from parent Corpus, not individual permissions per the consolidated permissioning guide
+  - Files: `opencontractserver/tests/test_corpus_fork_round_trip.py:277`
 - **Critical: Infinite loop in corpus document copies**: Fixed chain reaction where corpus copies triggered re-ingestion
   - **Root Cause**: `add_document()` created corpus copies without setting `processing_started`, causing the ingestion signal to fire on each copy
   - **Impact**: Uploading one document created infinite chain of copies (doc → copy → copy of copy → ...)
@@ -103,6 +119,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Fix**: Removed `visible_to_user()` filtering from existence checks (constraints apply globally)
   - **Files**: `opencontractserver/shared/Managers.py:369-442`, `opencontractserver/annotations/migrations/0059_add_embedding_unique_constraints.py`
 
+### Changed
+- **Permission consistency**: Utility function `build_fork_corpus_task()` now uses `PermissionTypes.CRUD` (was `ALL`) to match mutation
+  - Files: `opencontractserver/utils/corpus_forking.py:69`
+- **`BulkUploadModal`** is now a thin wrapper: `<UploadModal forceMode="bulk" />`
+- **`DocumentUploadModal`** is now a thin wrapper: `<UploadModal forceMode="single" />`
+- **Image retrieval uses fast path**: Both REST API and embedding tasks check `image_content_file` first
+  - Falls back to PAWLs loading only for legacy annotations without pre-extracted images
+  - Files: `opencontractserver/llms/tools/image_tools.py:281-349`, `opencontractserver/utils/multimodal_embeddings.py:101-127`
+- **`import_annotations()` accepts `pawls_data` parameter**: Enables batch image extraction during import
+  - Files: `opencontractserver/utils/importing.py:58-150`
+- **`StructuralAnnotationSet.duplicate()` copies image files**: Preserves pre-extracted images during corpus isolation
+  - Files: `opencontractserver/annotations/models.py:705-745`
+-
+### Technical Details
+- Documentation consolidated from separate remediation/edit plan files into `docs/architecture/corpus_forking.md`
+- Removed obsolete files: `corpus_forking_edit_plan.md`, `corpus_forking_remediation_plan.md`
+- Migrated from Semantic UI to `@os-legal/ui` design system (Modal, Button, Input, Progress, etc.)
+- Uses `--oc-*` CSS design tokens for consistent theming
+- Debounce cleanup on unmount to prevent memory leaks
+- Sequential uploads to avoid server overload (documented trade-off)
+
+### Removed
+- **Deleted unused components**: `DocumentUploadList.tsx`, `DocumentListItem.tsx`
+
 ### Security
 - **JWT authentication error message hardening** (CWE-209: Information Exposure Through Error Messages)
   - JWT errors now return generic messages (`"Invalid token"`) instead of exposing exception details
@@ -114,15 +154,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `opencontractserver/utils/logging.py`, `opencontractserver/tasks/doc_tasks.py`,
     `opencontractserver/pipeline/base/embedder.py`, `opencontractserver/pipeline/base/post_processor.py`,
     `opencontractserver/pipeline/parsers/llamaparse_parser.py`, `opencontractserver/pipeline/post_processors/pdf_redactor.py`
-
-### Changed
-- **Image retrieval uses fast path**: Both REST API and embedding tasks check `image_content_file` first
-  - Falls back to PAWLs loading only for legacy annotations without pre-extracted images
-  - Files: `opencontractserver/llms/tools/image_tools.py:281-349`, `opencontractserver/utils/multimodal_embeddings.py:101-127`
-- **`import_annotations()` accepts `pawls_data` parameter**: Enables batch image extraction during import
-  - Files: `opencontractserver/utils/importing.py:58-150`
-- **`StructuralAnnotationSet.duplicate()` copies image files**: Preserves pre-extracted images during corpus isolation
-  - Files: `opencontractserver/annotations/models.py:705-745`
 
 ## [Unreleased] - 2026-01-12
 
