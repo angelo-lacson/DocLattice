@@ -517,6 +517,8 @@ export interface CorpusStats {
   totalExtracts: number;
   totalAnnotations: number;
   totalThreads?: number; // Optional for backward compatibility with backend
+  totalChats?: number;
+  totalRelationships?: number;
 }
 
 export interface GetCorpusStatsOutputType {
@@ -532,6 +534,8 @@ export const GET_CORPUS_STATS = gql`
       totalExtracts
       totalAnnotations
       totalThreads
+      totalChats
+      totalRelationships
     }
   }
 `;

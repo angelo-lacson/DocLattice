@@ -1862,6 +1862,8 @@ export const Corpuses = () => {
         totalAnalyses: 0,
         totalExtracts: 0,
         totalThreads: 0,
+        totalChats: 0,
+        totalRelationships: 0,
       }
     );
   }, [
@@ -1870,6 +1872,8 @@ export const Corpuses = () => {
     statsData?.corpusStats?.totalAnalyses,
     statsData?.corpusStats?.totalExtracts,
     statsData?.corpusStats?.totalThreads,
+    statsData?.corpusStats?.totalChats,
+    statsData?.corpusStats?.totalRelationships,
   ]);
 
   // When query is skipped (no valid corpus ID), treat as not loading
@@ -2302,6 +2306,7 @@ export const Corpuses = () => {
         id: "relationships",
         label: "Relationships",
         icon: <Link2 />,
+        badge: stats.totalRelationships,
         component: opened_corpus?.id ? (
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
@@ -2365,6 +2370,7 @@ export const Corpuses = () => {
         id: "chats",
         label: "Chats",
         icon: <Brain />,
+        badge: stats.totalChats,
         component: opened_corpus?.id ? (
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
@@ -2507,6 +2513,9 @@ export const Corpuses = () => {
     stats.totalAnnotations,
     stats.totalAnalyses,
     stats.totalExtracts,
+    stats.totalThreads,
+    stats.totalChats,
+    stats.totalRelationships,
     canUpdateCorpus,
     documentsViewMode, // Required for view mode toggle to work
     chatInConversation, // Required for chat tab header visibility
