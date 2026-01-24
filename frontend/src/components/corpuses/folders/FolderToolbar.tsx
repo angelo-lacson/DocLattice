@@ -384,12 +384,11 @@ const MobileMenuItem = styled.button`
 `;
 
 // Upload button with dropdown - unified split button design
+// NOTE: overflow is NOT hidden to allow dropdown menu to be visible
 const UploadButtonGroup = styled.div`
   position: relative;
   display: inline-flex;
   align-items: stretch;
-  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 `;
 
@@ -400,6 +399,8 @@ const UploadMainButton = styled.button`
   padding: 8px 14px;
   background: ${OS_LEGAL_COLORS.accent};
   border: none;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton} 0 0
+    ${OS_LEGAL_SPACING.borderRadiusButton};
   font-size: 13px;
   font-weight: 500;
   color: white;
@@ -432,6 +433,8 @@ const UploadDropdownButton = styled.button`
   background: ${OS_LEGAL_COLORS.accent};
   border: none;
   border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 ${OS_LEGAL_SPACING.borderRadiusButton}
+    ${OS_LEGAL_SPACING.borderRadiusButton} 0;
   color: white;
   cursor: pointer;
   transition: background 0.15s ease;
