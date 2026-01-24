@@ -1577,6 +1577,8 @@ class Query(graphene.ObjectType):
         total_analyses = 0
         total_extracts = 0
         total_threads = 0
+        total_chats = 0
+        total_relationships = 0
 
         corpus_pk = from_global_id(corpus_id)[1]
         corpuses = Corpus.objects.visible_to_user(info.context.user).filter(
@@ -1600,6 +1602,14 @@ class Query(graphene.ObjectType):
                 .visible_to_user(info.context.user)
                 .count()
             )
+            total_chats = (
+                Conversation.objects.filter(
+                    conversation_type="chat", chat_with_corpus=corpus
+                )
+                .visible_to_user(info.context.user)
+                .count()
+            )
+            total_relationships = corpus.document_relationships.all().count()
 
         return CorpusStatsType(
             total_docs=total_docs,
@@ -1608,6 +1618,8 @@ class Query(graphene.ObjectType):
             total_analyses=total_analyses,
             total_extracts=total_extracts,
             total_threads=total_threads,
+            total_chats=total_chats,
+            total_relationships=total_relationships,
         )
 
     document_corpus_actions = graphene.Field(
