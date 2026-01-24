@@ -180,7 +180,11 @@ class ConversationQuerySet(SoftDeleteQuerySet):
             )
 
             # Context inheritance for THREADs on public corpuses/documents
-            # Anonymous users can see threads linked to public corpuses/documents
+            # Anonymous users can see threads linked to public corpuses/documents.
+            # The thread's own is_public flag provides DIRECT visibility (via anon_base),
+            # while context inheritance provides visibility through the resource.
+            # Per permissioning guide: "threads on public resources" means the
+            # corpus/document is public, not the thread itself.
             public_corpus_ids = Corpus.objects.filter(is_public=True).values_list(
                 "id", flat=True
             )
@@ -188,19 +192,20 @@ class ConversationQuerySet(SoftDeleteQuerySet):
                 "id", flat=True
             )
 
-            # Thread on public corpus only
+            # Thread on public corpus only - inherits visibility from corpus
             anon_corpus_context = Q(
                 conversation_type=ConversationTypeChoices.THREAD,
                 chat_with_corpus_id__in=public_corpus_ids,
                 chat_with_document__isnull=True,
             )
-            # Thread on public document only
+            # Thread on public document only - inherits visibility from document
             anon_doc_context = Q(
                 conversation_type=ConversationTypeChoices.THREAD,
                 chat_with_document_id__in=public_doc_ids,
                 chat_with_corpus__isnull=True,
             )
-            # Thread on both - need both to be public
+            # Thread on both corpus and document - MIN permission rule:
+            # need BOTH corpus AND document to be public
             anon_both_context = Q(
                 conversation_type=ConversationTypeChoices.THREAD,
                 chat_with_corpus_id__in=public_corpus_ids,
