@@ -1546,6 +1546,10 @@ export const Corpuses = () => {
   const [documentsViewMode, setDocumentsViewMode] =
     useState<ViewMode>("modern-list");
 
+  // Track whether CorpusChat is showing a conversation (vs the list view)
+  // Used to hide parent navigation header when CorpusChat handles its own
+  const [chatInConversation, setChatInConversation] = useState<boolean>(false);
+
   // Debug: Log state changes
   console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
 
@@ -2365,29 +2369,35 @@ export const Corpuses = () => {
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
           >
-            <TabNavigationHeader>
-              <BackNavButton
-                onClick={() => setActiveTab(0)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Back to Home"
-              >
-                <ArrowLeft />
-              </BackNavButton>
-              <TabTitle>Chat History</TabTitle>
-              <MobileKebabButton
-                onClick={() => setMobileSidebarOpen(true)}
-                aria-label="Open navigation menu"
-              >
-                <MoreVertical />
-              </MobileKebabButton>
-            </TabNavigationHeader>
+            {/* Only show parent header when CorpusChat is in list view */}
+            {/* When in conversation view, CorpusChat renders its own navigation */}
+            {!chatInConversation && (
+              <TabNavigationHeader>
+                <BackNavButton
+                  onClick={() => setActiveTab(0)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  title="Back to Home"
+                >
+                  <ArrowLeft />
+                </BackNavButton>
+                <TabTitle>Chat History</TabTitle>
+                <MobileKebabButton
+                  onClick={() => setMobileSidebarOpen(true)}
+                  aria-label="Open navigation menu"
+                >
+                  <MoreVertical />
+                </MobileKebabButton>
+              </TabNavigationHeader>
+            )}
             <div style={{ flex: 1, overflow: "hidden" }}>
               <CorpusChat
                 corpusId={opened_corpus.id}
                 showLoad={true}
                 onMessageSelect={() => {}}
                 setShowLoad={() => {}}
+                onViewModeChange={setChatInConversation}
+                onClose={() => setActiveTab(0)}
               />
             </div>
           </div>

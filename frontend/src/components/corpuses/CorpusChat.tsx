@@ -137,6 +137,11 @@ interface CorpusChatProps {
   initialQuery?: string;
   forceNewChat?: boolean;
   onClose?: () => void;
+  /**
+   * Callback fired when the component transitions between list view and conversation view.
+   * Parent components can use this to adjust their navigation headers.
+   */
+  onViewModeChange?: (isInConversation: boolean) => void;
 }
 
 // Add these styled components near your other styled components
@@ -386,41 +391,6 @@ const EmptyStateButton = styled(motion.button)`
   svg {
     width: 18px;
     height: 18px;
-  }
-`;
-
-const ConversationViewHeader = styled.div`
-  display: flex;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  background: ${color.N1};
-  border-bottom: 1px solid ${color.N4};
-  flex-shrink: 0;
-`;
-
-const BackToListButton = styled(motion.button)`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border: 1px solid ${color.N4};
-  border-radius: 6px;
-  background: ${color.N1};
-  color: ${color.N8};
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-
-  &:hover {
-    border-color: ${color.N5};
-    background: ${color.N2};
-    color: ${color.N10};
-  }
-
-  svg {
-    width: 14px;
-    height: 14px;
   }
 `;
 
@@ -808,6 +778,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   initialQuery,
   forceNewChat = false,
   onClose,
+  onViewModeChange,
 }) => {
   // Window dimensions for responsive layout
   const { width } = useWindowDimensions();
@@ -1522,6 +1493,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    */
   const isConversation = isNewChat || !!selectedConversationId;
 
+  // Notify parent when view mode changes (conversation vs list)
+  useEffect(() => {
+    onViewModeChange?.(isConversation);
+  }, [isConversation, onViewModeChange]);
+
   /**
    * Send approval decision back to the WebSocket.
    */
@@ -1582,20 +1558,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log("Back button clicked", {
-                  selectedConversationId,
-                  isNewChat,
-                });
-                if (selectedConversationId || !isNewChat) {
-                  // Go back to conversation list (internal navigation)
-                  setSelectedConversationId(undefined);
-                  setIsNewChat(false);
-                  setChat([]);
-                  setServerMessages([]);
-                } else if (onClose) {
-                  // Go back to corpus home (use parent callback)
-                  onClose();
-                }
+                // Back button in conversation view always goes to the chat list
+                // (The Home button is for going directly to corpus home)
+                setSelectedConversationId(undefined);
+                setIsNewChat(false);
+                setChat([]);
+                setServerMessages([]);
               }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -1646,24 +1614,6 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              {/* Desktop conversation header with back button */}
-              {!use_mobile_layout && (
-                <ConversationViewHeader>
-                  <BackToListButton
-                    onClick={() => {
-                      setSelectedConversationId(undefined);
-                      setIsNewChat(false);
-                      setChat([]);
-                      setServerMessages([]);
-                    }}
-                    whileHover={{ x: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <ArrowLeft size={16} />
-                    <span>Back to Chats</span>
-                  </BackToListButton>
-                </ConversationViewHeader>
-              )}
               {/* Scrollable Messages */}
               <MessagesArea
                 className="chat-messages-area"
