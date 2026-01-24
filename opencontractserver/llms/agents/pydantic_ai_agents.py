@@ -958,39 +958,38 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             )
             seeded_tools = list(seeded_tools_dict.values())
 
-            # Merge per-call tool overrides, deduplicating against seeded tools
-            extra_tools: list[Callable] = []
-            seeded_names = {getattr(t, "__name__", None) for t in seeded_tools}
+            # Per-call tools take precedence over seeded tools.
+            # If a per-call tool has the same name as a seeded tool, replace it.
+            override_tools: list[Callable] = []
 
             if tools:
                 from opencontractserver.llms.api import _resolve_tools
 
                 resolved_core_tools = _resolve_tools(tools)
-                candidate_tools = PydanticAIToolFactory.create_tools(
-                    resolved_core_tools
-                )
-                # Deduplicate against seeded tools to prevent UserError
-                for tool in candidate_tools:
-                    tool_name = getattr(tool, "__name__", None)
-                    if tool_name not in seeded_names:
-                        extra_tools.append(tool)
-                    else:
-                        logger.debug(
-                            f"Skipping duplicate tool '{tool_name}' in structured_response - "
-                            "already registered as seeded tool"
-                        )
+                override_tools = PydanticAIToolFactory.create_tools(resolved_core_tools)
             elif self.config.tools:
-                # If caller did not pass tools but config has additional wrappers,
-                # include them after deduplicating against seeded tools
-                for tool in self.config.tools:
-                    tool_name = getattr(tool, "__name__", None)
-                    if tool_name not in seeded_names:
-                        extra_tools.append(tool)
-                    else:
-                        logger.debug(
-                            f"Skipping duplicate config tool '{tool_name}' in structured_response - "
-                            "already registered as seeded tool"
+                # If caller did not pass tools but config has additional wrappers
+                override_tools = list(self.config.tools)
+
+            # Build the final tool list, preferring override tools over seeded
+            if override_tools:
+                override_names = {getattr(t, "__name__", None) for t in override_tools}
+
+                # Filter out seeded tools that will be replaced
+                filtered_seeded = []
+                for seeded_tool in seeded_tools:
+                    seeded_name = getattr(seeded_tool, "__name__", None)
+                    if seeded_name in override_names:
+                        logger.info(
+                            f"Per-call tool '{seeded_name}' overrides seeded tool - "
+                            "using caller's configuration"
                         )
+                    else:
+                        filtered_seeded.append(seeded_tool)
+
+                final_tools = filtered_seeded + override_tools
+            else:
+                final_tools = seeded_tools
 
             # Build a dedicated system prompt for structured extraction via hook
             structured_system_prompt = self._build_structured_system_prompt(
@@ -1004,7 +1003,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 system_prompt=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
-                tools=[*seeded_tools, *extra_tools],
+                tools=final_tools,
                 model_settings=model_settings,
             )
 
@@ -2061,21 +2060,25 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 ]
             )
         if tools:
-            # Deduplicate: only add caller-provided tools that don't conflict
-            # with built-in tools. This prevents UserError from PydanticAI
-            # when tools like 'update_document_description' are already
-            # registered as defaults.
-            existing_names = {getattr(t, "__name__", None) for t in effective_tools}
-            for tool in tools:
-                tool_name = getattr(tool, "__name__", None)
-                if tool_name in existing_names:
-                    logger.debug(
-                        f"Skipping duplicate tool '{tool_name}' - "
-                        "already registered as default"
+            # Caller-provided tools take precedence over defaults.
+            # If a caller tool has the same name as a default, replace the default.
+            # This allows callers to override tool configurations (e.g., requires_approval).
+            caller_tool_names = {getattr(t, "__name__", None) for t in tools}
+
+            # Filter out defaults that will be replaced by caller tools
+            filtered_defaults = []
+            for default_tool in effective_tools:
+                default_name = getattr(default_tool, "__name__", None)
+                if default_name in caller_tool_names:
+                    logger.info(
+                        f"Caller tool '{default_name}' overrides default - "
+                        "using caller's configuration"
                     )
-                    continue
-                effective_tools.append(tool)
-                existing_names.add(tool_name)
+                else:
+                    filtered_defaults.append(default_tool)
+
+            # Build final list: filtered defaults + all caller tools
+            effective_tools = filtered_defaults + list(tools)
 
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(

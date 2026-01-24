@@ -9,13 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-#### Duplicate Tool Deduplication in structured_response()
-- **Fixed incomplete deduplication in `_structured_response_raw()` method**: The `elif self.config.tools` branch was not deduplicating tools against seeded tools from the main agent, potentially causing `pydantic_ai.exceptions.UserError` when config tools duplicated seeded tools
-  - Applied same deduplication pattern used in the `if tools` branch
-  - Added debug logging for skipped duplicate tools
-  - Files: `opencontractserver/llms/agents/pydantic_ai_agents.py:961-993`
-- **Added test coverage for config.tools path**: New test `test_config_tools_deduplicated_in_structured_response` exercises the `elif self.config.tools` branch in `structured_response()`
-  - Files: `opencontractserver/tests/test_duplicate_tool_registration.py:167-266`
+#### Duplicate Tool Registration and Caller Tool Precedence
+- **Fixed duplicate tool registration error in PydanticAI agent**: Resolved `pydantic_ai.exceptions.UserError` when caller-provided tools have the same name as default tools
+  - Files: `opencontractserver/llms/agents/pydantic_ai_agents.py:2063-2082`
+- **Caller-provided tools now take precedence over defaults**: When a caller passes a tool with the same name as a built-in default, the caller's tool configuration (description, requires_approval, etc.) is now used instead of silently dropping it
+  - Allows callers to override tool behavior and configurations
+  - Applies to both `PydanticAIDocumentAgent.create()` and `structured_response()`
+  - Added info-level logging when caller tools override defaults
+  - Files: `opencontractserver/llms/agents/pydantic_ai_agents.py:961-992`, `opencontractserver/llms/agents/pydantic_ai_agents.py:2063-2082`
+- **Added comprehensive test coverage**:
+  - `test_caller_tool_overrides_default_configuration` verifies caller's tool is used (not default)
+  - `test_config_tools_deduplicated_in_structured_response` covers the config.tools path
+  - Files: `opencontractserver/tests/test_duplicate_tool_registration.py`
 
 ### Added
 
