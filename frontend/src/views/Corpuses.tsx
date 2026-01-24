@@ -871,7 +871,7 @@ const NavigationItems = styled.div`
 `;
 
 // Badge for count display on navigation items
-const NavItemBadge = styled.span<{ isActive: boolean }>`
+const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -883,13 +883,19 @@ const NavItemBadge = styled.span<{ isActive: boolean }>`
   font-weight: 600;
   margin-left: auto;
   background: ${(props) =>
-    props.isActive
+    props.$isZero
+      ? "transparent"
+      : props.isActive
       ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
       : "#e2e8f0"};
-  color: ${(props) => (props.isActive ? "white" : "#64748b")};
+  color: ${(props) =>
+    props.$isZero ? "#94a3b8" : props.isActive ? "white" : "#64748b"};
+  border: ${(props) => (props.$isZero ? "1px dashed #cbd5e1" : "none")};
   transition: all 0.2s ease;
   box-shadow: ${(props) =>
-    props.isActive
+    props.$isZero
+      ? "none"
+      : props.isActive
       ? "0 2px 4px rgba(74, 144, 226, 0.3)"
       : "0 1px 2px rgba(0, 0, 0, 0.05)"};
 `;
@@ -2145,6 +2151,10 @@ export const Corpuses = () => {
       typeof tabIndexOrId === "number" ? TAB_IDS[tabIndexOrId] : tabIndexOrId;
     // Use null for "home" to keep URLs clean (home is default)
     updateTabParam(location, navigate, tabId === "home" ? null : tabId);
+    // Refresh stats on tab switch to ensure counts are up to date
+    if (validCorpusId) {
+      refetchStats();
+    }
   };
 
   // Derive active tab index from URL
@@ -2668,11 +2678,12 @@ export const Corpuses = () => {
               >
                 <div style={{ position: "relative" }}>
                   {item.icon}
-                  {item.badge &&
-                    item.badge > 0 &&
+                  {item.badge !== undefined &&
                     !sidebarExpanded &&
                     !use_mobile_layout && (
-                      <NotificationBadge>{item.badge}</NotificationBadge>
+                      <NotificationBadge>
+                        {item.badge > 0 ? item.badge : "–"}
+                      </NotificationBadge>
                     )}
                 </div>
                 {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
@@ -2680,9 +2691,12 @@ export const Corpuses = () => {
                     <span style={{ flex: "1", textAlign: "left" }}>
                       {item.label}
                     </span>
-                    {item.badge !== undefined && item.badge > 0 && (
-                      <NavItemBadge isActive={active_tab === index}>
-                        {item.badge}
+                    {item.badge !== undefined && (
+                      <NavItemBadge
+                        isActive={active_tab === index}
+                        $isZero={item.badge === 0}
+                      >
+                        {item.badge > 0 ? item.badge : "–"}
                       </NavItemBadge>
                     )}
                   </>
