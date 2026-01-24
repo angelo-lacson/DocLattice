@@ -160,6 +160,40 @@ class ConversationQueryOptimizer:
             .order_by("-created")
         )
 
+    def get_corpus_conversation_counts(self, corpus_id: int) -> tuple[int, int]:
+        """
+        Get thread and chat counts for a corpus in a single visibility check.
+
+        This is more efficient than calling get_threads_for_corpus() and
+        get_chats_for_user() separately, as it only executes the visibility
+        subqueries once.
+
+        Args:
+            corpus_id: The corpus ID to get counts for.
+
+        Returns:
+            Tuple of (thread_count, chat_count) for visible conversations.
+        """
+        from opencontractserver.conversations.models import (
+            Conversation,
+            ConversationTypeChoices,
+        )
+
+        # Get all visible conversations for this corpus in one query
+        visible_corpus_conversations = Conversation.objects.visible_to_user(
+            self.user
+        ).filter(chat_with_corpus_id=corpus_id)
+
+        # Count by type - uses single query with conditional aggregation
+        thread_count = visible_corpus_conversations.filter(
+            conversation_type=ConversationTypeChoices.THREAD
+        ).count()
+        chat_count = visible_corpus_conversations.filter(
+            conversation_type=ConversationTypeChoices.CHAT
+        ).count()
+
+        return thread_count, chat_count
+
     def invalidate_caches(self) -> None:
         """
         Invalidate all cached data.

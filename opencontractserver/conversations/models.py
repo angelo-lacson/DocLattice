@@ -171,9 +171,51 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         if hasattr(user, "is_superuser") and user.is_superuser:
             return queryset.distinct().order_by("-created")
 
-        # Anonymous users only see public items
+        # Anonymous users: can ONLY view THREADs (never CHATs)
+        # Per consolidated_permissioning_guide.md line 604: "Anonymous Users: Can only view threads on public resources"
         if user.is_anonymous:
-            return queryset.filter(is_public=True).distinct().order_by("-created")
+            # Base: directly public THREADs only (anonymous cannot see CHATs at all)
+            anon_base = Q(
+                is_public=True, conversation_type=ConversationTypeChoices.THREAD
+            )
+
+            # Context inheritance for THREADs on public corpuses/documents
+            # Anonymous users can see threads linked to public corpuses/documents.
+            # The thread's own is_public flag provides DIRECT visibility (via anon_base),
+            # while context inheritance provides visibility through the resource.
+            # Per permissioning guide: "threads on public resources" means the
+            # corpus/document is public, not the thread itself.
+            public_corpus_ids = Corpus.objects.filter(is_public=True).values_list(
+                "id", flat=True
+            )
+            public_doc_ids = Document.objects.filter(is_public=True).values_list(
+                "id", flat=True
+            )
+
+            # Thread on public corpus only - inherits visibility from corpus
+            anon_corpus_context = Q(
+                conversation_type=ConversationTypeChoices.THREAD,
+                chat_with_corpus_id__in=public_corpus_ids,
+                chat_with_document__isnull=True,
+            )
+            # Thread on public document only - inherits visibility from document
+            anon_doc_context = Q(
+                conversation_type=ConversationTypeChoices.THREAD,
+                chat_with_document_id__in=public_doc_ids,
+                chat_with_corpus__isnull=True,
+            )
+            # Thread on both corpus and document - MIN permission rule:
+            # need BOTH corpus AND document to be public
+            anon_both_context = Q(
+                conversation_type=ConversationTypeChoices.THREAD,
+                chat_with_corpus_id__in=public_corpus_ids,
+                chat_with_document_id__in=public_doc_ids,
+            )
+
+            anon_filter = (
+                anon_base | anon_corpus_context | anon_doc_context | anon_both_context
+            )
+            return queryset.filter(anon_filter).distinct().order_by("-created")
 
         # Get explicitly permitted conversation IDs via guardian
         model_name = self.model._meta.model_name
@@ -345,7 +387,7 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
 
         # Anonymous users only see messages in public conversations
         if user.is_anonymous:
-            return queryset.filter(conversation__is_public=True)
+            return queryset.filter(conversation__is_public=True).order_by("created")
 
         # Primary visibility: messages in visible conversations
         # This inherits the bifurcated CHAT/THREAD permission logic
@@ -403,9 +445,14 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
         # - Message in visible conversation, OR
         # - User created the message or has explicit permission, OR
         # - User is a moderator
-        return queryset.filter(
-            conversation_visible | base_conditions | moderator_conditions
-        ).distinct()
+        # Order by created timestamp for chronological message display
+        return (
+            queryset.filter(
+                conversation_visible | base_conditions | moderator_conditions
+            )
+            .distinct()
+            .order_by("created")
+        )
 
     def search_by_embedding(
         self,

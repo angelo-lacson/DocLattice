@@ -18,7 +18,7 @@ const Container = styled.div`
 const Popover = styled.div<{ $visible: boolean }>`
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  left: 0;
   z-index: 1000;
   width: 340px;
   background: white;
@@ -33,7 +33,7 @@ const Popover = styled.div<{ $visible: boolean }>`
 
   @media (max-width: 480px) {
     width: calc(100vw - 32px);
-    right: -16px;
+    left: -16px;
   }
 `;
 
