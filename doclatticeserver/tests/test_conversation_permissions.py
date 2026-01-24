@@ -586,14 +586,14 @@ class TestConversationQueryOptimizer(TestCase):
         optimizer = ConversationQueryOptimizer(self.bob)
 
         # Access to populate cache
-        _ = optimizer._get_visible_corpus_ids()
-        self.assertIsNotNone(optimizer._visible_corpus_ids_cache)
+        _ = optimizer._get_visible_conversation_ids()
+        self.assertIsNotNone(optimizer._visible_conversation_ids_cache)
 
         # Invalidate
         optimizer.invalidate_caches()
 
         # Cache should be cleared
-        self.assertIsNone(optimizer._visible_corpus_ids_cache)
+        self.assertIsNone(optimizer._visible_conversation_ids_cache)
 
 
 class TestEdgeCases(TestCase):

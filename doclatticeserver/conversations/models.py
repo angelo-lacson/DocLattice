@@ -126,7 +126,7 @@ class ConversationQuerySet(SoftDeleteQuerySet):
 
     def visible_to_user(
         self, user: Optional["AbstractBaseUser"] = None
-    ) -> "models.QuerySet[Conversation]":
+    ) -> "ConversationQuerySet":
         """
         Returns queryset filtered to conversations visible to the user.
 
@@ -194,10 +194,15 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         )
 
         # CHAT type: base conditions only (restrictive)
-        chat_filter = Q(conversation_type="chat") & base_conditions
+        chat_filter = (
+            Q(conversation_type=ConversationTypeChoices.CHAT) & base_conditions
+        )
 
         # THREAD type: base conditions + context inheritance
-        # Get visible corpus and document IDs for this user
+        # Get visible corpus and document IDs for this user.
+        # Note: These are lazy QuerySets - they become subqueries in the final SQL,
+        # not separate database queries. The database optimizer handles them efficiently.
+        # For CHAT-only filters, the OR logic short-circuits these in the query plan.
         visible_corpus_ids = Corpus.objects.visible_to_user(user).values_list(
             "id", flat=True
         )
@@ -205,7 +210,10 @@ class ConversationQuerySet(SoftDeleteQuerySet):
             "id", flat=True
         )
 
-        # Context inheritance conditions (AND logic when both are set):
+        # Context inheritance conditions:
+        # - Each case uses AND logic internally (must have ALL required permissions)
+        # - Cases are combined with OR (ANY matching case grants access)
+        #
         # Case 1: Only corpus set - user must have READ on corpus
         corpus_only_context = Q(chat_with_corpus_id__in=visible_corpus_ids) & Q(
             chat_with_document__isnull=True
@@ -216,7 +224,7 @@ class ConversationQuerySet(SoftDeleteQuerySet):
             chat_with_corpus__isnull=True
         )
 
-        # Case 3: Both set - user must have READ on BOTH (AND logic)
+        # Case 3: Both set - user must have READ on BOTH corpus AND document
         both_context = Q(chat_with_corpus_id__in=visible_corpus_ids) & Q(
             chat_with_document_id__in=visible_doc_ids
         )
@@ -228,7 +236,7 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         context_conditions = corpus_only_context | doc_only_context | both_context
 
         # THREAD type: base conditions OR context inheritance
-        thread_filter = Q(conversation_type="thread") & (
+        thread_filter = Q(conversation_type=ConversationTypeChoices.THREAD) & (
             base_conditions | context_conditions
         )
 
@@ -296,7 +304,9 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
 
     EMBEDDING_RELATED_NAME = "embedding_set"
 
-    def visible_to_user(self, user=None):
+    def visible_to_user(
+        self, user: Optional["AbstractBaseUser"] = None
+    ) -> "ChatMessageQuerySet":
         """
         Returns queryset filtered to messages visible to the user.
 
