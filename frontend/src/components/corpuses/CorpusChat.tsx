@@ -1550,9 +1550,9 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   return (
     <ChatContainer id="corpus-chat-container">
       <ConversationIndicator id="conversation-indicator">
-        {/* Mobile navigation header for conversation view
-            Always render on mobile when in conversation mode */}
-        {use_mobile_layout && isConversation && (
+        {/* Navigation header for conversation view
+            Shows on both mobile and desktop when viewing a conversation */}
+        {isConversation && (
           <ChatNavigationHeader>
             <BackButton
               onClick={(e) => {

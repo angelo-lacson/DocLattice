@@ -2509,6 +2509,7 @@ export const Corpuses = () => {
     stats.totalExtracts,
     canUpdateCorpus,
     documentsViewMode, // Required for view mode toggle to work
+    chatInConversation, // Required for chat tab header visibility
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);
