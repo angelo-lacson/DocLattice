@@ -17,6 +17,10 @@ from pydantic import validate_arguments
 
 from config import celery_app
 from opencontractserver.annotations.models import TOKEN_LABEL, Annotation
+from opencontractserver.constants import (
+    MAX_PROCESSING_ERROR_LENGTH,
+    MAX_PROCESSING_TRACEBACK_LENGTH,
+)
 from opencontractserver.documents.models import Document, DocumentProcessingStatus
 from opencontractserver.notifications.models import (
     Notification,
@@ -48,10 +52,6 @@ logger.setLevel(logging.DEBUG)
 
 User = get_user_model()
 
-# Constants for processing error field limits
-MAX_ERROR_LENGTH = 5000
-MAX_TRACEBACK_LENGTH = 10000
-
 
 # CONSTANT
 class TaskStates(str, enum.Enum):
@@ -80,13 +80,15 @@ def _mark_document_failed(
 
     Args:
         document: The Document instance to mark as failed.
-        error_msg: Human-readable error message (truncated to MAX_ERROR_LENGTH).
-        traceback_str: Full traceback string (truncated to MAX_TRACEBACK_LENGTH).
+        error_msg: Human-readable error message (truncated to MAX_PROCESSING_ERROR_LENGTH).
+        traceback_str: Full traceback string (truncated to MAX_PROCESSING_TRACEBACK_LENGTH).
         create_notification: Whether to create a failure notification.
     """
     document.processing_status = DocumentProcessingStatus.FAILED
-    document.processing_error = error_msg[:MAX_ERROR_LENGTH]
-    document.processing_error_traceback = traceback_str[:MAX_TRACEBACK_LENGTH]
+    document.processing_error = error_msg[:MAX_PROCESSING_ERROR_LENGTH]
+    document.processing_error_traceback = traceback_str[
+        :MAX_PROCESSING_TRACEBACK_LENGTH
+    ]
     document.processing_finished = timezone.now()
     # NOTE: backend_lock stays True - document is not ready for use
     document.save(
@@ -321,7 +323,6 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
 
     Raises:
         DocumentParsingError: Re-raised for transient errors to trigger Celery retry.
-        ValueError: If no parser is defined for the document's MIME type.
     """
     from opencontractserver.documents.models import DocumentPath
 
