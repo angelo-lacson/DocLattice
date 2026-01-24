@@ -347,9 +347,9 @@ This section provides a comprehensive reference for how permissions work across 
 | **Metadata (Datacell)** | Corpus-primary | Corpus permissions | Document READ required | Corpus UPDATE + Doc READ = can edit; corpus-level feature |
 | **Analysis** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
 | **Extract** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
-| **Conversation (CHAT)** | Context-based | `chat_with_corpus` OR `chat_with_document` | `is_public` flag | Only ONE context field can be set |
-| **Conversation (THREAD)** | Context-based | `chat_with_corpus` AND/OR `chat_with_document` | `is_public` flag | BOTH context fields can be set for doc-in-corpus threads |
-| **ChatMessage** | Inherited (Conversation) + Moderator | Parent conversation permissions | Moderator access | Moderators see all messages; see [ChatMessage Visibility](#chatmessage-visibility-moderator-access) |
+| **Conversation (CHAT)** | Restrictive | Creator + explicit permissions + public | `is_public` flag | Personal agent chats; NO context inheritance |
+| **Conversation (THREAD)** | Context-based | Base rules + context inheritance | `is_public` flag | Collaborative discussions; inherits from corpus/document |
+| **ChatMessage** | Inherited (Conversation) + Moderator | Parent conversation visibility | Moderator access | See [ChatMessage Visibility](#chatmessage-visibility-moderator-access) |
 | **UserBadge** | Privacy-filtered | Recipient's profile privacy | Corpus membership | Follows recipient's `is_profile_public` |
 | **User** | Privacy-controlled | `is_profile_public` | Corpus membership | Private users visible via shared corpus with > READ |
 
@@ -443,37 +443,66 @@ DELETE Check:
 
 **Implementation**: `MetadataQueryOptimizer.check_metadata_mutation_permission()` in `opencontractserver/extracts/query_optimizer.py`
 
-#### Conversations (THREAD Type) - Document-in-Corpus Model
-```
-Access Check (when both chat_with_corpus AND chat_with_document set):
-  can_access = (has_corpus_permission OR corpus_is_public)
-               AND (has_document_permission OR document_is_public)
+#### Conversations - Bifurcated Permission Model
 
+Conversations use a **bifurcated permission model** based on `conversation_type`:
+
+##### CHAT Type (Restrictive - Personal Agent Chats)
+```
+Visibility Check:
+  can_see = is_superuser
+            OR is_creator
+            OR has_explicit_guardian_permission (read_conversation)
+            OR is_public
+
+Note: CHAT type does NOT inherit visibility from corpus/document context.
+      Even if a user can read the corpus, they cannot see another user's CHAT.
+```
+
+##### THREAD Type (Context-Based - Collaborative Discussions)
+```
+Visibility Check:
+  can_see = CHAT_rules (creator OR explicit_permission OR is_public)
+            OR context_inheritance (see below)
+
+Context Inheritance (AND logic when both set):
+  IF only chat_with_corpus set:
+    can_see = user can READ corpus
+  ELIF only chat_with_document set:
+    can_see = user can READ document
+  ELIF both chat_with_corpus AND chat_with_document set:
+    can_see = user can READ corpus AND user can READ document
+```
+
+##### Moderation (Applies to Both Types)
+```
 Moderation Check:
   can_moderate = is_superuser
+                 OR is_conversation_creator
                  OR corpus.creator == user
                  OR document.creator == user
-                 OR user has EDIT permission on corpus
-                 OR user has EDIT permission on document
+                 OR user is CorpusModerator with permissions
 ```
 
-#### Conversations (CHAT Type) - Single Context Model
-```
-Access Check (only ONE of corpus/document set):
-  IF chat_with_corpus:
-    can_access = has_corpus_permission OR corpus_is_public
-  ELIF chat_with_document:
-    can_access = has_document_permission OR document_is_public
-```
+##### Key Differences Summary
+
+| Aspect | CHAT | THREAD |
+|--------|------|--------|
+| Purpose | Personal agent conversations | Collaborative discussions |
+| Context Inheritance | NO | YES |
+| Context Fields | Only ONE (corpus OR document) | BOTH allowed (doc-in-corpus) |
+| Corpus Reader Visibility | Cannot see others' CHATs | CAN see corpus THREADs |
+
+**Implementation**: `ConversationQuerySet.visible_to_user()` in `opencontractserver/conversations/models.py`
 
 #### ChatMessage Visibility (Moderator Access)
 
-ChatMessages use a custom `visible_to_user()` method that extends visibility to include moderator access. This ensures that corpus owners, document owners, and thread creators can see all messages in their conversations for moderation purposes.
+ChatMessages inherit visibility from their parent conversation via `Conversation.objects.visible_to_user()`. This means messages automatically inherit the bifurcated CHAT/THREAD permission logic. Additionally, moderator access is provided for corpus/document owners.
 
 ```
 Visibility Check (ChatMessage.visible_to_user):
   can_see_message = is_superuser
-                    OR message is in public conversation
+                    OR message is in VISIBLE conversation (inherits bifurcated logic)
                     OR user created the message
                     OR user has explicit permission on the message
                     OR user can moderate the conversation
@@ -486,23 +515,37 @@ Moderator Conditions (for visibility):
 
 **Key Implementation Details:**
 - Located in `ChatMessageQuerySet.visible_to_user()` (`opencontractserver/conversations/models.py`)
+- **Primary visibility check**: Uses `Conversation.objects.visible_to_user()` to inherit bifurcated permissions
 - Moderators can see ALL messages in conversations they moderate, even without explicit message permissions
-- This extends the base `SoftDeleteQuerySet.visible_to_user()` method
 - Mutations like UpdateMessage and DeleteMessage use this visibility check and additionally verify the user has edit/delete permissions (or is a moderator)
 
-**Example:**
+**Example - Bifurcated Behavior:**
 ```python
-# Corpus owner can see all messages in threads linked to their corpus
+# Setup: Alice owns corpus, Bob has corpus READ permission
 corpus = Corpus.objects.create(title="Legal Docs", creator=alice)
-thread = Conversation.objects.create(chat_with_corpus=corpus, creator=bob)
-message = ChatMessage.objects.create(conversation=thread, creator=charlie)
+assign_perm("read_corpus", bob, corpus)
 
-# Alice can see and moderate charlie's message (as corpus owner)
-visible = ChatMessage.objects.visible_to_user(alice)
-assert message in visible  # Alice sees it
+# Alice creates a CHAT (agent conversation) on the corpus
+chat = Conversation.objects.create(
+    chat_with_corpus=corpus, creator=alice, conversation_type="chat"
+)
+chat_msg = ChatMessage.objects.create(conversation=chat, creator=alice)
 
-# Alice can also edit the message (as moderator)
-can_edit = thread.can_moderate(alice)  # True
+# Alice creates a THREAD (discussion) on the corpus
+thread = Conversation.objects.create(
+    chat_with_corpus=corpus, creator=alice, conversation_type="thread"
+)
+thread_msg = ChatMessage.objects.create(conversation=thread, creator=alice)
+
+# Bob (corpus reader) can see THREAD messages but NOT CHAT messages
+visible_to_bob = ChatMessage.objects.visible_to_user(bob)
+assert thread_msg in visible_to_bob  # THREAD inherits corpus visibility
+assert chat_msg not in visible_to_bob  # CHAT is private to creator
+
+# Alice (corpus owner) can see ALL messages as moderator
+visible_to_alice = ChatMessage.objects.visible_to_user(alice)
+assert chat_msg in visible_to_alice  # Moderator access
+assert thread_msg in visible_to_alice  # Moderator access
 ```
 
 ### Anonymous User Access Summary

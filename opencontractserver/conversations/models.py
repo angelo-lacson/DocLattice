@@ -1,4 +1,7 @@
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Optional
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser
 
 import django
 from django.contrib.auth import get_user_model
@@ -110,12 +113,137 @@ class ConversationQuerySet(SoftDeleteQuerySet):
     """
     QuerySet for Conversation model with vector search capabilities.
     Combines soft-delete filtering with vector similarity search.
+
+    Implements bifurcated visibility based on conversation_type:
+    - CHAT: Restrictive (creator + explicit permissions + public)
+    - THREAD: Context-based (inherits visibility from corpus/document)
     """
 
     from opencontractserver.shared.mixins import VectorSearchViaEmbeddingMixin
 
     # Use the VectorSearchViaEmbeddingMixin directly within the class
     EMBEDDING_RELATED_NAME = "embedding_set"
+
+    def visible_to_user(
+        self, user: Optional["AbstractBaseUser"] = None
+    ) -> "ConversationQuerySet":
+        """
+        Returns queryset filtered to conversations visible to the user.
+
+        Bifurcated logic based on conversation_type:
+
+        CHAT type (restrictive - personal agent chats):
+        - Creator can see their own chats
+        - Users with explicit guardian permission can see
+        - Public chats are visible to all
+
+        THREAD type (context-based - collaborative discussions):
+        - All CHAT rules apply, PLUS:
+        - If only chat_with_corpus is set: user must have READ on corpus
+        - If only chat_with_document is set: user must have READ on document
+        - If BOTH are set: user must have READ on corpus AND document (AND logic)
+
+        Note on performance: This method executes subqueries for visible corpus/document
+        IDs on each call. For list queries in GraphQL resolvers, consider using
+        ConversationQueryOptimizer which provides request-level caching.
+
+        Args:
+            user: The user to filter visibility for. None is treated as anonymous.
+
+        Returns:
+            QuerySet of visible conversations, ordered by -created (newest first).
+        """
+        from django.apps import apps
+        from django.contrib.auth.models import AnonymousUser
+        from django.db.models import Q
+
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import Document
+
+        # Handle None user as anonymous
+        if user is None:
+            user = AnonymousUser()
+
+        # Start with current queryset (already has soft-delete filtering)
+        queryset = self
+
+        # Superusers see everything
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return queryset.distinct().order_by("-created")
+
+        # Anonymous users only see public items
+        if user.is_anonymous:
+            return queryset.filter(is_public=True).distinct().order_by("-created")
+
+        # Get explicitly permitted conversation IDs via guardian
+        model_name = self.model._meta.model_name
+        app_label = self.model._meta.app_label
+
+        try:
+            permission_model_name = f"{model_name}userobjectpermission"
+            permission_model_type = apps.get_model(app_label, permission_model_name)
+            permitted_ids = permission_model_type.objects.filter(
+                permission__codename=f"read_{model_name}", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+        except LookupError:
+            permitted_ids = []
+
+        # Base conditions: apply to BOTH CHAT and THREAD types
+        base_conditions = (
+            Q(creator_id=user.id) | Q(is_public=True) | Q(id__in=permitted_ids)
+        )
+
+        # CHAT type: base conditions only (restrictive)
+        chat_filter = (
+            Q(conversation_type=ConversationTypeChoices.CHAT) & base_conditions
+        )
+
+        # THREAD type: base conditions + context inheritance
+        # Get visible corpus and document IDs for this user.
+        # Note: These are lazy QuerySets - they become subqueries in the final SQL,
+        # not separate database queries. The database optimizer handles them efficiently.
+        # For CHAT-only filters, the OR logic short-circuits these in the query plan.
+        visible_corpus_ids = Corpus.objects.visible_to_user(user).values_list(
+            "id", flat=True
+        )
+        visible_doc_ids = Document.objects.visible_to_user(user).values_list(
+            "id", flat=True
+        )
+
+        # Context inheritance conditions:
+        # - Each case uses AND logic internally (must have ALL required permissions)
+        # - Cases are combined with OR (ANY matching case grants access)
+        #
+        # Case 1: Only corpus set - user must have READ on corpus
+        corpus_only_context = Q(chat_with_corpus_id__in=visible_corpus_ids) & Q(
+            chat_with_document__isnull=True
+        )
+
+        # Case 2: Only document set - user must have READ on document
+        doc_only_context = Q(chat_with_document_id__in=visible_doc_ids) & Q(
+            chat_with_corpus__isnull=True
+        )
+
+        # Case 3: Both set - user must have READ on BOTH corpus AND document
+        both_context = Q(chat_with_corpus_id__in=visible_corpus_ids) & Q(
+            chat_with_document_id__in=visible_doc_ids
+        )
+
+        # Note: Threads with neither corpus nor document set (orphan threads)
+        # rely on base conditions only and are NOT covered by context_conditions
+
+        # Combine context conditions with OR (any matching context grants access)
+        context_conditions = corpus_only_context | doc_only_context | both_context
+
+        # THREAD type: base conditions OR context inheritance
+        thread_filter = Q(conversation_type=ConversationTypeChoices.THREAD) & (
+            base_conditions | context_conditions
+        )
+
+        # Combine CHAT and THREAD filters
+        return (
+            queryset.filter(chat_filter | thread_filter).distinct().order_by("-created")
+        )
 
     def search_by_embedding(
         self,
@@ -176,21 +304,27 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
 
     EMBEDDING_RELATED_NAME = "embedding_set"
 
-    def visible_to_user(self, user=None):
+    def visible_to_user(
+        self, user: Optional["AbstractBaseUser"] = None
+    ) -> "ChatMessageQuerySet":
         """
         Returns queryset filtered to messages visible to the user.
 
         A user can see a message if ANY of:
         1. User is superuser
-        2. Message is in a public conversation
+        2. Message is in a visible conversation (inherits bifurcated CHAT/THREAD logic)
         3. User created the message
         4. User has explicit permission on the message
         5. User can moderate the conversation (corpus/document/thread owner)
 
-        The moderator access (case 5) is the key extension over the base
-        SoftDeleteQuerySet.visible_to_user() method. This ensures that
-        corpus owners, document owners, and thread creators can see all
-        messages in their conversations for moderation purposes.
+        The primary visibility check (case 2) leverages Conversation.objects.visible_to_user()
+        which implements bifurcated permissions:
+        - CHAT: creator + explicit permissions + public
+        - THREAD: CHAT rules + context inheritance from corpus/document
+
+        The moderator access (case 5) is retained for additional access to allow
+        corpus/document owners to see all messages for moderation purposes, even
+        if they wouldn't normally see the conversation.
         """
         from django.contrib.auth.models import AnonymousUser
         from django.db.models import Q
@@ -213,8 +347,15 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
         if user.is_anonymous:
             return queryset.filter(conversation__is_public=True)
 
-        # Build visibility conditions for authenticated users
-        # Base conditions: created by them, explicitly shared, or public conversation
+        # Primary visibility: messages in visible conversations
+        # This inherits the bifurcated CHAT/THREAD permission logic
+        # Note: Conversation is defined in this same module, no import needed
+        visible_conversation_ids = Conversation.objects.visible_to_user(
+            user
+        ).values_list("id", flat=True)
+        conversation_visible = Q(conversation_id__in=visible_conversation_ids)
+
+        # Additional conditions for explicit message-level access
         from django.apps import apps
 
         try:
@@ -231,22 +372,21 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
 
         base_conditions = (
             Q(creator=user)  # User created the message
-            | has_permission  # User has explicit permission
-            | Q(conversation__is_public=True)  # Public conversation
+            | has_permission  # User has explicit permission on message
         )
 
         # Moderator conditions: user can moderate the conversation
-        # This includes:
+        # This provides additional access beyond conversation visibility
+        # for corpus/document owners who need to moderate discussions
+        #
+        # Includes:
         # - Conversation creator
         # - Corpus owner (for corpus-linked threads)
         # - Document owner (for document-linked threads)
 
-        # Get IDs of corpuses user owns
         owned_corpus_ids = Corpus.objects.filter(creator=user).values_list(
             "id", flat=True
         )
-
-        # Get IDs of documents user owns
         owned_document_ids = Document.objects.filter(creator=user).values_list(
             "id", flat=True
         )
@@ -259,8 +399,13 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
             )  # Document owner
         )
 
-        # Combine all conditions with OR
-        return queryset.filter(base_conditions | moderator_conditions).distinct()
+        # Combine all conditions with OR:
+        # - Message in visible conversation, OR
+        # - User created the message or has explicit permission, OR
+        # - User is a moderator
+        return queryset.filter(
+            conversation_visible | base_conditions | moderator_conditions
+        ).distinct()
 
     def search_by_embedding(
         self,

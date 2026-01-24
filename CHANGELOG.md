@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Bifurcated Conversation Permissions (CHAT vs THREAD)
+- **New `conversation_type` field on Conversation model**: Distinguishes between personal agent chats and collaborative discussions
+  - `CHAT` type: Restrictive permissions (creator + explicit permissions + public only)
+  - `THREAD` type: Context-based permissions (inherits visibility from linked corpus/document)
+  - Files: `opencontractserver/conversations/models.py:51-53`, `opencontractserver/conversations/migrations/`
+- **Bifurcated `visible_to_user()` queryset method**: Different visibility logic based on conversation type
+  - CHAT: Only creator, explicit guardian permissions, or public flag
+  - THREAD: CHAT rules + context inheritance (READ on corpus AND/OR document)
+  - AND logic when both corpus and document are linked (must have READ on both)
+  - Files: `opencontractserver/conversations/models.py:127-238`
+- **ConversationQueryOptimizer helper class**: Request-level caching to avoid N+1 queries
+  - Caches visible conversation IDs per request
+  - IDOR-safe `check_conversation_visibility()` method for mutations
+  - Convenience methods: `get_threads_for_corpus()`, `get_threads_for_document()`, `get_chats_for_user()`
+  - Files: `opencontractserver/conversations/query_optimizer.py`
+- **ChatMessage visibility inheritance**: Messages inherit bifurcated permissions from parent conversation
+  - Moderator access retained for corpus/document owners
+  - Files: `opencontractserver/conversations/models.py:299-398`
+- **22 new permission tests**: Comprehensive coverage of CHAT vs THREAD behavior
+  - Files: `opencontractserver/tests/test_conversation_permissions.py`
+- **Updated permissioning guide**: Documentation for bifurcated model with examples
+  - Files: `docs/permissioning/consolidated_permissioning_guide.md`
+
 #### Corpus Forking: Folder and Relationship Preservation
 - **Folder hierarchy preservation during fork**: Forked corpora now maintain the complete folder structure
   - Folders cloned in tree-depth order to preserve parent-child relationships
