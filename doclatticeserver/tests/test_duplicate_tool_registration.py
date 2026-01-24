@@ -143,6 +143,75 @@ class TestDuplicateToolRegistration(TransactionTestCase):
 
         self.assertIsNotNone(agent)
 
+    async def test_caller_tool_overrides_default_configuration(self):
+        """
+        Test that caller-provided tools OVERRIDE default tool configurations.
+
+        This verifies that when a caller provides a tool with the same name as
+        a default tool, the caller's configuration is used instead of the default.
+        We verify this by checking that only one instance of the tool exists
+        and by using a custom docstring that differs from the default.
+        """
+        from django.conf import settings
+
+        # Create a custom function with a unique docstring we can identify
+        custom_docstring = "UNIQUE_CUSTOM_DOCSTRING_FOR_OVERRIDE_TEST_12345"
+
+        async def custom_update_document_description(new_description: str) -> dict:
+            pass
+
+        # Set the docstring and name to match the default tool
+        custom_update_document_description.__doc__ = custom_docstring
+        custom_update_document_description.__name__ = "update_document_description"
+
+        config = AgentConfig(
+            user_id=self.user.id,
+            model_name=settings.OPENAI_MODEL,
+            store_user_messages=False,
+            store_llm_messages=False,
+        )
+
+        agent = await PydanticAIDocumentAgent.create(
+            document=self.doc,
+            corpus=self.corpus,
+            config=config,
+            tools=[custom_update_document_description],
+        )
+
+        self.assertIsNotNone(agent)
+
+        # Verify the caller's tool is used, not the default
+        # Access the internal _function_tools dict from the pydantic_ai agent
+        function_tools = getattr(agent.pydantic_ai_agent, "_function_tools", {})
+
+        # Count how many times 'update_document_description' appears
+        update_desc_count = sum(
+            1 for name in function_tools.keys() if "update_document_description" in name
+        )
+
+        # Should only appear once (caller's tool replaces default)
+        self.assertEqual(
+            update_desc_count,
+            1,
+            f"Expected exactly 1 instance of 'update_document_description' but found {update_desc_count}",
+        )
+
+        # Find the update_document_description tool and verify it's our custom one
+        # by checking that the tool's description contains our custom docstring
+        for tool_name, tool_def in function_tools.items():
+            if "update_document_description" in tool_name:
+                # PydanticAI Tool objects have a 'description' attribute that comes from
+                # the function's docstring. Check if our custom docstring is present.
+                tool_desc = getattr(tool_def, "description", "")
+                # The tool description should contain our unique marker
+                self.assertIn(
+                    custom_docstring,
+                    tool_desc,
+                    f"Expected caller's custom docstring in tool description but got: {tool_desc}. "
+                    "The default tool may have been used instead of the caller's override.",
+                )
+                break
+
     async def test_multiple_duplicate_tools_deduplicated(self):
         """
         Test that passing multiple tools with the same name as default tools
