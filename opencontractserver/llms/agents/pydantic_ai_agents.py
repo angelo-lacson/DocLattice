@@ -973,13 +973,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             # Build the final tool list, preferring override tools over seeded
             if override_tools:
-                override_names = {getattr(t, "__name__", None) for t in override_tools}
+                override_names = {
+                    getattr(t, "__name__", None) for t in override_tools
+                } - {
+                    None
+                }  # Filter out None values from tools without __name__
 
                 # Filter out seeded tools that will be replaced
                 filtered_seeded = []
                 for seeded_tool in seeded_tools:
                     seeded_name = getattr(seeded_tool, "__name__", None)
-                    if seeded_name in override_names:
+                    if seeded_name and seeded_name in override_names:
                         logger.info(
                             f"Per-call tool '{seeded_name}' overrides seeded tool - "
                             "using caller's configuration"
@@ -2063,13 +2067,15 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             # Caller-provided tools take precedence over defaults.
             # If a caller tool has the same name as a default, replace the default.
             # This allows callers to override tool configurations (e.g., requires_approval).
-            caller_tool_names = {getattr(t, "__name__", None) for t in tools}
+            caller_tool_names = {getattr(t, "__name__", None) for t in tools} - {
+                None
+            }  # Filter out None values from tools without __name__
 
             # Filter out defaults that will be replaced by caller tools
             filtered_defaults = []
             for default_tool in effective_tools:
                 default_name = getattr(default_tool, "__name__", None)
-                if default_name in caller_tool_names:
+                if default_name and default_name in caller_tool_names:
                     logger.info(
                         f"Caller tool '{default_name}' overrides default - "
                         "using caller's configuration"
@@ -2400,22 +2406,29 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             ask_doc_tool_wrapped,
         ]
 
-        # Default tool names to filter out duplicates
-        default_tool_names = {
-            "get_corpus_description",
-            "update_corpus_description",
-            "list_documents",
-            "ask_document",
-        }
-
         if tools:
-            # Filter out tools that would conflict with default tools
-            for tool in tools:
-                tool_name = getattr(tool, "name", None) or getattr(
-                    tool, "__name__", None
-                )
-                if tool_name not in default_tool_names:
-                    effective_tools.append(tool)
+            # Caller-provided tools take precedence over defaults.
+            # If a caller tool has the same name as a default, replace the default.
+            caller_tool_names = {
+                getattr(t, "__name__", None) or getattr(t, "name", None) for t in tools
+            } - {
+                None
+            }  # Filter out None values
+
+            # Filter out defaults that will be replaced by caller tools
+            filtered_defaults = []
+            for default_tool in effective_tools:
+                default_name = getattr(default_tool, "__name__", None)
+                if default_name in caller_tool_names:
+                    logger.info(
+                        f"Caller tool '{default_name}' overrides default - "
+                        "using caller's configuration"
+                    )
+                else:
+                    filtered_defaults.append(default_tool)
+
+            # Build final list: filtered defaults + all caller tools
+            effective_tools = filtered_defaults + list(tools)
 
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,

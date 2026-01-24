@@ -1883,6 +1883,51 @@ standard_tools = create_document_tools()
 # )
 ```
 
+#### Tool Precedence and Overrides
+
+When you pass tools to an agent, **caller-provided tools take precedence** over built-in defaults if there's a name conflict. This allows you to customize tool behavior without modifying the framework.
+
+**When conflicts occur:**
+- You pass a tool with `__name__` matching a default tool (e.g., `"update_document_description"`)
+- The framework detects the duplicate and uses YOUR tool's configuration
+
+**What gets overridden:**
+- Tool description (affects LLM's understanding of the tool)
+- `requires_approval` flag (enables/disables human-in-the-loop)
+- `parameter_descriptions` (affects LLM parameter usage)
+- The actual function implementation
+
+**Example: Disabling approval for a tool**
+```python
+from opencontractserver.llms.tools.tool_factory import CoreTool
+from opencontractserver.llms.tools.core_tools import update_document_description
+
+# Create a version of update_document_description that doesn't require approval
+no_approval_tool = CoreTool.from_function(
+    update_document_description,
+    name="update_document_description",  # Same name as default
+    description="Update the document description (auto-approved)",
+    requires_approval=False,  # Override the default's requires_approval=True
+)
+
+agent = await agents.for_document(
+    document=123,
+    corpus=1,
+    tools=[no_approval_tool],  # Your tool replaces the default
+)
+# Now update_document_description won't pause for approval
+```
+
+**Precedence rules:**
+1. Per-call `tools` parameter → highest priority
+2. `AgentConfig.tools` → used if no per-call tools
+3. Built-in defaults → lowest priority (replaced by above)
+
+**Logging:** When a caller tool overrides a default, an INFO-level log is emitted:
+```
+Caller tool 'update_document_description' overrides default - using caller's configuration
+```
+
 ### Vector Store Integration
 
 #### Advanced Search
