@@ -106,8 +106,14 @@ const CreateButton = styled.button`
   white-space: nowrap;
   flex-shrink: 0;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: ${color.G7};
+  }
+
+  &:disabled {
+    background: ${color.N5};
+    cursor: not-allowed;
+    opacity: 0.7;
   }
 
   svg {
@@ -459,6 +465,17 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
 
       {/* Single Toolbar: Category filters + Search + Sort + Tabs */}
       <Toolbar>
+        {/* Create button when header is hidden (embedded mode) */}
+        {hideHeader && isAuthenticated && (
+          <CreateButton
+            onClick={() => setShowCreateModal(true)}
+            aria-label="Create new discussion"
+          >
+            <Plus />
+            <span>New</span>
+          </CreateButton>
+        )}
+
         {/* Category filter pills */}
         <FilterPills>
           <FilterPill

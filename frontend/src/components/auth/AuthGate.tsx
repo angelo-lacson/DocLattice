@@ -122,12 +122,12 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             // This may delay render by ~50-100ms, but prevents flash of stale data.
             // Unlike logout (fire-and-forget), login benefits from clean cache before render
             // since users expect to see their own data immediately.
-            // refetchActive: false because auth state is already set and component mount
-            // will trigger necessary queries with correct credentials.
+            // refetchActive: true ensures already-mounted components (like Chat tab viewed
+            // anonymously) refresh their data with the new auth context.
             try {
               await resetOnAuthChange({
                 reason: "auth0_login",
-                refetchActive: false,
+                refetchActive: true,
               });
             } catch (cacheError) {
               // Log with context for debugging but don't block - cache clear is best-effort
