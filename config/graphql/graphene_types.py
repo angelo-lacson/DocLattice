@@ -26,6 +26,7 @@ from opencontractserver.annotations.models import (
     NoteRevision,
     Relationship,
 )
+from opencontractserver.constants import MAX_PROCESSING_ERROR_DISPLAY_LENGTH
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -1407,9 +1408,8 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_processing_error(self, info):
         """Resolve processing error message (truncated for display)."""
-        # Return first 500 chars for display purposes
         if self.processing_error:
-            return self.processing_error[:500]
+            return self.processing_error[:MAX_PROCESSING_ERROR_DISPLAY_LENGTH]
         return None
 
     def resolve_can_retry(self, info):
