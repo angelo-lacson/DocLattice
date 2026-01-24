@@ -960,6 +960,8 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             # Merge per-call tool overrides, deduplicating against seeded tools
             extra_tools: list[Callable] = []
+            seeded_names = {getattr(t, "__name__", None) for t in seeded_tools}
+
             if tools:
                 from opencontractserver.llms.api import _resolve_tools
 
@@ -968,14 +970,27 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     resolved_core_tools
                 )
                 # Deduplicate against seeded tools to prevent UserError
-                seeded_names = {getattr(t, "__name__", None) for t in seeded_tools}
                 for tool in candidate_tools:
                     tool_name = getattr(tool, "__name__", None)
                     if tool_name not in seeded_names:
                         extra_tools.append(tool)
+                    else:
+                        logger.debug(
+                            f"Skipping duplicate tool '{tool_name}' in structured_response - "
+                            "already registered as seeded tool"
+                        )
             elif self.config.tools:
-                # If caller did not pass tools but config has additional wrappers, include them
-                extra_tools = list(self.config.tools)
+                # If caller did not pass tools but config has additional wrappers,
+                # include them after deduplicating against seeded tools
+                for tool in self.config.tools:
+                    tool_name = getattr(tool, "__name__", None)
+                    if tool_name not in seeded_names:
+                        extra_tools.append(tool)
+                    else:
+                        logger.debug(
+                            f"Skipping duplicate config tool '{tool_name}' in structured_response - "
+                            "already registered as seeded tool"
+                        )
 
             # Build a dedicated system prompt for structured extraction via hook
             structured_system_prompt = self._build_structured_system_prompt(

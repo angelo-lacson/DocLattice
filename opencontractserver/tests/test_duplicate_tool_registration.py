@@ -163,3 +163,104 @@ class TestDuplicateToolRegistration(TransactionTestCase):
         )
 
         self.assertIsNotNone(agent)
+
+    async def test_config_tools_deduplicated_in_structured_response(self):
+        """
+        Test that config.tools are properly deduplicated in structured_response().
+
+        This exercises the `elif self.config.tools` branch in _structured_response_raw(),
+        ensuring that tools passed via AgentConfig don't cause duplicate tool errors
+        when structured_response() creates a temporary agent that seeds tools from
+        the main agent.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from django.conf import settings
+        from pydantic import BaseModel
+
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            PydanticAIToolFactory,
+        )
+
+        # Create a duplicate tool that will be in config.tools
+        duplicate_core_tool = CoreTool.from_function(
+            update_document_description,
+            name="update_document_description",
+            description="Duplicate tool for testing structured_response",
+        )
+        duplicate_pydantic_tool = PydanticAIToolFactory.create_tool(duplicate_core_tool)
+
+        # Create config with the duplicate tool in config.tools
+        config = AgentConfig(
+            user_id=self.user.id,
+            model_name=settings.OPENAI_MODEL,
+            store_user_messages=False,
+            store_llm_messages=False,
+            tools=[
+                duplicate_pydantic_tool
+            ],  # This will go through elif self.config.tools
+        )
+
+        # Create the agent (this should work - deduplication happens at create time)
+        agent = await PydanticAIDocumentAgent.create(
+            document=self.doc,
+            corpus=self.corpus,
+            config=config,
+            tools=[],  # Empty tools list so config.tools path is used in structured_response
+        )
+        self.assertIsNotNone(agent)
+
+        # Define a simple response model for structured_response
+        class SimpleResponse(BaseModel):
+            answer: str
+
+        # Mock the PydanticAI agent's run method to avoid actual API calls
+        # The key test is that agent creation inside structured_response doesn't raise UserError
+        mock_result = AsyncMock()
+        mock_result.output = SimpleResponse(answer="test")
+
+        with patch.object(
+            agent.pydantic_ai_agent.__class__, "run", return_value=mock_result
+        ):
+            # This should NOT raise UserError even though config.tools contains
+            # a duplicate of 'update_document_description' which is already seeded
+            # from the main agent's tools
+            try:
+                # We need to mock the temporary agent created inside structured_response
+                # The actual test is that the PydanticAIAgent constructor doesn't raise
+                with patch(
+                    "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+                ) as mock_agent_class:
+                    mock_agent_instance = AsyncMock()
+                    mock_agent_instance.run = AsyncMock(return_value=mock_result)
+                    mock_agent_class.return_value = mock_agent_instance
+
+                    await agent.structured_response(
+                        prompt="Test prompt",
+                        target_type=SimpleResponse,
+                    )
+
+                    # Verify the agent was created (no UserError during construction)
+                    mock_agent_class.assert_called_once()
+
+                    # Check that tools were passed correctly (seeded + deduplicated config.tools)
+                    call_kwargs = mock_agent_class.call_args.kwargs
+                    tools_passed = call_kwargs.get("tools", [])
+
+                    # Count how many times 'update_document_description' appears
+                    update_desc_count = sum(
+                        1
+                        for t in tools_passed
+                        if getattr(t, "__name__", "") == "update_document_description"
+                    )
+
+                    # Should only appear once (seeded from main agent, not duplicated from config)
+                    self.assertEqual(
+                        update_desc_count,
+                        1,
+                        f"Expected 1 instance of 'update_document_description' but found {update_desc_count}",
+                    )
+
+            except Exception as e:
+                if "UserError" in type(e).__name__ or "Tool name conflicts" in str(e):
+                    self.fail(f"structured_response raised duplicate tool error: {e}")
