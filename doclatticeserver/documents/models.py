@@ -138,7 +138,7 @@ class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
     processing_started = django.db.models.DateTimeField(null=True)
     processing_finished = django.db.models.DateTimeField(null=True)
 
-    # Processing status fields for pipeline hardening (Issue #XXX)
+    # Processing status fields for pipeline hardening (PR #824)
     processing_status = django.db.models.CharField(
         max_length=20,
         choices=DocumentProcessingStatus.choices,

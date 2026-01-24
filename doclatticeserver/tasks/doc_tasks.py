@@ -17,6 +17,10 @@ from pydantic import validate_arguments
 
 from config import celery_app
 from doclatticeserver.annotations.models import TOKEN_LABEL, Annotation
+from doclatticeserver.constants import (
+    MAX_PROCESSING_ERROR_LENGTH,
+    MAX_PROCESSING_TRACEBACK_LENGTH,
+)
 from doclatticeserver.documents.models import Document, DocumentProcessingStatus
 from doclatticeserver.notifications.models import (
     Notification,
@@ -48,10 +52,6 @@ logger.setLevel(logging.DEBUG)
 
 User = get_user_model()
 
-# Constants for processing error field limits
-MAX_ERROR_LENGTH = 5000
-MAX_TRACEBACK_LENGTH = 10000
-
 
 # CONSTANT
 class TaskStates(str, enum.Enum):
@@ -80,13 +80,15 @@ def _mark_document_failed(
 
     Args:
         document: The Document instance to mark as failed.
-        error_msg: Human-readable error message (truncated to MAX_ERROR_LENGTH).
-        traceback_str: Full traceback string (truncated to MAX_TRACEBACK_LENGTH).
+        error_msg: Human-readable error message (truncated to MAX_PROCESSING_ERROR_LENGTH).
+        traceback_str: Full traceback string (truncated to MAX_PROCESSING_TRACEBACK_LENGTH).
         create_notification: Whether to create a failure notification.
     """
     document.processing_status = DocumentProcessingStatus.FAILED
-    document.processing_error = error_msg[:MAX_ERROR_LENGTH]
-    document.processing_error_traceback = traceback_str[:MAX_TRACEBACK_LENGTH]
+    document.processing_error = error_msg[:MAX_PROCESSING_ERROR_LENGTH]
+    document.processing_error_traceback = traceback_str[
+        :MAX_PROCESSING_TRACEBACK_LENGTH
+    ]
     document.processing_finished = timezone.now()
     # NOTE: backend_lock stays True - document is not ready for use
     document.save(
@@ -242,15 +244,15 @@ def _create_document_processed_notifications(
     if document.creator:
         recipients.add(document.creator)
 
-    # Add corpus owners from DocumentPath data
-    for data in corpus_data:
-        corpus_creator_id = data.get("corpus__creator_id")
-        if corpus_creator_id:
-            try:
-                corpus_creator = User.objects.get(pk=corpus_creator_id)
-                recipients.add(corpus_creator)
-            except User.DoesNotExist:
-                pass
+    # Add corpus owners from DocumentPath data (bulk fetch to avoid N+1)
+    corpus_creator_ids = {
+        data.get("corpus__creator_id")
+        for data in corpus_data
+        if data.get("corpus__creator_id")
+    }
+    if corpus_creator_ids:
+        corpus_creators = User.objects.filter(pk__in=corpus_creator_ids)
+        recipients.update(corpus_creators)
 
     # Get document title for notification
     doc_title = document.title
@@ -321,7 +323,6 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
 
     Raises:
         DocumentParsingError: Re-raised for transient errors to trigger Celery retry.
-        ValueError: If no parser is defined for the document's MIME type.
     """
     from doclatticeserver.documents.models import DocumentPath
 
@@ -743,41 +744,38 @@ def retry_document_processing(user_id: int, doc_id: int) -> dict[str, Any]:
         f"by user {user_id}"
     )
 
-    try:
-        document = Document.objects.get(pk=doc_id)
-    except Document.DoesNotExist:
-        return {
-            "status": "error",
-            "doc_id": doc_id,
-            "message": "Document not found",
-        }
-
-    # Verify document is in failed state
-    if document.processing_status != DocumentProcessingStatus.FAILED:
-        return {
-            "status": "error",
-            "doc_id": doc_id,
-            "message": (
-                f"Document is not in failed state "
-                f"(current status: {document.processing_status})"
-            ),
-        }
-
-    # Reset processing state
-    document.processing_status = DocumentProcessingStatus.PENDING
-    document.processing_error = ""
-    document.processing_error_traceback = ""
-    document.processing_started = timezone.now()
-    document.processing_finished = None
-    document.save(
-        update_fields=[
-            "processing_status",
-            "processing_error",
-            "processing_error_traceback",
-            "processing_started",
-            "processing_finished",
-        ]
+    # Atomic update: only reset if document is in FAILED state
+    # This prevents race conditions if user clicks retry multiple times
+    updated_count = Document.objects.filter(
+        pk=doc_id,
+        processing_status=DocumentProcessingStatus.FAILED,
+    ).update(
+        processing_status=DocumentProcessingStatus.PENDING,
+        processing_error="",
+        processing_error_traceback="",
+        processing_started=timezone.now(),
+        processing_finished=None,
+        backend_lock=True,  # Lock document during reprocessing
     )
+
+    if updated_count == 0:
+        # Either document doesn't exist or isn't in FAILED state
+        try:
+            document = Document.objects.get(pk=doc_id)
+            return {
+                "status": "error",
+                "doc_id": doc_id,
+                "message": (
+                    f"Document is not in failed state "
+                    f"(current status: {document.processing_status})"
+                ),
+            }
+        except Document.DoesNotExist:
+            return {
+                "status": "error",
+                "doc_id": doc_id,
+                "message": "Document not found",
+            }
 
     logger.info(
         f"[retry_document_processing] Reset document {doc_id} state, "

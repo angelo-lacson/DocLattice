@@ -2295,8 +2295,8 @@ class RetryDocumentProcessing(graphene.Mutation):
             if document.processing_status != DocumentProcessingStatus.FAILED:
                 return RetryDocumentProcessing(
                     ok=False,
-                    message=f"Document is not in failed state (current status: {document.processing_status})",
-                    document=document,
+                    message="Document is not in a failed state and cannot be retried",
+                    document=None,
                 )
 
             # Check user has UPDATE permission
@@ -2310,7 +2310,7 @@ class RetryDocumentProcessing(graphene.Mutation):
                     return RetryDocumentProcessing(
                         ok=False,
                         message="You don't have permission to retry processing for this document",
-                        document=document,
+                        document=None,
                     )
 
             # Trigger the retry task
