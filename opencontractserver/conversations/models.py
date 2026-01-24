@@ -387,7 +387,7 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
 
         # Anonymous users only see messages in public conversations
         if user.is_anonymous:
-            return queryset.filter(conversation__is_public=True)
+            return queryset.filter(conversation__is_public=True).order_by("created")
 
         # Primary visibility: messages in visible conversations
         # This inherits the bifurcated CHAT/THREAD permission logic
@@ -445,9 +445,14 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
         # - Message in visible conversation, OR
         # - User created the message or has explicit permission, OR
         # - User is a moderator
-        return queryset.filter(
-            conversation_visible | base_conditions | moderator_conditions
-        ).distinct()
+        # Order by created timestamp for chronological message display
+        return (
+            queryset.filter(
+                conversation_visible | base_conditions | moderator_conditions
+            )
+            .distinct()
+            .order_by("created")
+        )
 
     def search_by_embedding(
         self,

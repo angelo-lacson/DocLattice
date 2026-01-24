@@ -116,7 +116,6 @@ from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
-    ConversationTypeChoices,
     MessageTypeChoices,
     ModerationAction,
 )
@@ -1580,11 +1579,14 @@ class Query(graphene.ObjectType):
         - Analyses: Uses AnalysisQueryOptimizer (hybrid permission model)
         - Extracts: Uses ExtractQueryOptimizer (hybrid permission model)
         - Relationships: Uses DocumentRelationshipQueryOptimizer (inherit doc+corpus)
-        - Threads/Chats: Uses Conversation.visible_to_user()
+        - Threads/Chats: Uses ConversationQueryOptimizer (single visibility query)
         """
         from opencontractserver.annotations.query_optimizer import (
             AnalysisQueryOptimizer,
             ExtractQueryOptimizer,
+        )
+        from opencontractserver.conversations.query_optimizer import (
+            ConversationQueryOptimizer,
         )
 
         total_docs = 0
@@ -1649,24 +1651,11 @@ class Query(graphene.ObjectType):
                     user, corpus_id=corpus.id
                 ).count()
 
-                # total_threads: Permission-aware via visible_to_user()
-                total_threads = (
-                    Conversation.objects.filter(
-                        conversation_type=ConversationTypeChoices.THREAD,
-                        chat_with_corpus=corpus,
-                    )
-                    .visible_to_user(user)
-                    .count()
-                )
-
-                # total_chats: Permission-aware via visible_to_user()
-                total_chats = (
-                    Conversation.objects.filter(
-                        conversation_type=ConversationTypeChoices.CHAT,
-                        chat_with_corpus=corpus,
-                    )
-                    .visible_to_user(user)
-                    .count()
+                # total_threads and total_chats: Use ConversationQueryOptimizer
+                # to execute visibility subqueries once instead of twice
+                conv_optimizer = ConversationQueryOptimizer(user)
+                total_threads, total_chats = (
+                    conv_optimizer.get_corpus_conversation_counts(corpus.id)
                 )
 
                 # total_relationships: Uses DocumentRelationshipQueryOptimizer
