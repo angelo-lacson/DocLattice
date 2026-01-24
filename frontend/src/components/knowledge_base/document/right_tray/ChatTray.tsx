@@ -176,8 +176,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
   const auth_token = useReactiveVar(authToken);
 
   // Chat state
-  // Start with new chat if readOnly OR if user is anonymous (no token)
-  const [isNewChat, setIsNewChat] = useState<boolean>(readOnly || !auth_token);
+  // Start with new chat if readOnly OR if user is anonymous
+  const [isNewChat, setIsNewChat] = useState<boolean>(readOnly || !user_obj);
   const [newMessage, setNewMessage] = useState("");
   const [chat, setChat] = useState<ChatMessageProps[]>([]);
   const [wsReady, setWsReady] = useState(false);
@@ -237,7 +237,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       createdAt_Lte: createdAtLte || undefined,
     },
     fetchPolicy: "network-only",
-    skip: !auth_token, // Skip loading conversations for anonymous users
+    skip: !user_obj, // Skip loading conversations for anonymous users
   });
 
   // Lazy query for loading messages of a specific conversation
@@ -1627,7 +1627,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     <ChatContainer id="chat-container">
       <ConversationIndicator id="conversation-indicator">
         <AnimatePresence>
-          {isNewChat || selectedConversationId || readOnly || !auth_token ? (
+          {isNewChat || selectedConversationId || readOnly || !user_obj ? (
             <motion.div
               style={{
                 display: "flex",
@@ -1656,7 +1656,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
               >
-                {!readOnly && auth_token && (
+                {!readOnly && user_obj && (
                   <Button
                     size="small"
                     onClick={exitConversation}
