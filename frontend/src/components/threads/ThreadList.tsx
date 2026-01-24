@@ -8,6 +8,7 @@ import {
   GetConversationsOutputs,
 } from "../../graphql/queries";
 import { ConversationType } from "../../types/graphql-api";
+import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
 import { color } from "../../theme/colors";
 import { threadSortAtom, threadFiltersAtom } from "../../atoms/threadAtoms";
 import { ThreadListItem } from "./ThreadListItem";
@@ -142,7 +143,7 @@ export function ThreadList({
     variables: {
       corpusId,
       documentId,
-      conversationType: "THREAD",
+      conversationType: CONVERSATION_TYPE.THREAD,
       limit: 20,
       title_Contains: searchQuery || undefined,
     },

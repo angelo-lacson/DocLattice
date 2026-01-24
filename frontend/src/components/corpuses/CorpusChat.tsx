@@ -40,6 +40,7 @@ import { Button, Loader } from "semantic-ui-react";
 import styled from "styled-components";
 import { color } from "../../theme/colors";
 import { MessageCircle } from "lucide-react";
+import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
 
 import {
   GET_CORPUS_CONVERSATIONS,
@@ -854,7 +855,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         title_Contains: debouncedTitle || undefined,
         createdAt_Gte: createdAtGte || undefined,
         createdAt_Lte: createdAtLte || undefined,
-        conversationType: "CHAT",
+        conversationType: CONVERSATION_TYPE.CHAT,
       },
       fetchPolicy: "network-only",
     }
