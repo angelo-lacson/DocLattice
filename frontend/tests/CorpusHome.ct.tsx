@@ -191,8 +191,12 @@ const mocks: MockedResponse[] = [
         corpusStats: {
           totalDocs: 3,
           totalAnnotations: 5,
+          totalComments: 0,
           totalAnalyses: 0,
           totalExtracts: 0,
+          totalThreads: 0,
+          totalChats: 0,
+          totalRelationships: 0,
           __typename: "CorpusStatsType",
         },
       },

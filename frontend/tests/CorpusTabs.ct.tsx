@@ -341,8 +341,12 @@ const createBaseMocks = (corpus: CorpusType): MockedResponse[] => [
         corpusStats: {
           totalDocs: 2,
           totalAnnotations: 5,
+          totalComments: 0,
           totalAnalyses: 1,
           totalExtracts: 1,
+          totalThreads: 0,
+          totalChats: 0,
+          totalRelationships: 0,
           __typename: "CorpusStatsType",
         },
       },
