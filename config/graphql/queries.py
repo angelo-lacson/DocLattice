@@ -1570,6 +1570,21 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
     def resolve_corpus_stats(self, info, corpus_id):
+        """
+        Resolve corpus statistics with proper permission filtering.
+
+        SECURITY: All counts respect the permission model:
+        - Documents: Uses visible_to_user() + DocumentPath filtering
+        - Annotations: Filtered by visible documents (inherit doc+corpus permissions)
+        - Analyses: Uses AnalysisQueryOptimizer (hybrid permission model)
+        - Extracts: Uses ExtractQueryOptimizer (hybrid permission model)
+        - Relationships: Uses DocumentRelationshipQueryOptimizer (inherit doc+corpus)
+        - Threads/Chats: Uses Conversation.visible_to_user()
+        """
+        from opencontractserver.annotations.query_optimizer import (
+            AnalysisQueryOptimizer,
+            ExtractQueryOptimizer,
+        )
 
         total_docs = 0
         total_annotations = 0
@@ -1580,36 +1595,87 @@ class Query(graphene.ObjectType):
         total_chats = 0
         total_relationships = 0
 
+        user = info.context.user
         corpus_pk = from_global_id(corpus_id)[1]
-        corpuses = Corpus.objects.visible_to_user(info.context.user).filter(
-            id=corpus_pk
-        )
 
-        if corpuses.count() == 1:
-            corpus = corpuses[0]
-            # Use DocumentPath-based method for accurate count
-            total_docs = corpus.document_count()
-            total_annotations = corpus.annotations.all().count()
-            total_comments = UserFeedback.objects.filter(
-                commented_annotation__corpus=corpus
-            ).count()
-            total_analyses = corpus.analyses.all().count()
-            total_extracts = corpus.extracts.all().count()
-            total_threads = (
-                Conversation.objects.filter(
-                    conversation_type="thread", chat_with_corpus=corpus
+        try:
+            corpuses = Corpus.objects.visible_to_user(user).filter(id=corpus_pk)
+
+            if corpuses.count() == 1:
+                corpus = corpuses[0]
+
+                # Get visible document IDs in this corpus (for filtering annotations)
+                # Uses DocumentPath to respect folder structure and versioning
+                # Note: path_records is the related_name for Document FK in DocumentPath
+                visible_doc_ids = (
+                    Document.objects.visible_to_user(user)
+                    .filter(
+                        path_records__corpus=corpus,
+                        path_records__is_current=True,
+                        path_records__is_deleted=False,
+                    )
+                    .values_list("id", flat=True)
                 )
-                .visible_to_user(info.context.user)
-                .count()
-            )
-            total_chats = (
-                Conversation.objects.filter(
-                    conversation_type="chat", chat_with_corpus=corpus
+
+                # total_docs: Count of visible documents with active paths in corpus
+                total_docs = visible_doc_ids.count()
+
+                # total_annotations: Annotations inherit permissions from document + corpus
+                # Since user has corpus permission, filter by visible documents
+                # Include both document-attached and structural annotations
+                # Note: structural_set.documents is the reverse FK from Document to StructuralAnnotationSet
+                total_annotations = corpus.annotations.filter(
+                    Q(document_id__in=visible_doc_ids)
+                    | Q(
+                        structural_set__documents__in=visible_doc_ids,
+                        structural=True,
+                    )
+                ).count()
+
+                # total_comments: Comments on visible annotations
+                total_comments = UserFeedback.objects.filter(
+                    commented_annotation__corpus=corpus,
+                    commented_annotation__document_id__in=visible_doc_ids,
+                ).count()
+
+                # total_analyses: Uses hybrid permission model (analysis perm + corpus perm)
+                total_analyses = AnalysisQueryOptimizer.get_visible_analyses(
+                    user, corpus_id=corpus.id
+                ).count()
+
+                # total_extracts: Uses hybrid permission model (extract perm + corpus perm)
+                total_extracts = ExtractQueryOptimizer.get_visible_extracts(
+                    user, corpus_id=corpus.id
+                ).count()
+
+                # total_threads: Permission-aware via visible_to_user()
+                total_threads = (
+                    Conversation.objects.filter(
+                        conversation_type="thread", chat_with_corpus=corpus
+                    )
+                    .visible_to_user(user)
+                    .count()
                 )
-                .visible_to_user(info.context.user)
-                .count()
-            )
-            total_relationships = corpus.document_relationships.all().count()
+
+                # total_chats: Permission-aware via visible_to_user()
+                total_chats = (
+                    Conversation.objects.filter(
+                        conversation_type="chat", chat_with_corpus=corpus
+                    )
+                    .visible_to_user(user)
+                    .count()
+                )
+
+                # total_relationships: Uses DocumentRelationshipQueryOptimizer
+                # Relationships inherit from source_doc + target_doc + corpus
+                total_relationships = (
+                    DocumentRelationshipQueryOptimizer.get_visible_relationships(
+                        user, corpus_id=corpus.id, context=info.context
+                    ).count()
+                )
+        except Exception as e:
+            logger.error(f"Error in resolve_corpus_stats: {e}", exc_info=True)
+            raise
 
         return CorpusStatsType(
             total_docs=total_docs,

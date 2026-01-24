@@ -1058,18 +1058,21 @@ class ExtractQueryOptimizer:
         elif user.is_anonymous:
             # Anonymous users can only see public extracts in public corpuses
             qs = Extract.objects.filter(
-                Q(corpus__isnull=True) | Q(corpus__is_public=True)
+                Q(is_public=True) & (Q(corpus__isnull=True) | Q(corpus__is_public=True))
             )
         else:
             # Import permission model
             from opencontractserver.extracts.models import ExtractUserObjectPermission
 
             # Get extracts where:
-            # 1. User has permission on the extract AND
+            # 1. User has permission on the extract (via creator, is_public, or guardian) AND
             # 2. User has permission on the corpus
             qs = Extract.objects.filter(
                 # User must have extract permission
                 Q(creator=user)
+                | Q(
+                    is_public=True
+                )  # Public extracts are visible to all authenticated users
                 | Exists(
                     ExtractUserObjectPermission.objects.filter(
                         user=user, content_object_id=OuterRef("id")
