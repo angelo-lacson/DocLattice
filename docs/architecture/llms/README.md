@@ -1928,6 +1928,12 @@ agent = await agents.for_document(
 Caller tool 'update_document_description' overrides default - using caller's configuration
 ```
 
+**Security Considerations:**
+- Only pass **trusted tools** via the `tools` parameter
+- Overriding tools can **bypass `requires_approval` safeguards** that provide human-in-the-loop protection
+- If tools originate from user-controlled configurations (e.g., stored in database), **validate them against an approved registry** before passing to agents
+- The `deduplicate_tools()` utility in `opencontractserver/utils/tools.py` documents these security implications
+
 ### Vector Store Integration
 
 #### Advanced Search

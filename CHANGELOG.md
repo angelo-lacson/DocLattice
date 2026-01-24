@@ -22,10 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `test_config_tools_deduplicated_in_structured_response` covers the config.tools path
   - Files: `opencontractserver/tests/test_duplicate_tool_registration.py`
 - **Fixed PydanticAICorpusAgent consistency**: Now uses same caller-precedence pattern as document agent
-  - Files: `opencontractserver/llms/agents/pydantic_ai_agents.py:2403-2424`
-- **Fixed potential None in tool name sets**: Tools without `__name__` no longer cause issues
-  - Filters out `None` values when building tool name sets for comparison
-- **Added documentation for tool precedence**: New section in LLM docs explaining when conflicts occur and which configuration wins
+- **Extracted `deduplicate_tools()` utility**: DRY refactor moves repeated deduplication logic to reusable function
+  - Checks both `__name__` and `name` attributes for tool identification
+  - Filters out `None` values to handle tools without names
+  - Includes security documentation in docstring
+  - Files: `opencontractserver/utils/tools.py`
+- **Added documentation for tool precedence**: New section in LLM docs explaining when conflicts occur, which configuration wins, and security considerations
   - Files: `docs/architecture/llms/README.md`
 
 ### Added
