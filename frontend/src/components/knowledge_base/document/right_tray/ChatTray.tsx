@@ -173,6 +173,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
 }) => {
   // User / Auth state – must be declared before any state that depends on it
   const user_obj = useReactiveVar(userObj);
+  // Note: auth_token is kept for WebSocket URL construction which requires the token
+  // for authentication. GraphQL queries use userObj for skip conditions.
   const auth_token = useReactiveVar(authToken);
 
   // Chat state

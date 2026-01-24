@@ -116,6 +116,7 @@ from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
+    ConversationTypeChoices,
     MessageTypeChoices,
     ModerationAction,
 )
@@ -1651,7 +1652,8 @@ class Query(graphene.ObjectType):
                 # total_threads: Permission-aware via visible_to_user()
                 total_threads = (
                     Conversation.objects.filter(
-                        conversation_type="thread", chat_with_corpus=corpus
+                        conversation_type=ConversationTypeChoices.THREAD,
+                        chat_with_corpus=corpus,
                     )
                     .visible_to_user(user)
                     .count()
@@ -1660,7 +1662,8 @@ class Query(graphene.ObjectType):
                 # total_chats: Permission-aware via visible_to_user()
                 total_chats = (
                     Conversation.objects.filter(
-                        conversation_type="chat", chat_with_corpus=corpus
+                        conversation_type=ConversationTypeChoices.CHAT,
+                        chat_with_corpus=corpus,
                     )
                     .visible_to_user(user)
                     .count()
