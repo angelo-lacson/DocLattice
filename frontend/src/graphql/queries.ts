@@ -517,6 +517,8 @@ export interface CorpusStats {
   totalExtracts: number;
   totalAnnotations: number;
   totalThreads?: number; // Optional for backward compatibility with backend
+  totalChats?: number;
+  totalRelationships?: number;
 }
 
 export interface GetCorpusStatsOutputType {
@@ -532,6 +534,8 @@ export const GET_CORPUS_STATS = gql`
       totalExtracts
       totalAnnotations
       totalThreads
+      totalChats
+      totalRelationships
     }
   }
 `;
@@ -3411,6 +3415,7 @@ export const GET_CORPUS_CONVERSATIONS = gql`
     $createdAt_Lte: DateTime
     $cursor: String
     $limit: Int
+    $conversationType: ConversationTypeEnum
   ) {
     conversations(
       corpusId: $corpusId
@@ -3419,6 +3424,7 @@ export const GET_CORPUS_CONVERSATIONS = gql`
       createdAt_Lte: $createdAt_Lte
       first: $limit
       after: $cursor
+      conversationType: $conversationType
     ) {
       pageInfo {
         hasNextPage
@@ -3476,6 +3482,7 @@ export interface GetCorpusConversationsInputs {
   createdAt_Lte?: string;
   cursor?: string;
   limit?: number;
+  conversationType?: ConversationTypeEnum;
 }
 
 export interface GetCorpusConversationsOutputs {

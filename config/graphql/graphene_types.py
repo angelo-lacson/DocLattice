@@ -2307,6 +2307,8 @@ class CorpusStatsType(graphene.ObjectType):
     total_analyses = graphene.Int()
     total_extracts = graphene.Int()
     total_threads = graphene.Int()
+    total_chats = graphene.Int()
+    total_relationships = graphene.Int()
 
 
 class MentionedResourceType(graphene.ObjectType):

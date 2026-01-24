@@ -390,6 +390,60 @@ class TestConversationBifurcatedPermissions(TestCase):
         self.assertIn(public_thread, visible)
         self.assertNotIn(private_chat, visible)
 
+    def test_anonymous_user_sees_threads_on_public_corpus(self):
+        """
+        Anonymous users can see THREAD conversations on public corpuses
+        even if the conversation itself is not marked as public.
+        This tests context inheritance for anonymous users.
+        """
+        # Create a public corpus
+        public_corpus = Corpus.objects.create(
+            title="Public Corpus",
+            creator=self.alice,
+            is_public=True,
+        )
+
+        # Thread on public corpus (conversation NOT marked public)
+        thread_on_public = Conversation.objects.create(
+            title="Thread on Public Corpus",
+            chat_with_corpus=public_corpus,
+            creator=self.alice,
+            conversation_type=ConversationTypeChoices.THREAD,
+            is_public=False,  # NOT public, but corpus IS public
+        )
+
+        # CHAT on public corpus (should NOT be visible - CHATs are restrictive)
+        chat_on_public = Conversation.objects.create(
+            title="Chat on Public Corpus",
+            chat_with_corpus=public_corpus,
+            creator=self.alice,
+            conversation_type=ConversationTypeChoices.CHAT,
+            is_public=False,
+        )
+
+        # Thread on private corpus (should NOT be visible)
+        thread_on_private = Conversation.objects.create(
+            title="Thread on Private Corpus",
+            chat_with_corpus=self.corpus,  # self.corpus is private
+            creator=self.alice,
+            conversation_type=ConversationTypeChoices.THREAD,
+            is_public=False,
+        )
+
+        visible = Conversation.objects.visible_to_user(AnonymousUser())
+
+        # Anonymous CAN see thread on public corpus (context inheritance)
+        self.assertIn(thread_on_public, visible)
+
+        # Anonymous CANNOT see chat on public corpus (CHAT is restrictive)
+        self.assertNotIn(chat_on_public, visible)
+
+        # Anonymous CANNOT see thread on private corpus
+        self.assertNotIn(thread_on_private, visible)
+
+        # Cleanup
+        public_corpus.delete()
+
 
 class TestChatMessageInheritedPermissions(TestCase):
     """

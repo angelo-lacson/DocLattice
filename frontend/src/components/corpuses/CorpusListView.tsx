@@ -24,7 +24,6 @@ import {
   deletingCorpus,
   exportingCorpus,
   showAnalyzerSelectionForCorpus,
-  authToken,
   userObj,
 } from "../../graphql/cache";
 import {
@@ -380,9 +379,10 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
   allowImport = false,
 }) => {
   const navigate = useNavigate();
-  const auth_token = useReactiveVar(authToken);
   const currentUser = useReactiveVar(userObj);
-  const isAuthenticated = Boolean(auth_token);
+  // Use userObj for auth check - consistent with NavMenu which gates protected items on user object
+  // Note: authToken can be out of sync with userObj in some edge cases
+  const isAuthenticated = Boolean(currentUser);
   const currentUserEmail = currentUser?.email;
 
   // Filter state
