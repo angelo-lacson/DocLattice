@@ -39,70 +39,12 @@ class ConversationQueryOptimizer:
             user: The user to check visibility for. If None, treated as anonymous.
         """
         self.user = user if user is not None else AnonymousUser()
-        self._visible_corpus_ids_cache: Optional[set] = None
-        self._visible_document_ids_cache: Optional[set] = None
         self._visible_conversation_ids_cache: Optional[set] = None
 
     @property
     def _is_superuser(self) -> bool:
         """Check if the user is a superuser."""
         return hasattr(self.user, "is_superuser") and self.user.is_superuser
-
-    def _get_visible_corpus_ids(self) -> set:
-        """
-        Get set of corpus IDs visible to the user (cached).
-
-        Note: For superusers, returns empty set. Callers should check
-        _is_superuser first and bypass set membership checks entirely.
-
-        Returns:
-            Set of corpus IDs the user can read, or empty set for superusers.
-        """
-        if self._visible_corpus_ids_cache is None:
-            from opencontractserver.corpuses.models import Corpus
-
-            if self._is_superuser:
-                # Superusers see all - skip caching to avoid memory overhead
-                self._visible_corpus_ids_cache = set()
-            elif self.user.is_anonymous:
-                self._visible_corpus_ids_cache = set(
-                    Corpus.objects.filter(is_public=True).values_list("id", flat=True)
-                )
-            else:
-                self._visible_corpus_ids_cache = set(
-                    Corpus.objects.visible_to_user(self.user).values_list(
-                        "id", flat=True
-                    )
-                )
-        return self._visible_corpus_ids_cache
-
-    def _get_visible_document_ids(self) -> set:
-        """
-        Get set of document IDs visible to the user (cached).
-
-        Note: For superusers, returns empty set. Callers should check
-        _is_superuser first and bypass set membership checks entirely.
-
-        Returns:
-            Set of document IDs the user can read, or empty set for superusers.
-        """
-        if self._visible_document_ids_cache is None:
-            from opencontractserver.documents.models import Document
-
-            if self._is_superuser:
-                # Superusers see all - skip caching to avoid memory overhead
-                self._visible_document_ids_cache = set()
-            elif self.user.is_anonymous:
-                self._visible_document_ids_cache = set(
-                    Document.objects.filter(is_public=True).values_list("id", flat=True)
-                )
-            else:
-                self._visible_document_ids_cache = set(
-                    Document.objects.visible_to_user(self.user).values_list(
-                        "id", flat=True
-                    )
-                )
-        return self._visible_document_ids_cache
 
     def _get_visible_conversation_ids(self) -> set:
         """
@@ -160,12 +102,15 @@ class ConversationQueryOptimizer:
             QuerySet of Conversation objects (THREAD type only) visible
             to the user and linked to the specified corpus.
         """
-        from opencontractserver.conversations.models import Conversation
+        from opencontractserver.conversations.models import (
+            Conversation,
+            ConversationTypeChoices,
+        )
 
         return (
             Conversation.objects.visible_to_user(self.user)
             .filter(
-                conversation_type="thread",
+                conversation_type=ConversationTypeChoices.THREAD,
                 chat_with_corpus_id=corpus_id,
             )
             .order_by("-is_pinned", "-created")
@@ -182,12 +127,15 @@ class ConversationQueryOptimizer:
             QuerySet of Conversation objects (THREAD type only) visible
             to the user and linked to the specified document.
         """
-        from opencontractserver.conversations.models import Conversation
+        from opencontractserver.conversations.models import (
+            Conversation,
+            ConversationTypeChoices,
+        )
 
         return (
             Conversation.objects.visible_to_user(self.user)
             .filter(
-                conversation_type="thread",
+                conversation_type=ConversationTypeChoices.THREAD,
                 chat_with_document_id=document_id,
             )
             .order_by("-is_pinned", "-created")
@@ -201,11 +149,14 @@ class ConversationQueryOptimizer:
             QuerySet of Conversation objects (CHAT type only) visible
             to the user.
         """
-        from opencontractserver.conversations.models import Conversation
+        from opencontractserver.conversations.models import (
+            Conversation,
+            ConversationTypeChoices,
+        )
 
         return (
             Conversation.objects.visible_to_user(self.user)
-            .filter(conversation_type="chat")
+            .filter(conversation_type=ConversationTypeChoices.CHAT)
             .order_by("-created")
         )
 
@@ -216,8 +167,6 @@ class ConversationQueryOptimizer:
         Call this if the underlying permissions have changed during
         the request lifecycle.
         """
-        self._visible_corpus_ids_cache = None
-        self._visible_document_ids_cache = None
         self._visible_conversation_ids_cache = None
 
 
