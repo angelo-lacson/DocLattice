@@ -175,7 +175,9 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         # Per consolidated_permissioning_guide.md line 604: "Anonymous Users: Can only view threads on public resources"
         if user.is_anonymous:
             # Base: directly public THREADs only (anonymous cannot see CHATs at all)
-            anon_base = Q(is_public=True, conversation_type=ConversationTypeChoices.THREAD)
+            anon_base = Q(
+                is_public=True, conversation_type=ConversationTypeChoices.THREAD
+            )
 
             # Context inheritance for THREADs on public corpuses/documents
             # Anonymous users can see threads linked to public corpuses/documents
