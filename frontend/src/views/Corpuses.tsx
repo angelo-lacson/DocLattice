@@ -56,7 +56,7 @@ import {
   editingCorpus,
   viewingCorpus,
   documentSearchTerm,
-  authToken,
+  userObj,
   annotationContentSearchTerm,
   openedDocument,
   selectedMetaAnnotationId,
@@ -1515,7 +1515,7 @@ export const Corpuses = () => {
   const opened_document = useReactiveVar(openedDocument);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
 
-  const auth_token = useReactiveVar(authToken);
+  const currentUser = useReactiveVar(userObj);
   const annotation_search_term = useReactiveVar(annotationContentSearchTerm);
   const show_query_view_state = useReactiveVar(showQueryViewState);
 
@@ -1753,7 +1753,7 @@ export const Corpuses = () => {
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Handle metadata refetch when auth changes and corpus is open
   useEffect(() => {
-    if (auth_token && metadata_called && opened_corpus?.id) {
+    if (currentUser && metadata_called && opened_corpus?.id) {
       // Only refetch if we have previously called the query successfully
       if (metadata_data || metadata_loading) {
         refetchMetadata();
@@ -1765,7 +1765,7 @@ export const Corpuses = () => {
         }
       }
     }
-  }, [auth_token]); // Re-run when auth token changes
+  }, [currentUser]); // Re-run when user changes
 
   // Search term effect - needed because fetchPolicy is "network-only"
   useEffect(() => {
@@ -2076,7 +2076,7 @@ export const Corpuses = () => {
   };
 
   let corpus_actions: DropdownActionProps[] = [];
-  if (auth_token) {
+  if (currentUser) {
     corpus_actions = [
       ...corpus_actions,
       {
@@ -2090,7 +2090,7 @@ export const Corpuses = () => {
 
     // Currently the import capability is enabled via an env variable in case we want it disabled
     // (which we'll probably do for the public demo to cut down on attack surface and load on server)
-    if (REACT_APP_ALLOW_IMPORTS && auth_token) {
+    if (REACT_APP_ALLOW_IMPORTS) {
       corpus_actions.push({
         icon: "cloud upload",
         title: "Import Corpus",
@@ -2102,7 +2102,7 @@ export const Corpuses = () => {
   }
 
   let contract_actions: DropdownActionProps[] = [];
-  if (selected_document_ids.length > 0 && auth_token) {
+  if (selected_document_ids.length > 0 && currentUser) {
     contract_actions.push({
       icon: "remove circle",
       title: "Remove Contract(s)",
@@ -2114,7 +2114,7 @@ export const Corpuses = () => {
 
   // Actions for analyzer pane (if user is signed in)
   if (
-    auth_token &&
+    currentUser &&
     raw_permissions?.includes(PermissionTypes.CAN_UPDATE) &&
     raw_permissions?.includes(PermissionTypes.CAN_READ)
   ) {
@@ -2555,7 +2555,7 @@ export const Corpuses = () => {
         onImportCorpus={() => corpusUploadRef.current.click()}
         searchValue={corpusSearchCache}
         onSearchChange={handleCorpusSearchChange}
-        allowImport={REACT_APP_ALLOW_IMPORTS && Boolean(auth_token)}
+        allowImport={REACT_APP_ALLOW_IMPORTS && Boolean(currentUser)}
       />
     );
   } else if (
