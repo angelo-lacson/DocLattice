@@ -958,13 +958,21 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             )
             seeded_tools = list(seeded_tools_dict.values())
 
-            # Merge per-call tool overrides
+            # Merge per-call tool overrides, deduplicating against seeded tools
             extra_tools: list[Callable] = []
             if tools:
                 from opencontractserver.llms.api import _resolve_tools
 
                 resolved_core_tools = _resolve_tools(tools)
-                extra_tools = PydanticAIToolFactory.create_tools(resolved_core_tools)
+                candidate_tools = PydanticAIToolFactory.create_tools(
+                    resolved_core_tools
+                )
+                # Deduplicate against seeded tools to prevent UserError
+                seeded_names = {getattr(t, "__name__", None) for t in seeded_tools}
+                for tool in candidate_tools:
+                    tool_name = getattr(tool, "__name__", None)
+                    if tool_name not in seeded_names:
+                        extra_tools.append(tool)
             elif self.config.tools:
                 # If caller did not pass tools but config has additional wrappers, include them
                 extra_tools = list(self.config.tools)
@@ -2038,7 +2046,21 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 ]
             )
         if tools:
-            effective_tools.extend(tools)
+            # Deduplicate: only add caller-provided tools that don't conflict
+            # with built-in tools. This prevents UserError from PydanticAI
+            # when tools like 'update_document_description' are already
+            # registered as defaults.
+            existing_names = {getattr(t, "__name__", None) for t in effective_tools}
+            for tool in tools:
+                tool_name = getattr(tool, "__name__", None)
+                if tool_name in existing_names:
+                    logger.debug(
+                        f"Skipping duplicate tool '{tool_name}' - "
+                        "already registered as default"
+                    )
+                    continue
+                effective_tools.append(tool)
+                existing_names.add(tool_name)
 
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(
