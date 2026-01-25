@@ -35,7 +35,10 @@ def backfill_processing_status(apps, schema_editor):
     ).filter(
         models.Q(pawls_parse_file__isnull=True) | models.Q(pawls_parse_file=""),
         models.Q(txt_extract_file__isnull=True) | models.Q(txt_extract_file=""),
-    ).update(processing_status="failed")
+    ).update(
+        processing_status="failed",
+        processing_error="Processing completed but produced no output (legacy document)",
+    )
 
     # Mark documents with processing_started but no processing_finished as PROCESSING
     Document.objects.filter(

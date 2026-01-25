@@ -1418,7 +1418,9 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         Returns True only if:
         1. Document is in FAILED state
-        2. User has UPDATE permission on the document
+        2. User has UPDATE permission (or is creator/superuser)
+
+        Note: This logic must stay aligned with RetryDocumentProcessing mutation.
         """
         from django.contrib.auth.models import AnonymousUser
 
@@ -1433,7 +1435,11 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
             return False
 
-        # Check UPDATE permission
+        # Creator and superuser can always retry their documents
+        if self.creator == user or user.is_superuser:
+            return True
+
+        # Others need UPDATE permission
         return user_has_permission_for_obj(
             user, self, PermissionTypes.UPDATE, include_group_permissions=True
         )
