@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-01-24
 
+### Fixed
+
+#### Duplicate Tool Registration and Caller Tool Precedence
+- **Fixed duplicate tool registration error in PydanticAI agent**: Resolved `pydantic_ai.exceptions.UserError` when caller-provided tools have the same name as default tools
+  - Files: `opencontractserver/llms/agents/pydantic_ai_agents.py:2063-2082`
+- **Caller-provided tools now take precedence over defaults**: When a caller passes a tool with the same name as a built-in default, the caller's tool configuration (description, requires_approval, etc.) is now used instead of silently dropping it
+  - Allows callers to override tool behavior and configurations
+  - Applies to both `PydanticAIDocumentAgent.create()` and `structured_response()`
+  - Added info-level logging when caller tools override defaults
+  - Files: `opencontractserver/llms/agents/pydantic_ai_agents.py:961-992`, `opencontractserver/llms/agents/pydantic_ai_agents.py:2063-2082`
+- **Added comprehensive test coverage**:
+  - `test_caller_tool_overrides_default_configuration` verifies caller's tool is used (not default)
+  - `test_config_tools_deduplicated_in_structured_response` covers the config.tools path
+  - Files: `opencontractserver/tests/test_duplicate_tool_registration.py`
+- **Fixed PydanticAICorpusAgent consistency**: Now uses same caller-precedence pattern as document agent
+- **Extracted `deduplicate_tools()` utility**: DRY refactor moves repeated deduplication logic to reusable function
+  - Checks both `__name__` and `name` attributes for tool identification
+  - Filters out `None` values to handle tools without names
+  - Includes security documentation in docstring
+  - Files: `opencontractserver/utils/tools.py`
+- **Added documentation for tool precedence**: New section in LLM docs explaining when conflicts occur, which configuration wins, and security considerations
+  - Files: `docs/architecture/llms/README.md`
+
 ### Added
 
 #### Document Processing Pipeline Hardening (PR #824)
