@@ -758,3 +758,248 @@ class TestDoclingParserImageExtraction(TestCase):
 
         self.assertIsNotNone(result)
         mock_extract_images.assert_called_once()
+
+    def test_find_images_in_bounds_invalid_page_type(self):
+        """Test _find_images_in_bounds handles non-dict page data."""
+        bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
+        # Page is not a dict
+        pawls_pages = ["invalid page data"]
+
+        result = self.parser._find_images_in_bounds(
+            bounds=bounds,
+            page_idx=0,
+            pawls_pages=pawls_pages,
+            token_offset=0,
+        )
+
+        self.assertEqual(result, [])
+
+    def test_find_images_in_bounds_invalid_page_index(self):
+        """Test _find_images_in_bounds handles out-of-range page index."""
+        bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
+        pawls_pages = [{"page": {"width": 612, "height": 792}, "tokens": []}]
+
+        result = self.parser._find_images_in_bounds(
+            bounds=bounds,
+            page_idx=5,  # Out of range
+            pawls_pages=pawls_pages,
+            token_offset=0,
+        )
+
+        self.assertEqual(result, [])
+
+    def test_find_images_in_bounds_token_offset_exceeds_length(self):
+        """Test _find_images_in_bounds when token_offset exceeds token list."""
+        bounds = {"left": 100, "top": 100, "right": 200, "bottom": 200}
+        page_tokens = [
+            {"x": 0, "y": 0, "width": 50, "height": 12, "text": "Text"},
+        ]
+        pawls_pages = [{"page": {"width": 612, "height": 792}, "tokens": page_tokens}]
+
+        result = self.parser._find_images_in_bounds(
+            bounds=bounds,
+            page_idx=0,
+            pawls_pages=pawls_pages,
+            token_offset=10,  # Exceeds token list length
+        )
+
+        self.assertEqual(result, [])
+
+    def test_add_image_refs_to_annotation_empty_bounds(self):
+        """Test _add_image_refs_to_annotation returns early when bounds is empty."""
+        annotation = {
+            "id": "figure-1",
+            "annotationLabel": "Figure",
+            "page": 0,
+            "annotation_json": {
+                "0": {
+                    "bounds": {},  # Empty bounds
+                    "tokensJsons": [],
+                }
+            },
+        }
+
+        pawls_pages = [
+            {
+                "page": {"width": 612, "height": 792, "index": 0},
+                "tokens": [],
+            }
+        ]
+
+        # Should return early without modifying anything
+        self.parser._add_image_refs_to_annotation(
+            annotation=annotation,
+            pdf_bytes=b"fake pdf",
+            image_token_offsets={},
+            page_dims={0: (612.0, 792.0)},
+            pawls_pages=pawls_pages,
+            storage_path=None,
+        )
+
+        # annotation_json should remain unchanged
+        self.assertEqual(annotation["annotation_json"]["0"]["tokensJsons"], [])
+
+    @patch(
+        "opencontractserver.pipeline.parsers.docling_parser_rest.extract_images_from_pdf"
+    )
+    def test_add_images_to_result_exception_handling(self, mock_extract):
+        """Test _add_images_to_result handles exceptions gracefully."""
+        mock_extract.side_effect = Exception("Image extraction failed")
+
+        base_result = {
+            "title": "Test",
+            "content": "Test content",
+            "pawls_file_content": [
+                {
+                    "page": {"width": 612, "height": 792, "index": 0},
+                    "tokens": [],
+                }
+            ],
+            "labelled_text": [],
+        }
+
+        # Should not raise, just log warning and return result unchanged
+        result = self.parser._add_images_to_result(
+            result=base_result,
+            pdf_bytes=b"fake pdf",
+            storage_path=None,
+        )
+
+        self.assertEqual(result, base_result)
+
+    @patch(
+        "opencontractserver.pipeline.parsers.docling_parser_rest.extract_images_from_pdf"
+    )
+    def test_add_images_to_result_invalid_page_index(self, mock_extract):
+        """Test _add_images_to_result handles invalid page index in images_by_page."""
+        # Return images for a page that doesn't exist in pawls_pages
+        mock_extract.return_value = {
+            5: [  # Page index 5 doesn't exist
+                {
+                    "x": 100,
+                    "y": 250,
+                    "width": 150,
+                    "height": 100,
+                    "text": "",
+                    "is_image": True,
+                    "format": "jpeg",
+                }
+            ]
+        }
+
+        base_result = {
+            "title": "Test",
+            "pawls_file_content": [
+                {
+                    "page": {"width": 612, "height": 792, "index": 0},
+                    "tokens": [],
+                }
+            ],
+            "labelled_text": [],
+        }
+
+        # Should not raise, just skip invalid page
+        result = self.parser._add_images_to_result(
+            result=base_result,
+            pdf_bytes=b"fake pdf",
+            storage_path=None,
+        )
+
+        # Original result should be unchanged
+        self.assertEqual(len(result["pawls_file_content"][0]["tokens"]), 0)
+
+
+class TestDoclingParser4xxErrors(TestCase):
+    """Tests for 4xx HTTP error handling (non-transient errors)."""
+
+    def setUp(self):
+        """Set up test environment."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="error4xx_user", password="testpass123"
+            )
+
+        self.doc = Document.objects.create(
+            title="4xx Error Test Document",
+            file_type="pdf",
+            creator=self.user,
+        )
+
+        pdf_content = (
+            b"%PDF-1.7\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n%%EOF\n"
+        )
+        self.doc.pdf_file.save("test_4xx.pdf", ContentFile(pdf_content))
+
+        self.parser = DoclingParser()
+
+    @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
+    @patch(
+        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
+    )
+    def test_parse_document_400_error_not_transient(self, mock_open, mock_post):
+        """Test that 400 Bad Request is treated as non-transient error."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        # Create a RequestException with a 400 response
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.text = "Bad Request: Invalid PDF format"
+
+        error = RequestException("Bad Request")
+        error.response = mock_response
+        mock_post.side_effect = error
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            self.parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
+
+        # 4xx errors should NOT be transient
+        self.assertFalse(ctx.exception.is_transient)
+
+    @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
+    @patch(
+        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
+    )
+    def test_parse_document_403_error_not_transient(self, mock_open, mock_post):
+        """Test that 403 Forbidden is treated as non-transient error."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.text = "Forbidden: Access denied"
+
+        error = RequestException("Forbidden")
+        error.response = mock_response
+        mock_post.side_effect = error
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            self.parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
+
+        self.assertFalse(ctx.exception.is_transient)
+
+    @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
+    @patch(
+        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
+    )
+    def test_parse_document_503_error_is_transient(self, mock_open, mock_post):
+        """Test that 503 Service Unavailable is treated as transient error."""
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"mock pdf content"
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+        mock_response.text = "Service Unavailable"
+
+        error = RequestException("Service Unavailable")
+        error.response = mock_response
+        mock_post.side_effect = error
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            self.parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
+
+        # 5xx errors should be transient
+        self.assertTrue(ctx.exception.is_transient)
