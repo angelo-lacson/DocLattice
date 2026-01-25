@@ -5,7 +5,7 @@ All notable changes to DocLattice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-21
+## [Unreleased] - 2026-01-24
 
 ### Fixed
 
@@ -31,6 +31,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `docs/architecture/llms/README.md`
 
 ### Added
+
+#### Document Processing Pipeline Hardening (PR #824)
+- **Document processing status tracking**: New `DocumentProcessingStatus` enum with PENDING, PROCESSING, COMPLETED, FAILED states
+  - `processing_status` field on Document model with database index
+  - `processing_error` and `processing_error_traceback` fields for failure diagnostics
+  - Files: `doclatticeserver/documents/models.py:24-32`, `doclatticeserver/documents/models.py:141-159`
+- **Typed parsing exceptions**: New `DocumentParsingError` with `is_transient` flag
+  - Transient errors (network timeouts, service unavailable) trigger automatic retry
+  - Permanent errors (invalid file, no parser) fail immediately
+  - Files: `doclatticeserver/pipeline/base/exceptions.py`
+- **Automatic retry with exponential backoff**: Up to 3 retries with 60-300s backoff and jitter
+  - Failed documents remain locked (`backend_lock=True`) to prevent broken state
+  - Files: `doclatticeserver/tasks/doc_tasks.py:287-435`
+- **Manual retry via GraphQL**: New `RetryDocumentProcessing` mutation
+  - Allows users to retry failed documents after infrastructure issues are resolved
+  - Atomic state reset prevents race conditions from multiple retry clicks
+  - Files: `config/graphql/mutations.py:2244-2330`
+- **Failure notifications**: New `DOCUMENT_PROCESSING_FAILED` notification type
+  - Notifies document creator when processing fails
+  - Files: `doclatticeserver/tasks/doc_tasks.py:113-146`, `doclatticeserver/notifications/models.py`
+- **Processing status constants**: Centralized in `doclatticeserver/constants/document_processing.py`
+- **24 unit tests**: Comprehensive coverage of new functionality
+  - Files: `doclatticeserver/tests/test_pipeline_hardening.py`
 
 #### Bifurcated Conversation Permissions (CHAT vs THREAD)
 - **New `conversation_type` field on Conversation model**: Distinguishes between personal agent chats and collaborative discussions
