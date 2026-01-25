@@ -16,7 +16,6 @@ Each test is named descriptively to serve as documentation of expected behavior.
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.db.models.signals import post_save
 from django.test import TransactionTestCase
 
 from opencontractserver.corpuses.folder_service import DocumentFolderService
@@ -25,10 +24,6 @@ from opencontractserver.corpuses.models import (
     CorpusFolder,
 )
 from opencontractserver.documents.models import Document, DocumentPath
-from opencontractserver.documents.signals import (
-    DOC_CREATE_UID,
-    process_doc_on_create_atomic,
-)
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -42,27 +37,13 @@ User = get_user_model()
 
 class DocumentFolderServiceTestBase(TransactionTestCase):
     """
-    Base test class that disconnects document processing signals.
+    Base test class for document folder service tests.
 
-    This prevents Celery tasks from being triggered during test setup,
-    which would cause tests to hang or fail in non-Celery environments.
+    Note: Signal management is handled globally by conftest.py fixture
+    `disable_document_processing_signals` - no need to disconnect/reconnect here.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        """Disconnect document processing signals before tests."""
-        super().setUpClass()
-        post_save.disconnect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-
-    @classmethod
-    def tearDownClass(cls):
-        """Reconnect document processing signals after tests."""
-        post_save.connect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-        super().tearDownClass()
+    pass
 
 
 # =============================================================================
