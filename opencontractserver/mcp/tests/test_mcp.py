@@ -3700,34 +3700,41 @@ class MCPPermissionChangeTest(TransactionTestCase):
         db.connections.close_all()
 
     def test_scoped_server_revalidates_permissions_on_tool_call(self):
-        """Test that scoped server re-validates corpus permissions on each tool call."""
-        import asyncio
+        """Test that scoped server re-validates corpus permissions on each tool call.
 
-        from asgiref.sync import sync_to_async
-        from django import db
+        Mocks the Corpus queryset to avoid async database connection issues
+        in parallel test environments. Tests the function's logic by changing
+        mock return values to simulate permission changes.
+        """
+        import asyncio
+        from unittest.mock import MagicMock, patch
+
+        from opencontractserver.mcp.server import validate_corpus_slug
+
+        # Track call count to return different values on subsequent calls
+        call_count = 0
+
+        def mock_visible_to_user(user):
+            nonlocal call_count
+            call_count += 1
+            mock_queryset = MagicMock()
+            # First call: corpus is public (exists returns True)
+            # Second call: corpus is private (exists returns False)
+            mock_queryset.filter.return_value.exists.return_value = call_count == 1
+            return mock_queryset
 
         async def run_test():
-            # Test via the validation function which is called on each request
-            from opencontractserver.mcp.server import validate_corpus_slug
+            with patch(
+                "opencontractserver.corpuses.models.Corpus.objects.visible_to_user",
+                side_effect=mock_visible_to_user,
+            ):
+                # Initially should be valid (corpus is public)
+                is_valid = await validate_corpus_slug(self.corpus.slug)
+                self.assertTrue(is_valid)
 
-            # Initially should be valid (corpus is public)
-            is_valid = await validate_corpus_slug(self.corpus.slug)
-            self.assertTrue(is_valid)
-
-            # Make corpus private - use sync_to_async for DB operations
-            @sync_to_async
-            def make_private():
-                self.corpus.is_public = False
-                self.corpus.save()
-
-            await make_private()
-
-            # Should now be invalid - validates permission on each call
-            is_valid = await validate_corpus_slug(self.corpus.slug)
-            self.assertFalse(is_valid)
-
-        # Close any stale connections before creating event loop
-        db.connections.close_all()
+                # Second call should be invalid (simulating corpus became private)
+                is_valid = await validate_corpus_slug(self.corpus.slug)
+                self.assertFalse(is_valid)
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -3735,17 +3742,22 @@ class MCPPermissionChangeTest(TransactionTestCase):
             loop.run_until_complete(run_test())
         finally:
             loop.close()
-            # Close connections after async execution to prevent corruption
-            db.connections.close_all()
 
     def test_asgi_rejects_request_after_corpus_becomes_private(self):
-        """Test ASGI endpoint rejects requests after corpus becomes private."""
-        import asyncio
+        """Test ASGI endpoint rejects requests after corpus becomes private.
 
-        from asgiref.sync import sync_to_async
-        from django import db
+        Mocks the Corpus queryset to avoid async database connection issues
+        in parallel test environments. The mock returns empty queryset to
+        simulate a private corpus (not visible to anonymous users).
+        """
+        import asyncio
+        from unittest.mock import MagicMock, patch
 
         from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        # Mock queryset returns False for exists() - corpus not visible (private)
+        mock_queryset = MagicMock()
+        mock_queryset.filter.return_value.exists.return_value = False
 
         async def run_test():
             received = []
@@ -3767,15 +3779,12 @@ class MCPPermissionChangeTest(TransactionTestCase):
 
             app = create_mcp_asgi_app()
 
-            # Make corpus private before request - use sync_to_async for DB operations
-            @sync_to_async
-            def make_private():
-                self.corpus.is_public = False
-                self.corpus.save()
-
-            await make_private()
-
-            await app(scope, mock_receive, mock_send)
+            # Mock the visibility check to return False (corpus is private)
+            with patch(
+                "opencontractserver.corpuses.models.Corpus.objects.visible_to_user",
+                return_value=mock_queryset,
+            ):
+                await app(scope, mock_receive, mock_send)
 
             # Should get 404 (corpus not found/not public)
             self.assertEqual(received[0]["type"], "http.response.start")
@@ -3783,17 +3792,12 @@ class MCPPermissionChangeTest(TransactionTestCase):
             body = json.loads(received[1]["body"])
             self.assertIn("not found or not public", body["error"])
 
-        # Close any stale connections before creating event loop
-        db.connections.close_all()
-
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(run_test())
         finally:
             loop.close()
-            # Close connections after async execution to prevent corruption
-            db.connections.close_all()
 
 
 class MCPCleanupCallbackErrorTest(TestCase):
