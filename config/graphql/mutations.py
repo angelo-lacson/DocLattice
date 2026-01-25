@@ -2241,6 +2241,95 @@ class DeleteMultipleDocuments(graphene.Mutation):
         return DeleteMultipleDocuments(ok=ok, message=message)
 
 
+class RetryDocumentProcessing(graphene.Mutation):
+    """
+    Retry processing for a failed document.
+
+    This mutation allows users to manually trigger reprocessing of a document
+    that failed during the parsing pipeline. It's useful when transient errors
+    (like network timeouts or service unavailability) have been resolved.
+
+    Requirements:
+    - Document must be in FAILED processing state
+    - User must have UPDATE permission on the document
+    """
+
+    class Arguments:
+        document_id = graphene.String(
+            required=True, description="ID of the failed document to retry processing"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    document = graphene.Field(DocumentType)
+
+    @login_required
+    def mutate(root, info, document_id):
+        from opencontractserver.documents.models import DocumentProcessingStatus
+        from opencontractserver.tasks.doc_tasks import retry_document_processing
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        try:
+            # Decode global ID
+            doc_pk = from_global_id(document_id)[1]
+
+            # Fetch the document
+            try:
+                document = Document.objects.get(pk=doc_pk)
+            except Document.DoesNotExist:
+                return RetryDocumentProcessing(
+                    ok=False, message="Document not found", document=None
+                )
+
+            # IDOR protection: Check user has access to this document
+            if not document.is_public and document.creator != info.context.user:
+                if not user_has_permission_for_obj(
+                    info.context.user, document, PermissionTypes.READ
+                ):
+                    return RetryDocumentProcessing(
+                        ok=False, message="Document not found", document=None
+                    )
+
+            # Check document is in failed state
+            if document.processing_status != DocumentProcessingStatus.FAILED:
+                return RetryDocumentProcessing(
+                    ok=False,
+                    message="Document is not in a failed state and cannot be retried",
+                    document=None,
+                )
+
+            # Check user has UPDATE permission
+            if (
+                document.creator != info.context.user
+                and not info.context.user.is_superuser
+            ):
+                if not user_has_permission_for_obj(
+                    info.context.user, document, PermissionTypes.UPDATE
+                ):
+                    return RetryDocumentProcessing(
+                        ok=False,
+                        message="You don't have permission to retry processing for this document",
+                        document=None,
+                    )
+
+            # Trigger the retry task
+            retry_document_processing.delay(
+                user_id=info.context.user.id, doc_id=document.id
+            )
+
+            return RetryDocumentProcessing(
+                ok=True,
+                message="Document reprocessing has been queued",
+                document=document,
+            )
+
+        except Exception as e:
+            return RetryDocumentProcessing(
+                ok=False, message=f"Retry failed: {str(e)}", document=None
+            )
+
+
 class RemoveAnnotation(graphene.Mutation):
     class Arguments:
         annotation_id = graphene.String(
@@ -5683,6 +5772,9 @@ class Mutation(graphene.ObjectType):
     delete_document = DeleteDocument.Field()
     delete_multiple_documents = DeleteMultipleDocuments.Field()
     upload_documents_zip = UploadDocumentsZip.Field()  # Bulk document upload via zip
+    retry_document_processing = (
+        RetryDocumentProcessing.Field()
+    )  # Retry failed documents
 
     # DOCUMENT VERSIONING MUTATIONS ############################################
     restore_deleted_document = RestoreDeletedDocument.Field()

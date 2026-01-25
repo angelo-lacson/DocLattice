@@ -26,6 +26,7 @@ from opencontractserver.annotations.models import (
     NoteRevision,
     Relationship,
 )
+from opencontractserver.constants import MAX_PROCESSING_ERROR_DISPLAY_LENGTH
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -44,6 +45,7 @@ from opencontractserver.documents.models import (
     Document,
     DocumentAnalysisRow,
     DocumentPath,
+    DocumentProcessingStatus,
     DocumentRelationship,
     DocumentSummaryRevision,
 )
@@ -472,6 +474,15 @@ class AgentTypeEnum(graphene.Enum):
 
     DOCUMENT_AGENT = "document_agent"
     CORPUS_AGENT = "corpus_agent"
+
+
+class DocumentProcessingStatusEnum(graphene.Enum):
+    """Enum for document processing status in the parsing pipeline."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 # -------------------- Versioning Types (Phase 1) -------------------- #
@@ -1371,6 +1382,66 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         return user_has_permission_for_obj(
             user, self, PermissionTypes.READ, include_group_permissions=True
+        )
+
+    # -------------------- Processing Status Fields (Pipeline Hardening) -------------------- #
+    processing_status = graphene.Field(
+        DocumentProcessingStatusEnum,
+        description="Current processing status of the document in the parsing pipeline",
+    )
+    processing_error = graphene.String(
+        description="Error message if processing failed (truncated for display)",
+    )
+    can_retry = graphene.Boolean(
+        description="Whether the user can retry processing for this document (True if FAILED and user has permission)",
+    )
+
+    def resolve_processing_status(self, info):
+        """Resolve the processing status enum value."""
+        status_value = self.processing_status
+        if status_value:
+            try:
+                return DocumentProcessingStatusEnum.get(status_value)
+            except Exception:
+                return None
+        return None
+
+    def resolve_processing_error(self, info):
+        """Resolve processing error message (truncated for display)."""
+        if self.processing_error:
+            return self.processing_error[:MAX_PROCESSING_ERROR_DISPLAY_LENGTH]
+        return None
+
+    def resolve_can_retry(self, info):
+        """
+        Check if user can retry processing for this document.
+
+        Returns True only if:
+        1. Document is in FAILED state
+        2. User has UPDATE permission (or is creator/superuser)
+
+        Note: This logic must stay aligned with RetryDocumentProcessing mutation.
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        # Must be in failed state to retry
+        if self.processing_status != DocumentProcessingStatus.FAILED:
+            return False
+
+        user = info.context.user
+        if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+            return False
+
+        # Creator and superuser can always retry their documents
+        if self.creator == user or user.is_superuser:
+            return True
+
+        # Others need UPDATE permission
+        return user_has_permission_for_obj(
+            user, self, PermissionTypes.UPDATE, include_group_permissions=True
         )
 
     page_annotations = graphene.List(

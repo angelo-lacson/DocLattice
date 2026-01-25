@@ -15,6 +15,7 @@ from opencontractserver.annotations.models import (
     StructuralAnnotationSet,
 )
 from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.types.dicts import OpenContractDocExport
 from opencontractserver.utils.importing import (
@@ -356,7 +357,7 @@ class BaseParser(PipelineComponentBase, ABC):
 
     def process_document(
         self, user_id: int, doc_id: int, **kwargs
-    ) -> Optional[OpenContractDocExport]:
+    ) -> OpenContractDocExport:
         """
         Process a document by parsing it and then saving the parsed data.
         This method calls parse_document(...) and then save_parsed_data(...).
@@ -369,7 +370,11 @@ class BaseParser(PipelineComponentBase, ABC):
                       - corpus_id (Optional[int]): ID of corpus for corpus-specific embeddings
 
         Returns:
-            Optional[OpenContractDocExport]: The parsed document data, or None if parsing failed.
+            OpenContractDocExport: The parsed document data.
+
+        Raises:
+            DocumentParsingError: If parsing fails. The exception's is_transient
+                attribute indicates whether the error might succeed on retry.
         """
         # Extract corpus_id for save_parsed_data (not needed by parse_document)
         corpus_id = kwargs.pop("corpus_id", None)
@@ -380,10 +385,13 @@ class BaseParser(PipelineComponentBase, ABC):
         )
 
         parsed_data = self.parse_document(user_id, doc_id, **kwargs)
-        if parsed_data is not None:
-            self.save_parsed_data(user_id, doc_id, parsed_data, corpus_id=corpus_id)
-            logger.info(f"Document {doc_id} processed successfully.")
-        else:
-            logger.warning(f"Document {doc_id} parsing failed.")
+        if parsed_data is None:
+            raise DocumentParsingError(
+                f"Parser {self.__class__.__name__} returned None for document {doc_id}",
+                is_transient=True,  # Assume transient by default; subclasses override
+            )
+
+        self.save_parsed_data(user_id, doc_id, parsed_data, corpus_id=corpus_id)
+        logger.info(f"Document {doc_id} processed successfully.")
 
         return parsed_data

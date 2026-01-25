@@ -6,7 +6,7 @@ import uuid
 import django
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from pgvector.django import VectorField
@@ -19,6 +19,15 @@ from opencontractserver.shared.mixins import HasEmbeddingMixin
 from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.slug_utils import generate_unique_slug, sanitize_slug
 from opencontractserver.shared.utils import calc_oc_file_path
+
+
+class DocumentProcessingStatus(models.TextChoices):
+    """Processing status for documents in the parsing pipeline."""
+
+    PENDING = "pending", "Pending"
+    PROCESSING = "processing", "Processing"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
 
 
 class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
@@ -128,6 +137,25 @@ class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
 
     processing_started = django.db.models.DateTimeField(null=True)
     processing_finished = django.db.models.DateTimeField(null=True)
+
+    # Processing status fields for pipeline hardening (PR #824)
+    processing_status = django.db.models.CharField(
+        max_length=20,
+        choices=DocumentProcessingStatus.choices,
+        default=DocumentProcessingStatus.PENDING,
+        db_index=True,
+        help_text="Current processing status of the document in the parsing pipeline",
+    )
+    processing_error = django.db.models.TextField(
+        blank=True,
+        default="",
+        help_text="Error message if processing failed",
+    )
+    processing_error_traceback = django.db.models.TextField(
+        blank=True,
+        default="",
+        help_text="Full traceback if processing failed",
+    )
 
     # Vector for vector search
     embedding = VectorField(dimensions=384, null=True, blank=True)

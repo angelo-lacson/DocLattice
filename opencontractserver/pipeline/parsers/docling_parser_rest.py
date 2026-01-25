@@ -8,6 +8,7 @@ from django.core.files.storage import default_storage
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.types.dicts import (
@@ -192,20 +193,44 @@ class DoclingParser(BaseParser):
                 )
                 response.raise_for_status()  # Raise exception for 4XX/5XX responses
             except Timeout:
-                logger.error(
-                    f"Request to Docling parser service timed out after {self.request_timeout} seconds"
+                msg = (
+                    f"Request to Docling parser service timed out after "
+                    f"{self.request_timeout} seconds for document {doc_id}"
                 )
-                return None
+                logger.error(msg)
+                raise DocumentParsingError(msg, is_transient=True)
             except ConnectionError:
-                logger.error(
-                    f"Failed to connect to Docling parser service at {self.service_url}"
+                msg = (
+                    f"Failed to connect to Docling parser service at "
+                    f"{self.service_url} for document {doc_id}"
                 )
-                return None
+                logger.error(msg)
+                raise DocumentParsingError(msg, is_transient=True)
             except RequestException as e:
-                logger.error(f"Request to Docling parser service failed: {e}")
-                if hasattr(e, "response") and e.response:
-                    logger.error(f"Response content: {e.response.text}")
-                return None
+                # Determine if transient based on HTTP status code
+                is_transient = True
+                status_code = None
+                response_text = ""
+
+                if hasattr(e, "response") and e.response is not None:
+                    status_code = e.response.status_code
+                    response_text = e.response.text[:500]  # Limit error text length
+                    # 4xx errors are typically permanent (bad request, unauthorized, etc.)
+                    # 5xx errors are typically transient (server error, service unavailable)
+                    if 400 <= status_code < 500:
+                        is_transient = False
+
+                msg = (
+                    f"Request to Docling parser service failed for document {doc_id}: "
+                    f"{e}"
+                )
+                if status_code:
+                    msg += f" (status={status_code})"
+                if response_text:
+                    msg += f" - Response: {response_text}"
+
+                logger.error(msg)
+                raise DocumentParsingError(msg, is_transient=is_transient)
 
             # Parse the response
             result = response.json()
@@ -227,12 +252,17 @@ class DoclingParser(BaseParser):
             )
             return normalized_result
 
+        except DocumentParsingError:
+            # Re-raise our custom exceptions as-is
+            raise
         except Exception as e:
             import traceback
 
             stacktrace = traceback.format_exc()
-            logger.error(f"Docling REST parser failed: {e}\n{stacktrace}")
-            return None
+            msg = f"Docling REST parser failed unexpectedly for document {doc_id}: {e}"
+            logger.error(f"{msg}\n{stacktrace}")
+            # Unexpected errors default to transient (might be temporary issue)
+            raise DocumentParsingError(msg, is_transient=True)
 
     def _normalize_response(self, response_data: dict[str, Any]) -> dict[str, Any]:
         """

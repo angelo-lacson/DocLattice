@@ -815,6 +815,9 @@ class TestLLMTools(TestCase):
 class AsyncTestDuplicateTools(TransactionTestCase):
     """Separate test class for async tests to avoid database connection issues."""
 
+    # Note: Signal management is handled globally by conftest.py fixture
+    # `disable_document_processing_signals` - no need to disconnect/reconnect here.
+
     @classmethod
     def setUpClass(cls):
         """Set up test data."""
@@ -1655,44 +1658,8 @@ class AsyncTestDocumentSummary(TransactionTestCase):
 class AsyncTestSearchExactTextAsSources(TransactionTestCase):
     """Async tests for search_exact_text_as_sources function."""
 
-    @classmethod
-    def setUpClass(cls):
-        """Disconnect document processing signals to avoid triggering ingestion."""
-        from django.db.models.signals import post_save
-
-        from opencontractserver.documents.signals import (
-            DOC_CREATE_UID,
-            process_doc_on_create_atomic,
-        )
-
-        # Disconnect signals BEFORE calling super().setUpClass()
-        # Document is already imported at module level
-        post_save.disconnect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-
-        super().setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Reconnect document processing signals."""
-        try:
-            super().tearDownClass()
-        finally:
-            from django.db.models.signals import post_save
-
-            from opencontractserver.documents.signals import (
-                DOC_CREATE_UID,
-                process_doc_on_create_atomic,
-            )
-
-            # Reconnect signals in finally block to ensure it happens even if teardown fails
-            # Document is already imported at module level
-            post_save.connect(
-                process_doc_on_create_atomic,
-                sender=Document,
-                dispatch_uid=DOC_CREATE_UID,
-            )
+    # Note: Signal management is handled globally by conftest.py fixture
+    # `disable_document_processing_signals` - no need to disconnect/reconnect here.
 
     def setUp(self):
         """Set up test data."""

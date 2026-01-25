@@ -115,6 +115,17 @@ class MockParser(BaseParser):
         self.doc.file_type = "application/mock"
         self.doc.save()
 
+        # Minimal valid parsed data to avoid DocumentParsingError for None return
+        mock_parsed_data: OpenContractDocExport = {
+            "title": "Test",
+            "content": "Test content",
+            "description": "",
+            "pawls_file_content": [],
+            "page_count": 1,
+            "doc_labels": [],
+            "labelled_text": [],
+        }
+
         # We'll override settings so that the doc_type -> parser reference name is "mock_parser.MockParser"
         with self.settings(
             PREFERRED_PARSERS={
@@ -130,7 +141,7 @@ class MockParser(BaseParser):
             # indeed receives the "test_key" kwarg.
             with patch(
                 "opencontractserver.pipeline.parsers.mock_parser.MockParser._parse_document_impl",
-                return_value=None,
+                return_value=mock_parsed_data,
             ) as mock_parse:
                 # Now call our Celery-based ingest_doc as a task signature
                 ingest_doc.s(user_id=self.user.id, doc_id=self.doc.id).apply()
@@ -256,3 +267,124 @@ class MockParser(BaseParser):
         self.assertEqual(rel_label.label_type, "RELATIONSHIP_LABEL")
 
         logger.info("LocalMockParser relationship import test passed successfully.")
+
+    def test_create_structural_annotation_set_already_exists(self):
+        """Test that _create_structural_annotation_set returns early when set exists."""
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.pipeline.base.parser import BaseParser
+
+        # Create a structural annotation set for the document
+        struct_set = StructuralAnnotationSet.objects.create(
+            creator=self.user,
+            content_hash="existing_hash",
+            parser_name="TestParser",
+            parser_version="1.0",
+            page_count=1,
+        )
+        self.doc.structural_annotation_set = struct_set
+        self.doc.save()
+
+        class LocalParser(BaseParser):
+            title = "LocalParser"
+
+            def _parse_document_impl(self, user_id, doc_id, **kwargs):
+                return None
+
+        parser = LocalParser()
+
+        # Should return early without creating a new set
+        parser._create_structural_annotation_set(self.doc, self.user)
+
+        # Should still have the same structural set
+        self.doc.refresh_from_db()
+        self.assertEqual(self.doc.structural_annotation_set.pk, struct_set.pk)
+
+    def test_create_structural_annotation_set_no_annotations(self):
+        """Test _create_structural_annotation_set with no structural annotations."""
+        from opencontractserver.pipeline.base.parser import BaseParser
+
+        class LocalParser(BaseParser):
+            title = "LocalParser"
+
+            def _parse_document_impl(self, user_id, doc_id, **kwargs):
+                return None
+
+        parser = LocalParser()
+
+        # Document has no structural annotations
+        parser._create_structural_annotation_set(self.doc, self.user)
+
+        # Should not create a structural set
+        self.doc.refresh_from_db()
+        self.assertIsNone(self.doc.structural_annotation_set)
+
+    def test_create_structural_annotation_set_retry_reuses_orphaned_set(self):
+        """Test _create_structural_annotation_set reuses orphaned set on retry.
+
+        This tests the retry scenario where:
+        1. First attempt creates StructuralAnnotationSet but crashes before document.save()
+        2. Retry finds the orphaned set by content hash and links it
+
+        The content hash is document-specific (pdf_file_hash or doc_{pk}), so this
+        is NOT about sharing sets between documents - it's about idempotent retries.
+        """
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.pipeline.base.parser import BaseParser
+
+        # Set up a document with a content hash
+        self.doc.pdf_file_hash = "doc_specific_hash_abc123"
+        self.doc.save()
+
+        # Simulate a previous failed attempt that created an orphaned set
+        # (set was created but document wasn't linked before crash)
+        orphaned_set = StructuralAnnotationSet.objects.create(
+            creator=self.user,
+            content_hash="doc_specific_hash_abc123",  # Same hash as document
+            parser_name="LocalParser",
+            parser_version="1.0",
+            page_count=1,
+        )
+
+        # Create a structural annotation on the document (from the retry attempt)
+        label = AnnotationLabel.objects.create(
+            text="StructLabel", creator=self.user, label_type="SPAN_LABEL"
+        )
+        Annotation.objects.create(
+            raw_text="Structural text",
+            annotation_label=label,
+            document=self.doc,
+            creator=self.user,
+            structural=True,
+        )
+
+        class LocalParser(BaseParser):
+            title = "LocalParser"
+
+            def _parse_document_impl(self, user_id, doc_id, **kwargs):
+                return None
+
+        parser = LocalParser()
+        parser._create_structural_annotation_set(self.doc, self.user)
+
+        # Should reuse the orphaned set from the failed first attempt
+        self.doc.refresh_from_db()
+        self.assertEqual(self.doc.structural_annotation_set.pk, orphaned_set.pk)
+
+    def test_process_document_raises_on_none_return(self):
+        """Test process_document raises DocumentParsingError when parser returns None."""
+        from opencontractserver.pipeline.base.exceptions import DocumentParsingError
+        from opencontractserver.pipeline.base.parser import BaseParser
+
+        class NoneParser(BaseParser):
+            title = "NoneParser"
+
+            def _parse_document_impl(self, user_id, doc_id, **kwargs):
+                return None
+
+        parser = NoneParser()
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            parser.process_document(user_id=self.user.id, doc_id=self.doc.id)
+
+        self.assertTrue(ctx.exception.is_transient)
+        self.assertIn("returned None", str(ctx.exception))

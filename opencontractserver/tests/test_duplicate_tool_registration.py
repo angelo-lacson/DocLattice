@@ -12,15 +12,10 @@ Bug report:
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.db.models.signals import post_save
 from django.test import TransactionTestCase
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
-from opencontractserver.documents.signals import (
-    DOC_CREATE_UID,
-    process_doc_on_create_atomic,
-)
 from opencontractserver.llms import agents
 from opencontractserver.llms.agents.core_agents import AgentConfig
 from opencontractserver.llms.agents.pydantic_ai_agents import PydanticAIDocumentAgent
@@ -33,21 +28,8 @@ User = get_user_model()
 class TestDuplicateToolRegistration(TransactionTestCase):
     """Tests for duplicate tool registration bug."""
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        """Disconnect document processing signals to avoid Celery tasks during setup."""
-        super().setUpClass()
-        post_save.disconnect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        """Reconnect document processing signals after tests complete."""
-        post_save.connect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-        super().tearDownClass()
+    # Note: Signal management is handled globally by conftest.py fixture
+    # `disable_document_processing_signals` - no need to disconnect/reconnect here.
 
     def setUp(self) -> None:
         """Create test data."""

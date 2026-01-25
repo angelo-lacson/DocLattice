@@ -9,25 +9,13 @@ import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import connection, connections
-from django.db.models.signals import post_save
 from django.db.utils import OperationalError
 from django.test import TransactionTestCase, override_settings
 from graphql_jwt.shortcuts import get_token
 
 from config.asgi import application
-from opencontractserver.annotations.models import Annotation
-from opencontractserver.annotations.signals import (
-    ANNOT_CREATE_UID,  # Import the static UID
-)
-from opencontractserver.annotations.signals import (
-    process_annot_on_create_atomic,
-)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
-from opencontractserver.documents.signals import (
-    DOC_CREATE_UID,
-    process_doc_on_create_atomic,
-)
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -89,20 +77,13 @@ class BaseFixtureTestCase(TransactionTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         """
-        Set up test class with patched signals.
+        Set up test class.
         Also closes any lingering DB connections before continuing.
+
+        Note: Signal management is handled globally by conftest.py fixture
+        `disable_document_processing_signals` - no need to disconnect here.
         """
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
-
-        # Disconnect signals before loading fixtures
-        post_save.disconnect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-        post_save.disconnect(
-            process_annot_on_create_atomic,
-            sender=Annotation,
-            dispatch_uid=ANNOT_CREATE_UID,  # Use static UID
-        )
 
         # Close any existing connections before setup
         for conn in connections.all():
@@ -131,7 +112,11 @@ class BaseFixtureTestCase(TransactionTestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         """
-        Clean up signal patches, test media, and database connections.
+        Clean up test media and database connections.
+
+        Note: Signal management is handled globally by conftest.py fixture
+        `disable_document_processing_signals` - signals stay disconnected
+        for the entire test session.
         """
         try:
             # First, just close connections normally without terminating
@@ -163,18 +148,7 @@ class BaseFixtureTestCase(TransactionTestCase):
                 else:
                     raise
         finally:
-            # Reconnect signals and clean up the filesystem
-            post_save.connect(
-                process_doc_on_create_atomic,
-                sender=Document,
-                dispatch_uid=DOC_CREATE_UID,
-            )
-            post_save.connect(
-                process_annot_on_create_atomic,
-                sender=Annotation,
-                dispatch_uid=ANNOT_CREATE_UID,  # Use static UID
-            )
-
+            # Clean up test media directory
             if os.path.exists(settings.MEDIA_ROOT):
                 shutil.rmtree(settings.MEDIA_ROOT)
 
