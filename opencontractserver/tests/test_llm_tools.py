@@ -818,6 +818,18 @@ class AsyncTestDuplicateTools(TransactionTestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test data."""
+        # Disconnect document processing signal to prevent Celery tasks during tests
+        from django.db.models.signals import post_save
+
+        from opencontractserver.documents.signals import (
+            DOC_CREATE_UID,
+            process_doc_on_create_atomic,
+        )
+
+        post_save.disconnect(
+            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+        )
+
         super().setUpClass()
 
         cls.user = User.objects.create_user(username="testuser_async", password="12345")
@@ -848,6 +860,22 @@ class AsyncTestDuplicateTools(TransactionTestCase):
             document=cls.doc,
             corpus=cls.corpus,
             creator=cls.user,
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        """Reconnect signals after tests."""
+        from django.db.models.signals import post_save
+
+        from opencontractserver.documents.signals import (
+            DOC_CREATE_UID,
+            process_doc_on_create_atomic,
+        )
+
+        super().tearDownClass()
+
+        post_save.connect(
+            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
         )
 
     # ------------------------------------------------------------------
