@@ -15,20 +15,28 @@ def backfill_processing_status(apps, schema_editor):
     """
     Document = apps.get_model("documents", "Document")
 
-    # Mark documents with processing_finished and parsed content as COMPLETED
+    # STEP 1: Mark PDF documents with PAWLS content as COMPLETED
+    # FileFields can be either NULL or empty string ("") when empty, so we check both.
+    # This query catches documents that have actual PAWLS parse data (PDFs).
     Document.objects.filter(
         processing_finished__isnull=False, pawls_parse_file__isnull=False
     ).exclude(pawls_parse_file="").update(processing_status="completed")
 
-    # Also mark documents with txt_extract_file as completed (text files don't have PAWLS)
+    # STEP 2: Mark text-only documents as COMPLETED
+    # Text files (txt, md, etc.) don't produce PAWLS data - they only have txt_extract_file.
+    # This catches documents where pawls_parse_file is empty string but txt_extract exists.
+    # Note: Documents with actual PAWLS content were already marked COMPLETED in step 1,
+    # so this won't create duplicates.
     Document.objects.filter(
         processing_finished__isnull=False,
-        pawls_parse_file="",  # No PAWLS file
+        pawls_parse_file="",  # Empty string means no PAWLS (text file)
         txt_extract_file__isnull=False,
     ).exclude(txt_extract_file="").update(processing_status="completed")
 
-    # Mark documents with processing_finished but no content as FAILED
-    # These are documents where processing "completed" but produced no output
+    # STEP 3: Mark documents with processing_finished but no content as FAILED
+    # These are legacy documents where processing "completed" but produced no output.
+    # We check processing_status="pending" to avoid overwriting documents already
+    # marked as COMPLETED in steps 1-2.
     Document.objects.filter(
         processing_finished__isnull=False,
         processing_status="pending",  # Not yet marked as completed
@@ -40,7 +48,8 @@ def backfill_processing_status(apps, schema_editor):
         processing_error="Processing completed but produced no output (legacy document)",
     )
 
-    # Mark documents with processing_started but no processing_finished as PROCESSING
+    # STEP 4: Mark documents currently being processed as PROCESSING
+    # These have processing_started but no processing_finished timestamp.
     Document.objects.filter(
         processing_started__isnull=False,
         processing_finished__isnull=True,
