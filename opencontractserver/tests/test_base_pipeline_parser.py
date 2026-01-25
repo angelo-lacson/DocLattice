@@ -115,6 +115,17 @@ class MockParser(BaseParser):
         self.doc.file_type = "application/mock"
         self.doc.save()
 
+        # Minimal valid parsed data to avoid DocumentParsingError for None return
+        mock_parsed_data: OpenContractDocExport = {
+            "title": "Test",
+            "content": "Test content",
+            "description": "",
+            "pawls_file_content": [],
+            "page_count": 1,
+            "doc_labels": [],
+            "labelled_text": [],
+        }
+
         # We'll override settings so that the doc_type -> parser reference name is "mock_parser.MockParser"
         with self.settings(
             PREFERRED_PARSERS={
@@ -130,7 +141,7 @@ class MockParser(BaseParser):
             # indeed receives the "test_key" kwarg.
             with patch(
                 "opencontractserver.pipeline.parsers.mock_parser.MockParser._parse_document_impl",
-                return_value=None,
+                return_value=mock_parsed_data,
             ) as mock_parse:
                 # Now call our Celery-based ingest_doc as a task signature
                 ingest_doc.s(user_id=self.user.id, doc_id=self.doc.id).apply()

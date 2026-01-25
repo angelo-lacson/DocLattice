@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.parsers.docling_parser_rest import DoclingParser
 
 User = get_user_model()
@@ -148,7 +149,7 @@ class TestDoclingParser(TestCase):
         "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
     )
     def test_parse_document_service_error(self, mock_open, mock_post):
-        """Test handling of service errors."""
+        """Test handling of service errors raises DocumentParsingError."""
         # Mock the file reading
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
@@ -160,11 +161,12 @@ class TestDoclingParser(TestCase):
             side_effect=Exception("500 Server Error")
         )
 
-        # Call the parse_document method
-        result = self.parser.parse_document(user_id=1, doc_id=self.doc.id)
+        # Call the parse_document method - should raise DocumentParsingError
+        with self.assertRaises(DocumentParsingError) as ctx:
+            self.parser.parse_document(user_id=1, doc_id=self.doc.id)
 
-        # Check that the result is None when service fails
-        self.assertIsNone(result)
+        # Verify the error is marked as transient (server errors are transient)
+        self.assertTrue(ctx.exception.is_transient)
 
     @override_settings(DOCLING_PARSER_SERVICE_URL="http://custom-host:9000/parse/")
     def test_custom_settings(self):
@@ -205,7 +207,7 @@ class TestDoclingParser(TestCase):
         "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
     )
     def test_parse_document_timeout_error(self, mock_open, mock_post):
-        """Parser returns None when the Docling service call times out."""
+        """Parser raises DocumentParsingError when the Docling service call times out."""
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
         mock_open.return_value.__enter__.return_value = mock_file
@@ -213,9 +215,12 @@ class TestDoclingParser(TestCase):
         # Simulate a timeout raised by requests.post
         mock_post.side_effect = Timeout()
 
-        result = self.parser.parse_document(user_id=1, doc_id=self.doc.id)
+        # Should raise DocumentParsingError with is_transient=True
+        with self.assertRaises(DocumentParsingError) as ctx:
+            self.parser.parse_document(user_id=1, doc_id=self.doc.id)
 
-        self.assertIsNone(result)
+        self.assertTrue(ctx.exception.is_transient)
+        self.assertIn("timed out", str(ctx.exception))
         mock_post.assert_called_once()  # Ensure we attempted a single request
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
@@ -223,7 +228,7 @@ class TestDoclingParser(TestCase):
         "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
     )
     def test_parse_document_connection_error(self, mock_open, mock_post):
-        """Parser returns None when the Docling service is unreachable."""
+        """Parser raises DocumentParsingError when the Docling service is unreachable."""
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
         mock_open.return_value.__enter__.return_value = mock_file
@@ -231,9 +236,12 @@ class TestDoclingParser(TestCase):
         # Simulate inability to connect to the service
         mock_post.side_effect = ConnectionError()
 
-        result = self.parser.parse_document(user_id=1, doc_id=self.doc.id)
+        # Should raise DocumentParsingError with is_transient=True
+        with self.assertRaises(DocumentParsingError) as ctx:
+            self.parser.parse_document(user_id=1, doc_id=self.doc.id)
 
-        self.assertIsNone(result)
+        self.assertTrue(ctx.exception.is_transient)
+        self.assertIn("Failed to connect", str(ctx.exception))
         mock_post.assert_called_once()
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
@@ -242,7 +250,7 @@ class TestDoclingParser(TestCase):
     )
     def test_parse_document_generic_request_exception(self, mock_open, mock_post):
         """
-        Parser returns None when an unexpected RequestException is raised.
+        Parser raises DocumentParsingError when an unexpected RequestException is raised.
         Also verify that a response object attached to the exception is handled.
         """
         mock_file = MagicMock()
@@ -252,15 +260,18 @@ class TestDoclingParser(TestCase):
         # Create a mock response to attach to the exception
         mock_failed_response = MagicMock()
         mock_failed_response.text = "Upstream failure"
+        mock_failed_response.status_code = None  # No status code for generic exception
 
         # Raise a generic RequestException that includes a response attribute
         mock_post.side_effect = RequestException(
             "Service blew up", response=mock_failed_response
         )
 
-        result = self.parser.parse_document(user_id=1, doc_id=self.doc.id)
+        # Should raise DocumentParsingError with is_transient=True (default for unknown errors)
+        with self.assertRaises(DocumentParsingError) as ctx:
+            self.parser.parse_document(user_id=1, doc_id=self.doc.id)
 
-        self.assertIsNone(result)
+        self.assertTrue(ctx.exception.is_transient)
         mock_post.assert_called_once()
 
     def test_maybe_add_cloud_run_auth_non_cloud_run_url(self):
