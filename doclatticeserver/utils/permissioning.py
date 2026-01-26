@@ -206,17 +206,17 @@ def get_users_permissions_for_obj(
 ) -> set[str]:
 
     model_name = instance._meta.model_name
-    logger.info(
+    logger.debug(
         f"get_users_permissions_for_obj() - Starting check for {user.username} with model type {model_name}"
     )
 
     app_label = instance._meta.app_label
-    logger.info(f"get_users_permissions_for_obj - App name: {app_label}")
+    logger.debug(f"get_users_permissions_for_obj - App name: {app_label}")
 
     # Check if the model has django-guardian permission tables
     # Some models (like AnnotationLabel) use creator-based permissions instead
     if not hasattr(instance, f"{model_name}userobjectpermission_set"):
-        logger.info(
+        logger.debug(
             f"Model {model_name} does not have guardian permissions, using creator-based permissions"
         )
         # For models without guardian permissions, use creator-based permissions
@@ -242,16 +242,16 @@ def get_users_permissions_for_obj(
         elif hasattr(instance, "is_public") and instance.is_public:
             model_permissions_for_user.add(f"read_{model_name}")
 
-        logger.info(f"Creator-based permissions: {model_permissions_for_user}")
+        logger.debug(f"Creator-based permissions: {model_permissions_for_user}")
         return model_permissions_for_user
 
     this_user_perms = getattr(instance, f"{model_name}userobjectpermission_set")
 
-    logger.info(f"get_users_permissions_for_obj - this_user_perms: {this_user_perms}")
+    logger.debug(f"get_users_permissions_for_obj - this_user_perms: {this_user_perms}")
     permission_id_to_name_map = get_permission_id_to_name_map_for_model(
         instance=instance
     )
-    logger.info(
+    logger.debug(
         f"get_users_permissions_for_obj - permission_id_to_name_map: {permission_id_to_name_map}"
     )
 
@@ -270,7 +270,7 @@ def get_users_permissions_for_obj(
         this_users_group_perms = getattr(
             instance, f"{model_name}groupobjectpermission_set"
         ).filter(group_id__in=get_users_group_ids(user_instance=user))
-        logger.info(
+        logger.debug(
             f"get_users_permissions_for_obj - this_users_group_perms: {this_users_group_perms}"
         )
         for perm in this_users_group_perms:
@@ -278,7 +278,7 @@ def get_users_permissions_for_obj(
                 permission_id_to_name_map[perm.permission_id]
             )
 
-    logger.info(f"Final permissions: {model_permissions_for_user}")
+    logger.debug(f"Final permissions: {model_permissions_for_user}")
 
     return model_permissions_for_user
 

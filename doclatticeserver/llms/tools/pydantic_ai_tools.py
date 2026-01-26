@@ -223,13 +223,24 @@ class PydanticAIDependencies(BaseModel):
 class PydanticAIToolWrapper:
     """Modern Pydantic AI tool wrapper following latest patterns."""
 
-    def __init__(self, core_tool: CoreTool):
+    def __init__(
+        self,
+        core_tool: CoreTool,
+        inject_params: dict[str, Any] | None = None,
+    ):
         """Initialize the wrapper.
 
         Args:
             core_tool: The CoreTool instance to wrap
+            inject_params: Parameters to automatically inject at execution time,
+                hiding them from the LLM's view of the tool schema. This is used
+                for context-bound values like document_id or corpus_id that should
+                be deterministic (set by the system) rather than chosen by the LLM.
+                Maps parameter name -> value to inject.
+                Example: {"document_id": 123, "corpus_id": 456}
         """
         self.core_tool = core_tool
+        self.inject_params = inject_params or {}
         self._metadata = PydanticAIToolMetadata(
             name=core_tool.name,
             description=core_tool.description,
@@ -271,12 +282,17 @@ class PydanticAIToolWrapper:
             )
         ]
 
-        # Add original parameters (excluding 'self' if present)
+        # Add original parameters, EXCLUDING:
+        # - 'self'/'cls' (method artifacts)
+        # - Parameters in inject_params (hidden from LLM, auto-injected at runtime)
         for param_name, param in sig.parameters.items():
-            if param_name not in ["self", "cls"]:
+            if (
+                param_name not in ["self", "cls"]
+                and param_name not in self.inject_params
+            ):
                 new_params.append(param)
 
-        # Create new signature
+        # Create new signature (LLM will only see non-injected params)
         new_sig = sig.replace(parameters=new_params)
 
         # ------------------------------------------------------------------
@@ -328,12 +344,18 @@ class PydanticAIToolWrapper:
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
             ):
                 """Async wrapper for PydanticAI tools."""
+                # Inject context-bound parameters before any other processing.
+                # These params are hidden from the LLM and set deterministically.
+                for param_name, value in self.inject_params.items():
+                    kwargs[param_name] = value
+
                 # Defense-in-depth: validate user permissions BEFORE any tool execution
                 # This prevents permission escalation via agents
                 await _check_user_permissions(ctx)
 
                 # Defense-in-depth: validate resource ID params match context
                 # This prevents prompt injection attacks that try to access other resources
+                # (Also validates injected params match deps as additional safety check)
                 _validate_resource_id_params(ctx, **kwargs)
 
                 # Trigger approval gate *before* attempting execution.
@@ -367,12 +389,18 @@ class PydanticAIToolWrapper:
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
             ):
                 """Sync to async wrapper for PydanticAI tools."""
+                # Inject context-bound parameters before any other processing.
+                # These params are hidden from the LLM and set deterministically.
+                for param_name, value in self.inject_params.items():
+                    kwargs[param_name] = value
+
                 # Defense-in-depth: validate user permissions BEFORE any tool execution
                 # This prevents permission escalation via agents
                 await _check_user_permissions(ctx)
 
                 # Defense-in-depth: validate resource ID params match context
                 # This prevents prompt injection attacks that try to access other resources
+                # (Also validates injected params match deps as additional safety check)
                 _validate_resource_id_params(ctx, **kwargs)
 
                 _maybe_raise(ctx, *args, **kwargs)
@@ -452,16 +480,24 @@ class PydanticAIToolFactory:
         return [PydanticAIToolFactory.create_tool(tool) for tool in core_tools]
 
     @staticmethod
-    def create_tool(core_tool: CoreTool) -> Callable:
+    def create_tool(
+        core_tool: CoreTool,
+        inject_params: dict[str, Any] | None = None,
+    ) -> Callable:
         """Convert a single CoreTool to a modern Pydantic AI callable tool.
 
         Args:
             core_tool: CoreTool instance
+            inject_params: Parameters to auto-inject at execution time, hiding them
+                from the LLM. Used for context-bound values like document_id.
+                Example: {"document_id": 123}
 
         Returns:
             PydanticAI-compatible callable function
         """
-        return PydanticAIToolWrapper(core_tool).callable_function
+        return PydanticAIToolWrapper(
+            core_tool, inject_params=inject_params
+        ).callable_function
 
     @staticmethod
     def from_function(
@@ -473,6 +509,7 @@ class PydanticAIToolFactory:
         requires_approval: bool = False,
         requires_corpus: bool = False,
         requires_write_permission: bool = False,
+        inject_params: dict[str, Any] | None = None,
     ) -> Callable:
         """Create a PydanticAI-compatible callable tool directly from a Python function.
 
@@ -484,6 +521,10 @@ class PydanticAIToolFactory:
             requires_approval: Whether the tool requires approval
             requires_corpus: Whether the tool requires a corpus_id to function
             requires_write_permission: Whether the tool performs write operations
+            inject_params: Parameters to auto-inject at execution time, hiding them
+                from the LLM. Used for context-bound values like document_id that
+                should be deterministic. Maps param name -> value to inject.
+                Example: {"document_id": 123}
 
         Returns:
             PydanticAI-compatible callable function
@@ -497,7 +538,9 @@ class PydanticAIToolFactory:
             requires_corpus=requires_corpus,
             requires_write_permission=requires_write_permission,
         )
-        return PydanticAIToolWrapper(core_tool).callable_function
+        return PydanticAIToolWrapper(
+            core_tool, inject_params=inject_params
+        ).callable_function
 
     @staticmethod
     def create_tool_registry(core_tools: list[CoreTool]) -> dict[str, Callable]:
