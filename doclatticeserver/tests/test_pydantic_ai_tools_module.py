@@ -320,3 +320,152 @@ class TestCheckUserPermissions(TestCase):
         with self.assertRaises(PermissionError) as context:
             await _check_user_permissions(ctx)
         self.assertIn("not found", str(context.exception))
+
+
+# ---------------------------------------------------------------------------
+# Tests for inject_params functionality
+# ---------------------------------------------------------------------------
+
+
+def tool_with_doc_id(document_id: int, text: str) -> dict:
+    """A tool that requires document_id and text."""
+    return {"document_id": document_id, "text": text, "processed": True}
+
+
+async def async_tool_with_ids(document_id: int, corpus_id: int, query: str) -> dict:
+    """An async tool that requires document_id, corpus_id, and a query."""
+    return {"document_id": document_id, "corpus_id": corpus_id, "query": query}
+
+
+@pytest.mark.django_db
+class TestInjectParams(TestCase):
+    """Test suite for inject_params functionality.
+
+    This tests the feature where context-bound parameters (like document_id)
+    can be automatically injected at execution time while being hidden from
+    the LLM's view of the tool schema.
+    """
+
+    def test_inject_params_filters_from_signature(self):
+        """Test that injected params are filtered from the function signature.
+
+        The LLM should not see document_id as a parameter - it should only
+        see 'text' as a required parameter.
+        """
+        wrapped = PydanticAIToolFactory.from_function(
+            tool_with_doc_id,
+            name="process_document",
+            inject_params={"document_id": 123},
+        )
+
+        sig = inspect.signature(wrapped)
+        param_names = list(sig.parameters.keys())
+
+        # ctx should be first param (for PydanticAI)
+        self.assertEqual(param_names[0], "ctx")
+
+        # document_id should NOT be in params (hidden from LLM)
+        self.assertNotIn("document_id", param_names)
+
+        # text should still be visible to LLM
+        self.assertIn("text", param_names)
+
+    def test_inject_params_multiple_params_filtered(self):
+        """Test that multiple injected params are all filtered from signature."""
+        wrapped = PydanticAIToolFactory.from_function(
+            async_tool_with_ids,
+            name="search_document",
+            inject_params={"document_id": 100, "corpus_id": 200},
+        )
+
+        sig = inspect.signature(wrapped)
+        param_names = list(sig.parameters.keys())
+
+        # Only ctx and query should be visible
+        self.assertEqual(param_names, ["ctx", "query"])
+
+        # document_id and corpus_id should be hidden
+        self.assertNotIn("document_id", param_names)
+        self.assertNotIn("corpus_id", param_names)
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestInjectParamsExecution(TestCase):
+    """Async tests for inject_params execution behavior."""
+
+    async def test_sync_tool_injects_params_at_execution(self):
+        """Test that injected params are provided to sync function at execution."""
+        wrapped = PydanticAIToolFactory.from_function(
+            tool_with_doc_id,
+            name="process_document",
+            inject_params={"document_id": 42},
+        )
+
+        # Call without providing document_id - it should be injected
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, text="hello world")
+
+        # Verify injected value was used
+        self.assertEqual(result["document_id"], 42)
+        self.assertEqual(result["text"], "hello world")
+        self.assertTrue(result["processed"])
+
+    async def test_async_tool_injects_params_at_execution(self):
+        """Test that injected params are provided to async function at execution."""
+        wrapped = PydanticAIToolFactory.from_function(
+            async_tool_with_ids,
+            name="search_document",
+            inject_params={"document_id": 100, "corpus_id": 200},
+        )
+
+        # Call with only query - document_id and corpus_id should be injected
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, query="find contracts")
+
+        # Verify all injected values were used
+        self.assertEqual(result["document_id"], 100)
+        self.assertEqual(result["corpus_id"], 200)
+        self.assertEqual(result["query"], "find contracts")
+
+    async def test_wrapper_constructor_accepts_inject_params(self):
+        """Test that PydanticAIToolWrapper constructor accepts inject_params."""
+        core_tool = CoreTool.from_function(tool_with_doc_id)
+        wrapper = PydanticAIToolWrapper(core_tool, inject_params={"document_id": 999})
+
+        # Verify inject_params is stored
+        self.assertEqual(wrapper.inject_params, {"document_id": 999})
+
+        # Verify it works at execution
+        ctx = MagicMock(deps=None)
+        result = await wrapper.callable_function(ctx, text="test")
+        self.assertEqual(result["document_id"], 999)
+
+    async def test_create_tool_accepts_inject_params(self):
+        """Test that PydanticAIToolFactory.create_tool accepts inject_params."""
+        core_tool = CoreTool.from_function(tool_with_doc_id)
+        wrapped = PydanticAIToolFactory.create_tool(
+            core_tool, inject_params={"document_id": 777}
+        )
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, text="factory test")
+
+        self.assertEqual(result["document_id"], 777)
+        self.assertEqual(result["text"], "factory test")
+
+    async def test_no_inject_params_preserves_original_signature(self):
+        """Test that without inject_params, all original params are preserved."""
+        wrapped = PydanticAIToolFactory.from_function(
+            tool_with_doc_id,
+            name="process_document",
+            # No inject_params
+        )
+
+        sig = inspect.signature(wrapped)
+        param_names = list(sig.parameters.keys())
+
+        # All params should be visible (ctx + original params)
+        self.assertIn("ctx", param_names)
+        self.assertIn("document_id", param_names)
+        self.assertIn("text", param_names)
