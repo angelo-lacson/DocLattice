@@ -369,6 +369,19 @@ export const openedDocument = makeVar<DocumentType | null>(null);
 export const selectedDocumentIds = makeVar<string[]>([]);
 export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
+/**
+ * Tracks document IDs currently visible in the folder/corpus view.
+ * Used by FolderToolbar to enable Select All functionality.
+ * Set by CorpusDocumentCards when documents load.
+ */
+export const currentViewDocumentIds = makeVar<string[]>([]);
+
+/**
+ * Tracks whether documents are currently loading in the folder/corpus view.
+ * Used by FolderToolbar to disable Select All while loading.
+ * Set by CorpusDocumentCards during query loading state.
+ */
+export const documentsLoading = makeVar<boolean>(false);
 
 /**
  * Document relationship modal state.

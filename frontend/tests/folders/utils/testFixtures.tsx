@@ -6,6 +6,7 @@ import {
   FolderToolbar,
   ViewMode,
 } from "../../../src/components/corpuses/folders/FolderToolbar";
+import { RemoveDocumentsModal } from "../../../src/components/corpuses/folders/RemoveDocumentsModal";
 import {
   selectedFolderIdAtom,
   folderListAtom,
@@ -14,6 +15,8 @@ import {
   folderCorpusIdAtom,
   sidebarCollapsedAtom,
   corpusPermissionsAtom,
+  showRemoveDocumentsModalAtom,
+  removeDocumentsIdsAtom,
 } from "../../../src/atoms/folderAtoms";
 
 /**
@@ -74,6 +77,14 @@ interface ToolbarFixtureProps {
   onGoUp?: () => void;
   onNewFolder?: () => void;
   onUpload?: () => void;
+  // Selection-related props
+  selectedDocumentCount?: number;
+  totalDocumentCount?: number;
+  onSelectAll?: () => void;
+  onClearSelection?: () => void;
+  onRemoveFromCorpus?: () => void;
+  allSelected?: boolean;
+  isLoading?: boolean;
 }
 
 export function ToolbarFixture({
@@ -88,6 +99,14 @@ export function ToolbarFixture({
   onGoUp = () => {},
   onNewFolder = () => {},
   onUpload = () => {},
+  // Selection props with defaults
+  selectedDocumentCount = 0,
+  totalDocumentCount = 0,
+  onSelectAll,
+  onClearSelection,
+  onRemoveFromCorpus,
+  allSelected = false,
+  isLoading = false,
 }: ToolbarFixtureProps) {
   // canCreateFoldersAtom now reads from corpusPermissionsAtom
   // which checks for "update_corpus" permission on the corpus
@@ -117,7 +136,38 @@ export function ToolbarFixture({
         onGoUp={onGoUp}
         onNewFolder={onNewFolder}
         onUpload={onUpload}
+        selectedDocumentCount={selectedDocumentCount}
+        totalDocumentCount={totalDocumentCount}
+        onSelectAll={onSelectAll}
+        onClearSelection={onClearSelection}
+        onRemoveFromCorpus={onRemoveFromCorpus}
+        allSelected={allSelected}
+        isLoading={isLoading}
       />
     </div>
   );
+}
+
+// ============================================================================
+// Remove Documents Modal Fixture
+// ============================================================================
+
+interface RemoveDocumentsModalFixtureProps {
+  showModal?: boolean;
+  documentIds?: string[];
+  corpusId?: string;
+}
+
+export function RemoveDocumentsModalFixture({
+  showModal = true,
+  documentIds = [],
+  corpusId = "corpus-1",
+}: RemoveDocumentsModalFixtureProps) {
+  useHydrateAtoms([
+    [showRemoveDocumentsModalAtom, showModal],
+    [removeDocumentsIdsAtom, documentIds],
+    [folderCorpusIdAtom, corpusId],
+  ] as const);
+
+  return <RemoveDocumentsModal />;
 }
