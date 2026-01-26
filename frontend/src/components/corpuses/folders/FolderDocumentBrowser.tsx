@@ -27,6 +27,7 @@ import {
   selectedDocumentIds as selectedDocumentIdsReactiveVar,
   linkDocumentsModalState,
   openedCorpus,
+  currentViewDocumentIds,
 } from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderToolbar } from "./FolderToolbar";
@@ -54,6 +55,11 @@ import {
   MoveCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
+import {
+  REMOVE_DOCUMENTS_FROM_CORPUS,
+  RemoveDocumentsFromCorpusInputs,
+  RemoveDocumentsFromCorpusOutputs,
+} from "../../../graphql/mutations";
 import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
 import {
   OS_LEGAL_COLORS,
@@ -337,6 +343,70 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   // Document relationship modal state (from reactive var for cross-component access)
   const linkModalState = useReactiveVar(linkDocumentsModalState);
   const selectedDocumentIds = useReactiveVar(selectedDocumentIdsReactiveVar);
+  const viewDocumentIds = useReactiveVar(currentViewDocumentIds);
+
+  // Compute selection state
+  const allSelected =
+    viewDocumentIds.length > 0 &&
+    viewDocumentIds.every((id) => selectedDocumentIds.includes(id));
+
+  // Remove documents from corpus mutation
+  const [removeDocumentsFromCorpus] = useMutation<
+    RemoveDocumentsFromCorpusOutputs,
+    RemoveDocumentsFromCorpusInputs
+  >(REMOVE_DOCUMENTS_FROM_CORPUS, {
+    // Evict documents from cache to force refetch
+    update(cache) {
+      cache.evict({ fieldName: "documents" });
+      cache.gc();
+    },
+  });
+
+  // Handler for Select All / Deselect All
+  const handleSelectAll = useCallback(() => {
+    if (allSelected) {
+      // Deselect all
+      selectedDocumentIdsReactiveVar([]);
+    } else {
+      // Select all visible documents
+      selectedDocumentIdsReactiveVar([...viewDocumentIds]);
+    }
+  }, [allSelected, viewDocumentIds]);
+
+  // Handler for Clear Selection
+  const handleClearSelection = useCallback(() => {
+    selectedDocumentIdsReactiveVar([]);
+  }, []);
+
+  // Handler for Remove from Corpus (bulk action)
+  const handleRemoveFromCorpus = useCallback(() => {
+    if (selectedDocumentIds.length === 0) return;
+
+    const count = selectedDocumentIds.length;
+    const confirmMessage = `Remove ${count} document${
+      count !== 1 ? "s" : ""
+    } from this corpus?`;
+
+    if (window.confirm(confirmMessage)) {
+      removeDocumentsFromCorpus({
+        variables: {
+          corpusId,
+          documentIdsToRemove: selectedDocumentIds,
+        },
+      })
+        .then(() => {
+          toast.success(
+            `Successfully removed ${count} document${
+              count !== 1 ? "s" : ""
+            } from corpus`
+          );
+          selectedDocumentIdsReactiveVar([]);
+        })
+        .catch((error) => {
+          toast.error(`Error removing documents: ${error.message}`);
+        });
+    }
+  }, [selectedDocumentIds, corpusId, removeDocumentsFromCorpus]);
 
   // Helper to open the link modal
   const openLinkModal = (sourceIds: string[], targetIds: string[] = []) => {
@@ -697,7 +767,12 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
               onUpload={handleUpload}
               onBulkImport={handleBulkImport}
               selectedDocumentCount={selectedDocumentIds.length}
+              totalDocumentCount={viewDocumentIds.length}
               onLinkDocuments={() => openLinkModal(selectedDocumentIds)}
+              onSelectAll={handleSelectAll}
+              onClearSelection={handleClearSelection}
+              onRemoveFromCorpus={handleRemoveFromCorpus}
+              allSelected={allSelected}
             />
           )}
 

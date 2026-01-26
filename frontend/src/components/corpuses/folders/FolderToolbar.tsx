@@ -14,6 +14,10 @@ import {
   Link2,
   ChevronDown,
   FileArchive,
+  CheckSquare,
+  Square,
+  X,
+  Trash2,
 } from "lucide-react";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import {
@@ -61,8 +65,18 @@ interface FolderToolbarProps {
   onBulkImport?: () => void;
   /** Number of currently selected documents (for multi-select actions) */
   selectedDocumentCount?: number;
+  /** Total number of documents in current view (for Select All) */
+  totalDocumentCount?: number;
   /** Callback when user clicks Link Documents button */
   onLinkDocuments?: () => void;
+  /** Callback when user clicks Select All */
+  onSelectAll?: () => void;
+  /** Callback when user clicks Clear Selection */
+  onClearSelection?: () => void;
+  /** Callback when user clicks Remove from Corpus (bulk action) */
+  onRemoveFromCorpus?: () => void;
+  /** Whether all visible documents are selected */
+  allSelected?: boolean;
 }
 
 // ===============================================
@@ -256,6 +270,121 @@ const ViewToggleButton = styled.button<{ $active: boolean }>`
   svg {
     width: 16px;
     height: 16px;
+  }
+`;
+
+// Selection controls group - shown when documents exist
+const SelectionGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    display: none;
+  }
+`;
+
+const SelectAllButton = styled.button<{ $allSelected?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: ${(props) =>
+    props.$allSelected ? OS_LEGAL_COLORS.accent : "transparent"};
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${(props) =>
+    props.$allSelected ? "white" : OS_LEGAL_COLORS.textSecondary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${(props) =>
+      props.$allSelected
+        ? OS_LEGAL_COLORS.accentHover
+        : OS_LEGAL_COLORS.border};
+    color: ${(props) =>
+      props.$allSelected ? "white" : OS_LEGAL_COLORS.textPrimary};
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const SelectionCount = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  padding: 0 4px;
+`;
+
+const SelectionDivider = styled.div`
+  width: 1px;
+  height: 16px;
+  background: ${OS_LEGAL_COLORS.border};
+`;
+
+const ClearSelectionButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const DangerButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
+  font-size: 13px;
+  font-weight: 500;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: 8px;
+
+    span {
+      display: none;
+    }
   }
 `;
 
@@ -520,7 +649,12 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
   onUpload,
   onBulkImport,
   selectedDocumentCount = 0,
+  totalDocumentCount = 0,
   onLinkDocuments,
+  onSelectAll,
+  onClearSelection,
+  onRemoveFromCorpus,
+  allSelected = false,
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
   const canCreateFolders = useAtomValue(canCreateFoldersAtom);
@@ -639,6 +773,51 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
         >
           <ChevronUp />
         </NavButton>
+
+        {/* Selection controls - shown when documents exist */}
+        {totalDocumentCount > 0 && onSelectAll && (
+          <SelectionGroup>
+            <SelectAllButton
+              onClick={onSelectAll}
+              $allSelected={allSelected}
+              title={allSelected ? "Deselect all" : "Select all"}
+              aria-label={allSelected ? "Deselect all" : "Select all"}
+            >
+              {allSelected ? <CheckSquare /> : <Square />}
+              {allSelected ? "All" : "Select All"}
+            </SelectAllButton>
+            {selectedDocumentCount > 0 && (
+              <>
+                <SelectionDivider />
+                <SelectionCount>
+                  {selectedDocumentCount} of {totalDocumentCount}
+                </SelectionCount>
+                {onClearSelection && (
+                  <ClearSelectionButton
+                    onClick={onClearSelection}
+                    title="Clear selection"
+                    aria-label="Clear selection"
+                  >
+                    <X />
+                  </ClearSelectionButton>
+                )}
+              </>
+            )}
+          </SelectionGroup>
+        )}
+
+        {/* Remove from Corpus button - visible when 1+ documents selected */}
+        {selectedDocumentCount >= 1 && onRemoveFromCorpus && (
+          <DangerButton
+            onClick={onRemoveFromCorpus}
+            title={`Remove ${selectedDocumentCount} document${
+              selectedDocumentCount !== 1 ? "s" : ""
+            } from corpus`}
+          >
+            <Trash2 />
+            <span>Remove ({selectedDocumentCount})</span>
+          </DangerButton>
+        )}
 
         {/* Link Documents button - visible when 1+ documents selected */}
         {selectedDocumentCount >= 1 && onLinkDocuments && (
@@ -773,6 +952,44 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
           <PanelLeftOpen />
           Show Folders
         </MobileMenuItem>
+        {/* Selection controls for mobile */}
+        {totalDocumentCount > 0 && onSelectAll && (
+          <MobileMenuItem
+            role="menuitem"
+            onClick={() => {
+              onSelectAll();
+              closeMobileMenu();
+            }}
+          >
+            {allSelected ? <CheckSquare /> : <Square />}
+            {allSelected ? "Deselect All" : "Select All"} ({totalDocumentCount})
+          </MobileMenuItem>
+        )}
+        {selectedDocumentCount > 0 && onClearSelection && (
+          <MobileMenuItem
+            role="menuitem"
+            onClick={() => {
+              onClearSelection();
+              closeMobileMenu();
+            }}
+          >
+            <X />
+            Clear Selection ({selectedDocumentCount})
+          </MobileMenuItem>
+        )}
+        {selectedDocumentCount >= 1 && onRemoveFromCorpus && (
+          <MobileMenuItem
+            role="menuitem"
+            onClick={() => {
+              onRemoveFromCorpus();
+              closeMobileMenu();
+            }}
+            style={{ color: "#dc2626" }}
+          >
+            <Trash2 />
+            Remove from Corpus ({selectedDocumentCount})
+          </MobileMenuItem>
+        )}
         {selectedDocumentCount >= 1 && onLinkDocuments && (
           <MobileMenuItem
             role="menuitem"

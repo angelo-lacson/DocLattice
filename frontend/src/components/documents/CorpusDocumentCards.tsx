@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "react-toastify";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +20,7 @@ import {
   openedCorpus,
   selectedFolderId,
   linkDocumentsModalState,
+  currentViewDocumentIds,
 } from "../../graphql/cache";
 import {
   GET_CORPUS_FOLDERS,
@@ -176,6 +177,17 @@ export const CorpusDocumentCards = ({
     "documents for folderId:",
     selected_folder_id
   );
+
+  // Update the global reactive var with current view document IDs for toolbar's Select All functionality
+  useEffect(() => {
+    const ids = document_items.map((doc) => doc.id);
+    currentViewDocumentIds(ids);
+
+    // Clear on unmount
+    return () => {
+      currentViewDocumentIds([]);
+    };
+  }, [document_items]);
 
   const handleRemoveContracts = (delete_ids: string[]) => {
     removeDocumentsFromCorpus({
