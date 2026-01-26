@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `opencontractserver/pipeline/embedders/sent_transformer_microservice.py:120-133`
 - **Added comprehensive test coverage**: 18 new tests for error handling, bytes decoding, and array format parsing
   - Files: `opencontractserver/tests/test_embeddings_task.py`
+- **Added TestEmbedder for fast, deterministic test embeddings**: Tests now use a fast in-memory embedder by default instead of the HTTP-based MicroserviceEmbedder
+  - Returns deterministic fake vectors based on text hash (same text = same embedding)
+  - Eliminates HTTP round-trips to vector-embedder service during tests (faster test execution)
+  - Integration tests that need real service connectivity should explicitly instantiate MicroserviceEmbedder
+  - Files: `opencontractserver/pipeline/embedders/test_embedder.py`, `config/settings/test.py:120-134`
 
 #### Cache Eviction Consistency
 - **Fixed folder document counts not updating after bulk removal**: Added `corpusFolders` cache eviction to `REMOVE_DOCUMENTS_FROM_CORPUS` mutation to match the pattern used by `MOVE_DOCUMENT_TO_FOLDER`
