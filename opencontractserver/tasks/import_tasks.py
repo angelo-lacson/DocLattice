@@ -20,7 +20,7 @@ from opencontractserver.annotations.models import (
     Annotation,
 )
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.types.dicts import (
     OpenContractsAnnotatedDocumentImportType,
     OpenContractsExportDataJsonPythonType,
@@ -317,36 +317,39 @@ def import_document_to_corpus(
 
         # Link to corpus using proper versioning method
         # This creates a corpus-isolated copy with DocumentPath
-        corpus_obj.add_document(document=doc_obj, user=user_obj)
+        # IMPORTANT: Use the corpus copy for all subsequent operations
+        corpus_doc, _status, _doc_path = corpus_obj.add_document(
+            document=doc_obj, user=user_obj
+        )
         logger.info(f"Linked document to corpus: {corpus_obj.title}")
 
-        # Import text annotations
+        # Import text annotations - use corpus_doc (the corpus copy)
         doc_annotations_data = document_import_data["doc_data"]["labelled_text"]
         logger.info(f"Importing {len(doc_annotations_data)} text annotations")
         import_annotations(
             user_id,
-            doc_obj,
+            corpus_doc,
             corpus_obj,
             doc_annotations_data,
             label_lookup,
             label_type=TOKEN_LABEL,
         )
 
-        # Import document-level annotations
+        # Import document-level annotations - use corpus_doc (the corpus copy)
         doc_labels = document_import_data["doc_data"]["doc_labels"]
         logger.info(f"Importing {len(doc_labels)} doc labels")
         for doc_label in doc_labels:
             label_obj = existing_doc_labels[doc_label]
             annot_obj = Annotation.objects.create(
                 annotation_label=label_obj,
-                document=doc_obj,
+                document=corpus_doc,
                 corpus=corpus_obj,
                 creator_id=user_id,
             )
             set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
 
         logger.info("Document import completed successfully")
-        return doc_obj.id
+        return corpus_doc.id
 
     except Exception as e:
         logger.error(f"Exception encountered in document import: {e}")
@@ -492,6 +495,13 @@ def process_documents_zip(
                             or f"Uploaded as part of batch upload (job: {job_id})"
                         )
 
+                        # Generate path for corpus document
+                        safe_filename = "".join(
+                            c if c.isalnum() or c in "-_." else "_"
+                            for c in base_filename[:100]
+                        )
+                        doc_path = f"/documents/{safe_filename}"
+
                         # Create the document based on file type
                         document = None
 
@@ -501,18 +511,39 @@ def process_documents_zip(
                             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         ]:
-                            pdf_file = ContentFile(file_bytes, name=filename)
-                            document = Document(
-                                creator=user_obj,
-                                title=doc_title,
-                                description=doc_description,
-                                custom_meta=custom_meta,
-                                pdf_file=pdf_file,
-                                backend_lock=True,
-                                is_public=make_public,
-                                file_type=kind,
-                            )
-                            document.save()
+                            if corpus_obj:
+                                # Use import_content to create document directly in corpus
+                                # This avoids creating orphan standalone documents
+                                document, status, path_record = (
+                                    corpus_obj.import_content(
+                                        content=file_bytes,
+                                        path=doc_path,
+                                        user=user_obj,
+                                        title=doc_title,
+                                        description=doc_description,
+                                        custom_meta=custom_meta,
+                                        is_public=make_public,
+                                        file_type=kind,
+                                    )
+                                )
+                                logger.info(
+                                    f"process_documents_zip() - Created document {document.id} "
+                                    f"in corpus {corpus_obj.id} (status: {status})"
+                                )
+                            else:
+                                # Standalone upload (no corpus) - legacy path
+                                pdf_file = ContentFile(file_bytes, name=filename)
+                                document = Document(
+                                    creator=user_obj,
+                                    title=doc_title,
+                                    description=doc_description,
+                                    custom_meta=custom_meta,
+                                    pdf_file=pdf_file,
+                                    backend_lock=True,
+                                    is_public=make_public,
+                                    file_type=kind,
+                                )
+                                document.save()
                         elif kind in ["text/plain", "application/txt"]:
                             txt_extract_file = ContentFile(file_bytes, name=filename)
                             document = Document(
@@ -527,20 +558,28 @@ def process_documents_zip(
                             )
                             document.save()
 
+                            # For text files with corpus, create DocumentPath directly
+                            if corpus_obj:
+                                DocumentPath.objects.create(
+                                    document=document,
+                                    corpus=corpus_obj,
+                                    folder=None,
+                                    path=doc_path,
+                                    version_number=1,
+                                    is_current=True,
+                                    is_deleted=False,
+                                    creator=user_obj,
+                                )
+                                logger.info(
+                                    f"process_documents_zip() - Created text document {document.id} "
+                                    f"in corpus {corpus_obj.id}"
+                                )
+
                         if document:
                             # Set permissions for the document
                             set_permissions_for_obj_to_user(
                                 user_obj, document, [PermissionTypes.CRUD]
                             )
-
-                            # Add to corpus if needed
-                            if corpus_obj:
-                                # Use the new versioning system to create proper DocumentPath
-                                added_doc, status, doc_path = corpus_obj.add_document(
-                                    document=document, user=user_obj
-                                )
-                                # Update document reference in case versioning returned a different doc
-                                document = added_doc
 
                             # Update results
                             results["processed_files"] += 1
@@ -1003,65 +1042,84 @@ def import_zip_with_folder_structure(
                         doc_path_str = f"/{entry.sanitized_path}"
 
                     # Create document based on file type
-                    document = None
+                    # Use import_content to create document directly in corpus
+                    # This avoids creating orphan standalone documents
+                    added_doc = None
+                    doc_path = None
 
-                    if mime_type in [
-                        "application/pdf",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    ]:
-                        pdf_file = ContentFile(file_bytes, name=entry.filename)
-                        document = Document(
-                            creator=user_obj,
-                            title=doc_title,
-                            description=doc_description,
-                            custom_meta=custom_meta,
-                            pdf_file=pdf_file,
-                            backend_lock=True,
-                            is_public=make_public,
-                            file_type=mime_type,
-                        )
-                        document.save()
-                    elif mime_type in ["text/plain", "application/txt"]:
-                        txt_extract_file = ContentFile(file_bytes, name=entry.filename)
-                        document = Document(
-                            creator=user_obj,
-                            title=doc_title,
-                            description=doc_description,
-                            custom_meta=custom_meta,
-                            txt_extract_file=txt_extract_file,
-                            backend_lock=True,
-                            is_public=make_public,
-                            file_type=mime_type,
-                        )
-                        document.save()
-
-                    if document:
-                        # Set permissions for the document
-                        set_permissions_for_obj_to_user(
-                            user_obj, document, [PermissionTypes.CRUD]
-                        )
-
-                        # Add to corpus with folder assignment and path for versioning
-                        # If a document already exists at this path, it will be upversioned
-                        try:
-                            added_doc, status, doc_path = corpus_obj.add_document(
-                                document=document,
+                    try:
+                        if mime_type in [
+                            "application/pdf",
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        ]:
+                            # Use import_content to create document directly in corpus
+                            added_doc, status, doc_path = corpus_obj.import_content(
+                                content=file_bytes,
+                                path=doc_path_str,
                                 user=user_obj,
                                 folder=doc_folder,
-                                path=doc_path_str,
+                                title=doc_title,
+                                description=doc_description,
+                                custom_meta=custom_meta,
+                                is_public=make_public,
+                                file_type=mime_type,
                             )
-                        except PermissionError as e:
-                            logger.warning(
-                                f"Permission error adding document at {doc_path_str}: {e}"
+                            logger.info(
+                                f"import_zip_with_folder_structure() - Created document "
+                                f"{added_doc.id} in corpus {corpus_obj.id} (status: {status})"
                             )
-                            results["files_errored"] += 1
-                            results["errors"].append(
-                                f"Permission error for {entry.sanitized_path}: {str(e)}"
+                        elif mime_type in ["text/plain", "application/txt"]:
+                            # For text files, create document and link to corpus
+                            txt_extract_file = ContentFile(
+                                file_bytes, name=entry.filename
                             )
-                            continue
+                            added_doc = Document(
+                                creator=user_obj,
+                                title=doc_title,
+                                description=doc_description,
+                                custom_meta=custom_meta,
+                                txt_extract_file=txt_extract_file,
+                                backend_lock=True,
+                                is_public=make_public,
+                                file_type=mime_type,
+                            )
+                            added_doc.save()
 
+                            # Create DocumentPath to link document to corpus
+                            doc_path = DocumentPath.objects.create(
+                                document=added_doc,
+                                corpus=corpus_obj,
+                                folder=doc_folder,
+                                path=doc_path_str,
+                                version_number=1,
+                                is_current=True,
+                                is_deleted=False,
+                                creator=user_obj,
+                            )
+                            logger.info(
+                                f"import_zip_with_folder_structure() - Created text document "
+                                f"{added_doc.id} in corpus {corpus_obj.id}"
+                            )
+
+                        if added_doc:
+                            # Set permissions for the document
+                            set_permissions_for_obj_to_user(
+                                user_obj, added_doc, [PermissionTypes.CRUD]
+                            )
+
+                    except PermissionError as e:
+                        logger.warning(
+                            f"Permission error adding document at {doc_path_str}: {e}"
+                        )
+                        results["files_errored"] += 1
+                        results["errors"].append(
+                            f"Permission error for {entry.sanitized_path}: {str(e)}"
+                        )
+                        continue
+
+                    if added_doc:
                         results["files_processed"] += 1
                         results["document_ids"].append(str(added_doc.id))
 
