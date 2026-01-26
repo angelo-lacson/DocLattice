@@ -4302,10 +4302,14 @@ export const SEARCH_AGENTS_FOR_MENTION = gql`
 /**
  * GET_AGENT_CONFIGURATIONS - Get available agent configurations for corpus actions
  * Used in CreateCorpusActionModal to allow selecting an agent for automated actions
+ *
+ * Supports server-side search via name_Contains and pagination via first parameter.
  */
 export interface GetAgentConfigurationsInput {
   corpusId?: string;
   isActive?: boolean;
+  name_Contains?: string;
+  first?: number;
 }
 
 export interface GetAgentConfigurationsOutput {
@@ -4330,8 +4334,18 @@ export interface GetAgentConfigurationsOutput {
 }
 
 export const GET_AGENT_CONFIGURATIONS = gql`
-  query GetAgentConfigurations($corpusId: String, $isActive: Boolean) {
-    agentConfigurations(corpusId: $corpusId, isActive: $isActive) {
+  query GetAgentConfigurations(
+    $corpusId: String
+    $isActive: Boolean
+    $name_Contains: String
+    $first: Int
+  ) {
+    agentConfigurations(
+      corpusId: $corpusId
+      isActive: $isActive
+      name_Contains: $name_Contains
+      first: $first
+    ) {
       edges {
         node {
           id

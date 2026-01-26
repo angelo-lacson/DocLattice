@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   Modal,
   Form,
@@ -16,6 +16,7 @@ import {
 } from "semantic-ui-react";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
+import _ from "lodash";
 
 /**
  * Default moderation tools (fallback when backend query fails or returns no data).
@@ -129,6 +130,8 @@ export const CreateCorpusActionModal: React.FC<
   const [disabled, setDisabled] = React.useState(false);
   const [runOnAllCorpuses, setRunOnAllCorpuses] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  // Agent search state for server-side filtering
+  const [agentSearchQuery, setAgentSearchQuery] = useState<string>("");
 
   const resetForm = () => {
     setName("");
@@ -147,6 +150,7 @@ export const CreateCorpusActionModal: React.FC<
     setSelectedModerationTools(DEFAULT_MODERATION_TOOLS.map((t) => t.name));
     setDisabled(false);
     setRunOnAllCorpuses(false);
+    setAgentSearchQuery("");
   };
 
   // Helper to normalize trigger value to lowercase format
@@ -261,12 +265,32 @@ export const CreateCorpusActionModal: React.FC<
     GetAnalyzersInputs
   >(GET_ANALYZERS);
 
-  const { data: agentConfigsData } = useQuery<
+  const { data: agentConfigsData, loading: agentConfigsLoading } = useQuery<
     GetAgentConfigurationsOutput,
     GetAgentConfigurationsInput
   >(GET_AGENT_CONFIGURATIONS, {
-    variables: { isActive: true },
+    variables: {
+      isActive: true,
+      name_Contains: agentSearchQuery || undefined,
+      first: 50, // Limit results for performance
+    },
+    fetchPolicy: "cache-and-network", // Refresh data on mount
   });
+
+  // Debounced search handler for agent dropdown
+  const debouncedSetAgentSearch = useCallback(
+    _.debounce((query: string) => {
+      setAgentSearchQuery(query);
+    }, 300),
+    []
+  );
+
+  const handleAgentSearchChange = (
+    _event: React.SyntheticEvent<HTMLElement>,
+    { searchQuery }: { searchQuery: string }
+  ) => {
+    debouncedSetAgentSearch(searchQuery);
+  };
 
   // Fetch moderation tools dynamically from backend
   // Only fetch when needed (thread/message triggers)
@@ -875,7 +899,10 @@ export const CreateCorpusActionModal: React.FC<
                             setSelectedAgentConfigId(data.value as string);
                             setPreAuthorizedTools([]);
                           }}
+                          onSearchChange={handleAgentSearchChange}
+                          loading={agentConfigsLoading}
                           placeholder="Select agent configuration"
+                          selectOnNavigation={false}
                         />
                       </Form.Field>
 
@@ -957,7 +984,10 @@ export const CreateCorpusActionModal: React.FC<
                         setSelectedAgentConfigId(data.value as string);
                         setPreAuthorizedTools([]);
                       }}
+                      onSearchChange={handleAgentSearchChange}
+                      loading={agentConfigsLoading}
                       placeholder="Select agent configuration"
+                      selectOnNavigation={false}
                     />
                   </Form.Field>
 
