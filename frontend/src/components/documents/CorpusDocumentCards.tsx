@@ -21,6 +21,7 @@ import {
   selectedFolderId,
   linkDocumentsModalState,
   currentViewDocumentIds,
+  documentsLoading as documentsLoadingVar,
 } from "../../graphql/cache";
 import {
   GET_CORPUS_FOLDERS,
@@ -188,6 +189,16 @@ export const CorpusDocumentCards = ({
       currentViewDocumentIds([]);
     };
   }, [document_items]);
+
+  // Sync loading state to reactive var for toolbar to disable Select All while loading
+  useEffect(() => {
+    documentsLoadingVar(documents_loading);
+
+    // Clear on unmount
+    return () => {
+      documentsLoadingVar(false);
+    };
+  }, [documents_loading]);
 
   const handleRemoveContracts = (delete_ids: string[]) => {
     removeDocumentsFromCorpus({

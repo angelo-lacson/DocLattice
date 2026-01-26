@@ -377,6 +377,13 @@ export const editingDocument = makeVar<DocumentType | null>(null);
 export const currentViewDocumentIds = makeVar<string[]>([]);
 
 /**
+ * Tracks whether documents are currently loading in the folder/corpus view.
+ * Used by FolderToolbar to disable Select All while loading.
+ * Set by CorpusDocumentCards during query loading state.
+ */
+export const documentsLoading = makeVar<boolean>(false);
+
+/**
  * Document relationship modal state.
  * Used to trigger the link documents modal from various entry points:
  * - Right-click context menu on a single document

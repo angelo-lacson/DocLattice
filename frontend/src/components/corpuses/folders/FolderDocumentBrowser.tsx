@@ -28,6 +28,7 @@ import {
   linkDocumentsModalState,
   openedCorpus,
   currentViewDocumentIds,
+  documentsLoading,
 } from "../../../graphql/cache";
 import { FolderTreeSidebar } from "./FolderTreeSidebar";
 import { FolderToolbar } from "./FolderToolbar";
@@ -37,6 +38,7 @@ import { BulkImportModal } from "../../widgets/modals/BulkImportModal";
 import { EditFolderModal } from "./EditFolderModal";
 import { MoveFolderModal } from "./MoveFolderModal";
 import { DeleteFolderModal } from "./DeleteFolderModal";
+import { RemoveDocumentsModal } from "./RemoveDocumentsModal";
 import { TrashFolderView } from "./TrashFolderView";
 import {
   folderCorpusIdAtom,
@@ -45,6 +47,7 @@ import {
   openCreateFolderModalAtom,
   folderListAtom,
   corpusPermissionsAtom,
+  openRemoveDocumentsModalAtom,
 } from "../../../atoms/folderAtoms";
 import {
   MOVE_DOCUMENT_TO_FOLDER,
@@ -55,11 +58,6 @@ import {
   MoveCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
-import {
-  REMOVE_DOCUMENTS_FROM_CORPUS,
-  RemoveDocumentsFromCorpusInputs,
-  RemoveDocumentsFromCorpusOutputs,
-} from "../../../graphql/mutations";
 import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
 import {
   OS_LEGAL_COLORS,
@@ -318,6 +316,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const selectedFolderId = useReactiveVar(selectedFolderIdReactiveVar);
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
   const openCreateModal = useSetAtom(openCreateFolderModalAtom);
+  const openRemoveDocumentsModal = useSetAtom(openRemoveDocumentsModalAtom);
   const folderList = useAtomValue(folderListAtom);
   const location = useLocation();
   const navigate = useNavigate();
@@ -344,23 +343,12 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
   const linkModalState = useReactiveVar(linkDocumentsModalState);
   const selectedDocumentIds = useReactiveVar(selectedDocumentIdsReactiveVar);
   const viewDocumentIds = useReactiveVar(currentViewDocumentIds);
+  const isDocumentsLoading = useReactiveVar(documentsLoading);
 
   // Compute selection state
   const allSelected =
     viewDocumentIds.length > 0 &&
     viewDocumentIds.every((id) => selectedDocumentIds.includes(id));
-
-  // Remove documents from corpus mutation
-  const [removeDocumentsFromCorpus] = useMutation<
-    RemoveDocumentsFromCorpusOutputs,
-    RemoveDocumentsFromCorpusInputs
-  >(REMOVE_DOCUMENTS_FROM_CORPUS, {
-    // Evict documents from cache to force refetch
-    update(cache) {
-      cache.evict({ fieldName: "documents" });
-      cache.gc();
-    },
-  });
 
   // Handler for Select All / Deselect All
   const handleSelectAll = useCallback(() => {
@@ -378,35 +366,11 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
     selectedDocumentIdsReactiveVar([]);
   }, []);
 
-  // Handler for Remove from Corpus (bulk action)
+  // Handler for Remove from Corpus (bulk action) - opens confirmation modal
   const handleRemoveFromCorpus = useCallback(() => {
     if (selectedDocumentIds.length === 0) return;
-
-    const count = selectedDocumentIds.length;
-    const confirmMessage = `Remove ${count} document${
-      count !== 1 ? "s" : ""
-    } from this corpus?`;
-
-    if (window.confirm(confirmMessage)) {
-      removeDocumentsFromCorpus({
-        variables: {
-          corpusId,
-          documentIdsToRemove: selectedDocumentIds,
-        },
-      })
-        .then(() => {
-          toast.success(
-            `Successfully removed ${count} document${
-              count !== 1 ? "s" : ""
-            } from corpus`
-          );
-          selectedDocumentIdsReactiveVar([]);
-        })
-        .catch((error) => {
-          toast.error(`Error removing documents: ${error.message}`);
-        });
-    }
-  }, [selectedDocumentIds, corpusId, removeDocumentsFromCorpus]);
+    openRemoveDocumentsModal(selectedDocumentIds);
+  }, [selectedDocumentIds, openRemoveDocumentsModal]);
 
   // Helper to open the link modal
   const openLinkModal = (sourceIds: string[], targetIds: string[] = []) => {
@@ -773,6 +737,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
               onClearSelection={handleClearSelection}
               onRemoveFromCorpus={handleRemoveFromCorpus}
               allSelected={allSelected}
+              isLoading={isDocumentsLoading}
             />
           )}
 
@@ -829,6 +794,7 @@ export const FolderDocumentBrowser: React.FC<FolderDocumentBrowserProps> = ({
       <EditFolderModal />
       <MoveFolderModal />
       <DeleteFolderModal />
+      <RemoveDocumentsModal />
 
       {/* Bulk Import Modal */}
       <BulkImportModal />

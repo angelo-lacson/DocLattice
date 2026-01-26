@@ -77,6 +77,8 @@ interface FolderToolbarProps {
   onRemoveFromCorpus?: () => void;
   /** Whether all visible documents are selected */
   allSelected?: boolean;
+  /** Whether documents are currently loading (disables Select All) */
+  isLoading?: boolean;
 }
 
 // ===============================================
@@ -304,13 +306,18 @@ const SelectAllButton = styled.button<{ $allSelected?: boolean }>`
   cursor: pointer;
   transition: all 0.15s ease;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: ${(props) =>
       props.$allSelected
         ? OS_LEGAL_COLORS.accentHover
         : OS_LEGAL_COLORS.border};
     color: ${(props) =>
       props.$allSelected ? "white" : OS_LEGAL_COLORS.textPrimary};
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   svg {
@@ -655,6 +662,7 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
   onClearSelection,
   onRemoveFromCorpus,
   allSelected = false,
+  isLoading = false,
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useAtom(sidebarCollapsedAtom);
   const canCreateFolders = useAtomValue(canCreateFoldersAtom);
@@ -780,8 +788,21 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
             <SelectAllButton
               onClick={onSelectAll}
               $allSelected={allSelected}
-              title={allSelected ? "Deselect all" : "Select all"}
-              aria-label={allSelected ? "Deselect all" : "Select all"}
+              disabled={isLoading}
+              title={
+                isLoading
+                  ? "Loading documents..."
+                  : allSelected
+                  ? "Deselect all"
+                  : "Select all"
+              }
+              aria-label={
+                isLoading
+                  ? "Loading documents"
+                  : allSelected
+                  ? "Deselect all"
+                  : "Select all"
+              }
             >
               {allSelected ? <CheckSquare /> : <Square />}
               {allSelected ? "All" : "Select All"}
@@ -956,13 +977,21 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
         {totalDocumentCount > 0 && onSelectAll && (
           <MobileMenuItem
             role="menuitem"
+            disabled={isLoading}
             onClick={() => {
-              onSelectAll();
-              closeMobileMenu();
+              if (!isLoading) {
+                onSelectAll();
+                closeMobileMenu();
+              }
             }}
+            style={isLoading ? { opacity: 0.5, cursor: "not-allowed" } : {}}
           >
             {allSelected ? <CheckSquare /> : <Square />}
-            {allSelected ? "Deselect All" : "Select All"} ({totalDocumentCount})
+            {isLoading
+              ? "Loading..."
+              : `${
+                  allSelected ? "Deselect All" : "Select All"
+                } (${totalDocumentCount})`}
           </MobileMenuItem>
         )}
         {selectedDocumentCount > 0 && onClearSelection && (

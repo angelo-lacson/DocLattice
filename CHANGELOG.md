@@ -5,9 +5,31 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-24
+## [Unreleased] - 2026-01-25
+
+### Added
+
+#### Bulk Document Selection and Removal
+- **Bulk document selection in folder toolbar**: New Select All / Deselect All functionality for corpus documents
+  - Selection count display showing "X of Y" documents selected
+  - Clear selection button to deselect all
+  - Selection state persists across folder navigation for building cross-folder selections
+  - Files: `frontend/src/components/corpuses/folders/FolderToolbar.tsx:780-827`
+- **Bulk remove from corpus action**: Remove multiple selected documents from corpus in one operation
+  - Dedicated danger button with document count indicator
+  - Proper confirmation modal (replaces browser `window.confirm`)
+  - Files: `frontend/src/components/corpuses/folders/RemoveDocumentsModal.tsx`, `frontend/src/components/corpuses/folders/FolderDocumentBrowser.tsx:367-371`
+- **Mobile-responsive bulk actions**: Kebab menu includes selection controls for tablet/mobile viewports
+  - Files: `frontend/src/components/corpuses/folders/FolderToolbar.tsx:976-993`
+- **Loading state handling**: Select All button disabled while documents are loading to prevent incomplete selections
+  - New `documentsLoading` reactive var syncs loading state from CorpusDocumentCards to FolderToolbar
+  - Files: `frontend/src/graphql/cache.ts:379-384`, `frontend/src/components/documents/CorpusDocumentCards.tsx:193-201`
 
 ### Fixed
+
+#### Cache Eviction Consistency
+- **Fixed folder document counts not updating after bulk removal**: Added `corpusFolders` cache eviction to `REMOVE_DOCUMENTS_FROM_CORPUS` mutation to match the pattern used by `MOVE_DOCUMENT_TO_FOLDER`
+  - Files: `frontend/src/components/corpuses/folders/RemoveDocumentsModal.tsx:109-112`
 
 #### Duplicate Tool Registration and Caller Tool Precedence
 - **Fixed duplicate tool registration error in PydanticAI agent**: Resolved `pydantic_ai.exceptions.UserError` when caller-provided tools have the same name as default tools
