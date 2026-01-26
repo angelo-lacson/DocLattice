@@ -110,7 +110,12 @@ class MicroserviceEmbedder(BaseEmbedder):
                 if np.isnan(embeddings_array).any():
                     logger.error("Embedding contains NaN values")
                     return None
+                # Handle both 1D (single embedding) and 2D (batch) response formats
+                if embeddings_array.ndim == 1:
+                    # Service returns 1D array directly: [0.1, 0.2, ...]
+                    return embeddings_array.tolist()
                 else:
+                    # Service returns 2D batch array: [[0.1, 0.2, ...]]
                     return embeddings_array[0].tolist()
             else:
                 logger.error(
