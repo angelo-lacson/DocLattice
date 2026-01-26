@@ -514,6 +514,7 @@ def process_documents_zip(
                             if corpus_obj:
                                 # Use import_content to create document directly in corpus
                                 # This avoids creating orphan standalone documents
+                                # backend_lock=True ensures document shows as processing
                                 document, status, path_record = (
                                     corpus_obj.import_content(
                                         content=file_bytes,
@@ -524,6 +525,7 @@ def process_documents_zip(
                                         custom_meta=custom_meta,
                                         is_public=make_public,
                                         file_type=kind,
+                                        backend_lock=True,
                                     )
                                 )
                                 logger.info(
@@ -1055,6 +1057,7 @@ def import_zip_with_folder_structure(
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         ]:
                             # Use import_content to create document directly in corpus
+                            # backend_lock=True ensures document shows as processing
                             added_doc, status, doc_path = corpus_obj.import_content(
                                 content=file_bytes,
                                 path=doc_path_str,
@@ -1065,6 +1068,7 @@ def import_zip_with_folder_structure(
                                 custom_meta=custom_meta,
                                 is_public=make_public,
                                 file_type=mime_type,
+                                backend_lock=True,
                             )
                             logger.info(
                                 f"import_zip_with_folder_structure() - Created document "

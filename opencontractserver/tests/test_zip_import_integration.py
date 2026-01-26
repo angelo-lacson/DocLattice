@@ -1710,3 +1710,194 @@ file.pdf,Custom Title
         self.assertTrue(result["success"])
         self.assertTrue(result["metadata_file_found"])
         self.assertEqual(result["metadata_applied"], 1)
+
+
+class TestBackendLockBehavior(TestCase):
+    """
+    Tests for backend_lock=True behavior during bulk document import.
+
+    Documents created via bulk import should have backend_lock=True immediately
+    after creation to indicate they are being processed. This ensures the frontend
+    shows them as "processing" until the Celery pipeline completes.
+
+    Related: Fix for bulk upload documents not showing backend_lock processing state.
+    """
+
+    def setUp(self):
+        """Set up test user, corpus, and sample data."""
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="testuser", password="testpass"
+            )
+
+        with transaction.atomic():
+            self.corpus = Corpus.objects.create(
+                title="Test Corpus",
+                description="Corpus for testing",
+                creator=self.user,
+            )
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
+
+        # Sample PDF bytes
+        self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+
+    def _create_test_zip(self, files: dict[str, bytes]) -> io.BytesIO:
+        """Create an in-memory zip file for testing."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        buffer.seek(0)
+        return buffer
+
+    def _create_temp_file_handle(self, zip_buffer: io.BytesIO) -> TemporaryFileHandle:
+        """Create a TemporaryFileHandle from a zip buffer."""
+        zip_content = ContentFile(zip_buffer.read(), name="test_import.zip")
+        handle = TemporaryFileHandle.objects.create(
+            file=zip_content,
+        )
+        return handle
+
+    def test_import_zip_sets_backend_lock_true(self):
+        """
+        Documents created via import_zip_with_folder_structure have backend_lock=True.
+
+        This ensures documents show as "processing" in the frontend immediately
+        after creation, before the Celery pipeline completes.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        files = {
+            "file1.pdf": self.pdf_bytes,
+            "docs/file2.pdf": self.pdf_bytes,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-backend-lock",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["files_processed"], 2)
+
+        # Verify ALL created documents have backend_lock=True
+        for doc_id in result["document_ids"]:
+            doc = Document.objects.get(id=doc_id)
+            self.assertTrue(
+                doc.backend_lock,
+                f"Document {doc_id} should have backend_lock=True after import, "
+                f"but got backend_lock={doc.backend_lock}",
+            )
+
+    def test_process_documents_zip_sets_backend_lock_true(self):
+        """
+        Documents created via process_documents_zip have backend_lock=True.
+
+        This is the older zip import task that should also set backend_lock=True.
+        """
+        from opencontractserver.tasks.import_tasks import process_documents_zip
+
+        files = {
+            "contract.pdf": self.pdf_bytes,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = process_documents_zip.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-backend-lock-old",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertEqual(result["processed_files"], 1)
+
+        # Verify document has backend_lock=True
+        for doc_id in result["document_ids"]:
+            doc = Document.objects.get(id=doc_id)
+            self.assertTrue(
+                doc.backend_lock,
+                f"Document {doc_id} should have backend_lock=True after import, "
+                f"but got backend_lock={doc.backend_lock}",
+            )
+
+    def test_text_file_import_sets_backend_lock_true(self):
+        """
+        Text files imported via zip also have backend_lock=True.
+
+        Text files follow a different code path but should still be locked.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        files = {
+            "readme.txt": b"This is a plain text document.",
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-backend-lock-text",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["files_processed"], 1)
+
+        # Verify text document has backend_lock=True
+        doc = Document.objects.get(id=result["document_ids"][0])
+        self.assertTrue(
+            doc.backend_lock,
+            f"Text document should have backend_lock=True, got {doc.backend_lock}",
+        )
+
+    def test_standalone_upload_without_corpus_sets_backend_lock_true(self):
+        """
+        Standalone document uploads (no corpus) also have backend_lock=True.
+
+        This is the legacy path for uploads without a corpus.
+        """
+        from opencontractserver.tasks.import_tasks import process_documents_zip
+
+        files = {
+            "standalone.pdf": self.pdf_bytes,
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        # Import WITHOUT corpus_id
+        result = process_documents_zip.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-backend-lock-standalone",
+                # No corpus_id - standalone upload
+            }
+        ).get()
+
+        self.assertEqual(result["processed_files"], 1)
+
+        # Verify standalone document has backend_lock=True
+        doc = Document.objects.get(id=result["document_ids"][0])
+        self.assertTrue(
+            doc.backend_lock,
+            f"Standalone document should have backend_lock=True, "
+            f"got {doc.backend_lock}",
+        )
