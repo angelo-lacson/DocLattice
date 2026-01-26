@@ -117,9 +117,18 @@ class MicroserviceEmbedder(BaseEmbedder):
                 else:
                     # Service returns 2D batch array: [[0.1, 0.2, ...]]
                     return embeddings_array[0].tolist()
-            else:
+            elif 400 <= response.status_code < 500:
+                # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
-                    f"Microservice returned status code {response.status_code}"
+                    f"Microservice returned client error {response.status_code}. "
+                    f"Input text length: {len(text)}"
+                )
+                return None  # Non-retriable error
+            else:
+                # Server errors (5xx) or unexpected status - worth logging distinctly
+                logger.error(
+                    f"Microservice returned server error {response.status_code}. "
+                    f"This may be a transient error."
                 )
                 return None
         except Exception as e:
