@@ -134,12 +134,32 @@ class BaseParser(PipelineComponentBase, ABC):
             from django.apps import apps
 
             Corpus = apps.get_model("corpuses", "Corpus")
+            DocumentPath = apps.get_model("documents", "DocumentPath")
             corpus_obj = Corpus.objects.get(id=corpus_id)
-            # Use add_document for corpus isolation (creates DocumentPath)
-            document, status, _ = corpus_obj.add_document(document=document, user=user)
-            logger.info(
-                f"Associated document with corpus: {corpus_obj.title} (status: {status})"
-            )
+
+            # Check if document is ALREADY in this corpus via DocumentPath
+            # (e.g., created by import_content in process_documents_zip)
+            existing_path = DocumentPath.objects.filter(
+                document=document,
+                corpus=corpus_obj,
+                is_current=True,
+                is_deleted=False,
+            ).first()
+
+            if existing_path:
+                # Document already in corpus - don't create another copy
+                logger.info(
+                    f"Document {doc_id} already in corpus {corpus_obj.title} "
+                    f"via DocumentPath {existing_path.id}, skipping add_document"
+                )
+            else:
+                # Document not yet in corpus - use add_document for corpus isolation
+                document, status, _ = corpus_obj.add_document(
+                    document=document, user=user
+                )
+                logger.info(
+                    f"Associated document with corpus: {corpus_obj.title} (status: {status})"
+                )
         else:
             corpus_obj = None
 
