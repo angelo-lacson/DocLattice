@@ -102,7 +102,7 @@ const getAnalyzersMock = {
 const getAgentConfigsMock = {
   request: {
     query: GET_AGENT_CONFIGURATIONS,
-    variables: { isActive: true },
+    variables: { isActive: true, name_Contains: undefined, first: 50 },
   },
   result: {
     data: {
