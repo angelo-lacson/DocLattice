@@ -200,31 +200,35 @@ def _import_corpus_v1(
                     )
 
                     # Add to corpus using new versioned system
-                    corpus_obj.add_document(doc_obj, user=user_obj)
+                    # IMPORTANT: Use the corpus copy for all subsequent operations
+                    corpus_doc, _status, _doc_path = corpus_obj.add_document(
+                        doc_obj, user=user_obj
+                    )
 
-                    # Import doc-level annotations
+                    # Import doc-level annotations - use corpus_doc (the corpus copy)
                     for doc_label_name in doc_data.get("doc_labels", []):
                         label_obj = doc_label_lookup.get(doc_label_name)
                         if label_obj:
                             Annotation.objects.create(
                                 annotation_label=label_obj,
-                                document=doc_obj,
+                                document=corpus_doc,
                                 corpus=corpus_obj,
                                 creator=user_obj,
                             )
 
-                    # Import text annotations
+                    # Import text annotations - use corpus_doc (the corpus copy)
                     import_annotations(
                         user_id=user_obj.id,
-                        doc_obj=doc_obj,
+                        doc_obj=corpus_doc,
                         corpus_obj=corpus_obj,
                         annotations_data=doc_data.get("labelled_text", []),
                         label_lookup=label_lookup,
                         label_type=TOKEN_LABEL,
                     )
 
-                    doc_obj.backend_lock = False
-                    doc_obj.save()
+                    # Unlock the corpus copy (not the original)
+                    corpus_doc.backend_lock = False
+                    corpus_doc.save()
 
             except Exception as e:
                 logger.error(f"Error importing document {doc_filename}: {e}")
