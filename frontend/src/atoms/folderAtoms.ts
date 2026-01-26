@@ -391,3 +391,36 @@ export const closeAllFolderModalsAtom = atom(null, (_get, set) => {
   set(activeFolderModalIdAtom, null);
   set(createFolderParentIdAtom, null);
 });
+
+// ============================================================================
+// REMOVE DOCUMENTS MODAL STATE
+// ============================================================================
+
+/**
+ * Show/hide remove documents confirmation modal
+ */
+export const showRemoveDocumentsModalAtom = atom<boolean>(false);
+
+/**
+ * Document IDs to be removed (set when opening the modal)
+ */
+export const removeDocumentsIdsAtom = atom<string[]>([]);
+
+/**
+ * Open remove documents confirmation modal
+ */
+export const openRemoveDocumentsModalAtom = atom(
+  null,
+  (_get, set, documentIds: string[]) => {
+    set(removeDocumentsIdsAtom, documentIds);
+    set(showRemoveDocumentsModalAtom, true);
+  }
+);
+
+/**
+ * Close remove documents modal
+ */
+export const closeRemoveDocumentsModalAtom = atom(null, (_get, set) => {
+  set(showRemoveDocumentsModalAtom, false);
+  set(removeDocumentsIdsAtom, []);
+});
