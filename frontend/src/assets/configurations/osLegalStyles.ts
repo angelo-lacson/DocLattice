@@ -98,6 +98,16 @@ export const OS_LEGAL_COLORS = {
   dangerHover: "#b91c1c",
   /** Danger background - light red tint. */
   dangerLight: "rgba(220, 38, 38, 0.1)",
+  /** Danger surface background - very light red for panels/modals. */
+  dangerSurface: "#fef2f2",
+  /** Danger surface hover state - slightly darker. */
+  dangerSurfaceHover: "#fee2e2",
+  /** Danger border color - light red for subtle borders. */
+  dangerBorder: "#fecaca",
+  /** Danger border hover state - more prominent red. */
+  dangerBorderHover: "#f87171",
+  /** Danger text color - dark red for text on danger surfaces. */
+  dangerText: "#991b1b",
 
   /** Success color - green. Use for confirmations and positive feedback. */
   success: "#16a34a",

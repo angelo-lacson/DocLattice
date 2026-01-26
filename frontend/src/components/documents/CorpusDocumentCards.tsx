@@ -57,8 +57,6 @@ export const CorpusDocumentCards = ({
    * If the corpus_id is passed in, it will query and display the documents for
    * that corpus and let you browse them.
    */
-  console.log("[CorpusDocumentCards] Rendering with viewMode:", viewMode);
-
   const selected_document_ids = useReactiveVar(selectedDocumentIds);
   const document_search_term = useReactiveVar(documentSearchTerm);
   const selected_metadata_id_to_filter_on = useReactiveVar(
@@ -96,8 +94,6 @@ export const CorpusDocumentCards = ({
     ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
     ...(document_search_term ? { textSearch: document_search_term } : {}),
   };
-
-  console.log("[QUERY] GET_DOCUMENTS variables:", queryVariables);
 
   const {
     refetch: refetchDocuments,
@@ -171,13 +167,6 @@ export const CorpusDocumentCards = ({
   const document_items = document_data
     .map((edge) => (edge?.node ? edge.node : undefined))
     .filter((item): item is DocumentType => !!item);
-
-  console.log(
-    "[QUERY] GET_DOCUMENTS returned",
-    document_items.length,
-    "documents for folderId:",
-    selected_folder_id
-  );
 
   // Update the global reactive var with current view document IDs for toolbar's Select All functionality
   useEffect(() => {

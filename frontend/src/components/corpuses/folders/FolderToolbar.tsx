@@ -367,18 +367,18 @@ const DangerButton = styled.button`
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: ${OS_LEGAL_COLORS.dangerSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
   font-size: 13px;
   font-weight: 500;
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #fee2e2;
-    border-color: #f87171;
+    background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+    border-color: ${OS_LEGAL_COLORS.dangerBorderHover};
   }
 
   svg {
@@ -681,13 +681,7 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
   // Memoized view mode change handler to prevent unnecessary re-renders
   const handleViewModeChange = useCallback(
     (mode: ViewMode) => {
-      console.log("[FolderToolbar] View mode change requested:", mode);
-      if (onViewModeChange) {
-        console.log("[FolderToolbar] Calling onViewModeChange with:", mode);
-        onViewModeChange(mode);
-      } else {
-        console.log("[FolderToolbar] onViewModeChange is not defined!");
-      }
+      onViewModeChange?.(mode);
     },
     [onViewModeChange]
   );
@@ -1013,7 +1007,7 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
               onRemoveFromCorpus();
               closeMobileMenu();
             }}
-            style={{ color: "#dc2626" }}
+            style={{ color: OS_LEGAL_COLORS.danger }}
           >
             <Trash2 />
             Remove from Corpus ({selectedDocumentCount})
