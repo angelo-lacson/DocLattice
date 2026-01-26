@@ -303,7 +303,13 @@ def calculate_embedding_for_doc_text(
         if doc.txt_extract_file.name:
             with doc.txt_extract_file.open("r") as txt_file:
                 text = txt_file.read()
-                # Some storage backends may return bytes even with "r" mode
+                # Workaround: Some django-storages backends (e.g., S3Boto3Storage with
+                # certain configurations, or custom storage backends) may return bytes
+                # even when files are opened in text mode ("r"). This can happen when:
+                # - The storage backend doesn't properly handle the mode parameter
+                # - Binary mode is forced by the underlying implementation
+                # - File content-type metadata is missing or incorrect
+                # See: https://github.com/jschneier/django-storages/issues/382
                 if isinstance(text, bytes):
                     text = text.decode("utf-8")
         else:
