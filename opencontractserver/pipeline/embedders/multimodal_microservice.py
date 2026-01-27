@@ -192,7 +192,13 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                         f"first 100 chars: {text[:100]!r}"
                     )
                     return None
-                return embeddings_array[0].tolist()
+                # Handle both 1D (single embedding) and 2D (batch) response formats
+                if embeddings_array.ndim == 1:
+                    # Service returns 1D array directly: [0.1, 0.2, ...]
+                    return embeddings_array.tolist()
+                else:
+                    # Service returns 2D batch array: [[0.1, 0.2, ...]]
+                    return embeddings_array[0].tolist()
             elif 400 <= response.status_code < 500:
                 # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
@@ -273,7 +279,13 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
                         f"base64 data length: {len(image_base64)}"
                     )
                     return None
-                return embeddings_array[0].tolist()
+                # Handle both 1D (single embedding) and 2D (batch) response formats
+                if embeddings_array.ndim == 1:
+                    # Service returns 1D array directly: [0.1, 0.2, ...]
+                    return embeddings_array.tolist()
+                else:
+                    # Service returns 2D batch array: [[0.1, 0.2, ...]]
+                    return embeddings_array[0].tolist()
             elif 400 <= response.status_code < 500:
                 # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(

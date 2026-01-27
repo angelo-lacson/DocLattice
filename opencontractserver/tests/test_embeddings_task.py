@@ -915,5 +915,457 @@ class TestMultimodalEmbeddingTask(unittest.TestCase):
         mock_obj.add_embedding.assert_not_called()
 
 
+class TestEmbeddingGenerationError(unittest.TestCase):
+    """
+    Tests for EmbeddingGenerationError behavior introduced in PR #828.
+
+    The error handling ensures:
+    - Default embedding failures raise EmbeddingGenerationError (triggers Celery retry)
+    - Explicit embedder path failures raise EmbeddingGenerationError
+    - Corpus-specific embedding failures are logged but don't fail the task
+    """
+
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
+    @patch("opencontractserver.tasks.embeddings_task.settings")
+    def test_embedding_generation_error_raised_when_default_embedder_returns_none(
+        self, mock_settings, mock_get_default
+    ):
+        """
+        Test that EmbeddingGenerationError is raised when the default embedder
+        returns None (embedding generation failed).
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            EmbeddingGenerationError,
+            _apply_dual_embedding_strategy,
+        )
+
+        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+
+        # Create mock embedder that returns None (failure)
+        mock_embedder_instance = MagicMock()
+        mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
+        mock_get_default.return_value = mock_embedder_class
+
+        # Create mock object
+        mock_obj = MagicMock()
+
+        # Create embed function that returns False (embedding failed)
+        def failing_embed_func(obj, embedder, embedder_path):
+            return False
+
+        # Should raise EmbeddingGenerationError
+        with self.assertRaises(EmbeddingGenerationError) as context:
+            _apply_dual_embedding_strategy(
+                obj=mock_obj,
+                text="test text",
+                corpus_id=None,
+                obj_type="document",
+                obj_id=1,
+                embed_func=failing_embed_func,
+            )
+
+        self.assertIn("Default embedding failed", str(context.exception))
+        self.assertIn(
+            "Embedder returned None or failed to store", str(context.exception)
+        )
+
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
+    @patch("opencontractserver.tasks.embeddings_task.settings")
+    def test_embedding_generation_error_raised_when_default_embedder_class_none(
+        self, mock_settings, mock_get_default
+    ):
+        """
+        Test that EmbeddingGenerationError is raised when get_default_embedder
+        returns None (no embedder configured).
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            EmbeddingGenerationError,
+            _apply_dual_embedding_strategy,
+        )
+
+        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_default.return_value = None  # No default embedder
+
+        mock_obj = MagicMock()
+
+        def embed_func(obj, embedder, embedder_path):
+            return True
+
+        with self.assertRaises(EmbeddingGenerationError) as context:
+            _apply_dual_embedding_strategy(
+                obj=mock_obj,
+                text="test text",
+                corpus_id=None,
+                obj_type="document",
+                obj_id=1,
+                embed_func=embed_func,
+            )
+
+        self.assertIn("Could not get default embedder class", str(context.exception))
+
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
+    @patch("opencontractserver.tasks.embeddings_task.settings")
+    def test_embedding_generation_error_raised_when_default_embedder_throws(
+        self, mock_settings, mock_get_default
+    ):
+        """
+        Test that EmbeddingGenerationError is raised when the default embedder
+        throws an exception during embedding generation.
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            EmbeddingGenerationError,
+            _apply_dual_embedding_strategy,
+        )
+
+        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+
+        # Make get_default_embedder raise an exception
+        mock_get_default.side_effect = Exception("Connection refused")
+
+        mock_obj = MagicMock()
+
+        def embed_func(obj, embedder, embedder_path):
+            return True
+
+        with self.assertRaises(EmbeddingGenerationError) as context:
+            _apply_dual_embedding_strategy(
+                obj=mock_obj,
+                text="test text",
+                corpus_id=None,
+                obj_type="document",
+                obj_id=1,
+                embed_func=embed_func,
+            )
+
+        self.assertIn("Connection refused", str(context.exception))
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_explicit_embedder_path_raises_embedding_generation_error_on_failure(
+        self, mock_annotation_model, mock_get_component
+    ):
+        """
+        Test that calculate_embedding_for_annotation_text raises EmbeddingGenerationError
+        when an explicit embedder_path is provided and embedding fails.
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            EmbeddingGenerationError,
+            calculate_embedding_for_annotation_text,
+        )
+
+        # Create mock annotation
+        mock_annot = MagicMock()
+        mock_annot.id = 1
+        mock_annot.pk = 1
+        mock_annot.raw_text = "Test text"
+        mock_annot.corpus_id = None
+        mock_annot.content_modalities = ["TEXT"]
+        mock_annotation_model.objects.select_related.return_value.get.return_value = (
+            mock_annot
+        )
+
+        # Create mock embedder that returns None (failure)
+        mock_embedder_instance = MagicMock()
+        mock_embedder_instance.is_multimodal = False
+        mock_embedder_instance.supports_images = False
+        mock_embedder_instance.embed_text.return_value = None  # Embedding failed
+        mock_embedder_class = MagicMock(return_value=mock_embedder_instance)
+        mock_get_component.return_value = mock_embedder_class
+
+        # Should raise EmbeddingGenerationError
+        with self.assertRaises(EmbeddingGenerationError) as context:
+            calculate_embedding_for_annotation_text(
+                annotation_id=1, embedder_path="explicit.embedder.path"
+            )
+
+        self.assertIn("Embedding failed for annotation 1", str(context.exception))
+        self.assertIn("explicit.embedder.path", str(context.exception))
+
+    @patch("opencontractserver.tasks.embeddings_task.Corpus")
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
+    @patch("opencontractserver.tasks.embeddings_task.settings")
+    def test_corpus_embedding_failure_does_not_raise_error(
+        self, mock_settings, mock_get_default, mock_get_component, mock_corpus_model
+    ):
+        """
+        Test that corpus-specific embedding failures are logged but don't fail the task.
+        Only the default embedding failure should raise EmbeddingGenerationError.
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            _apply_dual_embedding_strategy,
+        )
+
+        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+
+        # Create successful default embedder
+        mock_default_embedder = MagicMock()
+        mock_default_embedder_class = MagicMock(return_value=mock_default_embedder)
+        mock_get_default.return_value = mock_default_embedder_class
+
+        # Create failing corpus embedder
+        mock_corpus_embedder = MagicMock()
+        mock_corpus_embedder_class = MagicMock(return_value=mock_corpus_embedder)
+        mock_get_component.return_value = mock_corpus_embedder_class
+
+        # Set up corpus with different preferred embedder
+        mock_corpus = MagicMock()
+        mock_corpus.id = 123
+        mock_corpus.preferred_embedder = "corpus.embedder.path"
+        mock_corpus_model.objects.get.return_value = mock_corpus
+
+        mock_obj = MagicMock()
+
+        call_count = [0]
+
+        def embed_func(obj, embedder, embedder_path):
+            call_count[0] += 1
+            if embedder_path == "default.embedder.path":
+                return True  # Default succeeds
+            else:
+                return False  # Corpus-specific fails
+
+        # Should NOT raise - corpus failure is non-fatal
+        _apply_dual_embedding_strategy(
+            obj=mock_obj,
+            text="test text",
+            corpus_id=123,
+            obj_type="document",
+            obj_id=1,
+            embed_func=embed_func,
+        )
+
+        # Both embedders should have been called
+        self.assertEqual(call_count[0], 2)
+
+    @patch("opencontractserver.tasks.embeddings_task.Corpus")
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
+    @patch("opencontractserver.tasks.embeddings_task.settings")
+    def test_corpus_embedding_exception_does_not_raise_error(
+        self, mock_settings, mock_get_default, mock_get_component, mock_corpus_model
+    ):
+        """
+        Test that corpus-specific embedding exceptions are caught and logged,
+        but don't fail the task.
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            _apply_dual_embedding_strategy,
+        )
+
+        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+
+        # Create successful default embedder
+        mock_default_embedder = MagicMock()
+        mock_default_embedder_class = MagicMock(return_value=mock_default_embedder)
+        mock_get_default.return_value = mock_default_embedder_class
+
+        # Make corpus embedder loading throw an exception
+        mock_get_component.side_effect = Exception("Corpus embedder not found")
+
+        # Set up corpus with different preferred embedder
+        mock_corpus = MagicMock()
+        mock_corpus.id = 123
+        mock_corpus.preferred_embedder = "corpus.embedder.path"
+        mock_corpus_model.objects.get.return_value = mock_corpus
+
+        mock_obj = MagicMock()
+
+        def embed_func(obj, embedder, embedder_path):
+            return True
+
+        # Should NOT raise - corpus loading failure is non-fatal
+        _apply_dual_embedding_strategy(
+            obj=mock_obj,
+            text="test text",
+            corpus_id=123,
+            obj_type="document",
+            obj_id=1,
+            embed_func=embed_func,
+        )
+
+        # Default embedder should still have been used
+        mock_get_default.assert_called_once()
+
+    def test_embedding_generation_error_is_exception_subclass(self):
+        """Test that EmbeddingGenerationError is a proper Exception subclass."""
+        from opencontractserver.tasks.embeddings_task import EmbeddingGenerationError
+
+        self.assertTrue(issubclass(EmbeddingGenerationError, Exception))
+
+        error = EmbeddingGenerationError("Test error message")
+        self.assertEqual(str(error), "Test error message")
+
+
+class TestBytesDecoding(unittest.TestCase):
+    """
+    Tests for bytes-to-string decoding in embedding tasks.
+
+    Some storage backends (e.g., django-storages with certain S3 configurations)
+    may return bytes even when files are opened in text mode ("r").
+    """
+
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    @patch("opencontractserver.tasks.embeddings_task.Document")
+    def test_bytes_content_decoded_to_string(
+        self, mock_document_model, mock_apply_strategy
+    ):
+        """
+        Test that bytes content from txt_extract_file is properly decoded to UTF-8.
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embedding_for_doc_text,
+        )
+
+        # Create mock document with a txt_extract_file that returns bytes
+        mock_doc = MagicMock()
+        mock_doc.id = 1
+        mock_doc.txt_extract_file.name = "test.txt"
+
+        # Simulate storage backend returning bytes even in "r" mode
+        mock_file = MagicMock()
+        mock_file.read.return_value = b"Test content in bytes"
+        mock_file.__enter__ = MagicMock(return_value=mock_file)
+        mock_file.__exit__ = MagicMock(return_value=False)
+        mock_doc.txt_extract_file.open.return_value = mock_file
+
+        mock_document_model.objects.get.return_value = mock_doc
+
+        # Call the function
+        calculate_embedding_for_doc_text(doc_id=1, corpus_id=None)
+
+        # Verify _apply_dual_embedding_strategy was called with decoded string
+        mock_apply_strategy.assert_called_once()
+        call_kwargs = mock_apply_strategy.call_args[1]
+        self.assertEqual(call_kwargs["text"], "Test content in bytes")
+        self.assertIsInstance(call_kwargs["text"], str)
+
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    @patch("opencontractserver.tasks.embeddings_task.Document")
+    def test_string_content_passed_through(
+        self, mock_document_model, mock_apply_strategy
+    ):
+        """
+        Test that string content from txt_extract_file is passed through unchanged.
+        """
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embedding_for_doc_text,
+        )
+
+        # Create mock document with a txt_extract_file that returns string
+        mock_doc = MagicMock()
+        mock_doc.id = 1
+        mock_doc.txt_extract_file.name = "test.txt"
+
+        # Normal behavior: file returns string
+        mock_file = MagicMock()
+        mock_file.read.return_value = "Test content as string"
+        mock_file.__enter__ = MagicMock(return_value=mock_file)
+        mock_file.__exit__ = MagicMock(return_value=False)
+        mock_doc.txt_extract_file.open.return_value = mock_file
+
+        mock_document_model.objects.get.return_value = mock_doc
+
+        # Call the function
+        calculate_embedding_for_doc_text(doc_id=1, corpus_id=None)
+
+        # Verify _apply_dual_embedding_strategy was called with the string
+        mock_apply_strategy.assert_called_once()
+        call_kwargs = mock_apply_strategy.call_args[1]
+        self.assertEqual(call_kwargs["text"], "Test content as string")
+
+
+class TestArrayFormatHandling(unittest.TestCase):
+    """
+    Tests for 1D vs 2D array format handling in embedders.
+
+    Different embedding services may return embeddings in different formats:
+    - 1D: [0.1, 0.2, 0.3, ...] - single embedding directly
+    - 2D: [[0.1, 0.2, 0.3, ...]] - batch format with single item
+    """
+
+    def test_microservice_embedder_handles_1d_array(self):
+        """Test that MicroserviceEmbedder correctly handles 1D array responses."""
+        from opencontractserver.pipeline.embedders.sent_transformer_microservice import (
+            MicroserviceEmbedder,
+        )
+
+        embedder = MicroserviceEmbedder()
+
+        # Simulate 1D response: [0.1, 0.2, 0.3]
+        with patch("requests.post") as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"embeddings": [0.1, 0.2, 0.3]}
+            mock_post.return_value = mock_response
+
+            result = embedder.embed_text("test")
+
+            self.assertEqual(result, [0.1, 0.2, 0.3])
+            self.assertIsInstance(result, list)
+
+    def test_microservice_embedder_handles_2d_array(self):
+        """Test that MicroserviceEmbedder correctly handles 2D array responses."""
+        from opencontractserver.pipeline.embedders.sent_transformer_microservice import (
+            MicroserviceEmbedder,
+        )
+
+        embedder = MicroserviceEmbedder()
+
+        # Simulate 2D response: [[0.1, 0.2, 0.3]]
+        with patch("requests.post") as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"embeddings": [[0.1, 0.2, 0.3]]}
+            mock_post.return_value = mock_response
+
+            result = embedder.embed_text("test")
+
+            self.assertEqual(result, [0.1, 0.2, 0.3])
+            self.assertIsInstance(result, list)
+
+    def test_multimodal_embedder_handles_1d_array(self):
+        """Test that MultimodalMicroserviceEmbedder correctly handles 1D array responses."""
+        from opencontractserver.pipeline.embedders.multimodal_microservice import (
+            MultimodalMicroserviceEmbedder,
+        )
+
+        embedder = MultimodalMicroserviceEmbedder()
+
+        with patch("requests.post") as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"embeddings": [0.4, 0.5, 0.6]}
+            mock_post.return_value = mock_response
+
+            with patch.object(
+                embedder, "_get_service_config", return_value=("http://test", "", {})
+            ):
+                result = embedder.embed_text("test")
+
+            self.assertEqual(result, [0.4, 0.5, 0.6])
+
+    def test_multimodal_embedder_handles_2d_array(self):
+        """Test that MultimodalMicroserviceEmbedder correctly handles 2D array responses."""
+        from opencontractserver.pipeline.embedders.multimodal_microservice import (
+            MultimodalMicroserviceEmbedder,
+        )
+
+        embedder = MultimodalMicroserviceEmbedder()
+
+        with patch("requests.post") as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"embeddings": [[0.4, 0.5, 0.6]]}
+            mock_post.return_value = mock_response
+
+            with patch.object(
+                embedder, "_get_service_config", return_value=("http://test", "", {})
+            ):
+                result = embedder.embed_text("test")
+
+            self.assertEqual(result, [0.4, 0.5, 0.6])
+
+
 if __name__ == "__main__":
     unittest.main()

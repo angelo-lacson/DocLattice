@@ -27,6 +27,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Embedder Error Handling and Response Parsing (PR #828)
+- **Fixed silent embedding failures**: Added `EmbeddingGenerationError` exception class that triggers Celery task retries when default embeddings fail
+  - Default embedding failures now properly raise and retry (up to 3 times with 60s delay)
+  - Corpus-specific embedding failures are logged but don't fail the task (non-fatal)
+  - Files: `opencontractserver/tasks/embeddings_task.py:165-273`
+- **Fixed 1D vs 2D array response parsing**: Embedders now handle both array formats from embedding services
+  - Some services return `[0.1, 0.2, ...]` (1D), others return `[[0.1, 0.2, ...]]` (2D batch format)
+  - Previously caused "object of type 'float' has no len()" errors
+  - Files: `opencontractserver/pipeline/embedders/sent_transformer_microservice.py:113-119`, `opencontractserver/pipeline/embedders/multimodal_microservice.py:195-201`
+- **Fixed bytes-to-string decoding**: Added workaround for storage backends that return bytes even in text mode
+  - Affects django-storages S3Boto3Storage with certain configurations
+  - Previously caused "bytes not JSON serializable" errors
+  - Files: `opencontractserver/tasks/embeddings_task.py:306-314`
+- **Aligned error handling across embedders**: MicroserviceEmbedder now distinguishes 4xx (client) vs 5xx (server) errors like MultimodalMicroserviceEmbedder
+  - Files: `opencontractserver/pipeline/embedders/sent_transformer_microservice.py:120-133`
+- **Added comprehensive test coverage**: 18 new tests for error handling, bytes decoding, and array format parsing
+  - Files: `opencontractserver/tests/test_embeddings_task.py`
+- **Added TestEmbedder for fast, deterministic test embeddings**: Tests now use a fast in-memory embedder by default instead of the HTTP-based MicroserviceEmbedder
+  - Returns deterministic fake vectors based on text hash (same text = same embedding)
+  - Eliminates HTTP round-trips to vector-embedder service during tests (faster test execution)
+  - Integration tests that need real service connectivity should explicitly instantiate MicroserviceEmbedder
+  - Files: `opencontractserver/pipeline/embedders/test_embedder.py`, `config/settings/test.py:120-134`
+
 #### Cache Eviction Consistency
 - **Fixed folder document counts not updating after bulk removal**: Added `corpusFolders` cache eviction to `REMOVE_DOCUMENTS_FROM_CORPUS` mutation to match the pattern used by `MOVE_DOCUMENT_TO_FOLDER`
   - Files: `frontend/src/components/corpuses/folders/RemoveDocumentsModal.tsx:109-112`
