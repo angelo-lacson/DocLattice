@@ -162,6 +162,12 @@ def _create_embedding_for_annotation(
         )
 
 
+class EmbeddingGenerationError(Exception):
+    """Raised when embedding generation fails and should be retried."""
+
+    pass
+
+
 def _apply_dual_embedding_strategy(
     obj: HasEmbeddingMixin,
     text: str,
@@ -184,6 +190,10 @@ def _apply_dual_embedding_strategy(
         obj_type: Type name for logging (e.g., "document", "annotation")
         obj_id: Object ID for logging
         embed_func: Function to call for creating embeddings (handles modality specifics)
+
+    Raises:
+        EmbeddingGenerationError: If the default embedding fails (triggers Celery retry).
+            Corpus-specific embedding failures are logged but don't raise.
     """
     if not text.strip():
         logger.info(f"{obj_type.capitalize()} {obj_id} has no text to embed.")
@@ -196,18 +206,27 @@ def _apply_dual_embedding_strategy(
         f"using {default_embedder_path} (for global search)"
     )
 
+    default_embedding_succeeded = False
+    default_embedding_error = None
+
     try:
         default_embedder_class = get_default_embedder()
         if default_embedder_class:
             default_embedder = default_embedder_class()
-            embed_func(obj, default_embedder, default_embedder_path)
+            default_embedding_succeeded = embed_func(
+                obj, default_embedder, default_embedder_path
+            )
+            if not default_embedding_succeeded:
+                default_embedding_error = "Embedder returned None or failed to store"
         else:
+            default_embedding_error = "Could not get default embedder class"
             logger.error(f"Could not get default embedder for {obj_type} {obj_id}")
     except Exception as e:
+        default_embedding_error = str(e)
         logger.error(f"Failed to create default embedding for {obj_type} {obj_id}: {e}")
-        # Don't raise - continue to try corpus embedding if applicable
 
     # 2. If corpus has different preferred_embedder, also create corpus-specific embedding
+    # (This is optional - failures here don't fail the task)
     if corpus_id:
         try:
             corpus = Corpus.objects.get(id=corpus_id)
@@ -221,7 +240,14 @@ def _apply_dual_embedding_strategy(
                 try:
                     corpus_embedder_class = get_component_by_name(corpus_embedder_path)
                     corpus_embedder = corpus_embedder_class()
-                    embed_func(obj, corpus_embedder, corpus_embedder_path)
+                    corpus_succeeded = embed_func(
+                        obj, corpus_embedder, corpus_embedder_path
+                    )
+                    if not corpus_succeeded:
+                        logger.warning(
+                            f"Corpus embedding failed for {obj_type} {obj_id} "
+                            f"with embedder {corpus_embedder_path} (non-fatal)"
+                        )
                 except Exception as e:
                     logger.error(
                         f"Failed to create corpus embedding for {obj_type} {obj_id} "
@@ -238,6 +264,13 @@ def _apply_dual_embedding_strategy(
             logger.error(
                 f"Error processing corpus-specific embedding for {obj_type} {obj_id}: {e}"
             )
+
+    # 3. Raise if default embedding failed (triggers Celery retry)
+    if not default_embedding_succeeded:
+        raise EmbeddingGenerationError(
+            f"Default embedding failed for {obj_type} {obj_id} "
+            f"using {default_embedder_path}: {default_embedding_error}"
+        )
 
     logger.info(f"Completed embedding generation for {obj_type} {obj_id}")
 
@@ -270,6 +303,15 @@ def calculate_embedding_for_doc_text(
         if doc.txt_extract_file.name:
             with doc.txt_extract_file.open("r") as txt_file:
                 text = txt_file.read()
+                # Workaround: Some django-storages backends (e.g., S3Boto3Storage with
+                # certain configurations, or custom storage backends) may return bytes
+                # even when files are opened in text mode ("r"). This can happen when:
+                # - The storage backend doesn't properly handle the mode parameter
+                # - Binary mode is forced by the underlying implementation
+                # - File content-type metadata is missing or incorrect
+                # See: https://github.com/jschneier/django-storages/issues/382
+                if isinstance(text, bytes):
+                    text = text.decode("utf-8")
         else:
             text = ""
 
@@ -346,7 +388,16 @@ def calculate_embedding_for_annotation_text(
         try:
             embedder_class = get_component_by_name(embedder_path)
             embedder = embedder_class()
-            _create_embedding_for_annotation(annotation, embedder, embedder_path)
+            succeeded = _create_embedding_for_annotation(
+                annotation, embedder, embedder_path
+            )
+            if not succeeded:
+                raise EmbeddingGenerationError(
+                    f"Embedding failed for annotation {annotation_id} "
+                    f"using explicit embedder {embedder_path}"
+                )
+        except EmbeddingGenerationError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to create embedding with explicit path {embedder_path}: {e}"

@@ -117,6 +117,20 @@ STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 MODE = "TEST"
 TELEMETRY_ENABLED = False
 
+# Embedder settings for tests
+# ------------------------------------------------------------------------------
+# Use fast TestEmbedder by default for all tests. This avoids HTTP calls to
+# the vector-embedder microservice and makes tests run ~2x faster.
+#
+# Integration tests that need to verify actual service connectivity should
+# explicitly instantiate the real embedder class (e.g., MicroserviceEmbedder).
+DEFAULT_EMBEDDER = "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder"
+DEFAULT_EMBEDDERS_BY_FILETYPE = {
+    "application/pdf": "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder",
+    "text/plain": "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder",  # noqa: E501
+}
+
 # Auth0 settings for tests
 # ------------------------------------------------------------------------------
 # These are required for importing Auth0 modules even if USE_AUTH0 is False.
