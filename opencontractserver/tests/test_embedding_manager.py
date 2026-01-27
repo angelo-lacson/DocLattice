@@ -254,3 +254,125 @@ class EmbeddingManagerConcurrentTest(TransactionTestCase):
             1,
             f"Expected exactly 1 embedding, found {embedding_count}",
         )
+
+
+class EmbeddingManager2048DimensionTest(TestCase):
+    """
+    Tests for 2048-dimensional embedding support in EmbeddingManager.
+
+    Covers the 2048 dimension branches added in commit f790fdb5:
+    - Managers.py lines 363-364: _get_vector_field_name returning "vector_2048"
+    - mixins.py lines 37-38: _dimension_to_field returning "embedding_set__vector_2048"
+    - mixins.py lines 144-145: get_embedding looking up vector_2048
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(
+            username="embedding_2048_test_user",
+            email="embedding_2048_test@test.com",
+            password="testpassword",
+        )
+
+    def setUp(self):
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus 2048",
+            creator=self.user,
+        )
+        with open(SAMPLE_PDF_FILE_TWO_PATH, "rb") as f:
+            pdf_content = f.read()
+        self.document = Document.objects.create(
+            title="Test Document 2048",
+            creator=self.user,
+            pdf_file=SimpleUploadedFile(
+                "test_2048.pdf", pdf_content, content_type="application/pdf"
+            ),
+            backend_lock=False,
+        )
+        self.corpus.documents.add(self.document)
+
+    def tearDown(self):
+        Embedding.objects.filter(embedder_path__startswith="test.2048").delete()
+        self.document.delete()
+        self.corpus.delete()
+
+    def test_store_embedding_2048_dimension(self):
+        """
+        Test that store_embedding correctly handles 2048-dimensional vectors.
+
+        Covers Managers.py lines 363-364: _get_vector_field_name returning "vector_2048"
+        """
+        embedder_path = "test.2048.embedder"
+        vector = [0.1] * 2048
+
+        embedding = Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=2048,
+            document_id=self.document.id,
+        )
+
+        self.assertIsNotNone(embedding)
+        self.assertIsNotNone(embedding.vector_2048)
+        self.assertEqual(len(embedding.vector_2048), 2048)
+        self.assertEqual(list(embedding.vector_2048), vector)
+
+    def test_get_embedding_2048_dimension(self):
+        """
+        Test that get_embedding correctly retrieves 2048-dimensional vectors.
+
+        Covers mixins.py lines 144-145: get_embedding looking up vector_2048
+        """
+        embedder_path = "test.2048.get_embedder"
+        vector = [0.2] * 2048
+
+        # Store the embedding first
+        Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=2048,
+            document_id=self.document.id,
+        )
+
+        # Retrieve using get_embedding from HasEmbeddingMixin
+        retrieved = self.document.get_embedding(embedder_path, dimension=2048)
+
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(len(retrieved), 2048)
+        # Convert to list for comparison (pgvector returns numpy array)
+        self.assertEqual(list(retrieved), vector)
+
+    def test_search_by_embedding_2048_dimension(self):
+        """
+        Test that search_by_embedding works with 2048-dimensional vectors.
+
+        Covers mixins.py lines 37-38: _dimension_to_field returning
+        "{EMBEDDING_RELATED_NAME}__vector_2048"
+        """
+        embedder_path = "test.2048.search_embedder"
+        vector = [0.3] * 2048
+
+        # Store the embedding
+        Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=2048,
+            document_id=self.document.id,
+        )
+
+        # Search using 2048-dimensional query vector
+        query_vector = [0.3] * 2048
+        results = Document.objects.search_by_embedding(
+            query_vector=query_vector,
+            embedder_path=embedder_path,
+            top_k=10,
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].id, self.document.id)
+        # Cosine distance should be 0 for identical vectors
+        self.assertAlmostEqual(results[0].similarity_score, 0.0, places=5)
