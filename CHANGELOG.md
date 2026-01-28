@@ -5,7 +5,37 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-25
+## [Unreleased] - 2026-01-27
+
+### Added
+
+#### 2048-Dimensional Embedding Support
+- **Added vector_2048 field to Embedding model**: Support for 2048-dimensional embeddings used by newer embedding models
+  - Migration 0061 adds nullable `vector_2048` column to `annotations_embedding` table
+  - Files: `opencontractserver/annotations/models.py:470`, `opencontractserver/annotations/migrations/0061_add_vector_2048.py`
+- **Updated dimension handling across codebase**:
+  - `Managers.py:_get_vector_field_name` returns "vector_2048" for 2048-dim vectors (lines 363-364)
+  - `mixins.py:_dimension_to_field` returns embedding relation for 2048-dim (lines 37-38)
+  - `mixins.py:get_embedding` retrieves 2048-dim vectors (lines 144-145)
+  - Vector stores validate 2048 as supported dimension
+  - Files: `opencontractserver/shared/Managers.py`, `opencontractserver/shared/mixins.py`, `opencontractserver/llms/vector_stores/core_vector_stores.py`, `opencontractserver/llms/vector_stores/core_conversation_vector_stores.py`
+
+#### Multimodal Embedder Refactoring
+- **Refactored MultimodalMicroserviceEmbedder into inheritance hierarchy**:
+  - `BaseMultimodalMicroserviceEmbedder`: Abstract base class with shared multimodal embedding logic
+  - `CLIPMicroserviceEmbedder`: CLIP ViT-L-14 model (768 dimensions) with backwards-compatible legacy settings
+  - `QwenMicroserviceEmbedder`: Qwen embedding model (1024 dimensions)
+  - Files: `opencontractserver/pipeline/embedders/multimodal_microservice.py`
+- **Added model-specific settings**: `CLIP_EMBEDDER_URL`, `CLIP_EMBEDDER_API_KEY`, `QWEN_EMBEDDER_URL`, `QWEN_EMBEDDER_API_KEY`
+  - Files: `config/settings/base.py:666-669`
+- **Deprecated legacy settings**: `MULTIMODAL_EMBEDDER_URL` and `MULTIMODAL_EMBEDDER_API_KEY` still work but emit deprecation warnings
+  - Users should migrate to `CLIP_EMBEDDER_URL` / `CLIP_EMBEDDER_API_KEY`
+
+### Fixed
+
+#### MicroserviceEmbedder Reliability
+- **Fixed MicroserviceEmbedder production failures**: Added Content-Type header and 30s timeout to prevent silent failures
+  - Files: `opencontractserver/pipeline/embedders/sent_transformer_microservice.py:522, 530`
 
 ### Added
 
