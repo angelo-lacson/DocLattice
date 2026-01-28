@@ -34,6 +34,8 @@ class VectorSearchViaEmbeddingMixin:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_1024"
         elif dimension == 1536:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
+        elif dimension == 2048:
+            return f"{self.EMBEDDING_RELATED_NAME}__vector_2048"
         elif dimension == 3072:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
         elif dimension == 4096:
@@ -135,10 +137,16 @@ class HasEmbeddingMixin:
             vector_field = "vector_384"
         elif dimension == 768:
             vector_field = "vector_768"
+        elif dimension == 1024:
+            vector_field = "vector_1024"
         elif dimension == 1536:
             vector_field = "vector_1536"
+        elif dimension == 2048:
+            vector_field = "vector_2048"
         elif dimension == 3072:
             vector_field = "vector_3072"
+        elif dimension == 4096:
+            vector_field = "vector_4096"
         else:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
 

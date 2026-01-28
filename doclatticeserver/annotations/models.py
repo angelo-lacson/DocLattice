@@ -65,6 +65,7 @@ EMBEDDING_DIM_384 = 384
 EMBEDDING_DIM_768 = 768
 EMBEDDING_DIM_1024 = 1024
 EMBEDDING_DIM_1536 = 1536
+EMBEDDING_DIM_2048 = 2048
 EMBEDDING_DIM_3072 = 3072
 EMBEDDING_DIM_4096 = 4096
 
@@ -73,6 +74,7 @@ EMBEDDING_DIMENSIONS = [
     (EMBEDDING_DIM_768, "768"),
     (EMBEDDING_DIM_1024, "1024"),
     (EMBEDDING_DIM_1536, "1536"),
+    (EMBEDDING_DIM_2048, "2048"),
     (EMBEDDING_DIM_3072, "3072"),
     (EMBEDDING_DIM_4096, "4096"),
 ]
@@ -465,6 +467,7 @@ class Embedding(BaseOCModel):
     vector_768 = VectorField(dimensions=EMBEDDING_DIM_768, null=True, blank=True)
     vector_1024 = VectorField(dimensions=EMBEDDING_DIM_1024, null=True, blank=True)
     vector_1536 = VectorField(dimensions=EMBEDDING_DIM_1536, null=True, blank=True)
+    vector_2048 = VectorField(dimensions=EMBEDDING_DIM_2048, null=True, blank=True)
     vector_3072 = VectorField(dimensions=EMBEDDING_DIM_3072, null=True, blank=True)
     vector_4096 = VectorField(dimensions=EMBEDDING_DIM_4096, null=True, blank=True)
 

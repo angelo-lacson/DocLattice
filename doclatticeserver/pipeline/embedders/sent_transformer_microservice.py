@@ -90,7 +90,7 @@ class MicroserviceEmbedder(BaseEmbedder):
                 )
             )
 
-            headers: dict[str, str] = {}
+            headers: dict[str, str] = {"Content-Type": "application/json"}
             if api_key:
                 headers["X-API-Key"] = api_key
 
@@ -103,6 +103,7 @@ class MicroserviceEmbedder(BaseEmbedder):
                 f"{service_url}/embeddings",
                 json={"text": text},
                 headers=headers,
+                timeout=30,
             )
 
             if response.status_code == 200:
