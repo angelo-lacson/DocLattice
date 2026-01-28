@@ -14,7 +14,11 @@ from opencontractserver.llms.agents.core_agents import (
     _is_public,
     get_default_config,
 )
-from opencontractserver.llms.tools.tool_factory import CoreTool, UnifiedToolFactory
+from opencontractserver.llms.tools.tool_factory import (
+    CoreTool,
+    UnifiedToolFactory,
+    build_inject_params_for_context,
+)
 from opencontractserver.llms.types import AgentFramework
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import user_has_permission_for_obj
@@ -213,9 +217,17 @@ class UnifiedAgentFactory:
         # Keep config in sync so downstream logic respects the filtered list
         config.tools = tools
 
-        # Convert tools to framework-specific format
+        # Convert tools to framework-specific format with context injection
         framework_tools = (
-            _convert_tools_for_framework(tools, framework) if tools else []
+            _convert_tools_for_framework(
+                tools,
+                framework,
+                document_id=doc_obj.id if doc_obj else None,
+                corpus_id=corpus_obj.id if corpus_obj else None,
+                user_id=user_id,
+            )
+            if tools
+            else []
         )
 
         if framework == AgentFramework.PYDANTIC_AI:
@@ -365,9 +377,18 @@ class UnifiedAgentFactory:
         # Keep config in sync so downstream logic respects the filtered list
         config.tools = tools
 
-        # Convert tools to framework-specific format
+        # Convert tools to framework-specific format with context injection
+        # Note: document_id is None for corpus agents (no specific document)
         framework_tools = (
-            _convert_tools_for_framework(tools, framework) if tools else []
+            _convert_tools_for_framework(
+                tools,
+                framework,
+                document_id=None,
+                corpus_id=corpus_obj.id if corpus_obj else None,
+                user_id=user_id,
+            )
+            if tools
+            else []
         )
 
         if framework == AgentFramework.PYDANTIC_AI:
@@ -383,25 +404,48 @@ class UnifiedAgentFactory:
 
 
 def _convert_tools_for_framework(
-    tools: list[Union[CoreTool, Callable, str]], framework: AgentFramework
+    tools: list[Union[CoreTool, Callable, str]],
+    framework: AgentFramework,
+    *,
+    document_id: int | None = None,
+    corpus_id: int | None = None,
+    user_id: int | None = None,
 ) -> list:
-    """Convert tools to framework-specific format.
+    """Convert tools to framework-specific format with context injection.
 
     Args:
         tools: List of CoreTool instances, functions, or tool names
         framework: Target framework
+        document_id: Document ID to inject into tools that accept it
+        corpus_id: Corpus ID to inject into tools that accept it
+        user_id: User ID to inject for author_id/creator_id params
 
     Returns:
         List of framework-specific tools
     """
-    core_tools = []
+    framework_tools = []
 
     for tool in tools:
         if isinstance(tool, CoreTool):
-            core_tools.append(tool)
+            inject_params = build_inject_params_for_context(
+                tool, document_id, corpus_id, user_id
+            )
+            framework_tools.append(
+                UnifiedToolFactory.create_tool(
+                    tool, framework, inject_params=inject_params
+                )
+            )
         elif callable(tool):
             # Convert function to CoreTool
-            core_tools.append(CoreTool.from_function(tool))
+            ct = CoreTool.from_function(tool)
+            inject_params = build_inject_params_for_context(
+                ct, document_id, corpus_id, user_id
+            )
+            framework_tools.append(
+                UnifiedToolFactory.create_tool(
+                    ct, framework, inject_params=inject_params
+                )
+            )
         elif isinstance(tool, str):
             # Handle tool names - these will be resolved by the tool factory
             # For now, we'll pass them through and let the framework handle them
@@ -410,8 +454,7 @@ def _convert_tools_for_framework(
         else:
             logger.warning(f"Ignoring invalid tool: {tool}")
 
-    # Convert to framework-specific tools
-    return UnifiedToolFactory.create_tools(core_tools, framework)
+    return framework_tools
 
 
 # Enhanced convenience functions that maintain backward compatibility

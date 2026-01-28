@@ -17,7 +17,10 @@ from opencontractserver.llms.tools.pydantic_ai_tools import (
     create_typed_pydantic_ai_tool,
     pydantic_ai_tool,
 )
-from opencontractserver.llms.tools.tool_factory import CoreTool
+from opencontractserver.llms.tools.tool_factory import (
+    CoreTool,
+    build_inject_params_for_context,
+)
 
 User = get_user_model()
 
@@ -469,3 +472,303 @@ class TestInjectParamsExecution(TestCase):
         self.assertIn("ctx", param_names)
         self.assertIn("document_id", param_names)
         self.assertIn("text", param_names)
+
+
+# ---------------------------------------------------------------------------
+# Tests for _validate_resource_id_params
+# ---------------------------------------------------------------------------
+
+
+def tool_with_resource_ids(document_id: int, corpus_id: int, text: str) -> dict:
+    """Tool that uses document_id and corpus_id."""
+    return {"document_id": document_id, "corpus_id": corpus_id, "text": text}
+
+
+@pytest.mark.django_db
+class TestValidateResourceIdParams(TestCase):
+    """Tests for _validate_resource_id_params defense-in-depth validation."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="validate_params_user",
+            password="password",
+            email="validate@test.com",
+        )
+        cls.corpus = Corpus.objects.create(
+            title="Validate Params Corpus", creator=cls.user, is_public=False
+        )
+        cls.doc = Document.objects.create(
+            title="Validate Params Doc",
+            corpus=cls.corpus,
+            creator=cls.user,
+            is_public=False,
+        )
+
+    def _make_ctx(self, deps):
+        """Create a mock context with the given deps."""
+        ctx = MagicMock()
+        ctx.deps = deps
+        return ctx
+
+    def test_matching_document_id_passes(self):
+        """Test that matching document_id passes validation."""
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            _validate_resource_id_params,
+        )
+
+        deps = PydanticAIDependencies(
+            user_id=self.user.id,
+            document_id=self.doc.id,
+            corpus_id=self.corpus.id,
+        )
+        ctx = self._make_ctx(deps)
+        # Should not raise - document_id matches
+        _validate_resource_id_params(ctx, document_id=self.doc.id, text="hi")
+
+    def test_matching_corpus_id_passes(self):
+        """Test that matching corpus_id passes validation."""
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            _validate_resource_id_params,
+        )
+
+        deps = PydanticAIDependencies(
+            user_id=self.user.id,
+            document_id=self.doc.id,
+            corpus_id=self.corpus.id,
+        )
+        ctx = self._make_ctx(deps)
+        # Should not raise - corpus_id matches
+        _validate_resource_id_params(ctx, corpus_id=self.corpus.id, query="x")
+
+    def test_mismatched_document_id_raises(self):
+        """Test that mismatched document_id raises PermissionError."""
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            _validate_resource_id_params,
+        )
+
+        deps = PydanticAIDependencies(
+            user_id=self.user.id,
+            document_id=self.doc.id,
+            corpus_id=self.corpus.id,
+        )
+        ctx = self._make_ctx(deps)
+        # Should raise - document_id doesn't match
+        with self.assertRaises(PermissionError) as exc_ctx:
+            _validate_resource_id_params(ctx, document_id=99999, text="hi")
+        self.assertIn("document_id", str(exc_ctx.exception))
+
+    def test_mismatched_corpus_id_raises(self):
+        """Test that mismatched corpus_id raises PermissionError."""
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            _validate_resource_id_params,
+        )
+
+        deps = PydanticAIDependencies(
+            user_id=self.user.id,
+            document_id=self.doc.id,
+            corpus_id=self.corpus.id,
+        )
+        ctx = self._make_ctx(deps)
+        # Should raise - corpus_id doesn't match
+        with self.assertRaises(PermissionError) as exc_ctx:
+            _validate_resource_id_params(ctx, corpus_id=99999, query="x")
+        self.assertIn("corpus_id", str(exc_ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# Tests for build_inject_params_for_context
+# ---------------------------------------------------------------------------
+
+
+def tool_needing_document_id(document_id: int, query: str) -> dict:
+    """Tool that needs document_id."""
+    return {"document_id": document_id, "query": query}
+
+
+def tool_needing_corpus_id(corpus_id: int, limit: int = 10) -> dict:
+    """Tool that needs corpus_id."""
+    return {"corpus_id": corpus_id, "limit": limit}
+
+
+def tool_needing_author_id(author_id: int, content: str) -> dict:
+    """Tool that needs author_id."""
+    return {"author_id": author_id, "content": content}
+
+
+def tool_needing_creator_id(creator_id: int, note: str) -> dict:
+    """Tool that needs creator_id."""
+    return {"creator_id": creator_id, "note": note}
+
+
+def tool_needing_multiple_ids(
+    document_id: int, corpus_id: int, author_id: int, text: str
+) -> dict:
+    """Tool that needs multiple context IDs."""
+    return {
+        "document_id": document_id,
+        "corpus_id": corpus_id,
+        "author_id": author_id,
+        "text": text,
+    }
+
+
+def tool_needing_no_ids(query: str, limit: int = 5) -> dict:
+    """Tool that doesn't need any context IDs."""
+    return {"query": query, "limit": limit}
+
+
+class TestBuildInjectParamsForContext(TestCase):
+    """Tests for build_inject_params_for_context helper function."""
+
+    def test_injects_document_id_when_present(self):
+        """Test that document_id is injected when tool needs it."""
+        tool = CoreTool.from_function(tool_needing_document_id)
+        inject = build_inject_params_for_context(tool, document_id=123)
+
+        self.assertEqual(inject, {"document_id": 123})
+
+    def test_injects_corpus_id_when_present(self):
+        """Test that corpus_id is injected when tool needs it."""
+        tool = CoreTool.from_function(tool_needing_corpus_id)
+        inject = build_inject_params_for_context(tool, corpus_id=456)
+
+        self.assertEqual(inject, {"corpus_id": 456})
+
+    def test_injects_author_id_from_user_id(self):
+        """Test that user_id is injected as author_id when tool needs it."""
+        tool = CoreTool.from_function(tool_needing_author_id)
+        inject = build_inject_params_for_context(tool, user_id=789)
+
+        self.assertEqual(inject, {"author_id": 789})
+
+    def test_injects_creator_id_from_user_id(self):
+        """Test that user_id is injected as creator_id when tool needs it."""
+        tool = CoreTool.from_function(tool_needing_creator_id)
+        inject = build_inject_params_for_context(tool, user_id=789)
+
+        self.assertEqual(inject, {"creator_id": 789})
+
+    def test_injects_multiple_params(self):
+        """Test that multiple context params are injected correctly."""
+        tool = CoreTool.from_function(tool_needing_multiple_ids)
+        inject = build_inject_params_for_context(
+            tool, document_id=100, corpus_id=200, user_id=300
+        )
+
+        self.assertEqual(
+            inject, {"document_id": 100, "corpus_id": 200, "author_id": 300}
+        )
+
+    def test_returns_empty_when_no_ids_needed(self):
+        """Test that empty dict is returned when tool needs no context IDs."""
+        tool = CoreTool.from_function(tool_needing_no_ids)
+        inject = build_inject_params_for_context(
+            tool, document_id=100, corpus_id=200, user_id=300
+        )
+
+        self.assertEqual(inject, {})
+
+    def test_skips_none_values(self):
+        """Test that None context values are not injected."""
+        tool = CoreTool.from_function(tool_needing_multiple_ids)
+        # Only provide document_id, others are None
+        inject = build_inject_params_for_context(tool, document_id=100)
+
+        self.assertEqual(inject, {"document_id": 100})
+
+    def test_partial_context_injection(self):
+        """Test injection with only some context values provided."""
+        tool = CoreTool.from_function(tool_needing_multiple_ids)
+        inject = build_inject_params_for_context(
+            tool, document_id=100, user_id=300  # no corpus_id
+        )
+
+        # Should have document_id and author_id, but not corpus_id
+        self.assertEqual(inject, {"document_id": 100, "author_id": 300})
+
+
+# ---------------------------------------------------------------------------
+# Integration tests for context injection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestContextInjectionIntegration(TestCase):
+    """Integration tests for context injection through the tool factory."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            username="context_inject_user",
+            password="password",
+            email="inject@test.com",
+        )
+        cls.corpus = Corpus.objects.create(
+            title="Context Inject Corpus", creator=cls.user, is_public=False
+        )
+        cls.doc = Document.objects.create(
+            title="Context Inject Doc",
+            corpus=cls.corpus,
+            creator=cls.user,
+            is_public=False,
+        )
+
+    async def test_tool_receives_injected_document_id(self):
+        """Test that tool receives injected document_id at execution time."""
+        tool = CoreTool.from_function(tool_needing_document_id)
+        inject_params = build_inject_params_for_context(tool, document_id=self.doc.id)
+
+        wrapped = PydanticAIToolFactory.create_tool(tool, inject_params=inject_params)
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, query="test query")
+
+        # Document ID should have been injected
+        self.assertEqual(result["document_id"], self.doc.id)
+        self.assertEqual(result["query"], "test query")
+
+    async def test_tool_receives_injected_corpus_id(self):
+        """Test that tool receives injected corpus_id at execution time."""
+        tool = CoreTool.from_function(tool_needing_corpus_id)
+        inject_params = build_inject_params_for_context(tool, corpus_id=self.corpus.id)
+
+        wrapped = PydanticAIToolFactory.create_tool(tool, inject_params=inject_params)
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, limit=20)
+
+        self.assertEqual(result["corpus_id"], self.corpus.id)
+        self.assertEqual(result["limit"], 20)
+
+    async def test_tool_receives_injected_user_id_as_author(self):
+        """Test that user_id is injected as author_id."""
+        tool = CoreTool.from_function(tool_needing_author_id)
+        inject_params = build_inject_params_for_context(tool, user_id=self.user.id)
+
+        wrapped = PydanticAIToolFactory.create_tool(tool, inject_params=inject_params)
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, content="test content")
+
+        self.assertEqual(result["author_id"], self.user.id)
+        self.assertEqual(result["content"], "test content")
+
+    async def test_unified_tool_factory_passes_inject_params(self):
+        """Test that UnifiedToolFactory.create_tool passes inject_params correctly."""
+        from opencontractserver.llms.tools.tool_factory import UnifiedToolFactory
+        from opencontractserver.llms.types import AgentFramework
+
+        tool = CoreTool.from_function(tool_needing_document_id)
+        inject_params = build_inject_params_for_context(tool, document_id=42)
+
+        wrapped = UnifiedToolFactory.create_tool(
+            tool, AgentFramework.PYDANTIC_AI, inject_params=inject_params
+        )
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, query="unified test")
+
+        self.assertEqual(result["document_id"], 42)
+        self.assertEqual(result["query"], "unified test")

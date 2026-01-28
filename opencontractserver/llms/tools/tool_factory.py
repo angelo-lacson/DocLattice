@@ -10,6 +10,49 @@ from opencontractserver.llms.types import AgentFramework
 logger = logging.getLogger(__name__)
 
 
+def build_inject_params_for_context(
+    tool: "CoreTool",
+    document_id: int | None = None,
+    corpus_id: int | None = None,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Inspect a CoreTool's function signature and build inject_params dict
+    for context-bound parameters that should be hidden from the LLM.
+
+    This function examines a tool's function signature and determines which
+    parameters should be automatically injected from context rather than
+    being provided by the LLM. This prevents the LLM from hallucinating
+    incorrect document_id, corpus_id, or user_id values.
+
+    Args:
+        tool: The CoreTool to inspect
+        document_id: Document ID to inject if the tool accepts it
+        corpus_id: Corpus ID to inject if the tool accepts it
+        user_id: User ID to inject for author_id/creator_id params
+
+    Returns:
+        Dictionary mapping parameter names to values to inject
+    """
+    sig = inspect.signature(tool.function)
+    inject: dict[str, Any] = {}
+
+    for param_name in sig.parameters:
+        if param_name == "document_id" and document_id is not None:
+            inject["document_id"] = document_id
+        elif param_name == "corpus_id" and corpus_id is not None:
+            inject["corpus_id"] = corpus_id
+        elif param_name in ("author_id", "creator_id") and user_id is not None:
+            inject[param_name] = user_id
+
+    if inject:
+        logger.debug(
+            f"Built inject_params for tool '{tool.name}': {list(inject.keys())}"
+        )
+
+    return inject
+
+
 @dataclass
 class ToolMetadata:
     """Metadata for a tool function."""
@@ -139,12 +182,18 @@ class UnifiedToolFactory:
     """Factory that creates tools using different frameworks with a common interface."""
 
     @staticmethod
-    def create_tool(tool: CoreTool, framework: AgentFramework) -> Any:
+    def create_tool(
+        tool: CoreTool,
+        framework: AgentFramework,
+        inject_params: dict[str, Any] | None = None,
+    ) -> Any:
         """Create a framework-specific tool from a CoreTool.
 
         Args:
             tool: CoreTool instance
             framework: Target framework
+            inject_params: Optional dict of params to inject at execution time,
+                          hiding them from the LLM's view of the tool schema
 
         Returns:
             Framework-specific tool instance
@@ -154,7 +203,7 @@ class UnifiedToolFactory:
                 PydanticAIToolFactory,
             )
 
-            return PydanticAIToolFactory.create_tool(tool)
+            return PydanticAIToolFactory.create_tool(tool, inject_params=inject_params)
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
