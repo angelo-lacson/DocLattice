@@ -376,3 +376,169 @@ class EmbeddingManager2048DimensionTest(TestCase):
         self.assertEqual(results[0].id, self.document.id)
         # Cosine distance should be 0 for identical vectors
         self.assertAlmostEqual(results[0].similarity_score, 0.0, places=5)
+
+
+class HasEmbeddingMixinDimensionTest(TestCase):
+    """
+    Tests for HasEmbeddingMixin.get_embedding across all supported dimensions.
+
+    Covers the dimension branches in mixins.py get_embedding method:
+    - Line 139: vector_768
+    - Line 141: vector_1024
+    - Line 143: vector_1536
+    - Line 146: vector_3072
+    - Line 148-149: vector_4096
+    - Line 151: unsupported dimension ValueError
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(
+            username="mixin_dimension_test_user",
+            email="mixin_dimension_test@test.com",
+            password="testpassword",
+        )
+
+    def setUp(self):
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus Mixin",
+            creator=self.user,
+        )
+        with open(SAMPLE_PDF_FILE_TWO_PATH, "rb") as f:
+            pdf_content = f.read()
+        self.document = Document.objects.create(
+            title="Test Document Mixin",
+            creator=self.user,
+            pdf_file=SimpleUploadedFile(
+                "test_mixin.pdf", pdf_content, content_type="application/pdf"
+            ),
+            backend_lock=False,
+        )
+        self.corpus.documents.add(self.document)
+
+    def tearDown(self):
+        Embedding.objects.filter(embedder_path__startswith="test.mixin").delete()
+        self.document.delete()
+        self.corpus.delete()
+
+    def test_get_embedding_768_dimension(self):
+        """
+        Test get_embedding correctly retrieves 768-dimensional vectors.
+
+        Covers mixins.py line 139: vector_field = "vector_768"
+        """
+        embedder_path = "test.mixin.768"
+        vector = [0.1] * 768
+
+        Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=768,
+            document_id=self.document.id,
+        )
+
+        retrieved = self.document.get_embedding(embedder_path, dimension=768)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(len(retrieved), 768)
+        self.assertEqual(list(retrieved), vector)
+
+    def test_get_embedding_1024_dimension(self):
+        """
+        Test get_embedding correctly retrieves 1024-dimensional vectors.
+
+        Covers mixins.py line 141: vector_field = "vector_1024"
+        """
+        embedder_path = "test.mixin.1024"
+        vector = [0.2] * 1024
+
+        Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=1024,
+            document_id=self.document.id,
+        )
+
+        retrieved = self.document.get_embedding(embedder_path, dimension=1024)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(len(retrieved), 1024)
+        self.assertEqual(list(retrieved), vector)
+
+    def test_get_embedding_1536_dimension(self):
+        """
+        Test get_embedding correctly retrieves 1536-dimensional vectors.
+
+        Covers mixins.py line 143: vector_field = "vector_1536"
+        """
+        embedder_path = "test.mixin.1536"
+        vector = [0.3] * 1536
+
+        Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=1536,
+            document_id=self.document.id,
+        )
+
+        retrieved = self.document.get_embedding(embedder_path, dimension=1536)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(len(retrieved), 1536)
+        self.assertEqual(list(retrieved), vector)
+
+    def test_get_embedding_3072_dimension(self):
+        """
+        Test get_embedding correctly retrieves 3072-dimensional vectors.
+
+        Covers mixins.py line 146: vector_field = "vector_3072"
+        """
+        embedder_path = "test.mixin.3072"
+        vector = [0.4] * 3072
+
+        Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=3072,
+            document_id=self.document.id,
+        )
+
+        retrieved = self.document.get_embedding(embedder_path, dimension=3072)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(len(retrieved), 3072)
+        self.assertEqual(list(retrieved), vector)
+
+    def test_get_embedding_4096_dimension(self):
+        """
+        Test get_embedding correctly retrieves 4096-dimensional vectors.
+
+        Covers mixins.py lines 148-149: vector_field = "vector_4096"
+        """
+        embedder_path = "test.mixin.4096"
+        vector = [0.5] * 4096
+
+        Embedding.objects.store_embedding(
+            creator=self.user,
+            embedder_path=embedder_path,
+            vector=vector,
+            dimension=4096,
+            document_id=self.document.id,
+        )
+
+        retrieved = self.document.get_embedding(embedder_path, dimension=4096)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(len(retrieved), 4096)
+        self.assertEqual(list(retrieved), vector)
+
+    def test_get_embedding_unsupported_dimension_raises_error(self):
+        """
+        Test get_embedding raises ValueError for unsupported dimensions.
+
+        Covers mixins.py line 151: raise ValueError
+        """
+        with self.assertRaises(ValueError) as context:
+            self.document.get_embedding("test.mixin.unsupported", dimension=512)
+
+        self.assertIn("Unsupported embedding dimension: 512", str(context.exception))
