@@ -360,6 +360,8 @@ class EmbeddingManager(BaseVisibilityManager):
             return "vector_1024"
         elif dimension == 1536:
             return "vector_1536"
+        elif dimension == 2048:
+            return "vector_2048"
         elif dimension == 3072:
             return "vector_3072"
         elif dimension == 4096:

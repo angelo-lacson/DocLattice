@@ -1,19 +1,20 @@
 """
-Multimodal embedder using CLIP via microservice.
+Multimodal embedders for text and image embeddings via microservices.
 
-This embedder supports both text and image embeddings using the CLIP model,
+This module provides embedders that support both text and image embeddings,
 producing vectors in a shared embedding space for cross-modal similarity search.
 
-Configuration is via environment variables:
-- MULTIMODAL_EMBEDDER_HOST: Service hostname (default: "multimodal-embedder")
-- MULTIMODAL_EMBEDDER_PORT: Service port (default: 8000)
-- MULTIMODAL_EMBEDDER_URL: Full URL (overrides host:port)
-- MULTIMODAL_EMBEDDER_VECTOR_SIZE: Embedding dimension (default: 768)
+Available embedders:
+- CLIPMicroserviceEmbedder: CLIP ViT-L-14 model (768 dimensions)
+- QwenMicroserviceEmbedder: Qwen embedding model (1024 dimensions)
+
+Configuration is via environment variables specific to each embedder.
 """
 
 import base64
 import logging
-from typing import Optional
+from abc import abstractmethod
+from typing import ClassVar, Optional
 
 import numpy as np
 import requests
@@ -50,33 +51,30 @@ class EmbeddingServerError(Exception):
     pass
 
 
-class MultimodalMicroserviceEmbedder(BaseEmbedder):
+class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
     """
-    Multimodal embedder using CLIP via microservice.
+    Abstract base class for multimodal embedders using microservices.
 
     Supports both text and image embeddings in a shared vector space, enabling
     cross-modal similarity search (e.g., find images similar to text queries).
 
-    Configuration (via environment variables):
-        - MULTIMODAL_EMBEDDER_HOST: Service hostname (default: "multimodal-embedder")
-        - MULTIMODAL_EMBEDDER_PORT: Service port (default: 8000)
-        - MULTIMODAL_EMBEDDER_URL: Full URL (overrides host:port if set)
-        - MULTIMODAL_EMBEDDER_VECTOR_SIZE: Embedding dimension (default: 768)
-        - MULTIMODAL_EMBEDDER_API_KEY: Optional API key for authentication
+    Subclasses must define:
+        - url_setting_name: Django setting name for service URL
+        - api_key_setting_name: Django setting name for API key
+        - vector_size: Embedding dimension for this model
+        - title, description: Human-readable metadata
 
-    API Endpoints:
+    API Endpoints (expected by all implementations):
         - POST /embeddings: Text embeddings ({"text": "..."})
         - POST /embeddings/image: Image embeddings ({"image": "<base64>"})
         - POST /embeddings/batch: Batch text ({"texts": [...]} max 100)
         - POST /embeddings/image/batch: Batch images ({"images": [...]} max 20)
     """
 
-    title = "Multimodal Microservice Embedder"
-    description = (
-        "Generates embeddings for text and images using CLIP. "
-        "Produces vectors in a shared embedding space for cross-modal search."
-    )
-    author = "OpenContracts"
+    # Subclasses must override these
+    url_setting_name: ClassVar[str] = ""
+    api_key_setting_name: ClassVar[str] = ""
+
     dependencies = ["numpy", "requests"]
     supported_file_types = [
         FileTypeEnum.PDF,
@@ -87,18 +85,18 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
     # Multimodal support - text and images in same vector space
     supported_modalities = {ContentModality.TEXT, ContentModality.IMAGE}
 
-    # Vector size configurable via MULTIMODAL_EMBEDDER_VECTOR_SIZE setting
-    # Read at import time (settings are loaded before embedders are imported)
-    # Default: 768 for CLIP ViT-L-14
-    vector_size = getattr(settings, "MULTIMODAL_EMBEDDER_VECTOR_SIZE", 768)
-
     def __init__(self, **kwargs):
-        """Initialize the MultimodalMicroserviceEmbedder."""
+        """Initialize the multimodal embedder."""
         super().__init__(**kwargs)
         logger.info(
-            f"MultimodalMicroserviceEmbedder initialized "
-            f"(vector_size={self.vector_size})."
+            f"{self.__class__.__name__} initialized (vector_size={self.vector_size})."
         )
+
+    @property
+    @abstractmethod
+    def _default_url(self) -> str:
+        """Default URL if setting is not configured."""
+        pass
 
     def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
         """
@@ -114,19 +112,21 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
         """
         component_settings = self.get_component_settings()
 
-        # Service URL
+        # Service URL - use the setting name defined by subclass
+        url_key = self.url_setting_name.lower()
         service_url_fallback = component_settings.get(
-            "multimodal_embedder_url",
-            getattr(settings, "MULTIMODAL_EMBEDDER_URL", ""),
+            url_key,
+            getattr(settings, self.url_setting_name, self._default_url),
         )
-        service_url = all_kwargs.get("multimodal_embedder_url", service_url_fallback)
+        service_url = all_kwargs.get(url_key, service_url_fallback)
 
-        # API Key
+        # API Key - use the setting name defined by subclass
+        api_key_key = self.api_key_setting_name.lower()
         api_key_fallback = component_settings.get(
-            "multimodal_embedder_api_key",
-            getattr(settings, "MULTIMODAL_EMBEDDER_API_KEY", ""),
+            api_key_key,
+            getattr(settings, self.api_key_setting_name, ""),
         )
-        api_key = all_kwargs.get("multimodal_embedder_api_key", api_key_fallback)
+        api_key = all_kwargs.get(api_key_key, api_key_fallback)
 
         # Cloud Run IAM auth flag
         use_cloud_run_iam_auth = bool(
@@ -159,10 +159,9 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
 
         Returns:
             Embedding vector as list of floats, or None on error.
-            Dimension is configured via MULTIMODAL_EMBEDDER_VECTOR_SIZE.
         """
         logger.debug(
-            f"MultimodalMicroserviceEmbedder generating text embedding. "
+            f"{self.__class__.__name__} generating text embedding. "
             f"Text length: {len(text)}"
         )
 
@@ -171,8 +170,8 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
 
             if not service_url:
                 logger.error(
-                    "MultimodalMicroserviceEmbedder: No service URL configured. "
-                    "Set MULTIMODAL_EMBEDDER_URL in environment or PIPELINE_SETTINGS."
+                    f"{self.__class__.__name__}: No service URL configured. "
+                    f"Set {self.url_setting_name} in environment or PIPELINE_SETTINGS."
                 )
                 return None
 
@@ -202,24 +201,26 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             elif 400 <= response.status_code < 500:
                 # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
-                    f"Multimodal text embedding service returned client error "
+                    f"{self.__class__.__name__} text embedding service returned client error "
                     f"{response.status_code}. Input text length: {len(text)}"
                 )
                 return None  # Non-retriable error
             else:
                 # Server errors (5xx) or unexpected status - worth retrying
                 error_msg = (
-                    f"Multimodal text embedding service returned status {response.status_code}. "
-                    f"This may be a transient error."
+                    f"{self.__class__.__name__} text embedding service returned status "
+                    f"{response.status_code}. This may be a transient error."
                 )
                 logger.error(error_msg)
                 raise EmbeddingServerError(error_msg)  # Retriable error
 
         except requests.exceptions.Timeout:
-            logger.error("Multimodal service request timed out for text embedding")
+            logger.error(
+                f"{self.__class__.__name__} service request timed out for text embedding"
+            )
             return None
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Failed to connect to multimodal service: {e}")
+            logger.error(f"Failed to connect to {self.__class__.__name__} service: {e}")
             return None
         except Exception as e:
             logger.error(f"Failed to generate text embedding: {e}")
@@ -239,10 +240,9 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
 
         Returns:
             Embedding vector as list of floats, or None on error.
-            Dimension is configured via MULTIMODAL_EMBEDDER_VECTOR_SIZE.
         """
         logger.debug(
-            f"MultimodalMicroserviceEmbedder generating image embedding. "
+            f"{self.__class__.__name__} generating image embedding. "
             f"Format: {image_format}, Data length: {len(image_base64)}"
         )
 
@@ -258,8 +258,8 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
 
             if not service_url:
                 logger.error(
-                    "MultimodalMicroserviceEmbedder: No service URL configured. "
-                    "Set MULTIMODAL_EMBEDDER_URL in environment or PIPELINE_SETTINGS."
+                    f"{self.__class__.__name__}: No service URL configured. "
+                    f"Set {self.url_setting_name} in environment or PIPELINE_SETTINGS."
                 )
                 return None
 
@@ -289,7 +289,7 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             elif 400 <= response.status_code < 500:
                 # Client errors (4xx) - don't retry, likely invalid input
                 logger.error(
-                    f"Multimodal image embedding service returned client error "
+                    f"{self.__class__.__name__} image embedding service returned client error "
                     f"{response.status_code}. Image format: {image_format}, "
                     f"base64 length: {len(image_base64)}"
                 )
@@ -297,17 +297,21 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
             else:
                 # Server errors (5xx) or unexpected status - worth retrying
                 error_msg = (
-                    f"Multimodal image embedding service returned status {response.status_code}. "
-                    f"This may be a transient error."
+                    f"{self.__class__.__name__} image embedding service returned status "
+                    f"{response.status_code}. This may be a transient error."
                 )
                 logger.error(error_msg)
                 raise EmbeddingServerError(error_msg)  # Retriable error
 
         except requests.exceptions.Timeout:
-            logger.error("Multimodal service request timed out for image embedding")
+            logger.error(
+                f"{self.__class__.__name__} service request timed out for image embedding"
+            )
             return None
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Failed to connect to multimodal service for image: {e}")
+            logger.error(
+                f"Failed to connect to {self.__class__.__name__} service for image: {e}"
+            )
             return None
         except Exception as e:
             logger.error(f"Failed to generate image embedding: {e}")
@@ -440,3 +444,148 @@ class MultimodalMicroserviceEmbedder(BaseEmbedder):
         except Exception as e:
             logger.error(f"Failed to generate batch image embeddings: {e}")
             return None
+
+
+class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
+    """
+    Multimodal embedder using CLIP ViT-L-14 via microservice.
+
+    Produces 768-dimensional vectors in a shared text-image embedding space.
+
+    Configuration (via environment variables):
+        - CLIP_EMBEDDER_URL: Full URL to the CLIP embedding service
+        - CLIP_EMBEDDER_API_KEY: Optional API key for authentication
+
+    For backwards compatibility, also supports legacy settings:
+        - MULTIMODAL_EMBEDDER_URL (deprecated, use CLIP_EMBEDDER_URL)
+        - MULTIMODAL_EMBEDDER_API_KEY (deprecated, use CLIP_EMBEDDER_API_KEY)
+    """
+
+    title = "CLIP Microservice Embedder"
+    description = (
+        "Generates embeddings for text and images using CLIP ViT-L-14. "
+        "Produces 768-dimensional vectors in a shared embedding space for cross-modal search."
+    )
+    author = "OpenContracts"
+
+    url_setting_name = "CLIP_EMBEDDER_URL"
+    api_key_setting_name = "CLIP_EMBEDDER_API_KEY"
+    vector_size = 768
+
+    # Legacy setting names for backwards compatibility
+    _legacy_url_setting = "MULTIMODAL_EMBEDDER_URL"
+    _legacy_api_key_setting = "MULTIMODAL_EMBEDDER_API_KEY"
+
+    @property
+    def _default_url(self) -> str:
+        return "http://vector-embedder:8000"
+
+    def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
+        """
+        Get service URL, API key, and headers for the microservice.
+
+        Extends base implementation to support legacy multimodal_embedder_url
+        and multimodal_embedder_api_key kwargs for backwards compatibility.
+
+        Priority order (first non-empty value wins):
+        1. Direct kwargs (new key, then legacy key)
+        2. Component settings (new key, then legacy key)
+        3. Django settings - LEGACY key first for backwards compatibility
+        4. Django settings - new key
+        5. Default URL
+        """
+        component_settings = self.get_component_settings()
+
+        # Service URL - check new key, then legacy key in kwargs
+        url_key = self.url_setting_name.lower()
+        legacy_url_key = self._legacy_url_setting.lower()
+
+        # Check kwargs: new key first, then legacy key
+        if url_key in all_kwargs:
+            service_url = all_kwargs[url_key]
+        elif legacy_url_key in all_kwargs:
+            service_url = all_kwargs[legacy_url_key]
+        else:
+            # Check component settings
+            if url_key in component_settings:
+                service_url = component_settings[url_key]
+            elif legacy_url_key in component_settings:
+                service_url = component_settings[legacy_url_key]
+            else:
+                # Fall back to Django settings - check LEGACY first for backwards compat
+                legacy_url = getattr(settings, self._legacy_url_setting, "")
+                new_url = getattr(settings, self.url_setting_name, "")
+                # Use legacy if set, otherwise new, otherwise default
+                service_url = legacy_url or new_url or self._default_url
+
+        # API Key - check new key, then legacy key
+        api_key_key = self.api_key_setting_name.lower()
+        legacy_api_key_key = self._legacy_api_key_setting.lower()
+
+        if api_key_key in all_kwargs:
+            api_key = all_kwargs[api_key_key]
+        elif legacy_api_key_key in all_kwargs:
+            api_key = all_kwargs[legacy_api_key_key]
+        else:
+            # Check component settings
+            if api_key_key in component_settings:
+                api_key = component_settings[api_key_key]
+            elif legacy_api_key_key in component_settings:
+                api_key = component_settings[legacy_api_key_key]
+            else:
+                # Fall back to Django settings - check LEGACY first for backwards compat
+                legacy_key = getattr(settings, self._legacy_api_key_setting, "")
+                new_key = getattr(settings, self.api_key_setting_name, "")
+                api_key = legacy_key or new_key or ""
+
+        # Cloud Run IAM auth flag
+        use_cloud_run_iam_auth = bool(
+            all_kwargs.get(
+                "use_cloud_run_iam_auth",
+                component_settings.get("use_cloud_run_iam_auth", False),
+            )
+        )
+
+        # Build headers
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if api_key:
+            headers["X-API-Key"] = api_key
+
+        # Add Cloud Run IAM auth if applicable
+        headers = maybe_add_cloud_run_auth(
+            service_url, headers, force=use_cloud_run_iam_auth
+        )
+
+        return service_url, api_key, headers
+
+
+class QwenMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
+    """
+    Multimodal embedder using Qwen embedding model via microservice.
+
+    Produces 1024-dimensional vectors in a shared text-image embedding space.
+
+    Configuration (via environment variables):
+        - QWEN_EMBEDDER_URL: Full URL to the Qwen embedding service
+        - QWEN_EMBEDDER_API_KEY: Optional API key for authentication
+    """
+
+    title = "Qwen Microservice Embedder"
+    description = (
+        "Generates embeddings for text and images using Qwen embedding model. "
+        "Produces 1024-dimensional vectors in a shared embedding space for cross-modal search."
+    )
+    author = "OpenContracts"
+
+    url_setting_name = "QWEN_EMBEDDER_URL"
+    api_key_setting_name = "QWEN_EMBEDDER_API_KEY"
+    vector_size = 1024
+
+    @property
+    def _default_url(self) -> str:
+        return "http://qwen-embedder:8000"
+
+
+# Backwards compatibility alias - points to CLIP embedder as that was the original
+# implementation. New code should use the specific embedder class directly.
+MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder

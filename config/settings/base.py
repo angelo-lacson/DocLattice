@@ -663,8 +663,16 @@ DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 # Microservice URLs - read from environment with defaults
 EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
 VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
-# Multimodal embedder configuration
-# URL can be set directly, or constructed from host:port
+# CLIP embedder configuration (768-dimensional vectors)
+CLIP_EMBEDDER_URL = env("CLIP_EMBEDDER_URL", default="http://vector-embedder:8000")
+CLIP_EMBEDDER_API_KEY = env("CLIP_EMBEDDER_API_KEY", default="")
+
+# Qwen embedder configuration (1024-dimensional vectors)
+QWEN_EMBEDDER_URL = env("QWEN_EMBEDDER_URL", default="http://qwen-embedder:8000")
+QWEN_EMBEDDER_API_KEY = env("QWEN_EMBEDDER_API_KEY", default="")
+
+# Legacy multimodal embedder configuration (deprecated - use CLIP or Qwen settings above)
+# Kept for backwards compatibility - maps to CLIP embedder
 MULTIMODAL_EMBEDDER_HOST = env(
     "MULTIMODAL_EMBEDDER_HOST", default="multimodal-embedder"
 )

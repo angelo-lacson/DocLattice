@@ -558,3 +558,214 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
         modalities = self.embedder.get_supported_modalities_as_strings()
         self.assertIn("TEXT", modalities)
         self.assertIn("IMAGE", modalities)
+
+    # =========================================================================
+    # 4xx Client Error Tests
+    # =========================================================================
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_embed_image_client_error_4xx(self, mock_post):
+        """Test image embedding handles 4xx client errors (non-retriable)."""
+        mock_post.return_value = MockResponse(400, {"error": "Bad request"})
+
+        image_base64 = create_test_image_base64()
+        result = self.embedder.embed_image(
+            image_base64, multimodal_embedder_url="http://test:8000"
+        )
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_embed_text_client_error_4xx(self, mock_post):
+        """Test text embedding handles 4xx client errors (non-retriable)."""
+        mock_post.return_value = MockResponse(422, {"error": "Validation error"})
+
+        result = self.embedder.embed_text(
+            "Test text", multimodal_embedder_url="http://test:8000"
+        )
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_embed_texts_batch_client_error_4xx(self, mock_post):
+        """Test batch text embedding handles 4xx client errors."""
+        mock_post.return_value = MockResponse(413, {"error": "Payload too large"})
+
+        result = self.embedder.embed_texts_batch(
+            ["Text 1", "Text 2"], multimodal_embedder_url="http://test:8000"
+        )
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_embed_images_batch_client_error_4xx(self, mock_post):
+        """Test batch image embedding handles 4xx client errors."""
+        mock_post.return_value = MockResponse(400, {"error": "Bad request"})
+
+        result = self.embedder.embed_images_batch(
+            [create_test_image_base64()], multimodal_embedder_url="http://test:8000"
+        )
+
+        self.assertIsNone(result)
+
+    # =========================================================================
+    # New-Style Service Config Tests (clip_embedder_url, clip_embedder_api_key)
+    # =========================================================================
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_service_config_new_style_kwargs(self, mock_post):
+        """Test that new-style kwargs (clip_embedder_url) work correctly."""
+        mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
+
+        self.embedder.embed_text(
+            "Test",
+            clip_embedder_url="http://new-style-url:9000",
+            clip_embedder_api_key="new-style-api-key",
+        )
+
+        call_args = mock_post.call_args
+        # Check URL used
+        self.assertTrue(call_args.args[0].startswith("http://new-style-url:9000"))
+        # Check API key header
+        self.assertEqual(call_args.kwargs["headers"]["X-API-Key"], "new-style-api-key")
+
+    @override_settings(
+        CLIP_EMBEDDER_URL="http://new-settings-url:8000",
+        CLIP_EMBEDDER_API_KEY="new-settings-api-key",
+        # Clear legacy settings so new-style settings take effect
+        MULTIMODAL_EMBEDDER_URL="",
+        MULTIMODAL_EMBEDDER_API_KEY="",
+    )
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_service_config_new_style_settings(self, mock_post):
+        """Test that new-style Django settings (CLIP_EMBEDDER_URL) work."""
+        mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
+
+        embedder = MultimodalMicroserviceEmbedder()
+        embedder.embed_text("Test")
+
+        call_args = mock_post.call_args
+        # Check URL used
+        self.assertTrue(call_args.args[0].startswith("http://new-settings-url:8000"))
+        # Check API key header
+        self.assertEqual(
+            call_args.kwargs["headers"]["X-API-Key"], "new-settings-api-key"
+        )
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_service_config_new_style_kwargs_override_legacy(self, mock_post):
+        """Test new-style kwargs take precedence over legacy kwargs."""
+        mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
+
+        self.embedder.embed_text(
+            "Test",
+            # Legacy kwargs
+            multimodal_embedder_url="http://legacy-url:8000",
+            multimodal_embedder_api_key="legacy-api-key",
+            # New-style kwargs should take precedence
+            clip_embedder_url="http://new-style-url:9000",
+            clip_embedder_api_key="new-style-api-key",
+        )
+
+        call_args = mock_post.call_args
+        # New-style should win
+        self.assertTrue(call_args.args[0].startswith("http://new-style-url:9000"))
+        self.assertEqual(call_args.kwargs["headers"]["X-API-Key"], "new-style-api-key")
+
+
+class TestQwenMicroserviceEmbedderUnit(TestCase):
+    """Unit tests for QwenMicroserviceEmbedder with mocked HTTP calls."""
+
+    def setUp(self):
+        from opencontractserver.pipeline.embedders.multimodal_microservice import (
+            QwenMicroserviceEmbedder,
+        )
+
+        self.embedder = QwenMicroserviceEmbedder()
+
+    def test_qwen_embedder_attributes(self):
+        """Test Qwen embedder has correct attributes."""
+        self.assertEqual(self.embedder.vector_size, 1024)
+        self.assertEqual(self.embedder.title, "Qwen Microservice Embedder")
+        self.assertEqual(self.embedder.url_setting_name, "QWEN_EMBEDDER_URL")
+        self.assertEqual(self.embedder.api_key_setting_name, "QWEN_EMBEDDER_API_KEY")
+
+    def test_qwen_default_url(self):
+        """Test Qwen embedder has correct default URL."""
+        self.assertEqual(self.embedder._default_url, "http://qwen-embedder:8000")
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_qwen_embed_text_success(self, mock_post):
+        """Test successful text embedding with Qwen embedder."""
+        mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 1024]})
+
+        result = self.embedder.embed_text(
+            "Test text", qwen_embedder_url="http://test:8000"
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 1024)
+        mock_post.assert_called_once()
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_qwen_embed_image_success(self, mock_post):
+        """Test successful image embedding with Qwen embedder."""
+        mock_post.return_value = MockResponse(200, {"embeddings": [[0.2] * 1024]})
+
+        image_base64 = create_test_image_base64()
+        result = self.embedder.embed_image(
+            image_base64, qwen_embedder_url="http://test:8000"
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 1024)
+
+    @override_settings(
+        QWEN_EMBEDDER_URL="http://qwen-settings-url:8000",
+        QWEN_EMBEDDER_API_KEY="qwen-settings-api-key",
+    )
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_qwen_service_config_from_settings(self, mock_post):
+        """
+        Test Qwen embedder loads config from Django settings.
+
+        Covers base class _get_service_config fallback path to Django settings
+        (lines 116-129 in BaseMultimodalMicroserviceEmbedder).
+        """
+        from opencontractserver.pipeline.embedders.multimodal_microservice import (
+            QwenMicroserviceEmbedder,
+        )
+
+        mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 1024]})
+
+        # Create new instance to pick up overridden settings
+        embedder = QwenMicroserviceEmbedder()
+        embedder.embed_text("Test")
+
+        call_args = mock_post.call_args
+        # Check URL used - should use the setting
+        self.assertTrue(call_args.args[0].startswith("http://qwen-settings-url:8000"))
+        # Check API key header
+        self.assertEqual(
+            call_args.kwargs["headers"]["X-API-Key"], "qwen-settings-api-key"
+        )
