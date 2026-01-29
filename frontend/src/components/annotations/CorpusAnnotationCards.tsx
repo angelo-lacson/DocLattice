@@ -32,10 +32,7 @@ import {
 } from "../../graphql/queries";
 import { ServerAnnotationType } from "../../types/graphql-api";
 import { getDocumentUrl } from "../../utils/navigationUtils";
-
-// Number of annotations to load per page
-const ANNOTATIONS_PAGE_SIZE = 20;
-const SEMANTIC_SEARCH_LIMIT = 20;
+import { ANNOTATION_PAGINATION } from "../../assets/configurations/constants";
 
 export const CorpusAnnotationCards = ({
   opened_corpus_id,
@@ -112,7 +109,7 @@ export const CorpusAnnotationCards = ({
     // Note: Don't add rawText_Contains here - we use semantic search for text search
 
     // Always set a limit for pagination
-    vars.limit = ANNOTATIONS_PAGE_SIZE;
+    vars.limit = ANNOTATION_PAGINATION.PAGE_SIZE;
 
     return vars;
   }, [
@@ -155,12 +152,30 @@ export const CorpusAnnotationCards = ({
         if (data?.semanticSearch) {
           const newResults = data.semanticSearch;
           if (semanticSearchOffset === 0) {
-            setSemanticSearchResults(newResults);
+            // First page - just set results (capped)
+            setSemanticSearchResults(
+              newResults.slice(0, ANNOTATION_PAGINATION.MAX_SEMANTIC_RESULTS)
+            );
           } else {
-            setSemanticSearchResults((prev) => [...prev, ...newResults]);
+            // Pagination - deduplicate and cap accumulated results
+            setSemanticSearchResults((prev) => {
+              const combined = [...prev, ...newResults];
+              // Deduplicate by annotation ID to handle potential overlaps
+              const unique = _.uniqBy(combined, (r) => r.annotation.id);
+              // Cap at MAX_SEMANTIC_RESULTS to prevent unbounded memory usage
+              return unique.slice(
+                0,
+                ANNOTATION_PAGINATION.MAX_SEMANTIC_RESULTS
+              );
+            });
           }
+          // Stop fetching more if we hit the cap or got fewer results than limit
+          const atCap =
+            semanticSearchOffset + newResults.length >=
+            ANNOTATION_PAGINATION.MAX_SEMANTIC_RESULTS;
           setHasMoreSemanticResults(
-            newResults.length === SEMANTIC_SEARCH_LIMIT
+            !atCap &&
+              newResults.length === ANNOTATION_PAGINATION.SEMANTIC_SEARCH_LIMIT
           );
         }
       },
@@ -181,7 +196,7 @@ export const CorpusAnnotationCards = ({
 
       const variables: SemanticSearchInput = {
         query: query.trim(),
-        limit: SEMANTIC_SEARCH_LIMIT,
+        limit: ANNOTATION_PAGINATION.SEMANTIC_SEARCH_LIMIT,
         offset,
         corpusId: opened_corpus_id,
       };
@@ -235,7 +250,8 @@ export const CorpusAnnotationCards = ({
     if (isSemanticSearchActive) {
       // Semantic search pagination
       if (!semanticSearchLoading && hasMoreSemanticResults) {
-        const newOffset = semanticSearchOffset + SEMANTIC_SEARCH_LIMIT;
+        const newOffset =
+          semanticSearchOffset + ANNOTATION_PAGINATION.SEMANTIC_SEARCH_LIMIT;
         setSemanticSearchOffset(newOffset);
         performSemanticSearch(searchValue, newOffset);
       }
@@ -247,7 +263,7 @@ export const CorpusAnnotationCards = ({
       ) {
         fetchMoreAnnotations({
           variables: {
-            limit: ANNOTATIONS_PAGE_SIZE,
+            limit: ANNOTATION_PAGINATION.PAGE_SIZE,
             cursor: annotation_response.annotations.pageInfo.endCursor,
           },
         });

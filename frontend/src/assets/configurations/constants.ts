@@ -130,3 +130,13 @@ export const DOCUMENT_PICKER_SEARCH_LIMIT = 20;
 
 // Mutation batching
 export const MUTATION_BATCH_SIZE = 10;
+
+// Annotation pagination constants
+export const ANNOTATION_PAGINATION = {
+  /** Number of annotations to load per page in browse mode */
+  PAGE_SIZE: 20,
+  /** Number of results per semantic search request */
+  SEMANTIC_SEARCH_LIMIT: 20,
+  /** Maximum accumulated semantic search results before capping */
+  MAX_SEMANTIC_RESULTS: 500,
+} as const;
