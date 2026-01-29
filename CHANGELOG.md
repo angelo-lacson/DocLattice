@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### AnnotationsPanel Shared Component
+- **Created `AnnotationsPanel` reusable component**: Extracts shared filtering/display logic from annotations views
+  - Provides filter tabs for type (All/Doc/Text) and source (All/Human/Agent/Structural)
+  - Includes SearchBox, grid display with ModernAnnotationCard, empty state, and pagination
+  - Can be used by both standalone Annotations view and corpus annotations tab
+  - Files: `frontend/src/components/annotations/AnnotationsPanel.tsx`
+- **Added `AnnotationsPanel` unit tests**: Comprehensive tests for filters, search, grid, empty/loading states
+  - Files: `frontend/src/components/annotations/__tests__/AnnotationsPanel.test.tsx`
+- **Created lightweight `GET_ANNOTATIONS_FOR_CARDS` query**: Fetches only fields needed for ModernAnnotationCard display
+  - Excludes heavy fields: `tokensJsons`, `json`, `page`, and unnecessary nested objects
+  - Reduces payload from ~340KB to ~30KB for 2130 annotations (estimated 90% reduction)
+  - Files: `frontend/src/graphql/queries.ts`
+
+### Fixed
+
+#### Annotations Panel Scroll Issue
+- **Fixed corpus annotations tab scroll behavior**: Restructured AnnotationsPanel to scroll only the cards grid
+  - Container uses flex column layout with `overflow: hidden`
+  - FiltersSection has `flex-shrink: 0` to stay fixed at top
+  - AnnotationsListContainer has `flex: 1` and `overflow-y: auto` for card scrolling
+  - Filters (search, type tabs, source tabs) stay visible while cards scroll below
+  - Files: `frontend/src/components/annotations/AnnotationsPanel.tsx`
+
+#### Annotations Query Missing Pagination
+- **Added initial page limit to annotations queries**: Previously loaded all annotations at once
+  - Added `limit` and `cursor` fields to `GetAnnotationsInputs` interface
+  - Set initial page size to 20 annotations for both Annotations.tsx and CorpusAnnotationCards.tsx
+  - Infinite scroll loads more as user scrolls down
+  - Files: `frontend/src/graphql/queries.ts`, `frontend/src/views/Annotations.tsx`, `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+
+#### Corpus Annotations Tab Source Filter
+- **Fixed structural annotations not visible in corpus tab**: Annotations tab now shows filter controls even when empty
+  - Added source filter (Human/Agent/Structural) to `CorpusAnnotationCards`
+  - Source filter syncs to GraphQL query variables: "structural" → `structural: true`, "human" → `structural: false, analysis_Isnull: true`, "agent" → `structural: false, analysis_Isnull: false`
+  - Users can now toggle to see structural annotations that were previously hidden
+  - Files: `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+- **Added missing `usesLabelFromLabelsetId` to GetAnnotationsInputs interface**: Interface was missing a field used by the query
+  - Files: `frontend/src/graphql/queries.ts:752`
+
+### Changed
+
+#### Annotations View Refactoring
+- **Updated Annotations.tsx to use AnnotationsPanel**: DRY refactoring, keeps hero section, stats, semantic search, advanced filters
+  - Files: `frontend/src/views/Annotations.tsx`
+- **Deleted superseded AnnotationCards.tsx**: Functionality absorbed into AnnotationsPanel
+  - Files: `frontend/src/components/annotations/AnnotationCards.tsx` (deleted)
+
+#### Annotations Query Optimization
+- **Switched to lightweight query for annotation cards**: Both `Annotations.tsx` and `CorpusAnnotationCards.tsx` now use `GET_ANNOTATIONS_FOR_CARDS`
+  - Previous query fetched `tokensJsons` (huge JSON), `json`, full document paths (pdfFile, txtExtractFile, pawlsParseFile), full corpus details
+  - New query fetches only: id, created, creator (id, email, username), corpus (id, slug, labelSet.title), document (id, slug, title), annotationLabel (id, text, color, labelType), analysis (id, analyzer.analyzerId), annotationType, structural, rawText, isPublic, contentModalities
+  - Expected improvement: ~90% payload reduction, significantly faster load times
+  - Files: `frontend/src/views/Annotations.tsx`, `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+
+### Added
+
 #### GraphQL Corpus Query Optimization
 - **Added `documentCount` field to CorpusType**: Efficient document count using annotated subquery instead of N+1 queries
   - For list queries (`corpuses`), the resolver annotates `_document_count` via `DocumentPath` subquery
