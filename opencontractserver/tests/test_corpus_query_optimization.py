@@ -611,3 +611,126 @@ class TestCorpusBySlugsCounts(TestCase):
         )
         corpus = result["data"]["corpusBySlugs"]
         self.assertEqual(corpus["annotationCount"], 4)
+
+
+class TestCorpusQueryEfficiency(TestCase):
+    """
+    Test that corpus queries use subqueries/annotations instead of N+1 queries.
+
+    Uses assertNumQueries to verify query count stays constant regardless of data size.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        """Create test data with multiple corpuses to test N+1 prevention."""
+        cls.user = User.objects.create_user(
+            username="efficiency_user",
+            password="testpass123",
+            email="efficiency@test.com",
+        )
+
+        # Create multiple corpuses with documents and annotations
+        cls.corpuses = []
+        for i in range(5):
+            corpus = Corpus.objects.create(
+                title=f"Efficiency Corpus {i}",
+                creator=cls.user,
+                is_public=True,
+            )
+            cls.corpuses.append(corpus)
+
+            # Create documents for each corpus
+            for j in range(3):
+                doc = Document.objects.create(
+                    title=f"Efficiency Doc {i}-{j}",
+                    creator=cls.user,
+                )
+                DocumentPath.objects.create(
+                    document=doc,
+                    corpus=corpus,
+                    path=f"/eff_doc_{i}_{j}.pdf",
+                    version_number=1,
+                    is_current=True,
+                    is_deleted=False,
+                    creator=cls.user,
+                )
+
+                # Create annotations for each document
+                label = AnnotationLabel.objects.create(
+                    text=f"Eff Label {i}-{j}",
+                    label_type="SPAN_LABEL",
+                    creator=cls.user,
+                )
+                for k in range(2):
+                    Annotation.objects.create(
+                        document=doc,
+                        annotation_label=label,
+                        creator=cls.user,
+                        raw_text=f"eff annot {i}-{j}-{k}",
+                        page=0,
+                    )
+
+    def setUp(self):
+        """Set up test client."""
+        self.factory = RequestFactory()
+        self.request = self.factory.get("/graphql")
+        self.request.user = self.user
+        self.client = Client(schema, context_value=self.request)
+
+    def test_corpuses_list_query_no_n_plus_1_for_counts(self):
+        """
+        Verify corpuses list query uses constant number of queries for counts.
+
+        With N+1 problem, query count would scale with corpus count.
+        With subquery optimization, query count stays constant.
+        """
+        query = """
+            query {
+                corpuses {
+                    edges {
+                        node {
+                            id
+                            title
+                            documentCount
+                            annotationCount
+                        }
+                    }
+                }
+            }
+        """
+
+        # First run to warm up any caches
+        self.client.execute(query)
+
+        # Second run with query counting
+        # The exact number may vary based on auth/permission checks,
+        # but it should NOT scale with number of corpuses (no N+1)
+        with self.assertNumQueries(6):
+            # Expected queries:
+            # 1. Content type check
+            # 2-3. Permission checks with tree CTEs
+            # 4. Main corpuses query with COALESCE subqueries for counts
+            # 5. Prefetch for documents (if visible_to_user adds it)
+            # 6. Prefetch for categories
+            # The counts (documentCount, annotationCount) come from subqueries
+            # within the main query, not N+1 per corpus
+            result = self.client.execute(query)
+
+        self.assertIsNone(
+            result.get("errors"), f"GraphQL errors: {result.get('errors')}"
+        )
+
+        edges = result["data"]["corpuses"]["edges"]
+        # Verify we got all our test corpuses
+        efficiency_corpuses = [
+            e for e in edges if e["node"]["title"].startswith("Efficiency Corpus")
+        ]
+        self.assertEqual(len(efficiency_corpuses), 5)
+
+        # Verify counts are populated (not None)
+        for edge in efficiency_corpuses:
+            self.assertIsNotNone(edge["node"]["documentCount"])
+            self.assertIsNotNone(edge["node"]["annotationCount"])
+            # Each corpus should have 3 documents and 6 annotations (3 docs * 2 annots)
+            self.assertEqual(edge["node"]["documentCount"], 3)
+            self.assertEqual(edge["node"]["annotationCount"], 6)

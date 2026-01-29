@@ -6,6 +6,7 @@ from typing import Optional
 import graphene
 from django.conf import settings
 from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
+from django.db.models.functions import Coalesce
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
@@ -247,11 +248,11 @@ class Query(graphene.ObjectType):
         qs = qs.visible_to_user(info.context.user)
 
         # Add count annotations for efficient documentCount/annotationCount
-        # resolution without N+1 queries
+        # resolution without N+1 queries. Coalesce ensures 0 instead of NULL.
         doc_sq, annot_sq = _corpus_count_subqueries()
         qs = qs.annotate(
-            _document_count=Subquery(doc_sq),
-            _annotation_count=Subquery(annot_sq),
+            _document_count=Coalesce(Subquery(doc_sq), 0),
+            _annotation_count=Coalesce(Subquery(annot_sq), 0),
         )
 
         return qs.first()
@@ -892,11 +893,17 @@ class Query(graphene.ObjectType):
             .select_related("creator", "engagement_metrics", "label_set", "parent")
             .prefetch_related("categories")
             .annotate(
-                _document_count=Subquery(doc_sq),
-                _annotation_count=Subquery(annot_sq),
-                _label_doc_count=Subquery(label_count_subquery("DOC_TYPE_LABEL")),
-                _label_span_count=Subquery(label_count_subquery("SPAN_LABEL")),
-                _label_token_count=Subquery(label_count_subquery("TOKEN_LABEL")),
+                _document_count=Coalesce(Subquery(doc_sq), 0),
+                _annotation_count=Coalesce(Subquery(annot_sq), 0),
+                _label_doc_count=Coalesce(
+                    Subquery(label_count_subquery("DOC_TYPE_LABEL")), 0
+                ),
+                _label_span_count=Coalesce(
+                    Subquery(label_count_subquery("SPAN_LABEL")), 0
+                ),
+                _label_token_count=Coalesce(
+                    Subquery(label_count_subquery("TOKEN_LABEL")), 0
+                ),
             )
         )
 
