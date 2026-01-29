@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import styled from "styled-components";
 import _ from "lodash";
 import { useReactiveVar } from "@apollo/client";
@@ -273,8 +273,11 @@ export const AnnotationsPanel: React.FC<AnnotationsPanelProps> = ({
 }) => {
   const selected_annotation_ids = useReactiveVar(selectedAnnotationIds);
 
-  // Apply local filters
-  const filteredItems = applyLocalFilters(items, typeFilter, sourceFilter);
+  // Apply local filters - memoized to avoid re-running _.uniqBy on 2000+ items on every render
+  const filteredItems = useMemo(
+    () => applyLocalFilters(items, typeFilter, sourceFilter),
+    [items, typeFilter, sourceFilter]
+  );
 
   return (
     <Container style={style}>

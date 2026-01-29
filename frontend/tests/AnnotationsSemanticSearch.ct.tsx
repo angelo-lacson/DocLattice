@@ -118,9 +118,7 @@ test.describe("Annotations Semantic Search", () => {
     );
 
     // Verify the page loads with search box
-    const searchInput = page.getByPlaceholder(
-      "Search annotations by label, text, or document..."
-    );
+    const searchInput = page.getByPlaceholder("Search annotations...");
     await expect(searchInput).toBeVisible({ timeout: 10000 });
 
     // Type in the search box
@@ -182,9 +180,7 @@ test.describe("Annotations Semantic Search", () => {
     );
 
     // Type in the search box
-    const searchInput = page.getByPlaceholder(
-      "Search annotations by label, text, or document..."
-    );
+    const searchInput = page.getByPlaceholder("Search annotations...");
     await expect(searchInput).toBeVisible({ timeout: 10000 });
     await searchInput.fill("contract terms");
 
