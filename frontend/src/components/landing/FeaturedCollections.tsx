@@ -184,17 +184,17 @@ export const FeaturedCollections: React.FC<FeaturedCollectionsProps> = ({
 
           // Build stats array
           const stats: string[] = [];
-          if (corpus.documents?.totalCount) {
+          if (corpus.documentCount) {
             stats.push(
-              `${corpus.documents.totalCount} doc${
-                corpus.documents.totalCount !== 1 ? "s" : ""
+              `${corpus.documentCount} doc${
+                corpus.documentCount !== 1 ? "s" : ""
               }`
             );
           }
-          if (corpus.annotations?.totalCount) {
+          if (corpus.annotationCount) {
             stats.push(
-              `${corpus.annotations.totalCount} annotation${
-                corpus.annotations.totalCount !== 1 ? "s" : ""
+              `${corpus.annotationCount} annotation${
+                corpus.annotationCount !== 1 ? "s" : ""
               }`
             );
           }

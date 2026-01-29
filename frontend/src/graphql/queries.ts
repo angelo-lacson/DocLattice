@@ -205,15 +205,8 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
         id
         title
       }
-      documents {
-        totalCount
-      }
-      annotations {
-        totalCount
-      }
-      analyses {
-        totalCount
-      }
+      documentCount
+      annotationCount
     }
   }
 `;
@@ -395,26 +388,6 @@ export const GET_CORPUS_METADATA = gql`
         id
         username
         slug
-      }
-      descriptionRevisions {
-        id
-        version
-        author {
-          id
-          email
-        }
-        created
-        diff
-        snapshot
-      }
-      allAnnotationSummaries {
-        id
-        rawText
-        json
-        annotationLabel {
-          id
-          text
-        }
       }
     }
   }
@@ -630,31 +603,16 @@ export const GET_CORPUSES = gql`
             slug
           }
           description
-          preferredEmbedder
-          appliedAnalyzerIds
           isPublic
           is_selected @client
           is_open @client
           myPermissions
+          documentCount
           parent {
             id
             icon
             title
             description
-          }
-          annotations {
-            totalCount
-          }
-          documents {
-            totalCount
-            edges {
-              node {
-                id
-                fileType
-                backendLock
-                description
-              }
-            }
           }
           labelSet {
             id
