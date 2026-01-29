@@ -37,6 +37,7 @@ const mockCorpuses = [
         slug: "testuser",
       },
       documents: { totalCount: 150 },
+      documentCount: 150,
       annotations: { totalCount: 5000 },
       engagementMetrics: {
         totalThreads: 25,
@@ -60,6 +61,7 @@ const mockCorpuses = [
         slug: "researcher",
       },
       documents: { totalCount: 300 },
+      documentCount: 300,
       annotations: { totalCount: 8000 },
       engagementMetrics: {
         totalThreads: 45,
@@ -342,17 +344,21 @@ test.describe("RecentDiscussions Component", () => {
     await component.unmount();
   });
 
-  test("should display reply count", async ({ mount, page }) => {
+  test("should display thread actions for discussions", async ({
+    mount,
+    page,
+  }) => {
     const component = await mount(
       <LandingTestWrapper>
         <RecentDiscussions discussions={mockDiscussions} loading={false} />
       </LandingTestWrapper>
     );
 
-    await expect(page.locator("text=15 replies")).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(page.locator("text=8 replies")).toBeVisible();
+    // Component displays "View thread" action for each discussion
+    const viewThreadLinks = page.locator("text=View thread");
+    await expect(viewThreadLinks.first()).toBeVisible({ timeout: 10000 });
+    // Should have one "View thread" per discussion
+    await expect(viewThreadLinks).toHaveCount(2);
 
     await component.unmount();
   });
