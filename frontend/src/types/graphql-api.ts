@@ -289,6 +289,8 @@ export type RawCorpusType = Node & {
   description?: Scalars["String"];
   icon?: Maybe<Scalars["String"]>;
   documents?: DocumentTypeConnection;
+  documentCount?: Scalars["Int"];
+  annotationCount?: Scalars["Int"];
   labelSet?: Maybe<LabelSetType>;
   preferredEmbedder?: Maybe<Scalars["String"]>;
   creator?: UserType;

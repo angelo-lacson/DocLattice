@@ -5,7 +5,59 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-27
+## [Unreleased] - 2026-01-28
+
+### Added
+
+#### GraphQL Corpus Query Optimization
+- **Added `documentCount` field to CorpusType**: Efficient document count using annotated subquery instead of N+1 queries
+  - For list queries (`corpuses`), the resolver annotates `_document_count` via `DocumentPath` subquery
+  - For single corpus queries, falls back to model's `document_count()` method
+  - Files: `config/graphql/graphene_types.py:2028-2038`, `config/graphql/queries.py:836-869`
+- **Added `annotationCount` field to CorpusType**: Efficient annotation count using annotated subquery
+  - For list queries, `resolve_corpuses` annotates `_annotation_count` via Document→DocumentPath join
+  - For single corpus queries, falls back to counting via DocumentPath query
+  - Files: `config/graphql/graphene_types.py`, `config/graphql/queries.py`
+- **Optimized LabelSet count resolvers**: Label counts now use corpus-annotated values when available
+  - `resolve_label_set` on CorpusType copies annotated counts to LabelSet instance
+  - `resolve_doc_label_count`, `resolve_span_label_count`, `resolve_token_label_count` check for annotations before querying
+  - Files: `config/graphql/graphene_types.py:680-699, 2040-2056`
+- **Optimized leaderboard `reputationGlobal` resolution**: `resolve_global_leaderboard` now attaches `_reputation_global` to user objects, avoiding N+1 queries when resolving `reputationGlobal`
+  - Files: `config/graphql/queries.py`, `config/graphql/graphene_types.py`
+- **Added query optimization tests**: Comprehensive tests for `documentCount`, `annotationCount`, and label set optimization
+  - Files: `opencontractserver/tests/test_corpus_query_optimization.py`
+
+### Changed
+
+#### DiscoveryLanding GraphQL Query Optimization
+- **Removed unused fields from landing page queries**: Eliminates ~39 N+1 queries per landing page load
+  - Removed from `GET_DISCOVERY_DATA`: `chatMessages { totalCount }` (unused by ActivitySection), `totalMessages`, `totalThreadsCreated`, `totalAnnotationsCreated` (unused by CompactLeaderboard)
+  - Replaced `documents { totalCount }` and `annotations { totalCount }` with `documentCount` and `annotationCount` (efficient subquery-backed fields)
+  - Files: `frontend/src/graphql/landing-queries.ts`
+- **Updated FeaturedCollections to use optimized count fields**: Uses `documentCount`/`annotationCount` instead of connection `totalCount`
+  - Files: `frontend/src/components/landing/FeaturedCollections.tsx`
+- **Updated TrendingCorpuses to use optimized count fields**: Uses `documentCount` instead of `documents.totalCount`
+  - Files: `frontend/src/components/landing/TrendingCorpuses.tsx`
+- **Updated RecentDiscussions to remove chatMessages dependency**: Display "View thread" instead of reply count
+  - Files: `frontend/src/components/landing/RecentDiscussions.tsx`
+
+#### Frontend Corpus Query Cleanup
+- **Removed unused fields from GET_CORPUSES query**: Reduces payload and eliminates N+1 queries
+  - Removed: `preferredEmbedder`, `appliedAnalyzerIds`, `documents.edges`, `annotations.totalCount`
+  - Added: `documentCount` (efficient server-side count)
+  - Files: `frontend/src/graphql/queries.ts:603-673`
+- **Updated CorpusItem to use documentCount**: Uses new field instead of `documents?.edges?.length`
+  - Files: `frontend/src/components/corpuses/CorpusItem.tsx:602-605`
+- **Updated CorpusListView formatStats function**: Uses `documentCount` and removes annotation count display
+  - Files: `frontend/src/components/corpuses/CorpusListView.tsx:303-306`
+- **Added documentCount and annotationCount to TypeScript types**: Updated `RawCorpusType` interface
+  - Files: `frontend/src/types/graphql-api.ts`
+
+### Technical Details
+- **Query reduction**: DiscoveryLanding page goes from ~39 N+1 queries to ~0 extra queries (all counts resolved via subqueries or removed)
+- **Backward compatibility**: All new fields (`documentCount`, `annotationCount`) gracefully fall back to model methods for single corpus queries
+- **Pattern**: Label counts are passed from corpus to label_set via instance attribute injection in `resolve_label_set`
+- **Pattern**: Leaderboard reputation score is pre-attached to user objects via `_reputation_global` attribute
 
 ### Added
 

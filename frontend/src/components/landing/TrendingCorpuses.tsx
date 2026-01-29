@@ -612,7 +612,7 @@ export const TrendingCorpuses: React.FC<TrendingCorpusesProps> = ({
                 <CardStats>
                   <StatItem>
                     <FileText size={14} />
-                    {corpus.documents?.totalCount || 0} docs
+                    {corpus.documentCount || 0} docs
                   </StatItem>
                   <StatItem>
                     <MessageSquare size={14} />

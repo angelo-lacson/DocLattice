@@ -5,7 +5,7 @@ from typing import Optional
 
 import graphene
 from django.conf import settings
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
@@ -136,6 +136,37 @@ from opencontractserver.users.models import Assignment, UserExport, UserImport
 logger = logging.getLogger(__name__)
 
 
+def _corpus_count_subqueries():
+    """
+    Build subqueries for efficient document and annotation counting on Corpus
+    querysets. Used by resolve_corpuses and resolve_corpus_by_slugs to annotate
+    _document_count and _annotation_count without N+1 queries.
+    """
+    from opencontractserver.documents.models import DocumentPath
+
+    document_count_sq = (
+        DocumentPath.objects.filter(
+            corpus_id=OuterRef("id"),
+            is_current=True,
+            is_deleted=False,
+        )
+        .values("corpus_id")
+        .annotate(count=Count("document_id", distinct=True))
+        .values("count")
+    )
+    annotation_count_sq = (
+        Annotation.objects.filter(
+            document__path_records__corpus_id=OuterRef("id"),
+            document__path_records__is_current=True,
+            document__path_records__is_deleted=False,
+        )
+        .values("document__path_records__corpus_id")
+        .annotate(count=Count("id", distinct=True))
+        .values("count")
+    )
+    return document_count_sq, annotation_count_sq
+
+
 class MetadataCompletionStatusType(graphene.ObjectType):
     """Type for metadata completion status information."""
 
@@ -214,6 +245,15 @@ class Query(graphene.ObjectType):
             return None
         qs = Corpus.objects.filter(creator=owner, slug=corpus_slug)
         qs = qs.visible_to_user(info.context.user)
+
+        # Add count annotations for efficient documentCount/annotationCount
+        # resolution without N+1 queries
+        doc_sq, annot_sq = _corpus_count_subqueries()
+        qs = qs.annotate(
+            _document_count=Subquery(doc_sq),
+            _annotation_count=Subquery(annot_sq),
+        )
+
         return qs.first()
 
     def resolve_document_by_slugs(self, info, user_slug, document_slug):
@@ -830,10 +870,34 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpuses(self, info, **kwargs):
+        from opencontractserver.annotations.models import AnnotationLabel
+
+        doc_sq, annot_sq = _corpus_count_subqueries()
+
+        # Subqueries for label counts (via corpus.label_set_id)
+        # Note: 'included_in_labelset' is the related_query_name for filtering
+        def label_count_subquery(label_type: str):
+            return (
+                AnnotationLabel.objects.filter(
+                    included_in_labelset=OuterRef("label_set_id"),
+                    label_type=label_type,
+                )
+                .values("included_in_labelset")
+                .annotate(count=Count("id"))
+                .values("count")
+            )
+
         return (
             Corpus.objects.visible_to_user(info.context.user)
-            .select_related("creator", "engagement_metrics")
+            .select_related("creator", "engagement_metrics", "label_set", "parent")
             .prefetch_related("categories")
+            .annotate(
+                _document_count=Subquery(doc_sq),
+                _annotation_count=Subquery(annot_sq),
+                _label_doc_count=Subquery(label_count_subquery("DOC_TYPE_LABEL")),
+                _label_span_count=Subquery(label_count_subquery("SPAN_LABEL")),
+                _label_token_count=Subquery(label_count_subquery("TOKEN_LABEL")),
+            )
         )
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
@@ -3507,6 +3571,8 @@ class Query(graphene.ObjectType):
         Get top contributors globally by reputation.
 
         Returns users ordered by global reputation score.
+        Attaches _reputation_global to each user to avoid N+1 queries
+        when resolving reputationGlobal on UserType.
 
         Epic: #565 - Corpus Engagement Metrics & Analytics
         Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
@@ -3522,8 +3588,12 @@ class Query(graphene.ObjectType):
             .order_by("-reputation_score")[:limit]
         )
 
-        # Return user objects (badges are already prefetched)
-        return [rep.user for rep in top_reputations]
+        # Attach reputation score to user objects to avoid N+1 queries
+        users = []
+        for rep in top_reputations:
+            rep.user._reputation_global = rep.reputation_score
+            users.append(rep.user)
+        return users
 
     # LEADERBOARD QUERIES (Issue #613) ###################
     leaderboard = graphene.Field(

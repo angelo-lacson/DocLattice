@@ -135,9 +135,16 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         Resolve global reputation for this user.
 
+        Uses pre-attached _reputation_global from resolve_global_leaderboard
+        to avoid N+1 queries. Falls back to database query for single-user
+        lookups.
+
         Epic: #565 - Corpus Engagement Metrics & Analytics
         Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
         """
+        if hasattr(self, "_reputation_global") and self._reputation_global is not None:
+            return self._reputation_global
+
         from opencontractserver.conversations.models import UserReputation
 
         try:
@@ -678,12 +685,22 @@ class LabelSetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     token_label_count = graphene.Int(description="Count of token-level labels")
 
     def resolve_doc_label_count(self, info):
+        """Return doc label count from annotation or query."""
+        # Check if parent corpus has passed the annotated value
+        if hasattr(self, "_doc_label_count") and self._doc_label_count is not None:
+            return self._doc_label_count
         return self.annotation_labels.filter(label_type="DOC_TYPE_LABEL").count()
 
     def resolve_span_label_count(self, info):
+        """Return span label count from annotation or query."""
+        if hasattr(self, "_span_label_count") and self._span_label_count is not None:
+            return self._span_label_count
         return self.annotation_labels.filter(label_type="SPAN_LABEL").count()
 
     def resolve_token_label_count(self, info):
+        """Return token label count from annotation or query."""
+        if hasattr(self, "_token_label_count") and self._token_label_count is not None:
+            return self._token_label_count
         return self.annotation_labels.filter(label_type="TOKEN_LABEL").count()
 
     # Count of corpuses using this label set
@@ -2017,6 +2034,64 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_categories(self, info):
         """Get all categories assigned to this corpus."""
         return self.categories.all()
+
+    # Efficient document count field - uses annotation from resolver
+    document_count = graphene.Int(
+        description="Count of active documents in this corpus (optimized)"
+    )
+
+    def resolve_document_count(self, info):
+        """
+        Return document count from annotation or fallback to model method.
+
+        For list queries, resolve_corpuses annotates _document_count.
+        For single corpus queries, falls back to model.document_count().
+        """
+        if hasattr(self, "_document_count") and self._document_count is not None:
+            return self._document_count
+        return self.document_count()
+
+    # Efficient annotation count field - uses annotation from resolver
+    annotation_count = graphene.Int(
+        description="Count of annotations in this corpus (optimized)"
+    )
+
+    def resolve_annotation_count(self, info):
+        """
+        Return annotation count from annotation or fallback to database query.
+
+        For list queries, resolve_corpuses annotates _annotation_count.
+        For single corpus queries, falls back to counting via DocumentPath.
+        """
+        if hasattr(self, "_annotation_count") and self._annotation_count is not None:
+            return self._annotation_count
+        from opencontractserver.documents.models import DocumentPath
+
+        doc_ids = DocumentPath.objects.filter(
+            corpus=self, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+        return Annotation.objects.filter(document_id__in=doc_ids).count()
+
+    def resolve_label_set(self, info):
+        """
+        Return label_set with count annotations copied from corpus.
+
+        When resolve_corpuses annotates label counts on the Corpus, we need
+        to copy those annotations to the label_set instance so that its
+        count resolvers can use them instead of hitting the database.
+        """
+        if self.label_set is None:
+            return None
+
+        # Copy annotated counts to the label_set instance
+        if hasattr(self, "_label_doc_count"):
+            self.label_set._doc_label_count = self._label_doc_count
+        if hasattr(self, "_label_span_count"):
+            self.label_set._span_label_count = self._label_span_count
+        if hasattr(self, "_label_token_count"):
+            self.label_set._token_label_count = self._label_token_count
+
+        return self.label_set
 
     class Meta:
         model = Corpus
