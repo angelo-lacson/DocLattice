@@ -90,10 +90,13 @@ class VectorSearchViaEmbeddingMixin:
         # then distance to pick the best score for each ID (though they should be identical).
         base_qs = base_qs.order_by("id", "_cosine_distance").distinct("id")
 
-        # Convert to list to materialize the query, then sort by distance ascending
-        # (lowest distance = most similar = should come first)
+        # Materialize to list, sort by distance, and take top_k
+        # Note: DISTINCT ON requires id first in ORDER BY, so we can't do the final
+        # sort by distance in PostgreSQL. Python sort is efficient for typical result
+        # sizes (hundreds to low thousands). For extreme scale, consider raw SQL with CTE.
         results = list(base_qs)
         results.sort(key=lambda obj: obj._cosine_distance)
+        results = results[:top_k]
 
         # Convert distance to similarity score for each result
         # similarity = 1 - distance (clamped to 0-1 range)
@@ -101,8 +104,7 @@ class VectorSearchViaEmbeddingMixin:
             distance = getattr(obj, "_cosine_distance", 0)
             obj.similarity_score = max(0.0, min(1.0, 1.0 - distance))
 
-        # Return top_k results (already sorted by similarity, highest first)
-        return results[:top_k]
+        return results
 
 
 class HasEmbeddingMixin:
