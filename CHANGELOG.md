@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Supports infinite scroll for semantic search results
   - Shows appropriate empty state and loading messages for search mode
   - Files: `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+- **Fixed semantic search similarity score calculation**: Scores now correctly display as percentages
+  - CosineDistance returns distance (0=identical), converted to similarity (1=identical)
+  - Results are sorted by similarity (highest first) and scores display correctly (e.g., 85% for close matches)
+  - Files: `opencontractserver/shared/mixins.py`
 - **Created lightweight `GET_ANNOTATIONS_FOR_CARDS` query**: Fetches only fields needed for ModernAnnotationCard display
   - Excludes heavy fields: `tokensJsons`, `json`, `page`, and unnecessary nested objects
   - Reduces payload from ~340KB to ~30KB for 2130 annotations (estimated 90% reduction)

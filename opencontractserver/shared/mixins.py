@@ -76,22 +76,32 @@ class VectorSearchViaEmbeddingMixin:
         )
 
         # Use annotate(...) plus the CosineDistance from pgvector
+        # CosineDistance returns distance (0 = identical, 1 = orthogonal, 2 = opposite)
+        # We convert to similarity (1 = identical, 0 = different) for frontend display
+        # Formula: similarity = 1 - distance (for normalized vectors, distance is 0-1)
         base_qs = base_qs.annotate(
-            similarity_score=CosineDistance(vector_field, query_vector)
+            _cosine_distance=CosineDistance(vector_field, query_vector)
         )
 
         # PostgreSQL DISTINCT ON approach to handle JOIN duplicates:
         # When an object has multiple Embedding rows with the same embedder_path,
         # we want to keep only one result per unique object ID.
         # DISTINCT ON (id) requires id to be first in ORDER BY, so we order by id first,
-        # then similarity_score to pick the best score for each ID (though they should be identical).
-        base_qs = base_qs.order_by("id", "similarity_score").distinct("id")
+        # then distance to pick the best score for each ID (though they should be identical).
+        base_qs = base_qs.order_by("id", "_cosine_distance").distinct("id")
 
-        # Convert to list to materialize the query, then sort by similarity_score in Python
+        # Convert to list to materialize the query, then sort by distance ascending
+        # (lowest distance = most similar = should come first)
         results = list(base_qs)
-        results.sort(key=lambda obj: obj.similarity_score)
+        results.sort(key=lambda obj: obj._cosine_distance)
 
-        # Return top_k results
+        # Convert distance to similarity score for each result
+        # similarity = 1 - distance (clamped to 0-1 range)
+        for obj in results:
+            distance = getattr(obj, "_cosine_distance", 0)
+            obj.similarity_score = max(0.0, min(1.0, 1.0 - distance))
+
+        # Return top_k results (already sorted by similarity, highest first)
         return results[:top_k]
 
 
