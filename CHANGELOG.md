@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `frontend/src/components/annotations/AnnotationsPanel.tsx`
 - **Added `AnnotationsPanel` unit tests**: Comprehensive tests for filters, search, grid, empty/loading states
   - Files: `frontend/src/components/annotations/__tests__/AnnotationsPanel.test.tsx`
+- **Added semantic search to corpus annotations tab**: Search box now uses vector similarity search
+  - Debounced search triggers semantic search as user types (500ms delay)
+  - Displays similarity scores on annotation cards
+  - Supports infinite scroll for semantic search results
+  - Shows appropriate empty state and loading messages for search mode
+  - Files: `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
 - **Created lightweight `GET_ANNOTATIONS_FOR_CARDS` query**: Fetches only fields needed for ModernAnnotationCard display
   - Excludes heavy fields: `tokensJsons`, `json`, `page`, and unnecessary nested objects
   - Reduces payload from ~340KB to ~30KB for 2130 annotations (estimated 90% reduction)
