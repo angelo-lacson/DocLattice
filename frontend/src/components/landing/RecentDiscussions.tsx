@@ -625,7 +625,7 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
                   </MetaItem>
                   <MetaItem>
                     <MessageCircle size={14} />
-                    {discussion.chatMessages?.totalCount || 0} replies
+                    View thread
                   </MetaItem>
                   {discussion.chatWithCorpus && (
                     <CorpusLink>

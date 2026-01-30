@@ -374,8 +374,8 @@ class EmbeddingManager2048DimensionTest(TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].id, self.document.id)
-        # Cosine distance should be 0 for identical vectors
-        self.assertAlmostEqual(results[0].similarity_score, 0.0, places=5)
+        # Cosine similarity should be 1.0 for identical vectors (1 - distance)
+        self.assertAlmostEqual(results[0].similarity_score, 1.0, places=5)
 
 
 class HasEmbeddingMixinDimensionTest(TestCase):
