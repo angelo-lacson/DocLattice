@@ -29,6 +29,8 @@ export interface CorpusAboutProps {
   canEdit: boolean;
   /** Callback when edit/add description button is clicked */
   onEditDescription: () => void;
+  /** Hide the header (useful when embedded with external header) */
+  hideHeader?: boolean;
   /** Test ID for the component */
   testId?: string;
 }
@@ -50,6 +52,7 @@ export const CorpusAbout: React.FC<CorpusAboutProps> = ({
   isLoading,
   canEdit,
   onEditDescription,
+  hideHeader = false,
   testId = "corpus-about",
 }) => {
   const hasContent = mdContent || corpus.description;
@@ -58,48 +61,54 @@ export const CorpusAbout: React.FC<CorpusAboutProps> = ({
     <AboutCard
       id={testId}
       data-testid={testId}
+      $minimal={hideHeader}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       style={{ minHeight: 0 }}
     >
-      <AboutHeader>
-        <AboutTitle>
-          <BookOpen size={22} />
-          About this Corpus
-        </AboutTitle>
-        <ActionButtons>
-          {hasContent && (
-            <HistoryButton
-              onClick={onEditDescription}
-              aria-label="View version history"
-            >
-              <Activity size={14} />
-              Version History
-            </HistoryButton>
-          )}
-          {canEdit && (
-            <EditButton
-              onClick={onEditDescription}
-              aria-label={hasContent ? "Edit description" : "Add description"}
-            >
-              {hasContent ? (
-                <>
-                  <Edit size={14} />
-                  Edit
-                </>
-              ) : (
-                <>
-                  <Plus size={14} />
-                  Add Description
-                </>
-              )}
-            </EditButton>
-          )}
-        </ActionButtons>
-      </AboutHeader>
+      {!hideHeader && (
+        <AboutHeader>
+          <AboutTitle>
+            <BookOpen size={22} />
+            About this Corpus
+          </AboutTitle>
+          <ActionButtons>
+            {hasContent && (
+              <HistoryButton
+                onClick={onEditDescription}
+                aria-label="View version history"
+              >
+                <Activity size={14} />
+                Version History
+              </HistoryButton>
+            )}
+            {canEdit && (
+              <EditButton
+                onClick={onEditDescription}
+                aria-label={hasContent ? "Edit description" : "Add description"}
+              >
+                {hasContent ? (
+                  <>
+                    <Edit size={14} />
+                    Edit
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} />
+                    Add Description
+                  </>
+                )}
+              </EditButton>
+            )}
+          </ActionButtons>
+        </AboutHeader>
+      )}
 
-      <AboutContent className={!hasContent && !isLoading ? "empty" : ""}>
+      <AboutContent
+        className={!hasContent && !isLoading ? "empty" : ""}
+        $minimal={hideHeader}
+      >
         {isLoading ? (
           <LoadingPlaceholder>
             <div className="title-skeleton" />

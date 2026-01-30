@@ -19,6 +19,7 @@ import {
   selectedTab,
   selectedFolderId,
   selectedExtractIds,
+  corpusDetailView,
 } from "../src/graphql/cache";
 import { mergeArrayByIdFieldPolicy } from "../src/graphql/cache";
 import {
@@ -286,6 +287,11 @@ export const CorpusesTestWrapper: React.FC<WrapperProps> = ({
     } as any);
   }
 
+  // CRITICAL: Initialize corpusDetailView synchronously BEFORE render
+  // This ensures CorpusHome sees "landing" view on first paint
+  // (prevents stale values from previous tests)
+  corpusDetailView("landing");
+
   // Mark authentication as done immediately for tests
   // Component tests set reactive vars directly (pragmatic exception to The ONE PLACE TO RULE THEM ALL)
   React.useEffect(() => {
@@ -309,6 +315,7 @@ export const CorpusesTestWrapper: React.FC<WrapperProps> = ({
       selectedTab(null);
       selectedFolderId(null);
       selectedExtractIds([]);
+      corpusDetailView("landing");
     };
   }, []);
 

@@ -590,6 +590,20 @@ export const corpusHomeView = makeVar<CorpusHomeViewType | null>(null);
 export const tocExpandAll = makeVar<boolean>(false);
 
 /**
+ * Corpus detail view selection (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Controls whether the corpus home page shows the landing view (centered, focused)
+ * or the details view (two-column with TOC and About).
+ * Defaults to "landing" when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus                    → corpusDetailView("landing") = default landing
+ *   /c/user/corpus?view=details       → corpusDetailView("details")
+ */
+export type CorpusDetailViewType = "landing" | "details";
+export const corpusDetailView = makeVar<CorpusDetailViewType>("landing");
+
+/**
  * Auth-related global variables
  */
 export const userObj = makeVar<User | null>(null);
