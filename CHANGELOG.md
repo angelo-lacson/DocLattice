@@ -5,7 +5,155 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-25
+## [Unreleased] - 2026-01-28
+
+### Added
+
+#### AnnotationsPanel Shared Component
+- **Created `AnnotationsPanel` reusable component**: Extracts shared filtering/display logic from annotations views
+  - Provides filter tabs for type (All/Doc/Text) and source (All/Human/Agent/Structural)
+  - Includes SearchBox, grid display with ModernAnnotationCard, empty state, and pagination
+  - Can be used by both standalone Annotations view and corpus annotations tab
+  - Files: `frontend/src/components/annotations/AnnotationsPanel.tsx`
+- **Added `AnnotationsPanel` unit tests**: Comprehensive tests for filters, search, grid, empty/loading states
+  - Files: `frontend/src/components/annotations/__tests__/AnnotationsPanel.test.tsx`
+- **Added semantic search to corpus annotations tab**: Search box now uses vector similarity search
+  - Debounced search triggers semantic search as user types (500ms delay)
+  - Displays similarity scores on annotation cards
+  - Supports infinite scroll for semantic search results
+  - Shows appropriate empty state and loading messages for search mode
+  - Files: `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+- **Fixed semantic search similarity score calculation**: Scores now correctly display as percentages
+  - CosineDistance returns distance (0=identical), converted to similarity (1=identical)
+  - Results are sorted by similarity (highest first) and scores display correctly (e.g., 85% for close matches)
+  - Files: `opencontractserver/shared/mixins.py`
+- **Created lightweight `GET_ANNOTATIONS_FOR_CARDS` query**: Fetches only fields needed for ModernAnnotationCard display
+  - Excludes heavy fields: `tokensJsons`, `json`, `page`, and unnecessary nested objects
+  - Reduces payload from ~340KB to ~30KB for 2130 annotations (estimated 90% reduction)
+  - Files: `frontend/src/graphql/queries.ts`
+
+### Fixed
+
+#### Annotations Panel Scroll Issue
+- **Fixed corpus annotations tab scroll behavior**: Restructured AnnotationsPanel to scroll only the cards grid
+  - Container uses flex column layout with `overflow: hidden`
+  - FiltersSection has `flex-shrink: 0` to stay fixed at top
+  - AnnotationsListContainer has `flex: 1` and `overflow-y: auto` for card scrolling
+  - Filters (search, type tabs, source tabs) stay visible while cards scroll below
+  - Files: `frontend/src/components/annotations/AnnotationsPanel.tsx`
+
+#### Annotations Query Missing Pagination
+- **Added initial page limit to annotations queries**: Previously loaded all annotations at once
+  - Added `limit` and `cursor` fields to `GetAnnotationsInputs` interface
+  - Set initial page size to 20 annotations for both Annotations.tsx and CorpusAnnotationCards.tsx
+  - Infinite scroll loads more as user scrolls down
+  - Files: `frontend/src/graphql/queries.ts`, `frontend/src/views/Annotations.tsx`, `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+
+#### Corpus Annotations Tab Source Filter
+- **Fixed structural annotations not visible in corpus tab**: Annotations tab now shows filter controls even when empty
+  - Added source filter (Human/Agent/Structural) to `CorpusAnnotationCards`
+  - Source filter syncs to GraphQL query variables: "structural" → `structural: true`, "human" → `structural: false, analysis_Isnull: true`, "agent" → `structural: false, analysis_Isnull: false`
+  - Users can now toggle to see structural annotations that were previously hidden
+  - Files: `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+- **Added missing `usesLabelFromLabelsetId` to GetAnnotationsInputs interface**: Interface was missing a field used by the query
+  - Files: `frontend/src/graphql/queries.ts:752`
+
+### Changed
+
+#### Annotations View Refactoring
+- **Updated Annotations.tsx to use AnnotationsPanel**: DRY refactoring, keeps hero section, stats, semantic search, advanced filters
+  - Files: `frontend/src/views/Annotations.tsx`
+- **Deleted superseded AnnotationCards.tsx**: Functionality absorbed into AnnotationsPanel
+  - Files: `frontend/src/components/annotations/AnnotationCards.tsx` (deleted)
+
+#### Annotations Query Optimization
+- **Switched to lightweight query for annotation cards**: Both `Annotations.tsx` and `CorpusAnnotationCards.tsx` now use `GET_ANNOTATIONS_FOR_CARDS`
+  - Previous query fetched `tokensJsons` (huge JSON), `json`, full document paths (pdfFile, txtExtractFile, pawlsParseFile), full corpus details
+  - New query fetches only: id, created, creator (id, email, username), corpus (id, slug, labelSet.title), document (id, slug, title), annotationLabel (id, text, color, labelType), analysis (id, analyzer.analyzerId), annotationType, structural, rawText, isPublic, contentModalities
+  - Expected improvement: ~90% payload reduction, significantly faster load times
+  - Files: `frontend/src/views/Annotations.tsx`, `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
+
+### Added
+
+#### GraphQL Corpus Query Optimization
+- **Added `documentCount` field to CorpusType**: Efficient document count using annotated subquery instead of N+1 queries
+  - For list queries (`corpuses`), the resolver annotates `_document_count` via `DocumentPath` subquery
+  - For single corpus queries, falls back to model's `document_count()` method
+  - Files: `config/graphql/graphene_types.py:2028-2038`, `config/graphql/queries.py:836-869`
+- **Added `annotationCount` field to CorpusType**: Efficient annotation count using annotated subquery
+  - For list queries, `resolve_corpuses` annotates `_annotation_count` via Document→DocumentPath join
+  - For single corpus queries, falls back to counting via DocumentPath query
+  - Files: `config/graphql/graphene_types.py`, `config/graphql/queries.py`
+- **Optimized LabelSet count resolvers**: Label counts now use corpus-annotated values when available
+  - `resolve_label_set` on CorpusType copies annotated counts to LabelSet instance
+  - `resolve_doc_label_count`, `resolve_span_label_count`, `resolve_token_label_count` check for annotations before querying
+  - Files: `config/graphql/graphene_types.py:680-699, 2040-2056`
+- **Optimized leaderboard `reputationGlobal` resolution**: `resolve_global_leaderboard` now attaches `_reputation_global` to user objects, avoiding N+1 queries when resolving `reputationGlobal`
+  - Files: `config/graphql/queries.py`, `config/graphql/graphene_types.py`
+- **Added query optimization tests**: Comprehensive tests for `documentCount`, `annotationCount`, and label set optimization
+  - Files: `opencontractserver/tests/test_corpus_query_optimization.py`
+
+### Changed
+
+#### DiscoveryLanding GraphQL Query Optimization
+- **Removed unused fields from landing page queries**: Eliminates ~39 N+1 queries per landing page load
+  - Removed from `GET_DISCOVERY_DATA`: `chatMessages { totalCount }` (unused by ActivitySection), `totalMessages`, `totalThreadsCreated`, `totalAnnotationsCreated` (unused by CompactLeaderboard)
+  - Replaced `documents { totalCount }` and `annotations { totalCount }` with `documentCount` and `annotationCount` (efficient subquery-backed fields)
+  - Files: `frontend/src/graphql/landing-queries.ts`
+- **Updated FeaturedCollections to use optimized count fields**: Uses `documentCount`/`annotationCount` instead of connection `totalCount`
+  - Files: `frontend/src/components/landing/FeaturedCollections.tsx`
+- **Updated TrendingCorpuses to use optimized count fields**: Uses `documentCount` instead of `documents.totalCount`
+  - Files: `frontend/src/components/landing/TrendingCorpuses.tsx`
+- **Updated RecentDiscussions to remove chatMessages dependency**: Display "View thread" instead of reply count
+  - Files: `frontend/src/components/landing/RecentDiscussions.tsx`
+
+#### Frontend Corpus Query Cleanup
+- **Removed unused fields from GET_CORPUSES query**: Reduces payload and eliminates N+1 queries
+  - Removed: `preferredEmbedder`, `appliedAnalyzerIds`, `documents.edges`, `annotations.totalCount`
+  - Added: `documentCount` (efficient server-side count)
+  - Files: `frontend/src/graphql/queries.ts:603-673`
+- **Updated CorpusItem to use documentCount**: Uses new field instead of `documents?.edges?.length`
+  - Files: `frontend/src/components/corpuses/CorpusItem.tsx:602-605`
+- **Updated CorpusListView formatStats function**: Uses `documentCount` and removes annotation count display
+  - Files: `frontend/src/components/corpuses/CorpusListView.tsx:303-306`
+- **Added documentCount and annotationCount to TypeScript types**: Updated `RawCorpusType` interface
+  - Files: `frontend/src/types/graphql-api.ts`
+
+### Technical Details
+- **Query reduction**: DiscoveryLanding page goes from ~39 N+1 queries to ~0 extra queries (all counts resolved via subqueries or removed)
+- **Backward compatibility**: All new fields (`documentCount`, `annotationCount`) gracefully fall back to model methods for single corpus queries
+- **Pattern**: Label counts are passed from corpus to label_set via instance attribute injection in `resolve_label_set`
+- **Pattern**: Leaderboard reputation score is pre-attached to user objects via `_reputation_global` attribute
+
+### Added
+
+#### 2048-Dimensional Embedding Support
+- **Added vector_2048 field to Embedding model**: Support for 2048-dimensional embeddings used by newer embedding models
+  - Migration 0061 adds nullable `vector_2048` column to `annotations_embedding` table
+  - Files: `opencontractserver/annotations/models.py:470`, `opencontractserver/annotations/migrations/0061_add_vector_2048.py`
+- **Updated dimension handling across codebase**:
+  - `Managers.py:_get_vector_field_name` returns "vector_2048" for 2048-dim vectors (lines 363-364)
+  - `mixins.py:_dimension_to_field` returns embedding relation for 2048-dim (lines 37-38)
+  - `mixins.py:get_embedding` retrieves 2048-dim vectors (lines 144-145)
+  - Vector stores validate 2048 as supported dimension
+  - Files: `opencontractserver/shared/Managers.py`, `opencontractserver/shared/mixins.py`, `opencontractserver/llms/vector_stores/core_vector_stores.py`, `opencontractserver/llms/vector_stores/core_conversation_vector_stores.py`
+
+#### Multimodal Embedder Refactoring
+- **Refactored MultimodalMicroserviceEmbedder into inheritance hierarchy**:
+  - `BaseMultimodalMicroserviceEmbedder`: Abstract base class with shared multimodal embedding logic
+  - `CLIPMicroserviceEmbedder`: CLIP ViT-L-14 model (768 dimensions) with backwards-compatible legacy settings
+  - `QwenMicroserviceEmbedder`: Qwen embedding model (1024 dimensions)
+  - Files: `opencontractserver/pipeline/embedders/multimodal_microservice.py`
+- **Added model-specific settings**: `CLIP_EMBEDDER_URL`, `CLIP_EMBEDDER_API_KEY`, `QWEN_EMBEDDER_URL`, `QWEN_EMBEDDER_API_KEY`
+  - Files: `config/settings/base.py:666-669`
+- **Deprecated legacy settings**: `MULTIMODAL_EMBEDDER_URL` and `MULTIMODAL_EMBEDDER_API_KEY` still work but emit deprecation warnings
+  - Users should migrate to `CLIP_EMBEDDER_URL` / `CLIP_EMBEDDER_API_KEY`
+
+### Fixed
+
+#### MicroserviceEmbedder Reliability
+- **Fixed MicroserviceEmbedder production failures**: Added Content-Type header and 30s timeout to prevent silent failures
+  - Files: `opencontractserver/pipeline/embedders/sent_transformer_microservice.py:522, 530`
 
 ### Added
 

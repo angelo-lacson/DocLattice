@@ -302,18 +302,10 @@ function getVisibilityStatus(
 
 function formatStats(corpus: CorpusType): string[] {
   const stats: string[] = [];
-  const docCount =
-    corpus.documents?.totalCount || corpus.documents?.edges?.length || 0;
-  const annCount = corpus.annotations?.totalCount || 0;
+  const docCount = corpus.documentCount ?? 0;
 
   if (docCount > 0)
     stats.push(`${docCount} ${docCount === 1 ? "doc" : "docs"}`);
-  if (annCount > 0)
-    stats.push(
-      `${annCount.toLocaleString()} ${
-        annCount === 1 ? "annotation" : "annotations"
-      }`
-    );
 
   // Add labelset name + label count together
   if (corpus.labelSet) {

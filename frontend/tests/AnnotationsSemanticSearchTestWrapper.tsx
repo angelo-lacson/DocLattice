@@ -14,7 +14,7 @@ import { MemoryRouter } from "react-router-dom";
 import { GraphQLError } from "graphql";
 import { Annotations } from "../src/views/Annotations";
 import {
-  GET_ANNOTATIONS,
+  GET_ANNOTATIONS_FOR_CARDS,
   SEMANTIC_SEARCH_ANNOTATIONS,
   GET_CORPUS_LABELSET_AND_LABELS,
 } from "../src/graphql/queries";
@@ -126,8 +126,11 @@ const createAnnotationsWildcardLink = (
 
     console.log(`[MOCK] Processing: ${opName}`, operation.variables);
 
-    // Match GET_ANNOTATIONS query (any variables)
-    if (query === GET_ANNOTATIONS || opName === "GetAnnotations") {
+    // Match GET_ANNOTATIONS_FOR_CARDS query (any variables)
+    if (
+      query === GET_ANNOTATIONS_FOR_CARDS ||
+      opName === "GetAnnotationsForCards"
+    ) {
       console.log("[MOCK] Returning annotations response");
       return Observable.of(annotationsResponse);
     }

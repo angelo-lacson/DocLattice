@@ -205,15 +205,8 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
         id
         title
       }
-      documents {
-        totalCount
-      }
-      annotations {
-        totalCount
-      }
-      analyses {
-        totalCount
-      }
+      documentCount
+      annotationCount
     }
   }
 `;
@@ -395,26 +388,6 @@ export const GET_CORPUS_METADATA = gql`
         id
         username
         slug
-      }
-      descriptionRevisions {
-        id
-        version
-        author {
-          id
-          email
-        }
-        created
-        diff
-        snapshot
-      }
-      allAnnotationSummaries {
-        id
-        rawText
-        json
-        annotationLabel {
-          id
-          text
-        }
       }
     }
   }
@@ -630,31 +603,16 @@ export const GET_CORPUSES = gql`
             slug
           }
           description
-          preferredEmbedder
-          appliedAnalyzerIds
           isPublic
           is_selected @client
           is_open @client
           myPermissions
+          documentCount
           parent {
             id
             icon
             title
             description
-          }
-          annotations {
-            totalCount
-          }
-          documents {
-            totalCount
-            edges {
-              node {
-                id
-                fileType
-                backendLock
-                description
-              }
-            }
           }
           labelSet {
             id
@@ -792,6 +750,7 @@ export const REQUEST_LABELSETS_WITH_ALL_LABELS = gql`
 export interface GetAnnotationsInputs {
   annotationLabelId?: string;
   corpusId?: string;
+  usesLabelFromLabelsetId?: string;
   rawText_Contains?: string;
   analysis_Isnull?: boolean;
   annotationLabel_description_search_string?: string;
@@ -800,6 +759,8 @@ export interface GetAnnotationsInputs {
   createdWithAnalyzerId?: string;
   createdByAnalysisIds?: string;
   structural?: boolean;
+  limit?: number;
+  cursor?: string;
 }
 
 export interface GetAnnotationsOutputs {
@@ -912,6 +873,107 @@ export const GET_ANNOTATIONS = gql`
           rawText
           isPublic
           myPermissions
+          contentModalities
+          __typename
+        }
+        __typename
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+        __typename
+      }
+      __typename
+    }
+  }
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LIGHTWEIGHT ANNOTATIONS QUERY FOR CARD DISPLAY
+// ═══════════════════════════════════════════════════════════════════════════════
+// This query fetches only the fields needed for ModernAnnotationCard display.
+// It excludes heavy fields like tokensJsons, json, and unnecessary nested objects.
+// Use this for annotation list/grid views where performance is critical.
+
+export const GET_ANNOTATIONS_FOR_CARDS = gql`
+  query GetAnnotationsForCards(
+    $annotationLabelId: ID
+    $corpusId: ID
+    $usesLabelFromLabelsetId: ID
+    $rawText_Contains: String
+    $annotationLabel_description_search_string: String
+    $annotationLabel_title_search_string: String
+    $annotationLabel_Type: String
+    $createdWithAnalyzerId: String
+    $createdByAnalysisIds: String
+    $analysis_Isnull: Boolean
+    $structural: Boolean
+    $cursor: String
+    $limit: Int
+  ) {
+    annotations(
+      corpusId: $corpusId
+      annotationLabelId: $annotationLabelId
+      usesLabelFromLabelsetId: $usesLabelFromLabelsetId
+      rawTextContains: $rawText_Contains
+      annotationLabel_TextContains: $annotationLabel_title_search_string
+      annotationLabel_DescriptionContains: $annotationLabel_description_search_string
+      annotationLabel_LabelType: $annotationLabel_Type
+      createdWithAnalyzerId: $createdWithAnalyzerId
+      createdByAnalysisIds: $createdByAnalysisIds
+      analysisIsnull: $analysis_Isnull
+      structural: $structural
+      first: $limit
+      after: $cursor
+    ) {
+      totalCount
+      edges {
+        node {
+          id
+          created
+          creator {
+            id
+            email
+            username
+            __typename
+          }
+          corpus {
+            id
+            slug
+            labelSet {
+              id
+              title
+              __typename
+            }
+            __typename
+          }
+          document {
+            id
+            slug
+            title
+            __typename
+          }
+          analysis {
+            id
+            analyzer {
+              analyzerId
+              __typename
+            }
+            __typename
+          }
+          annotationLabel {
+            id
+            text
+            color
+            labelType
+            __typename
+          }
+          annotationType
+          structural
+          rawText
+          isPublic
           contentModalities
           __typename
         }

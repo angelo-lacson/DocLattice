@@ -516,6 +516,11 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
                 legacy_url = getattr(settings, self._legacy_url_setting, "")
                 new_url = getattr(settings, self.url_setting_name, "")
                 # Use legacy if set, otherwise new, otherwise default
+                if legacy_url and not new_url:
+                    logger.warning(
+                        "MULTIMODAL_EMBEDDER_URL is deprecated. "
+                        "Please migrate to CLIP_EMBEDDER_URL."
+                    )
                 service_url = legacy_url or new_url or self._default_url
 
         # API Key - check new key, then legacy key
@@ -536,6 +541,11 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
                 # Fall back to Django settings - check LEGACY first for backwards compat
                 legacy_key = getattr(settings, self._legacy_api_key_setting, "")
                 new_key = getattr(settings, self.api_key_setting_name, "")
+                if legacy_key and not new_key:
+                    logger.warning(
+                        "MULTIMODAL_EMBEDDER_API_KEY is deprecated. "
+                        "Please migrate to CLIP_EMBEDDER_API_KEY."
+                    )
                 api_key = legacy_key or new_key or ""
 
         # Cloud Run IAM auth flag
