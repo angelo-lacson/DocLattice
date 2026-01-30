@@ -620,7 +620,7 @@ const CorpusViewContainer = styled.div`
 
 const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
   position: relative;
-  width: ${(props) => (props.$isExpanded ? "280px" : "72px")};
+  width: ${(props) => (props.$isExpanded ? "280px" : "80px")};
   background: linear-gradient(180deg, #ffffff 0%, #fafbfc 50%, #f8f9fa 100%);
   backdrop-filter: blur(10px);
   border-right: 1px solid #e2e8f0;
@@ -1311,6 +1311,29 @@ const NotificationBadge = styled.div`
   }
 `;
 
+// Compact badge for collapsed sidebar - slight overlap at corner
+const CollapsedBadge = styled.div<{ $isZero: boolean }>`
+  position: absolute;
+  top: -4px;
+  right: -12px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: ${(props) =>
+    props.$isZero
+      ? "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)"
+      : "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"};
+  color: white;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+`;
+
 // Split view container for extracts tab
 const ExtractsSplitView = styled.div`
   display: flex;
@@ -1532,9 +1555,7 @@ export const Corpuses = () => {
   const urlTab = useReactiveVar(selectedTab);
   const [showDescriptionEditor, setShowDescriptionEditor] =
     useState<boolean>(false);
-  const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(
-    () => width > MOBILE_VIEW_BREAKPOINT
-  ); // Expanded by default on desktop
+  const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false); // Collapsed by default, opens on hover
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const { REACT_APP_ALLOW_IMPORTS } = useEnv();
 
@@ -2581,7 +2602,7 @@ export const Corpuses = () => {
           data-testid="navigation-sidebar"
           $isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
           initial={{
-            width: use_mobile_layout ? "0" : sidebarExpanded ? "280px" : "72px",
+            width: use_mobile_layout ? "0" : sidebarExpanded ? "280px" : "80px",
           }}
           animate={{
             width: use_mobile_layout
@@ -2590,9 +2611,11 @@ export const Corpuses = () => {
                 : "0"
               : sidebarExpanded
               ? "280px"
-              : "72px",
+              : "80px",
           }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
+          onMouseEnter={() => !use_mobile_layout && setSidebarExpanded(true)}
+          onMouseLeave={() => !use_mobile_layout && setSidebarExpanded(false)}
         >
           <BottomSheetHandle
             onClick={() => use_mobile_layout && setMobileSidebarOpen(false)}
@@ -2681,9 +2704,9 @@ export const Corpuses = () => {
                   {item.badge !== undefined &&
                     !sidebarExpanded &&
                     !use_mobile_layout && (
-                      <NotificationBadge>
+                      <CollapsedBadge $isZero={item.badge === 0}>
                         {item.badge > 0 ? item.badge : "–"}
-                      </NotificationBadge>
+                      </CollapsedBadge>
                     )}
                 </div>
                 {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
