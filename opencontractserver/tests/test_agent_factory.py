@@ -124,7 +124,11 @@ class TestUnifiedAgentFactory(TestAgentFactorySetup):
             tools=raw_tools,
         )
         mock_convert_tools.assert_called_once_with(
-            raw_tools, AgentFramework.PYDANTIC_AI
+            raw_tools,
+            AgentFramework.PYDANTIC_AI,
+            document_id=self.doc1.id,
+            corpus_id=self.corpus1.id,
+            user_id=None,
         )
         mock_pydantic_agent_class.create.assert_called_once()
         self.assertIs(agent, mock_agent_instance)
