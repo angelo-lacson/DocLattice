@@ -68,9 +68,17 @@ const RouteParamInitializer: React.FC<{
 
   useEffect(() => {
     // Simulate CentralRouteManager Phase 2: parse view from URL
+    // URL param takes precedence to support navigation
+    // When URL has no view param, that means "landing" (the default)
+    // initialView is only used for initial mount, not subsequent changes
     const viewParam = searchParams.get("view");
-    const newView: CorpusDetailViewType =
-      viewParam === "details" ? "details" : initialView ?? "landing";
+    let newView: CorpusDetailViewType;
+    if (viewParam === "details") {
+      newView = "details";
+    } else {
+      // "landing" param, no param, or any other value = landing
+      newView = "landing";
+    }
     corpusDetailView(newView);
 
     // Parse homeView from URL (for details view About/TOC tabs)
@@ -103,6 +111,13 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
   initialHomeView,
   initialTocExpanded,
 }) => {
+  // CRITICAL: Initialize reactive vars synchronously BEFORE render
+  // This ensures the component sees the correct values on first paint
+  // (useEffect in RouteParamInitializer runs AFTER render, which is too late)
+  corpusDetailView(initialView ?? "landing");
+  corpusHomeView(initialHomeView ?? null);
+  tocExpandAll(initialTocExpanded ?? false);
+
   // Default stats matching the mock data in CorpusHome.ct.tsx
   const stats = {
     totalDocs: 3,

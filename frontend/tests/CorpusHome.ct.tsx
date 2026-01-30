@@ -274,8 +274,8 @@ test("renders landing view with corpus title and badge", async ({
 }) => {
   await mountCorpusHome(mount);
 
-  // CORPUS badge should be visible
-  await expect(page.locator("text=CORPUS")).toBeVisible();
+  // CORPUS badge should be visible (exact match to avoid matching "Corpuses" breadcrumb)
+  await expect(page.getByText("CORPUS", { exact: true })).toBeVisible();
 
   // Title should be visible
   const title = page.getByTestId("corpus-home-landing-title");
@@ -436,14 +436,19 @@ test("clicking back button in details view returns to landing", async ({
   );
 
   // Initially in details view
-  await expect(page.getByTestId("corpus-home-details")).toBeVisible();
+  await expect(page.getByTestId("corpus-home-details")).toBeVisible({
+    timeout: 10000,
+  });
 
   // Click back button
   const backBtn = page.getByTestId("corpus-home-details-back-btn");
   await backBtn.click();
 
+  // Wait for URL change to propagate to reactive var and re-render
   // Should now show landing view
-  await expect(page.getByTestId("corpus-home-landing")).toBeVisible();
+  await expect(page.getByTestId("corpus-home-landing")).toBeVisible({
+    timeout: 10000,
+  });
   await expect(page.getByTestId("corpus-home-details")).toBeHidden();
 });
 
