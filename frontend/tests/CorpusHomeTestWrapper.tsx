@@ -7,6 +7,8 @@ import { CorpusHome } from "../src/components/corpuses/CorpusHome";
 import { CorpusType } from "../src/types/graphql-api";
 import { relayStylePagination } from "@apollo/client/utilities";
 import {
+  corpusDetailView,
+  CorpusDetailViewType,
   corpusHomeView,
   CorpusHomeViewType,
   tocExpandAll,
@@ -45,23 +47,33 @@ const createTestCache = () =>
 interface Props {
   mocks: ReadonlyArray<MockedResponse>;
   corpus: CorpusType;
+  /** Initial view for landing/details switch */
+  initialView?: CorpusDetailViewType;
+  /** Initial home view for About/TOC switch (within details view) */
   initialHomeView?: CorpusHomeViewType | null;
   initialTocExpanded?: boolean;
 }
 
 /**
  * Helper component that simulates CentralRouteManager Phase 2 behavior
- * by setting the corpusHomeView and tocExpandAll reactive vars from URL params
+ * by setting the reactive vars from URL params
  */
 const RouteParamInitializer: React.FC<{
   children: React.ReactNode;
+  initialView?: CorpusDetailViewType;
   initialHomeView?: CorpusHomeViewType | null;
   initialTocExpanded?: boolean;
-}> = ({ children, initialHomeView, initialTocExpanded }) => {
+}> = ({ children, initialView, initialHomeView, initialTocExpanded }) => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Simulate CentralRouteManager Phase 2: parse homeView from URL
+    // Simulate CentralRouteManager Phase 2: parse view from URL
+    const viewParam = searchParams.get("view");
+    const newView: CorpusDetailViewType =
+      viewParam === "details" ? "details" : initialView ?? "landing";
+    corpusDetailView(newView);
+
+    // Parse homeView from URL (for details view About/TOC tabs)
     const homeViewParam = searchParams.get("homeView");
     const newHomeView: CorpusHomeViewType | null =
       homeViewParam === "toc" || homeViewParam === "about"
@@ -75,10 +87,11 @@ const RouteParamInitializer: React.FC<{
 
     // Cleanup on unmount
     return () => {
+      corpusDetailView("landing");
       corpusHomeView(null);
       tocExpandAll(false);
     };
-  }, [searchParams, initialHomeView, initialTocExpanded]);
+  }, [searchParams, initialView, initialHomeView, initialTocExpanded]);
 
   return <>{children}</>;
 };
@@ -86,6 +99,7 @@ const RouteParamInitializer: React.FC<{
 export const CorpusHomeTestWrapper: React.FC<Props> = ({
   mocks,
   corpus,
+  initialView,
   initialHomeView,
   initialTocExpanded,
 }) => {
@@ -97,8 +111,11 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
     totalExtracts: 0,
   };
 
-  // Build initial route with homeView and tocExpanded query params if specified
+  // Build initial route with query params if specified
   const params: string[] = [];
+  if (initialView === "details") {
+    params.push("view=details");
+  }
   if (initialHomeView) {
     params.push(`homeView=${initialHomeView}`);
   }
@@ -113,6 +130,7 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
       <MemoryRouter initialEntries={[initialRoute]}>
         <MockedProvider mocks={mocks} cache={createTestCache()} addTypename>
           <RouteParamInitializer
+            initialView={initialView}
             initialHomeView={initialHomeView}
             initialTocExpanded={initialTocExpanded}
           >
