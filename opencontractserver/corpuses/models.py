@@ -194,6 +194,12 @@ class Corpus(TreeNode):
     # Error status
     error = django.db.models.BooleanField(default=False)
 
+    # Personal corpus flag
+    is_personal = django.db.models.BooleanField(
+        default=False,
+        help_text="True if this is the user's personal 'My Documents' corpus",
+    )
+
     # Timing variables
     created = django.db.models.DateTimeField(default=timezone.now)
     modified = django.db.models.DateTimeField(default=timezone.now, blank=True)
@@ -310,13 +316,19 @@ class Corpus(TreeNode):
             django.db.models.Index(fields=["user_lock"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
+            django.db.models.Index(fields=["creator", "is_personal"]),
         ]
         ordering = ("created",)
         base_manager_name = "objects"
         constraints = [
             django.db.models.UniqueConstraint(
                 fields=["creator", "slug"], name="uniq_corpus_slug_per_creator_cs"
-            )
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["creator"],
+                condition=django.db.models.Q(is_personal=True),
+                name="one_personal_corpus_per_user",
+            ),
         ]
 
     # Override save to update modified on save
@@ -374,6 +386,50 @@ class Corpus(TreeNode):
             A tuple of (embedder path, embeddings list), or (None, None) on failure.
         """
         return generate_embeddings_from_text(text, corpus_id=self.pk)
+
+    # --------------------------------------------------------------------- #
+    # Personal Corpus Management                                            #
+    # --------------------------------------------------------------------- #
+
+    @classmethod
+    def get_or_create_personal_corpus(cls, user) -> "Corpus":
+        """
+        Get or create the user's personal "My Documents" corpus.
+
+        Each user has exactly one personal corpus (enforced by UniqueConstraint).
+        This method is idempotent - calling it multiple times returns the same corpus.
+
+        Args:
+            user: The User instance to get/create personal corpus for
+
+        Returns:
+            Corpus: The user's personal corpus
+
+        Raises:
+            IntegrityError: If concurrent creation attempts occur (handled by get_or_create)
+        """
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
+        with transaction.atomic():
+            corpus, created = cls.objects.get_or_create(
+                creator=user,
+                is_personal=True,
+                defaults={
+                    "title": "My Documents",
+                    "description": "Your personal document collection",
+                    "is_public": False,
+                },
+            )
+
+            if created:
+                logger.info(f"Created personal corpus {corpus.pk} for user {user.pk}")
+                # Grant full permissions to the user
+                set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.ALL])
+
+        return corpus
 
     # --------------------------------------------------------------------- #
     # Document Management - Issue #654                                     #
@@ -468,15 +524,12 @@ class Corpus(TreeNode):
                 is_current=True,
                 parent=None,  # Root of NEW content tree
                 source_document=document,  # Provenance tracking (Rule I2)
-                # Use provided structural_annotation_set if given (for sharing duplicates),
-                # otherwise duplicate for corpus isolation (per-corpus embeddings)
+                # Reuse structural_annotation_set instead of duplicating
+                # This avoids duplicating annotations/embeddings - embeddings are
+                # added incrementally based on the corpus's preferred_embedder
                 structural_annotation_set=(
                     doc_kwargs.get("structural_annotation_set")
-                    or (
-                        document.structural_annotation_set.duplicate(corpus_id=self.pk)
-                        if document.structural_annotation_set
-                        else None
-                    )
+                    or document.structural_annotation_set
                 ),
                 creator=user,
                 # CRITICAL: Set processing_started to prevent ingest signal from firing
@@ -500,6 +553,20 @@ class Corpus(TreeNode):
                 f"Created corpus-isolated copy {corpus_copy.pk} from doc {document.pk} "
                 f"in corpus {self.pk} (structural_set={corpus_copy.structural_annotation_set_id})"
             )
+
+            # Queue task to ensure embeddings exist for this corpus's embedder
+            # This handles the case where the structural set was created with a different
+            # embedder than this corpus uses
+            if corpus_copy.structural_annotation_set:
+                from opencontractserver.tasks.corpus_tasks import (
+                    ensure_embeddings_for_corpus,
+                )
+
+                ss_id = corpus_copy.structural_annotation_set_id
+                c_id = self.pk
+                transaction.on_commit(
+                    lambda: ensure_embeddings_for_corpus.delay(ss_id, c_id)
+                )
 
             # Check if path is occupied
             occupied_path = DocumentPath.objects.filter(
