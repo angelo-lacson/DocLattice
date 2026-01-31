@@ -395,6 +395,14 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     onViewModeChange?.(inThreadView);
   }, [inThreadView, onViewModeChange]);
 
+  // Reset inline selection when unmounting to prevent stale state
+  // when navigating back to the Discussions tab
+  useEffect(() => {
+    return () => {
+      setSelectedThreadId(null);
+    };
+  }, [setSelectedThreadId]);
+
   // Fetch all threads for stats calculation
   const { data: threadsData } = useQuery<
     GetConversationsOutputs,

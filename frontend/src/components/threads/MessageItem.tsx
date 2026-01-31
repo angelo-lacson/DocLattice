@@ -48,19 +48,13 @@ import {
   DeleteMessageOutput,
 } from "../../graphql/mutations";
 import { DEFAULT_AGENT_COLOR } from "../../assets/configurations/constants";
+import { hexToRgba, isValidHexColor } from "../../utils/colorUtils";
 
 /**
  * Validates that a value is a string
  */
 function isString(value: unknown): value is string {
   return typeof value === "string";
-}
-
-/**
- * Validates that a string is a valid hex color (3 or 6 digit format)
- */
-function isValidHexColor(value: string): boolean {
-  return /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/.test(value);
 }
 
 /**
@@ -121,41 +115,6 @@ interface MessageItemProps {
   currentUserId?: string;
   /** Parent message author for "Replying to" display */
   parentAuthor?: string;
-}
-
-/**
- * Normalizes a 3-digit hex color to 6-digit format.
- * e.g., "#abc" -> "#aabbcc"
- */
-function normalizeHexColor(hex: string): string {
-  const shortHexMatch = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex);
-  if (shortHexMatch) {
-    return `#${shortHexMatch[1]}${shortHexMatch[1]}${shortHexMatch[2]}${shortHexMatch[2]}${shortHexMatch[3]}${shortHexMatch[3]}`;
-  }
-  return hex;
-}
-
-/**
- * Helper to create an rgba color from a hex color with alpha.
- * Supports both 3-digit (#abc) and 6-digit (#aabbcc) hex formats.
- */
-export function hexToRgba(
-  hex: string | null | undefined,
-  alpha: number
-): string {
-  // Guard against null/undefined
-  if (!hex) return `rgba(74, 144, 226, ${alpha})`; // Fallback to default blue
-
-  // Normalize 3-digit hex to 6-digit
-  const normalizedHex = normalizeHexColor(hex);
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(
-    normalizedHex
-  );
-  if (!result) return `rgba(74, 144, 226, ${alpha})`; // Fallback to default blue
-  return `rgba(${parseInt(result[1], 16)}, ${parseInt(
-    result[2],
-    16
-  )}, ${parseInt(result[3], 16)}, ${alpha})`;
 }
 
 /**
