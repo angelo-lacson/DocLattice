@@ -511,42 +511,50 @@ def process_documents_zip(
                             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         ]:
-                            if corpus_obj:
-                                # Use import_content to create document directly in corpus
-                                # This avoids creating orphan standalone documents
-                                # backend_lock=True ensures document shows as processing
-                                document, status, path_record = (
-                                    corpus_obj.import_content(
-                                        content=file_bytes,
-                                        path=doc_path,
-                                        user=user_obj,
-                                        title=doc_title,
-                                        description=doc_description,
-                                        custom_meta=custom_meta,
-                                        is_public=make_public,
-                                        file_type=kind,
-                                        backend_lock=True,
-                                    )
+                            # Use corpus_obj if provided, otherwise use personal corpus
+                            target_corpus = corpus_obj
+                            if target_corpus is None:
+                                # Get or create user's personal corpus
+                                target_corpus = Corpus.get_or_create_personal_corpus(
+                                    user_obj
                                 )
                                 logger.info(
-                                    f"process_documents_zip() - Created document {document.id} "
-                                    f"in corpus {corpus_obj.id} (status: {status})"
+                                    f"process_documents_zip() - Using personal corpus "
+                                    f"{target_corpus.id} for user {user_obj.id}"
                                 )
-                            else:
-                                # Standalone upload (no corpus) - legacy path
-                                pdf_file = ContentFile(file_bytes, name=filename)
-                                document = Document(
-                                    creator=user_obj,
+
+                            # Use import_content to create document directly in corpus
+                            # This avoids creating orphan standalone documents
+                            # backend_lock=True ensures document shows as processing
+                            document, status, path_record = (
+                                target_corpus.import_content(
+                                    content=file_bytes,
+                                    path=doc_path,
+                                    user=user_obj,
                                     title=doc_title,
                                     description=doc_description,
                                     custom_meta=custom_meta,
-                                    pdf_file=pdf_file,
-                                    backend_lock=True,
                                     is_public=make_public,
                                     file_type=kind,
+                                    backend_lock=True,
                                 )
-                                document.save()
+                            )
+                            logger.info(
+                                f"process_documents_zip() - Created document {document.id} "
+                                f"in corpus {target_corpus.id} (status: {status})"
+                            )
                         elif kind in ["text/plain", "application/txt"]:
+                            # Use corpus_obj if provided, otherwise use personal corpus
+                            target_corpus = corpus_obj
+                            if target_corpus is None:
+                                target_corpus = Corpus.get_or_create_personal_corpus(
+                                    user_obj
+                                )
+                                logger.info(
+                                    f"process_documents_zip() - Using personal corpus "
+                                    f"{target_corpus.id} for text upload by user {user_obj.id}"
+                                )
+
                             txt_extract_file = ContentFile(file_bytes, name=filename)
                             document = Document(
                                 creator=user_obj,
@@ -560,22 +568,21 @@ def process_documents_zip(
                             )
                             document.save()
 
-                            # For text files with corpus, create DocumentPath directly
-                            if corpus_obj:
-                                DocumentPath.objects.create(
-                                    document=document,
-                                    corpus=corpus_obj,
-                                    folder=None,
-                                    path=doc_path,
-                                    version_number=1,
-                                    is_current=True,
-                                    is_deleted=False,
-                                    creator=user_obj,
-                                )
-                                logger.info(
-                                    f"process_documents_zip() - Created text document {document.id} "
-                                    f"in corpus {corpus_obj.id}"
-                                )
+                            # Create DocumentPath to link document to corpus
+                            DocumentPath.objects.create(
+                                document=document,
+                                corpus=target_corpus,
+                                folder=None,
+                                path=doc_path,
+                                version_number=1,
+                                is_current=True,
+                                is_deleted=False,
+                                creator=user_obj,
+                            )
+                            logger.info(
+                                f"process_documents_zip() - Created text document {document.id} "
+                                f"in corpus {target_corpus.id}"
+                            )
 
                         if document:
                             # Set permissions for the document
