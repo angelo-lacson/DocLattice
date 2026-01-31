@@ -130,6 +130,10 @@ from doclatticeserver.annotations.models import (
     Note,
     Relationship,
 )
+from doclatticeserver.constants.document_processing import (
+    DEFAULT_DOCUMENT_PATH_PREFIX,
+    MAX_FILENAME_LENGTH,
+)
 from doclatticeserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from doclatticeserver.corpuses.models import (
     Corpus,
@@ -1760,9 +1764,10 @@ class UploadDocument(graphene.Mutation):
 
                     # Generate path from filename
                     safe_filename = "".join(
-                        c if c.isalnum() or c in "-_." else "_" for c in filename[:100]
+                        c if c.isalnum() or c in "-_." else "_"
+                        for c in filename[:MAX_FILENAME_LENGTH]
                     )
-                    doc_path = f"/documents/{safe_filename}"
+                    doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 
                     # Use import_content for content-based deduplication
                     document, status, path_record = corpus.import_content(
@@ -1824,9 +1829,9 @@ class UploadDocument(graphene.Mutation):
                         # Generate path from filename
                         safe_filename = "".join(
                             c if c.isalnum() or c in "-_." else "_"
-                            for c in filename[:100]
+                            for c in filename[:MAX_FILENAME_LENGTH]
                         )
-                        doc_path = f"/documents/{safe_filename}"
+                        doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 
                         # Use import_content for consistency with corpus uploads
                         document, status, path_record = personal_corpus.import_content(
@@ -1869,37 +1874,26 @@ class UploadDocument(graphene.Mutation):
                             f"for text file upload by user {user.id}"
                         )
 
-                        # For text files, we still need to create the document first
-                        # then add to corpus, as import_content expects PDF bytes
-                        txt_extract_file = ContentFile(file_bytes, name=filename)
-                        document = Document(
-                            creator=user,
+                        # Use import_content() which routes based on file_type
+                        document, status, doc_path = personal_corpus.import_content(
+                            content=file_bytes,
+                            user=user,
+                            filename=filename,
+                            file_type=kind,
                             title=title,
                             description=description,
                             custom_meta=custom_meta,
-                            txt_extract_file=txt_extract_file,
                             backend_lock=True,
                             is_public=make_public,
-                            file_type=kind,
                             slug=slug,
                         )
-                        document.save()
 
                         set_permissions_for_obj_to_user(
                             user, document, [PermissionTypes.CRUD]
                         )
 
-                        # Add document to personal corpus
-                        corpus_doc, status, path_record = personal_corpus.add_document(
-                            document=document,
-                            user=user,
-                        )
-
-                        # Return the corpus copy (consistent with PDF upload flow)
-                        document = corpus_doc
-
                         logger.info(
-                            f"[UPLOAD] Text document {corpus_doc.id} uploaded "
+                            f"[UPLOAD] Text document {document.id} uploaded "
                             f"to personal corpus {personal_corpus.id}"
                         )
 
