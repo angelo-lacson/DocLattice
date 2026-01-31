@@ -1,7 +1,12 @@
 import React from "react";
 import styled from "styled-components";
 import { HelpCircle, Lightbulb, AlertCircle, CheckCircle } from "lucide-react";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_TRANSITIONS,
+} from "./styles/discussionStyles";
 
 /**
  * Discussion category types that can be inferred from thread content
@@ -17,52 +22,54 @@ interface DiscussionTypeBadgeProps {
 const BadgeContainer = styled.span<{ $category: DiscussionCategory }>`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: ${CORPUS_RADII.full};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   ${(props) => {
     switch (props.$category) {
       case "question":
         return `
-          background: ${color.T2};
-          color: ${color.T9};
-          border: 1px solid ${color.T4};
+          background: ${CORPUS_COLORS.teal[50]};
+          color: ${CORPUS_COLORS.teal[700]};
+          border: 1px solid ${CORPUS_COLORS.teal[200]};
         `;
       case "idea":
         return `
-          background: ${color.G2};
-          color: ${color.G9};
-          border: 1px solid ${color.G4};
+          background: #fef3c7;
+          color: #92400e;
+          border: 1px solid #fcd34d;
         `;
       case "help":
         return `
-          background: ${color.R2};
-          color: ${color.R8};
-          border: 1px solid ${color.R4};
+          background: #fee2e2;
+          color: #991b1b;
+          border: 1px solid #fca5a5;
         `;
       case "answered":
         return `
-          background: ${color.G2};
-          color: ${color.G8};
-          border: 1px solid ${color.G5};
+          background: #dcfce7;
+          color: #166534;
+          border: 1px solid #86efac;
         `;
       default:
         return `
-          background: ${color.N3};
-          color: ${color.N8};
-          border: 1px solid ${color.N5};
+          background: ${CORPUS_COLORS.slate[100]};
+          color: ${CORPUS_COLORS.slate[600]};
+          border: 1px solid ${CORPUS_COLORS.slate[300]};
         `;
     }
   }}
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 0.75rem;
+    height: 0.75rem;
     flex-shrink: 0;
   }
 `;

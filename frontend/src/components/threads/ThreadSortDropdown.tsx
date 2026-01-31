@@ -3,8 +3,13 @@ import styled from "styled-components";
 import { useAtom } from "jotai";
 import { ChevronDown, Check } from "lucide-react";
 import { threadSortAtom, ThreadSortOption } from "../../atoms/threadAtoms";
-import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+} from "./styles/discussionStyles";
 
 const DropdownContainer = styled.div`
   position: relative;
@@ -13,41 +18,43 @@ const DropdownContainer = styled.div`
 const DropdownButton = styled.button`
   display: flex;
   align-items: center;
-  gap: ${spacing.xs};
-  padding: ${spacing.xs} ${spacing.sm};
-  border: 1px solid ${color.N4};
-  border-radius: 6px;
-  background: ${color.N1};
-  color: ${color.N10};
-  font-size: 14px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  background: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[700]};
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    border-color: ${color.B5};
-    background: ${color.N2};
+    border-color: ${CORPUS_COLORS.teal[400]};
+    background: ${CORPUS_COLORS.teal[50]};
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
+    color: ${CORPUS_COLORS.slate[500]};
   }
 `;
 
 const DropdownMenu = styled.div<{ $isOpen: boolean }>`
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 0.25rem);
   right: 0;
-  min-width: 180px;
-  background: ${color.N1};
-  border: 1px solid ${color.N4};
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 12rem;
+  background: ${CORPUS_COLORS.white};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  box-shadow: ${CORPUS_SHADOWS.lg};
   opacity: ${(props) => (props.$isOpen ? 1 : 0)};
   visibility: ${(props) => (props.$isOpen ? "visible" : "hidden")};
   transform: ${(props) =>
     props.$isOpen ? "translateY(0)" : "translateY(-8px)"};
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
   z-index: 100;
 `;
 
@@ -56,47 +63,52 @@ const MenuItem = styled.button<{ $isActive: boolean }>`
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: ${spacing.sm} ${spacing.md};
+  padding: 0.625rem 0.875rem;
   border: none;
-  background: ${(props) => (props.$isActive ? color.B1 : "transparent")};
-  color: ${(props) => (props.$isActive ? color.B8 : color.N10)};
-  font-size: 14px;
+  background: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.teal[50] : "transparent"};
+  color: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.slate[700]};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.875rem;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    background: ${(props) => (props.$isActive ? color.B1 : color.N2)};
+    background: ${(props) =>
+      props.$isActive ? CORPUS_COLORS.teal[50] : CORPUS_COLORS.slate[50]};
   }
 
   &:first-child {
-    border-radius: 6px 6px 0 0;
+    border-radius: ${CORPUS_RADII.md} ${CORPUS_RADII.md} 0 0;
   }
 
   &:last-child {
-    border-radius: 0 0 6px 6px;
+    border-radius: 0 0 ${CORPUS_RADII.md} ${CORPUS_RADII.md};
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
     flex-shrink: 0;
+    color: ${CORPUS_COLORS.teal[600]};
   }
 `;
 
 const MenuItemContent = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 `;
 
 const MenuItemLabel = styled.span`
-  font-weight: 500;
+  font-weight: 600;
 `;
 
 const MenuItemDescription = styled.span`
-  font-size: 12px;
-  color: ${color.N6};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[500]};
 `;
 
 interface SortOption {

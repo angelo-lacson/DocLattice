@@ -1,8 +1,13 @@
 import React, { useState, useCallback } from "react";
 import { useMutation, ApolloCache } from "@apollo/client";
-import styled from "styled-components";
-import { ChevronUp, ChevronDown } from "lucide-react";
-import { color } from "../../theme/colors";
+import styled, { css } from "styled-components";
+import { ThumbsUp, ThumbsDown, ChevronUp, ChevronDown } from "lucide-react";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_TRANSITIONS,
+} from "./styles/discussionStyles";
 import {
   UPVOTE_MESSAGE,
   DOWNVOTE_MESSAGE,
@@ -16,48 +21,43 @@ import {
   VoteMessageResponse,
 } from "../../graphql/mutations";
 
-const Container = styled.div`
+const Container = styled.div<{ $compact?: boolean }>`
   display: flex;
-  flex-direction: column;
+  flex-direction: ${({ $compact }) => ($compact ? "row" : "column")};
   align-items: center;
-  gap: 2px;
+  gap: ${({ $compact }) => ($compact ? "0.125rem" : "0")};
 `;
 
 const VoteButton = styled.button<{
   $isActive?: boolean;
   $variant?: "up" | "down";
+  $compact?: boolean;
 }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: ${({ $compact }) => ($compact ? "1.5rem" : "1.75rem")};
+  height: ${({ $compact }) => ($compact ? "1.5rem" : "1.75rem")};
   border: none;
-  border-radius: 4px;
-  background: ${({ $isActive, $variant, theme }) => {
-    if ($isActive && $variant === "up") return theme.color.success + "20";
-    if ($isActive && $variant === "down") return color.R7 + "20";
+  border-radius: ${CORPUS_RADII.sm};
+  background: ${({ $isActive, $variant }) => {
+    if ($isActive && $variant === "up") return CORPUS_COLORS.teal[50];
+    if ($isActive && $variant === "down") return "#fee2e2";
     return "transparent";
   }};
-  color: ${({ $isActive, $variant, theme }) => {
-    if ($isActive && $variant === "up") return theme.color.success;
-    if ($isActive && $variant === "down") return color.R7;
-    return color.N7;
+  color: ${({ $isActive, $variant }) => {
+    if ($isActive && $variant === "up") return CORPUS_COLORS.teal[700];
+    if ($isActive && $variant === "down") return "#dc2626";
+    return CORPUS_COLORS.slate[400];
   }};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover:not(:disabled) {
-    background: ${({ $variant, theme }) => {
-      if ($variant === "up") return theme.color.success + "15";
-      if ($variant === "down") return color.R7 + "15";
-      return color.N2;
-    }};
-    color: ${({ $variant, theme }) => {
-      if ($variant === "up") return theme.color.success;
-      if ($variant === "down") return color.R7;
-      return color.N10;
-    }};
+    background: ${({ $variant }) =>
+      $variant === "up" ? CORPUS_COLORS.teal[50] : "#fee2e2"};
+    color: ${({ $variant }) =>
+      $variant === "up" ? CORPUS_COLORS.teal[700] : "#dc2626"};
   }
 
   &:disabled {
@@ -66,21 +66,22 @@ const VoteButton = styled.button<{
   }
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: ${({ $compact }) => ($compact ? "0.875rem" : "1.125rem")};
+    height: ${({ $compact }) => ($compact ? "0.875rem" : "1.125rem")};
   }
 `;
 
-const VoteCount = styled.div<{ $score: number }>`
-  font-size: 14px;
+const VoteCount = styled.div<{ $score: number; $compact?: boolean }>`
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: ${({ $compact }) => ($compact ? "0.75rem" : "0.8125rem")};
   font-weight: 600;
-  color: ${({ $score, theme }) => {
-    if ($score > 0) return theme.color.success;
-    if ($score < 0) return color.R7;
-    return color.N7;
+  color: ${({ $score }) => {
+    if ($score > 0) return CORPUS_COLORS.teal[700];
+    if ($score < 0) return "#dc2626";
+    return CORPUS_COLORS.slate[500];
   }};
-  padding: 2px 0;
-  min-width: 24px;
+  padding: ${({ $compact }) => ($compact ? "0 0.25rem" : "0.125rem 0")};
+  min-width: ${({ $compact }) => ($compact ? "auto" : "1.5rem")};
   text-align: center;
 `;
 
@@ -89,12 +90,13 @@ const ErrorMessage = styled.div`
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-top: 4px;
-  padding: 6px 10px;
-  background: ${({ theme }) => color.R7};
+  margin-top: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  background: #dc2626;
   color: white;
-  font-size: 12px;
-  border-radius: 4px;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  border-radius: ${CORPUS_RADII.sm};
   white-space: nowrap;
   z-index: 10;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -106,7 +108,7 @@ const ErrorMessage = styled.div`
     left: 50%;
     transform: translateX(-50%);
     border: 4px solid transparent;
-    border-bottom-color: ${({ theme }) => color.R7};
+    border-bottom-color: #dc2626;
   }
 `;
 
@@ -131,6 +133,8 @@ export interface VoteButtonsProps {
   disabled?: boolean;
   /** Optional callback when vote changes */
   onVoteChange?: (newScore: number) => void;
+  /** Compact horizontal layout with thumbs icons */
+  compact?: boolean;
 }
 
 /**
@@ -167,6 +171,7 @@ export const VoteButtons = React.memo(function VoteButtons({
   currentUserId,
   disabled = false,
   onVoteChange,
+  compact = false,
 }: VoteButtonsProps) {
   const [error, setError] = useState<string | null>(null);
   const [optimisticVote, setOptimisticVote] = useState<string | null>(null);
@@ -339,31 +344,38 @@ export const VoteButtons = React.memo(function VoteButtons({
     displayScore += 1;
   }
 
+  const UpIcon = compact ? ThumbsUp : ChevronUp;
+  const DownIcon = compact ? ThumbsDown : ChevronDown;
+
   return (
     <Wrapper>
-      <Container>
+      <Container $compact={compact}>
         <VoteButton
           $variant="up"
           $isActive={currentVote === "UPVOTE"}
+          $compact={compact}
           onClick={handleUpvote}
           disabled={disabled || loading}
           title={isOwnMessage ? "Cannot vote on own message" : "Upvote"}
           aria-label="Upvote"
         >
-          <ChevronUp />
+          <UpIcon />
         </VoteButton>
 
-        <VoteCount $score={displayScore}>{displayScore}</VoteCount>
+        <VoteCount $score={displayScore} $compact={compact}>
+          {displayScore}
+        </VoteCount>
 
         <VoteButton
           $variant="down"
           $isActive={currentVote === "DOWNVOTE"}
+          $compact={compact}
           onClick={handleDownvote}
           disabled={disabled || loading}
           title={isOwnMessage ? "Cannot vote on own message" : "Downvote"}
           aria-label="Downvote"
         >
-          <ChevronDown />
+          <DownIcon />
         </VoteButton>
       </Container>
 

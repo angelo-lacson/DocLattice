@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from "react";
+import styled from "styled-components";
 import { formatDistanceToNow } from "date-fns";
+import { CORPUS_COLORS, CORPUS_FONTS } from "./styles/discussionStyles";
 
 interface RelativeTimeProps {
   date: string | Date;
   suffix?: boolean;
   updateInterval?: number; // milliseconds
 }
+
+const TimeSpan = styled.span`
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[400]};
+  white-space: nowrap;
+`;
 
 /**
  * Displays timestamp as relative time (e.g., "2 hours ago")
@@ -32,5 +41,5 @@ export function RelativeTime({
   // Show full timestamp on hover
   const fullTimestamp = new Date(date).toLocaleString();
 
-  return <span title={fullTimestamp}>{time}</span>;
+  return <TimeSpan title={fullTimestamp}>{time}</TimeSpan>;
 }
