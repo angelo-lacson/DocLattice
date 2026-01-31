@@ -2502,6 +2502,74 @@ async def async_wrapper(ctx: RunContext[PydanticAIDependencies], *args, **kwargs
     return await original_func(*args, **kwargs)
 ```
 
+### 4. Vector Search Permission Layer
+
+**Locations**:
+- GraphQL: `config/graphql/queries.py:resolve_semantic_search`
+- Vector Store: `opencontractserver/llms/vector_stores/core_vector_stores.py`
+
+The vector search system implements its own permission layer to ensure users can only search annotations they have access to.
+
+#### GraphQL `semantic_search` Query
+
+The `semantic_search` query validates document/corpus access before creating the vector store:
+
+```python
+# Defense-in-depth check at GraphQL layer
+if document_pk:
+    if not Document.objects.visible_to_user(user).filter(id=document_pk).exists():
+        return []  # IDOR-safe: same response for not found vs. no permission
+
+if corpus_pk:
+    if not Corpus.objects.visible_to_user(user).filter(id=corpus_pk).exists():
+        return []  # IDOR-safe: same response for not found vs. no permission
+```
+
+#### CoreAnnotationVectorStore Permission Check
+
+The `CoreAnnotationVectorStore` class performs its own permission verification in `_build_base_queryset()`:
+
+```python
+# From core_vector_stores.py:_build_base_queryset()
+
+# Verify user has access to document
+if self.document_id is not None:
+    has_access = Document.objects.visible_to_user(user).filter(id=self.document_id).exists()
+    if not has_access:
+        return Annotation.objects.none()  # IDOR-safe
+
+# Verify user has access to corpus
+if self.corpus_id is not None:
+    has_access = Corpus.objects.visible_to_user(user).filter(id=self.corpus_id).exists()
+    if not has_access:
+        return Annotation.objects.none()  # IDOR-safe
+```
+
+#### Global Search Method
+
+The `global_search` class method uses the canonical `visible_to_user()` pattern:
+
+```python
+# Get all documents visible to user
+accessible_doc_ids = Document.objects.visible_to_user(user).filter(is_current=True).values_list("id", flat=True)
+
+# Filter annotations to accessible documents
+queryset = Annotation.objects.filter(
+    Q(document_id__in=accessible_doc_ids) |
+    Q(structural=True, structural_set__documents__in=accessible_doc_ids)
+)
+```
+
+#### Key Security Properties
+
+| Property | Implementation |
+|----------|----------------|
+| **IDOR Protection** | Returns empty results for both non-existent and inaccessible resources |
+| **Defense-in-depth** | Checks at GraphQL layer AND vector store layer |
+| **Visibility Pattern** | Uses `visible_to_user()` for all permission checks |
+| **Anonymous Support** | Anonymous users can search public documents/corpuses only |
+| **Structural Annotations** | Visible if user can access the document (always READ-only) |
+
 ### Permission Inheritance Model
 
 Agents inherit permissions from the **calling user**, not from the agent creator or any other privileged entity.
