@@ -15,6 +15,7 @@ from tree_queries.models import TreeNode
 
 from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
+    MAX_FILENAME_LENGTH,
 )
 from opencontractserver.corpuses.managers import CorpusActionExecutionManager
 from opencontractserver.shared.Models import BaseOCModel
@@ -500,7 +501,7 @@ class Corpus(TreeNode):
             if document.title:
                 safe_title = "".join(
                     c if c.isalnum() or c in "-_." else "_"
-                    for c in document.title[:100]
+                    for c in document.title[:MAX_FILENAME_LENGTH]
                 )
                 path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_title or f'doc_{document.pk}'}"
             else:
@@ -567,8 +568,9 @@ class Corpus(TreeNode):
 
                 ss_id = corpus_copy.structural_annotation_set_id
                 c_id = self.pk
+                # Use default args to capture values at lambda creation (not by reference)
                 transaction.on_commit(
-                    lambda: ensure_embeddings_for_corpus.delay(ss_id, c_id)
+                    lambda ss=ss_id, c=c_id: ensure_embeddings_for_corpus.delay(ss, c)
                 )
 
             # Check if path is occupied
@@ -751,7 +753,7 @@ class Corpus(TreeNode):
         if not path:
             safe_filename = "".join(
                 c if c.isalnum() or c in "-_." else "_"
-                for c in (filename or "document")[:100]
+                for c in (filename or "document")[:MAX_FILENAME_LENGTH]
             )
             path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 

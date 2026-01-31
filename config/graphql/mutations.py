@@ -132,6 +132,7 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
+    MAX_FILENAME_LENGTH,
 )
 from opencontractserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from opencontractserver.corpuses.models import (
@@ -1763,7 +1764,8 @@ class UploadDocument(graphene.Mutation):
 
                     # Generate path from filename
                     safe_filename = "".join(
-                        c if c.isalnum() or c in "-_." else "_" for c in filename[:100]
+                        c if c.isalnum() or c in "-_." else "_"
+                        for c in filename[:MAX_FILENAME_LENGTH]
                     )
                     doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 
@@ -1827,7 +1829,7 @@ class UploadDocument(graphene.Mutation):
                         # Generate path from filename
                         safe_filename = "".join(
                             c if c.isalnum() or c in "-_." else "_"
-                            for c in filename[:100]
+                            for c in filename[:MAX_FILENAME_LENGTH]
                         )
                         doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 

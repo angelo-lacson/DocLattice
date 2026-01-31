@@ -10,6 +10,9 @@ DEFAULT_DOCUMENT_PATH_PREFIX = "/documents"
 # Controls how many annotations are processed per Celery task to prevent queue flooding
 EMBEDDING_BATCH_SIZE = 100
 
+# Maximum length for filename/title truncation when generating document paths
+MAX_FILENAME_LENGTH = 100
+
 # Maximum length for error message stored on Document.processing_error
 MAX_PROCESSING_ERROR_LENGTH = 5000
 

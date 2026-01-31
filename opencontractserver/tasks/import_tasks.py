@@ -21,6 +21,7 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
+    MAX_FILENAME_LENGTH,
 )
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
 from opencontractserver.documents.models import Document, DocumentPath
@@ -501,7 +502,7 @@ def process_documents_zip(
                         # Generate path for corpus document
                         safe_filename = "".join(
                             c if c.isalnum() or c in "-_." else "_"
-                            for c in base_filename[:100]
+                            for c in base_filename[:MAX_FILENAME_LENGTH]
                         )
                         doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 
