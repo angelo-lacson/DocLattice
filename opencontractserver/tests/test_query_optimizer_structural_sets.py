@@ -5,7 +5,8 @@ with StructuralAnnotationSet support.
 These tests verify that the query optimizers correctly return:
 1. Annotations/relationships from both document FK and structural_set FK
 2. Proper corpus filtering (structural_set items have corpus_id=NULL)
-3. Each corpus gets its own ISOLATED structural annotation set (not shared)
+3. Corpus copies SHARE the same structural annotation set (for efficiency)
+   - Embeddings are added incrementally per-corpus via ensure_embeddings_for_corpus task
 """
 
 import hashlib
@@ -39,15 +40,16 @@ class QueryOptimizerStructuralSetTests(TestCase):
         Set up test data with structural annotation sets.
 
         NOTE: When adding a document to a corpus, the structural annotation set is
-        DUPLICATED (not shared). This is intentional for corpus isolation - each
-        corpus needs its own copy of structural annotations for per-corpus embeddings.
+        SHARED (not duplicated). This is intentional for efficiency - annotations
+        and parsing artifacts are reused across corpus copies. Per-corpus embeddings
+        are handled incrementally via the ensure_embeddings_for_corpus task, which
+        adds embeddings for the corpus's preferred_embedder if they don't exist.
 
         The test creates:
         - An original document with a structural_annotation_set
-        - A corpus-isolated copy via corpus.add_document() which gets a DUPLICATED
+        - A corpus-isolated copy via corpus.add_document() which SHARES the same
           structural_annotation_set
-        - Structural annotations are created on the DUPLICATED set (after add_document)
-          so they can be found by the query optimizer
+        - Structural annotations are created on the shared set
         """
         self.user = User.objects.create_user(
             username="query_optimizer_struct_sets_tester",
@@ -92,15 +94,15 @@ class QueryOptimizerStructuralSetTests(TestCase):
             structural_annotation_set=self.source_structural_set,
         )
 
-        # Add document to corpus A (creates corpus-isolated copy with DUPLICATED structural set)
+        # Add document to corpus A (creates corpus-isolated copy that SHARES structural set)
         self.corpus_a_doc, _, _ = self.corpus_a.add_document(
             document=self.doc, user=self.user
         )
 
-        # Get the DUPLICATED structural set (this is what the corpus copy uses)
+        # Get the SHARED structural set (same as source document)
         self.corpus_a_structural_set = self.corpus_a_doc.structural_annotation_set
 
-        # Create structural annotations in the DUPLICATED set (the one the corpus copy uses)
+        # Create structural annotations in the shared set
         self.structural_annot1 = Annotation.objects.create(
             structural_set=self.corpus_a_structural_set,
             annotation_label=self.header_label,
@@ -118,7 +120,7 @@ class QueryOptimizerStructuralSetTests(TestCase):
             page=1,
         )
 
-        # Create a structural relationship in the DUPLICATED set
+        # Create a structural relationship in the shared set
         self.structural_rel = Relationship.objects.create(
             structural_set=self.corpus_a_structural_set,
             relationship_label=self.rel_label,
@@ -227,15 +229,15 @@ class QueryOptimizerStructuralSetTests(TestCase):
         self.assertEqual(len(non_structural_only), 1)
         self.assertEqual(non_structural_only[0].raw_text, "Corpus-specific annotation")
 
-    def test_multiple_corpus_copies_have_isolated_structural_sets(self):
+    def test_multiple_corpus_copies_share_structural_sets(self):
         """
-        Verify multiple corpus-isolated documents get SEPARATE structural annotation sets.
+        Verify multiple corpus-isolated documents SHARE the same structural annotation set.
 
-        Each corpus copy gets its own duplicated structural_annotation_set for
-        corpus isolation (needed for per-corpus embeddings with potentially different
-        embedders/dimensions).
+        This is intentional for efficiency - structural annotations and parsing artifacts
+        are reused across corpus copies. Per-corpus embeddings are handled incrementally
+        via the ensure_embeddings_for_corpus task (tested separately in corpus tasks tests).
         """
-        # Add same document to corpus B (will create a NEW duplicated structural set)
+        # Add same document to corpus B (will SHARE the same structural set)
         corpus_b_doc, _, _ = self.corpus_b.add_document(
             document=self.doc, user=self.user
         )
@@ -246,25 +248,11 @@ class QueryOptimizerStructuralSetTests(TestCase):
             self.user, self.corpus_b, [PermissionTypes.READ]
         )
 
-        # Each corpus copy should have its OWN structural set (NOT shared)
-        self.assertNotEqual(
+        # Both corpus copies should SHARE the same structural set
+        # This is the new design - structural sets are reused for efficiency
+        self.assertEqual(
             self.corpus_a_doc.structural_annotation_set_id,
             corpus_b_doc.structural_annotation_set_id,
-        )
-
-        # Get corpus B's structural set
-        corpus_b_structural_set = corpus_b_doc.structural_annotation_set
-
-        # Create structural annotations for corpus B's set
-        # (In production, the duplicate() method copies annotations, but for this test
-        # we create them fresh to avoid depending on duplicate() implementation details)
-        Annotation.objects.create(
-            structural_set=corpus_b_structural_set,
-            annotation_label=self.header_label,
-            creator=self.user,
-            raw_text="Corpus B Header",
-            structural=True,
-            page=1,
         )
 
         # Query annotations for corpus B copy
@@ -276,15 +264,13 @@ class QueryOptimizerStructuralSetTests(TestCase):
             )
         )
 
-        # Should include corpus B's structural annotations
+        # Should include the SHARED structural annotations (same as corpus A)
         annotation_texts = [a.raw_text for a in corpus_b_annotations]
-        self.assertIn("Corpus B Header", annotation_texts)
+        self.assertIn("Structural Header", annotation_texts)
+        self.assertIn("Structural Paragraph", annotation_texts)
 
-        # Should NOT include corpus A's structural annotations (they're in a different set)
-        self.assertNotIn("Structural Header", annotation_texts)
-        self.assertNotIn("Structural Paragraph", annotation_texts)
-
-        # And NOT corpus A's specific annotation
+        # Should NOT include corpus A's corpus-specific annotation
+        # (corpus-specific annotations are tied to a specific corpus, not shared)
         self.assertNotIn("Corpus-specific annotation", annotation_texts)
 
     def test_document_without_structural_set_works(self):
