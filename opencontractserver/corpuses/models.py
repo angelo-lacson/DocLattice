@@ -661,29 +661,24 @@ class Corpus(TreeNode):
         """
         Import content into this corpus with automatic file type handling.
 
-        Routes to appropriate handling based on file_type:
-        - Parseable formats (PDF, DOCX, etc.): Uses import_document() pipeline
-          with full versioning support (uploading to same path creates new version)
-        - Text files: Creates document directly without parsing
-
-        Note: Text files do NOT support path-based versioning. Uploading a text file
-        to an existing path will create a new document rather than a new version.
-        This is by design since text files skip the parsing pipeline and don't
-        benefit from version tracking in the same way as parsed documents.
+        All file types now use the unified import_document() pipeline which provides:
+        - Full versioning support (uploading to same path creates new version)
+        - Consistent storage (text files → txt_extract_file, binary → pdf_file)
+        - Path-based version tracking for all document types
 
         Args:
             content: File content bytes (required)
             user: The user performing the operation (required)
             path: The filesystem path within the corpus (auto-generated if not provided)
             folder: Optional CorpusFolder to place the document in
-            filename: Original filename (used for text files and path generation)
-            file_type: MIME type of the content (required for routing)
+            filename: Original filename (used for path generation if path not provided)
+            file_type: MIME type of the content (determines storage field)
             **doc_kwargs: Additional arguments for document creation (title, description, etc.)
 
         Returns:
             Tuple of (document, status, document_path) where status is one of:
             - 'created': New document at new path
-            - 'updated': New version at existing path (parseable formats only)
+            - 'updated': New version at existing path
 
         Raises:
             ValueError: If user or content is not provided
@@ -694,37 +689,41 @@ class Corpus(TreeNode):
         if content is None:
             raise ValueError("Content is required for import_content()")
 
+        from opencontractserver.documents.versioning import import_document
+
         # Determine file type - check doc_kwargs for backwards compatibility
         effective_file_type = file_type or doc_kwargs.get("file_type")
 
-        # Route based on file type
-        if effective_file_type in self.TEXT_MIMETYPES:
-            return self._create_text_document_internal(
-                content=content,
-                filename=filename,
-                user=user,
-                path=path,
-                folder=folder,
-                file_type=effective_file_type,
-                **doc_kwargs,
-            )
-        else:
-            # Default to parsing pipeline (PDFs, DOCX, etc.)
-            from opencontractserver.documents.versioning import import_document
-
-            # Generate path if not provided
-            if not path:
+        # Generate path if not provided
+        if not path:
+            if filename:
+                # Use filename to generate path
+                safe_filename = "".join(
+                    c if c.isalnum() or c in "-_." else "_"
+                    for c in filename[:MAX_FILENAME_LENGTH]
+                )
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
+            else:
                 path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/doc_{uuid.uuid4().hex[:8]}"
 
-            return import_document(
-                corpus=self,
-                path=path,
-                content=content,
-                user=user,
-                folder=folder,
-                file_type=effective_file_type,
-                **doc_kwargs,
-            )
+        # All file types now go through the unified versioning pipeline
+        # Text files are stored in txt_extract_file, binary files in pdf_file
+        doc, status, doc_path = import_document(
+            corpus=self,
+            path=path,
+            content=content,
+            user=user,
+            folder=folder,
+            file_type=effective_file_type,
+            **doc_kwargs,
+        )
+
+        # Maintain M2M relationship for backwards compatibility
+        # This allows legacy queries like Document.objects.filter(corpus=...)
+        # TODO: Remove once M2M is fully deprecated (see issue #835)
+        self.documents.add(doc)
+
+        return doc, status, doc_path
 
     def _create_text_document_internal(
         self,
@@ -737,72 +736,34 @@ class Corpus(TreeNode):
         **doc_kwargs,
     ) -> tuple:
         """
-        Internal method to create a text document directly in this corpus.
+        DEPRECATED: Use import_content() instead.
 
-        Text files don't need parsing - they are stored directly as txt_extract_file.
-
-        Args:
-            content: Text content bytes
-            filename: Original filename (used to name the file)
-            user: The user performing the operation
-            path: The filesystem path within the corpus
-            folder: Optional CorpusFolder to place the document in
-            file_type: MIME type (defaults to text/plain)
-            **doc_kwargs: Additional arguments for document creation
-
-        Returns:
-            Tuple of (document, 'created', document_path)
+        This method is kept for backwards compatibility but no longer supports
+        versioning. New code should use import_content() which routes all file
+        types through the unified versioning pipeline.
         """
-        from django.core.files.base import ContentFile
-
-        from opencontractserver.documents.models import Document, DocumentPath
-
-        # Generate path if not provided
-        if not path:
-            safe_filename = "".join(
-                c if c.isalnum() or c in "-_." else "_"
-                for c in (filename or "document")[:MAX_FILENAME_LENGTH]
-            )
-            path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
-
-        # Remove file_type from doc_kwargs if present (we use the parameter directly)
-        doc_kwargs.pop("file_type", None)
-
-        with transaction.atomic():
-            # Create the document with text content
-            txt_extract_file = ContentFile(content, name=filename or "document.txt")
-            document = Document.objects.create(
-                creator=user,
-                txt_extract_file=txt_extract_file,
-                file_type=file_type,
-                **doc_kwargs,
-            )
-
-            # Create DocumentPath to link document to corpus
-            document_path = DocumentPath.objects.create(
-                document=document,
-                corpus=self,
-                folder=folder,
-                path=path,
-                version_number=1,
-                is_current=True,
-                is_deleted=False,
-                creator=user,
-            )
-
-            # Maintain M2M relationship for backwards compatibility
-            self.documents.add(document)
-
-            logger.info(
-                f"Created text document {document.pk} in corpus {self.pk} at {path}"
-            )
-
-            return document, "created", document_path
+        logger.warning(
+            "_create_text_document_internal is deprecated. "
+            "Use import_content() for full versioning support."
+        )
+        return self.import_content(
+            content=content,
+            user=user,
+            path=path,
+            folder=folder,
+            filename=filename,
+            file_type=file_type,
+            **doc_kwargs,
+        )
 
     # Backwards compatibility alias
     def create_text_document(self, *args, **kwargs):
-        """Alias for import_content() with text files. Prefer import_content()."""
-        return self._create_text_document_internal(*args, **kwargs)
+        """DEPRECATED: Use import_content() instead."""
+        logger.warning(
+            "create_text_document is deprecated. "
+            "Use import_content() for full versioning support."
+        )
+        return self.import_content(*args, **kwargs)
 
     def remove_document(self, document=None, path: str = None, user=None):
         """

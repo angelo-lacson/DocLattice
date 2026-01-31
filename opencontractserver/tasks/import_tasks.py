@@ -24,7 +24,7 @@ from opencontractserver.constants.document_processing import (
     MAX_FILENAME_LENGTH,
 )
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
-from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.documents.models import Document
 from opencontractserver.types.dicts import (
     OpenContractsAnnotatedDocumentImportType,
     OpenContractsExportDataJsonPythonType,
@@ -1052,62 +1052,26 @@ def import_zip_with_folder_structure(
                     doc_path = None
 
                     try:
-                        if mime_type in [
-                            "application/pdf",
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        ]:
-                            # Use import_content to create document directly in corpus
-                            # backend_lock=True ensures document shows as processing
-                            added_doc, status, doc_path = corpus_obj.import_content(
-                                content=file_bytes,
-                                path=doc_path_str,
-                                user=user_obj,
-                                folder=doc_folder,
-                                title=doc_title,
-                                description=doc_description,
-                                custom_meta=custom_meta,
-                                is_public=make_public,
-                                file_type=mime_type,
-                                backend_lock=True,
-                            )
-                            logger.info(
-                                f"import_zip_with_folder_structure() - Created document "
-                                f"{added_doc.id} in corpus {corpus_obj.id} (status: {status})"
-                            )
-                        elif mime_type in ["text/plain", "application/txt"]:
-                            # For text files, create document and link to corpus
-                            txt_extract_file = ContentFile(
-                                file_bytes, name=entry.filename
-                            )
-                            added_doc = Document(
-                                creator=user_obj,
-                                title=doc_title,
-                                description=doc_description,
-                                custom_meta=custom_meta,
-                                txt_extract_file=txt_extract_file,
-                                backend_lock=True,
-                                is_public=make_public,
-                                file_type=mime_type,
-                            )
-                            added_doc.save()
-
-                            # Create DocumentPath to link document to corpus
-                            doc_path = DocumentPath.objects.create(
-                                document=added_doc,
-                                corpus=corpus_obj,
-                                folder=doc_folder,
-                                path=doc_path_str,
-                                version_number=1,
-                                is_current=True,
-                                is_deleted=False,
-                                creator=user_obj,
-                            )
-                            logger.info(
-                                f"import_zip_with_folder_structure() - Created text document "
-                                f"{added_doc.id} in corpus {corpus_obj.id}"
-                            )
+                        # All file types now use the unified import_content pipeline
+                        # which handles versioning and proper file storage (text files
+                        # go to txt_extract_file, binary files to pdf_file)
+                        added_doc, status, doc_path = corpus_obj.import_content(
+                            content=file_bytes,
+                            path=doc_path_str,
+                            user=user_obj,
+                            folder=doc_folder,
+                            filename=entry.filename,
+                            title=doc_title,
+                            description=doc_description,
+                            custom_meta=custom_meta,
+                            is_public=make_public,
+                            file_type=mime_type,
+                            backend_lock=True,
+                        )
+                        logger.info(
+                            f"import_zip_with_folder_structure() - Created document "
+                            f"{added_doc.id} in corpus {corpus_obj.id} (status: {status})"
+                        )
 
                         if added_doc:
                             # Set permissions for the document
