@@ -67,228 +67,232 @@ interface CorpusContextSidebarProps {
 /**
  * CorpusContextSidebar - Shows corpus context alongside thread details
  */
-export const CorpusContextSidebar: React.FC<CorpusContextSidebarProps> = ({
-  corpusId,
-}) => {
-  const { width } = useWindowDimensions();
-  const corpus = useReactiveVar(openedCorpus);
-  const [isExpanded, setIsExpanded] = useAtom(threadContextSidebarExpandedAtom);
+export const CorpusContextSidebar: React.FC<CorpusContextSidebarProps> =
+  React.memo(({ corpusId }) => {
+    const { width } = useWindowDimensions();
+    const corpus = useReactiveVar(openedCorpus);
+    const [isExpanded, setIsExpanded] = useAtom(
+      threadContextSidebarExpandedAtom
+    );
 
-  // Section expansion states
-  const [aboutExpanded, setAboutExpanded] = useState(true);
-  const [docsExpanded, setDocsExpanded] = useState(true);
-  const [statsExpanded, setStatsExpanded] = useState(true);
+    // Section expansion states
+    const [aboutExpanded, setAboutExpanded] = useState(true);
+    const [docsExpanded, setDocsExpanded] = useState(true);
+    const [statsExpanded, setStatsExpanded] = useState(true);
 
-  // Determine if we're in collapsible mode (medium screens)
-  const isCollapsible =
-    width >= SIDEBAR_BREAKPOINT_HIDE && width < SIDEBAR_BREAKPOINT_COLLAPSE;
+    // Determine if we're in collapsible mode (medium screens)
+    const isCollapsible =
+      width >= SIDEBAR_BREAKPOINT_HIDE && width < SIDEBAR_BREAKPOINT_COLLAPSE;
 
-  // Fetch corpus stats
-  const { data: statsData } = useQuery<
-    GetCorpusStatsOutputType,
-    { corpusId: string }
-  >(GET_CORPUS_STATS, {
-    variables: { corpusId },
-    skip: !corpusId,
-    fetchPolicy: "cache-and-network",
-  });
+    // Fetch corpus stats
+    const { data: statsData } = useQuery<
+      GetCorpusStatsOutputType,
+      { corpusId: string }
+    >(GET_CORPUS_STATS, {
+      variables: { corpusId },
+      skip: !corpusId,
+      fetchPolicy: "cache-and-network",
+    });
 
-  const stats: CorpusStats | null = statsData?.corpusStats ?? null;
+    const stats: CorpusStats | null = statsData?.corpusStats ?? null;
 
-  // Get description from corpus
-  const description = useMemo(() => {
-    if (!corpus) return null;
-    return corpus.description || null;
-  }, [corpus]);
+    // Get description from corpus
+    const description = useMemo(() => {
+      if (!corpus) return null;
+      return corpus.description || null;
+    }, [corpus]);
 
-  // Don't render on small screens
-  if (width < SIDEBAR_BREAKPOINT_HIDE) {
-    return null;
-  }
+    // Don't render on small screens
+    if (width < SIDEBAR_BREAKPOINT_HIDE) {
+      return null;
+    }
 
-  // Collapsed state (on medium screens when user collapsed it)
-  if (isCollapsible && !isExpanded) {
+    // Collapsed state (on medium screens when user collapsed it)
+    if (isCollapsible && !isExpanded) {
+      return (
+        <ContextSidebarContainer
+          $isExpanded={false}
+          $isCollapsible={isCollapsible}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          <CollapsedSidebar>
+            <ExpandSidebarButton
+              onClick={() => setIsExpanded(true)}
+              aria-label="Expand corpus context sidebar"
+              title="Expand sidebar"
+            >
+              <PanelRightOpen />
+            </ExpandSidebarButton>
+          </CollapsedSidebar>
+        </ContextSidebarContainer>
+      );
+    }
+
     return (
       <ContextSidebarContainer
-        $isExpanded={false}
+        $isExpanded={isExpanded}
         $isCollapsible={isCollapsible}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2 }}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3 }}
       >
-        <CollapsedSidebar>
-          <ExpandSidebarButton
-            onClick={() => setIsExpanded(true)}
-            aria-label="Expand corpus context sidebar"
-            title="Expand sidebar"
-          >
-            <PanelRightOpen />
-          </ExpandSidebarButton>
-        </CollapsedSidebar>
+        <SidebarHeader>
+          <SidebarTitle>{corpus?.title || "Corpus Info"}</SidebarTitle>
+          {isCollapsible && (
+            <ContextSidebarToggle
+              onClick={() => setIsExpanded(false)}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+            >
+              <PanelRightClose />
+            </ContextSidebarToggle>
+          )}
+        </SidebarHeader>
+
+        <SidebarContent>
+          {/* About Section */}
+          <SidebarSection>
+            <SectionHeader
+              $isExpanded={aboutExpanded}
+              onClick={() => setAboutExpanded(!aboutExpanded)}
+              aria-expanded={aboutExpanded}
+              aria-controls="sidebar-about-content"
+            >
+              <SectionTitle>
+                <BookOpen />
+                About
+              </SectionTitle>
+              <SectionChevron $isExpanded={aboutExpanded}>
+                <ChevronDown />
+              </SectionChevron>
+            </SectionHeader>
+            <AnimatePresence initial={false}>
+              {aboutExpanded && (
+                <SectionContent
+                  id="sidebar-about-content"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <SectionInner>
+                    {description ? (
+                      <CompactAboutWrapper>
+                        <SafeMarkdown>{description}</SafeMarkdown>
+                      </CompactAboutWrapper>
+                    ) : (
+                      <EmptySectionState>
+                        <BookOpen />
+                        <p>No description available</p>
+                      </EmptySectionState>
+                    )}
+                  </SectionInner>
+                </SectionContent>
+              )}
+            </AnimatePresence>
+          </SidebarSection>
+
+          {/* Documents Section */}
+          <SidebarSection>
+            <SectionHeader
+              $isExpanded={docsExpanded}
+              onClick={() => setDocsExpanded(!docsExpanded)}
+              aria-expanded={docsExpanded}
+              aria-controls="sidebar-docs-content"
+            >
+              <SectionTitle>
+                <FileText />
+                Documents
+                {stats?.totalDocs != null && (
+                  <span style={{ fontWeight: 400, color: "#94a3b8" }}>
+                    ({stats.totalDocs})
+                  </span>
+                )}
+              </SectionTitle>
+              <SectionChevron $isExpanded={docsExpanded}>
+                <ChevronDown />
+              </SectionChevron>
+            </SectionHeader>
+            <AnimatePresence initial={false}>
+              {docsExpanded && (
+                <SectionContent
+                  id="sidebar-docs-content"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <SectionInner>
+                    <CompactTocWrapper>
+                      <DocumentTableOfContents
+                        corpusId={corpusId}
+                        embedded
+                        maxDepth={2}
+                      />
+                    </CompactTocWrapper>
+                  </SectionInner>
+                </SectionContent>
+              )}
+            </AnimatePresence>
+          </SidebarSection>
+
+          {/* Stats Section */}
+          <SidebarSection>
+            <SectionHeader
+              $isExpanded={statsExpanded}
+              onClick={() => setStatsExpanded(!statsExpanded)}
+              aria-expanded={statsExpanded}
+              aria-controls="sidebar-stats-content"
+            >
+              <SectionTitle>
+                <BarChart3 />
+                Quick Stats
+              </SectionTitle>
+              <SectionChevron $isExpanded={statsExpanded}>
+                <ChevronDown />
+              </SectionChevron>
+            </SectionHeader>
+            <AnimatePresence initial={false}>
+              {statsExpanded && (
+                <SectionContent
+                  id="sidebar-stats-content"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <SectionInner>
+                    <StatsGrid>
+                      <StatItem>
+                        <StatValue>{stats?.totalDocs ?? 0}</StatValue>
+                        <StatLabel>Documents</StatLabel>
+                      </StatItem>
+                      <StatItem>
+                        <StatValue>{stats?.totalThreads ?? 0}</StatValue>
+                        <StatLabel>Discussions</StatLabel>
+                      </StatItem>
+                      <StatItem>
+                        <StatValue>{stats?.totalAnnotations ?? 0}</StatValue>
+                        <StatLabel>Annotations</StatLabel>
+                      </StatItem>
+                      <StatItem>
+                        <StatValue>{stats?.totalComments ?? 0}</StatValue>
+                        <StatLabel>Comments</StatLabel>
+                      </StatItem>
+                    </StatsGrid>
+                  </SectionInner>
+                </SectionContent>
+              )}
+            </AnimatePresence>
+          </SidebarSection>
+        </SidebarContent>
       </ContextSidebarContainer>
     );
-  }
+  });
 
-  return (
-    <ContextSidebarContainer
-      $isExpanded={isExpanded}
-      $isCollapsible={isCollapsible}
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <SidebarHeader>
-        <SidebarTitle>{corpus?.title || "Corpus Info"}</SidebarTitle>
-        {isCollapsible && (
-          <ContextSidebarToggle
-            onClick={() => setIsExpanded(false)}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-          >
-            <PanelRightClose />
-          </ContextSidebarToggle>
-        )}
-      </SidebarHeader>
-
-      <SidebarContent>
-        {/* About Section */}
-        <SidebarSection>
-          <SectionHeader
-            $isExpanded={aboutExpanded}
-            onClick={() => setAboutExpanded(!aboutExpanded)}
-            aria-expanded={aboutExpanded}
-            aria-controls="sidebar-about-content"
-          >
-            <SectionTitle>
-              <BookOpen />
-              About
-            </SectionTitle>
-            <SectionChevron $isExpanded={aboutExpanded}>
-              <ChevronDown />
-            </SectionChevron>
-          </SectionHeader>
-          <AnimatePresence initial={false}>
-            {aboutExpanded && (
-              <SectionContent
-                id="sidebar-about-content"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <SectionInner>
-                  {description ? (
-                    <CompactAboutWrapper>
-                      <SafeMarkdown>{description}</SafeMarkdown>
-                    </CompactAboutWrapper>
-                  ) : (
-                    <EmptySectionState>
-                      <BookOpen />
-                      <p>No description available</p>
-                    </EmptySectionState>
-                  )}
-                </SectionInner>
-              </SectionContent>
-            )}
-          </AnimatePresence>
-        </SidebarSection>
-
-        {/* Documents Section */}
-        <SidebarSection>
-          <SectionHeader
-            $isExpanded={docsExpanded}
-            onClick={() => setDocsExpanded(!docsExpanded)}
-            aria-expanded={docsExpanded}
-            aria-controls="sidebar-docs-content"
-          >
-            <SectionTitle>
-              <FileText />
-              Documents
-              {stats?.totalDocs != null && (
-                <span style={{ fontWeight: 400, color: "#94a3b8" }}>
-                  ({stats.totalDocs})
-                </span>
-              )}
-            </SectionTitle>
-            <SectionChevron $isExpanded={docsExpanded}>
-              <ChevronDown />
-            </SectionChevron>
-          </SectionHeader>
-          <AnimatePresence initial={false}>
-            {docsExpanded && (
-              <SectionContent
-                id="sidebar-docs-content"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <SectionInner>
-                  <CompactTocWrapper>
-                    <DocumentTableOfContents
-                      corpusId={corpusId}
-                      embedded
-                      maxDepth={2}
-                    />
-                  </CompactTocWrapper>
-                </SectionInner>
-              </SectionContent>
-            )}
-          </AnimatePresence>
-        </SidebarSection>
-
-        {/* Stats Section */}
-        <SidebarSection>
-          <SectionHeader
-            $isExpanded={statsExpanded}
-            onClick={() => setStatsExpanded(!statsExpanded)}
-            aria-expanded={statsExpanded}
-            aria-controls="sidebar-stats-content"
-          >
-            <SectionTitle>
-              <BarChart3 />
-              Quick Stats
-            </SectionTitle>
-            <SectionChevron $isExpanded={statsExpanded}>
-              <ChevronDown />
-            </SectionChevron>
-          </SectionHeader>
-          <AnimatePresence initial={false}>
-            {statsExpanded && (
-              <SectionContent
-                id="sidebar-stats-content"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <SectionInner>
-                  <StatsGrid>
-                    <StatItem>
-                      <StatValue>{stats?.totalDocs ?? 0}</StatValue>
-                      <StatLabel>Documents</StatLabel>
-                    </StatItem>
-                    <StatItem>
-                      <StatValue>{stats?.totalThreads ?? 0}</StatValue>
-                      <StatLabel>Discussions</StatLabel>
-                    </StatItem>
-                    <StatItem>
-                      <StatValue>{stats?.totalAnnotations ?? 0}</StatValue>
-                      <StatLabel>Annotations</StatLabel>
-                    </StatItem>
-                    <StatItem>
-                      <StatValue>{stats?.totalComments ?? 0}</StatValue>
-                      <StatLabel>Comments</StatLabel>
-                    </StatItem>
-                  </StatsGrid>
-                </SectionInner>
-              </SectionContent>
-            )}
-          </AnimatePresence>
-        </SidebarSection>
-      </SidebarContent>
-    </ContextSidebarContainer>
-  );
-};
+// Display name for React DevTools
+CorpusContextSidebar.displayName = "CorpusContextSidebar";
 
 export default CorpusContextSidebar;

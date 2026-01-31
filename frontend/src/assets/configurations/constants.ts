@@ -14,6 +14,8 @@ export const MENTION_PREVIEW_LENGTH = 24;
 export const DEFAULT_LABEL_COLOR = "94a3b8";
 // Primary teal color used for new label creation
 export const PRIMARY_LABEL_COLOR = "0F766E";
+// Default color for agent messages when no badge color is configured
+export const DEFAULT_AGENT_COLOR = "#4A90E2";
 
 // File size constants for formatting
 export const FILE_SIZE = {

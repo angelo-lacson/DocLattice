@@ -34,6 +34,11 @@ export const ThreadWithContextContainer = styled.div`
   min-height: 0;
   overflow: hidden;
   background: ${CORPUS_COLORS.slate[50]};
+
+  /* Focus styles for accessibility - programmatic focus shouldn't show outline */
+  &:focus {
+    outline: none;
+  }
 `;
 
 /** Thread detail pane - takes remaining space */
@@ -67,6 +72,7 @@ export const ContextSidebarContainer = styled(motion.aside)<{
 }>`
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   width: ${({ $isExpanded, $isCollapsible }) =>
     $isCollapsible
       ? $isExpanded

@@ -12,8 +12,8 @@
 
 import styled from "styled-components";
 
-// Re-export design tokens from corpusDesignTokens for consistency
-export {
+// Import design tokens from corpusDesignTokens for consistency
+import {
   CORPUS_COLORS,
   CORPUS_FONTS,
   CORPUS_FONT_SIZES,
@@ -25,15 +25,18 @@ export {
   mediaQuery,
 } from "../../corpuses/styles/corpusDesignTokens";
 
-import {
+// Re-export for external use
+export {
   CORPUS_COLORS,
   CORPUS_FONTS,
   CORPUS_FONT_SIZES,
+  CORPUS_SPACING,
   CORPUS_RADII,
   CORPUS_SHADOWS,
   CORPUS_TRANSITIONS,
+  CORPUS_BREAKPOINTS,
   mediaQuery,
-} from "../../corpuses/styles/corpusDesignTokens";
+};
 
 // ============================================================================
 // Typography Components
