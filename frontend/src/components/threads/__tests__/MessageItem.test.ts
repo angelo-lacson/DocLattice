@@ -1,11 +1,12 @@
 /**
  * Unit tests for MessageItem helper functions
  *
- * Tests the getAgentDisplayData and hexToRgba helper functions
- * that support agent message styling.
+ * Tests the getAgentDisplayData function that supports agent message styling.
+ * hexToRgba tests are now in utils/__tests__/colorUtils.test.ts
  */
 import { describe, it, expect } from "vitest";
-import { getAgentDisplayData, hexToRgba } from "../MessageItem";
+import { getAgentDisplayData } from "../MessageItem";
+import { hexToRgba } from "../../../utils/colorUtils";
 import { AgentConfigurationType } from "../../../types/graphql-api";
 
 describe("getAgentDisplayData", () => {

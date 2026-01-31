@@ -14,6 +14,8 @@ export const MENTION_PREVIEW_LENGTH = 24;
 export const DEFAULT_LABEL_COLOR = "94a3b8";
 // Primary teal color used for new label creation
 export const PRIMARY_LABEL_COLOR = "0F766E";
+// Default color for agent messages when no badge color is configured
+export const DEFAULT_AGENT_COLOR = "#4A90E2";
 
 // File size constants for formatting
 export const FILE_SIZE = {
@@ -140,3 +142,31 @@ export const ANNOTATION_PAGINATION = {
   /** Maximum accumulated semantic search results before capping */
   MAX_SEMANTIC_RESULTS: 500,
 } as const;
+
+// Mention type configuration
+// Defines which mention types have active navigation routes
+// When a route is added for a type, set navigable: true
+export const MENTION_TYPES = {
+  user: {
+    navigable: true,
+    label: "User",
+  },
+  corpus: {
+    navigable: true,
+    label: "Corpus",
+  },
+  document: {
+    navigable: true,
+    label: "Document",
+  },
+  annotation: {
+    navigable: true,
+    label: "Annotation",
+  },
+  agent: {
+    navigable: false, // No agent detail page yet
+    label: "AI Agent",
+  },
+} as const;
+
+export type MentionType = keyof typeof MENTION_TYPES;

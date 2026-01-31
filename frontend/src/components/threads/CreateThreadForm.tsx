@@ -9,7 +9,14 @@ import {
 } from "../../graphql/mutations";
 import { GET_CONVERSATIONS } from "../../graphql/queries";
 import { MessageComposer } from "./MessageComposer";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
 
 const Overlay = styled.div`
   position: fixed;
@@ -22,135 +29,143 @@ const Overlay = styled.div`
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 16px;
+  padding: 1rem;
 `;
 
 const Modal = styled.div`
-  background: ${({ theme }) => color.N1};
-  border-radius: 8px;
+  background: ${CORPUS_COLORS.white};
+  border-radius: ${CORPUS_RADII.xl};
   width: 100%;
-  max-width: 600px;
+  max-width: 37.5rem;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: ${CORPUS_SHADOWS.xl};
 `;
 
 const Header = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid ${({ theme }) => color.N4};
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
+  background: ${CORPUS_COLORS.slate[50]};
 `;
 
 const Title = styled.h2`
   margin: 0;
-  font-size: 18px;
+  font-family: ${CORPUS_FONTS.serif};
+  font-size: 1.25rem;
   font-weight: 600;
-  color: ${({ theme }) => color.N10};
+  color: ${CORPUS_COLORS.slate[800]};
 `;
 
 const CloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   border: none;
-  border-radius: 4px;
+  border-radius: ${CORPUS_RADII.md};
   background: transparent;
-  color: ${({ theme }) => color.N7};
+  color: ${CORPUS_COLORS.slate[500]};
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    background: ${({ theme }) => color.N2};
+    background: ${CORPUS_COLORS.slate[100]};
+    color: ${CORPUS_COLORS.slate[700]};
   }
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: 1.25rem;
+    height: 1.25rem;
   }
 `;
 
 const Content = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 1.5rem;
 `;
 
 const Field = styled.div`
-  margin-bottom: 20px;
+  margin-bottom: 1.5rem;
 `;
 
 const Label = styled.label`
   display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ theme }) => color.N10};
+  margin-bottom: 0.5rem;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: ${CORPUS_COLORS.slate[700]};
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid ${({ theme }) => color.N4};
-  border-radius: 6px;
-  background: ${({ theme }) => color.N1};
-  color: ${({ theme }) => color.N10};
-  font-size: 14px;
-  font-family: inherit;
-  transition: border-color 0.15s ease;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  background: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[800]};
+  font-size: 0.9375rem;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:focus {
     outline: none;
-    border-color: ${({ theme }) => color.B5};
+    border-color: ${CORPUS_COLORS.teal[500]};
+    box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]};
   }
 
   &::placeholder {
-    color: ${({ theme }) => color.N6};
+    color: ${CORPUS_COLORS.slate[400]};
   }
 `;
 
 const TextArea = styled.textarea`
   width: 100%;
-  min-height: 80px;
-  padding: 10px 12px;
-  border: 1px solid ${({ theme }) => color.N4};
-  border-radius: 6px;
-  background: ${({ theme }) => color.N1};
-  color: ${({ theme }) => color.N10};
-  font-size: 14px;
-  font-family: inherit;
+  min-height: 5rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  background: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[800]};
+  font-size: 0.9375rem;
   resize: vertical;
-  transition: border-color 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:focus {
     outline: none;
-    border-color: ${({ theme }) => color.B5};
+    border-color: ${CORPUS_COLORS.teal[500]};
+    box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]};
   }
 
   &::placeholder {
-    color: ${({ theme }) => color.N6};
+    color: ${CORPUS_COLORS.slate[400]};
   }
 `;
 
 const HelpText = styled.p`
-  margin: 4px 0 0 0;
-  font-size: 12px;
-  color: ${({ theme }) => color.N6};
+  margin: 0.375rem 0 0 0;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[500]};
 `;
 
 const ErrorMessage = styled.div`
-  padding: 12px;
-  margin-bottom: 16px;
-  background: ${({ theme }) => color.R7}15;
-  border: 1px solid ${({ theme }) => color.R7}40;
-  border-radius: 6px;
-  color: ${({ theme }) => color.R7};
-  font-size: 13px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
+  color: #dc2626;
+  font-size: 0.8125rem;
 `;
 
 export interface CreateThreadFormProps {
