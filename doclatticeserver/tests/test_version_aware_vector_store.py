@@ -98,9 +98,10 @@ class TestVersionAwareVectorStore(TestCase):
         )
 
         # Create vector store (defaults to current only)
+        # Note: user_id is required for non-public corpus access
         vector_store = CoreAnnotationVectorStore(
             corpus_id=self.corpus.id,
-            user_id=None,  # Anonymous search
+            user_id=self.user.id,  # User with corpus access
             embedder_path=TEST_EMBEDDER_PATH,
             # only_current_versions=True by default
         )
@@ -169,7 +170,7 @@ class TestVersionAwareVectorStore(TestCase):
         # Create vector store with old versions included
         vector_store = CoreAnnotationVectorStore(
             corpus_id=self.corpus.id,
-            user_id=None,
+            user_id=self.user.id,
             only_current_versions=False,  # Include all versions
             # Don't filter by DocumentPath (needed to see old versions)
             check_corpus_deletion=False,
@@ -220,7 +221,9 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search before delete
         vector_store = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id, user_id=None, embedder_path=TEST_EMBEDDER_PATH
+            corpus_id=self.corpus.id,
+            user_id=self.user.id,
+            embedder_path=TEST_EMBEDDER_PATH,
         )
 
         query = VectorSearchQuery(query_text="searchable", similarity_top_k=10)
@@ -234,7 +237,7 @@ class TestVersionAwareVectorStore(TestCase):
         # Search after delete - should find nothing
         vector_store_after = CoreAnnotationVectorStore(
             corpus_id=self.corpus.id,
-            user_id=None,
+            user_id=self.user.id,
             embedder_path=TEST_EMBEDDER_PATH,
             # check_corpus_deletion=True by default
         )
@@ -282,7 +285,7 @@ class TestVersionAwareVectorStore(TestCase):
         # Search with deletion check disabled
         vector_store = CoreAnnotationVectorStore(
             corpus_id=self.corpus.id,
-            user_id=None,
+            user_id=self.user.id,
             check_corpus_deletion=False,  # Disable deletion check
             embedder_path=TEST_EMBEDDER_PATH,
         )
@@ -335,7 +338,9 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search should still find the annotation
         vector_store = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id, user_id=None, embedder_path=TEST_EMBEDDER_PATH
+            corpus_id=self.corpus.id,
+            user_id=self.user.id,
+            embedder_path=TEST_EMBEDDER_PATH,
         )
 
         query = VectorSearchQuery(query_text="moved doc", similarity_top_k=10)
@@ -402,7 +407,7 @@ class TestVersionAwareVectorStore(TestCase):
         # Search with document context
         vector_store = CoreAnnotationVectorStore(
             document_id=doc_v2.id,  # Specific document
-            user_id=None,
+            user_id=self.user.id,
             embedder_path=TEST_EMBEDDER_PATH,
         )
 
@@ -451,7 +456,9 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search in corpus with all deleted documents
         vector_store = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id, user_id=None, embedder_path=TEST_EMBEDDER_PATH
+            corpus_id=self.corpus.id,
+            user_id=self.user.id,
+            embedder_path=TEST_EMBEDDER_PATH,
         )
 
         query = VectorSearchQuery(query_text="searchable", similarity_top_k=10)
@@ -524,7 +531,9 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search in corpus 1 - should find nothing
         vector_store1 = CoreAnnotationVectorStore(
-            corpus_id=self.corpus.id, user_id=None, embedder_path=TEST_EMBEDDER_PATH
+            corpus_id=self.corpus.id,
+            user_id=self.user.id,
+            embedder_path=TEST_EMBEDDER_PATH,
         )
 
         query = VectorSearchQuery(query_text="searchable", similarity_top_k=10)
@@ -533,7 +542,7 @@ class TestVersionAwareVectorStore(TestCase):
 
         # Search in corpus 2 - should still find annotation
         vector_store2 = CoreAnnotationVectorStore(
-            corpus_id=corpus2.id, user_id=None, embedder_path=TEST_EMBEDDER_PATH
+            corpus_id=corpus2.id, user_id=self.user.id, embedder_path=TEST_EMBEDDER_PATH
         )
 
         results2 = vector_store2.search(query)
@@ -579,7 +588,9 @@ class TestVersionAwareVectorStore(TestCase):
             mock_gen.return_value = (TEST_EMBEDDER_PATH, mock_embeddings())
 
             vector_store = CoreAnnotationVectorStore(
-                corpus_id=self.corpus.id, user_id=None, embedder_path=TEST_EMBEDDER_PATH
+                corpus_id=self.corpus.id,
+                user_id=self.user.id,
+                embedder_path=TEST_EMBEDDER_PATH,
             )
 
             query = VectorSearchQuery(query_text="searchable", similarity_top_k=20)
