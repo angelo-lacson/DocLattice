@@ -17,7 +17,14 @@ import {
   GetThreadDetailInput,
   GetThreadDetailOutput,
 } from "../../graphql/queries";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
 import {
   selectedMessageIdAtom,
   replyingToMessageIdAtom,
@@ -54,20 +61,20 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: ${color.N2};
+  background: #fafafa;
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 0.75rem 1.5rem;
-  background: ${color.N1};
-  border-bottom: 1px solid ${color.N4};
+  padding: 1rem 2rem;
+  background: ${CORPUS_COLORS.white};
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
   gap: 1rem;
 
   @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
+    padding: 1rem;
     flex-direction: column;
   }
 `;
@@ -75,7 +82,7 @@ const Header = styled.div`
 const HeaderLeft = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
   flex: 1;
   min-width: 0;
 `;
@@ -91,24 +98,26 @@ const BackButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.375rem 0.625rem;
-  border: 1px solid ${color.N4};
-  border-radius: 6px;
-  background: ${color.N1};
-  color: ${color.N7};
-  font-size: 12px;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  background: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[600]};
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    border-color: ${color.G5};
-    color: ${color.G7};
+    border-color: ${CORPUS_COLORS.teal[300]};
+    background: ${CORPUS_COLORS.teal[50]};
+    color: ${CORPUS_COLORS.teal[700]};
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
   }
 `;
 
@@ -117,23 +126,25 @@ const ContextLink = styled.a`
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.5rem;
-  background: ${color.N2};
-  border: 1px solid ${color.N4};
-  border-radius: 4px;
-  font-size: 11px;
+  background: ${CORPUS_COLORS.slate[50]};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.sm};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
   font-weight: 500;
-  color: ${color.N7};
+  color: ${CORPUS_COLORS.slate[600]};
   text-decoration: none;
-  transition: all 0.15s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    border-color: ${color.G5};
-    color: ${color.G7};
+    border-color: ${CORPUS_COLORS.teal[300]};
+    background: ${CORPUS_COLORS.teal[50]};
+    color: ${CORPUS_COLORS.teal[700]};
   }
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 0.75rem;
+    height: 0.75rem;
   }
 `;
 
@@ -142,34 +153,40 @@ const StatusBadge = styled.span<{ $variant: "pinned" | "locked" | "deleted" }>`
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: ${CORPUS_RADII.full};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.6875rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 
   ${(props) =>
     props.$variant === "pinned" &&
     `
-    background: ${color.G1};
-    color: ${color.G7};
+    background: ${CORPUS_COLORS.teal[50]};
+    color: ${CORPUS_COLORS.teal[700]};
+    border: 1px solid ${CORPUS_COLORS.teal[200]};
   `}
 
   ${(props) =>
     props.$variant === "locked" &&
     `
-    background: ${color.Y1};
-    color: ${color.Y8};
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
   `}
 
   ${(props) =>
     props.$variant === "deleted" &&
     `
-    background: ${color.R1};
-    color: ${color.R7};
+    background: ${CORPUS_COLORS.slate[100]};
+    color: ${CORPUS_COLORS.slate[500]};
+    border: 1px solid ${CORPUS_COLORS.slate[300]};
   `}
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 0.75rem;
+    height: 0.75rem;
   }
 `;
 
@@ -181,26 +198,28 @@ const TitleRow = styled.div`
 `;
 
 const Title = styled.h1`
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: ${color.N10};
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 28px;
+  font-weight: 400;
+  color: #1e293b;
   margin: 0;
-  letter-spacing: -0.025em;
 `;
 
 const Description = styled.p`
-  font-size: 0.875rem;
-  color: ${color.N6};
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  color: #475569;
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.6;
 `;
 
 const MetaRow = styled.div`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 12px;
-  color: ${color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[500]};
   flex-wrap: wrap;
 `;
 
@@ -210,34 +229,35 @@ const MetaItem = styled.span`
   gap: 0.25rem;
 
   strong {
-    color: ${color.N8};
+    color: ${CORPUS_COLORS.slate[700]};
     font-weight: 600;
   }
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 0.875rem;
+    height: 0.875rem;
+    color: ${CORPUS_COLORS.teal[600]};
   }
 `;
 
 const MetaDot = styled.span`
-  color: ${color.N5};
+  color: ${CORPUS_COLORS.slate[300]};
 `;
 
 const ContentArea = styled.div`
   flex: 1;
   overflow: auto;
-  padding: 1rem 1.5rem;
+  padding: 32px 24px;
 
   @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
+    padding: 24px 16px;
   }
 `;
 
 const MessageListContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 16px;
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
@@ -245,17 +265,17 @@ const MessageListContainer = styled.div`
 
 const EmptyMessageState = styled.div`
   text-align: center;
-  padding: 2rem;
-  color: ${color.N6};
+  padding: 3rem;
+  color: ${CORPUS_COLORS.slate[500]};
 `;
 
 const ReplyComposerArea = styled.div`
-  padding: 1rem 1.5rem;
-  background: ${color.N1};
-  border-top: 1px solid ${color.N4};
+  padding: 1rem 2rem;
+  background: ${CORPUS_COLORS.white};
+  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
 
   @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
+    padding: 1rem;
   }
 `;
 

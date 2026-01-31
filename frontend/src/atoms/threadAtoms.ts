@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import { ConversationType, ChatMessageType } from "../types/graphql-api";
 
 // ============================================================================
@@ -68,6 +69,25 @@ export const replyingToMessageIdAtom = atom<string | null>(null);
  * Editing message (for edit functionality in future)
  */
 export const editingMessageIdAtom = atom<string | null>(null);
+
+// ============================================================================
+// INLINE THREAD VIEW STATE
+// ============================================================================
+
+/**
+ * Currently selected thread ID when viewing inline (in Discussions tab)
+ * When set, CorpusDiscussionsView shows ThreadDetailWithContext instead of ThreadList
+ */
+export const inlineSelectedThreadIdAtom = atom<string | null>(null);
+
+/**
+ * Corpus context sidebar expanded state (persisted to localStorage)
+ * Controls whether the sidebar is expanded or collapsed when viewing thread details
+ */
+export const threadContextSidebarExpandedAtom = atomWithStorage(
+  "threadContextSidebarExpanded",
+  true
+);
 
 // ============================================================================
 // DERIVED ATOMS
