@@ -516,6 +516,7 @@ class BulkDocumentUploadTests(TestCase):
         temp_file.file.save("test_error.zip", io.BytesIO(base64.b64decode(base64_zip)))
 
         # Mock the ContentFile constructor to raise an exception for one specific file
+        # ContentFile is now used in versioning.py (via import_content -> import_document)
         original_content_file = django.core.files.base.ContentFile
 
         def mock_content_file(content, name=None):
@@ -524,7 +525,7 @@ class BulkDocumentUploadTests(TestCase):
             return original_content_file(content, name)
 
         with patch(
-            "opencontractserver.tasks.import_tasks.ContentFile",
+            "opencontractserver.documents.versioning.ContentFile",
             side_effect=mock_content_file,
         ):
             job_id = str(uuid.uuid4())

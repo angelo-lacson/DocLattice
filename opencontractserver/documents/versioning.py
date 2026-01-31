@@ -77,6 +77,10 @@ def _create_content_file(
     Returns:
         ContentFile ready for assignment to a FileField
     """
+    # Handle None file_type - default to binary
+    if not file_type:
+        file_type = "application/octet-stream"
+
     # Get extension from MIME type
     extension = MIME_TO_EXTENSION.get(file_type)
     if not extension:
@@ -98,8 +102,10 @@ def _create_content_file(
     return ContentFile(content, name=filename)
 
 
-def _is_text_file(file_type: str) -> bool:
+def _is_text_file(file_type: str | None) -> bool:
     """Check if the file type should be stored as txt_extract_file."""
+    if not file_type:
+        return False
     return file_type in TEXT_MIMETYPES
 
 
@@ -164,7 +170,8 @@ def import_document(
     a new document regardless of content hash.
     """
     content_hash = compute_sha256(content)
-    file_type = doc_kwargs.get("file_type", "application/pdf")
+    # Handle file_type - use default if None or missing
+    file_type = doc_kwargs.get("file_type") or "application/pdf"
     is_text = _is_text_file(file_type)
 
     with transaction.atomic():
