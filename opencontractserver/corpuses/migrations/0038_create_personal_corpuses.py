@@ -154,7 +154,10 @@ def create_personal_corpuses_and_move_standalone_docs(apps, schema_editor):
             creator=doc.creator,
         )
 
-        # Also add to M2M for backwards compatibility
+        # Also add to M2M for backwards compatibility with legacy queries.
+        # TODO: The corpus.documents M2M is being phased out in favor of
+        # DocumentPath-only queries. Once all queries are migrated, this
+        # M2M population can be removed. See CLAUDE.md for details.
         personal_corpus.documents.add(doc)
 
         moved_count += 1

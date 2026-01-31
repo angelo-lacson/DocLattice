@@ -16,6 +16,8 @@ from tree_queries.models import TreeNode
 from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
     MAX_FILENAME_LENGTH,
+    PERSONAL_CORPUS_DESCRIPTION,
+    PERSONAL_CORPUS_TITLE,
 )
 from opencontractserver.corpuses.managers import CorpusActionExecutionManager
 from opencontractserver.shared.Models import BaseOCModel
@@ -422,8 +424,8 @@ class Corpus(TreeNode):
                 creator=user,
                 is_personal=True,
                 defaults={
-                    "title": "My Documents",
-                    "description": "Your personal document collection",
+                    "title": PERSONAL_CORPUS_TITLE,
+                    "description": PERSONAL_CORPUS_DESCRIPTION,
                     "is_public": False,
                 },
             )
@@ -661,7 +663,13 @@ class Corpus(TreeNode):
 
         Routes to appropriate handling based on file_type:
         - Parseable formats (PDF, DOCX, etc.): Uses import_document() pipeline
+          with full versioning support (uploading to same path creates new version)
         - Text files: Creates document directly without parsing
+
+        Note: Text files do NOT support path-based versioning. Uploading a text file
+        to an existing path will create a new document rather than a new version.
+        This is by design since text files skip the parsing pipeline and don't
+        benefit from version tracking in the same way as parsed documents.
 
         Args:
             content: File content bytes (required)
@@ -675,7 +683,7 @@ class Corpus(TreeNode):
         Returns:
             Tuple of (document, status, document_path) where status is one of:
             - 'created': New document at new path
-            - 'updated': New version at existing path (PDFs only)
+            - 'updated': New version at existing path (parseable formats only)
 
         Raises:
             ValueError: If user or content is not provided

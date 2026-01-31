@@ -13,6 +13,10 @@ EMBEDDING_BATCH_SIZE = 100
 # Maximum length for filename/title truncation when generating document paths
 MAX_FILENAME_LENGTH = 100
 
+# Personal corpus defaults
+PERSONAL_CORPUS_TITLE = "My Documents"
+PERSONAL_CORPUS_DESCRIPTION = "Your personal document collection"
+
 # Maximum length for error message stored on Document.processing_error
 MAX_PROCESSING_ERROR_LENGTH = 5000
 
