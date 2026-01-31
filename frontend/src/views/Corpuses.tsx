@@ -1577,6 +1577,11 @@ export const Corpuses = () => {
   // Used to hide parent navigation header when CorpusChat handles its own
   const [chatInConversation, setChatInConversation] = useState<boolean>(false);
 
+  // Track whether CorpusDiscussionsView is showing a thread detail (vs the list view)
+  // Used to hide parent navigation header when viewing inline thread detail
+  const [discussionInThreadView, setDiscussionInThreadView] =
+    useState<boolean>(false);
+
   // Debug: Log state changes
   console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
 
@@ -2374,25 +2379,33 @@ export const Corpuses = () => {
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
           >
-            <TabNavigationHeader>
-              <BackNavButton
-                onClick={() => setActiveTab(0)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Back to Home"
-              >
-                <ArrowLeft />
-              </BackNavButton>
-              <TabTitle>Discussions</TabTitle>
-              <MobileKebabButton
-                onClick={() => setMobileSidebarOpen(true)}
-                aria-label="Open navigation menu"
-              >
-                <MoreVertical />
-              </MobileKebabButton>
-            </TabNavigationHeader>
+            {/* Only show parent header when viewing thread list */}
+            {/* When viewing inline thread detail, CorpusDiscussionsView handles its own */}
+            {!discussionInThreadView && (
+              <TabNavigationHeader>
+                <BackNavButton
+                  onClick={() => setActiveTab(0)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  title="Back to Home"
+                >
+                  <ArrowLeft />
+                </BackNavButton>
+                <TabTitle>Discussions</TabTitle>
+                <MobileKebabButton
+                  onClick={() => setMobileSidebarOpen(true)}
+                  aria-label="Open navigation menu"
+                >
+                  <MoreVertical />
+                </MobileKebabButton>
+              </TabNavigationHeader>
+            )}
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <CorpusDiscussionsView corpusId={opened_corpus.id} hideHeader />
+              <CorpusDiscussionsView
+                corpusId={opened_corpus.id}
+                hideHeader
+                onViewModeChange={setDiscussionInThreadView}
+              />
             </div>
           </div>
         ) : null,
@@ -2550,6 +2563,7 @@ export const Corpuses = () => {
     canUpdateCorpus,
     documentsViewMode, // Required for view mode toggle to work
     chatInConversation, // Required for chat tab header visibility
+    discussionInThreadView, // Required for discussions tab header visibility
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);

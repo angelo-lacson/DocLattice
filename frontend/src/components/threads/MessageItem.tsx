@@ -19,7 +19,14 @@ import {
 } from "lucide-react";
 import { useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
 import { spacing } from "../../theme/spacing";
 import { MessageNode } from "./utils";
 import { RelativeTime } from "./RelativeTime";
@@ -169,38 +176,37 @@ const MessageContainer = styled.div<
   } & AgentColorProps
 >`
   display: flex;
-  gap: 0.75rem;
-  padding: 1rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem 1.5rem;
   background: ${(props) => {
-    if (props.$isDeleted) return color.N2;
-    if (props.$isHighlighted) return color.B1;
+    if (props.$isDeleted) return "#f8fafc";
+    if (props.$isHighlighted) return "#f0fdfa";
     if (props.$isAgent && props.$agentBgStart && props.$agentBgEnd) {
       return `linear-gradient(135deg, ${props.$agentBgStart} 0%, ${props.$agentBgEnd} 100%)`;
     }
-    return color.N1;
+    return "transparent";
   }};
-  border: 1px solid
-    ${(props) => {
-      if (props.$isHighlighted) return color.B5;
-      if (props.$isAgent) return props.$agentColor || "#4A90E2";
-      return color.N4;
-    }};
-  border-radius: 8px;
-  transition: all 0.15s;
+  border: none;
+  border-radius: 0;
+  transition: all 0.2s ease;
   position: relative;
 
-  /* Subtle left border for nested replies */
+  /* Subtle left accent for nested replies */
   ${(props) =>
     props.$depth > 0 &&
     `
-    border-left: 3px solid ${color.N4};
+    margin-left: ${Math.min(props.$depth * 1.5, 4)}rem;
+    padding-left: 1rem;
+    border-left: 2px solid #e2e8f0;
   `}
 
   /* Accent strip for highlighted messages */
   ${(props) =>
     props.$isHighlighted &&
     `
-    border-left: 3px solid ${color.B6};
+    background: #f0fdfa;
+    border-left: 3px solid #14b8a6;
   `}
 
   /* Accent strip for agent messages */
@@ -208,34 +214,38 @@ const MessageContainer = styled.div<
     props.$isAgent &&
     !props.$isHighlighted &&
     `
-    border-left: 3px solid ${props.$agentColor || "#4A90E2"};
+    border-left: 3px solid ${props.$agentColor || "#0f766e"};
+    background: ${props.$agentBgStart || "transparent"};
   `}
 
+  /* Show actions on hover */
   &:hover {
-    border-color: ${(props) => {
-      if (props.$isHighlighted) return color.B6;
-      if (props.$isAgent) return props.$agentColor || "#4A90E2";
-      return color.N5;
+    background: ${(props) => {
+      if (props.$isHighlighted) return "#f0fdfa";
+      if (props.$isAgent) return props.$agentBgStart || "#fafafa";
+      return "#fafafa";
     }};
+  }
+
+  /* Reveal footer actions on hover */
+  &:hover .message-footer-actions {
+    opacity: 1;
   }
 
   ${(props) =>
     props.$isDeleted &&
     `
-    opacity: 0.7;
+    opacity: 0.6;
   `}
 
-  @media (max-width: 480px) {
-    padding: 0.75rem;
-    gap: 0.5rem;
-  }
-`;
+  ${mediaQuery.mobile} {
+    padding: 1rem;
 
-const VoteColumn = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex-shrink: 0;
+    /* Always show actions on mobile (no hover) */
+    .message-footer-actions {
+      opacity: 1;
+    }
+  }
 `;
 
 const ContentColumn = styled.div`
@@ -262,33 +272,33 @@ const MessageHeaderLeft = styled.div`
 `;
 
 const UserAvatar = styled.div<{ $isAgent?: boolean } & AgentColorProps>`
-  width: 28px;
-  height: 28px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   background: ${(props) =>
     props.$isAgent
       ? `linear-gradient(135deg, ${props.$agentColor || "#4A90E2"} 0%, ${
           props.$agentColor || "#4A90E2"
         }dd 100%)`
-      : `linear-gradient(135deg, ${color.G6} 0%, ${color.G7} 100%)`};
+      : `linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[700]} 100%)`};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: ${CORPUS_COLORS.white};
   flex-shrink: 0;
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.75rem;
+    height: 0.75rem;
   }
 
-  @media (max-width: 480px) {
-    width: 24px;
-    height: 24px;
+  ${mediaQuery.mobile} {
+    width: 1.25rem;
+    height: 1.25rem;
 
     svg {
-      width: 12px;
-      height: 12px;
+      width: 0.625rem;
+      height: 0.625rem;
     }
   }
 `;
@@ -297,20 +307,22 @@ const ReplyIndicator = styled.div`
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 11px;
-  color: ${color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.6875rem;
+  color: ${CORPUS_COLORS.slate[500]};
   padding: 0.25rem 0.5rem;
-  background: ${color.N2};
-  border-radius: 4px;
+  background: ${CORPUS_COLORS.slate[50]};
+  border-radius: ${CORPUS_RADII.sm};
   margin-bottom: 0.25rem;
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 0.75rem;
+    height: 0.75rem;
+    color: ${CORPUS_COLORS.teal[500]};
   }
 
   strong {
-    color: ${color.N8};
+    color: ${CORPUS_COLORS.teal[700]};
     font-weight: 600;
   }
 `;
@@ -324,14 +336,16 @@ const UserInfo = styled.div`
 `;
 
 const Username = styled.span`
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 600;
-  color: ${color.N9};
-  font-size: 13px;
+  color: #1e293b;
+  font-size: 15px;
 `;
 
 const MessageTimestamp = styled.span`
-  font-size: 12px;
-  color: ${color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[400]};
 `;
 
 const MessageActionsContainer = styled.div`
@@ -341,28 +355,28 @@ const MessageActionsContainer = styled.div`
 const MessageActionsButton = styled.button`
   background: none;
   border: none;
-  color: ${color.N6};
+  color: ${CORPUS_COLORS.slate[400]};
   cursor: pointer;
-  padding: 4px;
+  padding: 0.25rem;
   display: flex;
   align-items: center;
-  border-radius: 4px;
-  transition: all 0.15s;
+  border-radius: ${CORPUS_RADII.sm};
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   /* Larger touch target on mobile */
-  @media (max-width: 600px) {
-    width: 40px;
-    height: 40px;
+  ${mediaQuery.mobile} {
+    width: 2.5rem;
+    height: 2.5rem;
     justify-content: center;
   }
 
   &:hover {
-    background: ${color.N3};
-    color: ${color.N9};
+    background: ${CORPUS_COLORS.slate[100]};
+    color: ${CORPUS_COLORS.slate[700]};
   }
 
   &:active {
-    background: ${color.N4};
+    background: ${CORPUS_COLORS.slate[200]};
   }
 `;
 
@@ -370,28 +384,28 @@ const ActionsDropdown = styled.div<{ $isOpen: boolean }>`
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
-  min-width: 160px;
-  background: ${color.N1};
-  border: 1px solid ${color.N4};
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  margin-top: 0.25rem;
+  min-width: 10rem;
+  background: ${CORPUS_COLORS.white};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  box-shadow: ${CORPUS_SHADOWS.lg};
   z-index: 100;
   opacity: ${(props) => (props.$isOpen ? 1 : 0)};
   visibility: ${(props) => (props.$isOpen ? "visible" : "hidden")};
   transform: ${(props) =>
     props.$isOpen ? "translateY(0)" : "translateY(-8px)"};
-  transition: all 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   /* Mobile: Bottom sheet style */
-  @media (max-width: 600px) {
+  ${mediaQuery.mobile} {
     position: fixed;
     top: auto;
     left: 0;
     right: 0;
     bottom: 0;
     margin: 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: ${CORPUS_RADII.xl} ${CORPUS_RADII.xl} 0 0;
     min-width: unset;
     transform: ${(props) =>
       props.$isOpen ? "translateY(0)" : "translateY(100%)"};
@@ -404,7 +418,7 @@ const DropdownBackdrop = styled.div<{ $isOpen: boolean }>`
   display: none;
 
   /* Mobile: Show backdrop for bottom sheet */
-  @media (max-width: 600px) {
+  ${mediaQuery.mobile} {
     display: ${(props) => (props.$isOpen ? "block" : "none")};
     position: fixed;
     top: 0;
@@ -419,44 +433,43 @@ const DropdownBackdrop = styled.div<{ $isOpen: boolean }>`
 const DropdownItem = styled.button<{ $variant?: "danger" }>`
   display: flex;
   align-items: center;
-  gap: ${spacing.sm};
+  gap: 0.5rem;
   width: 100%;
-  padding: ${spacing.sm} ${spacing.md};
+  padding: 0.5rem 0.75rem;
   border: none;
   background: transparent;
-  color: ${(props) => (props.$variant === "danger" ? color.R7 : color.N9)};
-  font-size: 14px;
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${(props) =>
+    props.$variant === "danger" ? "#dc2626" : CORPUS_COLORS.slate[700]};
+  font-size: 0.875rem;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background ${CORPUS_TRANSITIONS.fast};
 
   /* Larger touch targets on mobile */
-  @media (max-width: 600px) {
-    padding: ${spacing.md};
-    min-height: 52px;
-    font-size: 16px;
+  ${mediaQuery.mobile} {
+    padding: 0.875rem 1rem;
+    min-height: 3.25rem;
+    font-size: 1rem;
   }
 
   &:first-child {
-    border-radius: 8px 8px 0 0;
+    border-radius: ${CORPUS_RADII.md} ${CORPUS_RADII.md} 0 0;
   }
 
   &:last-child {
-    border-radius: 0 0 8px 8px;
+    border-radius: 0 0 ${CORPUS_RADII.md} ${CORPUS_RADII.md};
   }
 
   &:only-child {
-    border-radius: 8px;
+    border-radius: ${CORPUS_RADII.md};
   }
 
   &:hover {
     background: ${(props) =>
-      props.$variant === "danger" ? color.R1 : color.N2};
-  }
-
-  &:active {
-    background: ${(props) =>
-      props.$variant === "danger" ? color.R2 : color.N3};
+      props.$variant === "danger" ? "#fee2e2" : CORPUS_COLORS.teal[50]};
+    color: ${(props) =>
+      props.$variant === "danger" ? "#dc2626" : CORPUS_COLORS.teal[700]};
   }
 
   svg {
@@ -466,61 +479,63 @@ const DropdownItem = styled.button<{ $variant?: "danger" }>`
 
 const DropdownDivider = styled.div`
   height: 1px;
-  background: ${color.N4};
-  margin: ${spacing.xs} 0;
+  background: ${CORPUS_COLORS.slate[200]};
+  margin: 0.25rem 0;
 `;
 
 const MobileDropdownHeader = styled.div`
   display: none;
 
-  @media (max-width: 600px) {
+  ${mediaQuery.mobile} {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: ${spacing.md};
-    border-bottom: 1px solid ${color.N4};
+    padding: 0.75rem;
+    border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
 
     &::before {
       content: "";
-      width: 40px;
-      height: 4px;
-      background: ${color.N4};
-      border-radius: 2px;
+      width: 2.5rem;
+      height: 0.25rem;
+      background: ${CORPUS_COLORS.slate[300]};
+      border-radius: 0.125rem;
     }
   }
 `;
 
 const DeleteConfirmation = styled.div`
-  padding: ${spacing.md};
+  padding: 1rem;
   text-align: center;
 `;
 
 const DeleteConfirmText = styled.p`
-  margin: 0 0 ${spacing.md} 0;
-  color: ${color.N8};
-  font-size: 14px;
+  margin: 0 0 1rem 0;
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[700]};
+  font-size: 0.875rem;
 `;
 
 const DeleteConfirmButtons = styled.div`
   display: flex;
-  gap: ${spacing.sm};
+  gap: 0.5rem;
   justify-content: center;
 
-  @media (max-width: 600px) {
+  ${mediaQuery.mobile} {
     flex-direction: column-reverse;
   }
 `;
 
 const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
-  padding: ${spacing.sm} ${spacing.md};
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 0.5rem 1rem;
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
-  @media (max-width: 600px) {
-    padding: ${spacing.md};
+  ${mediaQuery.mobile} {
+    padding: 0.75rem;
     width: 100%;
   }
 
@@ -532,43 +547,44 @@ const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
   ${(props) =>
     props.$variant === "cancel" &&
     `
-    background: ${color.N2};
-    border: 1px solid ${color.N4};
-    color: ${color.N8};
+    background: ${CORPUS_COLORS.white};
+    border: 1px solid ${CORPUS_COLORS.slate[200]};
+    color: ${CORPUS_COLORS.slate[700]};
 
     &:hover:not(:disabled) {
-      background: ${color.N3};
+      background: ${CORPUS_COLORS.slate[50]};
     }
   `}
 
   ${(props) =>
     props.$variant === "delete" &&
     `
-    background: ${color.R6};
+    background: #dc2626;
     border: none;
     color: white;
 
     &:hover:not(:disabled) {
-      background: ${color.R7};
+      background: #b91c1c;
     }
   `}
 `;
 
 const MessageContent = styled.div<{ $isDeleted?: boolean }>`
-  color: ${color.N9};
-  line-height: 1.5;
-  font-size: 13px;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #334155;
+  line-height: 1.7;
+  font-size: 16px;
   word-wrap: break-word;
 
   ${(props) =>
     props.$isDeleted &&
     `
     font-style: italic;
-    color: ${color.N6};
+    color: #94a3b8;
   `}
 
   p {
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 12px 0;
     line-height: inherit;
 
     &:last-child {
@@ -577,74 +593,91 @@ const MessageContent = styled.div<{ $isDeleted?: boolean }>`
   }
 
   code {
-    background: ${color.N2};
-    border: 1px solid ${color.N4};
-    padding: 1px 4px;
-    border-radius: 3px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 4px;
     font-size: 0.9em;
-    font-family: monospace;
-    color: ${color.R7};
+    font-family: "SF Mono", Monaco, monospace;
+    color: #0f766e;
   }
 
   pre {
-    background: ${color.N2};
-    border: 1px solid ${color.N4};
-    padding: 0.5rem;
-    border-radius: 4px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 16px;
+    border-radius: 8px;
     overflow-x: auto;
-    margin: 0.5rem 0;
+    margin: 12px 0;
   }
 
   blockquote {
-    border-left: 3px solid ${color.G5};
-    padding-left: 0.75rem;
-    margin: 0.5rem 0;
-    color: ${color.N7};
+    border-left: 3px solid #5eead4;
+    padding-left: 16px;
+    margin: 12px 0;
+    color: #475569;
   }
 `;
 
 const MessageFooter = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+`;
+
+const FooterActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 `;
 
 const FooterButton = styled.button`
   background: transparent;
-  border: 1px solid ${color.N4};
-  color: ${color.N7};
+  border: none;
+  color: #94a3b8;
   cursor: pointer;
-  font-size: 12px;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 0.8125rem;
   font-weight: 500;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.375rem 0.625rem;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  transition: all 0.15s;
+  gap: 0.375rem;
+  transition: all 0.15s ease;
 
   &:hover {
-    background: ${color.G1};
-    border-color: ${color.G5};
-    color: ${color.G7};
+    background: #f0fdfa;
+    color: #0f766e;
   }
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 0.875rem;
+    height: 0.875rem;
   }
 `;
 
+const FooterDivider = styled.span`
+  width: 1px;
+  height: 1rem;
+  background: #e2e8f0;
+  margin: 0 0.25rem;
+`;
+
 const ReplyCount = styled.span`
-  font-size: 11px;
-  color: ${color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[400]};
   margin-left: auto;
 `;
 
 const SourcesContainer = styled.div`
-  margin-top: ${spacing.sm};
-  border-top: 1px solid ${color.N4};
-  padding-top: ${spacing.sm};
+  margin-top: 0.75rem;
+  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
+  padding-top: 0.75rem;
 `;
 
 const SourcesHeader = styled.div`
@@ -652,7 +685,7 @@ const SourcesHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
-  padding: ${spacing.xs} 0;
+  padding: 0.25rem 0;
   user-select: none;
 
   &:hover {
@@ -663,32 +696,39 @@ const SourcesHeader = styled.div`
 const SourcesTitle = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 0.375rem;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
   font-weight: 500;
-  color: ${color.N7};
+  color: ${CORPUS_COLORS.slate[600]};
+
+  svg {
+    color: ${CORPUS_COLORS.teal[600]};
+  }
 `;
 
 const SourcesList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${spacing.xs};
-  margin-top: ${spacing.xs};
+  gap: 0.375rem;
+  margin-top: 0.375rem;
 `;
 
 const SourceItem = styled.div`
-  padding: ${spacing.xs} ${spacing.sm};
-  background: ${color.N2};
-  border: 1px solid ${color.N4};
-  border-radius: 4px;
-  font-size: 13px;
-  color: ${color.N8};
+  padding: 0.375rem 0.625rem;
+  background: ${CORPUS_COLORS.slate[50]};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.sm};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[700]};
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    background: ${color.N3};
-    border-color: ${color.B5};
+    background: ${CORPUS_COLORS.teal[50]};
+    border-color: ${CORPUS_COLORS.teal[300]};
+    color: ${CORPUS_COLORS.teal[700]};
   }
 `;
 
@@ -912,19 +952,6 @@ export const MessageItem = React.memo(function MessageItem({
         isAgent ? `${agentData.name} (AI Agent)` : username
       }`}
     >
-      {/* Vote Column */}
-      <VoteColumn>
-        <VoteButtons
-          messageId={message.id}
-          upvoteCount={message.upvoteCount ?? 0}
-          downvoteCount={message.downvoteCount ?? 0}
-          userVote={message.userVote}
-          senderId={message.creator?.id || ""}
-          currentUserId={currentUserId}
-          disabled={isDeleted}
-        />
-      </VoteColumn>
-
       {/* Content Column */}
       <ContentColumn>
         {/* Header */}
@@ -1085,13 +1112,26 @@ export const MessageItem = React.memo(function MessageItem({
         {/* Footer */}
         {!isDeleted && (
           <MessageFooter>
-            <FooterButton
-              onClick={handleReply}
-              aria-label="Reply to this message"
-            >
-              <CornerDownRight />
-              Reply
-            </FooterButton>
+            <FooterActions className="message-footer-actions">
+              <VoteButtons
+                messageId={message.id}
+                upvoteCount={message.upvoteCount ?? 0}
+                downvoteCount={message.downvoteCount ?? 0}
+                userVote={message.userVote}
+                senderId={message.creator?.id || ""}
+                currentUserId={currentUserId}
+                disabled={isDeleted}
+                compact
+              />
+              <FooterDivider />
+              <FooterButton
+                onClick={handleReply}
+                aria-label="Reply to this message"
+              >
+                <CornerDownRight />
+                Reply
+              </FooterButton>
+            </FooterActions>
 
             {message.children && message.children.length > 0 && (
               <ReplyCount>

@@ -140,3 +140,31 @@ export const ANNOTATION_PAGINATION = {
   /** Maximum accumulated semantic search results before capping */
   MAX_SEMANTIC_RESULTS: 500,
 } as const;
+
+// Mention type configuration
+// Defines which mention types have active navigation routes
+// When a route is added for a type, set navigable: true
+export const MENTION_TYPES = {
+  user: {
+    navigable: true,
+    label: "User",
+  },
+  corpus: {
+    navigable: true,
+    label: "Corpus",
+  },
+  document: {
+    navigable: true,
+    label: "Document",
+  },
+  annotation: {
+    navigable: true,
+    label: "Annotation",
+  },
+  agent: {
+    navigable: false, // No agent detail page yet
+    label: "AI Agent",
+  },
+} as const;
+
+export type MentionType = keyof typeof MENTION_TYPES;
