@@ -13,6 +13,9 @@ from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from tree_queries.models import TreeNode
 
+from opencontractserver.constants.document_processing import (
+    DEFAULT_DOCUMENT_PATH_PREFIX,
+)
 from opencontractserver.corpuses.managers import CorpusActionExecutionManager
 from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.QuerySets import PermissionedTreeQuerySet
@@ -499,9 +502,9 @@ class Corpus(TreeNode):
                     c if c.isalnum() or c in "-_." else "_"
                     for c in document.title[:100]
                 )
-                path = f"/documents/{safe_title or f'doc_{document.pk}'}"
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_title or f'doc_{document.pk}'}"
             else:
-                path = f"/documents/doc_{document.pk}"
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/doc_{document.pk}"
 
         with transaction.atomic():
             # Always create corpus-isolated copy (no content-based deduplication)
@@ -630,32 +633,47 @@ class Corpus(TreeNode):
 
             return corpus_copy, "added", new_path
 
+    # File types that go through the parsing pipeline
+    PARSEABLE_MIMETYPES = {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+
+    # File types that are stored as-is without parsing
+    TEXT_MIMETYPES = {"text/plain", "application/txt"}
+
     def import_content(
         self,
         content: bytes,
+        user,
         path: str = None,
-        user=None,
         folder=None,
+        filename: str = None,
+        file_type: str = None,
         **doc_kwargs,
     ):
         """
-        Import content into this corpus.
+        Import content into this corpus with automatic file type handling.
 
-        Each upload creates a new document or document version. No content-based
-        deduplication is performed - duplicate files at different paths create
-        separate documents.
+        Routes to appropriate handling based on file_type:
+        - Parseable formats (PDF, DOCX, etc.): Uses import_document() pipeline
+        - Text files: Creates document directly without parsing
 
         Args:
-            content: PDF content bytes (required)
-            path: The filesystem path within the corpus (auto-generated if not provided)
+            content: File content bytes (required)
             user: The user performing the operation (required)
+            path: The filesystem path within the corpus (auto-generated if not provided)
             folder: Optional CorpusFolder to place the document in
+            filename: Original filename (used for text files and path generation)
+            file_type: MIME type of the content (required for routing)
             **doc_kwargs: Additional arguments for document creation (title, description, etc.)
 
         Returns:
             Tuple of (document, status, document_path) where status is one of:
             - 'created': New document at new path
-            - 'updated': New version at existing path
+            - 'updated': New version at existing path (PDFs only)
 
         Raises:
             ValueError: If user or content is not provided
@@ -666,20 +684,115 @@ class Corpus(TreeNode):
         if content is None:
             raise ValueError("Content is required for import_content()")
 
-        from opencontractserver.documents.versioning import import_document
+        # Determine file type - check doc_kwargs for backwards compatibility
+        effective_file_type = file_type or doc_kwargs.get("file_type")
+
+        # Route based on file type
+        if effective_file_type in self.TEXT_MIMETYPES:
+            return self._create_text_document_internal(
+                content=content,
+                filename=filename,
+                user=user,
+                path=path,
+                folder=folder,
+                file_type=effective_file_type,
+                **doc_kwargs,
+            )
+        else:
+            # Default to parsing pipeline (PDFs, DOCX, etc.)
+            from opencontractserver.documents.versioning import import_document
+
+            # Generate path if not provided
+            if not path:
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/doc_{uuid.uuid4().hex[:8]}"
+
+            return import_document(
+                corpus=self,
+                path=path,
+                content=content,
+                user=user,
+                folder=folder,
+                file_type=effective_file_type,
+                **doc_kwargs,
+            )
+
+    def _create_text_document_internal(
+        self,
+        content: bytes,
+        filename: str,
+        user,
+        path: str = None,
+        folder=None,
+        file_type: str = "text/plain",
+        **doc_kwargs,
+    ) -> tuple:
+        """
+        Internal method to create a text document directly in this corpus.
+
+        Text files don't need parsing - they are stored directly as txt_extract_file.
+
+        Args:
+            content: Text content bytes
+            filename: Original filename (used to name the file)
+            user: The user performing the operation
+            path: The filesystem path within the corpus
+            folder: Optional CorpusFolder to place the document in
+            file_type: MIME type (defaults to text/plain)
+            **doc_kwargs: Additional arguments for document creation
+
+        Returns:
+            Tuple of (document, 'created', document_path)
+        """
+        from django.core.files.base import ContentFile
+
+        from opencontractserver.documents.models import Document, DocumentPath
 
         # Generate path if not provided
         if not path:
-            path = f"/documents/doc_{uuid.uuid4().hex[:8]}"
+            safe_filename = "".join(
+                c if c.isalnum() or c in "-_." else "_"
+                for c in (filename or "document")[:100]
+            )
+            path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 
-        return import_document(
-            corpus=self,
-            path=path,
-            content=content,
-            user=user,
-            folder=folder,
-            **doc_kwargs,
-        )
+        # Remove file_type from doc_kwargs if present (we use the parameter directly)
+        doc_kwargs.pop("file_type", None)
+
+        with transaction.atomic():
+            # Create the document with text content
+            txt_extract_file = ContentFile(content, name=filename or "document.txt")
+            document = Document.objects.create(
+                creator=user,
+                txt_extract_file=txt_extract_file,
+                file_type=file_type,
+                **doc_kwargs,
+            )
+
+            # Create DocumentPath to link document to corpus
+            document_path = DocumentPath.objects.create(
+                document=document,
+                corpus=self,
+                folder=folder,
+                path=path,
+                version_number=1,
+                is_current=True,
+                is_deleted=False,
+                creator=user,
+            )
+
+            # Maintain M2M relationship for backwards compatibility
+            self.documents.add(document)
+
+            logger.info(
+                f"Created text document {document.pk} in corpus {self.pk} at {path}"
+            )
+
+            return document, "created", document_path
+
+    # Backwards compatibility alias
+    def create_text_document(self, *args, **kwargs):
+        """Alias for import_content() with text files. Prefer import_content()."""
+        return self._create_text_document_internal(*args, **kwargs)
 
     def remove_document(self, document=None, path: str = None, user=None):
         """

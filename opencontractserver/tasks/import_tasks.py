@@ -19,6 +19,9 @@ from opencontractserver.annotations.models import (
     TOKEN_LABEL,
     Annotation,
 )
+from opencontractserver.constants.document_processing import (
+    DEFAULT_DOCUMENT_PATH_PREFIX,
+)
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
 from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.types.dicts import (
@@ -500,7 +503,7 @@ def process_documents_zip(
                             c if c.isalnum() or c in "-_." else "_"
                             for c in base_filename[:100]
                         )
-                        doc_path = f"/documents/{safe_filename}"
+                        doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 
                         # Create the document based on file type
                         document = None
@@ -555,33 +558,24 @@ def process_documents_zip(
                                     f"{target_corpus.id} for text upload by user {user_obj.id}"
                                 )
 
-                            txt_extract_file = ContentFile(file_bytes, name=filename)
-                            document = Document(
-                                creator=user_obj,
-                                title=doc_title,
-                                description=doc_description,
-                                custom_meta=custom_meta,
-                                txt_extract_file=txt_extract_file,
-                                backend_lock=True,
-                                is_public=make_public,
-                                file_type=kind,
-                            )
-                            document.save()
-
-                            # Create DocumentPath to link document to corpus
-                            DocumentPath.objects.create(
-                                document=document,
-                                corpus=target_corpus,
-                                folder=None,
-                                path=doc_path,
-                                version_number=1,
-                                is_current=True,
-                                is_deleted=False,
-                                creator=user_obj,
+                            # Use import_content() which routes based on file_type
+                            document, status, path_record = (
+                                target_corpus.import_content(
+                                    content=file_bytes,
+                                    user=user_obj,
+                                    path=doc_path,
+                                    filename=filename,
+                                    file_type=kind,
+                                    title=doc_title,
+                                    description=doc_description,
+                                    custom_meta=custom_meta,
+                                    backend_lock=True,
+                                    is_public=make_public,
+                                )
                             )
                             logger.info(
                                 f"process_documents_zip() - Created text document {document.id} "
-                                f"in corpus {target_corpus.id}"
+                                f"in corpus {target_corpus.id} (status: {status})"
                             )
 
                         if document:

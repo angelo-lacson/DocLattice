@@ -326,10 +326,10 @@ class TestEnsureEmbeddingsForCorpus(TestCase):
 
     @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
     @patch(
-        "opencontractserver.tasks.embeddings_task.calculate_embedding_for_annotation_text"
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch"
     )
-    def test_queues_tasks_for_missing_embeddings(self, mock_embed_task):
-        """Should queue embedding tasks only for annotations missing embeddings."""
+    def test_queues_tasks_for_missing_embeddings(self, mock_batch_task):
+        """Should queue batch embedding tasks for annotations missing embeddings."""
         from opencontractserver.annotations.models import StructuralAnnotationSet
         from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
 
@@ -369,22 +369,21 @@ class TestEnsureEmbeddingsForCorpus(TestCase):
         )
 
         # Mock the delay method
-        mock_embed_task.delay = MagicMock()
+        mock_batch_task.delay = MagicMock()
 
         # Run the task
         result = ensure_embeddings_for_corpus(structural_set.pk, self.corpus.pk)
 
-        # Should queue tasks for ann2 and ann3 for default embedder
-        # And all 3 for corpus embedder (since none exist)
-        # Total: 2 (default) + 3 (corpus) = 5 tasks
-        self.assertEqual(result["tasks_queued"], 5)
+        # With batching (EMBEDDING_BATCH_SIZE=100), all annotations fit in one batch
+        # per embedder: 1 batch for default embedder + 1 batch for corpus embedder = 2 tasks
+        self.assertEqual(result["tasks_queued"], 2)
         self.assertEqual(result["annotations_already_embedded"], 1)
 
     @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
     @patch(
-        "opencontractserver.tasks.embeddings_task.calculate_embedding_for_annotation_text"
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch"
     )
-    def test_skips_if_all_embeddings_exist(self, mock_embed_task):
+    def test_skips_if_all_embeddings_exist(self, mock_batch_task):
         """Should not queue any tasks if all embeddings already exist."""
         from opencontractserver.annotations.models import StructuralAnnotationSet
         from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
@@ -418,7 +417,7 @@ class TestEnsureEmbeddingsForCorpus(TestCase):
             creator=self.user,
         )
 
-        mock_embed_task.delay = MagicMock()
+        mock_batch_task.delay = MagicMock()
 
         # Run the task
         result = ensure_embeddings_for_corpus(structural_set.pk, self.corpus.pk)

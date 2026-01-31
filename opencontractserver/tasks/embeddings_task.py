@@ -425,6 +425,114 @@ def calculate_embedding_for_annotation_text(
     autoretry_for=(Exception,),
     retry_kwargs={"max_retries": 3, "countdown": 60},
 )
+def calculate_embeddings_for_annotation_batch(
+    self,
+    annotation_ids: list[int],
+    corpus_id: Optional[Union[str, int]] = None,
+    embedder_path: Optional[str] = None,
+) -> dict:
+    """
+    Calculate embeddings for a batch of annotations.
+
+    This task processes multiple annotations in a single Celery task to prevent
+    queue flooding when adding documents with many annotations to a corpus.
+
+    Args:
+        self: Celery task instance (passed automatically when bind=True)
+        annotation_ids: List of annotation IDs to embed
+        corpus_id: Optional corpus ID for corpus-specific embeddings
+        embedder_path: Optional explicit embedder path (bypasses dual embedding)
+
+    Returns:
+        dict: Summary with counts of succeeded, failed, and skipped annotations
+    """
+    result = {
+        "total": len(annotation_ids),
+        "succeeded": 0,
+        "failed": 0,
+        "skipped": 0,
+        "errors": [],
+    }
+
+    if not annotation_ids:
+        return result
+
+    logger.info(
+        f"Processing batch of {len(annotation_ids)} annotations "
+        f"(corpus_id={corpus_id}, embedder_path={embedder_path})"
+    )
+
+    # Get embedder instance once for the batch
+    embedder = None
+    if embedder_path:
+        try:
+            embedder_class = get_component_by_name(embedder_path)
+            embedder = embedder_class()
+        except Exception as e:
+            logger.error(f"Failed to load embedder {embedder_path}: {e}")
+            result["errors"].append(f"Failed to load embedder: {e}")
+            result["failed"] = len(annotation_ids)
+            return result
+
+    # Fetch all annotations in batch to avoid N+1 queries
+    annotations = Annotation.objects.select_related(
+        "document", "structural_set"
+    ).filter(pk__in=annotation_ids)
+
+    annotation_map = {a.pk: a for a in annotations}
+
+    for annotation_id in annotation_ids:
+        annotation = annotation_map.get(annotation_id)
+
+        if not annotation:
+            logger.warning(f"Annotation {annotation_id} not found, skipping")
+            result["skipped"] += 1
+            continue
+
+        try:
+            if embedder_path and embedder:
+                # Use explicit embedder (bypass dual embedding)
+                succeeded = _create_embedding_for_annotation(
+                    annotation, embedder, embedder_path
+                )
+                if succeeded:
+                    result["succeeded"] += 1
+                else:
+                    result["failed"] += 1
+                    result["errors"].append(
+                        f"Annotation {annotation_id}: embedding generation returned False"
+                    )
+            else:
+                # Use dual embedding strategy
+                effective_corpus_id = corpus_id or annotation.corpus_id
+                _apply_dual_embedding_strategy(
+                    obj=annotation,
+                    text=annotation.raw_text or "",
+                    corpus_id=int(effective_corpus_id) if effective_corpus_id else None,
+                    obj_type="annotation",
+                    obj_id=annotation.id,
+                    embed_func=_create_embedding_for_annotation,
+                )
+                result["succeeded"] += 1
+
+        except Exception as e:
+            logger.error(f"Failed to embed annotation {annotation_id}: {e}")
+            result["failed"] += 1
+            result["errors"].append(f"Annotation {annotation_id}: {str(e)}")
+
+    logger.info(
+        f"Batch embedding complete: {result['succeeded']} succeeded, "
+        f"{result['failed']} failed, {result['skipped']} skipped"
+    )
+
+    return result
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 60},
+)
 def calculate_embedding_for_note_text(
     self, note_id: Union[str, int], corpus_id: Optional[Union[str, int]] = None
 ) -> None:

@@ -744,9 +744,6 @@ def ensure_embeddings_for_corpus(
         StructuralAnnotationSet,
     )
     from opencontractserver.corpuses.models import Corpus
-    from opencontractserver.tasks.embeddings_task import (
-        calculate_embedding_for_annotation_text,
-    )
 
     logger.info(
         f"ensure_embeddings_for_corpus() - structural_set={structural_set_id}, "
@@ -843,11 +840,20 @@ def ensure_embeddings_for_corpus(
                 f"missing embeddings for {embedder_path}"
             )
 
-            # Queue embedding tasks for missing annotations
-            # Use explicit embedder_path to bypass dual embedding strategy
-            for annotation_id in missing_annotation_ids:
-                calculate_embedding_for_annotation_text.delay(
-                    annotation_id=annotation_id,
+            # Queue embedding tasks in batches to prevent queue flooding
+            # Import batch size constant
+            from opencontractserver.constants.document_processing import (
+                EMBEDDING_BATCH_SIZE,
+            )
+            from opencontractserver.tasks.embeddings_task import (
+                calculate_embeddings_for_annotation_batch,
+            )
+
+            missing_ids_list = list(missing_annotation_ids)
+            for i in range(0, len(missing_ids_list), EMBEDDING_BATCH_SIZE):
+                batch = missing_ids_list[i : i + EMBEDDING_BATCH_SIZE]
+                calculate_embeddings_for_annotation_batch.delay(
+                    annotation_ids=batch,
                     corpus_id=corpus_id,
                     embedder_path=embedder_path,
                 )

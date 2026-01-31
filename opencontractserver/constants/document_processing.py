@@ -2,6 +2,14 @@
 Constants for document processing pipeline.
 """
 
+# Default path prefix for documents uploaded without explicit path
+# Used when generating document paths in corpus operations
+DEFAULT_DOCUMENT_PATH_PREFIX = "/documents"
+
+# Default batch size for embedding generation tasks
+# Controls how many annotations are processed per Celery task to prevent queue flooding
+EMBEDDING_BATCH_SIZE = 100
+
 # Maximum length for error message stored on Document.processing_error
 MAX_PROCESSING_ERROR_LENGTH = 5000
 
