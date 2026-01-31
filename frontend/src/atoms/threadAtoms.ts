@@ -88,17 +88,3 @@ export const threadContextSidebarExpandedAtom = atomWithStorage(
   "threadContextSidebarExpanded",
   true
 );
-
-// ============================================================================
-// DERIVED ATOMS
-// ============================================================================
-
-/**
- * Computes whether current user can create threads in selected corpus
- * This will be implemented later with actual permission checks
- */
-export const canCreateThreadAtom = atom<boolean>((get) => {
-  // TODO: Implement permission checking from Apollo cache
-  // For now, return true as placeholder
-  return true;
-});

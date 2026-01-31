@@ -67,6 +67,7 @@ export const ContextSidebarContainer = styled(motion.aside)<{
 }>`
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   width: ${({ $isExpanded, $isCollapsible }) =>
     $isCollapsible
       ? $isExpanded
