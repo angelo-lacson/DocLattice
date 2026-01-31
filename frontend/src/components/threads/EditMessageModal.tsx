@@ -19,7 +19,14 @@ import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { useMutation } from "@apollo/client";
 import { X, Save, AlertCircle } from "lucide-react";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
 import { spacing } from "../../theme/spacing";
 import { MessageComposer } from "./MessageComposer";
 import {
@@ -54,12 +61,12 @@ const StyledModal = styled(Modal)`
     /* Desktop/tablet styles */
     width: 90vw;
     max-width: 700px;
-    border-radius: 16px;
+    border-radius: ${CORPUS_RADII.xl};
     overflow: hidden;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    box-shadow: ${CORPUS_SHADOWS.xl};
 
     /* Mobile: Full screen modal for better touch interaction */
-    @media (max-width: 600px) {
+    ${mediaQuery.mobile} {
       width: 100vw !important;
       max-width: 100vw !important;
       height: 100vh !important;
@@ -76,7 +83,7 @@ const StyledModal = styled(Modal)`
     & > .content {
       padding: 0;
 
-      @media (max-width: 600px) {
+      ${mediaQuery.mobile} {
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -89,68 +96,69 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: ${spacing.md} ${spacing.lg};
-  background: ${color.N2};
-  border-bottom: 1px solid ${color.N4};
+  padding: 1rem 1.5rem;
+  background: ${CORPUS_COLORS.slate[50]};
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
 
-  @media (max-width: 600px) {
-    padding: ${spacing.md};
+  ${mediaQuery.mobile} {
+    padding: 1rem;
     /* Safe area for notched devices */
-    padding-top: max(${spacing.md}, env(safe-area-inset-top));
+    padding-top: max(1rem, env(safe-area-inset-top));
   }
 `;
 
 const ModalTitle = styled.h2`
   margin: 0;
-  font-size: 18px;
+  font-family: ${CORPUS_FONTS.serif};
+  font-size: 1.25rem;
   font-weight: 600;
-  color: ${color.N10};
+  color: ${CORPUS_COLORS.slate[800]};
   display: flex;
   align-items: center;
-  gap: ${spacing.sm};
+  gap: 0.5rem;
 
-  @media (max-width: 600px) {
-    font-size: 16px;
+  ${mediaQuery.mobile} {
+    font-size: 1.125rem;
   }
 `;
 
 const CloseButton = styled.button`
   background: none;
   border: none;
-  color: ${color.N7};
+  color: ${CORPUS_COLORS.slate[500]};
   cursor: pointer;
-  padding: ${spacing.xs};
-  border-radius: 8px;
+  padding: 0.375rem;
+  border-radius: ${CORPUS_RADII.md};
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   /* Larger touch target on mobile */
-  @media (max-width: 600px) {
-    width: 44px;
-    height: 44px;
+  ${mediaQuery.mobile} {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   &:hover {
-    background: ${color.N3};
-    color: ${color.N9};
+    background: ${CORPUS_COLORS.slate[100]};
+    color: ${CORPUS_COLORS.slate[700]};
   }
 
   &:active {
-    background: ${color.N4};
+    background: ${CORPUS_COLORS.slate[200]};
   }
 `;
 
 const ModalContent = styled.div`
-  padding: ${spacing.lg};
+  padding: 1.5rem;
   flex: 1;
   overflow-y: auto;
 
-  @media (max-width: 600px) {
-    padding: ${spacing.md};
+  ${mediaQuery.mobile} {
+    padding: 1rem;
     /* Account for virtual keyboard */
-    padding-bottom: max(${spacing.md}, env(safe-area-inset-bottom));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 `;
 
@@ -158,18 +166,18 @@ const ModalFooter = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: ${spacing.sm};
-  padding: ${spacing.md} ${spacing.lg};
-  background: ${color.N2};
-  border-top: 1px solid ${color.N4};
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: ${CORPUS_COLORS.slate[50]};
+  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
 
-  @media (max-width: 600px) {
-    padding: ${spacing.md};
+  ${mediaQuery.mobile} {
+    padding: 1rem;
     /* Safe area for bottom */
-    padding-bottom: max(${spacing.md}, env(safe-area-inset-bottom));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
     /* Full-width buttons on mobile */
     flex-direction: column-reverse;
-    gap: ${spacing.xs};
+    gap: 0.375rem;
   }
 `;
 
@@ -178,31 +186,32 @@ const ActionButton = styled(Button)<{ $variant?: "primary" | "secondary" }>`
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: ${spacing.xs};
-    padding: 10px 20px;
-    border-radius: 8px;
+    gap: 0.375rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: ${CORPUS_RADII.md};
+    font-family: ${CORPUS_FONTS.sans};
     font-weight: 600;
-    font-size: 14px;
-    transition: all 0.2s;
-    min-height: 44px;
+    font-size: 0.875rem;
+    transition: all ${CORPUS_TRANSITIONS.normal};
+    min-height: 2.75rem;
 
-    @media (max-width: 600px) {
+    ${mediaQuery.mobile} {
       width: 100%;
-      padding: 12px 20px;
+      padding: 0.75rem 1.25rem;
     }
 
     ${(props) =>
       props.$variant === "primary" &&
       `
-      background: linear-gradient(135deg, ${color.B6} 0%, ${color.B5} 100%);
+      background: linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[700]} 100%);
       color: white;
       border: none;
-      box-shadow: 0 4px 12px rgba(74, 144, 226, 0.35);
+      box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #5a7ee2 0%, ${color.B6} 100%);
+        background: linear-gradient(135deg, ${CORPUS_COLORS.teal[500]} 0%, ${CORPUS_COLORS.teal[600]} 100%);
         transform: translateY(-1px);
-        box-shadow: 0 6px 16px rgba(74, 144, 226, 0.45);
+        box-shadow: 0 6px 16px rgba(15, 118, 110, 0.45);
       }
 
       &:active:not(:disabled) {
@@ -219,13 +228,13 @@ const ActionButton = styled(Button)<{ $variant?: "primary" | "secondary" }>`
     ${(props) =>
       props.$variant === "secondary" &&
       `
-      background: ${color.N1};
-      color: ${color.N8};
-      border: 1px solid ${color.N4};
+      background: ${CORPUS_COLORS.white};
+      color: ${CORPUS_COLORS.slate[700]};
+      border: 1px solid ${CORPUS_COLORS.slate[200]};
 
       &:hover:not(:disabled) {
-        background: ${color.N2};
-        border-color: ${color.N5};
+        background: ${CORPUS_COLORS.slate[50]};
+        border-color: ${CORPUS_COLORS.slate[300]};
       }
     `}
   }
@@ -234,14 +243,15 @@ const ActionButton = styled(Button)<{ $variant?: "primary" | "secondary" }>`
 const ErrorMessage = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.xs};
-  padding: ${spacing.sm} ${spacing.md};
-  background: ${color.R1};
-  color: ${color.R7};
-  border: 1px solid ${color.R3};
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: ${spacing.md};
+  gap: 0.375rem;
+  padding: 0.625rem 0.875rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
 
   svg {
     flex-shrink: 0;
@@ -258,84 +268,87 @@ const UnsavedWarningOverlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: ${spacing.md};
+  padding: 1rem;
   z-index: 1000;
 `;
 
 const UnsavedWarningBox = styled.div`
-  background: white;
-  border-radius: 12px;
-  padding: ${spacing.lg};
-  max-width: 400px;
+  background: ${CORPUS_COLORS.white};
+  border-radius: ${CORPUS_RADII.lg};
+  padding: 1.5rem;
+  max-width: 25rem;
   width: 100%;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: ${CORPUS_SHADOWS.xl};
 
-  @media (max-width: 600px) {
+  ${mediaQuery.mobile} {
     max-width: 90vw;
   }
 `;
 
 const UnsavedWarningTitle = styled.h3`
-  margin: 0 0 ${spacing.sm} 0;
-  font-size: 18px;
+  margin: 0 0 0.5rem 0;
+  font-family: ${CORPUS_FONTS.serif};
+  font-size: 1.125rem;
   font-weight: 600;
-  color: ${color.N10};
+  color: ${CORPUS_COLORS.slate[800]};
   display: flex;
   align-items: center;
-  gap: ${spacing.xs};
+  gap: 0.375rem;
 `;
 
 const UnsavedWarningText = styled.p`
-  margin: 0 0 ${spacing.md} 0;
-  color: ${color.N8};
-  font-size: 14px;
+  margin: 0 0 1rem 0;
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[600]};
+  font-size: 0.875rem;
   line-height: 1.5;
 `;
 
 const UnsavedWarningButtons = styled.div`
   display: flex;
-  gap: ${spacing.sm};
+  gap: 0.5rem;
   justify-content: flex-end;
 
-  @media (max-width: 600px) {
+  ${mediaQuery.mobile} {
     flex-direction: column-reverse;
   }
 `;
 
 const UnsavedWarningButton = styled.button<{ $variant: "cancel" | "discard" }>`
-  padding: ${spacing.sm} ${spacing.md};
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 0.5rem 1rem;
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
   border: none;
 
-  @media (max-width: 600px) {
-    padding: ${spacing.md};
+  ${mediaQuery.mobile} {
+    padding: 0.75rem;
     width: 100%;
   }
 
   ${(props) =>
     props.$variant === "cancel" &&
     `
-    background: ${color.N2};
-    border: 1px solid ${color.N4};
-    color: ${color.N8};
+    background: ${CORPUS_COLORS.white};
+    border: 1px solid ${CORPUS_COLORS.slate[200]};
+    color: ${CORPUS_COLORS.slate[700]};
 
     &:hover {
-      background: ${color.N3};
+      background: ${CORPUS_COLORS.slate[50]};
     }
   `}
 
   ${(props) =>
     props.$variant === "discard" &&
     `
-    background: ${color.R6};
+    background: #dc2626;
     color: white;
 
     &:hover {
-      background: ${color.R7};
+      background: #b91c1c;
     }
   `}
 `;

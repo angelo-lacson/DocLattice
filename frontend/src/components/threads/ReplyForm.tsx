@@ -12,100 +12,110 @@ import {
 } from "../../graphql/mutations";
 import { GET_THREAD_DETAIL } from "../../graphql/queries";
 import { MessageComposer } from "./MessageComposer";
-import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_TRANSITIONS,
+} from "./styles/discussionStyles";
 
 const Container = styled.div`
-  border: 1px solid ${({ theme }) => color.N4};
-  border-radius: 8px;
-  background: ${({ theme }) => color.N2};
-  padding: 12px;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.lg};
+  background: ${CORPUS_COLORS.slate[50]};
+  padding: 0.875rem;
 `;
 
 const Header = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 `;
 
 const ReplyingTo = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => color.N7};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[600]};
 
   strong {
-    color: ${({ theme }) => color.N10};
-    font-weight: 500;
+    color: ${CORPUS_COLORS.teal[700]};
+    font-weight: 600;
   }
 `;
 
 const CancelButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
   border: none;
-  border-radius: 4px;
+  border-radius: ${CORPUS_RADII.sm};
   background: transparent;
-  color: ${({ theme }) => color.N7};
-  font-size: 13px;
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[500]};
+  font-size: 0.8125rem;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    background: ${({ theme }) => color.N3};
+    background: ${CORPUS_COLORS.slate[200]};
+    color: ${CORPUS_COLORS.slate[700]};
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
   }
 `;
 
 const ErrorMessage = styled.div`
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  background: ${({ theme }) => color.R7}15;
-  border: 1px solid ${({ theme }) => color.R7}40;
-  border-radius: 6px;
-  color: ${({ theme }) => color.R7};
-  font-size: 13px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
+  color: #dc2626;
+  font-size: 0.8125rem;
 `;
 
 const QuoteButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border: 1px solid ${({ theme }) => color.N4};
-  border-radius: 4px;
-  background: ${({ theme }) => color.N1};
-  color: ${({ theme }) => color.N7};
-  font-size: 12px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.sm};
+  background: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
+  color: ${CORPUS_COLORS.slate[600]};
+  font-size: 0.75rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
   margin-left: auto;
 
   &:hover {
-    background: ${({ theme }) => color.N2};
-    border-color: ${({ theme }) => color.B5};
-    color: ${({ theme }) => color.B7};
+    background: ${CORPUS_COLORS.teal[50]};
+    border-color: ${CORPUS_COLORS.teal[300]};
+    color: ${CORPUS_COLORS.teal[700]};
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
   }
 `;
 
 const QuotedMessage = styled.div`
-  padding: ${spacing.sm};
-  margin-bottom: ${spacing.sm};
-  border-left: 3px solid ${({ theme }) => color.B5};
-  background: ${({ theme }) => color.N2};
-  border-radius: 4px;
-  font-size: 13px;
-  color: ${({ theme }) => color.N7};
+  padding: 0.625rem;
+  margin-bottom: 0.625rem;
+  border-left: 3px solid ${CORPUS_COLORS.teal[400]};
+  background: ${CORPUS_COLORS.slate[100]};
+  border-radius: ${CORPUS_RADII.sm};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[600]};
   font-style: italic;
 
   &::before {
@@ -113,8 +123,8 @@ const QuotedMessage = styled.div`
     display: block;
     font-weight: 600;
     font-style: normal;
-    margin-bottom: 4px;
-    color: ${({ theme }) => color.N10};
+    margin-bottom: 0.25rem;
+    color: ${CORPUS_COLORS.slate[700]};
   }
 `;
 

@@ -3,44 +3,55 @@ import styled from "styled-components";
 import { useAtom } from "jotai";
 import { Lock, Trash2 } from "lucide-react";
 import { threadFiltersAtom } from "../../atoms/threadAtoms";
-import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_TRANSITIONS,
+} from "./styles/discussionStyles";
 
 const Container = styled.div`
   display: flex;
   align-items: center;
-  gap: ${spacing.sm};
+  gap: 0.5rem;
   flex-wrap: wrap;
 `;
 
 const Label = styled.span`
-  font-size: 14px;
-  color: ${color.N7};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[500]};
   font-weight: 500;
 `;
 
 const ToggleButton = styled.button<{ $isActive: boolean }>`
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid ${(props) => (props.$isActive ? color.B5 : color.N4)};
-  border-radius: 6px;
-  background: ${(props) => (props.$isActive ? color.B1 : color.N1)};
-  color: ${(props) => (props.$isActive ? color.B8 : color.N7)};
-  font-size: 13px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid
+    ${(props) =>
+      props.$isActive ? CORPUS_COLORS.teal[500] : CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.full};
+  background: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.teal[50] : CORPUS_COLORS.white};
+  color: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.slate[600]};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    border-color: ${(props) => (props.$isActive ? color.B6 : color.N5)};
-    background: ${(props) => (props.$isActive ? color.B2 : color.N2)};
+    border-color: ${CORPUS_COLORS.teal[400]};
+    background: ${CORPUS_COLORS.teal[50]};
+    color: ${CORPUS_COLORS.teal[700]};
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
   }
 `;
 

@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Inline Thread View with Corpus Context Sidebar
+- **Added inline thread viewing**: Users can now view thread details inline within the Discussions tab instead of navigating away
+  - Click a thread to view details in-place with a "Back" button to return to the list
+  - Thread state tracked via `inlineSelectedThreadIdAtom` Jotai atom
+  - Files: `frontend/src/components/discussions/CorpusDiscussionsView.tsx`, `frontend/src/atoms/threadAtoms.ts`
+- **Added corpus context sidebar**: Displays corpus context alongside thread details
+  - About section with corpus description (markdown rendered)
+  - Documents section with collapsible table of contents
+  - Quick stats grid (documents, threads, annotations, comments)
+  - Collapsible sections with smooth animations via Framer Motion
+  - Responsive behavior: hidden < 1024px, collapsible 1024-1200px, always expanded > 1200px
+  - Sidebar expanded state persisted to localStorage via `threadContextSidebarExpandedAtom`
+  - Files: `frontend/src/components/threads/CorpusContextSidebar.tsx`, `frontend/src/components/threads/ThreadDetailWithContext.tsx`
+  - New styled components: `frontend/src/components/threads/styles/contextSidebarStyles.ts`
+- **Added modernized discussion thread UI**: Comprehensive redesign following OS-Legal-Style design system
+  - Typography-first design: Serif headings (Georgia), sans-serif body (Inter)
+  - Teal accent color scheme (#0f766e) for interactive elements
+  - Improved message cards, vote buttons, badges, and metadata displays
+  - Mobile-responsive with proper breakpoints
+  - Files: `frontend/src/components/threads/styles/discussionStyles.ts` (950+ lines)
+- **Added agent mention rendering**: Discussion messages render styled agent mentions with custom colors
+  - Runtime validation of badge configuration from GenericScalar fields
+  - Hex color validation with fallback to default agent color
+  - Tooltip display for agent mentions
+  - Files: `frontend/src/components/threads/MarkdownMessageRenderer.tsx`
+- **Added component tests for new features**:
+  - Mention badge rendering tests: `frontend/tests/MentionRendering.ct.tsx`
+  - Compact vote button tests: `frontend/tests/VoteButtonsCompact.ct.tsx`
+
 #### AnnotationsPanel Shared Component
 - **Created `AnnotationsPanel` reusable component**: Extracts shared filtering/display logic from annotations views
   - Provides filter tabs for type (All/Doc/Text) and source (All/Human/Agent/Structural)
@@ -59,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `frontend/src/graphql/queries.ts:752`
 
 ### Changed
+
+#### Window Resize Performance
+- **Added debounce to window resize handler**: Prevents excessive re-renders during window resize
+  - 150ms debounce delay on resize events
+  - Properly cleans up timeout on unmount
+  - Files: `frontend/src/components/hooks/WindowDimensionHook.tsx`
 
 #### Annotations View Refactoring
 - **Updated Annotations.tsx to use AnnotationsPanel**: DRY refactoring, keeps hero section, stats, semantic search, advanced filters
