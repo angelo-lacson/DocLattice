@@ -47,11 +47,7 @@ import {
   DeleteMessageInput,
   DeleteMessageOutput,
 } from "../../graphql/mutations";
-
-/**
- * Default color for agent messages when no badge color is configured
- */
-const DEFAULT_AGENT_COLOR = "#4A90E2";
+import { DEFAULT_AGENT_COLOR } from "../../assets/configurations/constants";
 
 /**
  * Validates that a value is a string
@@ -143,7 +139,13 @@ function normalizeHexColor(hex: string): string {
  * Helper to create an rgba color from a hex color with alpha.
  * Supports both 3-digit (#abc) and 6-digit (#aabbcc) hex formats.
  */
-export function hexToRgba(hex: string, alpha: number): string {
+export function hexToRgba(
+  hex: string | null | undefined,
+  alpha: number
+): string {
+  // Guard against null/undefined
+  if (!hex) return `rgba(74, 144, 226, ${alpha})`; // Fallback to default blue
+
   // Normalize 3-digit hex to 6-digit
   const normalizedHex = normalizeHexColor(hex);
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(
