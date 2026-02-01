@@ -24,6 +24,11 @@ class PipelineSettingsModelTestCase(TestCase):
     """Tests for the PipelineSettings model."""
 
     def setUp(self):
+        from django.core.cache import cache
+
+        # Clear cache to ensure clean state between tests
+        cache.delete(PipelineSettings.CACHE_KEY)
+
         self.superuser = User.objects.create_superuser(
             username="admin", password="admin", email="admin@test.com"
         )
@@ -169,6 +174,11 @@ class PipelineSettingsGraphQLTestCase(TestCase):
     """Tests for the PipelineSettings GraphQL endpoints."""
 
     def setUp(self):
+        from django.core.cache import cache
+
+        # Clear cache to ensure clean state between tests
+        cache.delete(PipelineSettings.CACHE_KEY)
+
         self.superuser = User.objects.create_superuser(
             username="admin", password="admin", email="admin@test.com"
         )
@@ -374,12 +384,8 @@ class PipelineSettingsGraphQLTestCase(TestCase):
         returned_kwargs = result["data"]["updatePipelineSettings"]["pipelineSettings"][
             "parserKwargs"
         ]
-        self.assertEqual(
-            returned_kwargs["some.parser.TestParser"]["force_ocr"], True
-        )
-        self.assertEqual(
-            returned_kwargs["some.parser.TestParser"]["timeout"], 120
-        )
+        self.assertEqual(returned_kwargs["some.parser.TestParser"]["force_ocr"], True)
+        self.assertEqual(returned_kwargs["some.parser.TestParser"]["timeout"], 120)
 
     def test_update_default_embedder(self):
         """Test updating default embedder via GraphQL."""
@@ -423,6 +429,11 @@ class PipelineSettingsSecretsTestCase(TestCase):
     """Tests for encrypted secrets storage in PipelineSettings."""
 
     def setUp(self):
+        from django.core.cache import cache
+
+        # Clear cache to ensure clean state between tests
+        cache.delete(PipelineSettings.CACHE_KEY)
+
         self.superuser = User.objects.create_superuser(
             username="admin", password="admin", email="admin@test.com"
         )
@@ -455,7 +466,9 @@ class PipelineSettingsSecretsTestCase(TestCase):
         instance.refresh_from_db()
         retrieved = instance.get_secrets()
 
-        self.assertEqual(retrieved["component.path.TestParser"]["api_key"], "sk-test-12345")
+        self.assertEqual(
+            retrieved["component.path.TestParser"]["api_key"], "sk-test-12345"
+        )
         self.assertEqual(
             retrieved["component.path.TestParser"]["secret_token"], "tok-abcdef"
         )
@@ -465,9 +478,7 @@ class PipelineSettingsSecretsTestCase(TestCase):
         instance = PipelineSettings.get_instance()
 
         # Set initial secrets
-        instance.set_secrets(
-            {"component.path.Parser1": {"key1": "value1"}}
-        )
+        instance.set_secrets({"component.path.Parser1": {"key1": "value1"}})
         instance.save()
 
         # Update with new secret for same component
@@ -531,7 +542,9 @@ class PipelineSettingsSecretsTestCase(TestCase):
         )
         instance.save()
 
-        full_settings = instance.get_full_component_settings("component.path.TestParser")
+        full_settings = instance.get_full_component_settings(
+            "component.path.TestParser"
+        )
 
         self.assertEqual(full_settings["timeout"], 60)
         self.assertEqual(full_settings["batch_size"], 10)
@@ -673,6 +686,11 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
     """Tests for edge cases and error handling."""
 
     def setUp(self):
+        from django.core.cache import cache
+
+        # Clear cache to ensure clean state between tests
+        cache.delete(PipelineSettings.CACHE_KEY)
+
         self.superuser = User.objects.create_superuser(
             username="admin", password="admin", email="admin@test.com"
         )
@@ -716,7 +734,10 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         }
         result = self.superuser_client.execute(mutation, variables=variables)
         self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
-        self.assertIn("Invalid component path", result["data"]["updateComponentSecrets"]["message"])
+        self.assertIn(
+            "Invalid component path",
+            result["data"]["updateComponentSecrets"]["message"],
+        )
 
         # Test path that's too long
         variables = {
@@ -725,7 +746,10 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         }
         result = self.superuser_client.execute(mutation, variables=variables)
         self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
-        self.assertIn("exceeds maximum length", result["data"]["updateComponentSecrets"]["message"])
+        self.assertIn(
+            "exceeds maximum length",
+            result["data"]["updateComponentSecrets"]["message"],
+        )
 
     def test_invalid_secret_value_types(self):
         """Test that non-primitive secret values are rejected."""
@@ -751,7 +775,9 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         }
         result = self.superuser_client.execute(mutation, variables=variables)
         self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
-        self.assertIn("primitive type", result["data"]["updateComponentSecrets"]["message"])
+        self.assertIn(
+            "primitive type", result["data"]["updateComponentSecrets"]["message"]
+        )
 
     def test_caching_invalidation_on_save(self):
         """Test that cache is invalidated when settings are saved."""
@@ -779,8 +805,8 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         """Test that use_cache=False bypasses the cache."""
         from django.core.cache import cache
 
-        # Get instance with cache
-        instance1 = PipelineSettings.get_instance(use_cache=True)
+        # Populate the cache by getting instance
+        PipelineSettings.get_instance(use_cache=True)
 
         # Manually modify cache entry to test bypass
         cache.set(

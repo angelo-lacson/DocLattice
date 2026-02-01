@@ -742,15 +742,27 @@ class PipelineSettings(django.db.models.Model):
     The singleton instance is created via migration and cannot be deleted.
     Only superusers can modify these settings via the GraphQL API.
 
+    ⚠️  CRITICAL: SECRET_KEY Dependency
+    ----------------------------------
+    Encrypted secrets (API keys, credentials) are tied to Django's SECRET_KEY.
+    If you rotate SECRET_KEY, ALL encrypted secrets become PERMANENTLY UNRECOVERABLE.
+
+    Before rotating SECRET_KEY:
+    1. Export secrets via Django shell: PipelineSettings.get_instance().get_secrets()
+    2. Store exported secrets securely
+    3. After rotation, re-import via: instance.set_secrets(exported_secrets); instance.save()
+
     Settings Structure:
         preferred_parsers: Dict mapping MIME types to parser class paths
             Example: {"application/pdf": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser"}
 
         preferred_embedders: Dict mapping MIME types to embedder class paths
-            Example: {"application/pdf": "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"}
+            Example: {"application/pdf":
+                "opencontractserver.pipeline.embedders...MicroserviceEmbedder"}
 
         preferred_thumbnailers: Dict mapping MIME types to thumbnailer class paths
-            Example: {"application/pdf": "opencontractserver.pipeline.thumbnailers.pdf_thumbnailer.PdfThumbnailGenerator"}
+            Example: {"application/pdf":
+                "opencontractserver.pipeline.thumbnailers...PdfThumbnailGenerator"}
 
         parser_kwargs: Dict mapping parser class paths to their configuration kwargs
             Example: {"opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser": {"force_ocr": false}}
@@ -868,14 +880,18 @@ class PipelineSettings(django.db.models.Model):
         """Get PBKDF2 iteration count from Django settings."""
         from django.conf import settings as django_settings
 
-        return getattr(django_settings, "PIPELINE_SETTINGS_ENCRYPTION_ITERATIONS", 480000)
+        return getattr(
+            django_settings, "PIPELINE_SETTINGS_ENCRYPTION_ITERATIONS", 480000
+        )
 
     @classmethod
     def _get_max_secret_size(cls) -> int:
         """Get maximum secret payload size from Django settings."""
         from django.conf import settings as django_settings
 
-        return getattr(django_settings, "PIPELINE_SETTINGS_MAX_SECRET_SIZE_BYTES", 10240)
+        return getattr(
+            django_settings, "PIPELINE_SETTINGS_MAX_SECRET_SIZE_BYTES", 10240
+        )
 
     def save(self, *args, **kwargs):
         """Ensure singleton pattern and invalidate cache on save."""
@@ -925,8 +941,8 @@ class PipelineSettings(django.db.models.Model):
             if cached is not None:
                 return cached
 
-        # Get from database
-        instance, created = cls.objects.get_or_create(
+        # Get from database (select_related for modified_by to avoid N+1 query)
+        instance, created = cls.objects.select_related("modified_by").get_or_create(
             pk=1,
             defaults={
                 "preferred_parsers": getattr(django_settings, "PREFERRED_PARSERS", {}),
@@ -935,9 +951,7 @@ class PipelineSettings(django.db.models.Model):
                 ),
                 "preferred_thumbnailers": {},  # No default in Django settings
                 "parser_kwargs": getattr(django_settings, "PARSER_KWARGS", {}),
-                "component_settings": getattr(
-                    django_settings, "PIPELINE_SETTINGS", {}
-                ),
+                "component_settings": getattr(django_settings, "PIPELINE_SETTINGS", {}),
                 "default_embedder": getattr(django_settings, "DEFAULT_EMBEDDER", ""),
             },
         )
@@ -1026,9 +1040,7 @@ class PipelineSettings(django.db.models.Model):
             return self.parser_kwargs[parser_class_path]
 
         # Fall back to Django settings
-        return getattr(django_settings, "PARSER_KWARGS", {}).get(
-            parser_class_path, {}
-        )
+        return getattr(django_settings, "PARSER_KWARGS", {}).get(parser_class_path, {})
 
     def get_component_settings(self, component_class_path: str) -> dict:
         """
@@ -1189,7 +1201,9 @@ class PipelineSettings(django.db.models.Model):
         # Validate size
         max_size = self._get_max_secret_size()
         if len(json_bytes) > max_size:
-            raise ValueError(f"Secrets payload exceeds maximum size of {max_size} bytes")
+            raise ValueError(
+                f"Secrets payload exceeds maximum size of {max_size} bytes"
+            )
 
         # Generate random salt for this encryption
         salt = os.urandom(self._get_encryption_salt_length())
