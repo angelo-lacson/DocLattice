@@ -3414,12 +3414,16 @@ class UpdateDocumentRelationship(graphene.Mutation):
                         )
 
                     # Validate both documents are in the new corpus
-                    docs_in_corpus = corpus.get_documents().filter(
-                        id__in=[
-                            doc_relationship.source_document_id,
-                            doc_relationship.target_document_id,
-                        ]
-                    ).count()
+                    docs_in_corpus = (
+                        corpus.get_documents()
+                        .filter(
+                            id__in=[
+                                doc_relationship.source_document_id,
+                                doc_relationship.target_document_id,
+                            ]
+                        )
+                        .count()
+                    )
                     if docs_in_corpus != 2:
                         return UpdateDocumentRelationship(
                             ok=False,

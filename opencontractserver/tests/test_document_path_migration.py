@@ -420,5 +420,3 @@ class TestCorpusDocumentMethods(TransactionTestCase):
             self.corpus.import_content(content=None, user=self.user)
 
         self.assertIn("Content is required", str(cm.exception))
-
-

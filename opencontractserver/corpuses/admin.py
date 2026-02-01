@@ -29,7 +29,7 @@ class CorpusAdmin(GuardedModelAdmin):
     search_fields = ["id", "title", "description", "creator__username"]
     list_filter = ("is_public", "created", "modified", "error", "backend_lock")
     actions = ["make_public"]
-    raw_id_fields = ("creator", "user_lock", "documents", "label_set")
+    raw_id_fields = ("creator", "user_lock", "label_set")
     date_hierarchy = "created"
 
     def display_icon(self, obj):
