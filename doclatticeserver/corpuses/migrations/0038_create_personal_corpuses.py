@@ -45,19 +45,15 @@ def create_personal_corpuses_and_move_standalone_docs(apps, schema_editor):
     if corpus_ct:
         for codename in permission_codenames:
             try:
-                perm = Permission.objects.get(
-                    codename=codename, content_type=corpus_ct
-                )
+                perm = Permission.objects.get(codename=codename, content_type=corpus_ct)
                 permissions[codename] = perm
             except Permission.DoesNotExist:
                 logger.warning(f"Permission {codename} not found")
 
     # Step 1: Create personal corpuses for users who don't have one
-    users_without_personal = User.objects.filter(
-        is_active=True
-    ).exclude(
-        corpus__is_personal=True
-    ).distinct()
+    users_without_personal = (
+        User.objects.filter(is_active=True).exclude(corpus__is_personal=True).distinct()
+    )
 
     created_count = 0
     for user in users_without_personal:
@@ -166,34 +162,33 @@ def create_personal_corpuses_and_move_standalone_docs(apps, schema_editor):
             f"{personal_corpus.pk} at path {path}"
         )
 
-    logger.info(
-        f"Moved {moved_count} standalone documents to personal corpuses"
-    )
+    logger.info(f"Moved {moved_count} standalone documents to personal corpuses")
 
 
 def reverse_migration(apps, schema_editor):
     """
-    Reverse the migration by:
-    1. Removing DocumentPaths that link documents to personal corpuses
-    2. Deleting the personal corpuses themselves
+    Reverse migration is intentionally blocked to prevent data loss.
 
-    Note: This does NOT delete the documents - they become standalone again.
+    This migration creates personal corpuses and moves standalone documents into them.
+    Reversing would:
+    - Delete all DocumentPath records linking documents to personal corpuses
+    - Delete all personal corpuses
+    - Leave documents orphaned with no corpus organization
+
+    If you need to rollback past this migration, you must:
+    1. Manually handle document organization
+    2. Write a custom migration that preserves document paths
+    3. Or accept that documents will become standalone (no corpus)
+
+    For production systems with user data, this is a destructive operation.
     """
-    Corpus = apps.get_model("corpuses", "Corpus")
-    DocumentPath = apps.get_model("documents", "DocumentPath")
-
-    # Get all personal corpuses
-    personal_corpuses = Corpus.objects.filter(is_personal=True)
-
-    # Remove DocumentPaths linking to personal corpuses
-    deleted_paths = DocumentPath.objects.filter(
-        corpus__in=personal_corpuses
-    ).delete()
-    logger.info(f"Deleted {deleted_paths[0]} DocumentPaths from personal corpuses")
-
-    # Delete the personal corpuses
-    deleted_corpuses = personal_corpuses.delete()
-    logger.info(f"Deleted {deleted_corpuses[0]} personal corpuses")
+    raise NotImplementedError(
+        "Migration 0038 (create_personal_corpuses) cannot be reversed automatically. "
+        "This migration creates personal corpuses and moves documents into them. "
+        "Reversing would delete DocumentPath records and orphan user documents. "
+        "If you must rollback, write a custom migration that handles your specific "
+        "data preservation requirements. See migration docstring for details."
+    )
 
 
 class Migration(migrations.Migration):
