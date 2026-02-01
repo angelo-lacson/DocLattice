@@ -661,3 +661,199 @@ class TestUploadDefaultsToPersonalCorpus(TestCase):
             "Text document should have a DocumentPath linking to personal corpus",
         )
         self.assertEqual(doc_path.corpus_id, personal_corpus.pk)
+
+
+class TestCalculateEmbeddingsForAnnotationBatch(TestCase):
+    """Tests for calculate_embeddings_for_annotation_batch task."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+        # Create a document to attach annotations to (required by constraint)
+        self.document = Document.objects.create(
+            title="Test Document",
+            creator=self.user,
+            backend_lock=False,
+        )
+
+    def test_empty_annotation_ids_returns_early(self):
+        """Should return immediately with empty counts when no annotation IDs provided."""
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embeddings_for_annotation_batch,
+        )
+
+        result = calculate_embeddings_for_annotation_batch(annotation_ids=[])
+
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(result["succeeded"], 0)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["skipped"], 0)
+
+    def test_nonexistent_annotation_ids_are_skipped(self):
+        """Should skip annotation IDs that don't exist in the database."""
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embeddings_for_annotation_batch,
+        )
+
+        # Use IDs that definitely don't exist
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[999999, 999998, 999997]
+        )
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["skipped"], 3)
+        self.assertEqual(result["succeeded"], 0)
+        self.assertEqual(result["failed"], 0)
+
+    def test_invalid_embedder_path_fails_batch(self):
+        """Should fail entire batch if embedder path is invalid."""
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embeddings_for_annotation_batch,
+        )
+
+        # Create a real annotation with document parent
+        ann = Annotation.objects.create(
+            raw_text="Test annotation",
+            document=self.document,
+            creator=self.user,
+        )
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[ann.pk],
+            embedder_path="nonexistent.embedder.path",
+        )
+
+        self.assertEqual(result["failed"], 1)
+        self.assertTrue(any("Failed to load embedder" in e for e in result["errors"]))
+
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    def test_successful_embedding_with_dual_strategy(self, mock_dual_strategy):
+        """Should use dual embedding strategy when no explicit embedder specified."""
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embeddings_for_annotation_batch,
+        )
+
+        ann = Annotation.objects.create(
+            raw_text="Test annotation",
+            document=self.document,
+            creator=self.user,
+        )
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[ann.pk],
+            corpus_id=123,
+        )
+
+        self.assertEqual(result["succeeded"], 1)
+        mock_dual_strategy.assert_called_once()
+
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    def test_exception_during_embedding_is_caught(self, mock_dual_strategy):
+        """Should catch and record exceptions during embedding."""
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embeddings_for_annotation_batch,
+        )
+
+        mock_dual_strategy.side_effect = Exception("Test embedding error")
+
+        ann = Annotation.objects.create(
+            raw_text="Test annotation",
+            document=self.document,
+            creator=self.user,
+        )
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[ann.pk],
+        )
+
+        self.assertEqual(result["failed"], 1)
+        self.assertTrue(any("Test embedding error" in e for e in result["errors"]))
+
+
+class TestEnsureEmbeddingsNoEmbedderConfigured(TestCase):
+    """Tests for ensure_embeddings_for_corpus when no embedders are configured."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+
+    @override_settings(DEFAULT_EMBEDDER=None)
+    def test_no_embedders_configured_returns_error(self):
+        """Should return error when no embedders are configured."""
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
+
+        # Create corpus without preferred_embedder
+        corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+            preferred_embedder=None,  # No corpus-specific embedder
+        )
+
+        structural_set = StructuralAnnotationSet.objects.create(
+            content_hash=f"test_hash_{uuid.uuid4().hex[:12]}",
+            parser_name="TestParser",
+            creator=self.user,
+        )
+
+        result = ensure_embeddings_for_corpus(structural_set.pk, corpus.pk)
+
+        self.assertIn("No embedders configured", result["errors"])
+
+    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
+    def test_empty_structural_set_returns_early(self):
+        """Should return early when structural set has no annotations."""
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
+
+        corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+        )
+
+        # Create empty structural set (no annotations)
+        structural_set = StructuralAnnotationSet.objects.create(
+            content_hash=f"test_hash_{uuid.uuid4().hex[:12]}",
+            parser_name="TestParser",
+            creator=self.user,
+        )
+
+        result = ensure_embeddings_for_corpus(structural_set.pk, corpus.pk)
+
+        # Should return with no tasks queued and no errors
+        self.assertEqual(result["tasks_queued"], 0)
+        self.assertEqual(len(result["errors"]), 0)
+
+
+class TestPersonalCorpusSignalErrorHandling(TransactionTestCase):
+    """Tests for error handling in personal corpus signal handler."""
+
+    def test_signal_handles_integrity_error_gracefully(self):
+        """Signal should handle IntegrityError when corpus already exists."""
+        from opencontractserver.users.signals import _create_personal_corpus_for_user
+
+        # Create user (which triggers signal and creates personal corpus)
+        user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+
+        # Verify personal corpus exists
+        self.assertTrue(Corpus.objects.filter(creator=user, is_personal=True).exists())
+
+        # Calling _create_personal_corpus_for_user again should not raise
+        # (it uses get_or_create internally)
+        _create_personal_corpus_for_user(user)
+
+        # Should still have exactly one personal corpus
+        self.assertEqual(
+            Corpus.objects.filter(creator=user, is_personal=True).count(),
+            1,
+        )
