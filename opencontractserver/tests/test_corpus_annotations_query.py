@@ -279,3 +279,161 @@ class TestAnnotationQuerySetVisibleToUser(TestCase):
 
         # Structural annotation should be visible via structural_set relationship
         self.assertIn(self.structural_annotation, result)
+
+
+class TestCorpusAnnotationsQueryEdgeCases(TestCase):
+    """Test edge cases for AnnotationQueryOptimizer.get_corpus_annotations."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data."""
+        cls.owner = User.objects.create_user(
+            username="edge_owner", email="edge_owner@test.com", password="test123"
+        )
+        cls.superuser = User.objects.create_superuser(
+            username="edge_admin", email="edge_admin@test.com", password="admin123"
+        )
+
+        # Create a private corpus
+        cls.private_corpus = Corpus.objects.create(
+            title="Private Corpus",
+            creator=cls.owner,
+            is_public=False,
+        )
+
+        # Create structural annotation set and document
+        cls.structural_set = StructuralAnnotationSet.objects.create()
+        cls.document = Document.objects.create(
+            title="Edge Test Doc",
+            creator=cls.owner,
+            structural_annotation_set=cls.structural_set,
+        )
+
+        # Link document to corpus
+        DocumentPath.objects.create(
+            document=cls.document,
+            corpus=cls.private_corpus,
+            path="/edge_test.pdf",
+            is_current=True,
+            is_deleted=False,
+            version_number=1,
+            creator=cls.owner,
+        )
+
+        cls.label = AnnotationLabel.objects.create(
+            text="EdgeLabel",
+            label_type=LabelType.TOKEN_LABEL,
+            creator=cls.owner,
+        )
+
+        # Create annotations
+        cls.structural_annotation = Annotation.objects.create(
+            annotation_label=cls.label,
+            structural_set=cls.structural_set,
+            document=None,
+            corpus=None,
+            structural=True,
+            creator=cls.owner,
+        )
+        cls.user_annotation = Annotation.objects.create(
+            annotation_label=cls.label,
+            document=cls.document,
+            corpus=cls.private_corpus,
+            structural=False,
+            creator=cls.owner,
+        )
+
+        # Grant permissions to owner
+        set_permissions_for_obj_to_user(
+            cls.owner, cls.private_corpus, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(cls.owner, cls.document, [PermissionTypes.CRUD])
+
+    def test_nonexistent_corpus_returns_empty(self):
+        """Querying a non-existent corpus should return empty queryset."""
+        result = AnnotationQueryOptimizer.get_corpus_annotations(
+            corpus_id=999999,  # Non-existent
+            user=self.owner,
+        )
+
+        self.assertEqual(result.count(), 0)
+
+    def test_anonymous_user_private_corpus_returns_empty(self):
+        """Anonymous user cannot access private corpus annotations."""
+        from django.contrib.auth.models import AnonymousUser
+
+        anon_user = AnonymousUser()
+
+        result = AnnotationQueryOptimizer.get_corpus_annotations(
+            corpus_id=self.private_corpus.id,
+            user=anon_user,
+        )
+
+        self.assertEqual(result.count(), 0)
+
+    def test_superuser_with_structural_filter(self):
+        """Superuser can filter by structural=True."""
+        result = AnnotationQueryOptimizer.get_corpus_annotations(
+            corpus_id=self.private_corpus.id,
+            user=self.superuser,
+            structural=True,
+        )
+
+        self.assertIn(self.structural_annotation, result)
+        self.assertNotIn(self.user_annotation, result)
+
+    def test_superuser_with_analysis_isnull_filter(self):
+        """Superuser can filter by analysis_isnull=True."""
+        result = AnnotationQueryOptimizer.get_corpus_annotations(
+            corpus_id=self.private_corpus.id,
+            user=self.superuser,
+            analysis_isnull=True,
+        )
+
+        # Both annotations have analysis=NULL (manual annotations)
+        self.assertIn(self.structural_annotation, result)
+        self.assertIn(self.user_annotation, result)
+
+    def test_regular_user_with_analysis_isnull_filter(self):
+        """Regular user can filter by analysis_isnull=True."""
+        result = AnnotationQueryOptimizer.get_corpus_annotations(
+            corpus_id=self.private_corpus.id,
+            user=self.owner,
+            analysis_isnull=True,
+        )
+
+        # Both annotations have analysis=NULL (manual annotations)
+        self.assertIn(self.structural_annotation, result)
+        self.assertIn(self.user_annotation, result)
+
+    def test_user_with_corpus_access_but_no_document_access(self):
+        """User with corpus access but no visible documents sees nothing."""
+        # Create a user with corpus access but no document access
+        limited_user = User.objects.create_user(
+            username="limited", email="limited@test.com", password="test123"
+        )
+        set_permissions_for_obj_to_user(
+            limited_user, self.private_corpus, [PermissionTypes.READ]
+        )
+        # Deliberately NOT granting document permissions
+
+        result = AnnotationQueryOptimizer.get_corpus_annotations(
+            corpus_id=self.private_corpus.id,
+            user=limited_user,
+        )
+
+        # No visible documents = no annotations
+        self.assertEqual(result.count(), 0)
+
+    def test_apply_permission_filter_deprecated_method(self):
+        """Test the deprecated _apply_permission_filter method."""
+        from opencontractserver.annotations.models import Annotation
+
+        qs = Annotation.objects.all()
+        result = AnnotationQueryOptimizer._apply_permission_filter(
+            qs, self.owner, self.private_corpus.id
+        )
+
+        # Should filter by corpus_id
+        for annotation in result:
+            self.assertEqual(annotation.corpus_id, self.private_corpus.id)
