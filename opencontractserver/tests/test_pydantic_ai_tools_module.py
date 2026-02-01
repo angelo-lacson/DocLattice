@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -772,3 +772,132 @@ class TestContextInjectionIntegration(TestCase):
 
         self.assertEqual(result["document_id"], 42)
         self.assertEqual(result["query"], "unified test")
+
+
+# ---------------------------------------------------------------------------
+# Tests for sync-to-async database wrapping
+# ---------------------------------------------------------------------------
+
+
+def sync_db_read_tool(document_id: int) -> dict:
+    """A sync tool that reads from the database."""
+    doc = Document.objects.get(pk=document_id)
+    return {"id": doc.id, "title": doc.title}
+
+
+def sync_db_write_tool(document_id: int, new_title: str) -> dict:
+    """A sync tool that writes to the database."""
+    doc = Document.objects.get(pk=document_id)
+    old_title = doc.title
+    doc.title = new_title
+    doc.save(update_fields=["title"])
+    return {"id": doc.id, "old_title": old_title, "new_title": new_title}
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+class TestSyncToAsyncDatabaseWrapping(TransactionTestCase):
+    """Tests verifying that sync database tools work correctly in async context.
+
+    These tests ensure that the PydanticAI tool wrapper properly handles
+    synchronous Django ORM operations when called from async contexts.
+    Issue #841: sync tools were failing with "You cannot call this from an
+    async context" errors.
+
+    NOTE: We use TransactionTestCase because these tests use sync_to_async
+    which runs code in a thread pool. The thread pool worker has a different
+    database connection that can't see uncommitted transactions from TestCase.
+    TransactionTestCase commits data to the database, making it visible to
+    all connections.
+    """
+
+    def setUp(self):
+        # Create test data in setUp so it's committed to DB and visible
+        # to thread pool workers used by sync_to_async
+        self.user = User.objects.create_user(
+            username="sync_async_test_user",
+            password="password",
+            email="syncasync@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Sync Async Test Corpus", creator=self.user, is_public=False
+        )
+        self.doc = Document.objects.create(
+            title="Sync Async Test Doc",
+            corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+    async def test_sync_db_read_tool_works_in_async_context(self):
+        """Test that a sync tool performing DB reads works when wrapped for async.
+
+        This verifies that sync Django ORM .get() calls are properly wrapped
+        with sync_to_async when the tool is called from an async PydanticAI agent.
+        """
+        core_tool = CoreTool.from_function(sync_db_read_tool)
+        wrapped = PydanticAIToolWrapper(
+            core_tool, inject_params={"document_id": self.doc.id}
+        ).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx)
+
+        self.assertEqual(result["id"], self.doc.id)
+        self.assertEqual(result["title"], "Sync Async Test Doc")
+
+    async def test_sync_db_write_tool_works_in_async_context(self):
+        """Test that a sync tool performing DB writes works when wrapped for async.
+
+        This verifies that sync Django ORM .save() calls are properly wrapped
+        with sync_to_async when the tool is called from an async PydanticAI agent.
+        """
+        core_tool = CoreTool.from_function(sync_db_write_tool)
+        wrapped = PydanticAIToolWrapper(
+            core_tool, inject_params={"document_id": self.doc.id}
+        ).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, new_title="Updated Title")
+
+        self.assertEqual(result["id"], self.doc.id)
+        self.assertEqual(result["old_title"], "Sync Async Test Doc")
+        self.assertEqual(result["new_title"], "Updated Title")
+
+        # Verify the change was persisted
+        from channels.db import database_sync_to_async
+
+        doc = await database_sync_to_async(Document.objects.get)(pk=self.doc.id)
+        self.assertEqual(doc.title, "Updated Title")
+
+    async def test_sync_tool_with_core_tool_wrapper(self):
+        """Test sync tool wrapping through the full CoreTool -> PydanticAI pipeline.
+
+        This tests the complete flow that would be used by agent factory,
+        ensuring sync tools work when converted through UnifiedToolFactory.
+        """
+        # Create a fresh document for this test
+        from channels.db import database_sync_to_async
+
+        from opencontractserver.llms.tools.tool_factory import UnifiedToolFactory
+        from opencontractserver.llms.types import AgentFramework
+
+        fresh_doc = await database_sync_to_async(Document.objects.create)(
+            title="Fresh Test Doc",
+            corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+        core_tool = CoreTool.from_function(sync_db_read_tool)
+        wrapped = UnifiedToolFactory.create_tool(
+            core_tool,
+            AgentFramework.PYDANTIC_AI,
+            inject_params={"document_id": fresh_doc.id},
+        )
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx)
+
+        self.assertEqual(result["id"], fresh_doc.id)
+        self.assertEqual(result["title"], "Fresh Test Doc")

@@ -3,6 +3,7 @@
 import inspect
 import logging
 from collections.abc import Awaitable
+from functools import partial
 from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,6 +16,25 @@ from opencontractserver.llms.vector_stores.core_vector_stores import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Async-safe wrapper for synchronous database operations
+# ---------------------------------------------------------------------------
+# When sync tools are registered with PydanticAI agents, they get called from
+# an async context. Django's ORM is not async-safe by default and will raise
+# "You cannot call this from an async context" errors. We use database_sync_to_async
+# (from channels) or sync_to_async (from asgiref) to run sync functions in a
+# thread pool, making them safe to call from async contexts.
+# ---------------------------------------------------------------------------
+
+try:
+    from channels.db import database_sync_to_async as _database_sync_to_async
+
+    _db_sync_to_async = partial(_database_sync_to_async, thread_sensitive=False)
+except ModuleNotFoundError:  # Channels not installed – fall back gracefully
+    from asgiref.sync import sync_to_async as _sync_to_async
+
+    _db_sync_to_async = partial(_sync_to_async, thread_sensitive=False)
 
 
 async def _check_user_permissions(
@@ -383,7 +403,10 @@ class PydanticAIToolWrapper:
             async_wrapper.requires_approval = self.core_tool.requires_approval
             return async_wrapper
         else:
-            # Convert sync function to async
+            # Convert sync function to async using database_sync_to_async
+            # This wraps the sync function to run in a thread pool, making it
+            # safe to call Django ORM operations from async contexts
+            async_original_func = _db_sync_to_async(original_func)
 
             async def sync_to_async_wrapper(
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
@@ -406,7 +429,7 @@ class PydanticAIToolWrapper:
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
-                    return original_func(*args, **kwargs)
+                    return await async_original_func(*args, **kwargs)
                 except Exception as e:
                     logger.error(f"Error in tool {func_name}: {e}")
                     raise
