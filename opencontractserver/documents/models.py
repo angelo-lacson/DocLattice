@@ -1044,26 +1044,24 @@ class PipelineSettings(django.db.models.Model):
 
     def get_component_settings(self, component_class_path: str) -> dict:
         """
-        Get settings overrides for a specific component.
+        Get settings overrides for a specific component from database.
 
-        Falls back to Django settings if not configured in database.
+        This method only returns database settings, not Django settings fallback.
+        The Django settings fallback (with proper simple name vs full path
+        precedence) is handled by PipelineComponentBase.get_component_settings().
 
         Args:
             component_class_path: Full class path of the component
 
         Returns:
-            Dict of settings for the component.
+            Dict of settings for the component from database, or empty dict.
         """
-        from django.conf import settings as django_settings
-
-        # First check database settings
+        # Only return database settings - no Django fallback here
+        # The fallback chain is handled by PipelineComponentBase
         if self.component_settings and component_class_path in self.component_settings:
             return self.component_settings[component_class_path]
 
-        # Fall back to Django settings
-        return getattr(django_settings, "PIPELINE_SETTINGS", {}).get(
-            component_class_path, {}
-        )
+        return {}
 
     def get_default_embedder(self) -> str:
         """

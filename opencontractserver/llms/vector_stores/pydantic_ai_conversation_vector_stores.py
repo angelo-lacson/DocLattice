@@ -1,5 +1,6 @@
 """PydanticAI-specific vector store implementations for conversations and messages."""
 
+import asyncio
 import logging
 from typing import Any, Optional, Union
 
@@ -311,7 +312,11 @@ async def create_conversation_search_tool(
     Returns:
         Async function that can be used as a PydanticAI tool
     """
-    vector_store = PydanticAIConversationVectorStore(
+    # The PydanticAIConversationVectorStore constructor makes synchronous ORM calls
+    # (via CoreConversationVectorStore -> get_embedder -> PipelineSettings.get_instance).
+    # Wrap in to_thread to avoid SynchronousOnlyOperation in async context.
+    vector_store = await asyncio.to_thread(
+        PydanticAIConversationVectorStore,
         user_id=user_id,
         corpus_id=corpus_id,
         document_id=document_id,
@@ -375,7 +380,11 @@ async def create_message_search_tool(
     Returns:
         Async function that can be used as a PydanticAI tool
     """
-    vector_store = PydanticAIChatMessageVectorStore(
+    # The PydanticAIChatMessageVectorStore constructor makes synchronous ORM calls
+    # (via CoreChatMessageVectorStore -> get_embedder -> PipelineSettings.get_instance).
+    # Wrap in to_thread to avoid SynchronousOnlyOperation in async context.
+    vector_store = await asyncio.to_thread(
+        PydanticAIChatMessageVectorStore,
         user_id=user_id,
         corpus_id=corpus_id,
         conversation_id=conversation_id,

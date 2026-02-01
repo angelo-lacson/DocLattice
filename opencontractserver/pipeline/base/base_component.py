@@ -84,7 +84,9 @@ class PipelineComponentBase(ABC):
         """
         Load settings from Django settings.PIPELINE_SETTINGS as fallback.
 
-        Tries the full class path first, then falls back to simple class name.
+        Tries the simple class name first (higher precedence), then falls back
+        to the full class path. This allows simple configuration keys like
+        "MyComponent" to override more specific "mymodule.MyComponent" paths.
 
         Returns:
             Dict of settings for this component from Django settings.
@@ -97,20 +99,20 @@ class PipelineComponentBase(ABC):
 
         simple_class_name = self.__class__.__name__
 
-        # Try full class path first (more specific)
-        component_settings = pipeline_settings_dict.get(self._full_class_path)
-        if isinstance(component_settings, dict) and component_settings:
-            logger.debug(f"Loaded Django settings for '{self._full_class_path}'")
-            return component_settings.copy()
-
-        # Fallback to simple class name
+        # Try simple class name first (higher precedence for user convenience)
         component_settings = pipeline_settings_dict.get(simple_class_name)
         if isinstance(component_settings, dict) and component_settings:
             logger.debug(f"Loaded Django settings for '{simple_class_name}'")
             return component_settings.copy()
 
+        # Fallback to full class path
+        component_settings = pipeline_settings_dict.get(self._full_class_path)
+        if isinstance(component_settings, dict) and component_settings:
+            logger.debug(f"Loaded Django settings for '{self._full_class_path}'")
+            return component_settings.copy()
+
         logger.debug(
-            f"No settings found for '{self._full_class_path}' or "
-            f"'{simple_class_name}' in PIPELINE_SETTINGS."
+            f"No settings found for '{simple_class_name}' or "
+            f"'{self._full_class_path}' in PIPELINE_SETTINGS."
         )
         return {}
