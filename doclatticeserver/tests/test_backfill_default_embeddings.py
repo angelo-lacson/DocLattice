@@ -52,7 +52,7 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document, self.user)
         return document
 
     def _create_annotation(self, document, raw_text="Test text", corpus=None):
@@ -214,7 +214,7 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus2.documents.add(document2)
+        self.corpus2.add_document(document2, self.user)
         self._create_annotation(document2, raw_text="Other text", corpus=self.corpus2)
 
         out = StringIO()

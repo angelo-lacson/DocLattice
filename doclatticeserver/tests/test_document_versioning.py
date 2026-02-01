@@ -1872,9 +1872,6 @@ class TextFileVersioningTestCase(TestCase):
         self.assertTrue(doc.txt_extract_file)
         self.assertFalse(doc.pdf_file)
 
-        # Verify M2M maintained for backwards compatibility
-        self.assertIn(doc, self.corpus.documents.all())
-
     def test_text_file_versioning_via_import_content(self):
         """
         Text file versioning should work via import_content() as well.

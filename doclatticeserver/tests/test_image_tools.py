@@ -873,7 +873,7 @@ class ImageToolsEdgeCasesTest(TestCase):
                 json.dumps(malformed_pawls).encode(), name="test.pawls"
             ),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document, self.user)
 
         # Should not raise an exception
         result = list_document_images(document.id)
@@ -902,7 +902,7 @@ class ImageToolsEdgeCasesTest(TestCase):
                 json.dumps(pawls_data).encode(), name="test.pawls"
             ),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document, self.user)
 
         result = list_document_images(document.id)
         # Should find the one valid image token (even with missing fields)
@@ -928,7 +928,7 @@ class ImageToolsEdgeCasesTest(TestCase):
                 json.dumps(pawls_data).encode(), name="test.pawls"
             ),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document, self.user)
 
         # Token at index 0 is text, not image
         result = get_document_image(document.id, page_index=0, token_index=0)
@@ -951,7 +951,7 @@ class ImageToolsEdgeCasesTest(TestCase):
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document, self.user)
 
         annotation = Annotation.objects.create(
             document=document,

@@ -46,7 +46,7 @@ class TestAgentActionResultAdmin(TestCase):
             title="Test Document for Agent Admin",
             creator=cls.superuser,
         )
-        cls.corpus.documents.add(cls.document)
+        cls.corpus.add_document(cls.document, cls.superuser)
 
         # Create agent configuration
         cls.agent_config = AgentConfiguration.objects.create(

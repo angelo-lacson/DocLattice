@@ -1263,8 +1263,7 @@ class StartCorpusFork(graphene.Mutation):
             )
 
             # Now remove references to related objects on our new object, as these point to original docs and labels
-            # Note: New corpus has no DocumentPath records yet, so this is safe
-            corpus.documents.clear()
+            # Note: New forked corpus has no DocumentPath records yet, so no document cleanup needed
             corpus.label_set = None
 
             # Copy docs, annotations, folders, relationships, and metadata using async task
@@ -3415,12 +3414,16 @@ class UpdateDocumentRelationship(graphene.Mutation):
                         )
 
                     # Validate both documents are in the new corpus
-                    docs_in_corpus = corpus.documents.filter(
-                        id__in=[
-                            doc_relationship.source_document_id,
-                            doc_relationship.target_document_id,
-                        ]
-                    ).count()
+                    docs_in_corpus = (
+                        corpus.get_documents()
+                        .filter(
+                            id__in=[
+                                doc_relationship.source_document_id,
+                                doc_relationship.target_document_id,
+                            ]
+                        )
+                        .count()
+                    )
                     if docs_in_corpus != 2:
                         return UpdateDocumentRelationship(
                             ok=False,

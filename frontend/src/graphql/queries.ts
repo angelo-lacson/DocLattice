@@ -405,6 +405,7 @@ export const GET_CORPUS_WITH_HISTORY = gql`
       modified
       isPublic
       myPermissions
+      documentCount
       creator {
         id
         email

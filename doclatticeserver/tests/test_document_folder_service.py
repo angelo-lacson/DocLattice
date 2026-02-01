@@ -1675,15 +1675,6 @@ class TestM2MBackwardCompatibility(DocumentFolderServiceTestBase):
             title="Source Document", creator=self.owner, pdf_file="source.pdf"
         )
 
-    def test_add_document_updates_m2m_relationship(self):
-        """Adding document to corpus should also add to M2M relationship."""
-        corpus_doc, _, _ = DocumentFolderService.add_document_to_corpus(
-            user=self.owner, document=self.source_document, corpus=self.corpus
-        )
-
-        # Should be findable via M2M
-        self.assertTrue(self.corpus.documents.filter(id=corpus_doc.id).exists())
-
     def test_legacy_query_finds_added_document(self):
         """Legacy query Document.objects.filter(corpus=...) should find document."""
         corpus_doc, _, _ = DocumentFolderService.add_document_to_corpus(
