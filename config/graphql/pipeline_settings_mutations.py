@@ -23,7 +23,9 @@ MAX_MIME_TYPE_LENGTH = 128
 VALID_COMPONENT_PATH_PATTERN = re.compile(
     r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+$"
 )
-VALID_MIME_TYPE_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*$")
+VALID_MIME_TYPE_PATTERN = re.compile(
+    r"^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*$"
+)
 
 
 def validate_component_path(path: str) -> Optional[str]:
@@ -212,7 +214,9 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
 
             # Validate and apply preferred_parsers
             if preferred_parsers is not None:
-                error = validate_component_mapping(preferred_parsers, registry, "Parser")
+                error = validate_component_mapping(
+                    preferred_parsers, registry, "Parser"
+                )
                 if error:
                     return UpdatePipelineSettingsMutation(
                         ok=False, message=error, pipeline_settings=None
@@ -296,6 +300,9 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                     parser_kwargs=settings_instance.parser_kwargs or {},
                     component_settings=settings_instance.component_settings or {},
                     default_embedder=settings_instance.default_embedder or "",
+                    components_with_secrets=list(
+                        settings_instance.get_secrets().keys()
+                    ),
                     modified=settings_instance.modified,
                     modified_by=settings_instance.modified_by,
                 ),
@@ -378,6 +385,9 @@ class ResetPipelineSettingsMutation(graphene.Mutation):
                     parser_kwargs=settings_instance.parser_kwargs or {},
                     component_settings=settings_instance.component_settings or {},
                     default_embedder=settings_instance.default_embedder or "",
+                    components_with_secrets=list(
+                        settings_instance.get_secrets().keys()
+                    ),
                     modified=settings_instance.modified,
                     modified_by=settings_instance.modified_by,
                 ),
