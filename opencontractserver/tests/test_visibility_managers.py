@@ -307,28 +307,29 @@ class PermissionBasedVisibilityTest(TestCase):
 
     def test_corpus_visibility_with_permissions(self):
         """Test visibility rules for Corpus model using visible_to_user."""
-        # Owner sees their own + public (3 total: public, private, shared)
+        # Owner sees their own + personal corpus (4 total: public, private, shared, personal)
         owner_qs = Corpus.objects.visible_to_user(self.owner)
         self.assertEqual(
-            owner_qs.count(), 3, f"Owner should see 3 corpuses, saw {owner_qs.count()}"
+            owner_qs.count(), 4, f"Owner should see 4 corpuses, saw {owner_qs.count()}"
         )
 
-        # Collaborator sees public + their own + shared (via permission) (3 total: public, shared, collaborator's)
+        # Collaborator sees public + their own + shared (via permission) + personal
+        # (4 total: public, shared, collaborator's, personal)
         collab_qs = Corpus.objects.visible_to_user(self.collaborator)
         self.assertEqual(
             collab_qs.count(),
-            3,
-            f"Collaborator should see 3 corpuses, saw {collab_qs.count()}",
+            4,
+            f"Collaborator should see 4 corpuses, saw {collab_qs.count()}",
         )
 
-        # Regular user sees only public (1 total: public)
+        # Regular user sees public + their personal corpus (2 total)
         regular_qs = Corpus.objects.visible_to_user(self.regular_user)
         self.assertEqual(
             regular_qs.count(),
-            1,
-            f"Regular user should see 1 corpus, saw {regular_qs.count()}",
+            2,
+            f"Regular user should see 2 corpuses, saw {regular_qs.count()}",
         )
-        self.assertEqual(regular_qs.first(), self.public_corpus)
+        self.assertIn(self.public_corpus, regular_qs)
 
         # Anonymous user sees only public (1 total: public)
         anon_qs = Corpus.objects.visible_to_user(self.anonymous_user)

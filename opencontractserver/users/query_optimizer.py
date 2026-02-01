@@ -124,6 +124,11 @@ class UserQueryOptimizer:
         else:
             shared_membership_q = Q()
 
+        # If include_self=False, ensure user is excluded from shared membership path too
+        # (e.g., user is a corpus creator but shouldn't see themselves)
+        if not include_self and shared_membership_q:
+            shared_membership_q = shared_membership_q & ~Q(id=requesting_user.id)
+
         # Combine all visibility conditions
         visibility_q = own_profile_q | public_profiles_q | shared_membership_q
 
