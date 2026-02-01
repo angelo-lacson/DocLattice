@@ -56,7 +56,8 @@ def validate_no_orphaned_m2m(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("corpuses", "0038_create_personal_corpuses"),
-        ("documents", "0026_add_document_soft_delete"),  # Ensure DocumentPath exists
+        # DocumentPath (with is_deleted) exists since 0023; 0038 already depends on 0030
+        ("documents", "0030_document_processing_error_and_more"),
     ]
 
     operations = [
