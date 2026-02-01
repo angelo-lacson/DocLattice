@@ -325,16 +325,16 @@ class Query(graphene.ObjectType):
     def resolve_annotations(
         self, info, analysis_isnull=None, structural=None, **kwargs
     ):
-        # Check if we should use the query optimizer (when document_id is provided)
+        # Import the query optimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
         document_id = kwargs.get("document_id")
         corpus_id = kwargs.get("corpus_id")
 
         if document_id:
-            # Import the query optimizer
-            from opencontractserver.annotations.query_optimizer import (
-                AnnotationQueryOptimizer,
-            )
-
+            # Use document-specific query optimizer
             doc_django_pk = int(from_global_id(document_id)[1])
             corpus_django_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
 
@@ -348,8 +348,23 @@ class Query(graphene.ObjectType):
                 use_cache=False,
             )
 
+        elif corpus_id:
+            # Use corpus-wide query optimizer (handles structural annotations correctly)
+            # This optimizer already applies structural, analysis_isnull, and corpus filters
+            corpus_django_pk = int(from_global_id(corpus_id)[1])
+            queryset = AnnotationQueryOptimizer.get_corpus_annotations(
+                corpus_id=corpus_django_pk,
+                user=info.context.user,
+                structural=structural,
+                analysis_isnull=analysis_isnull,
+            )
+            # Mark filters already applied by optimizer to prevent double-filtering
+            corpus_id = None
+            structural = None
+            analysis_isnull = None
+
         else:
-            # Fallback to old behavior for non-document queries
+            # Fallback to visible_to_user for queries without document or corpus
             queryset = Annotation.objects.visible_to_user(info.context.user)
             logger.info(
                 f"Using visible_to_user for annotations query, found {queryset.count()} annotations"

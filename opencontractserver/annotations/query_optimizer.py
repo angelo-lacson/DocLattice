@@ -492,6 +492,179 @@ class AnnotationQueryOptimizer:
         # Simply filter by corpus since permissions are already checked
         return qs.filter(corpus_id=corpus_id)
 
+    @classmethod
+    def get_corpus_annotations(
+        cls,
+        corpus_id: int,
+        user,
+        structural: Optional[bool] = None,
+        analysis_isnull: Optional[bool] = None,
+    ) -> QuerySet:
+        """
+        Get annotations for a corpus with proper permission filtering.
+        Handles BOTH document-attached AND structural annotations correctly.
+
+        This method is for corpus-wide queries where no specific document_id is provided.
+        It properly includes structural annotations which have:
+        - document_id = NULL (linked via structural_set instead)
+        - corpus_id = NULL (shared across corpuses via structural_set)
+
+        Permission model:
+        - User must have READ permission on corpus
+        - Annotations are filtered to only those on documents user can see
+        - Structural annotations are included if their structural_set is linked
+          to any visible document in the corpus
+
+        Args:
+            corpus_id: The corpus ID to query annotations for
+            user: The requesting user
+            structural: Optional filter for structural annotations (True/False/None)
+            analysis_isnull: Optional filter for analysis field (True=manual only)
+
+        Returns:
+            QuerySet of annotations with permission filtering applied
+        """
+        from opencontractserver.analyzer.models import (
+            Analysis,
+            AnalysisUserObjectPermission,
+        )
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import Document
+        from opencontractserver.extracts.models import (
+            Extract,
+            ExtractUserObjectPermission,
+        )
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        # Superusers see everything
+        if user.is_superuser:
+            qs = Annotation.objects.filter(corpus_id=corpus_id)
+
+            # For structural annotations, include those linked via structural_set
+            # to documents in this corpus
+            visible_doc_ids = Document.objects.filter(
+                path_records__corpus_id=corpus_id,
+                path_records__is_current=True,
+                path_records__is_deleted=False,
+            ).values_list("id", flat=True)
+
+            structural_set_ids = Document.objects.filter(
+                id__in=visible_doc_ids,
+                structural_annotation_set_id__isnull=False,
+            ).values_list("structural_annotation_set_id", flat=True)
+
+            # Combine: corpus annotations OR structural annotations from visible docs
+            qs = Annotation.objects.filter(
+                Q(corpus_id=corpus_id)
+                | Q(structural_set_id__in=structural_set_ids, structural=True)
+            )
+
+            if structural is not None:
+                qs = qs.filter(structural=structural)
+            if analysis_isnull is not None:
+                qs = qs.filter(analysis__isnull=analysis_isnull)
+
+            return qs.distinct()
+
+        # Check corpus permission first
+        try:
+            corpus = Corpus.objects.get(id=corpus_id)
+        except Corpus.DoesNotExist:
+            return Annotation.objects.none()
+
+        # Anonymous users: corpus must be public
+        if user.is_anonymous:
+            if not corpus.is_public:
+                return Annotation.objects.none()
+            # Get public documents in this corpus
+            visible_doc_ids = Document.objects.filter(
+                is_public=True,
+                path_records__corpus_id=corpus_id,
+                path_records__is_current=True,
+                path_records__is_deleted=False,
+            ).values_list("id", flat=True)
+        else:
+            # Check if user has READ permission on corpus
+            has_corpus_read = user_has_permission_for_obj(
+                user, corpus, PermissionTypes.READ, include_group_permissions=True
+            )
+            if not has_corpus_read:
+                return Annotation.objects.none()
+
+            # Get documents visible to user in this corpus
+            visible_doc_ids = (
+                Document.objects.visible_to_user(user)
+                .filter(
+                    path_records__corpus_id=corpus_id,
+                    path_records__is_current=True,
+                    path_records__is_deleted=False,
+                )
+                .values_list("id", flat=True)
+            )
+
+        if not visible_doc_ids:
+            return Annotation.objects.none()
+
+        # Get structural_annotation_set IDs from visible documents
+        structural_set_ids = Document.objects.filter(
+            id__in=visible_doc_ids,
+            structural_annotation_set_id__isnull=False,
+        ).values_list("structural_annotation_set_id", flat=True)
+
+        # Build query for BOTH types of annotations:
+        # 1. Document-attached annotations: corpus_id matches AND document is visible
+        # 2. Structural annotations: structural_set_id is from a visible document
+        base_filter = Q(corpus_id=corpus_id, document_id__in=visible_doc_ids)
+
+        if structural_set_ids:
+            base_filter |= Q(structural_set_id__in=structural_set_ids, structural=True)
+
+        qs = Annotation.objects.filter(base_filter)
+
+        # Apply privacy filtering for created_by_* fields (non-superuser, non-anonymous)
+        if not user.is_anonymous:
+            # Get analyses user can access
+            visible_analyses = Analysis.objects.filter(
+                Q(is_public=True) | Q(creator=user)
+            )
+            analyses_with_permission = AnalysisUserObjectPermission.objects.filter(
+                user=user
+            ).values_list("content_object_id", flat=True)
+            visible_analyses = visible_analyses | Analysis.objects.filter(
+                id__in=analyses_with_permission
+            )
+
+            # Get extracts user can access
+            visible_extracts = Extract.objects.filter(Q(creator=user))
+            extracts_with_permission = ExtractUserObjectPermission.objects.filter(
+                user=user
+            ).values_list("content_object_id", flat=True)
+            visible_extracts = visible_extracts | Extract.objects.filter(
+                id__in=extracts_with_permission
+            )
+
+            # Filter: exclude private annotations user can't see
+            # BUT always include structural annotations (bypass privacy)
+            qs = qs.exclude(
+                Q(created_by_analysis__isnull=False)
+                & Q(structural=False)
+                & ~Q(created_by_analysis__in=visible_analyses)
+            ).exclude(
+                Q(created_by_extract__isnull=False)
+                & Q(structural=False)
+                & ~Q(created_by_extract__in=visible_extracts)
+            )
+
+        # Apply optional filters
+        if structural is not None:
+            qs = qs.filter(structural=structural)
+        if analysis_isnull is not None:
+            qs = qs.filter(analysis__isnull=analysis_isnull)
+
+        return qs.distinct()
+
 
 class RelationshipQueryOptimizer:
     """
