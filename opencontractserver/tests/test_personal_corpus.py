@@ -857,3 +857,51 @@ class TestPersonalCorpusSignalErrorHandling(TransactionTestCase):
             Corpus.objects.filter(creator=user, is_personal=True).count(),
             1,
         )
+
+
+class TestDocumentVersioningHelpers(TestCase):
+    """Tests for document versioning helper functions."""
+
+    def test_is_text_file_returns_true_for_text_plain(self):
+        """Should return True for text/plain MIME type."""
+        from opencontractserver.documents.versioning import _is_text_file
+
+        self.assertTrue(_is_text_file("text/plain"))
+
+    def test_is_text_file_returns_true_for_application_txt(self):
+        """Should return True for application/txt MIME type."""
+        from opencontractserver.documents.versioning import _is_text_file
+
+        self.assertTrue(_is_text_file("application/txt"))
+
+    def test_is_text_file_returns_false_for_pdf(self):
+        """Should return False for PDF MIME type."""
+        from opencontractserver.documents.versioning import _is_text_file
+
+        self.assertFalse(_is_text_file("application/pdf"))
+
+    def test_is_text_file_returns_false_for_none(self):
+        """Should return False for None file type."""
+        from opencontractserver.documents.versioning import _is_text_file
+
+        self.assertFalse(_is_text_file(None))
+
+    def test_create_content_file_handles_none_file_type(self):
+        """Should default to application/octet-stream for None file_type."""
+        from opencontractserver.documents.versioning import _create_content_file
+
+        content = b"test content"
+        content_hash = "abc123"
+        path = "/test/path"
+
+        # Should not raise when file_type is None
+        result = _create_content_file(
+            content=content,
+            content_hash=content_hash,
+            path=path,
+            file_type=None,
+        )
+
+        self.assertIsNotNone(result)
+        # Should have a .bin extension for unknown type
+        self.assertTrue(result.name.endswith(".bin"))
