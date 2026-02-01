@@ -126,8 +126,7 @@ class Corpus(TreeNode):
         blank=True, null=True, upload_to=calculate_icon_filepath
     )
 
-    # Documents and Labels in the Corpus
-    documents = django.db.models.ManyToManyField("documents.Document", blank=True)
+    # Categories and Labels in the Corpus
     categories = django.db.models.ManyToManyField(
         "CorpusCategory",
         blank=True,
@@ -607,10 +606,6 @@ class Corpus(TreeNode):
                 creator=user,
             )
 
-            # Maintain M2M relationship for backwards compatibility
-            # This allows legacy queries like Document.objects.filter(corpus=...)
-            self.documents.add(corpus_copy)
-
             logger.info(
                 f"Added corpus-isolated doc {corpus_copy.pk} to corpus {self.pk} at {path}"
             )
@@ -717,11 +712,6 @@ class Corpus(TreeNode):
             file_type=effective_file_type,
             **doc_kwargs,
         )
-
-        # Maintain M2M relationship for backwards compatibility
-        # This allows legacy queries like Document.objects.filter(corpus=...)
-        # TODO: Remove once M2M is fully deprecated (see issue #835)
-        self.documents.add(doc)
 
         return doc, status, doc_path
 

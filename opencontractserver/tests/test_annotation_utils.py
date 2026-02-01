@@ -292,7 +292,7 @@ class TestComputeContentModalitiesWithDocument(TestCase):
                 json.dumps(pawls_data).encode(), name="test.pawls"
             ),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document, self.user)
 
         tokens = [{"pageIndex": 0, "tokenIndex": 0}]
         result = compute_content_modalities(tokens, document=document)
@@ -356,7 +356,7 @@ class TestUpdateAnnotationModalities(TestCase):
                 json.dumps(pawls_data).encode(), name="test.pawls"
             ),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document, self.user)
         return document
 
     def test_updates_annotation_modalities_field(self):

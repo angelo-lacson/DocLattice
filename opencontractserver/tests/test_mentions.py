@@ -61,7 +61,7 @@ class MentionParsingTestCase(TestCase):
             slug="contract-template",
             backend_lock=True,  # Skip signal handlers
         )
-        self.corpus1.documents.add(self.doc1)
+        self.corpus1.add_document(self.doc1, self.user1)
 
         self.doc2 = Document.objects.create(
             title="Private Doc",
@@ -70,7 +70,7 @@ class MentionParsingTestCase(TestCase):
             slug="private-doc",
             backend_lock=True,  # Skip signal handlers
         )
-        self.corpus2.documents.add(self.doc2)
+        self.corpus2.add_document(self.doc2, self.user2)
 
         # Create conversation and message
         self.conversation = Conversation.objects.create(

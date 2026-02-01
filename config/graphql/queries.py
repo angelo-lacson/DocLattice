@@ -4128,7 +4128,9 @@ class Query(graphene.ObjectType):
         try:
             user = User.objects.get(slug=user_slug)
             corpus = Corpus.objects.get(creator=user, slug=corpus_slug, is_public=True)
-            document = corpus.documents.get(slug=document_slug, is_public=True)
+            document = corpus.get_documents().filter(slug=document_slug, is_public=True).first()
+            if not document:
+                raise Document.DoesNotExist()
 
             # Build icon URL if available
             icon_url = None
