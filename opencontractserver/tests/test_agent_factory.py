@@ -35,9 +35,10 @@ class TestUserHasWritePermission(TestCase):
         cls.corpus = Corpus.objects.create(
             title="Write Perm Test Corpus", creator=cls.user
         )
-        cls.doc = Document.objects.create(
-            title="Write Perm Test Doc", corpus=cls.corpus, creator=cls.user
+        original_doc = Document.objects.create(
+            title="Write Perm Test Doc", creator=cls.user
         )
+        cls.doc, _, _ = cls.corpus.add_document(document=original_doc, user=cls.user)
 
     async def test_returns_false_when_resource_is_none(self):
         """Test that _user_has_write_permission returns False when resource is None."""

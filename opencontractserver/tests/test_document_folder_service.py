@@ -1675,14 +1675,19 @@ class TestM2MBackwardCompatibility(DocumentFolderServiceTestBase):
             title="Source Document", creator=self.owner, pdf_file="source.pdf"
         )
 
-    def test_legacy_query_finds_added_document(self):
-        """Legacy query Document.objects.filter(corpus=...) should find document."""
+    def test_document_path_query_finds_added_document(self):
+        """Documents can be found via DocumentPath query after add_document."""
         corpus_doc, _, _ = DocumentFolderService.add_document_to_corpus(
             user=self.owner, document=self.source_document, corpus=self.corpus
         )
 
-        # This is the legacy query pattern used in many places
-        found = Document.objects.filter(corpus=self.corpus)
+        # Query via DocumentPath - the new pattern
+        from opencontractserver.documents.models import DocumentPath
+
+        doc_ids = DocumentPath.objects.filter(
+            corpus=self.corpus, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+        found = Document.objects.filter(id__in=doc_ids)
         self.assertIn(corpus_doc, found)
 
 

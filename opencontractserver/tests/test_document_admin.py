@@ -43,11 +43,13 @@ class TestDocumentAdmin(TestCase):
         cls.corpus = Corpus.objects.create(title="Test Corpus", creator=cls.superuser)
 
         # Create a document with one embedding
-        cls.document = Document.objects.create(
-            corpus=cls.corpus,
+        original_doc = Document.objects.create(
             title="Test Document",
             creator=cls.superuser,
             is_public=True,
+        )
+        cls.document, _, _ = cls.corpus.add_document(
+            document=original_doc, user=cls.superuser
         )
         # Create the Embedding
         cls.embedding_384 = Embedding.objects.create(
