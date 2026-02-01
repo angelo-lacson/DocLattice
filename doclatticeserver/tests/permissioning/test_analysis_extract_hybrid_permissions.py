@@ -774,7 +774,7 @@ class ExtractMetadataPermissionTestCase(TestCase):
         self.doc = Document.objects.create(title="Test Doc", creator=self.user)
 
         self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
-        self.corpus.add_document(self.doc, self.user)
+        self.corpus.add_document(document=self.doc, user=self.user)
 
         # Create fieldset with manual metadata column
         self.fieldset = Fieldset.objects.create(

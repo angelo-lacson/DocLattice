@@ -4058,9 +4058,9 @@ class Query(graphene.ObjectType):
         User = get_user_model()
         try:
             user = User.objects.get(slug=user_slug)
-            # Use annotate to avoid N+1 query for document count
+            # Use annotate to count documents via DocumentPath instead of M2M
             corpus = (
-                Corpus.objects.annotate(doc_count=Count("documents"))
+                Corpus.objects.annotate(doc_count=Count("document_paths"))
                 .select_related("creator")
                 .get(creator=user, slug=corpus_slug, is_public=True)
             )

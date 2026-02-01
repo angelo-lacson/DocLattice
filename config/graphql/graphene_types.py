@@ -2622,8 +2622,10 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 )
 
                 if document and corpus:
-                    # Check if document is actually in this corpus
-                    if corpus in document.corpus_set.all():
+                    # Check if document is actually in this corpus via DocumentPath
+                    if DocumentPath.objects.filter(
+                        document=document, corpus=corpus
+                    ).exists():
                         mentions.append(
                             MentionedResourceType(
                                 type="document",
@@ -2671,12 +2673,9 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 document = Document.objects.visible_to_user(user).get(slug=doc_slug)
                 url = f"/d/{document.creator.slug}/{document.slug}"
 
-                # Try to get corpus context (documents can be in multiple corpuses)
-                corpus = (
-                    document.corpus_set.first()
-                    if document.corpus_set.exists()
-                    else None
-                )
+                # Try to get corpus context via DocumentPath
+                doc_path = DocumentPath.objects.filter(document=document).first()
+                corpus = doc_path.corpus if doc_path else None
 
                 mentions.append(
                     MentionedResourceType(
