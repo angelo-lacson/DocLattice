@@ -5,9 +5,53 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-28
+## [Unreleased] - 2026-01-31
+
+### ⚠️ Important Migration Notes
+
+**Migration 0038 (`create_personal_corpuses`) is IRREVERSIBLE**
+
+This release includes a data migration that creates personal "My Documents" corpuses for all users and moves standalone documents into them. This migration **cannot be rolled back** via `python manage.py migrate`. Attempting to reverse will raise `NotImplementedError`.
+
+**Before deploying to production:**
+- Ensure you have a database backup
+- Test the migration in a staging environment first
+- Plan for this being a one-way migration
+
+If rollback is required after deployment, you must write a custom migration to handle your specific data preservation needs.
 
 ### Added
+
+#### Personal Corpus ("My Documents") Feature
+- **Personal corpus auto-creation**: Each user now automatically receives a personal "My Documents" corpus
+  - Created via signal handler when user account is created
+  - Uses database constraint to ensure one personal corpus per user (`one_personal_corpus_per_user`)
+  - Personal corpus is private (`is_public=False`) and grants full permissions to owner
+  - Files: `opencontractserver/corpuses/models.py:378-432`, `opencontractserver/users/signals.py:16-48`
+- **All uploads default to personal corpus**: Documents without a specified corpus go to "My Documents"
+  - Single file uploads via GraphQL now route to personal corpus
+  - Zip file bulk uploads also default to personal corpus when no corpus specified
+  - Files: `config/graphql/mutations.py:1807-1908`, `opencontractserver/tasks/import_tasks.py:514-585`
+- **`Corpus.get_or_create_personal_corpus()` class method**: Idempotent method to get/create personal corpus
+  - Thread-safe using `get_or_create` with atomic transaction
+  - Grants full permissions on creation
+  - Files: `opencontractserver/corpuses/models.py:390-432`
+- **Data migration for existing users**: Migration creates personal corpuses for existing users and moves standalone documents
+  - Creates "My Documents" corpus for all active users
+  - Moves documents without any DocumentPath to their creator's personal corpus
+  - **⚠️ IRREVERSIBLE MIGRATION**: This migration cannot be rolled back automatically. Attempting to reverse will raise `NotImplementedError`. Rolling back would delete DocumentPath records and orphan user documents from their corpus organization. If rollback is required, a custom migration must be written to handle data preservation.
+  - Files: `opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`
+
+#### Shared StructuralAnnotationSet
+- **Reuse structural sets instead of duplicating**: `add_document()` now reuses the source document's structural set
+  - Previously, adding a document to a corpus duplicated the entire StructuralAnnotationSet
+  - Now shares the set, reducing storage and maintaining single source of truth
+  - Files: `opencontractserver/corpuses/models.py:528-535`
+- **Incremental embedding creation**: New Celery task checks for missing embeddings when document is added
+  - `ensure_embeddings_for_corpus()` checks if embeddings exist for corpus's required embedders
+  - Only queues embedding generation for annotations missing embeddings
+  - Supports both DEFAULT_EMBEDDER and corpus's preferred_embedder
+  - Files: `opencontractserver/tasks/corpus_tasks.py:712-850`
 
 #### Inline Thread View with Corpus Context Sidebar
 - **Added inline thread viewing**: Users can now view thread details inline within the Discussions tab instead of navigating away
@@ -37,6 +81,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Added component tests for new features**:
   - Mention badge rendering tests: `frontend/tests/MentionRendering.ct.tsx`
   - Compact vote button tests: `frontend/tests/VoteButtonsCompact.ct.tsx`
+
+### Technical Details
+- Added `is_personal` BooleanField to Corpus model with database constraint
+- Added composite index on `(creator, is_personal)` for efficient lookups
+- Schema migration: `opencontractserver/corpuses/migrations/0037_add_is_personal_corpus.py`
+- Comprehensive test suite: `opencontractserver/tests/test_personal_corpus.py` (14 tests)
 
 #### AnnotationsPanel Shared Component
 - **Created `AnnotationsPanel` reusable component**: Extracts shared filtering/display logic from annotations views

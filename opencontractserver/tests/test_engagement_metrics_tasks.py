@@ -287,9 +287,9 @@ class TestUpdateAllCorpusEngagementMetricsTask(TestCase):
         """Test that batch task queues updates for all corpuses."""
         result = update_all_corpus_engagement_metrics()
 
-        # Should queue 3 updates
-        self.assertEqual(result["queued_updates"], 3)
-        self.assertEqual(len(result["corpus_ids"]), 3)
+        # Should queue 4 updates (3 explicit + 1 personal corpus)
+        self.assertEqual(result["queued_updates"], 4)
+        self.assertEqual(len(result["corpus_ids"]), 4)
         self.assertIn(self.corpus1.id, result["corpus_ids"])
         self.assertIn(self.corpus2.id, result["corpus_ids"])
         self.assertIn(self.corpus3.id, result["corpus_ids"])

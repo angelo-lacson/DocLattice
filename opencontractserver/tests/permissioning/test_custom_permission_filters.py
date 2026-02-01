@@ -85,18 +85,26 @@ class PermissionFilteringTestCase(TestCase):
         """
 
         # Test for user1
+        # Each user now also has a personal corpus (auto-created on user creation)
         result1 = self.client1.execute(query)
-        self.assertEqual(len(result1["data"]["corpuses"]["edges"]), 1)
         self.assertEqual(
-            result1["data"]["corpuses"]["edges"][0]["node"]["title"], "Corpus 1"
-        )
+            len(result1["data"]["corpuses"]["edges"]), 2
+        )  # corpus1 + personal
+        titles1 = [
+            edge["node"]["title"] for edge in result1["data"]["corpuses"]["edges"]
+        ]
+        self.assertIn("Corpus 1", titles1)
 
         # Test for user2
+        # Each user now also has a personal corpus (auto-created on user creation)
         result2 = self.client2.execute(query)
-        self.assertEqual(len(result2["data"]["corpuses"]["edges"]), 1)
         self.assertEqual(
-            result2["data"]["corpuses"]["edges"][0]["node"]["title"], "Corpus 2"
-        )
+            len(result2["data"]["corpuses"]["edges"]), 2
+        )  # corpus2 + personal
+        titles2 = [
+            edge["node"]["title"] for edge in result2["data"]["corpuses"]["edges"]
+        ]
+        self.assertIn("Corpus 2", titles2)
 
     def test_document_permission_filtering(self):
         query = """
@@ -217,30 +225,46 @@ class PermissionFilteringTestCase(TestCase):
         )
 
         # Test for user1
+        # Each user now also has a personal corpus (auto-created on user creation)
         result1 = self.client1.execute(query)
-        self.assertEqual(len(result1["data"]["corpuses"]["edges"]), 1)
         self.assertEqual(
-            len(result1["data"]["corpuses"]["edges"][0]["node"]["documents"]["edges"]),
-            1,
+            len(result1["data"]["corpuses"]["edges"]), 2
+        )  # corpus1 + personal
+        # Find corpus1 in the results (not the personal corpus)
+        corpus1_edge = next(
+            (
+                e
+                for e in result1["data"]["corpuses"]["edges"]
+                if e["node"]["title"] == "Corpus 1"
+            ),
+            None,
         )
+        self.assertIsNotNone(corpus1_edge)
+        self.assertEqual(len(corpus1_edge["node"]["documents"]["edges"]), 1)
         self.assertEqual(
-            result1["data"]["corpuses"]["edges"][0]["node"]["documents"]["edges"][0][
-                "node"
-            ]["title"],
+            corpus1_edge["node"]["documents"]["edges"][0]["node"]["title"],
             "Document 1",
         )
 
         # Test for user2
+        # Each user now also has a personal corpus (auto-created on user creation)
         result2 = self.client2.execute(query)
-        self.assertEqual(len(result2["data"]["corpuses"]["edges"]), 1)
         self.assertEqual(
-            len(result2["data"]["corpuses"]["edges"][0]["node"]["documents"]["edges"]),
-            1,
+            len(result2["data"]["corpuses"]["edges"]), 2
+        )  # corpus2 + personal
+        # Find corpus2 in the results (not the personal corpus)
+        corpus2_edge = next(
+            (
+                e
+                for e in result2["data"]["corpuses"]["edges"]
+                if e["node"]["title"] == "Corpus 2"
+            ),
+            None,
         )
+        self.assertIsNotNone(corpus2_edge)
+        self.assertEqual(len(corpus2_edge["node"]["documents"]["edges"]), 1)
         self.assertEqual(
-            result2["data"]["corpuses"]["edges"][0]["node"]["documents"]["edges"][0][
-                "node"
-            ]["title"],
+            corpus2_edge["node"]["documents"]["edges"][0]["node"]["title"],
             "Document 2",
         )
 
@@ -259,11 +283,15 @@ class PermissionFilteringTestCase(TestCase):
         """
 
         # Initial test for user2
+        # Each user now also has a personal corpus (auto-created on user creation)
         result1 = self.client2.execute(query)
-        self.assertEqual(len(result1["data"]["corpuses"]["edges"]), 1)
         self.assertEqual(
-            result1["data"]["corpuses"]["edges"][0]["node"]["title"], "Corpus 2"
-        )
+            len(result1["data"]["corpuses"]["edges"]), 2
+        )  # corpus2 + personal
+        titles1 = [
+            edge["node"]["title"] for edge in result1["data"]["corpuses"]["edges"]
+        ]
+        self.assertIn("Corpus 2", titles1)
 
         # Grant permission to user2 for corpus1
         set_permissions_for_obj_to_user(
@@ -272,7 +300,9 @@ class PermissionFilteringTestCase(TestCase):
 
         # Test again for user2 - permission grant above SHOULD have affected the result
         result2 = self.client2.execute(query)
-        self.assertEqual(len(result2["data"]["corpuses"]["edges"]), 2)
+        self.assertEqual(
+            len(result2["data"]["corpuses"]["edges"]), 3
+        )  # corpus1 + corpus2 + personal
         titles = [
             edge["node"]["title"] for edge in result2["data"]["corpuses"]["edges"]
         ]

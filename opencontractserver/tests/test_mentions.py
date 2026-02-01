@@ -512,6 +512,7 @@ class MentionSearchTestCase(TestCase):
 
         self.assertIsNone(result.get("errors"))
         edges = result["data"]["searchCorpusesForMention"]["edges"]
-        # Should return user's accessible corpuses (just corpus1)
-        self.assertEqual(len(edges), 1)
-        self.assertEqual(edges[0]["node"]["slug"], "legal-contracts")
+        # Should return user's accessible corpuses (corpus1 + personal corpus)
+        self.assertEqual(len(edges), 2)
+        slugs = [edge["node"]["slug"] for edge in edges]
+        self.assertIn("legal-contracts", slugs)

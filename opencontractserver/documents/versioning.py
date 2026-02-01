@@ -52,8 +52,11 @@ MIME_TO_EXTENSION = {
     "text/plain": ".txt",
 }
 
+# File types that are stored as txt_extract_file (plain text, no parsing needed)
+TEXT_MIMETYPES = {"text/plain", "application/txt"}
 
-def _create_pdf_file_from_content(
+
+def _create_content_file(
     content: bytes,
     content_hash: str,
     path: str,
@@ -74,6 +77,10 @@ def _create_pdf_file_from_content(
     Returns:
         ContentFile ready for assignment to a FileField
     """
+    # Handle None file_type - default to binary
+    if not file_type:
+        file_type = "application/octet-stream"
+
     # Get extension from MIME type
     extension = MIME_TO_EXTENSION.get(file_type)
     if not extension:
@@ -93,6 +100,13 @@ def _create_pdf_file_from_content(
 
     filename = f"{base_name}{extension}"
     return ContentFile(content, name=filename)
+
+
+def _is_text_file(file_type: str | None) -> bool:
+    """Check if the file type should be stored as txt_extract_file."""
+    if not file_type:
+        return False
+    return file_type in TEXT_MIMETYPES
 
 
 def compute_sha256(content: bytes) -> str:
@@ -122,6 +136,7 @@ def import_document(
     user: User,
     folder: Optional[CorpusFolder] = None,
     pdf_file=None,
+    txt_file=None,
     **doc_kwargs,
 ) -> tuple[Document, str, DocumentPath]:
     """
@@ -131,14 +146,20 @@ def import_document(
     within each corpus with independent version trees. Provenance is tracked
     via source_document field for traceability.
 
+    Supports all file types with unified versioning:
+    - Binary formats (PDF, DOCX, etc.): Stored in pdf_file field
+    - Text files: Stored in txt_extract_file field
+
     Args:
         corpus: The corpus to import into
         path: The filesystem path within the corpus
-        content: The PDF file content as bytes
+        content: The file content as bytes
         user: The user performing the import
         folder: Optional folder to place the document in
-        pdf_file: Optional Django file object for the PDF
+        pdf_file: Optional Django file object for binary files
+        txt_file: Optional Django file object for text files
         **doc_kwargs: Additional keyword arguments for Document creation
+            - file_type: MIME type (determines storage field)
 
     Returns:
         Tuple of (document, status, path_record) where status is one of:
@@ -149,6 +170,9 @@ def import_document(
     a new document regardless of content hash.
     """
     content_hash = compute_sha256(content)
+    # Handle file_type - use default if None or missing
+    file_type = doc_kwargs.get("file_type") or "application/pdf"
+    is_text = _is_text_file(file_type)
 
     with transaction.atomic():
         # Step 1: Check if this path already exists in THIS corpus
@@ -174,17 +198,28 @@ def import_document(
                 is_current=False
             )
 
-            # Determine pdf_file: use provided, fall back to old doc, or create from content
-            file_type = doc_kwargs.get("file_type", old_doc.file_type)
-            effective_pdf_file = pdf_file or old_doc.pdf_file
-            if not effective_pdf_file:
-                # Neither provided nor available from old doc - create from content
-                effective_pdf_file = _create_pdf_file_from_content(
-                    content=content,
-                    content_hash=content_hash,
-                    path=path,
-                    file_type=file_type,
-                )
+            # Determine file storage based on file type
+            # Text files go to txt_extract_file, everything else to pdf_file
+            if is_text:
+                effective_txt_file = txt_file or old_doc.txt_extract_file
+                if not effective_txt_file:
+                    effective_txt_file = _create_content_file(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+                effective_pdf_file = None
+            else:
+                effective_pdf_file = pdf_file or old_doc.pdf_file
+                if not effective_pdf_file:
+                    effective_pdf_file = _create_content_file(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+                effective_txt_file = None
 
             # Create new document version (isolated within corpus)
             new_doc = Document.objects.create(
@@ -192,6 +227,7 @@ def import_document(
                 description=doc_kwargs.get("description", old_doc.description),
                 file_type=file_type,
                 pdf_file=effective_pdf_file,
+                txt_extract_file=effective_txt_file,
                 pdf_file_hash=content_hash,
                 version_tree_id=old_doc.version_tree_id,  # Same tree
                 parent=old_doc,
@@ -254,21 +290,35 @@ def import_document(
             # Each upload is processed independently regardless of content hash
             tree_id = uuid.uuid4()
 
-            file_type = doc_kwargs.get("file_type", "application/pdf")
-            effective_pdf_file = pdf_file
-            if not effective_pdf_file:
-                effective_pdf_file = _create_pdf_file_from_content(
-                    content=content,
-                    content_hash=content_hash,
-                    path=path,
-                    file_type=file_type,
-                )
+            # Determine file storage based on file type
+            # Text files go to txt_extract_file, everything else to pdf_file
+            if is_text:
+                effective_txt_file = txt_file
+                if not effective_txt_file:
+                    effective_txt_file = _create_content_file(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+                effective_pdf_file = None
+            else:
+                effective_pdf_file = pdf_file
+                if not effective_pdf_file:
+                    effective_pdf_file = _create_content_file(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+                effective_txt_file = None
 
             doc = Document.objects.create(
                 title=doc_kwargs.get("title", f"Document at {path}"),
                 description=doc_kwargs.get("description", ""),
                 file_type=file_type,
                 pdf_file=effective_pdf_file,
+                txt_extract_file=effective_txt_file,
                 pdf_file_hash=content_hash,
                 version_tree_id=tree_id,
                 is_current=True,

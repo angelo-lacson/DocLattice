@@ -31,6 +31,9 @@ class BaseVisibilityManagerTestCase(TestCase):
         )
 
         # Create test corpuses
+        # NOTE: Each user also gets an auto-created personal corpus ("My Documents").
+        # Tests exclude personal corpuses via .exclude(is_personal=True) to focus on
+        # testing visibility logic with explicitly-created test corpuses only.
         self.public_corpus = Corpus.objects.create(
             title="Public Corpus", creator=self.owner, is_public=True
         )
@@ -56,14 +59,18 @@ class BaseVisibilityManagerTestCase(TestCase):
 
     def test_visible_to_user_with_none_user(self):
         """Test that None user is treated as AnonymousUser - covers line 54-55"""
-        corpuses = Corpus.objects.visible_to_user(user=None)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(user=None).exclude(is_personal=True)
         # Should only see public corpus
         self.assertEqual(corpuses.count(), 1)
         self.assertIn(self.public_corpus, corpuses)
 
     def test_visible_to_user_superuser_sees_everything(self):
         """Test that superuser sees all objects - covers line 58-59"""
-        corpuses = Corpus.objects.visible_to_user(self.superuser)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.superuser).exclude(
+            is_personal=True
+        )
         # Superuser should see all 3 corpuses
         self.assertEqual(corpuses.count(), 3)
         self.assertIn(self.public_corpus, corpuses)
@@ -73,14 +80,18 @@ class BaseVisibilityManagerTestCase(TestCase):
     def test_visible_to_user_anonymous_only_sees_public(self):
         """Test that anonymous user only sees public objects - covers line 62-63"""
         anonymous = AnonymousUser()
-        corpuses = Corpus.objects.visible_to_user(anonymous)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(anonymous).exclude(is_personal=True)
         # Anonymous should only see public corpus
         self.assertEqual(corpuses.count(), 1)
         self.assertIn(self.public_corpus, corpuses)
 
     def test_visible_to_user_authenticated_user_with_permissions(self):
         """Test authenticated user sees public + owned + explicitly shared - covers lines 95-121"""
-        corpuses = Corpus.objects.visible_to_user(self.other_user)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.other_user).exclude(
+            is_personal=True
+        )
         # Should see public corpus and shared corpus (has explicit permission)
         self.assertEqual(corpuses.count(), 2)
         self.assertIn(self.public_corpus, corpuses)
@@ -89,7 +100,8 @@ class BaseVisibilityManagerTestCase(TestCase):
 
     def test_visible_to_user_owner_sees_own_objects(self):
         """Test that owner sees all their own objects"""
-        corpuses = Corpus.objects.visible_to_user(self.owner)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.owner).exclude(is_personal=True)
         # Owner should see all 3 corpuses they created
         self.assertEqual(corpuses.count(), 3)
         self.assertIn(self.public_corpus, corpuses)
@@ -100,7 +112,8 @@ class BaseVisibilityManagerTestCase(TestCase):
         """Test that Corpus-specific optimizations are applied - covers lines 123-133"""
         # This test ensures the code path for model_name.upper() == "CORPUS" is hit
         # We verify this by checking the queryset executes successfully with optimizations
-        corpuses = Corpus.objects.visible_to_user(self.owner)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.owner).exclude(is_personal=True)
 
         # Force evaluation to ensure optimization code path is executed
         corpus_list = list(corpuses)
@@ -136,14 +149,18 @@ class BaseVisibilityManagerTestCase(TestCase):
     def test_distinct_not_applied_for_superuser(self):
         """Test that distinct() is not applied for superuser - covers line 182-184"""
         # The superuser path should not apply distinct
-        corpuses = Corpus.objects.visible_to_user(self.superuser)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.superuser).exclude(
+            is_personal=True
+        )
         # Should still work correctly
         self.assertEqual(corpuses.count(), 3)
 
     def test_distinct_not_applied_for_anonymous(self):
         """Test that distinct() is not applied for anonymous users - covers line 182-184"""
         anonymous = AnonymousUser()
-        corpuses = Corpus.objects.visible_to_user(anonymous)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(anonymous).exclude(is_personal=True)
         # Should still work correctly
         self.assertEqual(corpuses.count(), 1)
 
@@ -153,7 +170,10 @@ class BaseVisibilityManagerTestCase(TestCase):
         # Make apps.get_model raise an ImportError to trigger exception handling
         mock_get_model.side_effect = ImportError("Mocked ImportError")
 
-        corpuses = Corpus.objects.visible_to_user(self.other_user)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.other_user).exclude(
+            is_personal=True
+        )
         corpus_list = list(corpuses)
 
         # Should only see public corpus (fallback to creator/public filtering)
@@ -166,7 +186,10 @@ class BaseVisibilityManagerTestCase(TestCase):
         # Make apps.get_model raise a general exception to trigger exception handling
         mock_get_model.side_effect = Exception("Mocked general exception")
 
-        corpuses = Corpus.objects.visible_to_user(self.other_user)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.other_user).exclude(
+            is_personal=True
+        )
         corpus_list = list(corpuses)
 
         # Should only see public corpus (fallback to creator/public filtering)
@@ -179,7 +202,10 @@ class BaseVisibilityManagerTestCase(TestCase):
         # Make apps.get_model raise LookupError (permission model not found)
         mock_get_model.side_effect = LookupError("Permission model not found")
 
-        corpuses = Corpus.objects.visible_to_user(self.other_user)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.other_user).exclude(
+            is_personal=True
+        )
         corpus_list = list(corpuses)
 
         # Should see public corpus (fallback to creator/public check)
@@ -193,7 +219,10 @@ class BaseVisibilityManagerTestCase(TestCase):
             title="Isolated Corpus", creator=self.owner, is_public=False
         )
 
-        corpuses = Corpus.objects.visible_to_user(self.other_user)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.other_user).exclude(
+            is_personal=True
+        )
 
         # other_user should see: public_corpus and shared_corpus (has permission)
         # but NOT private_corpus or isolated_corpus
@@ -208,13 +237,17 @@ class BaseVisibilityManagerTestCase(TestCase):
         # This tests the specific branch where user is None in the legacy logic
         # We already have test_visible_to_user_with_none_user, but this ensures
         # the specific line 87-88 is hit
-        corpuses = Corpus.objects.visible_to_user(None)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(None).exclude(is_personal=True)
         self.assertEqual(corpuses.count(), 1)
         self.assertIn(self.public_corpus, corpuses)
 
     def test_superuser_within_legacy_logic(self):
         """Test superuser handling within legacy logic - covers line 89-91"""
-        corpuses = Corpus.objects.visible_to_user(self.superuser)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(self.superuser).exclude(
+            is_personal=True
+        )
         # Should see all corpuses and be ordered by created
         self.assertEqual(corpuses.count(), 3)
         # Verify ordering by created
@@ -227,6 +260,7 @@ class BaseVisibilityManagerTestCase(TestCase):
     def test_anonymous_within_legacy_logic(self):
         """Test anonymous user handling within legacy logic - covers line 92-94"""
         anonymous = AnonymousUser()
-        corpuses = Corpus.objects.visible_to_user(anonymous)
+        # Exclude personal corpuses to focus on explicitly-created test corpuses
+        corpuses = Corpus.objects.visible_to_user(anonymous).exclude(is_personal=True)
         self.assertEqual(corpuses.count(), 1)
         self.assertIn(self.public_corpus, corpuses)

@@ -107,19 +107,19 @@ class ComprehensivePermissionTestCase(TestCase):
         }
         """
 
-        # Test for owner
+        # Test for owner: 3 test corpuses + 1 personal corpus = 4
         result = self.owner_client.execute(query)
+        self.assertEqual(len(result["data"]["corpuses"]["edges"]), 4)
+
+        # Collaborator: public corpus + shared corpus + 1 personal corpus = 3
+        result = self.collaborator_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 3)
 
-        # Should be 2 - the public corpus and the shared corpus with collaborator
-        result = self.collaborator_client.execute(query)
+        # Regular user: public corpus + 1 personal corpus = 2
+        result = self.regular_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 2)
 
-        # Test for regular user - only the public corpus
-        result = self.regular_client.execute(query)
-        self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
-
-        # Test for anonymous user - only the public corpus
+        # Anonymous user: only the public corpus (no personal corpus)
         result = self.anonymous_client.execute(query)
         self.assertEqual(len(result["data"]["corpuses"]["edges"]), 1)
 

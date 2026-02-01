@@ -195,6 +195,52 @@ class CoreAnnotationVectorStore:
         """
         _logger.debug("Building base queryset for vector search")
 
+        # -------------------------------------------------------------------------
+        # SECURITY: Verify user has access to requested document/corpus (IDOR prevention)
+        # This check ensures callers cannot access annotations from documents/corpuses
+        # they don't have permission to view. We use visible_to_user() which returns
+        # empty queryset for both "not found" and "no permission" cases to prevent
+        # enumeration attacks.
+        # -------------------------------------------------------------------------
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import Document
+
+        user = None
+        if self.user_id:
+            try:
+                user = await sync_to_async(User.objects.get)(id=self.user_id)
+            except User.DoesNotExist:
+                _logger.warning(f"User ID {self.user_id} not found")
+                return Annotation.objects.none()
+
+        if self.document_id is not None:
+            # Check if user can access this document
+            has_access = await sync_to_async(
+                lambda: Document.objects.visible_to_user(user)
+                .filter(id=self.document_id)
+                .exists()
+            )()
+            if not has_access:
+                _logger.warning(
+                    f"User {self.user_id} denied access to document {self.document_id} "
+                    "in vector search (not found or no permission)"
+                )
+                return Annotation.objects.none()
+
+        if self.corpus_id is not None:
+            # Check if user can access this corpus
+            has_access = await sync_to_async(
+                lambda: Corpus.objects.visible_to_user(user)
+                .filter(id=self.corpus_id)
+                .exists()
+            )()
+            if not has_access:
+                _logger.warning(
+                    f"User {self.user_id} denied access to corpus {self.corpus_id} "
+                    "in vector search (not found or no permission)"
+                )
+                return Annotation.objects.none()
+
         # Select related for fields directly on Annotation or accessed often.
         # Document's M2M to Corpus (corpus_set) is handled by JOINs in filters.
         queryset = Annotation.objects.select_related(
@@ -238,8 +284,7 @@ class CoreAnnotationVectorStore:
 
         # Check for deleted documents in corpus
         if self.check_corpus_deletion and self.corpus_id and not self.document_id:
-            from asgiref.sync import sync_to_async
-
+            # Note: sync_to_async already imported at module level
             from opencontractserver.documents.models import DocumentPath
 
             # Get documents with active (non-deleted) paths in corpus
@@ -274,10 +319,7 @@ class CoreAnnotationVectorStore:
             )
 
             # Get document to check for structural_annotation_set
-            from asgiref.sync import sync_to_async
-
-            from opencontractserver.documents.models import Document
-
+            # Note: Document already imported at top of _build_base_queryset
             document = await sync_to_async(
                 lambda: Document.objects.select_related(
                     "structural_annotation_set"

@@ -1714,3 +1714,191 @@ class PdfFileCreationTestCase(TestCase):
         self.assertIsNone(doc.source_document_id)
         # Verify it's a NEW document, not the existing one
         self.assertNotEqual(doc.id, global_doc.id)
+
+
+class TextFileVersioningTestCase(TestCase):
+    """
+    Test Suite: Text File Versioning
+
+    Ensures that text files (text/plain, application/txt) are handled correctly
+    by the unified versioning pipeline:
+    - Stored in txt_extract_file field (not pdf_file)
+    - Support path-based versioning (update at same path creates new version)
+    - Content hash computed correctly
+    - M2M maintained for backwards compatibility
+    """
+
+    def setUp(self):
+        """Create test fixtures."""
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+
+    def test_text_file_stored_in_txt_extract_file(self):
+        """
+        Text files should be stored in txt_extract_file, not pdf_file.
+        """
+        content = b"This is plain text content for testing."
+
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/test_document.txt",
+            content=content,
+            user=self.user,
+            title="Test Text File",
+            file_type="text/plain",
+        )
+
+        self.assertEqual(status, "created")
+        # txt_extract_file must be populated for text files
+        self.assertTrue(
+            doc.txt_extract_file,
+            "txt_extract_file field is empty - text files should use this field!",
+        )
+        # pdf_file should NOT be populated for text files
+        self.assertFalse(
+            doc.pdf_file,
+            "pdf_file should be empty for text files!",
+        )
+        # Verify the file has correct extension
+        self.assertTrue(
+            doc.txt_extract_file.name.endswith(".txt"),
+            f"Expected .txt extension, got: {doc.txt_extract_file.name}",
+        )
+        # Verify content is accessible
+        doc.txt_extract_file.seek(0)
+        saved_content = doc.txt_extract_file.read()
+        self.assertEqual(saved_content, content, "Saved content doesn't match original")
+
+    def test_text_file_supports_versioning(self):
+        """
+        Text files should support path-based versioning like other file types.
+        Uploading to the same path should create a new version.
+        """
+        v1_content = b"Version 1 of the text file"
+        v2_content = b"Version 2 with updates"
+
+        # Import original
+        doc1, status1, path1 = import_document(
+            corpus=self.corpus,
+            path="/document.txt",
+            content=v1_content,
+            user=self.user,
+            title="Text Doc v1",
+            file_type="text/plain",
+        )
+
+        self.assertEqual(status1, "created")
+        self.assertEqual(path1.version_number, 1)
+
+        # Import update at same path
+        doc2, status2, path2 = import_document(
+            corpus=self.corpus,
+            path="/document.txt",
+            content=v2_content,
+            user=self.user,
+            title="Text Doc v2",
+            file_type="text/plain",
+        )
+
+        # Should be an update, not a new document
+        self.assertEqual(status2, "updated")
+        self.assertEqual(path2.version_number, 2)
+
+        # Verify parent-child relationship
+        self.assertEqual(doc2.parent_id, doc1.id)
+        self.assertEqual(doc2.version_tree_id, doc1.version_tree_id)
+
+        # Verify old path is no longer current
+        path1.refresh_from_db()
+        self.assertFalse(path1.is_current)
+
+        # Verify content history
+        history = get_content_history(doc2)
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0].id, doc1.id)
+        self.assertEqual(history[1].id, doc2.id)
+
+    def test_text_file_hash_computed_correctly(self):
+        """
+        Content hash should be computed for text files just like binary files.
+        """
+        content = b"Hash computation test content"
+        expected_hash = compute_sha256(content)
+
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/hash_test.txt",
+            content=content,
+            user=self.user,
+            file_type="text/plain",
+        )
+
+        self.assertEqual(doc.pdf_file_hash, expected_hash)
+
+    def test_text_file_with_application_txt_mimetype(self):
+        """
+        application/txt should also be recognized as text file.
+        """
+        content = b"Text content with application/txt MIME type"
+
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/test.txt",
+            content=content,
+            user=self.user,
+            file_type="application/txt",
+        )
+
+        self.assertEqual(status, "created")
+        self.assertTrue(doc.txt_extract_file)
+        self.assertFalse(doc.pdf_file)
+
+    def test_corpus_import_content_routes_text_files_correctly(self):
+        """
+        Corpus.import_content() should route text files through the unified
+        versioning pipeline.
+        """
+        content = b"Text content via import_content"
+
+        doc, status, path = self.corpus.import_content(
+            content=content,
+            user=self.user,
+            path="/imported.txt",
+            file_type="text/plain",
+            title="Imported Text",
+        )
+
+        self.assertEqual(status, "created")
+        self.assertTrue(doc.txt_extract_file)
+        self.assertFalse(doc.pdf_file)
+
+        # Verify M2M maintained for backwards compatibility
+        self.assertIn(doc, self.corpus.documents.all())
+
+    def test_text_file_versioning_via_import_content(self):
+        """
+        Text file versioning should work via import_content() as well.
+        """
+        v1_content = b"First version"
+        v2_content = b"Second version"
+
+        # First import
+        doc1, status1, path1 = self.corpus.import_content(
+            content=v1_content,
+            user=self.user,
+            path="/versioned.txt",
+            file_type="text/plain",
+        )
+
+        # Second import at same path
+        doc2, status2, path2 = self.corpus.import_content(
+            content=v2_content,
+            user=self.user,
+            path="/versioned.txt",
+            file_type="text/plain",
+        )
+
+        self.assertEqual(status1, "created")
+        self.assertEqual(status2, "updated")
+        self.assertEqual(path2.version_number, 2)
+        self.assertEqual(doc2.parent_id, doc1.id)

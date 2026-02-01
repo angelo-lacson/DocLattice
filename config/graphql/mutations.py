@@ -130,6 +130,10 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
+from opencontractserver.constants.document_processing import (
+    DEFAULT_DOCUMENT_PATH_PREFIX,
+    MAX_FILENAME_LENGTH,
+)
 from opencontractserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from opencontractserver.corpuses.models import (
     Corpus,
@@ -1760,9 +1764,10 @@ class UploadDocument(graphene.Mutation):
 
                     # Generate path from filename
                     safe_filename = "".join(
-                        c if c.isalnum() or c in "-_." else "_" for c in filename[:100]
+                        c if c.isalnum() or c in "-_." else "_"
+                        for c in filename[:MAX_FILENAME_LENGTH]
                     )
-                    doc_path = f"/documents/{safe_filename}"
+                    doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
 
                     # Use import_content for content-based deduplication
                     document, status, path_record = corpus.import_content(
@@ -1805,42 +1810,99 @@ class UploadDocument(graphene.Mutation):
                     message = f"Importing to corpus failed due to error: {e}"
                     return UploadDocument(message=message, ok=False, document=None)
             else:
-                # Standalone document upload (no corpus) - create directly
+                # No corpus specified - upload to user's personal corpus
+                # This ensures all documents belong to a corpus
                 if kind in [
                     "application/pdf",
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 ]:
-                    pdf_file = ContentFile(file_bytes, name=filename)
-                    document = Document(
-                        creator=user,
-                        title=title,
-                        description=description,
-                        custom_meta=custom_meta,
-                        pdf_file=pdf_file,
-                        backend_lock=True,
-                        is_public=make_public,
-                        file_type=kind,
-                        slug=slug,
-                    )
-                    document.save()
-                elif kind in ["text/plain", "application/txt"]:
-                    txt_extract_file = ContentFile(file_bytes, name=filename)
-                    document = Document(
-                        creator=user,
-                        title=title,
-                        description=description,
-                        custom_meta=custom_meta,
-                        txt_extract_file=txt_extract_file,
-                        backend_lock=True,
-                        is_public=make_public,
-                        file_type=kind,
-                        slug=slug,
-                    )
-                    document.save()
+                    try:
+                        # Get or create user's personal corpus
+                        personal_corpus = Corpus.get_or_create_personal_corpus(user)
+                        logger.info(
+                            f"[UPLOAD] Using personal corpus {personal_corpus.id} "
+                            f"for user {user.id}"
+                        )
 
-                set_permissions_for_obj_to_user(user, document, [PermissionTypes.CRUD])
+                        # Generate path from filename
+                        safe_filename = "".join(
+                            c if c.isalnum() or c in "-_." else "_"
+                            for c in filename[:MAX_FILENAME_LENGTH]
+                        )
+                        doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
+
+                        # Use import_content for consistency with corpus uploads
+                        document, status, path_record = personal_corpus.import_content(
+                            content=file_bytes,
+                            path=doc_path,
+                            user=user,
+                            folder=None,  # No folder in personal corpus by default
+                            title=title,
+                            description=description,
+                            file_type=kind,
+                            custom_meta=custom_meta,
+                            backend_lock=True,
+                            is_public=make_public,
+                            slug=slug,
+                        )
+
+                        # Set permissions on the document
+                        set_permissions_for_obj_to_user(
+                            user, document, [PermissionTypes.CRUD]
+                        )
+
+                        logger.info(
+                            f"[UPLOAD] Document {document.id} ({status}) "
+                            f"uploaded to personal corpus {personal_corpus.id}"
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            f"[UPLOAD] Error uploading to personal corpus: {e}"
+                        )
+                        message = f"Upload failed due to error: {e}"
+                        return UploadDocument(message=message, ok=False, document=None)
+
+                elif kind in ["text/plain", "application/txt"]:
+                    try:
+                        # Get or create user's personal corpus for text files too
+                        personal_corpus = Corpus.get_or_create_personal_corpus(user)
+                        logger.info(
+                            f"[UPLOAD] Using personal corpus {personal_corpus.id} "
+                            f"for text file upload by user {user.id}"
+                        )
+
+                        # Use import_content() which routes based on file_type
+                        document, status, doc_path = personal_corpus.import_content(
+                            content=file_bytes,
+                            user=user,
+                            filename=filename,
+                            file_type=kind,
+                            title=title,
+                            description=description,
+                            custom_meta=custom_meta,
+                            backend_lock=True,
+                            is_public=make_public,
+                            slug=slug,
+                        )
+
+                        set_permissions_for_obj_to_user(
+                            user, document, [PermissionTypes.CRUD]
+                        )
+
+                        logger.info(
+                            f"[UPLOAD] Text document {document.id} uploaded "
+                            f"to personal corpus {personal_corpus.id}"
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            f"[UPLOAD] Error uploading text to personal corpus: {e}"
+                        )
+                        message = f"Upload failed due to error: {e}"
+                        return UploadDocument(message=message, ok=False, document=None)
 
                 # Handle linking to extract (corpus case already handled above)
                 if add_to_extract_id is not None:
