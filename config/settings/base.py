@@ -912,6 +912,33 @@ PIPELINE_SETTINGS = {
     # Currently no overrides - all components use global settings which read from env vars
 }
 
+# Pipeline Settings Encryption Configuration
+# ------------------------------------------------------------------------------
+# These settings control how sensitive pipeline configuration (API keys, etc.)
+# is encrypted at rest in the PipelineSettings model.
+
+# Length of random salt prepended to encrypted secrets (in bytes)
+# 16 bytes = 128 bits, recommended minimum for secure encryption
+PIPELINE_SETTINGS_ENCRYPTION_SALT_LENGTH = 16
+
+# PBKDF2 iterations for key derivation from SECRET_KEY
+# OWASP 2023 recommends 480,000 iterations for PBKDF2-HMAC-SHA256
+# Higher = more secure but slower; only impacts save/load of secrets
+PIPELINE_SETTINGS_ENCRYPTION_ITERATIONS = env.int(
+    "PIPELINE_SETTINGS_ENCRYPTION_ITERATIONS", default=480000
+)
+
+# Maximum size for secrets payload (in bytes)
+# Prevents storage abuse; 10KB is generous for API keys/tokens
+PIPELINE_SETTINGS_MAX_SECRET_SIZE_BYTES = 10240
+
+# Cache TTL for PipelineSettings singleton (in seconds)
+# Reduces database queries during document processing
+# Cache is invalidated on any settings update
+PIPELINE_SETTINGS_CACHE_TTL_SECONDS = env.int(
+    "PIPELINE_SETTINGS_CACHE_TTL_SECONDS", default=300
+)
+
 LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"
 
 # Default Agent Instructions

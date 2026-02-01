@@ -3466,3 +3466,54 @@ class SemanticSearchResultType(graphene.ObjectType):
         if self.annotation:
             return self.annotation.corpus
         return None
+
+
+# ==============================================================================
+# PIPELINE SETTINGS TYPES (Runtime-configurable document processing settings)
+# ==============================================================================
+
+
+class PipelineSettingsType(graphene.ObjectType):
+    """
+    GraphQL type for PipelineSettings singleton.
+
+    Exposes the runtime-configurable document processing pipeline settings.
+    Only superusers can modify these settings via mutation.
+    """
+
+    # Preferred components per MIME type
+    preferred_parsers = GenericScalar(
+        description="Mapping of MIME types to preferred parser class paths"
+    )
+    preferred_embedders = GenericScalar(
+        description="Mapping of MIME types to preferred embedder class paths"
+    )
+    preferred_thumbnailers = GenericScalar(
+        description="Mapping of MIME types to preferred thumbnailer class paths"
+    )
+
+    # Component configuration
+    parser_kwargs = GenericScalar(
+        description="Mapping of parser class paths to their configuration kwargs"
+    )
+    component_settings = GenericScalar(
+        description="Mapping of component class paths to settings overrides"
+    )
+
+    # Default embedder
+    default_embedder = graphene.String(
+        description="Default embedder class path when no MIME-specific embedder is found"
+    )
+
+    # Secrets indicator (actual secrets are never exposed via GraphQL)
+    components_with_secrets = graphene.List(
+        graphene.String,
+        description="List of component paths that have encrypted secrets configured. "
+        "Actual secret values are never exposed via GraphQL.",
+    )
+
+    # Audit fields
+    modified = graphene.DateTime(description="When these settings were last modified")
+    modified_by = graphene.Field(
+        UserType, description="User who last modified these settings"
+    )
