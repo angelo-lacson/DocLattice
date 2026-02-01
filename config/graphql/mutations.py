@@ -98,7 +98,9 @@ from config.graphql.notification_mutations import (
 
 # Import pipeline settings mutations
 from config.graphql.pipeline_settings_mutations import (
+    DeleteComponentSecretsMutation,
     ResetPipelineSettingsMutation,
+    UpdateComponentSecretsMutation,
     UpdatePipelineSettingsMutation,
 )
 from config.graphql.ratelimits import (
@@ -5966,3 +5968,5 @@ class Mutation(graphene.ObjectType):
     # PIPELINE SETTINGS MUTATIONS (Superuser only) ###############################
     update_pipeline_settings = UpdatePipelineSettingsMutation.Field()
     reset_pipeline_settings = ResetPipelineSettingsMutation.Field()
+    update_component_secrets = UpdateComponentSecretsMutation.Field()
+    delete_component_secrets = DeleteComponentSecretsMutation.Field()

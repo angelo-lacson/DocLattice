@@ -300,3 +300,182 @@ class ResetPipelineSettingsMutation(graphene.Mutation):
                 message=f"Failed to reset pipeline settings: {str(e)}",
                 pipeline_settings=None,
             )
+
+
+class UpdateComponentSecretsMutation(graphene.Mutation):
+    """
+    Update encrypted secrets for a specific pipeline component.
+
+    This mutation allows superusers to securely store API keys, tokens, and
+    other credentials for pipeline components. The secrets are encrypted at
+    rest using Fernet symmetric encryption.
+
+    Only superusers can perform this operation.
+
+    Arguments:
+        component_path: Full class path of the component (e.g.,
+            'opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser')
+        secrets: Dict of secret key-value pairs to store (e.g., {'api_key': '...'})
+        merge: If True, merge with existing secrets. If False, replace all secrets
+            for this component. Default: True
+
+    Returns:
+        ok: Whether the update succeeded
+        message: Status message
+        components_with_secrets: List of component paths that have secrets stored
+    """
+
+    class Arguments:
+        component_path = graphene.String(
+            required=True,
+            description="Full class path of the component.",
+        )
+        secrets = GenericScalar(
+            required=True,
+            description="Dict of secret key-value pairs to store. "
+            "Example: {'api_key': 'sk-...', 'secret_token': '...'}",
+        )
+        merge = graphene.Boolean(
+            required=False,
+            default_value=True,
+            description="If True, merge with existing secrets. "
+            "If False, replace all secrets for this component.",
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    components_with_secrets = graphene.List(
+        graphene.String,
+        description="List of component paths that have secrets stored.",
+    )
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
+    def mutate(root, info, component_path, secrets, merge=True):
+        """Update encrypted secrets for a component."""
+        from opencontractserver.documents.models import PipelineSettings
+
+        user = info.context.user
+
+        # SECURITY: Only superusers can update secrets
+        if not user.is_superuser:
+            return UpdateComponentSecretsMutation(
+                ok=False,
+                message="Only superusers can update component secrets.",
+                components_with_secrets=None,
+            )
+
+        # Validate secrets is a dict
+        if not isinstance(secrets, dict):
+            return UpdateComponentSecretsMutation(
+                ok=False,
+                message="secrets must be a dictionary.",
+                components_with_secrets=None,
+            )
+
+        try:
+            settings_instance = PipelineSettings.get_instance()
+
+            if merge:
+                # Merge with existing secrets
+                settings_instance.update_secrets(component_path, secrets)
+            else:
+                # Replace all secrets for this component
+                all_secrets = settings_instance.get_secrets()
+                all_secrets[component_path] = secrets
+                settings_instance.set_secrets(all_secrets)
+
+            settings_instance.modified_by = user
+            settings_instance.save()
+
+            # Return list of components that have secrets (don't return actual secrets)
+            all_secrets = settings_instance.get_secrets()
+            components_with_secrets = list(all_secrets.keys())
+
+            logger.info(
+                f"Secrets updated for component '{component_path}' by {user.username}"
+            )
+
+            return UpdateComponentSecretsMutation(
+                ok=True,
+                message=f"Secrets updated successfully for '{component_path}'.",
+                components_with_secrets=components_with_secrets,
+            )
+
+        except Exception as e:
+            logger.exception("Error updating component secrets")
+            return UpdateComponentSecretsMutation(
+                ok=False,
+                message=f"Failed to update secrets: {str(e)}",
+                components_with_secrets=None,
+            )
+
+
+class DeleteComponentSecretsMutation(graphene.Mutation):
+    """
+    Delete all encrypted secrets for a specific pipeline component.
+
+    Only superusers can perform this operation.
+
+    Arguments:
+        component_path: Full class path of the component
+
+    Returns:
+        ok: Whether the deletion succeeded
+        message: Status message
+        components_with_secrets: Updated list of component paths that have secrets
+    """
+
+    class Arguments:
+        component_path = graphene.String(
+            required=True,
+            description="Full class path of the component.",
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    components_with_secrets = graphene.List(graphene.String)
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
+    def mutate(root, info, component_path):
+        """Delete all secrets for a component."""
+        from opencontractserver.documents.models import PipelineSettings
+
+        user = info.context.user
+
+        # SECURITY: Only superusers can delete secrets
+        if not user.is_superuser:
+            return DeleteComponentSecretsMutation(
+                ok=False,
+                message="Only superusers can delete component secrets.",
+                components_with_secrets=None,
+            )
+
+        try:
+            settings_instance = PipelineSettings.get_instance()
+            settings_instance.delete_component_secrets(component_path)
+            settings_instance.modified_by = user
+            settings_instance.save()
+
+            # Return updated list of components with secrets
+            all_secrets = settings_instance.get_secrets()
+            components_with_secrets = list(all_secrets.keys())
+
+            logger.info(
+                f"Secrets deleted for component '{component_path}' by {user.username}"
+            )
+
+            return DeleteComponentSecretsMutation(
+                ok=True,
+                message=f"Secrets deleted for '{component_path}'.",
+                components_with_secrets=components_with_secrets,
+            )
+
+        except Exception as e:
+            logger.exception("Error deleting component secrets")
+            return DeleteComponentSecretsMutation(
+                ok=False,
+                message=f"Failed to delete secrets: {str(e)}",
+                components_with_secrets=None,
+            )

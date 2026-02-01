@@ -760,17 +760,21 @@ class PipelineSettings(django.db.models.Model):
 
         default_embedder: Default embedder class path when no MIME-specific embedder is found
 
-    Security Note - API Keys and Secrets:
-        This model is intended for non-sensitive configuration only. Sensitive values
-        like API keys should be stored in environment variables, not in this model.
+    Security - Encrypted Secrets Storage:
+        Sensitive values (API keys, credentials) can be stored in the `encrypted_secrets`
+        field, which is encrypted at rest using Fernet symmetric encryption. The encryption
+        key is derived from Django's SECRET_KEY.
 
-        The recommended pattern is:
-        1. Store API keys in environment variables (LLAMAPARSE_API_KEY, etc.)
-        2. Pipeline components read from environment variables first
-        3. Use component_settings only for non-sensitive overrides (timeouts, batch sizes)
+        Structure of encrypted_secrets (after decryption):
+            {
+                "component_class_path": {
+                    "api_key": "...",
+                    "secret_token": "...",
+                }
+            }
 
-        This keeps secrets out of the database and allows them to be managed via
-        deployment configuration (environment variables, secrets managers, etc.).
+        Use set_secrets() and get_secrets() methods to access encrypted data.
+        The GraphQL mutations handle encryption/decryption transparently.
     """
 
     # Preferred parsers per MIME type
@@ -814,6 +818,14 @@ class PipelineSettings(django.db.models.Model):
         blank=True,
         default="",
         help_text="Default embedder class path",
+    )
+
+    # Encrypted secrets storage (API keys, tokens, credentials)
+    # Stored as Fernet-encrypted JSON blob
+    encrypted_secrets = django.db.models.BinaryField(
+        blank=True,
+        null=True,
+        help_text="Encrypted storage for sensitive configuration (API keys, credentials)",
     )
 
     # Audit fields
@@ -996,3 +1008,132 @@ class PipelineSettings(django.db.models.Model):
             return self.default_embedder
 
         return getattr(django_settings, "DEFAULT_EMBEDDER", "")
+
+    # =====================================================================
+    # Encrypted Secrets Management
+    # =====================================================================
+
+    @staticmethod
+    def _get_fernet() -> "Fernet":
+        """
+        Get a Fernet instance for encryption/decryption.
+
+        Uses Django's SECRET_KEY to derive the encryption key.
+        """
+        import base64
+        import hashlib
+
+        from cryptography.fernet import Fernet
+        from django.conf import settings as django_settings
+
+        # Derive a 32-byte key from SECRET_KEY using SHA256
+        key = hashlib.sha256(django_settings.SECRET_KEY.encode()).digest()
+        # Fernet requires base64-encoded 32-byte key
+        fernet_key = base64.urlsafe_b64encode(key)
+        return Fernet(fernet_key)
+
+    def get_secrets(self) -> dict:
+        """
+        Get the decrypted secrets dictionary.
+
+        Returns:
+            Dict mapping component class paths to their secrets:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": "...",
+                },
+                ...
+            }
+        """
+        import json
+
+        if not self.encrypted_secrets:
+            return {}
+
+        try:
+            fernet = self._get_fernet()
+            decrypted = fernet.decrypt(bytes(self.encrypted_secrets))
+            return json.loads(decrypted.decode("utf-8"))
+        except Exception:
+            # If decryption fails (e.g., key changed), return empty dict
+            return {}
+
+    def set_secrets(self, secrets: dict) -> None:
+        """
+        Encrypt and store secrets.
+
+        Args:
+            secrets: Dict mapping component class paths to their secrets:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": "...",
+                },
+            }
+        """
+        import json
+
+        fernet = self._get_fernet()
+        json_bytes = json.dumps(secrets).encode("utf-8")
+        self.encrypted_secrets = fernet.encrypt(json_bytes)
+
+    def update_secrets(self, component_path: str, secret_values: dict) -> None:
+        """
+        Update secrets for a specific component (merge with existing).
+
+        Args:
+            component_path: Full class path of the component
+            secret_values: Dict of secret key-value pairs to set
+        """
+        secrets = self.get_secrets()
+        if component_path not in secrets:
+            secrets[component_path] = {}
+        secrets[component_path].update(secret_values)
+        self.set_secrets(secrets)
+
+    def get_component_secrets(self, component_path: str) -> dict:
+        """
+        Get secrets for a specific component.
+
+        Args:
+            component_path: Full class path of the component
+
+        Returns:
+            Dict of secret key-value pairs for the component.
+        """
+        secrets = self.get_secrets()
+        return secrets.get(component_path, {})
+
+    def delete_component_secrets(self, component_path: str) -> None:
+        """
+        Delete all secrets for a specific component.
+
+        Args:
+            component_path: Full class path of the component
+        """
+        secrets = self.get_secrets()
+        if component_path in secrets:
+            del secrets[component_path]
+            self.set_secrets(secrets)
+
+    def get_full_component_settings(self, component_class_path: str) -> dict:
+        """
+        Get full settings for a component, merging non-sensitive settings
+        with decrypted secrets.
+
+        This is the method pipeline components should use to get their
+        complete configuration.
+
+        Args:
+            component_class_path: Full class path of the component
+
+        Returns:
+            Dict of all settings (non-sensitive + secrets) for the component.
+        """
+        # Get non-sensitive settings
+        settings = dict(self.get_component_settings(component_class_path))
+
+        # Merge with secrets (secrets take precedence)
+        secrets = self.get_component_secrets(component_class_path)
+        settings.update(secrets)
+
+        return settings
