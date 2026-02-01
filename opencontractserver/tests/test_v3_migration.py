@@ -1245,64 +1245,6 @@ class ValidationCommandEdgeCaseTests(TransactionTestCase):
         output = out.getvalue()
         self.assertIn("VALIDATION PASSED", output)
 
-    def test_validation_fails_with_missing_document_paths(self):
-        """Validation fails when M2M exists without DocumentPath."""
-        doc = Document.objects.create(
-            title="Missing Path Doc",
-            pdf_file_hash="missing_path_hash",
-            creator=self.user,
-        )
-        # Add document to corpus M2M directly WITHOUT creating DocumentPath
-        self.corpus.documents.add(doc)
-
-        out = io.StringIO()
-        with self.assertRaises(SystemExit):
-            call_command("validate_v3_migration", stdout=out)
-
-        output = out.getvalue()
-        self.assertIn("FAILED", output)
-        self.assertIn("M2M relationships missing DocumentPath", output)
-
-    def test_validation_verbose_shows_missing_document_path_details(self):
-        """--verbose shows which corpuses have missing DocumentPath records."""
-        doc = Document.objects.create(
-            title="Verbose Path Doc",
-            pdf_file_hash="verbose_path_hash",
-            creator=self.user,
-        )
-        self.corpus.documents.add(doc)  # M2M without DocumentPath
-
-        out = io.StringIO()
-        with self.assertRaises(SystemExit):
-            call_command("validate_v3_migration", "--verbose", stdout=out)
-
-        output = out.getvalue()
-        # Verbose mode shows corpus details
-        self.assertIn(self.corpus.title, output)
-
-    def test_validation_verbose_shows_multiple_corpuses_with_issues(self):
-        """--verbose truncates output when more than 5 corpuses have issues."""
-        # Create 6 corpuses with M2M but no DocumentPath
-        corpuses = []
-        for i in range(6):
-            corpus = Corpus.objects.create(title=f"Corpus {i}", creator=self.user)
-            doc = Document.objects.create(
-                title=f"Doc {i}",
-                pdf_file_hash=f"hash_{i}",
-                creator=self.user,
-            )
-            corpus.documents.add(doc)  # M2M without DocumentPath
-            corpuses.append(corpus)
-
-        out = io.StringIO()
-        with self.assertRaises(SystemExit):
-            call_command("validate_v3_migration", "--verbose", stdout=out)
-
-        output = out.getvalue()
-        # Should show truncation message
-        self.assertIn("... and", output)
-        self.assertIn("more corpuses", output)
-
     def test_validation_structural_migration_candidates_shows_notice(self):
         """Validation shows notice when documents can benefit from migration."""
         doc = Document.objects.create(

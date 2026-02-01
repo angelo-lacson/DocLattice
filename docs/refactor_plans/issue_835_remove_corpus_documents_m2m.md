@@ -1,5 +1,25 @@
 # Refactor Plan: Remove corpus.documents M2M Relationship (Issue #835)
 
+> ## Status: COMPLETED
+>
+> **Completed**: 2026-02-01
+>
+> This refactor has been fully implemented. The `corpus.documents` ManyToMany relationship has been removed. `DocumentPath` is now the sole source of truth for corpus-document associations.
+>
+> **Key changes implemented**:
+> - Removed `Corpus.documents` M2M field from model
+> - Updated all production code to use `Corpus.add_document()` and `Corpus.get_documents()`
+> - Updated 34 test files (~124 M2M usages)
+> - Updated 6 frontend components to use `documentCount` field
+> - Removed M2M signal handler from `documents/signals.py`
+> - Updated `validate_v3_migration` management command (now 6 checks instead of 7)
+>
+> **Reference implementations**:
+> - [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) - `Corpus.add_document()`, `Corpus.get_documents()`, `Corpus.document_count()`
+> - [`opencontractserver/documents/models.py`](../../opencontractserver/documents/models.py) - `DocumentPath` model
+
+---
+
 > **Last Reviewed**: 2026-02-01
 >
 > **Review Notes**: Plan validated against codebase. Key corrections made:
