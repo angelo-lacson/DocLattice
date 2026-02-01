@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-01-31
 
+### ⚠️ Important Migration Notes
+
+**Migration 0038 (`create_personal_corpuses`) is IRREVERSIBLE**
+
+This release includes a data migration that creates personal "My Documents" corpuses for all users and moves standalone documents into them. This migration **cannot be rolled back** via `python manage.py migrate`. Attempting to reverse will raise `NotImplementedError`.
+
+**Before deploying to production:**
+- Ensure you have a database backup
+- Test the migration in a staging environment first
+- Plan for this being a one-way migration
+
+If rollback is required after deployment, you must write a custom migration to handle your specific data preservation needs.
+
 ### Added
 
 #### Personal Corpus ("My Documents") Feature
@@ -26,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Data migration for existing users**: Migration creates personal corpuses for existing users and moves standalone documents
   - Creates "My Documents" corpus for all active users
   - Moves documents without any DocumentPath to their creator's personal corpus
+  - **⚠️ IRREVERSIBLE MIGRATION**: This migration cannot be rolled back automatically. Attempting to reverse will raise `NotImplementedError`. Rolling back would delete DocumentPath records and orphan user documents from their corpus organization. If rollback is required, a custom migration must be written to handle data preservation.
   - Files: `opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`
 
 #### Shared StructuralAnnotationSet
