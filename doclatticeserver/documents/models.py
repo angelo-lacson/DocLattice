@@ -848,7 +848,34 @@ class PipelineSettings(django.db.models.Model):
 
     # Cache settings
     CACHE_KEY = "pipeline_settings_singleton"
-    CACHE_TTL_SECONDS = 300  # 5 minutes
+
+    @classmethod
+    def _get_cache_ttl(cls) -> int:
+        """Get cache TTL from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(django_settings, "PIPELINE_SETTINGS_CACHE_TTL_SECONDS", 300)
+
+    @classmethod
+    def _get_encryption_salt_length(cls) -> int:
+        """Get encryption salt length from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(django_settings, "PIPELINE_SETTINGS_ENCRYPTION_SALT_LENGTH", 16)
+
+    @classmethod
+    def _get_encryption_iterations(cls) -> int:
+        """Get PBKDF2 iteration count from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(django_settings, "PIPELINE_SETTINGS_ENCRYPTION_ITERATIONS", 480000)
+
+    @classmethod
+    def _get_max_secret_size(cls) -> int:
+        """Get maximum secret payload size from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(django_settings, "PIPELINE_SETTINGS_MAX_SECRET_SIZE_BYTES", 10240)
 
     def save(self, *args, **kwargs):
         """Ensure singleton pattern and invalidate cache on save."""
@@ -917,7 +944,7 @@ class PipelineSettings(django.db.models.Model):
 
         # Cache the instance
         if use_cache:
-            cache.set(cls.CACHE_KEY, instance, cls.CACHE_TTL_SECONDS)
+            cache.set(cls.CACHE_KEY, instance, cls._get_cache_ttl())
 
         return instance
 
@@ -1046,13 +1073,8 @@ class PipelineSettings(django.db.models.Model):
     # Encrypted Secrets Management
     # =====================================================================
 
-    # Constants for encryption
-    ENCRYPTION_SALT_LENGTH = 16  # 128-bit salt
-    ENCRYPTION_ITERATIONS = 480000  # OWASP 2023 recommendation for PBKDF2-SHA256
-    MAX_SECRET_SIZE_BYTES = 10240  # 10KB limit per secret payload
-
-    @staticmethod
-    def _derive_key(salt: bytes) -> bytes:
+    @classmethod
+    def _derive_key(cls, salt: bytes) -> bytes:
         """
         Derive encryption key from Django SECRET_KEY using PBKDF2.
 
@@ -1075,7 +1097,7 @@ class PipelineSettings(django.db.models.Model):
             "sha256",
             django_settings.SECRET_KEY.encode(),
             salt,
-            PipelineSettings.ENCRYPTION_ITERATIONS,
+            cls._get_encryption_iterations(),
             dklen=32,
         )
         return base64.urlsafe_b64encode(key)
@@ -1106,15 +1128,16 @@ class PipelineSettings(django.db.models.Model):
         try:
             raw_data = bytes(self.encrypted_secrets)
 
-            # Extract salt (first 16 bytes) and ciphertext
-            if len(raw_data) < self.ENCRYPTION_SALT_LENGTH:
+            # Extract salt and ciphertext
+            salt_length = self._get_encryption_salt_length()
+            if len(raw_data) < salt_length:
                 logger.error(
                     "PipelineSettings: encrypted_secrets too short to contain salt"
                 )
                 return {}
 
-            salt = raw_data[: self.ENCRYPTION_SALT_LENGTH]
-            ciphertext = raw_data[self.ENCRYPTION_SALT_LENGTH :]
+            salt = raw_data[:salt_length]
+            ciphertext = raw_data[salt_length:]
 
             # Derive key from salt and decrypt
             key = self._derive_key(salt)
@@ -1164,13 +1187,12 @@ class PipelineSettings(django.db.models.Model):
         json_bytes = json.dumps(secrets).encode("utf-8")
 
         # Validate size
-        if len(json_bytes) > self.MAX_SECRET_SIZE_BYTES:
-            raise ValueError(
-                f"Secrets payload exceeds maximum size of {self.MAX_SECRET_SIZE_BYTES} bytes"
-            )
+        max_size = self._get_max_secret_size()
+        if len(json_bytes) > max_size:
+            raise ValueError(f"Secrets payload exceeds maximum size of {max_size} bytes")
 
         # Generate random salt for this encryption
-        salt = os.urandom(self.ENCRYPTION_SALT_LENGTH)
+        salt = os.urandom(self._get_encryption_salt_length())
 
         # Derive key and encrypt
         key = self._derive_key(salt)
