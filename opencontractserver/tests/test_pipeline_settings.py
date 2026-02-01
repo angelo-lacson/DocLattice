@@ -786,7 +786,7 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         cache.set(
             PipelineSettings.CACHE_KEY,
             "not_a_valid_instance",
-            PipelineSettings.CACHE_TTL_SECONDS,
+            PipelineSettings._get_cache_ttl(),
         )
 
         # With use_cache=False, should get real instance from DB
