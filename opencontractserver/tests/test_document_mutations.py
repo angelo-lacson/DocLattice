@@ -70,12 +70,21 @@ class DocumentMutationTestCase(TestCase):
             "customMeta": {"key": "value"},
         }
 
+        # Mock import_content at the corpus level since uploads now go through
+        # personal corpus -> import_content -> import_document -> DocumentPath
+        # We need to mock at a higher level to avoid foreign key violations
+        # Also mock set_permissions_for_obj_to_user to avoid permission FK violation
+        from opencontractserver.documents.models import DocumentPath
+
+        mock_doc = Document(id=1, title="Test PDF", description="A test PDF file")
+        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+
         with patch(
-            "opencontractserver.documents.models.Document.objects.create"
-        ) as mock_create:
-            mock_create.return_value = Document(
-                id=1, title="Test PDF", description="A test PDF file"
-            )
+            "opencontractserver.corpuses.models.Corpus.import_content"
+        ) as mock_import, patch(
+            "config.graphql.mutations.set_permissions_for_obj_to_user"
+        ):
+            mock_import.return_value = (mock_doc, "created", mock_path)
             result = self.client.execute(mutation, variables=variables)
 
         self.assertIsNone(result.get("errors"))
