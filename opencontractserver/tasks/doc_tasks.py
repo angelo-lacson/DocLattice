@@ -352,21 +352,22 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
     if corpus_id:
         logger.info(f"[ingest_doc] Document {doc_id} is in corpus {corpus_id}")
 
-    parser_name: str | None = getattr(settings, "PREFERRED_PARSERS", {}).get(
-        document.file_type
-    )
+    # Get preferred parser from database settings (with fallback to Django settings)
+    from opencontractserver.documents.models import PipelineSettings
+
+    pipeline_settings = PipelineSettings.get_instance()
+    parser_name: str | None = pipeline_settings.get_preferred_parser(document.file_type)
+
     if not parser_name:
         error_msg = f"No parser defined for MIME type '{document.file_type}'"
         _mark_document_failed(document, error_msg)
         return {"status": "failed", "doc_id": doc_id, "error": error_msg}
 
-    # Attempt to load parser kwargs
-    parser_kwargs = {}
-    if hasattr(settings, "PARSER_KWARGS"):
-        from opencontractserver.utils.logging import redact_sensitive_kwargs
+    # Attempt to load parser kwargs from database settings (with fallback)
+    from opencontractserver.utils.logging import redact_sensitive_kwargs
 
-        kwargs = getattr(settings, "PARSER_KWARGS", {})
-        parser_kwargs = kwargs.get(parser_name, {})
+    parser_kwargs = pipeline_settings.get_parser_kwargs(parser_name)
+    if parser_kwargs:
         logger.debug(
             f"Resolved parser kwargs for '{parser_name}': "
             f"{redact_sensitive_kwargs(parser_kwargs)}"
@@ -682,17 +683,42 @@ def extract_thumbnail(self, doc_id: int) -> None:
 
     file_type: str = document.file_type
 
-    # Get compatible thumbnailers for the document's MIME type
-    components = get_components_by_mimetype(file_type)
-    thumbnailers = components.get("thumbnailers", [])
+    # Check for preferred thumbnailer in database settings first
+    from opencontractserver.documents.models import PipelineSettings
 
-    if not thumbnailers:
-        logger.error(f"No thumbnailer found for file type '{file_type}'.")
-        return
+    pipeline_settings = PipelineSettings.get_instance()
+    preferred_thumbnailer = pipeline_settings.get_preferred_thumbnailer(file_type)
 
-    # Use the first available thumbnailer
-    thumbnailer_class = thumbnailers[0]
-    logger.info(f"Using thumbnailer '{thumbnailer_class.__name__}' for doc {doc_id}")
+    thumbnailer_class = None
+
+    if preferred_thumbnailer:
+        # Try to load the preferred thumbnailer
+        try:
+            thumbnailer_class = get_component_by_name(preferred_thumbnailer)
+            logger.info(
+                f"Using preferred thumbnailer '{preferred_thumbnailer}' for doc {doc_id}"
+            )
+        except ValueError:
+            logger.warning(
+                f"Preferred thumbnailer '{preferred_thumbnailer}' not found, "
+                "falling back to auto-discovery"
+            )
+
+    if not thumbnailer_class:
+        # Fall back to auto-discovered thumbnailers for the MIME type
+        components = get_components_by_mimetype(file_type)
+        thumbnailers = components.get("thumbnailers", [])
+
+        if not thumbnailers:
+            logger.error(f"No thumbnailer found for file type '{file_type}'.")
+            return
+
+        # Use the first available thumbnailer
+        thumbnailer_class = thumbnailers[0]
+        logger.info(
+            f"Using auto-discovered thumbnailer '{thumbnailer_class.__name__}' "
+            f"for doc {doc_id}"
+        )
 
     try:
         thumbnailer: BaseThumbnailGenerator = thumbnailer_class()

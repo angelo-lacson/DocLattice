@@ -304,13 +304,20 @@ def get_preferred_embedder(mimetype: str) -> Optional[type[BaseEmbedder]]:
     """
     Get the preferred embedder class for a given mimetype.
 
+    First checks the database PipelineSettings, then falls back to Django settings.
+
     Args:
         mimetype (str): The mimetype of the file.
 
     Returns:
         Optional[Type[BaseEmbedder]]: The preferred embedder class, or None if not found.
     """
-    embedder_path = settings.PREFERRED_EMBEDDERS.get(mimetype)
+    # Import here to avoid circular imports
+    from opencontractserver.documents.models import PipelineSettings
+
+    pipeline_settings = PipelineSettings.get_instance()
+    embedder_path = pipeline_settings.get_preferred_embedder(mimetype)
+
     if embedder_path:
         try:
             module_path, class_name = embedder_path.rsplit(".", 1)
@@ -329,10 +336,17 @@ def get_default_embedder() -> Optional[type[BaseEmbedder]]:
     """
     Get the default embedder class.
 
+    First checks the database PipelineSettings, then falls back to Django settings.
+
     Returns:
         Optional[Type[BaseEmbedder]]: The default embedder class, or None if not found.
     """
-    embedder_path = settings.DEFAULT_EMBEDDER
+    # Import here to avoid circular imports
+    from opencontractserver.documents.models import PipelineSettings
+
+    pipeline_settings = PipelineSettings.get_instance()
+    embedder_path = pipeline_settings.get_default_embedder()
+
     if embedder_path:
         try:
             module_path, class_name = embedder_path.rsplit(".", 1)

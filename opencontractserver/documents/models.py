@@ -726,3 +726,273 @@ class DocumentSummaryRevision(django.db.models.Model):
         return (
             f"DocumentSummaryRevision(document_id={self.document_id}, v={self.version})"
         )
+
+
+# -------------------- PipelineSettings (Singleton) -------------------- #
+
+
+class PipelineSettings(django.db.models.Model):
+    """
+    Singleton model for configurable document processing pipeline settings.
+
+    This model stores runtime-configurable settings for the document ingestion
+    pipeline, allowing superusers to change parsers, embedders, and thumbnailers
+    without code deployment.
+
+    The singleton instance is created via migration and cannot be deleted.
+    Only superusers can modify these settings via the GraphQL API.
+
+    Settings Structure:
+        preferred_parsers: Dict mapping MIME types to parser class paths
+            Example: {"application/pdf": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser"}
+
+        preferred_embedders: Dict mapping MIME types to embedder class paths
+            Example: {"application/pdf": "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"}
+
+        preferred_thumbnailers: Dict mapping MIME types to thumbnailer class paths
+            Example: {"application/pdf": "opencontractserver.pipeline.thumbnailers.pdf_thumbnailer.PdfThumbnailGenerator"}
+
+        parser_kwargs: Dict mapping parser class paths to their configuration kwargs
+            Example: {"opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser": {"force_ocr": false}}
+
+        component_settings: Dict mapping component class paths to their settings overrides
+            Example: {"opencontractserver.pipeline.embedders.MicroserviceEmbedder": {"timeout": 30}}
+
+        default_embedder: Default embedder class path when no MIME-specific embedder is found
+
+    Security Note - API Keys and Secrets:
+        This model is intended for non-sensitive configuration only. Sensitive values
+        like API keys should be stored in environment variables, not in this model.
+
+        The recommended pattern is:
+        1. Store API keys in environment variables (LLAMAPARSE_API_KEY, etc.)
+        2. Pipeline components read from environment variables first
+        3. Use component_settings only for non-sensitive overrides (timeouts, batch sizes)
+
+        This keeps secrets out of the database and allows them to be managed via
+        deployment configuration (environment variables, secrets managers, etc.).
+    """
+
+    # Preferred parsers per MIME type
+    preferred_parsers = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of MIME types to preferred parser class paths",
+    )
+
+    # Preferred embedders per MIME type
+    preferred_embedders = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of MIME types to preferred embedder class paths",
+    )
+
+    # Preferred thumbnailers per MIME type
+    preferred_thumbnailers = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of MIME types to preferred thumbnailer class paths",
+    )
+
+    # Parser-specific kwargs
+    parser_kwargs = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of parser class paths to configuration kwargs",
+    )
+
+    # Component-specific settings overrides
+    component_settings = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of component class paths to settings overrides",
+    )
+
+    # Default embedder when no MIME-specific one is found
+    default_embedder = django.db.models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Default embedder class path",
+    )
+
+    # Audit fields
+    modified = django.db.models.DateTimeField(auto_now=True)
+    modified_by = django.db.models.ForeignKey(
+        get_user_model(),
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pipeline_settings_modifications",
+        help_text="User who last modified these settings",
+    )
+
+    class Meta:
+        verbose_name = "Pipeline Settings"
+        verbose_name_plural = "Pipeline Settings"
+
+    def __str__(self):
+        return "PipelineSettings (Singleton)"
+
+    def save(self, *args, **kwargs):
+        """Ensure singleton pattern - only allow one instance."""
+        if not self.pk and PipelineSettings.objects.exists():
+            raise ValidationError(
+                "PipelineSettings is a singleton. Use PipelineSettings.get_instance() instead."
+            )
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """Prevent deletion of the singleton instance."""
+        raise ValidationError("PipelineSettings singleton cannot be deleted.")
+
+    @classmethod
+    def get_instance(cls) -> "PipelineSettings":
+        """
+        Get the singleton PipelineSettings instance.
+
+        If no instance exists (shouldn't happen after migration), creates one
+        with default values from Django settings.
+
+        Returns:
+            PipelineSettings: The singleton instance.
+        """
+        from django.conf import settings as django_settings
+
+        instance, created = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                "preferred_parsers": getattr(django_settings, "PREFERRED_PARSERS", {}),
+                "preferred_embedders": getattr(
+                    django_settings, "PREFERRED_EMBEDDERS", {}
+                ),
+                "preferred_thumbnailers": {},  # No default in Django settings
+                "parser_kwargs": getattr(django_settings, "PARSER_KWARGS", {}),
+                "component_settings": getattr(
+                    django_settings, "PIPELINE_SETTINGS", {}
+                ),
+                "default_embedder": getattr(django_settings, "DEFAULT_EMBEDDER", ""),
+            },
+        )
+        return instance
+
+    def get_preferred_parser(self, mimetype: str) -> str | None:
+        """
+        Get the preferred parser class path for a MIME type.
+
+        Falls back to Django settings if not configured in database.
+
+        Args:
+            mimetype: The MIME type (e.g., "application/pdf")
+
+        Returns:
+            Parser class path or None if not found.
+        """
+        from django.conf import settings as django_settings
+
+        # First check database settings
+        if self.preferred_parsers and mimetype in self.preferred_parsers:
+            return self.preferred_parsers[mimetype]
+
+        # Fall back to Django settings
+        return getattr(django_settings, "PREFERRED_PARSERS", {}).get(mimetype)
+
+    def get_preferred_embedder(self, mimetype: str) -> str | None:
+        """
+        Get the preferred embedder class path for a MIME type.
+
+        Falls back to Django settings if not configured in database.
+
+        Args:
+            mimetype: The MIME type (e.g., "application/pdf")
+
+        Returns:
+            Embedder class path or None if not found.
+        """
+        from django.conf import settings as django_settings
+
+        # First check database settings
+        if self.preferred_embedders and mimetype in self.preferred_embedders:
+            return self.preferred_embedders[mimetype]
+
+        # Fall back to Django settings
+        return getattr(django_settings, "PREFERRED_EMBEDDERS", {}).get(mimetype)
+
+    def get_preferred_thumbnailer(self, mimetype: str) -> str | None:
+        """
+        Get the preferred thumbnailer class path for a MIME type.
+
+        Note: No fallback to Django settings as thumbnailers are dynamically
+        selected by default.
+
+        Args:
+            mimetype: The MIME type (e.g., "application/pdf")
+
+        Returns:
+            Thumbnailer class path or None if not found.
+        """
+        if self.preferred_thumbnailers and mimetype in self.preferred_thumbnailers:
+            return self.preferred_thumbnailers[mimetype]
+        return None
+
+    def get_parser_kwargs(self, parser_class_path: str) -> dict:
+        """
+        Get configuration kwargs for a specific parser.
+
+        Falls back to Django settings if not configured in database.
+
+        Args:
+            parser_class_path: Full class path of the parser
+
+        Returns:
+            Dict of kwargs for the parser.
+        """
+        from django.conf import settings as django_settings
+
+        # First check database settings
+        if self.parser_kwargs and parser_class_path in self.parser_kwargs:
+            return self.parser_kwargs[parser_class_path]
+
+        # Fall back to Django settings
+        return getattr(django_settings, "PARSER_KWARGS", {}).get(
+            parser_class_path, {}
+        )
+
+    def get_component_settings(self, component_class_path: str) -> dict:
+        """
+        Get settings overrides for a specific component.
+
+        Falls back to Django settings if not configured in database.
+
+        Args:
+            component_class_path: Full class path of the component
+
+        Returns:
+            Dict of settings for the component.
+        """
+        from django.conf import settings as django_settings
+
+        # First check database settings
+        if self.component_settings and component_class_path in self.component_settings:
+            return self.component_settings[component_class_path]
+
+        # Fall back to Django settings
+        return getattr(django_settings, "PIPELINE_SETTINGS", {}).get(
+            component_class_path, {}
+        )
+
+    def get_default_embedder(self) -> str:
+        """
+        Get the default embedder class path.
+
+        Falls back to Django settings if not configured in database.
+
+        Returns:
+            Default embedder class path.
+        """
+        from django.conf import settings as django_settings
+
+        if self.default_embedder:
+            return self.default_embedder
+
+        return getattr(django_settings, "DEFAULT_EMBEDDER", "")
