@@ -73,14 +73,12 @@ class TestCoreAnnotationVectorStore(TestCase):
 
             cls.doc1 = Document.objects.create(
                 title="Document One",
-                corpus=cls.corpus,
                 creator=cls.user,
                 is_public=True,
             )
 
             cls.doc2 = Document.objects.create(
                 title="Document Two",
-                corpus=cls.corpus,
                 creator=cls.user,
                 is_public=True,
             )
