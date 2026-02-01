@@ -129,9 +129,9 @@ test.describe("GlobalSettingsPanel Component", () => {
   }) => {
     const component = await mount(<GlobalSettingsPanelWrapper />);
 
-    // Coming Soon badges should be visible
+    // Coming Soon badge should be visible (only User Management has it)
     const comingSoonBadges = page.locator("text=Coming Soon");
-    await expect(comingSoonBadges).toHaveCount(2);
+    await expect(comingSoonBadges).toHaveCount(1);
 
     await component.unmount();
   });
