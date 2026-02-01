@@ -64,7 +64,11 @@ import { CookieConsentDialog } from "./components/cookies/CookieConsent";
 import { initializeAnalyticsOnLoad } from "./utils/analytics";
 import { Extracts } from "./views/Extracts";
 import { BadgeManagement } from "./components/badges/BadgeManagement";
-import { GlobalSettingsPanel, GlobalAgentManagement } from "./components/admin";
+import {
+  GlobalSettingsPanel,
+  GlobalAgentManagement,
+  SystemSettings,
+} from "./components/admin";
 import { useEnv } from "./components/hooks/UseEnv";
 import { ExtractDetailRoute } from "./components/routes/ExtractDetailRoute";
 import { SelectAnalyzerOrFieldsetModal } from "./components/widgets/modals/SelectCorpusAnalyzerOrFieldsetAnalyzer";
@@ -483,6 +487,7 @@ export const App = () => {
                     path="/admin/agents"
                     element={<GlobalAgentManagement />}
                   />
+                  <Route path="/system_settings" element={<SystemSettings />} />
 
                   {/* Community Routes (Issue #613) */}
                   <Route path="/leaderboard" element={<LeaderboardRoute />} />
