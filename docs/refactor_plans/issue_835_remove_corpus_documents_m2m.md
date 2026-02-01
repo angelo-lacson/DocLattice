@@ -1,5 +1,18 @@
 # Refactor Plan: Remove corpus.documents M2M Relationship (Issue #835)
 
+> **Last Reviewed**: 2026-02-01
+>
+> **Review Notes**: Plan validated against codebase. Key corrections made:
+> - Test file count: 26 → 34 files (~124 usages)
+> - Frontend file count: 5 → 6 components + 1 query fix
+> - Added migration 0038 to production code scope
+> - Added pre-flight validation step
+> - Fixed line number for UpdateDocumentRelationship (3410-3415)
+> - Added backward-compat tests to Phase 7 removal list
+> - Identified GET_CORPUS_WITH_HISTORY query gap (pre-existing bug)
+
+---
+
 ## Executive Summary
 
 This document outlines a safe, phased approach to remove the legacy `Corpus.documents` ManyToMany relationship in favor of `DocumentPath` as the single source of truth for corpus-document associations.
@@ -27,10 +40,10 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
 | Category | File Count | M2M Usages |
 |----------|------------|------------|
 | Production Code | 8 files | ~15 usages |
-| Test Files | 26 files | ~84 usages |
+| Test Files | 34 files | ~124 usages |
 | GraphQL Schema | 3 files | ~8 usages |
-| Frontend | 5 files | 5 usages |
-| Migrations | 2 files | 2 usages |
+| Frontend | 6 files | 7 usages |
+| Migrations | 3 files | 3 usages |
 | Documentation | 2 files | 2 usages |
 
 ### 1.2 Production Code Files Requiring Changes
@@ -51,7 +64,7 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
 
 4. **`config/graphql/mutations.py`**
    - Line 1259: `corpus.documents.clear()` in `StartCorpusFork`
-   - Lines 3405-3421: `corpus.documents.filter()` validation in `UpdateDocumentRelationship`
+   - Lines 3410-3415: `corpus.documents.filter()` validation in `UpdateDocumentRelationship`
    - Line 4692: `extract.documents.remove()` (Extract model - OUT OF SCOPE)
 
 5. **`opencontractserver/utils/corpus_forking.py`**
@@ -63,6 +76,10 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
 7. **`opencontractserver/tasks/extract_orchestrator_tasks.py`**
    - Line 56: `extract.documents.count()` (Extract model - OUT OF SCOPE)
    - Line 88: `extract.documents.all()` (Extract model - OUT OF SCOPE)
+
+8. **`opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`**
+   - Line 157: `personal_corpus.documents.add(doc)` in data migration
+   - Note: Only runs on fresh installs, but should be updated for consistency
 
 #### Already Using DocumentPath (No Changes Needed)
 
@@ -88,10 +105,20 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
 | `CorpusLandingView.tsx` | 130 | `corpus.documents?.totalCount` |
 | `CorpusStatus.tsx` | 91 | `corpus.documents?.totalCount` |
 | `CorpusSelectorCard.tsx` | 129 | `corpus.documents?.totalCount` |
+| `CorpusSelector.tsx` | 107 | `corpus?.documents?.totalCount` |
+| `CorpusListView.tsx` | 457 | `c.documents?.totalCount` (fallback pattern) |
 
-**Note**: Most frontend code already uses `documentCount` field. Only 5 components use the older `documents.totalCount` pattern.
+**Note**: Most frontend code already uses `documentCount` field. 6 components use the older `documents.totalCount` pattern directly, plus 1 fallback pattern.
 
-### 1.5 Management Commands to Update/Remove
+### 1.5 GraphQL Query Gaps (Pre-existing Issue)
+
+**`GET_CORPUS_WITH_HISTORY`** (`frontend/src/graphql/queries.ts:396-435`):
+- Used by `CorpusDetailsView.tsx` and `CorpusLandingView.tsx`
+- **Missing**: Does not include `documentCount` OR `documents { totalCount }`
+- Current code accessing `corpus.documents?.totalCount` returns `undefined`
+- **Action**: Add `documentCount` field to this query in Phase 4
+
+### 1.6 Management Commands to Update/Remove
 
 1. **`sync_m2m_to_documentpath.py`** - KEEP for migration verification, then REMOVE
 2. **`validate_v3_migration.py`** - REMOVE M2M comparison logic
@@ -104,7 +131,7 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
 
 **Goal**: Update test files to use the new API patterns before changing production code.
 
-**Files to Update** (26 test files):
+**Files to Update** (34 test files with ~124 M2M usages):
 
 | File | Pattern | Replacement |
 |------|---------|-------------|
@@ -130,10 +157,17 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
 | `test_annotation_permission_mutations.py` | `.documents.add()` | `corpus.add_document()` |
 | `test_individual_extract_tasks.py` | `.documents.add()` | `corpus.add_document()` |
 | `test_mentions.py` | `.documents.add()` | `corpus.add_document()` |
-| `test_corpus_fork_round_trip.py` | `.documents.add()` | `corpus.add_document()` |
-| `test_document_folder_service.py` | M2M reference | Update verification logic |
+| `test_corpus_fork_round_trip.py` | `.documents.add()` (16 occurrences) | `corpus.add_document()` |
+| `test_document_folder_service.py` | M2M reference + backward compat test | Update verification logic, remove M2M test |
 | `test_document_uploads.py` | `.documents.clear()` | Remove or use `remove_document()` |
-| `test_document_versioning.py` | `.documents.all()` | `corpus.get_documents()` |
+| `test_document_versioning.py` | `.documents.all()` + backward compat assertion | `corpus.get_documents()`, remove M2M assertion |
+
+**Additional test files discovered** (not exhaustive - run grep to find all):
+
+| File | Pattern | Notes |
+|------|---------|-------|
+| Additional permissioning tests | `.documents.add()` | Multiple files in `tests/permissioning/` |
+| Additional pipeline tests | `.documents.add()` | Embedder and parser tests |
 
 **Pattern Replacements**:
 
@@ -215,7 +249,7 @@ corpus.documents.clear()
 **File**: `config/graphql/mutations.py`
 
 ```python
-# Lines 3405-3421:
+# Lines 3410-3415:
 # BEFORE:
 docs_in_corpus = corpus.documents.filter(
     id__in=[doc_relationship.source_document_id, doc_relationship.target_document_id]
@@ -242,6 +276,20 @@ if not document:
     raise Document.DoesNotExist()
 ```
 
+#### 2.5 Update Personal Corpus Migration
+
+**File**: `opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`
+
+```python
+# Line 157:
+# BEFORE:
+personal_corpus.documents.add(doc)
+
+# AFTER:
+# Use DocumentPath.objects.create() or call corpus.add_document()
+# Note: This only runs on fresh installs, but should be consistent
+```
+
 ---
 
 ### Phase 3: Update GraphQL Schema (Medium Risk)
@@ -266,13 +314,34 @@ def resolve_documents(self, info):
 
 **Goal**: Replace `corpus.documents?.totalCount` with `corpus.documentCount`.
 
-**Files to Update**:
+#### 4.1 Fix GraphQL Query Gap (Required First)
+
+**File**: `frontend/src/graphql/queries.ts`
+
+```typescript
+// GET_CORPUS_WITH_HISTORY (lines 396-435)
+// ADD the documentCount field to the query:
+query GetCorpusWithHistory($corpusId: ID!) {
+  corpus(id: $corpusId) {
+    id
+    title
+    documentCount  // <-- ADD THIS
+    # ... rest of fields
+  }
+}
+```
+
+#### 4.2 Update Component Files
+
+**Files to Update** (6 components + 1 fallback pattern):
 
 1. `frontend/src/components/modals/AddToCorpusModal.tsx:302`
 2. `frontend/src/components/corpuses/CorpusHome/CorpusDetailsView.tsx:150`
 3. `frontend/src/components/corpuses/CorpusHome/CorpusLandingView.tsx:130`
 4. `frontend/src/components/widgets/data-display/CorpusStatus.tsx:91`
 5. `frontend/src/components/widgets/modals/UploadModal/components/CorpusSelectorCard.tsx:129`
+6. `frontend/src/components/corpuses/CorpusSelector.tsx:107`
+7. `frontend/src/components/corpuses/CorpusListView.tsx:457` (fallback pattern cleanup)
 
 **Pattern**:
 ```typescript
@@ -283,7 +352,7 @@ corpus.documents?.totalCount
 corpus.documentCount
 ```
 
-**Note**: Ensure the GraphQL queries for these components include the `documentCount` field.
+**Note**: The query fix in 4.1 is required for CorpusDetailsView and CorpusLandingView to work correctly - they currently return `undefined` for document counts.
 
 ---
 
@@ -352,16 +421,52 @@ class Migration(migrations.Migration):
 
 ### Phase 7: Cleanup (Low Risk)
 
-**Goal**: Remove deprecated management commands and documentation.
+**Goal**: Remove deprecated management commands, tests, and documentation.
+
+#### 7.1 Remove Backward Compatibility Tests
+
+These tests explicitly verify M2M is maintained and will fail after Phase 6:
+
+1. `opencontractserver/tests/test_document_folder_service.py:1678-1695`
+   - Test: `test_add_document_updates_m2m_relationship()`
+   - Action: DELETE entirely
+
+2. `opencontractserver/tests/test_document_versioning.py:1876`
+   - Assertion: `self.assertIn(doc, self.corpus.documents.all())`
+   - Action: Remove this assertion (keep rest of test)
+
+#### 7.2 Remove Management Commands
 
 1. Remove `sync_m2m_to_documentpath.py` management command
-2. Update `validate_v3_migration.py` to remove M2M comparison
-3. Update documentation in `docs/architecture/document_folder_service_migration_inventory.md`
-4. Update any inline comments referencing M2M
+2. Update `validate_v3_migration.py` to remove M2M comparison (Check 3)
+
+#### 7.3 Update Documentation
+
+1. Update `docs/architecture/document_folder_service_migration_inventory.md`
+2. Update any inline comments referencing M2M
+3. Remove TODO comments referencing issue #835
 
 ---
 
 ## 3. Test Plan
+
+### 3.0 Pre-Flight Validation (Required)
+
+Before starting any refactoring, verify M2M/DocumentPath parity:
+
+```bash
+# Verify no orphaned M2M entries exist
+docker compose -f local.yml run django python manage.py validate_v3_migration --verbose
+
+# Check specifically for M2M without DocumentPath (Check 3 output)
+# Expected: "All M2M relationships have corresponding DocumentPath records"
+```
+
+If orphaned entries are found, run sync command first:
+```bash
+docker compose -f local.yml run django python manage.py sync_m2m_to_documentpath --dry-run
+docker compose -f local.yml run django python manage.py sync_m2m_to_documentpath
+```
 
 ### 3.1 Pre-Refactor Baseline
 
@@ -616,11 +721,13 @@ python manage.py sync_documentpath_to_m2m  # (would need to create this)
 
 - [ ] All tests pass on current main branch
 - [ ] Database backup created
-- [ ] sync_m2m_to_documentpath verified (no orphaned M2M entries)
+- [ ] Run `validate_v3_migration --verbose` (Check 3 must pass)
+- [ ] Run `sync_m2m_to_documentpath` if needed (no orphaned M2M entries)
 
 ### Phase 1: Test Updates
 
-- [ ] Update 26 test files to use new API
+- [ ] Update 34 test files to use new API (~124 M2M usages)
+- [ ] High-impact: `test_corpus_fork_round_trip.py` (16 occurrences)
 - [ ] All tests pass
 - [ ] PR reviewed and merged
 
@@ -630,6 +737,7 @@ python manage.py sync_documentpath_to_m2m  # (would need to create this)
 - [ ] Remove M2M writes in Corpus.add_document()
 - [ ] Update corpus forking to not use M2M
 - [ ] Update document relationship validation
+- [ ] Update migration 0038 (personal corpus creation)
 - [ ] All tests pass
 - [ ] PR reviewed and merged
 
@@ -639,7 +747,9 @@ python manage.py sync_documentpath_to_m2m  # (would need to create this)
 
 ### Phase 4: Frontend
 
-- [ ] Update 5 components to use documentCount
+- [ ] Add `documentCount` to GET_CORPUS_WITH_HISTORY query
+- [ ] Update 6 components to use documentCount
+- [ ] Clean up CorpusListView.tsx fallback pattern
 - [ ] TypeScript compiles
 - [ ] Frontend tests pass
 - [ ] PR reviewed and merged
@@ -661,7 +771,10 @@ python manage.py sync_documentpath_to_m2m  # (would need to create this)
 
 ### Phase 7: Cleanup
 
+- [ ] Remove backward-compat test in test_document_folder_service.py
+- [ ] Remove M2M assertion in test_document_versioning.py
 - [ ] Remove sync_m2m_to_documentpath command
+- [ ] Update validate_v3_migration.py (remove Check 3)
 - [ ] Update documentation
 - [ ] Close issue #835
 
@@ -676,27 +789,40 @@ python manage.py sync_documentpath_to_m2m  # (would need to create this)
 3. `opencontractserver/utils/corpus_forking.py` - Remove documents.clear()
 4. `config/graphql/mutations.py` - Update validation queries
 5. `config/graphql/queries.py` - Update public document resolution
+6. `opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py` - Update M2M usage
 
-### Test Files (26 files)
+### Test Files (34 files, ~124 usages)
 
-See Phase 1 section for complete list.
+See Phase 1 section for primary list. Run grep to find all:
+```bash
+grep -r "\.documents\.add\|\.documents\.remove\|\.documents\.clear\|\.documents\.all\|\.documents\.filter" opencontractserver/tests/ --include="*.py" -l | wc -l
+```
 
-### Frontend (5 files)
+### Frontend (6 components + 1 query)
 
-1. `frontend/src/components/modals/AddToCorpusModal.tsx`
-2. `frontend/src/components/corpuses/CorpusHome/CorpusDetailsView.tsx`
-3. `frontend/src/components/corpuses/CorpusHome/CorpusLandingView.tsx`
-4. `frontend/src/components/widgets/data-display/CorpusStatus.tsx`
-5. `frontend/src/components/widgets/modals/UploadModal/components/CorpusSelectorCard.tsx`
+1. `frontend/src/graphql/queries.ts` - Add documentCount to GET_CORPUS_WITH_HISTORY
+2. `frontend/src/components/modals/AddToCorpusModal.tsx`
+3. `frontend/src/components/corpuses/CorpusHome/CorpusDetailsView.tsx`
+4. `frontend/src/components/corpuses/CorpusHome/CorpusLandingView.tsx`
+5. `frontend/src/components/widgets/data-display/CorpusStatus.tsx`
+6. `frontend/src/components/widgets/modals/UploadModal/components/CorpusSelectorCard.tsx`
+7. `frontend/src/components/corpuses/CorpusSelector.tsx`
+8. `frontend/src/components/corpuses/CorpusListView.tsx` (fallback pattern cleanup)
 
 ### Management Commands
 
 1. `opencontractserver/documents/management/commands/sync_m2m_to_documentpath.py` - REMOVE
-2. `opencontractserver/documents/management/commands/validate_v3_migration.py` - UPDATE
+2. `opencontractserver/documents/management/commands/validate_v3_migration.py` - UPDATE (remove Check 3)
 
 ### Migrations
 
 1. New migration: `corpuses/migrations/XXXX_remove_documents_m2m.py`
+2. Update existing: `corpuses/migrations/0038_create_personal_corpuses.py`
+
+### Tests to Remove/Update in Phase 7
+
+1. `opencontractserver/tests/test_document_folder_service.py:1678-1695` - DELETE test
+2. `opencontractserver/tests/test_document_versioning.py:1876` - Remove assertion
 
 ---
 
