@@ -51,7 +51,7 @@ class TestCorpusActionExecutionAdmin(TestCase):
             title="Test Document for Admin",
             creator=cls.superuser,
         )
-        cls.corpus.add_document(cls.document, cls.superuser)
+        cls.corpus.add_document(document=cls.document, user=cls.superuser)
 
         # Create fieldset for corpus action
         cls.fieldset = Fieldset.objects.create(
