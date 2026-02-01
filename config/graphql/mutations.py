@@ -1443,10 +1443,10 @@ class StartCorpusExport(graphene.Mutation):
                     except Exception:  # If invalid, just skip for safety
                         pass
 
-            # Collect doc_ids in the corpus for the tasks
-            doc_ids = Document.objects.filter(corpus=corpus_pk).values_list(
-                "id", flat=True
-            )
+            # Collect doc_ids in the corpus via DocumentPath
+            doc_ids = DocumentPath.objects.filter(
+                corpus_id=corpus_pk, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
             logger.info(f"Doc ids: {list(doc_ids)}")
 
             # Build the Celery chain: label lookups → burn doc annotations → package → optional post-proc
