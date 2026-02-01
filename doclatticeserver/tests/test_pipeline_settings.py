@@ -417,3 +417,423 @@ class PipelineSettingsGraphQLTestCase(TestCase):
                 ],
                 embedder.class_name,
             )
+
+
+class PipelineSettingsSecretsTestCase(TestCase):
+    """Tests for encrypted secrets storage in PipelineSettings."""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@test.com"
+        )
+        self.regular_user = User.objects.create_user(
+            username="regular", password="regular"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        self.regular_client = Client(
+            schema, context_value=TestContext(self.regular_user)
+        )
+        PipelineSettings.objects.all().delete()
+
+    def test_set_and_get_secrets(self):
+        """Test basic encryption/decryption of secrets."""
+        instance = PipelineSettings.get_instance()
+
+        secrets = {
+            "component.path.TestParser": {
+                "api_key": "sk-test-12345",
+                "secret_token": "tok-abcdef",
+            }
+        }
+
+        instance.set_secrets(secrets)
+        instance.save()
+
+        # Retrieve and verify
+        instance.refresh_from_db()
+        retrieved = instance.get_secrets()
+
+        self.assertEqual(retrieved["component.path.TestParser"]["api_key"], "sk-test-12345")
+        self.assertEqual(
+            retrieved["component.path.TestParser"]["secret_token"], "tok-abcdef"
+        )
+
+    def test_update_secrets_merges_with_existing(self):
+        """Test that update_secrets merges with existing secrets."""
+        instance = PipelineSettings.get_instance()
+
+        # Set initial secrets
+        instance.set_secrets(
+            {"component.path.Parser1": {"key1": "value1"}}
+        )
+        instance.save()
+
+        # Update with new secret for same component
+        instance.update_secrets("component.path.Parser1", {"key2": "value2"})
+        instance.save()
+
+        secrets = instance.get_secrets()
+        self.assertEqual(secrets["component.path.Parser1"]["key1"], "value1")
+        self.assertEqual(secrets["component.path.Parser1"]["key2"], "value2")
+
+    def test_get_component_secrets(self):
+        """Test getting secrets for a specific component."""
+        instance = PipelineSettings.get_instance()
+
+        instance.set_secrets(
+            {
+                "component.path.Parser1": {"api_key": "key1"},
+                "component.path.Parser2": {"api_key": "key2"},
+            }
+        )
+        instance.save()
+
+        parser1_secrets = instance.get_component_secrets("component.path.Parser1")
+        self.assertEqual(parser1_secrets["api_key"], "key1")
+
+        # Non-existent component returns empty dict
+        empty_secrets = instance.get_component_secrets("component.path.NonExistent")
+        self.assertEqual(empty_secrets, {})
+
+    def test_delete_component_secrets(self):
+        """Test deleting secrets for a component."""
+        instance = PipelineSettings.get_instance()
+
+        instance.set_secrets(
+            {
+                "component.path.Parser1": {"api_key": "key1"},
+                "component.path.Parser2": {"api_key": "key2"},
+            }
+        )
+        instance.save()
+
+        instance.delete_component_secrets("component.path.Parser1")
+        instance.save()
+
+        secrets = instance.get_secrets()
+        self.assertNotIn("component.path.Parser1", secrets)
+        self.assertIn("component.path.Parser2", secrets)
+
+    def test_get_full_component_settings_merges_secrets(self):
+        """Test that get_full_component_settings merges non-sensitive and secrets."""
+        instance = PipelineSettings.get_instance()
+
+        # Set non-sensitive settings
+        instance.component_settings = {
+            "component.path.TestParser": {"timeout": 60, "batch_size": 10}
+        }
+
+        # Set secrets
+        instance.set_secrets(
+            {"component.path.TestParser": {"api_key": "secret-key-123"}}
+        )
+        instance.save()
+
+        full_settings = instance.get_full_component_settings("component.path.TestParser")
+
+        self.assertEqual(full_settings["timeout"], 60)
+        self.assertEqual(full_settings["batch_size"], 10)
+        self.assertEqual(full_settings["api_key"], "secret-key-123")
+
+    def test_encrypted_secrets_not_readable_as_plaintext(self):
+        """Test that encrypted secrets are not stored as plaintext."""
+        instance = PipelineSettings.get_instance()
+
+        secret_value = "super-secret-api-key-12345"
+        instance.set_secrets({"test.parser": {"api_key": secret_value}})
+        instance.save()
+        instance.refresh_from_db()
+
+        # The encrypted_secrets field should contain binary data
+        self.assertIsNotNone(instance.encrypted_secrets)
+
+        # The secret value should NOT appear in the raw binary
+        raw_bytes = bytes(instance.encrypted_secrets)
+        self.assertNotIn(secret_value.encode(), raw_bytes)
+
+    def test_update_component_secrets_mutation_as_superuser(self):
+        """Test updating secrets via GraphQL mutation."""
+        mutation = """
+            mutation UpdateComponentSecrets(
+                $componentPath: String!,
+                $secrets: GenericScalar!
+            ) {
+                updateComponentSecrets(
+                    componentPath: $componentPath,
+                    secrets: $secrets
+                ) {
+                    ok
+                    message
+                    componentsWithSecrets
+                }
+            }
+        """
+
+        variables = {
+            "componentPath": "test.parser.TestParser",
+            "secrets": {"api_key": "test-key-123"},
+        }
+
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn(
+            "test.parser.TestParser",
+            result["data"]["updateComponentSecrets"]["componentsWithSecrets"],
+        )
+
+    def test_update_component_secrets_mutation_as_regular_user_fails(self):
+        """Test that regular users cannot update secrets."""
+        mutation = """
+            mutation UpdateComponentSecrets(
+                $componentPath: String!,
+                $secrets: GenericScalar!
+            ) {
+                updateComponentSecrets(
+                    componentPath: $componentPath,
+                    secrets: $secrets
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        variables = {
+            "componentPath": "test.parser.TestParser",
+            "secrets": {"api_key": "test-key-123"},
+        }
+
+        result = self.regular_client.execute(mutation, variables=variables)
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn(
+            "superuser",
+            result["data"]["updateComponentSecrets"]["message"].lower(),
+        )
+
+    def test_delete_component_secrets_mutation(self):
+        """Test deleting secrets via GraphQL mutation."""
+        # First set some secrets
+        instance = PipelineSettings.get_instance()
+        instance.set_secrets({"test.parser.TestParser": {"api_key": "key"}})
+        instance.save()
+
+        mutation = """
+            mutation DeleteComponentSecrets($componentPath: String!) {
+                deleteComponentSecrets(componentPath: $componentPath) {
+                    ok
+                    message
+                    componentsWithSecrets
+                }
+            }
+        """
+
+        variables = {"componentPath": "test.parser.TestParser"}
+
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["deleteComponentSecrets"]["ok"])
+        self.assertNotIn(
+            "test.parser.TestParser",
+            result["data"]["deleteComponentSecrets"]["componentsWithSecrets"],
+        )
+
+    def test_pipeline_settings_query_includes_components_with_secrets(self):
+        """Test that the query returns list of components with secrets."""
+        # Set some secrets
+        instance = PipelineSettings.get_instance()
+        instance.set_secrets(
+            {
+                "parser1.path": {"key": "value1"},
+                "parser2.path": {"key": "value2"},
+            }
+        )
+        instance.save()
+
+        query = """
+            query {
+                pipelineSettings {
+                    componentsWithSecrets
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(query)
+        self.assertIsNone(result.get("errors"))
+
+        components = result["data"]["pipelineSettings"]["componentsWithSecrets"]
+        self.assertIn("parser1.path", components)
+        self.assertIn("parser2.path", components)
+
+
+class PipelineSettingsEdgeCasesTestCase(TestCase):
+    """Tests for edge cases and error handling."""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        PipelineSettings.objects.all().delete()
+
+    def test_secrets_size_limit(self):
+        """Test that oversized secrets are rejected."""
+        instance = PipelineSettings.get_instance()
+
+        # Create a secret payload that exceeds the 10KB limit
+        large_value = "x" * 15000  # 15KB
+        with self.assertRaises(ValueError) as context:
+            instance.set_secrets({"test.parser": {"api_key": large_value}})
+
+        self.assertIn("exceeds maximum size", str(context.exception))
+
+    def test_invalid_component_path_format(self):
+        """Test that invalid component paths are rejected."""
+        mutation = """
+            mutation UpdateComponentSecrets(
+                $componentPath: String!,
+                $secrets: GenericScalar!
+            ) {
+                updateComponentSecrets(
+                    componentPath: $componentPath,
+                    secrets: $secrets
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test path with invalid characters
+        variables = {
+            "componentPath": "invalid path with spaces",
+            "secrets": {"api_key": "test"},
+        }
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn("Invalid component path", result["data"]["updateComponentSecrets"]["message"])
+
+        # Test path that's too long
+        variables = {
+            "componentPath": "a" * 300 + ".module.Class",
+            "secrets": {"api_key": "test"},
+        }
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn("exceeds maximum length", result["data"]["updateComponentSecrets"]["message"])
+
+    def test_invalid_secret_value_types(self):
+        """Test that non-primitive secret values are rejected."""
+        mutation = """
+            mutation UpdateComponentSecrets(
+                $componentPath: String!,
+                $secrets: GenericScalar!
+            ) {
+                updateComponentSecrets(
+                    componentPath: $componentPath,
+                    secrets: $secrets
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test nested dict (should be rejected)
+        variables = {
+            "componentPath": "valid.module.Class",
+            "secrets": {"nested": {"key": "value"}},
+        }
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn("primitive type", result["data"]["updateComponentSecrets"]["message"])
+
+    def test_caching_invalidation_on_save(self):
+        """Test that cache is invalidated when settings are saved."""
+        from django.core.cache import cache
+
+        instance = PipelineSettings.get_instance()
+
+        # Verify cache is populated
+        cached = cache.get(PipelineSettings.CACHE_KEY)
+        self.assertIsNotNone(cached)
+
+        # Modify and save
+        instance.default_embedder = "new.embedder.Class"
+        instance.save()
+
+        # Cache should be invalidated
+        cached_after_save = cache.get(PipelineSettings.CACHE_KEY)
+        self.assertIsNone(cached_after_save)
+
+        # Get instance again - should hit database
+        new_instance = PipelineSettings.get_instance()
+        self.assertEqual(new_instance.default_embedder, "new.embedder.Class")
+
+    def test_bypass_cache_flag(self):
+        """Test that use_cache=False bypasses the cache."""
+        from django.core.cache import cache
+
+        # Get instance with cache
+        instance1 = PipelineSettings.get_instance(use_cache=True)
+
+        # Manually modify cache entry to test bypass
+        cache.set(
+            PipelineSettings.CACHE_KEY,
+            "not_a_valid_instance",
+            PipelineSettings.CACHE_TTL_SECONDS,
+        )
+
+        # With use_cache=False, should get real instance from DB
+        instance2 = PipelineSettings.get_instance(use_cache=False)
+        self.assertIsInstance(instance2, PipelineSettings)
+
+    def test_primitive_secret_types_accepted(self):
+        """Test that all primitive types are accepted as secret values."""
+        instance = PipelineSettings.get_instance()
+
+        # All primitive types should work
+        secrets = {
+            "test.component": {
+                "string_val": "test",
+                "int_val": 42,
+                "float_val": 3.14,
+                "bool_val": True,
+                "null_val": None,
+            }
+        }
+
+        instance.set_secrets(secrets)
+        instance.save()
+
+        retrieved = instance.get_secrets()
+        self.assertEqual(retrieved["test.component"]["string_val"], "test")
+        self.assertEqual(retrieved["test.component"]["int_val"], 42)
+        self.assertEqual(retrieved["test.component"]["float_val"], 3.14)
+        self.assertEqual(retrieved["test.component"]["bool_val"], True)
+        self.assertIsNone(retrieved["test.component"]["null_val"])
+
+    def test_pbkdf2_encryption_uses_unique_salt(self):
+        """Test that each encryption uses a unique salt."""
+        instance = PipelineSettings.get_instance()
+
+        # Encrypt same data twice
+        instance.set_secrets({"test": {"key": "value"}})
+        encrypted1 = bytes(instance.encrypted_secrets)
+
+        instance.set_secrets({"test": {"key": "value"}})
+        encrypted2 = bytes(instance.encrypted_secrets)
+
+        # Salt is first 16 bytes - should be different each time
+        salt1 = encrypted1[:16]
+        salt2 = encrypted2[:16]
+        self.assertNotEqual(salt1, salt2)
+
+        # But decryption should still work
+        decrypted = instance.get_secrets()
+        self.assertEqual(decrypted["test"]["key"], "value")

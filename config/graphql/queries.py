@@ -4234,6 +4234,9 @@ class Query(graphene.ObjectType):
 
         settings_instance = PipelineSettings.get_instance()
 
+        # Get list of components that have secrets (don't expose actual secrets)
+        components_with_secrets = list(settings_instance.get_secrets().keys())
+
         return PipelineSettingsType(
             preferred_parsers=settings_instance.preferred_parsers or {},
             preferred_embedders=settings_instance.preferred_embedders or {},
@@ -4241,6 +4244,7 @@ class Query(graphene.ObjectType):
             parser_kwargs=settings_instance.parser_kwargs or {},
             component_settings=settings_instance.component_settings or {},
             default_embedder=settings_instance.default_embedder or "",
+            components_with_secrets=components_with_secrets,
             modified=settings_instance.modified,
             modified_by=settings_instance.modified_by,
         )

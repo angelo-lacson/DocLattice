@@ -109,6 +109,14 @@ class Migration(migrations.Migration):
                         max_length=512,
                     ),
                 ),
+                (
+                    "encrypted_secrets",
+                    models.BinaryField(
+                        blank=True,
+                        null=True,
+                        help_text="Encrypted storage for sensitive configuration (API keys, credentials)",
+                    ),
+                ),
                 ("modified", models.DateTimeField(auto_now=True)),
                 (
                     "modified_by",

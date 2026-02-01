@@ -3505,6 +3505,13 @@ class PipelineSettingsType(graphene.ObjectType):
         description="Default embedder class path when no MIME-specific embedder is found"
     )
 
+    # Secrets indicator (actual secrets are never exposed via GraphQL)
+    components_with_secrets = graphene.List(
+        graphene.String,
+        description="List of component paths that have encrypted secrets configured. "
+        "Actual secret values are never exposed via GraphQL.",
+    )
+
     # Audit fields
     modified = graphene.DateTime(description="When these settings were last modified")
     modified_by = graphene.Field(

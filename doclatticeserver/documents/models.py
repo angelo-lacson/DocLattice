@@ -760,17 +760,21 @@ class PipelineSettings(django.db.models.Model):
 
         default_embedder: Default embedder class path when no MIME-specific embedder is found
 
-    Security Note - API Keys and Secrets:
-        This model is intended for non-sensitive configuration only. Sensitive values
-        like API keys should be stored in environment variables, not in this model.
+    Security - Encrypted Secrets Storage:
+        Sensitive values (API keys, credentials) can be stored in the `encrypted_secrets`
+        field, which is encrypted at rest using Fernet symmetric encryption. The encryption
+        key is derived from Django's SECRET_KEY.
 
-        The recommended pattern is:
-        1. Store API keys in environment variables (LLAMAPARSE_API_KEY, etc.)
-        2. Pipeline components read from environment variables first
-        3. Use component_settings only for non-sensitive overrides (timeouts, batch sizes)
+        Structure of encrypted_secrets (after decryption):
+            {
+                "component_class_path": {
+                    "api_key": "...",
+                    "secret_token": "...",
+                }
+            }
 
-        This keeps secrets out of the database and allows them to be managed via
-        deployment configuration (environment variables, secrets managers, etc.).
+        Use set_secrets() and get_secrets() methods to access encrypted data.
+        The GraphQL mutations handle encryption/decryption transparently.
     """
 
     # Preferred parsers per MIME type
@@ -816,6 +820,14 @@ class PipelineSettings(django.db.models.Model):
         help_text="Default embedder class path",
     )
 
+    # Encrypted secrets storage (API keys, tokens, credentials)
+    # Stored as Fernet-encrypted JSON blob
+    encrypted_secrets = django.db.models.BinaryField(
+        blank=True,
+        null=True,
+        help_text="Encrypted storage for sensitive configuration (API keys, credentials)",
+    )
+
     # Audit fields
     modified = django.db.models.DateTimeField(auto_now=True)
     modified_by = django.db.models.ForeignKey(
@@ -834,31 +846,59 @@ class PipelineSettings(django.db.models.Model):
     def __str__(self):
         return "PipelineSettings (Singleton)"
 
+    # Cache settings
+    CACHE_KEY = "pipeline_settings_singleton"
+    CACHE_TTL_SECONDS = 300  # 5 minutes
+
     def save(self, *args, **kwargs):
-        """Ensure singleton pattern - only allow one instance."""
+        """Ensure singleton pattern and invalidate cache on save."""
         if not self.pk and PipelineSettings.objects.exists():
             raise ValidationError(
                 "PipelineSettings is a singleton. Use PipelineSettings.get_instance() instead."
             )
         super().save(*args, **kwargs)
+        # Invalidate cache on save
+        self._invalidate_cache()
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of the singleton instance."""
         raise ValidationError("PipelineSettings singleton cannot be deleted.")
 
     @classmethod
-    def get_instance(cls) -> "PipelineSettings":
+    def _invalidate_cache(cls) -> None:
+        """Invalidate the cached instance."""
+        from django.core.cache import cache
+
+        cache.delete(cls.CACHE_KEY)
+
+    @classmethod
+    def get_instance(cls, use_cache: bool = True) -> "PipelineSettings":
         """
         Get the singleton PipelineSettings instance.
 
+        Uses Django's cache framework with a 5-minute TTL to reduce database
+        queries during document processing.
+
         If no instance exists (shouldn't happen after migration), creates one
         with default values from Django settings.
+
+        Args:
+            use_cache: If True (default), use cached instance. Set to False
+                to bypass cache and get fresh data from database.
 
         Returns:
             PipelineSettings: The singleton instance.
         """
         from django.conf import settings as django_settings
+        from django.core.cache import cache
 
+        # Try cache first (if enabled)
+        if use_cache:
+            cached = cache.get(cls.CACHE_KEY)
+            if cached is not None:
+                return cached
+
+        # Get from database
         instance, created = cls.objects.get_or_create(
             pk=1,
             defaults={
@@ -874,6 +914,11 @@ class PipelineSettings(django.db.models.Model):
                 "default_embedder": getattr(django_settings, "DEFAULT_EMBEDDER", ""),
             },
         )
+
+        # Cache the instance
+        if use_cache:
+            cache.set(cls.CACHE_KEY, instance, cls.CACHE_TTL_SECONDS)
+
         return instance
 
     def get_preferred_parser(self, mimetype: str) -> str | None:
@@ -996,3 +1041,203 @@ class PipelineSettings(django.db.models.Model):
             return self.default_embedder
 
         return getattr(django_settings, "DEFAULT_EMBEDDER", "")
+
+    # =====================================================================
+    # Encrypted Secrets Management
+    # =====================================================================
+
+    # Constants for encryption
+    ENCRYPTION_SALT_LENGTH = 16  # 128-bit salt
+    ENCRYPTION_ITERATIONS = 480000  # OWASP 2023 recommendation for PBKDF2-SHA256
+    MAX_SECRET_SIZE_BYTES = 10240  # 10KB limit per secret payload
+
+    @staticmethod
+    def _derive_key(salt: bytes) -> bytes:
+        """
+        Derive encryption key from Django SECRET_KEY using PBKDF2.
+
+        Uses PBKDF2-HMAC-SHA256 with high iteration count as recommended
+        by OWASP for secure key derivation.
+
+        Args:
+            salt: Random salt bytes (16 bytes recommended)
+
+        Returns:
+            32-byte derived key suitable for Fernet
+        """
+        import base64
+        import hashlib
+
+        from django.conf import settings as django_settings
+
+        # Use PBKDF2 with SHA256 for secure key derivation
+        key = hashlib.pbkdf2_hmac(
+            "sha256",
+            django_settings.SECRET_KEY.encode(),
+            salt,
+            PipelineSettings.ENCRYPTION_ITERATIONS,
+            dklen=32,
+        )
+        return base64.urlsafe_b64encode(key)
+
+    def get_secrets(self) -> dict:
+        """
+        Get the decrypted secrets dictionary.
+
+        Returns:
+            Dict mapping component class paths to their secrets:
+            {
+                "doclatticeserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": "...",
+                },
+                ...
+            }
+        """
+        import json
+        import logging
+
+        from cryptography.fernet import Fernet, InvalidToken
+
+        logger = logging.getLogger(__name__)
+
+        if not self.encrypted_secrets:
+            return {}
+
+        try:
+            raw_data = bytes(self.encrypted_secrets)
+
+            # Extract salt (first 16 bytes) and ciphertext
+            if len(raw_data) < self.ENCRYPTION_SALT_LENGTH:
+                logger.error(
+                    "PipelineSettings: encrypted_secrets too short to contain salt"
+                )
+                return {}
+
+            salt = raw_data[: self.ENCRYPTION_SALT_LENGTH]
+            ciphertext = raw_data[self.ENCRYPTION_SALT_LENGTH :]
+
+            # Derive key from salt and decrypt
+            key = self._derive_key(salt)
+            fernet = Fernet(key)
+            decrypted = fernet.decrypt(ciphertext)
+            return json.loads(decrypted.decode("utf-8"))
+
+        except InvalidToken:
+            logger.critical(
+                "PipelineSettings: Failed to decrypt secrets - InvalidToken. "
+                "This may indicate SECRET_KEY has changed. Secrets are unrecoverable "
+                "without the original SECRET_KEY."
+            )
+            return {}
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"PipelineSettings: Decrypted secrets contain invalid JSON: {e}"
+            )
+            return {}
+        except Exception as e:
+            logger.critical(
+                f"PipelineSettings: Unexpected error decrypting secrets: {e}. "
+                "Secrets may be corrupted or SECRET_KEY may have changed."
+            )
+            return {}
+
+    def set_secrets(self, secrets: dict) -> None:
+        """
+        Encrypt and store secrets.
+
+        Args:
+            secrets: Dict mapping component class paths to their secrets:
+            {
+                "doclatticeserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": "...",
+                },
+            }
+
+        Raises:
+            ValueError: If secrets payload exceeds size limit
+        """
+        import json
+        import os
+
+        from cryptography.fernet import Fernet
+
+        json_bytes = json.dumps(secrets).encode("utf-8")
+
+        # Validate size
+        if len(json_bytes) > self.MAX_SECRET_SIZE_BYTES:
+            raise ValueError(
+                f"Secrets payload exceeds maximum size of {self.MAX_SECRET_SIZE_BYTES} bytes"
+            )
+
+        # Generate random salt for this encryption
+        salt = os.urandom(self.ENCRYPTION_SALT_LENGTH)
+
+        # Derive key and encrypt
+        key = self._derive_key(salt)
+        fernet = Fernet(key)
+        ciphertext = fernet.encrypt(json_bytes)
+
+        # Store salt + ciphertext
+        self.encrypted_secrets = salt + ciphertext
+
+    def update_secrets(self, component_path: str, secret_values: dict) -> None:
+        """
+        Update secrets for a specific component (merge with existing).
+
+        Args:
+            component_path: Full class path of the component
+            secret_values: Dict of secret key-value pairs to set
+        """
+        secrets = self.get_secrets()
+        if component_path not in secrets:
+            secrets[component_path] = {}
+        secrets[component_path].update(secret_values)
+        self.set_secrets(secrets)
+
+    def get_component_secrets(self, component_path: str) -> dict:
+        """
+        Get secrets for a specific component.
+
+        Args:
+            component_path: Full class path of the component
+
+        Returns:
+            Dict of secret key-value pairs for the component.
+        """
+        secrets = self.get_secrets()
+        return secrets.get(component_path, {})
+
+    def delete_component_secrets(self, component_path: str) -> None:
+        """
+        Delete all secrets for a specific component.
+
+        Args:
+            component_path: Full class path of the component
+        """
+        secrets = self.get_secrets()
+        if component_path in secrets:
+            del secrets[component_path]
+            self.set_secrets(secrets)
+
+    def get_full_component_settings(self, component_class_path: str) -> dict:
+        """
+        Get full settings for a component, merging non-sensitive settings
+        with decrypted secrets.
+
+        This is the method pipeline components should use to get their
+        complete configuration.
+
+        Args:
+            component_class_path: Full class path of the component
+
+        Returns:
+            Dict of all settings (non-sensitive + secrets) for the component.
+        """
+        # Get non-sensitive settings
+        settings = dict(self.get_component_settings(component_class_path))
+
+        # Merge with secrets (secrets take precedence)
+        secrets = self.get_component_secrets(component_class_path)
+        settings.update(secrets)
+
+        return settings
