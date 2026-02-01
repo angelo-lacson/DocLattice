@@ -59,8 +59,9 @@ class VisibleToUserTests(TestCase):
         """Superusers should see all objects ordered by creation."""
         result = Corpus.objects.visible_to_user(self.superuser)
 
-        # Should see both corpora
-        self.assertEqual(result.count(), 2)
+        # Should see both test corpora + 2 personal corpuses (one per user)
+        # Each user (user, superuser) gets a personal corpus auto-created
+        self.assertEqual(result.count(), 4)  # public + private + 2 personal
         # Should be ordered by created
         self.assertEqual(result.query.order_by, ("created",))
 
@@ -294,30 +295,34 @@ class PermissionBasedVisibilityTest(TestCase):
 
     def test_corpus_visibility_with_permissions(self):
         """Test visibility rules for Corpus model using visible_to_user."""
-        # Owner sees their own + public (3 total: public, private, shared)
+        # Owner sees their own + public + personal corpus (auto-created on user creation)
+        # 4 total: public, private, shared + owner's personal corpus
         owner_qs = Corpus.objects.visible_to_user(self.owner)
         self.assertEqual(
-            owner_qs.count(), 3, f"Owner should see 3 corpuses, saw {owner_qs.count()}"
+            owner_qs.count(), 4, f"Owner should see 4 corpuses, saw {owner_qs.count()}"
         )
 
-        # Collaborator sees public + their own + shared (via permission) (3 total: public, shared, collaborator's)
+        # Collaborator sees public + their own + shared (via permission) + personal corpus
+        # 4 total: public, shared, collaborator_corpus + collaborator's personal corpus
         collab_qs = Corpus.objects.visible_to_user(self.collaborator)
         self.assertEqual(
             collab_qs.count(),
-            3,
-            f"Collaborator should see 3 corpuses, saw {collab_qs.count()}",
+            4,
+            f"Collaborator should see 4 corpuses, saw {collab_qs.count()}",
         )
 
-        # Regular user sees only public (1 total: public)
+        # Regular user sees public + their personal corpus
+        # 2 total: public + regular_user's personal corpus
         regular_qs = Corpus.objects.visible_to_user(self.regular_user)
         self.assertEqual(
             regular_qs.count(),
-            1,
-            f"Regular user should see 1 corpus, saw {regular_qs.count()}",
+            2,
+            f"Regular user should see 2 corpuses, saw {regular_qs.count()}",
         )
-        self.assertEqual(regular_qs.first(), self.public_corpus)
+        self.assertIn(self.public_corpus, regular_qs)
 
-        # Anonymous user sees only public (1 total: public)
+        # Anonymous user sees only public (no personal corpus for anonymous)
+        # 1 total: public
         anon_qs = Corpus.objects.visible_to_user(self.anonymous_user)
         self.assertEqual(
             anon_qs.count(),

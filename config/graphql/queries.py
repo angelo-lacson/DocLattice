@@ -2178,6 +2178,26 @@ class Query(graphene.ObjectType):
 
         user = info.context.user
 
+        # -------------------------------------------------------------------------
+        # SECURITY: Verify user has access to requested document/corpus (IDOR prevention)
+        # Uses visible_to_user() which returns empty queryset if no access.
+        # We return empty results for both "not found" and "no permission" cases
+        # to prevent enumeration attacks.
+        # -------------------------------------------------------------------------
+        if document_pk:
+            if (
+                not Document.objects.visible_to_user(user)
+                .filter(id=document_pk)
+                .exists()
+            ):
+                # Document doesn't exist or user lacks permission - return empty results
+                return []
+
+        if corpus_pk:
+            if not Corpus.objects.visible_to_user(user).filter(id=corpus_pk).exists():
+                # Corpus doesn't exist or user lacks permission - return empty results
+                return []
+
         # Build metadata filters for hybrid search
         metadata_filters = {}
         if label_text:
@@ -2189,6 +2209,7 @@ class Query(graphene.ObjectType):
         # which respects corpus-specific embedders
         if document_pk or corpus_pk:
             # Use instance-based CoreAnnotationVectorStore for scoped search
+            # Permission already verified above
             vector_store = CoreAnnotationVectorStore(
                 user_id=user.id,
                 corpus_id=corpus_pk,
