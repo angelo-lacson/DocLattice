@@ -5,11 +5,11 @@
 > **Review Notes**: Plan validated against codebase. Key corrections made:
 > - Test file count: 26 → 34 files (~124 usages)
 > - Frontend file count: 5 → 6 components + 1 query fix
-> - Added migration 0038 to production code scope
 > - Added pre-flight validation step
 > - Fixed line number for UpdateDocumentRelationship (3410-3415)
 > - Added backward-compat tests to Phase 7 removal list
 > - Identified GET_CORPUS_WITH_HISTORY query gap (pre-existing bug)
+> - Removed migration 0038 from scope (never edit existing migrations)
 
 ---
 
@@ -39,11 +39,11 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
 
 | Category | File Count | M2M Usages |
 |----------|------------|------------|
-| Production Code | 8 files | ~15 usages |
+| Production Code | 7 files | ~15 usages |
 | Test Files | 34 files | ~124 usages |
 | GraphQL Schema | 3 files | ~8 usages |
 | Frontend | 6 files | 7 usages |
-| Migrations | 3 files | 3 usages |
+| Migrations | 1 file (new) | N/A |
 | Documentation | 2 files | 2 usages |
 
 ### 1.2 Production Code Files Requiring Changes
@@ -77,9 +77,11 @@ This document outlines a safe, phased approach to remove the legacy `Corpus.docu
    - Line 56: `extract.documents.count()` (Extract model - OUT OF SCOPE)
    - Line 88: `extract.documents.all()` (Extract model - OUT OF SCOPE)
 
-8. **`opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`**
-   - Line 157: `personal_corpus.documents.add(doc)` in data migration
-   - Note: Only runs on fresh installs, but should be updated for consistency
+#### Existing Migrations (DO NOT EDIT)
+
+**`opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`**
+- Line 157: `personal_corpus.documents.add(doc)` in data migration
+- **Note**: This migration will continue to work because it runs before the M2M removal migration. Never edit existing migrations.
 
 #### Already Using DocumentPath (No Changes Needed)
 
@@ -274,20 +276,6 @@ document = corpus.documents.get(slug=document_slug, is_public=True)
 document = corpus.get_documents().filter(slug=document_slug, is_public=True).first()
 if not document:
     raise Document.DoesNotExist()
-```
-
-#### 2.5 Update Personal Corpus Migration
-
-**File**: `opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`
-
-```python
-# Line 157:
-# BEFORE:
-personal_corpus.documents.add(doc)
-
-# AFTER:
-# Use DocumentPath.objects.create() or call corpus.add_document()
-# Note: This only runs on fresh installs, but should be consistent
 ```
 
 ---
@@ -737,7 +725,6 @@ python manage.py sync_documentpath_to_m2m  # (would need to create this)
 - [ ] Remove M2M writes in Corpus.add_document()
 - [ ] Update corpus forking to not use M2M
 - [ ] Update document relationship validation
-- [ ] Update migration 0038 (personal corpus creation)
 - [ ] All tests pass
 - [ ] PR reviewed and merged
 
@@ -789,7 +776,6 @@ python manage.py sync_documentpath_to_m2m  # (would need to create this)
 3. `opencontractserver/utils/corpus_forking.py` - Remove documents.clear()
 4. `config/graphql/mutations.py` - Update validation queries
 5. `config/graphql/queries.py` - Update public document resolution
-6. `opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py` - Update M2M usage
 
 ### Test Files (34 files, ~124 usages)
 
@@ -817,7 +803,8 @@ grep -r "\.documents\.add\|\.documents\.remove\|\.documents\.clear\|\.documents\
 ### Migrations
 
 1. New migration: `corpuses/migrations/XXXX_remove_documents_m2m.py`
-2. Update existing: `corpuses/migrations/0038_create_personal_corpuses.py`
+
+**Note**: Existing migration `0038_create_personal_corpuses.py` uses M2M but will NOT be edited. It runs before the removal migration, so it continues to work correctly.
 
 ### Tests to Remove/Update in Phase 7
 
