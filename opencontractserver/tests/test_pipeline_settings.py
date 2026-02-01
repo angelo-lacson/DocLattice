@@ -667,3 +667,173 @@ class PipelineSettingsSecretsTestCase(TestCase):
         components = result["data"]["pipelineSettings"]["componentsWithSecrets"]
         self.assertIn("parser1.path", components)
         self.assertIn("parser2.path", components)
+
+
+class PipelineSettingsEdgeCasesTestCase(TestCase):
+    """Tests for edge cases and error handling."""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        PipelineSettings.objects.all().delete()
+
+    def test_secrets_size_limit(self):
+        """Test that oversized secrets are rejected."""
+        instance = PipelineSettings.get_instance()
+
+        # Create a secret payload that exceeds the 10KB limit
+        large_value = "x" * 15000  # 15KB
+        with self.assertRaises(ValueError) as context:
+            instance.set_secrets({"test.parser": {"api_key": large_value}})
+
+        self.assertIn("exceeds maximum size", str(context.exception))
+
+    def test_invalid_component_path_format(self):
+        """Test that invalid component paths are rejected."""
+        mutation = """
+            mutation UpdateComponentSecrets(
+                $componentPath: String!,
+                $secrets: GenericScalar!
+            ) {
+                updateComponentSecrets(
+                    componentPath: $componentPath,
+                    secrets: $secrets
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test path with invalid characters
+        variables = {
+            "componentPath": "invalid path with spaces",
+            "secrets": {"api_key": "test"},
+        }
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn("Invalid component path", result["data"]["updateComponentSecrets"]["message"])
+
+        # Test path that's too long
+        variables = {
+            "componentPath": "a" * 300 + ".module.Class",
+            "secrets": {"api_key": "test"},
+        }
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn("exceeds maximum length", result["data"]["updateComponentSecrets"]["message"])
+
+    def test_invalid_secret_value_types(self):
+        """Test that non-primitive secret values are rejected."""
+        mutation = """
+            mutation UpdateComponentSecrets(
+                $componentPath: String!,
+                $secrets: GenericScalar!
+            ) {
+                updateComponentSecrets(
+                    componentPath: $componentPath,
+                    secrets: $secrets
+                ) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Test nested dict (should be rejected)
+        variables = {
+            "componentPath": "valid.module.Class",
+            "secrets": {"nested": {"key": "value"}},
+        }
+        result = self.superuser_client.execute(mutation, variables=variables)
+        self.assertFalse(result["data"]["updateComponentSecrets"]["ok"])
+        self.assertIn("primitive type", result["data"]["updateComponentSecrets"]["message"])
+
+    def test_caching_invalidation_on_save(self):
+        """Test that cache is invalidated when settings are saved."""
+        from django.core.cache import cache
+
+        instance = PipelineSettings.get_instance()
+
+        # Verify cache is populated
+        cached = cache.get(PipelineSettings.CACHE_KEY)
+        self.assertIsNotNone(cached)
+
+        # Modify and save
+        instance.default_embedder = "new.embedder.Class"
+        instance.save()
+
+        # Cache should be invalidated
+        cached_after_save = cache.get(PipelineSettings.CACHE_KEY)
+        self.assertIsNone(cached_after_save)
+
+        # Get instance again - should hit database
+        new_instance = PipelineSettings.get_instance()
+        self.assertEqual(new_instance.default_embedder, "new.embedder.Class")
+
+    def test_bypass_cache_flag(self):
+        """Test that use_cache=False bypasses the cache."""
+        from django.core.cache import cache
+
+        # Get instance with cache
+        instance1 = PipelineSettings.get_instance(use_cache=True)
+
+        # Manually modify cache entry to test bypass
+        cache.set(
+            PipelineSettings.CACHE_KEY,
+            "not_a_valid_instance",
+            PipelineSettings.CACHE_TTL_SECONDS,
+        )
+
+        # With use_cache=False, should get real instance from DB
+        instance2 = PipelineSettings.get_instance(use_cache=False)
+        self.assertIsInstance(instance2, PipelineSettings)
+
+    def test_primitive_secret_types_accepted(self):
+        """Test that all primitive types are accepted as secret values."""
+        instance = PipelineSettings.get_instance()
+
+        # All primitive types should work
+        secrets = {
+            "test.component": {
+                "string_val": "test",
+                "int_val": 42,
+                "float_val": 3.14,
+                "bool_val": True,
+                "null_val": None,
+            }
+        }
+
+        instance.set_secrets(secrets)
+        instance.save()
+
+        retrieved = instance.get_secrets()
+        self.assertEqual(retrieved["test.component"]["string_val"], "test")
+        self.assertEqual(retrieved["test.component"]["int_val"], 42)
+        self.assertEqual(retrieved["test.component"]["float_val"], 3.14)
+        self.assertEqual(retrieved["test.component"]["bool_val"], True)
+        self.assertIsNone(retrieved["test.component"]["null_val"])
+
+    def test_pbkdf2_encryption_uses_unique_salt(self):
+        """Test that each encryption uses a unique salt."""
+        instance = PipelineSettings.get_instance()
+
+        # Encrypt same data twice
+        instance.set_secrets({"test": {"key": "value"}})
+        encrypted1 = bytes(instance.encrypted_secrets)
+
+        instance.set_secrets({"test": {"key": "value"}})
+        encrypted2 = bytes(instance.encrypted_secrets)
+
+        # Salt is first 16 bytes - should be different each time
+        salt1 = encrypted1[:16]
+        salt2 = encrypted2[:16]
+        self.assertNotEqual(salt1, salt2)
+
+        # But decryption should still work
+        decrypted = instance.get_secrets()
+        self.assertEqual(decrypted["test"]["key"], "value")

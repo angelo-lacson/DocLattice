@@ -5,6 +5,8 @@ Superuser-only mutations to configure document processing pipeline at runtime.
 """
 
 import logging
+import re
+from typing import Optional
 
 import graphene
 from graphene.types.generic import GenericScalar
@@ -14,6 +16,111 @@ from config.graphql.graphene_types import PipelineSettingsType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 
 logger = logging.getLogger(__name__)
+
+# Validation constants
+MAX_COMPONENT_PATH_LENGTH = 256
+MAX_MIME_TYPE_LENGTH = 128
+VALID_COMPONENT_PATH_PATTERN = re.compile(
+    r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+$"
+)
+VALID_MIME_TYPE_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*$")
+
+
+def validate_component_path(path: str) -> Optional[str]:
+    """
+    Validate a component class path.
+
+    Args:
+        path: The component class path to validate
+
+    Returns:
+        Error message if invalid, None if valid
+    """
+    if not path:
+        return "Component path cannot be empty"
+    if len(path) > MAX_COMPONENT_PATH_LENGTH:
+        return f"Component path exceeds maximum length of {MAX_COMPONENT_PATH_LENGTH}"
+    if not VALID_COMPONENT_PATH_PATTERN.match(path):
+        return f"Invalid component path format: '{path}'. Must be a valid Python module path."
+    return None
+
+
+def validate_mime_type(mime_type: str) -> Optional[str]:
+    """
+    Validate a MIME type string.
+
+    Args:
+        mime_type: The MIME type to validate
+
+    Returns:
+        Error message if invalid, None if valid
+    """
+    if not mime_type:
+        return "MIME type cannot be empty"
+    if len(mime_type) > MAX_MIME_TYPE_LENGTH:
+        return f"MIME type exceeds maximum length of {MAX_MIME_TYPE_LENGTH}"
+    if not VALID_MIME_TYPE_PATTERN.match(mime_type):
+        return f"Invalid MIME type format: '{mime_type}'"
+    return None
+
+
+def validate_component_mapping(
+    mapping: dict, registry, component_type: str
+) -> Optional[str]:
+    """
+    Validate a mapping of MIME types to component paths.
+
+    Args:
+        mapping: Dict mapping MIME types to component class paths
+        registry: Pipeline component registry for validation
+        component_type: Type name for error messages (e.g., "Parser")
+
+    Returns:
+        Error message if invalid, None if valid
+    """
+    if not isinstance(mapping, dict):
+        return f"{component_type} mapping must be a dictionary"
+
+    for mime_type, component_path in mapping.items():
+        # Validate MIME type
+        error = validate_mime_type(mime_type)
+        if error:
+            return error
+
+        # Validate component path format
+        error = validate_component_path(component_path)
+        if error:
+            return error
+
+        # Validate component exists in registry
+        if not registry.get_by_class_name(component_path):
+            return f"{component_type} '{component_path}' not found in registry"
+
+    return None
+
+
+def validate_secrets_input(secrets: dict) -> Optional[str]:
+    """
+    Validate secrets input structure.
+
+    Args:
+        secrets: Dict of secret key-value pairs
+
+    Returns:
+        Error message if invalid, None if valid
+    """
+    if not isinstance(secrets, dict):
+        return "Secrets must be a dictionary"
+
+    for key, value in secrets.items():
+        if not isinstance(key, str):
+            return f"Secret key must be a string, got {type(key).__name__}"
+        if len(key) > 256:
+            return f"Secret key '{key[:50]}...' exceeds maximum length of 256"
+        if not isinstance(value, (str, int, float, bool, type(None))):
+            return f"Secret value for '{key}' must be a primitive type (string, number, boolean, null)"
+
+    return None
 
 
 class UpdatePipelineSettingsMutation(graphene.Mutation):
@@ -103,61 +210,38 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
             settings_instance = PipelineSettings.get_instance()
             registry = get_registry()
 
-            # Validate preferred_parsers if provided
+            # Validate and apply preferred_parsers
             if preferred_parsers is not None:
-                if not isinstance(preferred_parsers, dict):
+                error = validate_component_mapping(preferred_parsers, registry, "Parser")
+                if error:
                     return UpdatePipelineSettingsMutation(
-                        ok=False,
-                        message="preferred_parsers must be a dictionary.",
-                        pipeline_settings=None,
+                        ok=False, message=error, pipeline_settings=None
                     )
-                # Validate parser class paths exist in registry
-                for mimetype, parser_path in preferred_parsers.items():
-                    if not registry.get_by_class_name(parser_path):
-                        return UpdatePipelineSettingsMutation(
-                            ok=False,
-                            message=f"Parser '{parser_path}' not found in registry.",
-                            pipeline_settings=None,
-                        )
                 settings_instance.preferred_parsers = preferred_parsers
 
-            # Validate preferred_embedders if provided
+            # Validate and apply preferred_embedders
             if preferred_embedders is not None:
-                if not isinstance(preferred_embedders, dict):
+                error = validate_component_mapping(
+                    preferred_embedders, registry, "Embedder"
+                )
+                if error:
                     return UpdatePipelineSettingsMutation(
-                        ok=False,
-                        message="preferred_embedders must be a dictionary.",
-                        pipeline_settings=None,
+                        ok=False, message=error, pipeline_settings=None
                     )
-                # Validate embedder class paths exist in registry
-                for mimetype, embedder_path in preferred_embedders.items():
-                    if not registry.get_by_class_name(embedder_path):
-                        return UpdatePipelineSettingsMutation(
-                            ok=False,
-                            message=f"Embedder '{embedder_path}' not found in registry.",
-                            pipeline_settings=None,
-                        )
                 settings_instance.preferred_embedders = preferred_embedders
 
-            # Validate preferred_thumbnailers if provided
+            # Validate and apply preferred_thumbnailers
             if preferred_thumbnailers is not None:
-                if not isinstance(preferred_thumbnailers, dict):
+                error = validate_component_mapping(
+                    preferred_thumbnailers, registry, "Thumbnailer"
+                )
+                if error:
                     return UpdatePipelineSettingsMutation(
-                        ok=False,
-                        message="preferred_thumbnailers must be a dictionary.",
-                        pipeline_settings=None,
+                        ok=False, message=error, pipeline_settings=None
                     )
-                # Validate thumbnailer class paths exist in registry
-                for mimetype, thumbnailer_path in preferred_thumbnailers.items():
-                    if not registry.get_by_class_name(thumbnailer_path):
-                        return UpdatePipelineSettingsMutation(
-                            ok=False,
-                            message=f"Thumbnailer '{thumbnailer_path}' not found in registry.",
-                            pipeline_settings=None,
-                        )
                 settings_instance.preferred_thumbnailers = preferred_thumbnailers
 
-            # Validate parser_kwargs if provided
+            # Validate parser_kwargs
             if parser_kwargs is not None:
                 if not isinstance(parser_kwargs, dict):
                     return UpdatePipelineSettingsMutation(
@@ -167,7 +251,7 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                     )
                 settings_instance.parser_kwargs = parser_kwargs
 
-            # Validate component_settings if provided
+            # Validate component_settings
             if component_settings is not None:
                 if not isinstance(component_settings, dict):
                     return UpdatePipelineSettingsMutation(
@@ -177,14 +261,20 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                     )
                 settings_instance.component_settings = component_settings
 
-            # Validate default_embedder if provided
+            # Validate default_embedder
             if default_embedder is not None:
-                if default_embedder and not registry.get_by_class_name(default_embedder):
-                    return UpdatePipelineSettingsMutation(
-                        ok=False,
-                        message=f"Default embedder '{default_embedder}' not found in registry.",
-                        pipeline_settings=None,
-                    )
+                if default_embedder:
+                    error = validate_component_path(default_embedder)
+                    if error:
+                        return UpdatePipelineSettingsMutation(
+                            ok=False, message=error, pipeline_settings=None
+                        )
+                    if not registry.get_by_class_name(default_embedder):
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Default embedder '{default_embedder}' not found in registry.",
+                            pipeline_settings=None,
+                        )
                 settings_instance.default_embedder = default_embedder
 
             # Record who made the change
@@ -365,12 +455,18 @@ class UpdateComponentSecretsMutation(graphene.Mutation):
                 components_with_secrets=None,
             )
 
-        # Validate secrets is a dict
-        if not isinstance(secrets, dict):
+        # Validate component path
+        error = validate_component_path(component_path)
+        if error:
             return UpdateComponentSecretsMutation(
-                ok=False,
-                message="secrets must be a dictionary.",
-                components_with_secrets=None,
+                ok=False, message=error, components_with_secrets=None
+            )
+
+        # Validate secrets structure
+        error = validate_secrets_input(secrets)
+        if error:
+            return UpdateComponentSecretsMutation(
+                ok=False, message=error, components_with_secrets=None
             )
 
         try:
