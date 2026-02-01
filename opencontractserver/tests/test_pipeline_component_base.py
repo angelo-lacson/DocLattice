@@ -102,12 +102,23 @@ class TestPipelineComponentBaseSettings(TestCase):
 
     def test_pipeline_settings_is_not_a_dictionary(self):
         """Tests that a warning is logged if PIPELINE_SETTINGS is not a dict."""
-        with self.assertLogs(logger=BASE_COMPONENT_LOGGER, level="WARNING") as cm:
-            # The override_settings context manager will apply this setting
-            with self.settings(PIPELINE_SETTINGS="this_is_not_a_dictionary"):
-                component = DummyComponent()
+        # The new implementation loads settings lazily when get_component_settings()
+        # is called, so we need to call it to trigger the warning.
+        # Also, we need to ensure DB settings are empty so the fallback is used.
+        with self.settings(PIPELINE_SETTINGS="this_is_not_a_dictionary"):
+            component = DummyComponent()
+            # Clear DB settings so fallback to Django settings is used
+            from opencontractserver.documents.models import PipelineSettings
 
-        self.assertEqual(component.get_component_settings(), {})
+            pipeline_settings = PipelineSettings.get_instance(use_cache=False)
+            pipeline_settings.component_settings = {}
+            pipeline_settings.save()
+            PipelineSettings._invalidate_cache()
+
+            with self.assertLogs(logger=BASE_COMPONENT_LOGGER, level="WARNING") as cm:
+                result = component.get_component_settings()
+
+        self.assertEqual(result, {})
         self.assertIn(
             "PIPELINE_SETTINGS is defined but is not a dictionary", cm.output[0]
         )

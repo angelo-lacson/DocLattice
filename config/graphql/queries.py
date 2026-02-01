@@ -4211,6 +4211,44 @@ class Query(graphene.ObjectType):
         except Extract.DoesNotExist:
             return None
 
+    # PIPELINE SETTINGS ########################################
+    pipeline_settings = graphene.Field(
+        "config.graphql.graphene_types.PipelineSettingsType",
+        description="Retrieve the singleton pipeline settings for document processing configuration.",
+    )
+
+    @login_required
+    def resolve_pipeline_settings(self, info):
+        """
+        Resolve the singleton PipelineSettings instance.
+
+        This query returns the runtime-configurable document processing settings.
+        Any authenticated user can read these settings, but only superusers can
+        modify them via the UpdatePipelineSettings mutation.
+
+        Returns:
+            PipelineSettingsType: The singleton pipeline settings.
+        """
+        from config.graphql.graphene_types import PipelineSettingsType
+        from opencontractserver.documents.models import PipelineSettings
+
+        settings_instance = PipelineSettings.get_instance()
+
+        # Get list of components that have secrets (don't expose actual secrets)
+        components_with_secrets = list(settings_instance.get_secrets().keys())
+
+        return PipelineSettingsType(
+            preferred_parsers=settings_instance.preferred_parsers or {},
+            preferred_embedders=settings_instance.preferred_embedders or {},
+            preferred_thumbnailers=settings_instance.preferred_thumbnailers or {},
+            parser_kwargs=settings_instance.parser_kwargs or {},
+            component_settings=settings_instance.component_settings or {},
+            default_embedder=settings_instance.default_embedder or "",
+            components_with_secrets=components_with_secrets,
+            modified=settings_instance.modified,
+            modified_by=settings_instance.modified_by,
+        )
+
     # DEBUG FIELD ########################################
     if settings.ALLOW_GRAPHQL_DEBUG:
         debug = graphene.Field(DjangoDebug, name="_debug")

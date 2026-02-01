@@ -95,6 +95,14 @@ from config.graphql.notification_mutations import (
     MarkNotificationReadMutation,
     MarkNotificationUnreadMutation,
 )
+
+# Import pipeline settings mutations
+from config.graphql.pipeline_settings_mutations import (
+    DeleteComponentSecretsMutation,
+    ResetPipelineSettingsMutation,
+    UpdateComponentSecretsMutation,
+    UpdatePipelineSettingsMutation,
+)
 from config.graphql.ratelimits import (
     RateLimits,
     get_user_tier_rate,
@@ -5956,3 +5964,9 @@ class Mutation(graphene.ObjectType):
     create_agent_configuration = CreateAgentConfigurationMutation.Field()
     update_agent_configuration = UpdateAgentConfigurationMutation.Field()
     delete_agent_configuration = DeleteAgentConfigurationMutation.Field()
+
+    # PIPELINE SETTINGS MUTATIONS (Superuser only) ###############################
+    update_pipeline_settings = UpdatePipelineSettingsMutation.Field()
+    reset_pipeline_settings = ResetPipelineSettingsMutation.Field()
+    update_component_secrets = UpdateComponentSecretsMutation.Field()
+    delete_component_secrets = DeleteComponentSecretsMutation.Field()

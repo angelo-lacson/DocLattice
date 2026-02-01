@@ -22,6 +22,45 @@ If rollback is required after deployment, you must write a custom migration to h
 
 ### Added
 
+#### Runtime-Configurable Pipeline Settings (Superuser Only)
+- **PipelineSettings singleton model**: Database-backed configuration for document processing pipeline
+  - Stores preferred parsers, embedders, and thumbnailers per MIME type
+  - Stores parser-specific kwargs and component settings overrides
+  - Falls back to Django settings when database values are not configured
+  - Singleton pattern: only one instance exists, cannot be deleted
+  - Files: `opencontractserver/documents/models.py:734-1140`
+- **Encrypted secrets storage**: Secure storage for API keys and sensitive credentials
+  - Uses Fernet symmetric encryption (key derived from Django SECRET_KEY)
+  - Secrets are never exposed via GraphQL responses
+  - GraphQL only returns list of components that have secrets configured
+  - Methods: `set_secrets()`, `get_secrets()`, `update_secrets()`, `get_full_component_settings()`
+  - Files: `opencontractserver/documents/models.py:1012-1139`
+- **GraphQL query `pipelineSettings`**: Any authenticated user can read current pipeline configuration
+  - Returns preferred components, parser kwargs, component settings
+  - Includes `componentsWithSecrets` field (list of paths, not actual secrets)
+  - Includes audit fields (modified, modified_by)
+  - Files: `config/graphql/queries.py:4214-4250`
+- **GraphQL mutation `updatePipelineSettings`**: Superusers can modify pipeline configuration at runtime
+  - Validates component class paths exist in the pipeline registry
+  - Tracks who made changes (modified_by field)
+  - Changes take effect immediately for new document processing tasks
+  - Files: `config/graphql/pipeline_settings_mutations.py:20-220`
+- **GraphQL mutation `resetPipelineSettings`**: Superusers can reset to Django settings defaults
+  - Restores all values from PREFERRED_PARSERS, PREFERRED_EMBEDDERS, etc.
+  - Files: `config/graphql/pipeline_settings_mutations.py:223-302`
+- **GraphQL mutation `updateComponentSecrets`**: Superusers can securely store API keys per component
+  - Accepts component path and secrets dict, encrypts and stores in database
+  - Supports merge mode (add to existing) or replace mode
+  - Files: `config/graphql/pipeline_settings_mutations.py:305-411`
+- **GraphQL mutation `deleteComponentSecrets`**: Superusers can remove secrets for a component
+  - Files: `config/graphql/pipeline_settings_mutations.py:414-481`
+- **Migration 0031**: Creates PipelineSettings table with encrypted_secrets field
+  - Files: `opencontractserver/documents/migrations/0031_add_pipeline_settings.py`
+- **Integration with doc_tasks**: `ingest_doc` and `extract_thumbnail` now read from PipelineSettings
+  - Files: `opencontractserver/tasks/doc_tasks.py:355-374`, `opencontractserver/tasks/doc_tasks.py:686-721`
+- **Integration with pipeline/utils**: `get_preferred_embedder` and `get_default_embedder` use PipelineSettings
+  - Files: `opencontractserver/pipeline/utils.py:303-361`
+
 #### Personal Corpus ("My Documents") Feature
 - **Personal corpus auto-creation**: Each user now automatically receives a personal "My Documents" corpus
   - Created via signal handler when user account is created

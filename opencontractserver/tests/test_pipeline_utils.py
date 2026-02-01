@@ -593,12 +593,23 @@ class TestPostProcessor(BasePostProcessor):
     def test_find_embedder_for_filetype(self) -> None:
         """
         Test find_embedder_for_filetype function with different input types and scenarios.
+
+        Note: We clear PipelineSettings DB values to ensure Django settings fallback is used,
+        since the functions now check DB first before Django settings.
         """
+        from opencontractserver.documents.models import PipelineSettings
         from opencontractserver.pipeline.base.file_types import FileTypeEnum
         from opencontractserver.pipeline.utils import (
             find_embedder_for_filetype,
             get_default_embedder,
         )
+
+        # Clear PipelineSettings DB values so Django settings fallback is used
+        pipeline_settings = PipelineSettings.get_instance(use_cache=False)
+        pipeline_settings.preferred_embedders = {}
+        pipeline_settings.default_embedder = ""
+        pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
 
         # Get the default embedder for comparison
         default_embedder = get_default_embedder()
@@ -640,8 +651,18 @@ class TestPostProcessor(BasePostProcessor):
     def test_find_embedder_for_filetype_error_handling(self) -> None:
         """
         Test find_embedder_for_filetype error handling when embedder path can't be loaded.
+
+        Note: We clear PipelineSettings DB values to ensure Django settings fallback is used.
         """
+        from opencontractserver.documents.models import PipelineSettings
         from opencontractserver.pipeline.utils import find_embedder_for_filetype
+
+        # Clear PipelineSettings DB values so Django settings fallback is used
+        pipeline_settings = PipelineSettings.get_instance(use_cache=False)
+        pipeline_settings.preferred_embedders = {}
+        pipeline_settings.default_embedder = ""
+        pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
 
         # When a preferred embedder can't be loaded, the function should return None
         embedder = find_embedder_for_filetype("application/pdf")
