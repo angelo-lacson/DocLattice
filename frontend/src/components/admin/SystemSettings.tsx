@@ -20,7 +20,6 @@ import {
   Save,
   RotateCcw,
   AlertTriangle,
-  Check,
   X,
   FileText,
   Cpu,
@@ -30,6 +29,7 @@ import {
   Upload,
   Search,
   Trash2,
+  Check,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import {
@@ -868,6 +868,9 @@ export const SystemSettings: React.FC = () => {
   const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
     useState(false);
   const [defaultEmbedderValue, setDefaultEmbedderValue] = useState("");
+  const [showDeleteSecretsConfirm, setShowDeleteSecretsConfirm] =
+    useState(false);
+  const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
 
   // GraphQL queries
   const {
@@ -987,7 +990,7 @@ export const SystemSettings: React.FC = () => {
       const stageComponents = components[stage] || [];
 
       // Filter by supported file types if available
-      return stageComponents.filter((comp) => {
+      return stageComponents.filter((comp): comp is PipelineComponentType => {
         if (!comp) return false;
         // If no supportedFileTypes specified, assume it supports all
         if (!comp.supportedFileTypes || comp.supportedFileTypes.length === 0) {
@@ -1094,22 +1097,20 @@ export const SystemSettings: React.FC = () => {
     }
   }, [secretsComponentPath, secretsValue, updateSecrets]);
 
-  const handleDeleteSecrets = useCallback(
-    (componentPath: string) => {
-      if (
-        window.confirm(
-          `Are you sure you want to delete secrets for this component?`
-        )
-      ) {
-        deleteSecrets({
-          variables: {
-            componentPath,
-          },
-        });
-      }
-    },
-    [deleteSecrets]
-  );
+  const handleDeleteSecretsClick = useCallback((componentPath: string) => {
+    setDeleteSecretsPath(componentPath);
+    setShowDeleteSecretsConfirm(true);
+  }, []);
+
+  const handleConfirmDeleteSecrets = useCallback(() => {
+    deleteSecrets({
+      variables: {
+        componentPath: deleteSecretsPath,
+      },
+    });
+    setShowDeleteSecretsConfirm(false);
+    setDeleteSecretsPath("");
+  }, [deleteSecrets, deleteSecretsPath]);
 
   // Handle default embedder
   const handleEditDefaultEmbedder = useCallback(() => {
@@ -1256,7 +1257,7 @@ export const SystemSettings: React.FC = () => {
                           <IconButton
                             $danger
                             onClick={() =>
-                              handleDeleteSecrets(currentSelection)
+                              handleDeleteSecretsClick(currentSelection)
                             }
                           >
                             <Trash2 />
@@ -1316,7 +1317,7 @@ export const SystemSettings: React.FC = () => {
       handleSelectComponent,
       toggleAdvancedSettings,
       handleAddSecrets,
-      handleDeleteSecrets,
+      handleDeleteSecretsClick,
       updating,
     ]
   );
@@ -1476,7 +1477,7 @@ export const SystemSettings: React.FC = () => {
                   {getComponentDisplayName(componentPath)}
                   <IconButton
                     $danger
-                    onClick={() => handleDeleteSecrets(componentPath)}
+                    onClick={() => handleDeleteSecretsClick(componentPath)}
                     title="Delete secrets"
                   >
                     <Trash2 />
@@ -1691,6 +1692,44 @@ export const SystemSettings: React.FC = () => {
           >
             <Save style={{ width: 16, height: 16, marginRight: 8 }} />
             Save
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Delete Secrets Confirmation Modal */}
+      <Modal
+        open={showDeleteSecretsConfirm}
+        onClose={() => setShowDeleteSecretsConfirm(false)}
+        size="sm"
+      >
+        <ModalHeader
+          title="Delete Component Secrets"
+          onClose={() => setShowDeleteSecretsConfirm(false)}
+        />
+        <ModalBody>
+          <WarningBanner>
+            <AlertTriangle />
+            <WarningText>
+              Are you sure you want to delete secrets for{" "}
+              <strong>{deleteSecretsPath}</strong>? This action cannot be
+              undone.
+            </WarningText>
+          </WarningBanner>
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => setShowDeleteSecretsConfirm(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleConfirmDeleteSecrets}
+            loading={deletingSecrets}
+          >
+            <Trash2 style={{ width: 16, height: 16, marginRight: 8 }} />
+            Delete Secrets
           </Button>
         </ModalFooter>
       </Modal>
