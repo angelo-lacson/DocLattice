@@ -823,12 +823,8 @@ class TestSyncToAsyncDatabaseWrapping(TransactionTestCase):
             password="password",
             email="syncasync@test.com",
         )
-        self.corpus = Corpus.objects.create(
-            title="Sync Async Test Corpus", creator=self.user, is_public=False
-        )
         self.doc = Document.objects.create(
             title="Sync Async Test Doc",
-            corpus=self.corpus,
             creator=self.user,
             is_public=False,
         )
@@ -888,7 +884,6 @@ class TestSyncToAsyncDatabaseWrapping(TransactionTestCase):
 
         fresh_doc = await database_sync_to_async(Document.objects.create)(
             title="Fresh Test Doc",
-            corpus=self.corpus,
             creator=self.user,
             is_public=False,
         )
