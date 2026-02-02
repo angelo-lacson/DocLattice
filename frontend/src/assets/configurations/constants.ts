@@ -170,3 +170,11 @@ export const MENTION_TYPES = {
 } as const;
 
 export type MentionType = keyof typeof MENTION_TYPES;
+
+// Pipeline configuration UI constants
+export const PIPELINE_UI = {
+  /** Default icon size for pipeline component icons (in pixels) */
+  ICON_SIZE: 48,
+  /** Minimum width for component cards in grid layout (in pixels) */
+  COMPONENT_GRID_MIN_WIDTH: 140,
+} as const;

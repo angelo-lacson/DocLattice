@@ -178,6 +178,25 @@ If rollback is required after deployment, you must write a custom migration to h
 
 ### Changed
 
+#### Pipeline Configuration UI Redesign
+- **Replaced JSON-based configuration with visual pipeline flow**: System Settings page redesigned for intuitive configuration
+  - Visual pipeline stages: Document Upload → Parser → Thumbnailer → Embedder → Ready for Search
+  - Clickable component cards replace JSON text editing
+  - Per-stage MIME type selectors (PDF, TXT, DOCX)
+  - Auto-expanding advanced settings for components requiring API keys
+  - Collapsible advanced settings to reduce visual clutter
+  - Files: `frontend/src/components/admin/SystemSettings.tsx`
+- **New component icon system**: Custom SVG icons for each pipeline component type
+  - Docling, LlamaParse, ModernBERT, OpenAI, and more
+  - Semantic icons that are visually distinctive
+  - Generic fallback icon for unknown components
+  - Files: `frontend/src/components/admin/PipelineIcons.tsx`
+- **Added accessibility attributes**: ARIA support for screen readers
+  - `aria-pressed` on MIME type and component selection buttons
+  - `aria-expanded` on collapsible settings sections
+  - `aria-label` on interactive elements
+  - Files: `frontend/src/components/admin/SystemSettings.tsx`
+
 #### Window Resize Performance
 - **Added debounce to window resize handler**: Prevents excessive re-renders during window resize
   - 150ms debounce delay on resize events

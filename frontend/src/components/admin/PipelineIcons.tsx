@@ -1,15 +1,21 @@
 import React from "react";
+import { PIPELINE_UI } from "../../assets/configurations/constants";
 
 interface IconProps {
   size?: number;
   className?: string;
 }
 
+const DEFAULT_ICON_SIZE = PIPELINE_UI.ICON_SIZE;
+
 /**
  * Geometric icon for Docling parser (IBM Research)
  * Represents document layers/structure extraction
  */
-export const DoclingIcon: React.FC<IconProps> = ({ size = 48, className }) => (
+export const DoclingIcon: React.FC<IconProps> = ({
+  size = DEFAULT_ICON_SIZE,
+  className,
+}) => (
   <svg
     width={size}
     height={size}
@@ -75,7 +81,7 @@ export const DoclingIcon: React.FC<IconProps> = ({ size = 48, className }) => (
  * Represents AI/llama with document parsing
  */
 export const LlamaParseIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -124,7 +130,7 @@ export const LlamaParseIcon: React.FC<IconProps> = ({
  * Simple text/document representation
  */
 export const TextParserIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -192,7 +198,7 @@ export const TextParserIcon: React.FC<IconProps> = ({
  * Represents image/preview generation from PDF
  */
 export const PdfThumbnailIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -229,7 +235,7 @@ export const PdfThumbnailIcon: React.FC<IconProps> = ({
  * Geometric icon for text thumbnail generator
  */
 export const TextThumbnailIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -268,7 +274,7 @@ export const TextThumbnailIcon: React.FC<IconProps> = ({
  * Neural network / transformer representation
  */
 export const ModernBertIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -417,7 +423,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
  * Represents distributed/cloud computing
  */
 export const SentenceTransformerIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -487,7 +493,7 @@ export const SentenceTransformerIcon: React.FC<IconProps> = ({
  * Represents text + image processing
  */
 export const MultimodalIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -555,7 +561,7 @@ export const MultimodalIcon: React.FC<IconProps> = ({
  * Generic fallback icon for unknown components
  */
 export const GenericComponentIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -577,34 +583,56 @@ export const GenericComponentIcon: React.FC<IconProps> = ({
 );
 
 /**
- * Map component class names to their icons
+ * Map component class names to their icons.
+ * Order matters: more specific compound patterns are checked first to avoid
+ * false matches (e.g., "text_thumbnailer" should match TextThumbnailIcon,
+ * not TextParserIcon).
  */
 export const getComponentIcon = (className: string): React.FC<IconProps> => {
   const lowerName = className.toLowerCase();
 
-  if (lowerName.includes("docling")) return DoclingIcon;
-  if (lowerName.includes("llama")) return LlamaParseIcon;
-  if (
-    lowerName.includes("txt") ||
-    lowerName.includes("text_parser") ||
-    lowerName.includes("oc_text")
-  )
-    return TextParserIcon;
+  // Compound patterns first (most specific)
   if (lowerName.includes("pdf") && lowerName.includes("thumb"))
     return PdfThumbnailIcon;
   if (lowerName.includes("text") && lowerName.includes("thumb"))
     return TextThumbnailIcon;
   if (lowerName.includes("modernbert") || lowerName.includes("modern_bert"))
     return ModernBertIcon;
+
+  // Specific parser/embedder patterns
+  if (lowerName.includes("docling")) return DoclingIcon;
+  if (lowerName.includes("llama")) return LlamaParseIcon;
+  if (lowerName.includes("multimodal")) return MultimodalIcon;
   if (
     lowerName.includes("sent") ||
     lowerName.includes("sentence") ||
     lowerName.includes("microservice")
   )
     return SentenceTransformerIcon;
-  if (lowerName.includes("multimodal")) return MultimodalIcon;
+
+  // Generic text parser (checked last among text-related to avoid collisions)
+  if (
+    lowerName.includes("txt") ||
+    lowerName.includes("text_parser") ||
+    lowerName.includes("oc_text")
+  )
+    return TextParserIcon;
 
   return GenericComponentIcon;
+};
+
+// Known acronyms that should be preserved in display names
+const KNOWN_ACRONYMS: Record<string, string> = {
+  openai: "OpenAI",
+  modernbert: "ModernBERT",
+  bert: "BERT",
+  gpt: "GPT",
+  llm: "LLM",
+  api: "API",
+  pdf: "PDF",
+  ocr: "OCR",
+  nlp: "NLP",
+  nlm: "NLM",
 };
 
 /**
@@ -621,8 +649,17 @@ export const getComponentDisplayName = (
   const name = parts[parts.length - 1];
 
   // Convert CamelCase to readable format
-  return name
+  let displayName = name
     .replace(/([A-Z])/g, " $1")
     .replace(/^./, (str) => str.toUpperCase())
     .trim();
+
+  // Replace known acronyms with proper casing
+  for (const [lower, proper] of Object.entries(KNOWN_ACRONYMS)) {
+    // Match the acronym as a whole word (case-insensitive)
+    const regex = new RegExp(`\\b${lower}\\b`, "gi");
+    displayName = displayName.replace(regex, proper);
+  }
+
+  return displayName;
 };
