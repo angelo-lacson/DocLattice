@@ -240,9 +240,11 @@ class TestCheckUserPermissions(TestCase):
         cls.corpus = Corpus.objects.create(
             title="Perm Check Corpus", creator=cls.user, is_public=False
         )
-        cls.doc = Document.objects.create(
-            title="Perm Check Doc", corpus=cls.corpus, creator=cls.user, is_public=False
+        # Create document and add to corpus - add_document returns corpus-isolated copy
+        original_doc = Document.objects.create(
+            title="Perm Check Doc", creator=cls.user, is_public=False
         )
+        cls.doc, _, _ = cls.corpus.add_document(document=original_doc, user=cls.user)
 
     async def test_anonymous_user_nonexistent_document_raises_error(self):
         """Test that anonymous user accessing non-existent document raises PermissionError.
@@ -498,12 +500,13 @@ class TestValidateResourceIdParams(TestCase):
         cls.corpus = Corpus.objects.create(
             title="Validate Params Corpus", creator=cls.user, is_public=False
         )
-        cls.doc = Document.objects.create(
+        # Create document and add to corpus - add_document returns corpus-isolated copy
+        original_doc = Document.objects.create(
             title="Validate Params Doc",
-            corpus=cls.corpus,
             creator=cls.user,
             is_public=False,
         )
+        cls.doc, _, _ = cls.corpus.add_document(document=original_doc, user=cls.user)
 
     def _make_ctx(self, deps):
         """Create a mock context with the given deps."""
@@ -708,12 +711,13 @@ class TestContextInjectionIntegration(TestCase):
         cls.corpus = Corpus.objects.create(
             title="Context Inject Corpus", creator=cls.user, is_public=False
         )
-        cls.doc = Document.objects.create(
+        # Create document and add to corpus - add_document returns corpus-isolated copy
+        original_doc = Document.objects.create(
             title="Context Inject Doc",
-            corpus=cls.corpus,
             creator=cls.user,
             is_public=False,
         )
+        cls.doc, _, _ = cls.corpus.add_document(document=original_doc, user=cls.user)
 
     async def test_tool_receives_injected_document_id(self):
         """Test that tool receives injected document_id at execution time."""

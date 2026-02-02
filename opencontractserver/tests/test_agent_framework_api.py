@@ -32,9 +32,12 @@ class TestAPISetup(TestCase):
         )
 
         cls.corpus1 = Corpus.objects.create(title="API Test Corpus 1", creator=cls.user)
-        cls.doc1 = Document.objects.create(
-            title="API Test Doc 1", corpus=cls.corpus1, creator=cls.user
+        # Create document and add to corpus - add_document returns corpus-isolated copy
+        original_doc1 = Document.objects.create(
+            title="API Test Doc 1", creator=cls.user
         )
+        cls.doc1, _, _ = cls.corpus1.add_document(document=original_doc1, user=cls.user)
+
         cls.doc2 = Document.objects.create(
             title="API Test Doc 2", creator=cls.user
         )  # No corpus initially

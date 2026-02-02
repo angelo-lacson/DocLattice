@@ -215,13 +215,15 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         annotation1 = self._create_annotation(document1, corpus=self.corpus)
 
         # Doc 2 in corpus 2 - create without adding to self.corpus
-        document2 = Document.objects.create(
+        original_doc2 = Document.objects.create(
             title="Doc 2",
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus2.add_document(document=document2, user=self.user)
-        self._create_annotation(document2, raw_text="Other text", corpus=self.corpus2)
+        corpus2_doc, _, _ = self.corpus2.add_document(
+            document=original_doc2, user=self.user
+        )
+        self._create_annotation(corpus2_doc, raw_text="Other text", corpus=self.corpus2)
 
         out = StringIO()
         call_command(

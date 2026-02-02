@@ -705,13 +705,13 @@ class TestCorpusQueryEfficiency(TestCase):
         # Second run with query counting
         # The exact number may vary based on auth/permission checks,
         # but it should NOT scale with number of corpuses (no N+1)
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(5):
             # Expected queries:
             # 1. Content type check
             # 2-3. Permission checks with tree CTEs
             # 4. Main corpuses query with COALESCE subqueries for counts
-            # 5. Prefetch for documents (if visible_to_user adds it)
-            # 6. Prefetch for categories
+            # 5. Prefetch for categories
+            # NOTE: documents M2M was removed - counts now via DocumentPath subqueries
             # The counts (documentCount, annotationCount) come from subqueries
             # within the main query, not N+1 per corpus
             result = self.client.execute(query)

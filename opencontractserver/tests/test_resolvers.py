@@ -412,11 +412,12 @@ class PermissionBasedVisibilityTest(TestCase):
         corpus_qs = Corpus.objects.visible_to_user(self.owner)
 
         # Check that the queryset has the expected optimizations
+        # NOTE: documents M2M was removed in favor of DocumentPath
         self.assertQuerysetOptimized(
             corpus_qs,
             Corpus,
             expected_select=["creator", "label_set", "user_lock"],
-            expected_prefetch=["documents"],
+            expected_prefetch=[],
         )
 
     def test_document_queryset_optimizations(self):

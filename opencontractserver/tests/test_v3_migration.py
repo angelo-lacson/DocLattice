@@ -814,8 +814,8 @@ class ValidationCommandTests(TransactionTestCase):
 
         output = out.getvalue()
         # Verbose mode should show more detail
-        self.assertIn("[1/7]", output)
-        self.assertIn("[2/7]", output)
+        self.assertIn("[1/6]", output)
+        self.assertIn("[2/6]", output)
 
 
 class ValidationCommandFailureTests(TransactionTestCase):
@@ -869,17 +869,17 @@ class ValidationCommandFailureTests(TransactionTestCase):
         call_command("validate_v3_migration", "--fix", "--verbose", stdout=out)
 
         output = out.getvalue()
-        self.assertIn("[1/7]", output)  # Shows progress
+        self.assertIn("[1/6]", output)  # Shows progress
         self.assertIn("PASSED", output)
 
     def test_validation_shows_all_check_numbers(self):
-        """Validation output shows all 7 check numbers."""
+        """Validation output shows all 6 check numbers."""
         out = io.StringIO()
         call_command("validate_v3_migration", "--verbose", stdout=out)
 
         output = out.getvalue()
-        for i in range(1, 8):
-            self.assertIn(f"[{i}/7]", output)
+        for i in range(1, 7):
+            self.assertIn(f"[{i}/6]", output)
 
     def test_validation_summary_shows_all_checks(self):
         """Summary includes all check names."""
@@ -889,7 +889,6 @@ class ValidationCommandFailureTests(TransactionTestCase):
         output = out.getvalue()
         self.assertIn("Document.version_tree_id", output)
         self.assertIn("Document.is_current", output)
-        self.assertIn("DocumentPath records", output)
         self.assertIn("Annotation XOR constraint", output)
         self.assertIn("Relationship XOR constraint", output)
         self.assertIn("StructuralAnnotationSet uniqueness", output)
