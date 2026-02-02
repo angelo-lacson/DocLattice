@@ -1779,3 +1779,69 @@ export enum FileTypeEnum {
   /** DOCX file type. */
   DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
+
+/**
+ * Pipeline Settings Type - represents system-wide document processing configuration.
+ * Only modifiable by superusers.
+ */
+export type PipelineSettingsType = {
+  __typename?: "PipelineSettingsType";
+  /** Mapping of MIME types to parser class paths. */
+  preferredParsers?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of MIME types to embedder class paths. */
+  preferredEmbedders?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of MIME types to thumbnailer class paths. */
+  preferredThumbnailers?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of parser class paths to configuration kwargs. */
+  parserKwargs?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of component class paths to settings overrides. */
+  componentSettings?: Maybe<Scalars["GenericScalar"]>;
+  /** Default embedder class path. */
+  defaultEmbedder?: Maybe<Scalars["String"]>;
+  /** List of components with encrypted secrets configured (actual secrets never exposed). */
+  componentsWithSecrets?: Maybe<Array<Maybe<Scalars["String"]>>>;
+  /** When settings were last modified. */
+  modified?: Maybe<Scalars["DateTime"]>;
+  /** User who last modified the settings. */
+  modifiedBy?: Maybe<UserType>;
+};
+
+/**
+ * Mutation response for updating pipeline settings.
+ */
+export type UpdatePipelineSettingsResponse = {
+  __typename?: "UpdatePipelineSettingsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  pipelineSettings?: Maybe<PipelineSettingsType>;
+};
+
+/**
+ * Mutation response for resetting pipeline settings.
+ */
+export type ResetPipelineSettingsResponse = {
+  __typename?: "ResetPipelineSettingsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  pipelineSettings?: Maybe<PipelineSettingsType>;
+};
+
+/**
+ * Mutation response for updating component secrets.
+ */
+export type UpdateComponentSecretsResponse = {
+  __typename?: "UpdateComponentSecretsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  componentsWithSecrets?: Maybe<Array<Maybe<Scalars["String"]>>>;
+};
+
+/**
+ * Mutation response for deleting component secrets.
+ */
+export type DeleteComponentSecretsResponse = {
+  __typename?: "DeleteComponentSecretsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  componentsWithSecrets?: Maybe<Array<Maybe<Scalars["String"]>>>;
+};
