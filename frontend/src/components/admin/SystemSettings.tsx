@@ -18,7 +18,6 @@ import {
   Save,
   RotateCcw,
   AlertTriangle,
-  Check,
   X,
   FileText,
   Cpu,
@@ -542,6 +541,9 @@ export const SystemSettings: React.FC = () => {
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
   const [secretsValue, setSecretsValue] = useState("");
+  const [showDeleteSecretsConfirm, setShowDeleteSecretsConfirm] =
+    useState(false);
+  const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
 
   // GraphQL queries
   const {
@@ -767,22 +769,20 @@ export const SystemSettings: React.FC = () => {
     }
   }, [secretsComponentPath, secretsValue, updateSecrets]);
 
-  const handleDeleteSecrets = useCallback(
-    (componentPath: string) => {
-      if (
-        window.confirm(
-          `Are you sure you want to delete secrets for ${componentPath}?`
-        )
-      ) {
-        deleteSecrets({
-          variables: {
-            componentPath,
-          },
-        });
-      }
-    },
-    [deleteSecrets]
-  );
+  const handleDeleteSecretsClick = useCallback((componentPath: string) => {
+    setDeleteSecretsPath(componentPath);
+    setShowDeleteSecretsConfirm(true);
+  }, []);
+
+  const handleConfirmDeleteSecrets = useCallback(() => {
+    deleteSecrets({
+      variables: {
+        componentPath: deleteSecretsPath,
+      },
+    });
+    setShowDeleteSecretsConfirm(false);
+    setDeleteSecretsPath("");
+  }, [deleteSecrets, deleteSecretsPath]);
 
   // Format date
   const formatDate = useCallback((dateStr: string | null | undefined) => {
@@ -1029,7 +1029,7 @@ export const SystemSettings: React.FC = () => {
                   {componentPath}
                   <IconButton
                     $danger
-                    onClick={() => handleDeleteSecrets(componentPath)}
+                    onClick={() => handleDeleteSecretsClick(componentPath)}
                     title="Delete secrets"
                   >
                     <Trash2 />
@@ -1258,6 +1258,44 @@ export const SystemSettings: React.FC = () => {
           >
             <Key style={{ width: 16, height: 16, marginRight: 8 }} />
             Save Secrets
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Delete Secrets Confirmation Modal */}
+      <Modal
+        open={showDeleteSecretsConfirm}
+        onClose={() => setShowDeleteSecretsConfirm(false)}
+        size="sm"
+      >
+        <ModalHeader
+          title="Delete Component Secrets"
+          onClose={() => setShowDeleteSecretsConfirm(false)}
+        />
+        <ModalBody>
+          <WarningBanner>
+            <AlertTriangle />
+            <WarningText>
+              Are you sure you want to delete secrets for{" "}
+              <strong>{deleteSecretsPath}</strong>? This action cannot be
+              undone.
+            </WarningText>
+          </WarningBanner>
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => setShowDeleteSecretsConfirm(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleConfirmDeleteSecrets}
+            loading={deletingSecrets}
+          >
+            <Trash2 style={{ width: 16, height: 16, marginRight: 8 }} />
+            Delete Secrets
           </Button>
         </ModalFooter>
       </Modal>
