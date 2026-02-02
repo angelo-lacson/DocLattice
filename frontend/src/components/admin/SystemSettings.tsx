@@ -894,14 +894,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.updatePipelineSettings?.message || "Failed to update settings",
+            data.updatePipelineSettings?.message || "Failed to update settings"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating settings: ${err.message}`);
       },
-    },
+    }
   );
 
   const [resetSettings, { loading: resetting }] = useMutation(
@@ -914,14 +914,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.resetPipelineSettings?.message || "Failed to reset settings",
+            data.resetPipelineSettings?.message || "Failed to reset settings"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error resetting settings: ${err.message}`);
       },
-    },
+    }
   );
 
   const [updateSecrets, { loading: updatingSecrets }] = useMutation(
@@ -936,14 +936,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.updateComponentSecrets?.message || "Failed to update secrets",
+            data.updateComponentSecrets?.message || "Failed to update secrets"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating secrets: ${err.message}`);
       },
-    },
+    }
   );
 
   const [deleteSecrets, { loading: deletingSecrets }] = useMutation(
@@ -955,14 +955,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.deleteComponentSecrets?.message || "Failed to delete secrets",
+            data.deleteComponentSecrets?.message || "Failed to delete secrets"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error deleting secrets: ${err.message}`);
       },
-    },
+    }
   );
 
   const settings = settingsData?.pipelineSettings;
@@ -977,7 +977,7 @@ export const SystemSettings: React.FC = () => {
       ] as Record<string, string> | null;
       return mapping?.[mimeType] || null;
     },
-    [settings],
+    [settings]
   );
 
   // Get components for a stage, filtered by MIME type support
@@ -997,11 +997,11 @@ export const SystemSettings: React.FC = () => {
         const mimeShort = mimeType.split("/")[1]?.toUpperCase();
         return comp.supportedFileTypes.some(
           (ft) =>
-            ft?.toUpperCase() === mimeShort || ft?.toLowerCase() === mimeType,
+            ft?.toUpperCase() === mimeShort || ft?.toLowerCase() === mimeType
         );
       });
     },
-    [components],
+    [components]
   );
 
   // Check if a component requires configuration
@@ -1020,7 +1020,7 @@ export const SystemSettings: React.FC = () => {
     (className: string): boolean => {
       return settings?.componentsWithSecrets?.includes(className) || false;
     },
-    [settings],
+    [settings]
   );
 
   // Handle component selection
@@ -1050,7 +1050,7 @@ export const SystemSettings: React.FC = () => {
         }));
       }
     },
-    [settings, updateSettings, getComponentConfig, hasSecrets],
+    [settings, updateSettings, getComponentConfig, hasSecrets]
   );
 
   // Handle MIME type change for a stage
@@ -1061,7 +1061,7 @@ export const SystemSettings: React.FC = () => {
         [stage]: mimeType,
       }));
     },
-    [],
+    []
   );
 
   // Toggle advanced settings
@@ -1098,7 +1098,7 @@ export const SystemSettings: React.FC = () => {
     (componentPath: string) => {
       if (
         window.confirm(
-          `Are you sure you want to delete secrets for this component?`,
+          `Are you sure you want to delete secrets for this component?`
         )
       ) {
         deleteSecrets({
@@ -1108,7 +1108,7 @@ export const SystemSettings: React.FC = () => {
         });
       }
     },
-    [deleteSecrets],
+    [deleteSecrets]
   );
 
   // Handle default embedder
@@ -1186,7 +1186,7 @@ export const SystemSettings: React.FC = () => {
                   const IconComponent = getComponentIcon(comp.className);
                   const displayName = getComponentDisplayName(
                     comp.className,
-                    comp.title || undefined,
+                    comp.title || undefined
                   );
                   const vectorSize = (
                     comp as PipelineComponentType & { vectorSize?: number }
@@ -1318,7 +1318,7 @@ export const SystemSettings: React.FC = () => {
       handleAddSecrets,
       handleDeleteSecrets,
       updating,
-    ],
+    ]
   );
 
   // Loading state
@@ -1482,7 +1482,7 @@ export const SystemSettings: React.FC = () => {
                     <Trash2 />
                   </IconButton>
                 </SecretBadge>
-              ) : null,
+              ) : null
             )
           ) : (
             <EmptyValue>No component secrets configured</EmptyValue>
@@ -1672,7 +1672,7 @@ export const SystemSettings: React.FC = () => {
                       {e.className}
                     </div>
                   </div>
-                ) : null,
+                ) : null
               )}
             </div>
           )}

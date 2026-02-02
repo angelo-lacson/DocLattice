@@ -612,7 +612,7 @@ export const getComponentIcon = (className: string): React.FC<IconProps> => {
  */
 export const getComponentDisplayName = (
   className: string,
-  title?: string,
+  title?: string
 ): string => {
   if (title) return title;
 
