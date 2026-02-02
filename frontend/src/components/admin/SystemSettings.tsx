@@ -5,16 +5,18 @@ import styled from "styled-components";
 import {
   Button,
   Input,
-  Textarea,
   Modal,
   ModalHeader,
   ModalBody,
   ModalFooter,
   Spinner,
+  Textarea,
 } from "@os-legal/ui";
 import {
   Settings,
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   Save,
   RotateCcw,
   AlertTriangle,
@@ -25,14 +27,17 @@ import {
   Image,
   Key,
   Info,
-  Edit2,
+  Upload,
+  Search,
   Trash2,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import {
   PipelineSettingsType,
   PipelineComponentsType,
+  PipelineComponentType,
 } from "../../types/graphql-api";
+import { getComponentIcon, getComponentDisplayName } from "./PipelineIcons";
 
 // ============================================================================
 // GraphQL Operations
@@ -73,6 +78,7 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         vectorSize
+        supportedFileTypes
       }
       thumbnailers {
         name
@@ -174,12 +180,27 @@ const DELETE_COMPONENT_SECRETS = gql`
 `;
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+const SUPPORTED_MIME_TYPES = [
+  { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
+  { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
+  {
+    value:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    label: "Word Document",
+    shortLabel: "DOCX",
+  },
+];
+
+// ============================================================================
 // Styled Components
 // ============================================================================
 
 const Container = styled.div`
   padding: 2rem;
-  max-width: 1200px;
+  max-width: 900px;
   margin: 0 auto;
   min-height: 100%;
   overflow-y: auto;
@@ -258,6 +279,297 @@ const LastModified = styled.div`
   }
 `;
 
+// Pipeline Flow Styles
+const PipelineFlow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 2rem;
+`;
+
+const PipelineConnector = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+
+  &::after {
+    content: "";
+    width: 2px;
+    height: 24px;
+    background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
+  }
+`;
+
+const PipelineStage = styled.div<{ $color: string }>`
+  background: white;
+  border: 2px solid ${(props) => props.$color}20;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+`;
+
+const StageHeader = styled.div<{ $color: string }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: ${(props) => props.$color}08;
+  border-bottom: 1px solid ${(props) => props.$color}15;
+`;
+
+const StageInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
+const StageIcon = styled.div<{ $color: string }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: ${(props) => props.$color}15;
+  border-radius: 10px;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: ${(props) => props.$color};
+  }
+`;
+
+const StageTitle = styled.h2`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+`;
+
+const StageSubtitle = styled.p`
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0.125rem 0 0 0;
+`;
+
+const MimeSelector = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const MimeButton = styled.button<{ $active: boolean }>`
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid ${(props) => (props.$active ? "#6366f1" : "#e2e8f0")};
+  background: ${(props) => (props.$active ? "#6366f1" : "white")};
+  color: ${(props) => (props.$active ? "white" : "#64748b")};
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: #6366f1;
+    color: ${(props) => (props.$active ? "white" : "#6366f1")};
+  }
+`;
+
+const StageContent = styled.div`
+  padding: 1.25rem;
+`;
+
+const ComponentGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+`;
+
+const ComponentCard = styled.button<{ $selected: boolean; $color: string }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1rem;
+  background: ${(props) => (props.$selected ? `${props.$color}10` : "#f8fafc")};
+  border: 2px solid ${(props) => (props.$selected ? props.$color : "#e2e8f0")};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-height: 120px;
+
+  &:hover {
+    border-color: ${(props) => props.$color};
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  ${(props) =>
+    props.$selected &&
+    `
+    box-shadow: 0 0 0 3px ${props.$color}20;
+  `}
+`;
+
+const SelectedBadge = styled.div<{ $color: string }>`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: ${(props) => props.$color};
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 12px;
+    height: 12px;
+    color: white;
+  }
+`;
+
+const ComponentIconWrapper = styled.div`
+  margin-bottom: 0.5rem;
+`;
+
+const ComponentName = styled.span`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #1e293b;
+  text-align: center;
+  line-height: 1.3;
+`;
+
+const VectorBadge = styled.span`
+  font-size: 0.625rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+`;
+
+const NoComponents = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-style: italic;
+`;
+
+// Collapsible Settings
+const AdvancedSettingsToggle = styled.button<{ $expanded: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem;
+  margin-top: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+    transform: rotate(${(props) => (props.$expanded ? "90deg" : "0deg")});
+  }
+`;
+
+const AdvancedSettingsContent = styled.div<{ $expanded: boolean }>`
+  display: ${(props) => (props.$expanded ? "block" : "none")};
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: #fafafa;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+`;
+
+const RequiredBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.625rem;
+  font-weight: 500;
+  border-radius: 4px;
+  margin-left: auto;
+
+  svg {
+    width: 10px;
+    height: 10px;
+  }
+`;
+
+const SettingField = styled.div`
+  margin-bottom: 1rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const SettingLabel = styled.label`
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.375rem;
+`;
+
+const SettingHelperText = styled.p`
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0.25rem 0 0 0;
+`;
+
+// Start/End Stages
+const BookendStage = styled.div<{ $variant: "start" | "end" }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: ${(props) =>
+    props.$variant === "start"
+      ? "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)"
+      : "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)"};
+  border: 2px dashed
+    ${(props) => (props.$variant === "start" ? "#cbd5e1" : "#6ee7b7")};
+  border-radius: 12px;
+
+  svg {
+    width: 24px;
+    height: 24px;
+    color: ${(props) => (props.$variant === "start" ? "#64748b" : "#10b981")};
+  }
+`;
+
+const BookendText = styled.span<{ $variant: "start" | "end" }>`
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: ${(props) => (props.$variant === "start" ? "#64748b" : "#059669")};
+`;
+
+// Bottom sections
 const Section = styled.div`
   background: white;
   border: 1px solid #e2e8f0;
@@ -278,14 +590,14 @@ const SectionTitle = styled.h2`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #1e293b;
   margin: 0;
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     color: #6366f1;
   }
 `;
@@ -294,81 +606,6 @@ const SectionDescription = styled.p`
   color: #64748b;
   font-size: 0.875rem;
   margin: 0 0 1rem 0;
-`;
-
-const SettingsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
-`;
-
-const SettingCard = styled.div`
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem;
-`;
-
-const SettingLabel = styled.div`
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
-`;
-
-const SettingValue = styled.div`
-  font-size: 0.875rem;
-  color: #1e293b;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  word-break: break-all;
-`;
-
-const EmptyValue = styled.span`
-  color: #94a3b8;
-  font-style: italic;
-`;
-
-const MimeTypeList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-`;
-
-const MimeTypeRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-
-  @media (max-width: 640px) {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-`;
-
-const MimeTypeBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.75rem;
-  background: #e0e7ff;
-  color: #3730a3;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 9999px;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-`;
-
-const ComponentPath = styled.span`
-  flex: 1;
-  font-size: 0.875rem;
-  color: #1e293b;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  word-break: break-all;
 `;
 
 const SecretsList = styled.div`
@@ -394,10 +631,55 @@ const SecretBadge = styled.div`
   }
 `;
 
-const ButtonGroup = styled.div`
+const IconButton = styled.button<{ $danger?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: ${(props) => (props.$danger ? "#fef2f2" : "transparent")};
+  color: ${(props) => (props.$danger ? "#dc2626" : "#475569")};
+
+  &:hover {
+    background: ${(props) => (props.$danger ? "#fee2e2" : "#e2e8f0")};
+    color: ${(props) => (props.$danger ? "#b91c1c" : "#1e293b")};
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+
+const EmptyValue = styled.span`
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 0.875rem;
+`;
+
+const DefaultEmbedderDisplay = styled.div`
   display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+`;
+
+const DefaultEmbedderInfo = styled.div`
+  flex: 1;
+`;
+
+const DefaultEmbedderPath = styled.code`
+  font-size: 0.75rem;
+  color: #64748b;
+  word-break: break-all;
 `;
 
 const ActionButtons = styled.div`
@@ -470,6 +752,10 @@ const WarningText = styled.div`
   }
 `;
 
+const JsonEditor = styled.div`
+  margin-bottom: 1rem;
+`;
+
 const FormField = styled.div`
   margin-bottom: 1rem;
 `;
@@ -488,37 +774,8 @@ const FormHelperText = styled.p`
   margin: 0.375rem 0 0 0;
 `;
 
-const JsonEditor = styled.div`
-  margin-bottom: 1rem;
-`;
-
-const IconButton = styled.button<{ $danger?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  background: ${(props) => (props.$danger ? "#fef2f2" : "#f1f5f9")};
-  color: ${(props) => (props.$danger ? "#dc2626" : "#475569")};
-
-  &:hover {
-    background: ${(props) => (props.$danger ? "#fee2e2" : "#e2e8f0")};
-    color: ${(props) => (props.$danger ? "#b91c1c" : "#1e293b")};
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-`;
-
 // ============================================================================
-// Component
+// Types
 // ============================================================================
 
 interface PipelineSettingsQueryResult {
@@ -529,19 +786,88 @@ interface PipelineComponentsQueryResult {
   pipelineComponents: PipelineComponentsType;
 }
 
+type StageType = "parsers" | "embedders" | "thumbnailers";
+
+// Components that require API keys or special configuration
+const COMPONENTS_REQUIRING_CONFIG: Record<
+  string,
+  {
+    fields: Array<{
+      key: string;
+      label: string;
+      type: string;
+      placeholder: string;
+      required: boolean;
+    }>;
+  }
+> = {
+  llamaparse: {
+    fields: [
+      {
+        key: "api_key",
+        label: "LlamaParse API Key",
+        type: "password",
+        placeholder: "llx-...",
+        required: true,
+      },
+    ],
+  },
+};
+
+// Stage configuration
+const STAGE_CONFIG = {
+  parsers: {
+    color: "#3B82F6",
+    icon: FileText,
+    title: "Parser",
+    subtitle: "Extract text and structure",
+    settingsKey: "preferredParsers",
+  },
+  thumbnailers: {
+    color: "#EC4899",
+    icon: Image,
+    title: "Thumbnailer",
+    subtitle: "Generate document previews",
+    settingsKey: "preferredThumbnailers",
+  },
+  embedders: {
+    color: "#10B981",
+    icon: Cpu,
+    title: "Embedder",
+    subtitle: "Create vector embeddings",
+    settingsKey: "preferredEmbedders",
+  },
+};
+
+// ============================================================================
+// Component
+// ============================================================================
+
 export const SystemSettings: React.FC = () => {
   const navigate = useNavigate();
 
-  // State for edit modals
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editSection, setEditSection] = useState<
-    "parsers" | "embedders" | "thumbnailers" | "default_embedder" | null
-  >(null);
-  const [editValue, setEditValue] = useState("");
+  // Per-stage MIME type selection
+  const [selectedMimeTypes, setSelectedMimeTypes] = useState<
+    Record<StageType, string>
+  >({
+    parsers: "application/pdf",
+    embedders: "application/pdf",
+    thumbnailers: "application/pdf",
+  });
+
+  // Advanced settings expansion state
+  const [expandedSettings, setExpandedSettings] = useState<
+    Record<string, boolean>
+  >({});
+
+  // Modal states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
   const [secretsValue, setSecretsValue] = useState("");
+  const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
+    useState(false);
+  const [defaultEmbedderValue, setDefaultEmbedderValue] = useState("");
 
   // GraphQL queries
   const {
@@ -565,18 +891,17 @@ export const SystemSettings: React.FC = () => {
       onCompleted: (data) => {
         if (data.updatePipelineSettings?.ok) {
           toast.success("Settings updated successfully");
-          setShowEditModal(false);
           refetchSettings();
         } else {
           toast.error(
-            data.updatePipelineSettings?.message || "Failed to update settings"
+            data.updatePipelineSettings?.message || "Failed to update settings",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating settings: ${err.message}`);
       },
-    }
+    },
   );
 
   const [resetSettings, { loading: resetting }] = useMutation(
@@ -589,14 +914,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.resetPipelineSettings?.message || "Failed to reset settings"
+            data.resetPipelineSettings?.message || "Failed to reset settings",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error resetting settings: ${err.message}`);
       },
-    }
+    },
   );
 
   const [updateSecrets, { loading: updatingSecrets }] = useMutation(
@@ -611,14 +936,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.updateComponentSecrets?.message || "Failed to update secrets"
+            data.updateComponentSecrets?.message || "Failed to update secrets",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating secrets: ${err.message}`);
       },
-    }
+    },
   );
 
   const [deleteSecrets, { loading: deletingSecrets }] = useMutation(
@@ -630,124 +955,126 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.deleteComponentSecrets?.message || "Failed to delete secrets"
+            data.deleteComponentSecrets?.message || "Failed to delete secrets",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error deleting secrets: ${err.message}`);
       },
-    }
+    },
   );
 
   const settings = settingsData?.pipelineSettings;
   const components = componentsData?.pipelineComponents;
 
-  // Helper to format MIME type mappings for display
-  const formatMappings = useCallback(
-    (
-      mappings: Record<string, string> | null | undefined
-    ): Array<{ mimeType: string; component: string }> => {
-      if (!mappings || typeof mappings !== "object") return [];
-      return Object.entries(mappings).map(([mimeType, component]) => ({
-        mimeType,
-        component: String(component),
+  // Get current selection for a stage and MIME type
+  const getCurrentSelection = useCallback(
+    (stage: StageType, mimeType: string): string | null => {
+      if (!settings) return null;
+      const mapping = settings[
+        STAGE_CONFIG[stage].settingsKey as keyof PipelineSettingsType
+      ] as Record<string, string> | null;
+      return mapping?.[mimeType] || null;
+    },
+    [settings],
+  );
+
+  // Get components for a stage, filtered by MIME type support
+  const getComponentsForStage = useCallback(
+    (stage: StageType, mimeType: string): PipelineComponentType[] => {
+      if (!components) return [];
+      const stageComponents = components[stage] || [];
+
+      // Filter by supported file types if available
+      return stageComponents.filter((comp) => {
+        if (!comp) return false;
+        // If no supportedFileTypes specified, assume it supports all
+        if (!comp.supportedFileTypes || comp.supportedFileTypes.length === 0) {
+          return true;
+        }
+        // Check if the MIME type matches any supported file type
+        const mimeShort = mimeType.split("/")[1]?.toUpperCase();
+        return comp.supportedFileTypes.some(
+          (ft) =>
+            ft?.toUpperCase() === mimeShort || ft?.toLowerCase() === mimeType,
+        );
+      });
+    },
+    [components],
+  );
+
+  // Check if a component requires configuration
+  const getComponentConfig = useCallback((className: string) => {
+    const lowerName = className.toLowerCase();
+    for (const [key, config] of Object.entries(COMPONENTS_REQUIRING_CONFIG)) {
+      if (lowerName.includes(key)) {
+        return config;
+      }
+    }
+    return null;
+  }, []);
+
+  // Check if component has secrets configured
+  const hasSecrets = useCallback(
+    (className: string): boolean => {
+      return settings?.componentsWithSecrets?.includes(className) || false;
+    },
+    [settings],
+  );
+
+  // Handle component selection
+  const handleSelectComponent = useCallback(
+    (stage: StageType, mimeType: string, className: string) => {
+      const currentMapping =
+        (settings?.[
+          STAGE_CONFIG[stage].settingsKey as keyof PipelineSettingsType
+        ] as Record<string, string>) || {};
+      const newMapping = {
+        ...currentMapping,
+        [mimeType]: className,
+      };
+
+      updateSettings({
+        variables: {
+          [STAGE_CONFIG[stage].settingsKey]: newMapping,
+        },
+      });
+
+      // Auto-expand settings if component requires configuration and doesn't have secrets
+      const config = getComponentConfig(className);
+      if (config && !hasSecrets(className)) {
+        setExpandedSettings((prev) => ({
+          ...prev,
+          [`${stage}-${mimeType}`]: true,
+        }));
+      }
+    },
+    [settings, updateSettings, getComponentConfig, hasSecrets],
+  );
+
+  // Handle MIME type change for a stage
+  const handleMimeTypeChange = useCallback(
+    (stage: StageType, mimeType: string) => {
+      setSelectedMimeTypes((prev) => ({
+        ...prev,
+        [stage]: mimeType,
       }));
     },
-    []
+    [],
   );
 
-  // Get available components for dropdowns
-  const availableParsers = useMemo(() => {
-    return (
-      components?.parsers?.map((p) => ({
-        value: p?.className || "",
-        label: p?.title || p?.name || "",
-      })) || []
-    );
-  }, [components]);
+  // Toggle advanced settings
+  const toggleAdvancedSettings = useCallback((key: string) => {
+    setExpandedSettings((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  }, []);
 
-  const availableEmbedders = useMemo(() => {
-    return (
-      components?.embedders?.map((e) => ({
-        value: e?.className || "",
-        label: `${e?.title || e?.name || ""} (${e?.vectorSize || "?"} dim)`,
-      })) || []
-    );
-  }, [components]);
-
-  const availableThumbnailers = useMemo(() => {
-    return (
-      components?.thumbnailers?.map((t) => ({
-        value: t?.className || "",
-        label: t?.title || t?.name || "",
-      })) || []
-    );
-  }, [components]);
-
-  // Handle edit button click
-  const handleEdit = useCallback(
-    (
-      section: "parsers" | "embedders" | "thumbnailers" | "default_embedder"
-    ) => {
-      setEditSection(section);
-      if (section === "default_embedder") {
-        setEditValue(settings?.defaultEmbedder || "");
-      } else if (section === "parsers") {
-        setEditValue(JSON.stringify(settings?.preferredParsers || {}, null, 2));
-      } else if (section === "embedders") {
-        setEditValue(
-          JSON.stringify(settings?.preferredEmbedders || {}, null, 2)
-        );
-      } else if (section === "thumbnailers") {
-        setEditValue(
-          JSON.stringify(settings?.preferredThumbnailers || {}, null, 2)
-        );
-      }
-      setShowEditModal(true);
-    },
-    [settings]
-  );
-
-  // Handle save
-  const handleSave = useCallback(() => {
-    try {
-      if (editSection === "default_embedder") {
-        updateSettings({
-          variables: {
-            defaultEmbedder: editValue || null,
-          },
-        });
-      } else if (editSection === "parsers") {
-        const parsed = JSON.parse(editValue || "{}");
-        updateSettings({
-          variables: {
-            preferredParsers: parsed,
-          },
-        });
-      } else if (editSection === "embedders") {
-        const parsed = JSON.parse(editValue || "{}");
-        updateSettings({
-          variables: {
-            preferredEmbedders: parsed,
-          },
-        });
-      } else if (editSection === "thumbnailers") {
-        const parsed = JSON.parse(editValue || "{}");
-        updateSettings({
-          variables: {
-            preferredThumbnailers: parsed,
-          },
-        });
-      }
-    } catch (err) {
-      toast.error("Invalid JSON format");
-    }
-  }, [editSection, editValue, updateSettings]);
-
-  // Handle secrets
-  const handleAddSecrets = useCallback(() => {
-    setSecretsComponentPath("");
+  // Handle secrets modal
+  const handleAddSecrets = useCallback((componentPath?: string) => {
+    setSecretsComponentPath(componentPath || "");
     setSecretsValue('{\n  "api_key": ""\n}');
     setShowSecretsModal(true);
   }, []);
@@ -771,7 +1098,7 @@ export const SystemSettings: React.FC = () => {
     (componentPath: string) => {
       if (
         window.confirm(
-          `Are you sure you want to delete secrets for ${componentPath}?`
+          `Are you sure you want to delete secrets for this component?`,
         )
       ) {
         deleteSecrets({
@@ -781,8 +1108,23 @@ export const SystemSettings: React.FC = () => {
         });
       }
     },
-    [deleteSecrets]
+    [deleteSecrets],
   );
+
+  // Handle default embedder
+  const handleEditDefaultEmbedder = useCallback(() => {
+    setDefaultEmbedderValue(settings?.defaultEmbedder || "");
+    setShowDefaultEmbedderModal(true);
+  }, [settings]);
+
+  const handleSaveDefaultEmbedder = useCallback(() => {
+    updateSettings({
+      variables: {
+        defaultEmbedder: defaultEmbedderValue || null,
+      },
+    });
+    setShowDefaultEmbedderModal(false);
+  }, [defaultEmbedderValue, updateSettings]);
 
   // Format date
   const formatDate = useCallback((dateStr: string | null | undefined) => {
@@ -793,6 +1135,191 @@ export const SystemSettings: React.FC = () => {
       return dateStr;
     }
   }, []);
+
+  // Render a pipeline stage
+  const renderStage = useCallback(
+    (stage: StageType) => {
+      const config = STAGE_CONFIG[stage];
+      const Icon = config.icon;
+      const mimeType = selectedMimeTypes[stage];
+      const stageComponents = getComponentsForStage(stage, mimeType);
+      const currentSelection = getCurrentSelection(stage, mimeType);
+      const settingsKey = `${stage}-${mimeType}`;
+      const isExpanded = expandedSettings[settingsKey] || false;
+
+      // Check if current selection requires config
+      const selectedConfig = currentSelection
+        ? getComponentConfig(currentSelection)
+        : null;
+      const needsConfig = selectedConfig && !hasSecrets(currentSelection || "");
+
+      return (
+        <PipelineStage $color={config.color} key={stage}>
+          <StageHeader $color={config.color}>
+            <StageInfo>
+              <StageIcon $color={config.color}>
+                <Icon />
+              </StageIcon>
+              <div>
+                <StageTitle>{config.title}</StageTitle>
+                <StageSubtitle>{config.subtitle}</StageSubtitle>
+              </div>
+            </StageInfo>
+            <MimeSelector>
+              {SUPPORTED_MIME_TYPES.map((mime) => (
+                <MimeButton
+                  key={mime.value}
+                  $active={mimeType === mime.value}
+                  onClick={() => handleMimeTypeChange(stage, mime.value)}
+                >
+                  {mime.shortLabel}
+                </MimeButton>
+              ))}
+            </MimeSelector>
+          </StageHeader>
+          <StageContent>
+            {stageComponents.length > 0 ? (
+              <ComponentGrid>
+                {stageComponents.map((comp) => {
+                  if (!comp?.className) return null;
+                  const isSelected = currentSelection === comp.className;
+                  const IconComponent = getComponentIcon(comp.className);
+                  const displayName = getComponentDisplayName(
+                    comp.className,
+                    comp.title || undefined,
+                  );
+                  const vectorSize = (
+                    comp as PipelineComponentType & { vectorSize?: number }
+                  ).vectorSize;
+
+                  return (
+                    <ComponentCard
+                      key={comp.className}
+                      $selected={isSelected}
+                      $color={config.color}
+                      onClick={() =>
+                        handleSelectComponent(stage, mimeType, comp.className!)
+                      }
+                      disabled={updating}
+                    >
+                      {isSelected && (
+                        <SelectedBadge $color={config.color}>
+                          <Check />
+                        </SelectedBadge>
+                      )}
+                      <ComponentIconWrapper>
+                        <IconComponent size={48} />
+                      </ComponentIconWrapper>
+                      <ComponentName>{displayName}</ComponentName>
+                      {vectorSize && (
+                        <VectorBadge>{vectorSize}d vectors</VectorBadge>
+                      )}
+                    </ComponentCard>
+                  );
+                })}
+              </ComponentGrid>
+            ) : (
+              <NoComponents>
+                No components available for{" "}
+                {SUPPORTED_MIME_TYPES.find((m) => m.value === mimeType)
+                  ?.label || mimeType}
+              </NoComponents>
+            )}
+
+            {/* Advanced Settings */}
+            {currentSelection && (
+              <AdvancedSettingsToggle
+                $expanded={isExpanded}
+                onClick={() => toggleAdvancedSettings(settingsKey)}
+              >
+                <ChevronRight />
+                Advanced Settings
+                {needsConfig && (
+                  <RequiredBadge>
+                    <AlertTriangle />
+                    Config Required
+                  </RequiredBadge>
+                )}
+              </AdvancedSettingsToggle>
+            )}
+
+            {currentSelection && isExpanded && (
+              <AdvancedSettingsContent $expanded={isExpanded}>
+                {selectedConfig ? (
+                  <>
+                    {hasSecrets(currentSelection) ? (
+                      <SettingField>
+                        <SettingLabel>API Credentials</SettingLabel>
+                        <SecretBadge>
+                          <Key />
+                          Secrets configured
+                          <IconButton
+                            $danger
+                            onClick={() =>
+                              handleDeleteSecrets(currentSelection)
+                            }
+                          >
+                            <Trash2 />
+                          </IconButton>
+                        </SecretBadge>
+                        <SettingHelperText>
+                          Click the trash icon to remove and reconfigure
+                          secrets.
+                        </SettingHelperText>
+                      </SettingField>
+                    ) : (
+                      <SettingField>
+                        <SettingLabel>
+                          {selectedConfig.fields[0]?.label || "API Key"}
+                        </SettingLabel>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleAddSecrets(currentSelection)}
+                        >
+                          <Key
+                            style={{ width: 14, height: 14, marginRight: 6 }}
+                          />
+                          Configure API Key
+                        </Button>
+                        <SettingHelperText>
+                          This component requires an API key to function.
+                        </SettingHelperText>
+                      </SettingField>
+                    )}
+                  </>
+                ) : (
+                  <SettingField>
+                    <SettingLabel>Component Path</SettingLabel>
+                    <DefaultEmbedderPath>
+                      {currentSelection}
+                    </DefaultEmbedderPath>
+                    <SettingHelperText>
+                      This component has no additional configuration options.
+                    </SettingHelperText>
+                  </SettingField>
+                )}
+              </AdvancedSettingsContent>
+            )}
+          </StageContent>
+        </PipelineStage>
+      );
+    },
+    [
+      selectedMimeTypes,
+      getComponentsForStage,
+      getCurrentSelection,
+      expandedSettings,
+      getComponentConfig,
+      hasSecrets,
+      handleMimeTypeChange,
+      handleSelectComponent,
+      toggleAdvancedSettings,
+      handleAddSecrets,
+      handleDeleteSecrets,
+      updating,
+    ],
+  );
 
   // Loading state
   if (settingsLoading || componentsLoading) {
@@ -839,11 +1366,11 @@ export const SystemSettings: React.FC = () => {
       <PageHeader>
         <PageTitle>
           <Settings />
-          System Settings
+          Pipeline Configuration
         </PageTitle>
         <PageDescription>
-          Configure system-wide document processing pipeline settings. Changes
-          take effect immediately for new document processing tasks.
+          Configure how documents are processed through the ingestion pipeline.
+          Select components for each stage based on file type.
         </PageDescription>
         {settings?.modified && (
           <LastModified>
@@ -858,84 +1385,36 @@ export const SystemSettings: React.FC = () => {
       <WarningBanner>
         <AlertTriangle />
         <WarningText>
-          <strong>Superuser Only:</strong> These settings affect all users and
-          document processing across the entire system. Changes take effect
-          immediately for new uploads. Existing documents are not affected.
+          <strong>Superuser Only:</strong> Changes affect all users and take
+          effect immediately for new uploads. Existing documents are not
+          reprocessed.
         </WarningText>
       </WarningBanner>
 
-      {/* Preferred Parsers */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <FileText />
-            Preferred Parsers
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleEdit("parsers")}
-          >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
-            Edit
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Configure which parser to use for each document MIME type.
-        </SectionDescription>
-        <MimeTypeList>
-          {formatMappings(settings?.preferredParsers).length > 0 ? (
-            formatMappings(settings?.preferredParsers).map(
-              ({ mimeType, component }) => (
-                <MimeTypeRow key={mimeType}>
-                  <MimeTypeBadge>{mimeType}</MimeTypeBadge>
-                  <ComponentPath>{component}</ComponentPath>
-                </MimeTypeRow>
-              )
-            )
-          ) : (
-            <EmptyValue>No custom parser mappings configured</EmptyValue>
-          )}
-        </MimeTypeList>
-      </Section>
+      {/* Pipeline Flow */}
+      <PipelineFlow>
+        <BookendStage $variant="start">
+          <Upload />
+          <BookendText $variant="start">Document Upload</BookendText>
+        </BookendStage>
 
-      {/* Preferred Embedders */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <Cpu />
-            Preferred Embedders
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleEdit("embedders")}
-          >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
-            Edit
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Configure which embedder to use for generating vector embeddings per
-          MIME type.
-        </SectionDescription>
-        <MimeTypeList>
-          {formatMappings(settings?.preferredEmbedders).length > 0 ? (
-            formatMappings(settings?.preferredEmbedders).map(
-              ({ mimeType, component }) => (
-                <MimeTypeRow key={mimeType}>
-                  <MimeTypeBadge>{mimeType}</MimeTypeBadge>
-                  <ComponentPath>{component}</ComponentPath>
-                </MimeTypeRow>
-              )
-            )
-          ) : (
-            <EmptyValue>No custom embedder mappings configured</EmptyValue>
-          )}
-        </MimeTypeList>
-      </Section>
+        <PipelineConnector />
+        {renderStage("parsers")}
 
-      {/* Default Embedder */}
+        <PipelineConnector />
+        {renderStage("thumbnailers")}
+
+        <PipelineConnector />
+        {renderStage("embedders")}
+
+        <PipelineConnector />
+        <BookendStage $variant="end">
+          <Search />
+          <BookendText $variant="end">Ready for Search</BookendText>
+        </BookendStage>
+      </PipelineFlow>
+
+      {/* Default Embedder Section */}
       <Section>
         <SectionHeader>
           <SectionTitle>
@@ -945,79 +1424,47 @@ export const SystemSettings: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => handleEdit("default_embedder")}
+            onClick={handleEditDefaultEmbedder}
           >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
             Edit
           </Button>
         </SectionHeader>
         <SectionDescription>
-          The default embedder used when no MIME-type-specific embedder is
-          configured.
+          Fallback embedder when no MIME-type-specific embedder is configured.
         </SectionDescription>
-        <SettingsGrid>
-          <SettingCard>
-            <SettingLabel>Current Default</SettingLabel>
-            <SettingValue>
-              {settings?.defaultEmbedder || (
-                <EmptyValue>Using system default</EmptyValue>
-              )}
-            </SettingValue>
-          </SettingCard>
-        </SettingsGrid>
-      </Section>
-
-      {/* Preferred Thumbnailers */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <Image />
-            Preferred Thumbnailers
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleEdit("thumbnailers")}
-          >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
-            Edit
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Configure which thumbnailer to use for generating document previews
-          per MIME type.
-        </SectionDescription>
-        <MimeTypeList>
-          {formatMappings(settings?.preferredThumbnailers).length > 0 ? (
-            formatMappings(settings?.preferredThumbnailers).map(
-              ({ mimeType, component }) => (
-                <MimeTypeRow key={mimeType}>
-                  <MimeTypeBadge>{mimeType}</MimeTypeBadge>
-                  <ComponentPath>{component}</ComponentPath>
-                </MimeTypeRow>
-              )
-            )
+        <DefaultEmbedderDisplay>
+          {settings?.defaultEmbedder ? (
+            <DefaultEmbedderInfo>
+              <ComponentName>
+                {getComponentDisplayName(settings.defaultEmbedder)}
+              </ComponentName>
+              <DefaultEmbedderPath>
+                {settings.defaultEmbedder}
+              </DefaultEmbedderPath>
+            </DefaultEmbedderInfo>
           ) : (
-            <EmptyValue>No custom thumbnailer mappings configured</EmptyValue>
+            <EmptyValue>Using system default</EmptyValue>
           )}
-        </MimeTypeList>
+        </DefaultEmbedderDisplay>
       </Section>
 
-      {/* Component Secrets */}
+      {/* Component Secrets Section */}
       <Section>
         <SectionHeader>
           <SectionTitle>
             <Key />
             Component Secrets
           </SectionTitle>
-          <Button variant="secondary" size="sm" onClick={handleAddSecrets}>
-            <Key style={{ width: 14, height: 14, marginRight: 6 }} />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleAddSecrets()}
+          >
             Add Secrets
           </Button>
         </SectionHeader>
         <SectionDescription>
-          Encrypted secrets (API keys, credentials) for pipeline components.
-          Actual secret values are never exposed.
+          Encrypted API keys and credentials for pipeline components.
         </SectionDescription>
         <SecretsList>
           {settings?.componentsWithSecrets &&
@@ -1026,7 +1473,7 @@ export const SystemSettings: React.FC = () => {
               componentPath ? (
                 <SecretBadge key={componentPath}>
                   <Key />
-                  {componentPath}
+                  {getComponentDisplayName(componentPath)}
                   <IconButton
                     $danger
                     onClick={() => handleDeleteSecrets(componentPath)}
@@ -1035,7 +1482,7 @@ export const SystemSettings: React.FC = () => {
                     <Trash2 />
                   </IconButton>
                 </SecretBadge>
-              ) : null
+              ) : null,
             )
           ) : (
             <EmptyValue>No component secrets configured</EmptyValue>
@@ -1054,107 +1501,6 @@ export const SystemSettings: React.FC = () => {
           Reset to Defaults
         </Button>
       </ActionButtons>
-
-      {/* Edit Modal */}
-      <Modal
-        open={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        size="lg"
-      >
-        <ModalHeader
-          title={`Edit ${
-            editSection === "default_embedder"
-              ? "Default Embedder"
-              : editSection === "parsers"
-              ? "Preferred Parsers"
-              : editSection === "embedders"
-              ? "Preferred Embedders"
-              : "Preferred Thumbnailers"
-          }`}
-          onClose={() => setShowEditModal(false)}
-        />
-        <ModalBody>
-          {editSection === "default_embedder" ? (
-            <FormField>
-              <FormLabel>Default Embedder Class Path</FormLabel>
-              <Input
-                id="default-embedder"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                placeholder="e.g., opencontractserver.pipeline.embedders.openai_ada_embedder.OpenAIAdaEmbedder"
-                fullWidth
-              />
-              <FormHelperText>
-                Full Python class path for the default embedder. Leave empty to
-                use system default.
-              </FormHelperText>
-              {availableEmbedders.length > 0 && (
-                <div style={{ marginTop: "1rem" }}>
-                  <FormLabel>Available Embedders:</FormLabel>
-                  {availableEmbedders.map((e) => (
-                    <div
-                      key={e.value}
-                      style={{
-                        padding: "0.5rem",
-                        fontSize: "0.875rem",
-                        cursor: "pointer",
-                        borderRadius: "4px",
-                        background:
-                          editValue === e.value ? "#e0e7ff" : "transparent",
-                      }}
-                      onClick={() => setEditValue(e.value)}
-                    >
-                      <strong>{e.label}</strong>
-                      <div
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#64748b",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {e.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </FormField>
-          ) : (
-            <JsonEditor>
-              <FormLabel>
-                {editSection === "parsers"
-                  ? "Parser Mappings (MIME Type → Class Path)"
-                  : editSection === "embedders"
-                  ? "Embedder Mappings (MIME Type → Class Path)"
-                  : "Thumbnailer Mappings (MIME Type → Class Path)"}
-              </FormLabel>
-              <Textarea
-                id={`edit-${editSection}`}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                placeholder='{"application/pdf": "opencontractserver.pipeline..."}'
-                fullWidth
-                autoResize
-                maxRows={15}
-                style={{ fontFamily: "monospace", fontSize: "0.875rem" }}
-              />
-              <FormHelperText>
-                JSON object mapping MIME types to component class paths.
-              </FormHelperText>
-            </JsonEditor>
-          )}
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => setShowEditModal(false)}>
-            <X style={{ width: 16, height: 16, marginRight: 8 }} />
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSave} loading={updating}>
-            <Save style={{ width: 16, height: 16, marginRight: 8 }} />
-            Save Changes
-          </Button>
-        </ModalFooter>
-      </Modal>
 
       {/* Reset Confirmation Modal */}
       <Modal
@@ -1200,16 +1546,15 @@ export const SystemSettings: React.FC = () => {
         size="lg"
       >
         <ModalHeader
-          title="Add Component Secrets"
+          title="Configure Component Secrets"
           onClose={() => setShowSecretsModal(false)}
         />
         <ModalBody>
           <WarningBanner>
             <AlertTriangle />
             <WarningText>
-              <strong>Security Notice:</strong> Secrets are encrypted using
-              Fernet symmetric encryption tied to Django's SECRET_KEY. If the
-              SECRET_KEY is rotated, all secrets will become unrecoverable.
+              <strong>Security Notice:</strong> Secrets are encrypted and stored
+              securely. They will never be displayed again after saving.
             </WarningText>
           </WarningBanner>
           <FormField>
@@ -1218,11 +1563,11 @@ export const SystemSettings: React.FC = () => {
               id="secrets-component-path"
               value={secretsComponentPath}
               onChange={(e) => setSecretsComponentPath(e.target.value)}
-              placeholder="e.g., opencontractserver.pipeline.embedders.openai_ada_embedder.OpenAIAdaEmbedder"
+              placeholder="e.g., opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser"
               fullWidth
             />
             <FormHelperText>
-              Full Python class path for the component that needs secrets.
+              Full Python class path for the component.
             </FormHelperText>
           </FormField>
           <JsonEditor>
@@ -1231,15 +1576,14 @@ export const SystemSettings: React.FC = () => {
               id="secrets-value"
               value={secretsValue}
               onChange={(e) => setSecretsValue(e.target.value)}
-              placeholder='{"api_key": "sk-...", "secret_key": "..."}'
+              placeholder='{"api_key": "..."}'
               fullWidth
               autoResize
               maxRows={10}
               style={{ fontFamily: "monospace", fontSize: "0.875rem" }}
             />
             <FormHelperText>
-              JSON object with secret key-value pairs. Values must be primitive
-              types (strings, numbers, booleans).
+              JSON object with secret key-value pairs.
             </FormHelperText>
           </JsonEditor>
         </ModalBody>
@@ -1258,6 +1602,95 @@ export const SystemSettings: React.FC = () => {
           >
             <Key style={{ width: 16, height: 16, marginRight: 8 }} />
             Save Secrets
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Default Embedder Modal */}
+      <Modal
+        open={showDefaultEmbedderModal}
+        onClose={() => setShowDefaultEmbedderModal(false)}
+        size="md"
+      >
+        <ModalHeader
+          title="Edit Default Embedder"
+          onClose={() => setShowDefaultEmbedderModal(false)}
+        />
+        <ModalBody>
+          <FormField>
+            <FormLabel>Default Embedder Class Path</FormLabel>
+            <Input
+              id="default-embedder"
+              value={defaultEmbedderValue}
+              onChange={(e) => setDefaultEmbedderValue(e.target.value)}
+              placeholder="e.g., opencontractserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder"
+              fullWidth
+            />
+            <FormHelperText>
+              Full Python class path. Leave empty to use system default.
+            </FormHelperText>
+          </FormField>
+          {components?.embedders && components.embedders.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <FormLabel>Available Embedders:</FormLabel>
+              {components.embedders.map((e) =>
+                e?.className ? (
+                  <div
+                    key={e.className}
+                    style={{
+                      padding: "0.75rem",
+                      fontSize: "0.875rem",
+                      cursor: "pointer",
+                      borderRadius: "8px",
+                      marginBottom: "0.5rem",
+                      background:
+                        defaultEmbedderValue === e.className
+                          ? "#e0e7ff"
+                          : "#f8fafc",
+                      border: `1px solid ${
+                        defaultEmbedderValue === e.className
+                          ? "#6366f1"
+                          : "#e2e8f0"
+                      }`,
+                    }}
+                    onClick={() => setDefaultEmbedderValue(e.className!)}
+                  >
+                    <strong>{e.title || e.name}</strong>
+                    {e.vectorSize && (
+                      <span style={{ color: "#64748b", marginLeft: "0.5rem" }}>
+                        ({e.vectorSize}d)
+                      </span>
+                    )}
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#64748b",
+                        fontFamily: "monospace",
+                        marginTop: "0.25rem",
+                      }}
+                    >
+                      {e.className}
+                    </div>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => setShowDefaultEmbedderModal(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSaveDefaultEmbedder}
+            loading={updating}
+          >
+            <Save style={{ width: 16, height: 16, marginRight: 8 }} />
+            Save
           </Button>
         </ModalFooter>
       </Modal>
