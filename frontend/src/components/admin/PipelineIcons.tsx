@@ -1,15 +1,21 @@
 import React from "react";
+import { PIPELINE_UI } from "../../assets/configurations/constants";
 
 interface IconProps {
   size?: number;
   className?: string;
 }
 
+const DEFAULT_ICON_SIZE = PIPELINE_UI.ICON_SIZE;
+
 /**
  * Geometric icon for Docling parser (IBM Research)
  * Represents document layers/structure extraction
  */
-export const DoclingIcon: React.FC<IconProps> = ({ size = 48, className }) => (
+export const DoclingIcon: React.FC<IconProps> = ({
+  size = DEFAULT_ICON_SIZE,
+  className,
+}) => (
   <svg
     width={size}
     height={size}
@@ -75,7 +81,7 @@ export const DoclingIcon: React.FC<IconProps> = ({ size = 48, className }) => (
  * Represents AI/llama with document parsing
  */
 export const LlamaParseIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -124,7 +130,7 @@ export const LlamaParseIcon: React.FC<IconProps> = ({
  * Simple text/document representation
  */
 export const TextParserIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -192,7 +198,7 @@ export const TextParserIcon: React.FC<IconProps> = ({
  * Represents image/preview generation from PDF
  */
 export const PdfThumbnailIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -229,7 +235,7 @@ export const PdfThumbnailIcon: React.FC<IconProps> = ({
  * Geometric icon for text thumbnail generator
  */
 export const TextThumbnailIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -268,7 +274,7 @@ export const TextThumbnailIcon: React.FC<IconProps> = ({
  * Neural network / transformer representation
  */
 export const ModernBertIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -417,7 +423,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
  * Represents distributed/cloud computing
  */
 export const SentenceTransformerIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -487,7 +493,7 @@ export const SentenceTransformerIcon: React.FC<IconProps> = ({
  * Represents text + image processing
  */
 export const MultimodalIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg
@@ -555,7 +561,7 @@ export const MultimodalIcon: React.FC<IconProps> = ({
  * Generic fallback icon for unknown components
  */
 export const GenericComponentIcon: React.FC<IconProps> = ({
-  size = 48,
+  size = DEFAULT_ICON_SIZE,
   className,
 }) => (
   <svg

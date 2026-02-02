@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
@@ -36,6 +36,7 @@ import {
   PipelineComponentType,
 } from "../../types/graphql-api";
 import { getComponentIcon, getComponentDisplayName } from "./PipelineIcons";
+import { PIPELINE_UI } from "../../assets/configurations/constants";
 
 // ============================================================================
 // GraphQL Operations
@@ -378,7 +379,10 @@ const StageContent = styled.div`
 
 const ComponentGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(${PIPELINE_UI.COMPONENT_GRID_MIN_WIDTH}px, 1fr)
+  );
   gap: 1rem;
 
   @media (max-width: 480px) {
@@ -515,28 +519,6 @@ const RequiredBadge = styled.span`
     width: 10px;
     height: 10px;
   }
-`;
-
-const SettingField = styled.div`
-  margin-bottom: 1rem;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`;
-
-const SettingLabel = styled.label`
-  display: block;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.375rem;
-`;
-
-const SettingHelperText = styled.p`
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin: 0.25rem 0 0 0;
 `;
 
 // Start/End Stages
@@ -756,6 +738,10 @@ const JsonEditor = styled.div`
 
 const FormField = styled.div`
   margin-bottom: 1rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 `;
 
 const FormLabel = styled.label`
@@ -786,6 +772,12 @@ interface PipelineComponentsQueryResult {
 
 type StageType = "parsers" | "embedders" | "thumbnailers";
 
+// Type for pipeline settings keys that hold MIME-type mappings
+type PipelineMappingKey =
+  | "preferredParsers"
+  | "preferredEmbedders"
+  | "preferredThumbnailers";
+
 // Components that require API keys or special configuration
 const COMPONENTS_REQUIRING_CONFIG: Record<
   string,
@@ -812,8 +804,17 @@ const COMPONENTS_REQUIRING_CONFIG: Record<
   },
 };
 
-// Stage configuration
-const STAGE_CONFIG = {
+// Stage configuration with properly typed settings keys
+const STAGE_CONFIG: Record<
+  StageType,
+  {
+    color: string;
+    icon: React.FC;
+    title: string;
+    subtitle: string;
+    settingsKey: PipelineMappingKey;
+  }
+> = {
   parsers: {
     color: "#3B82F6",
     icon: FileText,
@@ -870,6 +871,14 @@ export const SystemSettings: React.FC = () => {
     useState(false);
   const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
 
+  // Ref for tracking pending auto-expand after component selection
+  // This ensures auto-expand only happens after mutation succeeds
+  const pendingAutoExpandRef = useRef<{
+    stage: StageType;
+    mimeType: string;
+    className: string;
+  } | null>(null);
+
   // GraphQL queries
   const {
     data: settingsData,
@@ -893,14 +902,37 @@ export const SystemSettings: React.FC = () => {
         if (data.updatePipelineSettings?.ok) {
           toast.success("Settings updated successfully");
           refetchSettings();
+
+          // Handle pending auto-expand for components requiring configuration
+          const pending = pendingAutoExpandRef.current;
+          if (pending) {
+            const lowerName = pending.className.toLowerCase();
+            const requiresConfig = Object.keys(
+              COMPONENTS_REQUIRING_CONFIG
+            ).some((key) => lowerName.includes(key));
+            const hasSecretsConfigured =
+              data.updatePipelineSettings.pipelineSettings?.componentsWithSecrets?.includes(
+                pending.className
+              ) ?? false;
+
+            if (requiresConfig && !hasSecretsConfigured) {
+              setExpandedSettings((prev) => ({
+                ...prev,
+                [`${pending.stage}-${pending.mimeType}`]: true,
+              }));
+            }
+            pendingAutoExpandRef.current = null;
+          }
         } else {
           toast.error(
             data.updatePipelineSettings?.message || "Failed to update settings"
           );
+          pendingAutoExpandRef.current = null;
         }
       },
       onError: (err) => {
         toast.error(`Error updating settings: ${err.message}`);
+        pendingAutoExpandRef.current = null;
       },
     }
   );
@@ -973,10 +1005,11 @@ export const SystemSettings: React.FC = () => {
   const getCurrentSelection = useCallback(
     (stage: StageType, mimeType: string): string | null => {
       if (!settings) return null;
-      const mapping = settings[
-        STAGE_CONFIG[stage].settingsKey as keyof PipelineSettingsType
-      ] as Record<string, string> | null;
-      return mapping?.[mimeType] || null;
+      const mapping = settings[STAGE_CONFIG[stage].settingsKey] as
+        | Record<string, string>
+        | null
+        | undefined;
+      return mapping?.[mimeType] ?? null;
     },
     [settings]
   );
@@ -987,6 +1020,10 @@ export const SystemSettings: React.FC = () => {
       if (!components) return [];
       const stageComponents = components[stage] || [];
 
+      // Pre-compute normalized values for comparison
+      const mimeTypeLower = mimeType.toLowerCase();
+      const mimeShort = mimeType.split("/")[1]?.toUpperCase();
+
       // Filter by supported file types if available
       return stageComponents.filter((comp): comp is PipelineComponentType => {
         if (!comp) return false;
@@ -995,11 +1032,15 @@ export const SystemSettings: React.FC = () => {
           return true;
         }
         // Check if the MIME type matches any supported file type
-        const mimeShort = mimeType.split("/")[1]?.toUpperCase();
-        return comp.supportedFileTypes.some(
-          (ft) =>
-            ft?.toUpperCase() === mimeShort || ft?.toLowerCase() === mimeType
-        );
+        return comp.supportedFileTypes.some((ft) => {
+          if (!ft) return false;
+          const ftLower = ft.toLowerCase();
+          // Match either short form (e.g., "PDF") or full MIME type
+          return (
+            (mimeShort && ft.toUpperCase() === mimeShort) ||
+            ftLower === mimeTypeLower
+          );
+        });
       });
     },
     [components]
@@ -1028,30 +1069,24 @@ export const SystemSettings: React.FC = () => {
   const handleSelectComponent = useCallback(
     (stage: StageType, mimeType: string, className: string) => {
       const currentMapping =
-        (settings?.[
-          STAGE_CONFIG[stage].settingsKey as keyof PipelineSettingsType
-        ] as Record<string, string>) || {};
+        (settings?.[STAGE_CONFIG[stage].settingsKey] as
+          | Record<string, string>
+          | undefined) ?? {};
       const newMapping = {
         ...currentMapping,
         [mimeType]: className,
       };
+
+      // Store pending auto-expand info (will be processed in mutation onCompleted)
+      pendingAutoExpandRef.current = { stage, mimeType, className };
 
       updateSettings({
         variables: {
           [STAGE_CONFIG[stage].settingsKey]: newMapping,
         },
       });
-
-      // Auto-expand settings if component requires configuration and doesn't have secrets
-      const config = getComponentConfig(className);
-      if (config && !hasSecrets(className)) {
-        setExpandedSettings((prev) => ({
-          ...prev,
-          [`${stage}-${mimeType}`]: true,
-        }));
-      }
     },
-    [settings, updateSettings, getComponentConfig, hasSecrets]
+    [settings, updateSettings]
   );
 
   // Handle MIME type change for a stage
@@ -1181,45 +1216,51 @@ export const SystemSettings: React.FC = () => {
           <StageContent>
             {stageComponents.length > 0 ? (
               <ComponentGrid>
-                {stageComponents.map((comp) => {
-                  if (!comp?.className) return null;
-                  const isSelected = currentSelection === comp.className;
-                  const IconComponent = getComponentIcon(comp.className);
-                  const displayName = getComponentDisplayName(
-                    comp.className,
-                    comp.title || undefined
-                  );
-                  const vectorSize = (
-                    comp as PipelineComponentType & { vectorSize?: number }
-                  ).vectorSize;
+                {stageComponents
+                  .filter(
+                    (
+                      comp
+                    ): comp is PipelineComponentType & { className: string } =>
+                      Boolean(comp?.className)
+                  )
+                  .map((comp) => {
+                    const isSelected = currentSelection === comp.className;
+                    const IconComponent = getComponentIcon(comp.className);
+                    const displayName = getComponentDisplayName(
+                      comp.className,
+                      comp.title || undefined
+                    );
+                    const vectorSize = (
+                      comp as PipelineComponentType & { vectorSize?: number }
+                    ).vectorSize;
 
-                  return (
-                    <ComponentCard
-                      key={comp.className}
-                      $selected={isSelected}
-                      $color={config.color}
-                      onClick={() =>
-                        handleSelectComponent(stage, mimeType, comp.className!)
-                      }
-                      disabled={updating}
-                      aria-pressed={isSelected}
-                      aria-label={`Select ${displayName} as ${config.title.toLowerCase()}`}
-                    >
-                      {isSelected && (
-                        <SelectedBadge $color={config.color}>
-                          <Check />
-                        </SelectedBadge>
-                      )}
-                      <ComponentIconWrapper>
-                        <IconComponent size={48} />
-                      </ComponentIconWrapper>
-                      <ComponentName>{displayName}</ComponentName>
-                      {vectorSize && (
-                        <VectorBadge>{vectorSize}d vectors</VectorBadge>
-                      )}
-                    </ComponentCard>
-                  );
-                })}
+                    return (
+                      <ComponentCard
+                        key={comp.className}
+                        $selected={isSelected}
+                        $color={config.color}
+                        onClick={() =>
+                          handleSelectComponent(stage, mimeType, comp.className)
+                        }
+                        disabled={updating}
+                        aria-pressed={isSelected}
+                        aria-label={`Select ${displayName} as ${config.title.toLowerCase()}`}
+                      >
+                        {isSelected && (
+                          <SelectedBadge $color={config.color}>
+                            <Check />
+                          </SelectedBadge>
+                        )}
+                        <ComponentIconWrapper>
+                          <IconComponent size={PIPELINE_UI.ICON_SIZE} />
+                        </ComponentIconWrapper>
+                        <ComponentName>{displayName}</ComponentName>
+                        {vectorSize && (
+                          <VectorBadge>{vectorSize}d vectors</VectorBadge>
+                        )}
+                      </ComponentCard>
+                    );
+                  })}
               </ComponentGrid>
             ) : (
               <NoComponents>
@@ -1256,8 +1297,8 @@ export const SystemSettings: React.FC = () => {
                 {selectedConfig ? (
                   <>
                     {hasSecrets(currentSelection) ? (
-                      <SettingField>
-                        <SettingLabel>API Credentials</SettingLabel>
+                      <FormField>
+                        <FormLabel>API Credentials</FormLabel>
                         <SecretBadge>
                           <Key />
                           Secrets configured
@@ -1270,16 +1311,16 @@ export const SystemSettings: React.FC = () => {
                             <Trash2 />
                           </IconButton>
                         </SecretBadge>
-                        <SettingHelperText>
+                        <FormHelperText>
                           Click the trash icon to remove and reconfigure
                           secrets.
-                        </SettingHelperText>
-                      </SettingField>
+                        </FormHelperText>
+                      </FormField>
                     ) : (
-                      <SettingField>
-                        <SettingLabel>
+                      <FormField>
+                        <FormLabel>
                           {selectedConfig.fields[0]?.label || "API Key"}
-                        </SettingLabel>
+                        </FormLabel>
                         <Button
                           variant="secondary"
                           size="sm"
@@ -1290,22 +1331,22 @@ export const SystemSettings: React.FC = () => {
                           />
                           Configure API Key
                         </Button>
-                        <SettingHelperText>
+                        <FormHelperText>
                           This component requires an API key to function.
-                        </SettingHelperText>
-                      </SettingField>
+                        </FormHelperText>
+                      </FormField>
                     )}
                   </>
                 ) : (
-                  <SettingField>
-                    <SettingLabel>Component Path</SettingLabel>
+                  <FormField>
+                    <FormLabel>Component Path</FormLabel>
                     <DefaultEmbedderPath>
                       {currentSelection}
                     </DefaultEmbedderPath>
-                    <SettingHelperText>
+                    <FormHelperText>
                       This component has no additional configuration options.
-                    </SettingHelperText>
-                  </SettingField>
+                    </FormHelperText>
+                  </FormField>
                 )}
               </AdvancedSettingsContent>
             )}
@@ -1477,8 +1518,9 @@ export const SystemSettings: React.FC = () => {
         <SecretsList>
           {settings?.componentsWithSecrets &&
           settings.componentsWithSecrets.length > 0 ? (
-            settings.componentsWithSecrets.map((componentPath) =>
-              componentPath ? (
+            settings.componentsWithSecrets
+              .filter((path): path is string => Boolean(path))
+              .map((componentPath) => (
                 <SecretBadge key={componentPath}>
                   <Key />
                   {getComponentDisplayName(componentPath)}
@@ -1490,8 +1532,7 @@ export const SystemSettings: React.FC = () => {
                     <Trash2 />
                   </IconButton>
                 </SecretBadge>
-              ) : null
-            )
+              ))
           ) : (
             <EmptyValue>No component secrets configured</EmptyValue>
           )}
@@ -1641,8 +1682,12 @@ export const SystemSettings: React.FC = () => {
           {components?.embedders && components.embedders.length > 0 && (
             <div style={{ marginTop: "1rem" }}>
               <FormLabel>Available Embedders:</FormLabel>
-              {components.embedders.map((e) =>
-                e?.className ? (
+              {components.embedders
+                .filter(
+                  (e): e is PipelineComponentType & { className: string } =>
+                    Boolean(e?.className)
+                )
+                .map((e) => (
                   <div
                     key={e.className}
                     style={{
@@ -1661,7 +1706,7 @@ export const SystemSettings: React.FC = () => {
                           : "#e2e8f0"
                       }`,
                     }}
-                    onClick={() => setDefaultEmbedderValue(e.className!)}
+                    onClick={() => setDefaultEmbedderValue(e.className)}
                   >
                     <strong>{e.title || e.name}</strong>
                     {e.vectorSize && (
@@ -1680,8 +1725,7 @@ export const SystemSettings: React.FC = () => {
                       {e.className}
                     </div>
                   </div>
-                ) : null
-              )}
+                ))}
             </div>
           )}
         </ModalBody>
