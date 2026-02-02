@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
@@ -15,12 +15,10 @@ import {
 import {
   Settings,
   ChevronLeft,
-  ChevronDown,
   ChevronRight,
   Save,
   RotateCcw,
   AlertTriangle,
-  X,
   FileText,
   Cpu,
   Image,
@@ -1166,12 +1164,14 @@ export const SystemSettings: React.FC = () => {
                 <StageSubtitle>{config.subtitle}</StageSubtitle>
               </div>
             </StageInfo>
-            <MimeSelector>
+            <MimeSelector role="group" aria-label="File type filter">
               {SUPPORTED_MIME_TYPES.map((mime) => (
                 <MimeButton
                   key={mime.value}
                   $active={mimeType === mime.value}
                   onClick={() => handleMimeTypeChange(stage, mime.value)}
+                  aria-pressed={mimeType === mime.value}
+                  aria-label={`Filter by ${mime.label}`}
                 >
                   {mime.shortLabel}
                 </MimeButton>
@@ -1202,6 +1202,8 @@ export const SystemSettings: React.FC = () => {
                         handleSelectComponent(stage, mimeType, comp.className!)
                       }
                       disabled={updating}
+                      aria-pressed={isSelected}
+                      aria-label={`Select ${displayName} as ${config.title.toLowerCase()}`}
                     >
                       {isSelected && (
                         <SelectedBadge $color={config.color}>
@@ -1232,6 +1234,8 @@ export const SystemSettings: React.FC = () => {
               <AdvancedSettingsToggle
                 $expanded={isExpanded}
                 onClick={() => toggleAdvancedSettings(settingsKey)}
+                aria-expanded={isExpanded}
+                aria-controls={`settings-content-${settingsKey}`}
               >
                 <ChevronRight />
                 Advanced Settings
@@ -1245,7 +1249,10 @@ export const SystemSettings: React.FC = () => {
             )}
 
             {currentSelection && isExpanded && (
-              <AdvancedSettingsContent $expanded={isExpanded}>
+              <AdvancedSettingsContent
+                $expanded={isExpanded}
+                id={`settings-content-${settingsKey}`}
+              >
                 {selectedConfig ? (
                   <>
                     {hasSecrets(currentSelection) ? (

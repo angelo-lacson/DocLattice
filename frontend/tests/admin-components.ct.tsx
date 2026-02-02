@@ -526,6 +526,7 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         vectorSize
+        supportedFileTypes
       }
       thumbnailers {
         name
@@ -573,6 +574,7 @@ const mockPipelineComponents = {
       description: "OpenAI text-embedding-ada-002",
       className: "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
       vectorSize: 1536,
+      supportedFileTypes: null,
     },
   ],
   thumbnailers: [
@@ -632,23 +634,26 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
-    // Check all sections are present (use h2 to be specific)
+    // Check pipeline stages are present (new visual flow design)
+    // Stage headers are h2 elements
+    await expect(page.locator("h2", { hasText: "Parser" })).toBeVisible();
+    await expect(page.locator("h2", { hasText: "Thumbnailer" })).toBeVisible();
     await expect(
-      page.locator("h2:has-text('Preferred Parsers')")
+      page.locator("h2", { hasText: "Embedder" }).first()
+    ).toBeVisible();
+
+    // Check bottom sections
+    await expect(
+      page.locator("h2", { hasText: "Default Embedder" })
     ).toBeVisible();
     await expect(
-      page.locator("h2:has-text('Preferred Embedders')")
-    ).toBeVisible();
-    await expect(page.locator("h2:has-text('Default Embedder')")).toBeVisible();
-    await expect(
-      page.locator("h2:has-text('Preferred Thumbnailers')")
-    ).toBeVisible();
-    await expect(
-      page.locator("h2:has-text('Component Secrets')")
+      page.locator("h2", { hasText: "Component Secrets" })
     ).toBeVisible();
 
     await component.unmount();
@@ -670,7 +675,9 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
@@ -680,7 +687,10 @@ test.describe("SystemSettings Component", () => {
     await component.unmount();
   });
 
-  test("should display configured parser mappings", async ({ mount, page }) => {
+  test("should display configured parser mappings with component cards", async ({
+    mount,
+    page,
+  }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
       result: { data: { pipelineSettings: mockPipelineSettings } },
@@ -696,19 +706,17 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
-    // Check MIME type badge is displayed
-    await expect(page.locator("text=application/pdf")).toBeVisible();
+    // Check MIME type selector buttons are displayed
+    await expect(page.locator("button:has-text('PDF')").first()).toBeVisible();
 
-    // Check component path is displayed
-    await expect(
-      page.locator(
-        "text=opencontractserver.pipeline.parsers.docling.DoclingParser"
-      )
-    ).toBeVisible();
+    // Check component card is displayed with title (uses full title from mock data)
+    await expect(page.locator("text=Docling Parser")).toBeVisible();
 
     await component.unmount();
   });
@@ -729,16 +737,15 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
-    // Check secrets badge is displayed
-    await expect(
-      page.locator(
-        "text=opencontractserver.pipeline.embedders.openai.OpenAIEmbedder"
-      )
-    ).toBeVisible();
+    // Check secrets badge is displayed in Component Secrets section
+    // getComponentDisplayName formats "OpenAIEmbedder" to "Open A I Embedder"
+    await expect(page.locator("text=Open A I Embedder")).toBeVisible();
 
     await component.unmount();
   });
@@ -759,7 +766,9 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
@@ -770,7 +779,10 @@ test.describe("SystemSettings Component", () => {
     await component.unmount();
   });
 
-  test("should open edit modal for parsers", async ({ mount, page }) => {
+  test("should toggle advanced settings when component is selected", async ({
+    mount,
+    page,
+  }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
       result: { data: { pipelineSettings: mockPipelineSettings } },
@@ -786,15 +798,22 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
-    // Click Edit button for Preferred Parsers section (first edit button)
-    await page.locator('button:has-text("Edit")').first().click();
+    // Advanced Settings toggle should be visible for selected component
+    await expect(
+      page.locator("button:has-text('Advanced Settings')").first()
+    ).toBeVisible();
 
-    // Modal should open
-    await expect(page.locator("text=Edit Preferred Parsers")).toBeVisible();
+    // Click to expand
+    await page.locator("button:has-text('Advanced Settings')").first().click();
+
+    // Should show component path in expanded settings
+    await expect(page.locator("text=Component Path")).toBeVisible();
 
     await component.unmount();
   });
@@ -815,7 +834,9 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
@@ -823,7 +844,9 @@ test.describe("SystemSettings Component", () => {
     await page.locator('button:has-text("Add Secrets")').click();
 
     // Modal should open
-    await expect(page.locator("text=Add Component Secrets")).toBeVisible();
+    await expect(
+      page.locator("text=Configure Component Secrets")
+    ).toBeVisible();
 
     // Security notice should be visible
     await expect(page.locator("text=Security Notice")).toBeVisible();
@@ -850,7 +873,9 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
@@ -882,7 +907,9 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
@@ -900,7 +927,7 @@ test.describe("SystemSettings Component", () => {
     await component.unmount();
   });
 
-  test("should display empty state messages for unconfigured settings", async ({
+  test("should display empty state for unconfigured secrets", async ({
     mount,
     page,
   }) => {
@@ -927,23 +954,20 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
-    // Check empty state messages
-    await expect(
-      page.locator("text=No custom parser mappings configured")
-    ).toBeVisible();
-    await expect(
-      page.locator("text=No custom embedder mappings configured")
-    ).toBeVisible();
-    await expect(
-      page.locator("text=No custom thumbnailer mappings configured")
-    ).toBeVisible();
+    // In new UI, component cards are always shown (no empty state for parsers/embedders)
+    // But Component Secrets section shows empty state when no secrets configured
     await expect(
       page.locator("text=No component secrets configured")
     ).toBeVisible();
+
+    // Using system default is shown when no default embedder configured
+    await expect(page.locator("text=Using system default")).toBeVisible();
 
     await component.unmount();
   });
@@ -993,12 +1017,79 @@ test.describe("SystemSettings Component", () => {
     );
 
     // Wait for page to load
-    await expect(page.locator("h1:has-text('System Settings')")).toBeVisible({
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
       timeout: 5000,
     });
 
     // Check back button
     await expect(page.locator("text=Back to Admin Settings")).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should display visual pipeline flow stages", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Check pipeline bookend stages
+    await expect(page.locator("text=Document Upload")).toBeVisible();
+    await expect(page.locator("text=Ready for Search")).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should allow switching MIME types", async ({ mount, page }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // MIME type buttons should be visible (PDF is selected by default)
+    const pdfButton = page.locator("button:has-text('PDF')").first();
+    await expect(pdfButton).toBeVisible();
+
+    // TXT and DOCX buttons should also be visible
+    await expect(page.locator("button:has-text('TXT')").first()).toBeVisible();
+    await expect(page.locator("button:has-text('DOCX')").first()).toBeVisible();
 
     await component.unmount();
   });
