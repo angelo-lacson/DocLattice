@@ -583,34 +583,56 @@ export const GenericComponentIcon: React.FC<IconProps> = ({
 );
 
 /**
- * Map component class names to their icons
+ * Map component class names to their icons.
+ * Order matters: more specific compound patterns are checked first to avoid
+ * false matches (e.g., "text_thumbnailer" should match TextThumbnailIcon,
+ * not TextParserIcon).
  */
 export const getComponentIcon = (className: string): React.FC<IconProps> => {
   const lowerName = className.toLowerCase();
 
-  if (lowerName.includes("docling")) return DoclingIcon;
-  if (lowerName.includes("llama")) return LlamaParseIcon;
-  if (
-    lowerName.includes("txt") ||
-    lowerName.includes("text_parser") ||
-    lowerName.includes("oc_text")
-  )
-    return TextParserIcon;
+  // Compound patterns first (most specific)
   if (lowerName.includes("pdf") && lowerName.includes("thumb"))
     return PdfThumbnailIcon;
   if (lowerName.includes("text") && lowerName.includes("thumb"))
     return TextThumbnailIcon;
   if (lowerName.includes("modernbert") || lowerName.includes("modern_bert"))
     return ModernBertIcon;
+
+  // Specific parser/embedder patterns
+  if (lowerName.includes("docling")) return DoclingIcon;
+  if (lowerName.includes("llama")) return LlamaParseIcon;
+  if (lowerName.includes("multimodal")) return MultimodalIcon;
   if (
     lowerName.includes("sent") ||
     lowerName.includes("sentence") ||
     lowerName.includes("microservice")
   )
     return SentenceTransformerIcon;
-  if (lowerName.includes("multimodal")) return MultimodalIcon;
+
+  // Generic text parser (checked last among text-related to avoid collisions)
+  if (
+    lowerName.includes("txt") ||
+    lowerName.includes("text_parser") ||
+    lowerName.includes("oc_text")
+  )
+    return TextParserIcon;
 
   return GenericComponentIcon;
+};
+
+// Known acronyms that should be preserved in display names
+const KNOWN_ACRONYMS: Record<string, string> = {
+  openai: "OpenAI",
+  modernbert: "ModernBERT",
+  bert: "BERT",
+  gpt: "GPT",
+  llm: "LLM",
+  api: "API",
+  pdf: "PDF",
+  ocr: "OCR",
+  nlp: "NLP",
+  nlm: "NLM",
 };
 
 /**
@@ -627,8 +649,17 @@ export const getComponentDisplayName = (
   const name = parts[parts.length - 1];
 
   // Convert CamelCase to readable format
-  return name
+  let displayName = name
     .replace(/([A-Z])/g, " $1")
     .replace(/^./, (str) => str.toUpperCase())
     .trim();
+
+  // Replace known acronyms with proper casing
+  for (const [lower, proper] of Object.entries(KNOWN_ACRONYMS)) {
+    // Match the acronym as a whole word (case-insensitive)
+    const regex = new RegExp(`\\b${lower}\\b`, "gi");
+    displayName = displayName.replace(regex, proper);
+  }
+
+  return displayName;
 };

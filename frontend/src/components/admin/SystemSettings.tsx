@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useMemo, memo } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
@@ -839,6 +839,60 @@ const STAGE_CONFIG: Record<
 };
 
 // ============================================================================
+// Memoized Sub-components
+// ============================================================================
+
+interface PipelineComponentCardProps {
+  component: PipelineComponentType & { className: string };
+  isSelected: boolean;
+  color: string;
+  stageTitle: string;
+  disabled: boolean;
+  onSelect: () => void;
+}
+
+/**
+ * Memoized component card to prevent unnecessary re-renders.
+ * Only re-renders when its specific props change.
+ */
+const PipelineComponentCard = memo<PipelineComponentCardProps>(
+  ({ component, isSelected, color, stageTitle, disabled, onSelect }) => {
+    const IconComponent = getComponentIcon(component.className);
+    const displayName = getComponentDisplayName(
+      component.className,
+      component.title || undefined
+    );
+    const vectorSize = (
+      component as PipelineComponentType & { vectorSize?: number }
+    ).vectorSize;
+
+    return (
+      <ComponentCard
+        $selected={isSelected}
+        $color={color}
+        onClick={onSelect}
+        disabled={disabled}
+        aria-pressed={isSelected}
+        aria-label={`Select ${displayName} as ${stageTitle.toLowerCase()}`}
+      >
+        {isSelected && (
+          <SelectedBadge $color={color}>
+            <Check />
+          </SelectedBadge>
+        )}
+        <ComponentIconWrapper>
+          <IconComponent size={PIPELINE_UI.ICON_SIZE} />
+        </ComponentIconWrapper>
+        <ComponentName>{displayName}</ComponentName>
+        {vectorSize && <VectorBadge>{vectorSize}d vectors</VectorBadge>}
+      </ComponentCard>
+    );
+  }
+);
+
+PipelineComponentCard.displayName = "PipelineComponentCard";
+
+// ============================================================================
 // Component
 // ============================================================================
 
@@ -1001,17 +1055,29 @@ export const SystemSettings: React.FC = () => {
   const settings = settingsData?.pipelineSettings;
   const components = componentsData?.pipelineComponents;
 
-  // Get current selection for a stage and MIME type
-  const getCurrentSelection = useCallback(
-    (stage: StageType, mimeType: string): string | null => {
-      if (!settings) return null;
+  // Memoize all current selections to avoid repeated lookups during render
+  const currentSelections = useMemo(() => {
+    if (!settings) return {};
+    const selections: Record<string, Record<string, string | null>> = {};
+    for (const stage of Object.keys(STAGE_CONFIG) as StageType[]) {
       const mapping = settings[STAGE_CONFIG[stage].settingsKey] as
         | Record<string, string>
         | null
         | undefined;
-      return mapping?.[mimeType] ?? null;
+      selections[stage] = {};
+      for (const mime of SUPPORTED_MIME_TYPES) {
+        selections[stage][mime.value] = mapping?.[mime.value] ?? null;
+      }
+    }
+    return selections;
+  }, [settings]);
+
+  // Get current selection for a stage and MIME type (uses memoized cache)
+  const getCurrentSelection = useCallback(
+    (stage: StageType, mimeType: string): string | null => {
+      return currentSelections[stage]?.[mimeType] ?? null;
     },
-    [settings]
+    [currentSelections]
   );
 
   // Get components for a stage, filtered by MIME type support
@@ -1223,44 +1289,19 @@ export const SystemSettings: React.FC = () => {
                     ): comp is PipelineComponentType & { className: string } =>
                       Boolean(comp?.className)
                   )
-                  .map((comp) => {
-                    const isSelected = currentSelection === comp.className;
-                    const IconComponent = getComponentIcon(comp.className);
-                    const displayName = getComponentDisplayName(
-                      comp.className,
-                      comp.title || undefined
-                    );
-                    const vectorSize = (
-                      comp as PipelineComponentType & { vectorSize?: number }
-                    ).vectorSize;
-
-                    return (
-                      <ComponentCard
-                        key={comp.className}
-                        $selected={isSelected}
-                        $color={config.color}
-                        onClick={() =>
-                          handleSelectComponent(stage, mimeType, comp.className)
-                        }
-                        disabled={updating}
-                        aria-pressed={isSelected}
-                        aria-label={`Select ${displayName} as ${config.title.toLowerCase()}`}
-                      >
-                        {isSelected && (
-                          <SelectedBadge $color={config.color}>
-                            <Check />
-                          </SelectedBadge>
-                        )}
-                        <ComponentIconWrapper>
-                          <IconComponent size={PIPELINE_UI.ICON_SIZE} />
-                        </ComponentIconWrapper>
-                        <ComponentName>{displayName}</ComponentName>
-                        {vectorSize && (
-                          <VectorBadge>{vectorSize}d vectors</VectorBadge>
-                        )}
-                      </ComponentCard>
-                    );
-                  })}
+                  .map((comp) => (
+                    <PipelineComponentCard
+                      key={comp.className}
+                      component={comp}
+                      isSelected={currentSelection === comp.className}
+                      color={config.color}
+                      stageTitle={config.title}
+                      disabled={updating}
+                      onSelect={() =>
+                        handleSelectComponent(stage, mimeType, comp.className)
+                      }
+                    />
+                  ))}
               </ComponentGrid>
             ) : (
               <NoComponents>

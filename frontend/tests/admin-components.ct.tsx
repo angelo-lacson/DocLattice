@@ -539,6 +539,95 @@ const GET_PIPELINE_COMPONENTS = gql`
   }
 `;
 
+// Mutations for SystemSettings
+const UPDATE_PIPELINE_SETTINGS = gql`
+  mutation UpdatePipelineSettings(
+    $preferredParsers: GenericScalar
+    $preferredEmbedders: GenericScalar
+    $preferredThumbnailers: GenericScalar
+    $parserKwargs: GenericScalar
+    $componentSettings: GenericScalar
+    $defaultEmbedder: String
+  ) {
+    updatePipelineSettings(
+      preferredParsers: $preferredParsers
+      preferredEmbedders: $preferredEmbedders
+      preferredThumbnailers: $preferredThumbnailers
+      parserKwargs: $parserKwargs
+      componentSettings: $componentSettings
+      defaultEmbedder: $defaultEmbedder
+    ) {
+      ok
+      message
+      pipelineSettings {
+        preferredParsers
+        preferredEmbedders
+        preferredThumbnailers
+        parserKwargs
+        componentSettings
+        defaultEmbedder
+        componentsWithSecrets
+        modified
+        modifiedBy {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+const RESET_PIPELINE_SETTINGS = gql`
+  mutation ResetPipelineSettings {
+    resetPipelineSettings {
+      ok
+      message
+      pipelineSettings {
+        preferredParsers
+        preferredEmbedders
+        preferredThumbnailers
+        parserKwargs
+        componentSettings
+        defaultEmbedder
+        componentsWithSecrets
+        modified
+        modifiedBy {
+          id
+          username
+        }
+      }
+    }
+  }
+`;
+
+const UPDATE_COMPONENT_SECRETS = gql`
+  mutation UpdateComponentSecrets(
+    $componentPath: String!
+    $secrets: GenericScalar!
+    $merge: Boolean
+  ) {
+    updateComponentSecrets(
+      componentPath: $componentPath
+      secrets: $secrets
+      merge: $merge
+    ) {
+      ok
+      message
+      componentsWithSecrets
+    }
+  }
+`;
+
+const DELETE_COMPONENT_SECRETS = gql`
+  mutation DeleteComponentSecrets($componentPath: String!) {
+    deleteComponentSecrets(componentPath: $componentPath) {
+      ok
+      message
+      componentsWithSecrets
+    }
+  }
+`;
+
 // Mock data for SystemSettings
 const mockPipelineSettings = {
   preferredParsers: {
@@ -744,8 +833,8 @@ test.describe("SystemSettings Component", () => {
     });
 
     // Check secrets badge is displayed in Component Secrets section
-    // getComponentDisplayName formats "OpenAIEmbedder" to "Open A I Embedder"
-    await expect(page.locator("text=Open A I Embedder")).toBeVisible();
+    // getComponentDisplayName formats "OpenAIEmbedder" to "OpenAI Embedder" (preserves acronyms)
+    await expect(page.locator("text=OpenAI Embedder")).toBeVisible();
 
     await component.unmount();
   });
@@ -1090,6 +1179,363 @@ test.describe("SystemSettings Component", () => {
     // TXT and DOCX buttons should also be visible
     await expect(page.locator("button:has-text('TXT')").first()).toBeVisible();
     await expect(page.locator("button:has-text('DOCX')").first()).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should call UPDATE_PIPELINE_SETTINGS when selecting a component", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    // Mock the mutation response
+    const updateSettingsMock = {
+      request: {
+        query: UPDATE_PIPELINE_SETTINGS,
+        variables: {
+          preferredParsers: {
+            "application/pdf":
+              "opencontractserver.pipeline.parsers.docling.DoclingParser",
+          },
+        },
+      },
+      result: {
+        data: {
+          updatePipelineSettings: {
+            ok: true,
+            message: "Settings updated successfully",
+            pipelineSettings: {
+              ...mockPipelineSettings,
+              preferredParsers: {
+                "application/pdf":
+                  "opencontractserver.pipeline.parsers.docling.DoclingParser",
+              },
+            },
+          },
+        },
+      },
+    };
+
+    // Refetch mock after mutation
+    const refetchMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper
+        mocks={[settingsMock, componentsMock, updateSettingsMock, refetchMock]}
+      />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Click on the Docling Parser card to select it
+    const doclingCard = page.locator("text=Docling Parser").first();
+    await expect(doclingCard).toBeVisible();
+    await doclingCard.click();
+
+    // Should show success toast (the mutation mock returns ok: true)
+    await expect(
+      page.locator("text=Settings updated successfully")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    await component.unmount();
+  });
+
+  test("should call RESET_PIPELINE_SETTINGS when clicking reset button", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const resetMock = {
+      request: { query: RESET_PIPELINE_SETTINGS },
+      result: {
+        data: {
+          resetPipelineSettings: {
+            ok: true,
+            message: "Settings reset to defaults",
+            pipelineSettings: {
+              preferredParsers: {},
+              preferredEmbedders: {},
+              preferredThumbnailers: {},
+              parserKwargs: {},
+              componentSettings: {},
+              defaultEmbedder: null,
+              componentsWithSecrets: [],
+              modified: "2024-01-15T11:00:00Z",
+              modifiedBy: { id: "VXNlclR5cGU6MQ==", username: "admin" },
+            },
+          },
+        },
+      },
+    };
+
+    // Refetch mock after reset
+    const refetchMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: {
+        data: {
+          pipelineSettings: {
+            preferredParsers: {},
+            preferredEmbedders: {},
+            preferredThumbnailers: {},
+            parserKwargs: {},
+            componentSettings: {},
+            defaultEmbedder: null,
+            componentsWithSecrets: [],
+            modified: "2024-01-15T11:00:00Z",
+            modifiedBy: { id: "VXNlclR5cGU6MQ==", username: "admin" },
+          },
+        },
+      },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper
+        mocks={[settingsMock, componentsMock, resetMock, refetchMock]}
+      />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Click reset button to open confirmation modal
+    const resetButton = page.locator("button:has-text('Reset to Defaults')");
+    await expect(resetButton).toBeVisible();
+    await resetButton.click();
+
+    // Confirmation modal should appear
+    await expect(page.locator("text=Reset to Defaults").nth(1)).toBeVisible();
+    await expect(
+      page.locator("text=This will reset all pipeline settings")
+    ).toBeVisible();
+
+    // Click confirm reset button in modal
+    const confirmButton = page.locator("button:has-text('Reset Settings')");
+    await expect(confirmButton).toBeVisible();
+    await confirmButton.click();
+
+    // Should show success toast
+    await expect(page.locator("text=Settings reset")).toBeVisible({
+      timeout: 5000,
+    });
+
+    await component.unmount();
+  });
+
+  test("should call UPDATE_COMPONENT_SECRETS when saving secrets", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const updateSecretsMock = {
+      request: {
+        query: UPDATE_COMPONENT_SECRETS,
+        variables: {
+          componentPath:
+            "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+          secrets: { api_key: "test-api-key" },
+          merge: true,
+        },
+      },
+      result: {
+        data: {
+          updateComponentSecrets: {
+            ok: true,
+            message: "Secrets saved successfully",
+            componentsWithSecrets: [
+              "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+              "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+            ],
+          },
+        },
+      },
+    };
+
+    // Refetch mock after saving secrets
+    const refetchMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            componentsWithSecrets: [
+              "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+              "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+            ],
+          },
+        },
+      },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper
+        mocks={[settingsMock, componentsMock, updateSecretsMock, refetchMock]}
+      />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Click Add Secrets button
+    const addSecretsButton = page.locator("button:has-text('Add Secrets')");
+    await expect(addSecretsButton).toBeVisible();
+    await addSecretsButton.click();
+
+    // Modal should appear
+    await expect(
+      page.locator("text=Configure Component Secrets")
+    ).toBeVisible();
+
+    // Fill in the form
+    const componentPathInput = page.locator("#secrets-component-path");
+    await componentPathInput.fill(
+      "opencontractserver.pipeline.parsers.llamaparse.LlamaParser"
+    );
+
+    const secretsInput = page.locator("#secrets-value");
+    await secretsInput.fill('{"api_key": "test-api-key"}');
+
+    // Click save button
+    const saveButton = page.locator("button:has-text('Save Secrets')");
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click();
+
+    // Should show success toast
+    await expect(page.locator("text=Secrets saved")).toBeVisible({
+      timeout: 5000,
+    });
+
+    await component.unmount();
+  });
+
+  test("should call DELETE_COMPONENT_SECRETS when deleting secrets", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const deleteSecretsMock = {
+      request: {
+        query: DELETE_COMPONENT_SECRETS,
+        variables: {
+          componentPath:
+            "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+        },
+      },
+      result: {
+        data: {
+          deleteComponentSecrets: {
+            ok: true,
+            message: "Secrets deleted successfully",
+            componentsWithSecrets: [],
+          },
+        },
+      },
+    };
+
+    // Refetch mock after deleting secrets
+    const refetchMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            componentsWithSecrets: [],
+          },
+        },
+      },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper
+        mocks={[settingsMock, componentsMock, deleteSecretsMock, refetchMock]}
+      />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Find the delete button for the existing secret (OpenAI Embedder)
+    // The secret badge shows "OpenAI Embedder" with a trash icon button
+    const secretBadge = page.locator("text=OpenAI Embedder").first();
+    await expect(secretBadge).toBeVisible();
+
+    // Click the delete (trash) button next to it
+    const deleteButton = page.locator('[title="Delete secrets"]').first();
+    await expect(deleteButton).toBeVisible();
+    await deleteButton.click();
+
+    // Confirmation modal should appear
+    await expect(page.locator("text=Delete Component Secrets")).toBeVisible();
+    await expect(
+      page.locator("text=Are you sure you want to delete secrets")
+    ).toBeVisible();
+
+    // Click confirm delete button
+    const confirmButton = page.locator("button:has-text('Delete Secrets')");
+    await expect(confirmButton).toBeVisible();
+    await confirmButton.click();
+
+    // Should show success toast
+    await expect(page.locator("text=Secrets deleted")).toBeVisible({
+      timeout: 5000,
+    });
 
     await component.unmount();
   });
