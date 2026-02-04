@@ -193,6 +193,14 @@ const SUPPORTED_MIME_TYPES = [
   },
 ];
 
+/**
+ * Lookup map from full MIME type to short label (e.g., "text/plain" → "TXT").
+ * Used for matching component supportedFileTypes which use short forms.
+ */
+const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
+);
+
 // ============================================================================
 // Styled Components
 // ============================================================================
@@ -1088,7 +1096,8 @@ export const SystemSettings: React.FC = () => {
 
       // Pre-compute normalized values for comparison
       const mimeTypeLower = mimeType.toLowerCase();
-      const mimeShort = mimeType.split("/")[1]?.toUpperCase();
+      // Use lookup map to get short label (e.g., "text/plain" → "TXT")
+      const mimeShort = MIME_TO_SHORT_LABEL[mimeType]?.toUpperCase();
 
       // Filter by supported file types if available
       return stageComponents.filter((comp): comp is PipelineComponentType => {
@@ -1101,7 +1110,7 @@ export const SystemSettings: React.FC = () => {
         return comp.supportedFileTypes.some((ft) => {
           if (!ft) return false;
           const ftLower = ft.toLowerCase();
-          // Match either short form (e.g., "PDF") or full MIME type
+          // Match either short form (e.g., "PDF", "TXT") or full MIME type
           return (
             (mimeShort && ft.toUpperCase() === mimeShort) ||
             ftLower === mimeTypeLower
