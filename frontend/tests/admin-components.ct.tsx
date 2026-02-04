@@ -1185,6 +1185,141 @@ test.describe("SystemSettings Component", () => {
     await component.unmount();
   });
 
+  test("should filter components by MIME type - TXT and DOCX support", async ({
+    mount,
+    page,
+  }) => {
+    // Mock components with different MIME type support using short forms (PDF, TXT, DOCX)
+    // This tests the fix for the MIME_TO_SHORT_LABEL mapping
+    const multiMimeComponents = {
+      parsers: [
+        {
+          name: "docling",
+          title: "Docling Parser",
+          description: "ML-based document parser (PDF only)",
+          className:
+            "opencontractserver.pipeline.parsers.docling.DoclingParser",
+          supportedFileTypes: ["PDF"], // Only PDF
+        },
+        {
+          name: "text_parser",
+          title: "Text Parser",
+          description: "Plain text parser",
+          className:
+            "opencontractserver.pipeline.parsers.text_parser.TextParser",
+          supportedFileTypes: ["TXT"], // Only TXT - tests "text/plain" → "TXT" mapping
+        },
+        {
+          name: "universal_parser",
+          title: "Universal Parser",
+          description: "Handles all document types",
+          className:
+            "opencontractserver.pipeline.parsers.universal.UniversalParser",
+          supportedFileTypes: ["PDF", "TXT", "DOCX"], // All types
+        },
+        {
+          name: "docx_parser",
+          title: "Word Document Parser",
+          description: "Microsoft Word parser",
+          className:
+            "opencontractserver.pipeline.parsers.docx_parser.DocxParser",
+          supportedFileTypes: ["DOCX"], // Only DOCX - tests long MIME → "DOCX" mapping
+        },
+      ],
+      embedders: [
+        {
+          name: "openai",
+          title: "OpenAI Ada Embedder",
+          description: "OpenAI text-embedding-ada-002",
+          className:
+            "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+          vectorSize: 1536,
+          supportedFileTypes: null, // Supports all
+        },
+      ],
+      thumbnailers: [
+        {
+          name: "pdf_thumb",
+          title: "PDF Thumbnailer",
+          description: "Generate thumbnails for PDF documents",
+          className:
+            "opencontractserver.pipeline.thumbnailers.pdf.PDFThumbnailer",
+          supportedFileTypes: ["PDF"],
+        },
+        {
+          name: "text_thumb",
+          title: "Text Thumbnailer",
+          description: "Generate thumbnails for text documents",
+          className:
+            "opencontractserver.pipeline.thumbnailers.text.TextThumbnailer",
+          supportedFileTypes: ["TXT"],
+        },
+      ],
+    };
+
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            preferredParsers: {}, // No selections yet
+          },
+        },
+      },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: multiMimeComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // === Test PDF selection (default) ===
+    // Should show Docling Parser and Universal Parser (both support PDF)
+    await expect(page.locator("text=Docling Parser")).toBeVisible();
+    await expect(page.locator("text=Universal Parser")).toBeVisible();
+    // Should NOT show Text Parser or Word Document Parser (don't support PDF)
+    await expect(page.locator("text=Text Parser")).not.toBeVisible();
+    await expect(page.locator("text=Word Document Parser")).not.toBeVisible();
+
+    // === Test TXT selection ===
+    // Click TXT button in the Parser stage
+    const txtButton = page.locator("button:has-text('TXT')").first();
+    await txtButton.click();
+
+    // Should show Text Parser and Universal Parser (both support TXT)
+    await expect(page.locator("text=Text Parser")).toBeVisible();
+    await expect(page.locator("text=Universal Parser")).toBeVisible();
+    // Should NOT show Docling Parser or Word Document Parser
+    await expect(page.locator("text=Docling Parser")).not.toBeVisible();
+    await expect(page.locator("text=Word Document Parser")).not.toBeVisible();
+
+    // === Test DOCX selection ===
+    // Click DOCX button in the Parser stage
+    const docxButton = page.locator("button:has-text('DOCX')").first();
+    await docxButton.click();
+
+    // Should show Word Document Parser and Universal Parser (both support DOCX)
+    await expect(page.locator("text=Word Document Parser")).toBeVisible();
+    await expect(page.locator("text=Universal Parser")).toBeVisible();
+    // Should NOT show Docling Parser or Text Parser
+    await expect(page.locator("text=Docling Parser")).not.toBeVisible();
+    await expect(page.locator("text=Text Parser")).not.toBeVisible();
+
+    await component.unmount();
+  });
+
   test("should call UPDATE_PIPELINE_SETTINGS when selecting a component", async ({
     mount,
     page,
