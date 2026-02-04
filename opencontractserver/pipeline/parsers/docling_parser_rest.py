@@ -1,9 +1,9 @@
 import base64
 import logging
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import requests
-from django.conf import settings
 from django.core.files.storage import default_storage
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
@@ -11,6 +11,10 @@ from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
+from opencontractserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
+)
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
     OpenContractDocExport,
@@ -39,32 +43,129 @@ class DoclingParser(BaseParser):
     dependencies = ["requests"]
     supported_file_types = [FileTypeEnum.PDF]
 
-    def __init__(self):
-        """Initialize the Docling REST parser with service URL from settings."""
-        super().__init__()  # Call to superclass __init__
+    @dataclass
+    class Settings:
+        """Configuration schema for DoclingParser."""
 
-        # Priority order for service URL:
-        # 1. PIPELINE_SETTINGS configuration (if specified)
-        # 2. Django settings attribute (which reads from env vars)
-        # Note: Environment variables are ONLY read in Django settings, not here
-
-        self.service_url = getattr(settings, "DOCLING_PARSER_SERVICE_URL")
-
-        # Allow configuring the timeout
-        self.request_timeout = getattr(settings, "DOCLING_PARSER_TIMEOUT")
-
-        # Optional explicit flag to force Cloud Run IAM auth (useful for custom domains)
-        self.use_cloud_run_iam_auth = bool(
-            getattr(settings, "use_cloud_run_iam_auth", False)
+        service_url: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.REQUIRED,
+                    required=True,
+                    description="URL of the Docling parser microservice",
+                    env_var="DOCLING_PARSER_SERVICE_URL",
+                )
+            },
+        )
+        request_timeout: int = field(
+            default=300,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Request timeout in seconds",
+                    env_var="DOCLING_PARSER_TIMEOUT",
+                )
+            },
+        )
+        use_cloud_run_iam_auth: bool = field(
+            default=False,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Force Google Cloud Run IAM authentication",
+                )
+            },
+        )
+        extract_images: bool = field(
+            default=True,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Extract images from PDF for multimodal processing",
+                    env_var="DOCLING_EXTRACT_IMAGES",
+                )
+            },
+        )
+        image_format: str = field(
+            default="jpeg",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Format for extracted images (jpeg, png, webp)",
+                    env_var="DOCLING_IMAGE_FORMAT",
+                )
+            },
+        )
+        image_quality: int = field(
+            default=85,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="JPEG quality for extracted images (1-100)",
+                    env_var="DOCLING_IMAGE_QUALITY",
+                )
+            },
+        )
+        image_dpi: int = field(
+            default=150,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="DPI for cropped images",
+                    env_var="DOCLING_IMAGE_DPI",
+                )
+            },
+        )
+        min_image_width: int = field(
+            default=50,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Minimum width for extracted images (pixels)",
+                    env_var="DOCLING_MIN_IMAGE_WIDTH",
+                )
+            },
+        )
+        min_image_height: int = field(
+            default=50,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Minimum height for extracted images (pixels)",
+                    env_var="DOCLING_MIN_IMAGE_HEIGHT",
+                )
+            },
         )
 
-        # Image extraction configuration
-        self.extract_images = getattr(settings, "DOCLING_EXTRACT_IMAGES", True)
-        self.image_format = getattr(settings, "DOCLING_IMAGE_FORMAT", "jpeg")
-        self.image_quality = getattr(settings, "DOCLING_IMAGE_QUALITY", 85)
-        self.image_dpi = getattr(settings, "DOCLING_IMAGE_DPI", 150)
-        self.min_image_width = getattr(settings, "DOCLING_MIN_IMAGE_WIDTH", 50)
-        self.min_image_height = getattr(settings, "DOCLING_MIN_IMAGE_HEIGHT", 50)
+    def __init__(self):
+        """Initialize the Docling REST parser with settings from PipelineSettings."""
+        super().__init__()  # Loads settings via PipelineComponentBase
+
+        # Access settings via the settings property (populated from PipelineSettings DB)
+        # Fall back to defaults if settings not yet configured
+        s = self.settings
+        if s is not None:
+            self.service_url = s.service_url
+            self.request_timeout = s.request_timeout
+            self.use_cloud_run_iam_auth = s.use_cloud_run_iam_auth
+            self.extract_images = s.extract_images
+            self.image_format = s.image_format
+            self.image_quality = s.image_quality
+            self.image_dpi = s.image_dpi
+            self.min_image_width = s.min_image_width
+            self.min_image_height = s.min_image_height
+        else:
+            # Fallback to defaults for backwards compatibility during migration
+            self.service_url = ""
+            self.request_timeout = 300
+            self.use_cloud_run_iam_auth = False
+            self.extract_images = True
+            self.image_format = "jpeg"
+            self.image_quality = 85
+            self.image_dpi = 150
+            self.min_image_width = 50
+            self.min_image_height = 50
 
         logger.info(
             f"DoclingParser initialized with service URL: {self.service_url}, "

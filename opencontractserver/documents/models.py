@@ -1275,3 +1275,188 @@ class PipelineSettings(django.db.models.Model):
         settings.update(secrets)
 
         return settings
+
+    # =====================================================================
+    # Component Schema and Validation Methods
+    # =====================================================================
+
+    def get_component_schema(self, component_path: str) -> dict:
+        """
+        Get the settings schema for a specific component.
+
+        This is useful for the admin UI to dynamically generate configuration
+        forms based on what a component requires.
+
+        Args:
+            component_path: Full class path or simple name of the component
+
+        Returns:
+            Dict mapping setting names to their schema information:
+            {
+                "api_key": {
+                    "type": "secret",
+                    "required": True,
+                    "default": "",
+                    "description": "API key",
+                    "python_type": "str",
+                    "has_value": True,  # Whether a value is currently configured
+                },
+                ...
+            }
+        """
+        import logging
+
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        logger = logging.getLogger(__name__)
+        registry = get_registry()
+
+        # Try to find component by full path or simple name
+        component_def = registry.get_by_class_name(component_path)
+        if not component_def:
+            component_def = registry.get_by_name(component_path)
+
+        if not component_def or not component_def.component_class:
+            logger.warning(f"Component not found: {component_path}")
+            return {}
+
+        schema = get_settings_schema(component_def.component_class)
+
+        # Augment schema with current value status
+        current_settings = self.get_full_component_settings(component_def.class_name)
+        for setting_name, info in schema.items():
+            value = current_settings.get(setting_name)
+            # For secrets, only indicate whether a value exists, never the value itself
+            if info.get("type") == "secret":
+                info["has_value"] = value is not None and value != ""
+                info["current_value"] = None  # Never expose secret values
+            else:
+                info["has_value"] = value is not None
+                info["current_value"] = value
+
+        return schema
+
+    def validate_all_components(self) -> dict[str, list[str]]:
+        """
+        Validate that all registered components have their required settings configured.
+
+        Scans all parsers, embedders, thumbnailers, and post-processors,
+        checks their Settings schemas, and reports any missing required settings.
+
+        Returns:
+            Dict mapping component class paths to lists of missing settings:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": [
+                    "api_key"
+                ],
+                ...
+            }
+            Empty dict if all required settings are configured.
+        """
+        import logging
+
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_required_settings,
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        logger = logging.getLogger(__name__)
+        registry = get_registry()
+        missing_by_component: dict[str, list[str]] = {}
+
+        # Collect all components
+        all_components = []
+        all_components.extend(registry.parsers)
+        all_components.extend(registry.embedders)
+        all_components.extend(registry.thumbnailers)
+        all_components.extend(registry.post_processors)
+
+        for component_def in all_components:
+            component_class = component_def.component_class
+            if component_class is None:
+                continue
+
+            class_path = component_def.class_name
+            schema = get_settings_schema(component_class)
+
+            if not schema:
+                # Component has no Settings schema, skip
+                continue
+
+            required_settings = get_required_settings(component_class)
+            if not required_settings:
+                # No required settings, skip
+                continue
+
+            # Get current settings from DB
+            current_settings = self.get_full_component_settings(class_path)
+
+            missing = []
+            for setting_name in required_settings:
+                value = current_settings.get(setting_name)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    missing.append(setting_name)
+
+            if missing:
+                missing_by_component[class_path] = missing
+                logger.warning(
+                    f"Component '{class_path}' is missing required settings: "
+                    f"{', '.join(missing)}"
+                )
+
+        return missing_by_component
+
+    def get_all_component_schemas(self) -> dict[str, dict]:
+        """
+        Get settings schemas for all registered components.
+
+        Returns:
+            Dict mapping component class paths to their schemas:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": {...},
+                    "num_workers": {...},
+                },
+                ...
+            }
+        """
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        schemas: dict[str, dict] = {}
+
+        all_components = []
+        all_components.extend(registry.parsers)
+        all_components.extend(registry.embedders)
+        all_components.extend(registry.thumbnailers)
+        all_components.extend(registry.post_processors)
+
+        for component_def in all_components:
+            if component_def.component_class is None:
+                continue
+
+            schema = get_settings_schema(component_def.component_class)
+            if schema:
+                # Augment with current value status
+                current_settings = self.get_full_component_settings(
+                    component_def.class_name
+                )
+                for setting_name, info in schema.items():
+                    value = current_settings.get(setting_name)
+                    if info.get("type") == "secret":
+                        info["has_value"] = value is not None and value != ""
+                        info["current_value"] = None
+                    else:
+                        info["has_value"] = value is not None
+                        info["current_value"] = value
+
+                schemas[component_def.class_name] = schema
+
+        return schemas

@@ -3,11 +3,16 @@ import json
 import logging
 import zipfile
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from pdfredact import build_text_redacted_pdf, redact_pdf_to_images
 
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.post_processor import BasePostProcessor
+from opencontractserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
+)
 from opencontractserver.types.dicts import (
     OpenContractsAnnotationPythonType,
     OpenContractsExportDataJsonPythonType,
@@ -22,6 +27,12 @@ class PDFRedactor(BasePostProcessor):
     """
     Post-processor that redacts PDFs by overlaying black rectangles
     and removing text from annotated regions.
+
+    Settings are loaded from PipelineSettings database. Use the management
+    command `migrate_pipeline_settings` to seed initial values from environment.
+
+    Note: The `labels_to_redact` parameter is passed via kwargs at runtime,
+    not stored in PipelineSettings. See `input_schema` for user-provided inputs.
     """
 
     title: str = "PDF Redactor"
@@ -33,13 +44,27 @@ class PDFRedactor(BasePostProcessor):
             "type": "array",
             "items": {"type": "string"},
             "description": "Restriction annotations to these labels. ALL annotations will be redacted if empty.",
-            "title": "Labels to redact (provide alist of annotation label names)",
+            "title": "Labels to redact (provide a list of annotation label names)",
         },
     }
     supported_file_types = [FileTypeEnum.PDF]
 
+    @dataclass
+    class Settings:
+        """Configuration schema for PDFRedactor."""
+
+        redaction_dpi: int = field(
+            default=200,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="DPI for redaction rendering (higher = better quality, slower)",
+                )
+            },
+        )
+
     def __init__(self, **kwargs_super):
-        """Initializes the PDFRedactor post-processor."""
+        """Initialize the PDFRedactor post-processor."""
         super().__init__(**kwargs_super)
         logger.info("PDFRedactor initialized.")
 

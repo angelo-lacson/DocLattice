@@ -8,12 +8,14 @@ Available embedders:
 - CLIPMicroserviceEmbedder: CLIP ViT-L-14 model (768 dimensions)
 - QwenMicroserviceEmbedder: Qwen embedding model (1024 dimensions)
 
-Configuration is via environment variables specific to each embedder.
+Settings are loaded from PipelineSettings database. Use the management
+command `migrate_pipeline_settings` to seed initial values from environment.
 """
 
 import base64
 import logging
 from abc import abstractmethod
+from dataclasses import dataclass, field
 from typing import ClassVar, Optional
 
 import numpy as np
@@ -22,6 +24,10 @@ from django.conf import settings
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
+)
 from opencontractserver.types.enums import ContentModality
 from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
@@ -452,13 +458,8 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
 
     Produces 768-dimensional vectors in a shared text-image embedding space.
 
-    Configuration (via environment variables):
-        - CLIP_EMBEDDER_URL: Full URL to the CLIP embedding service
-        - CLIP_EMBEDDER_API_KEY: Optional API key for authentication
-
-    For backwards compatibility, also supports legacy settings:
-        - MULTIMODAL_EMBEDDER_URL (deprecated, use CLIP_EMBEDDER_URL)
-        - MULTIMODAL_EMBEDDER_API_KEY (deprecated, use CLIP_EMBEDDER_API_KEY)
+    Settings are loaded from PipelineSettings database. Use the management
+    command `migrate_pipeline_settings` to seed initial values from environment.
     """
 
     title = "CLIP Microservice Embedder"
@@ -476,6 +477,42 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
     _legacy_url_setting = "MULTIMODAL_EMBEDDER_URL"
     _legacy_api_key_setting = "MULTIMODAL_EMBEDDER_API_KEY"
 
+    @dataclass
+    class Settings:
+        """Configuration schema for CLIPMicroserviceEmbedder."""
+
+        clip_embedder_url: str = field(
+            default="http://vector-embedder:8000",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.REQUIRED,
+                    required=True,
+                    description="URL of the CLIP embedding microservice",
+                    env_var="CLIP_EMBEDDER_URL",
+                )
+            },
+        )
+        clip_embedder_api_key: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.SECRET,
+                    required=False,
+                    description="API key for the CLIP embedding service (optional)",
+                    env_var="CLIP_EMBEDDER_API_KEY",
+                )
+            },
+        )
+        use_cloud_run_iam_auth: bool = field(
+            default=False,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Force Google Cloud Run IAM authentication",
+                )
+            },
+        )
+
     @property
     def _default_url(self) -> str:
         return "http://vector-embedder:8000"
@@ -484,77 +521,57 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
         """
         Get service URL, API key, and headers for the microservice.
 
-        Extends base implementation to support legacy multimodal_embedder_url
-        and multimodal_embedder_api_key kwargs for backwards compatibility.
-
-        Priority order (first non-empty value wins):
-        1. Direct kwargs (new key, then legacy key)
-        2. Component settings (new key, then legacy key)
-        3. Django settings - LEGACY key first for backwards compatibility
-        4. Django settings - new key
-        5. Default URL
+        Uses Settings dataclass when available, with fallback to legacy
+        configuration pattern for backwards compatibility.
         """
-        component_settings = self.get_component_settings()
-
-        # Service URL - check new key, then legacy key in kwargs
-        url_key = self.url_setting_name.lower()
-        legacy_url_key = self._legacy_url_setting.lower()
-
-        # Check kwargs: new key first, then legacy key
-        if url_key in all_kwargs:
-            service_url = all_kwargs[url_key]
-        elif legacy_url_key in all_kwargs:
-            service_url = all_kwargs[legacy_url_key]
+        # Try to use Settings dataclass first
+        s = self.settings
+        if s is not None:
+            service_url = all_kwargs.get("clip_embedder_url", s.clip_embedder_url)
+            api_key = all_kwargs.get("clip_embedder_api_key", s.clip_embedder_api_key)
+            use_cloud_run_iam_auth = bool(
+                all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
+            )
         else:
-            # Check component settings
-            if url_key in component_settings:
+            # Legacy fallback for backwards compatibility
+            component_settings = self.get_component_settings()
+
+            # Service URL - check new key, then legacy key in kwargs
+            url_key = self.url_setting_name.lower()
+            legacy_url_key = self._legacy_url_setting.lower()
+
+            if url_key in all_kwargs:
+                service_url = all_kwargs[url_key]
+            elif legacy_url_key in all_kwargs:
+                service_url = all_kwargs[legacy_url_key]
+            elif url_key in component_settings:
                 service_url = component_settings[url_key]
             elif legacy_url_key in component_settings:
                 service_url = component_settings[legacy_url_key]
             else:
-                # Fall back to Django settings - check LEGACY first for backwards compat
-                legacy_url = getattr(settings, self._legacy_url_setting, "")
-                new_url = getattr(settings, self.url_setting_name, "")
-                # Use legacy if set, otherwise new, otherwise default
-                if legacy_url and not new_url:
-                    logger.warning(
-                        "MULTIMODAL_EMBEDDER_URL is deprecated. "
-                        "Please migrate to CLIP_EMBEDDER_URL."
-                    )
-                service_url = legacy_url or new_url or self._default_url
+                service_url = self._default_url
 
-        # API Key - check new key, then legacy key
-        api_key_key = self.api_key_setting_name.lower()
-        legacy_api_key_key = self._legacy_api_key_setting.lower()
+            # API Key - check new key, then legacy key
+            api_key_key = self.api_key_setting_name.lower()
+            legacy_api_key_key = self._legacy_api_key_setting.lower()
 
-        if api_key_key in all_kwargs:
-            api_key = all_kwargs[api_key_key]
-        elif legacy_api_key_key in all_kwargs:
-            api_key = all_kwargs[legacy_api_key_key]
-        else:
-            # Check component settings
-            if api_key_key in component_settings:
+            if api_key_key in all_kwargs:
+                api_key = all_kwargs[api_key_key]
+            elif legacy_api_key_key in all_kwargs:
+                api_key = all_kwargs[legacy_api_key_key]
+            elif api_key_key in component_settings:
                 api_key = component_settings[api_key_key]
             elif legacy_api_key_key in component_settings:
                 api_key = component_settings[legacy_api_key_key]
             else:
-                # Fall back to Django settings - check LEGACY first for backwards compat
-                legacy_key = getattr(settings, self._legacy_api_key_setting, "")
-                new_key = getattr(settings, self.api_key_setting_name, "")
-                if legacy_key and not new_key:
-                    logger.warning(
-                        "MULTIMODAL_EMBEDDER_API_KEY is deprecated. "
-                        "Please migrate to CLIP_EMBEDDER_API_KEY."
-                    )
-                api_key = legacy_key or new_key or ""
+                api_key = ""
 
-        # Cloud Run IAM auth flag
-        use_cloud_run_iam_auth = bool(
-            all_kwargs.get(
-                "use_cloud_run_iam_auth",
-                component_settings.get("use_cloud_run_iam_auth", False),
+            use_cloud_run_iam_auth = bool(
+                all_kwargs.get(
+                    "use_cloud_run_iam_auth",
+                    component_settings.get("use_cloud_run_iam_auth", False),
+                )
             )
-        )
 
         # Build headers
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -575,9 +592,8 @@ class QwenMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
 
     Produces 1024-dimensional vectors in a shared text-image embedding space.
 
-    Configuration (via environment variables):
-        - QWEN_EMBEDDER_URL: Full URL to the Qwen embedding service
-        - QWEN_EMBEDDER_API_KEY: Optional API key for authentication
+    Settings are loaded from PipelineSettings database. Use the management
+    command `migrate_pipeline_settings` to seed initial values from environment.
     """
 
     title = "Qwen Microservice Embedder"
@@ -590,6 +606,42 @@ class QwenMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
     url_setting_name = "QWEN_EMBEDDER_URL"
     api_key_setting_name = "QWEN_EMBEDDER_API_KEY"
     vector_size = 1024
+
+    @dataclass
+    class Settings:
+        """Configuration schema for QwenMicroserviceEmbedder."""
+
+        qwen_embedder_url: str = field(
+            default="http://qwen-embedder:8000",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.REQUIRED,
+                    required=True,
+                    description="URL of the Qwen embedding microservice",
+                    env_var="QWEN_EMBEDDER_URL",
+                )
+            },
+        )
+        qwen_embedder_api_key: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.SECRET,
+                    required=False,
+                    description="API key for the Qwen embedding service (optional)",
+                    env_var="QWEN_EMBEDDER_API_KEY",
+                )
+            },
+        )
+        use_cloud_run_iam_auth: bool = field(
+            default=False,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Force Google Cloud Run IAM authentication",
+                )
+            },
+        )
 
     @property
     def _default_url(self) -> str:
