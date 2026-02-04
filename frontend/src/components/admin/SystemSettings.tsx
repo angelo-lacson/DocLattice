@@ -1131,6 +1131,24 @@ export const SystemSettings: React.FC = () => {
     [settings]
   );
 
+  // Look up a component's display name by className from loaded components data
+  const getComponentDisplayNameByClassName = useCallback(
+    (className: string): string => {
+      if (!components) {
+        return getComponentDisplayName(className);
+      }
+      // Search through all component types to find matching className
+      const allComponents = [
+        ...(components.parsers || []),
+        ...(components.embedders || []),
+        ...(components.thumbnailers || []),
+      ];
+      const component = allComponents.find((c) => c?.className === className);
+      return getComponentDisplayName(className, component?.title || undefined);
+    },
+    [components]
+  );
+
   // Handle component selection
   const handleSelectComponent = useCallback(
     (stage: StageType, mimeType: string, className: string) => {
@@ -1564,7 +1582,7 @@ export const SystemSettings: React.FC = () => {
               .map((componentPath) => (
                 <SecretBadge key={componentPath}>
                   <Key />
-                  {getComponentDisplayName(componentPath)}
+                  {getComponentDisplayNameByClassName(componentPath)}
                   <IconButton
                     $danger
                     onClick={() => handleDeleteSecretsClick(componentPath)}

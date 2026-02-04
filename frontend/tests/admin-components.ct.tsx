@@ -833,8 +833,10 @@ test.describe("SystemSettings Component", () => {
     });
 
     // Check secrets badge is displayed in Component Secrets section
-    // getComponentDisplayName formats "OpenAIEmbedder" to "OpenAI Embedder" (preserves acronyms)
-    await expect(page.locator("text=OpenAI Embedder")).toBeVisible();
+    // Uses the title from the loaded component data
+    // Look for the secrets badge specifically (has a key icon and delete button)
+    const secretsBadge = page.locator('[title="Delete secrets"]').locator("..");
+    await expect(secretsBadge).toContainText("OpenAI Ada Embedder");
 
     await component.unmount();
   });
@@ -1197,7 +1199,7 @@ test.describe("SystemSettings Component", () => {
       result: { data: { pipelineComponents: mockPipelineComponents } },
     };
 
-    // Mock the mutation response
+    // Mock the mutation response - match exact variables since variableMatcher seems unreliable
     const updateSettingsMock = {
       request: {
         query: UPDATE_PIPELINE_SETTINGS,
@@ -1346,7 +1348,7 @@ test.describe("SystemSettings Component", () => {
     await confirmButton.click();
 
     // Should show success toast
-    await expect(page.locator("text=Settings reset")).toBeVisible({
+    await expect(page.locator("text=Settings reset to defaults")).toBeVisible({
       timeout: 5000,
     });
 
@@ -1445,9 +1447,11 @@ test.describe("SystemSettings Component", () => {
     await saveButton.click();
 
     // Should show success toast
-    await expect(page.locator("text=Secrets saved")).toBeVisible({
-      timeout: 5000,
-    });
+    await expect(page.locator("text=Secrets updated successfully")).toBeVisible(
+      {
+        timeout: 5000,
+      }
+    );
 
     await component.unmount();
   });
@@ -1511,10 +1515,10 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Find the delete button for the existing secret (OpenAI Embedder)
-    // The secret badge shows "OpenAI Embedder" with a trash icon button
-    const secretBadge = page.locator("text=OpenAI Embedder").first();
-    await expect(secretBadge).toBeVisible();
+    // Find the delete button for the existing secret
+    // The secret badge shows the component title from the loaded components data
+    const secretsBadge = page.locator('[title="Delete secrets"]').locator("..");
+    await expect(secretsBadge).toContainText("OpenAI Ada Embedder");
 
     // Click the delete (trash) button next to it
     const deleteButton = page.locator('[title="Delete secrets"]').first();
@@ -1533,9 +1537,11 @@ test.describe("SystemSettings Component", () => {
     await confirmButton.click();
 
     // Should show success toast
-    await expect(page.locator("text=Secrets deleted")).toBeVisible({
-      timeout: 5000,
-    });
+    await expect(page.locator("text=Secrets deleted successfully")).toBeVisible(
+      {
+        timeout: 5000,
+      }
+    );
 
     await component.unmount();
   });
