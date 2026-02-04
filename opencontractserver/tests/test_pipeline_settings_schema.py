@@ -10,10 +10,9 @@ pipeline components, including:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from opencontractserver.pipeline.base.base_component import PipelineComponentBase
 from opencontractserver.pipeline.base.settings_schema import (
@@ -22,7 +21,6 @@ from opencontractserver.pipeline.base.settings_schema import (
     SettingType,
     create_settings_instance,
     get_all_env_vars,
-    get_pipeline_setting,
     get_required_settings,
     get_secret_settings,
     get_settings_schema,
@@ -280,7 +278,9 @@ class TestCreateSettingsInstance(TestCase):
         with self.assertRaises(ConfigurationError) as context:
             create_settings_instance(ComponentWithSettings, settings_dict, strict=True)
 
-        self.assertIn("api_key", str(context.exception.missing_settings) or str(context.exception))
+        self.assertIn(
+            "api_key", str(context.exception.missing_settings) or str(context.exception)
+        )
 
     def test_create_instance_for_component_without_settings_raises(self):
         """Test that creating instance for component without Settings raises."""

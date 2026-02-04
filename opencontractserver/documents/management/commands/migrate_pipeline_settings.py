@@ -67,9 +67,7 @@ class Command(BaseCommand):
         specific_component = options.get("component")
 
         self.stdout.write(self.style.NOTICE("\n" + "=" * 70))
-        self.stdout.write(
-            self.style.NOTICE("Pipeline Settings Migration")
-        )
+        self.stdout.write(self.style.NOTICE("Pipeline Settings Migration"))
         self.stdout.write(self.style.NOTICE("=" * 70 + "\n"))
 
         if verify_only:
@@ -97,7 +95,8 @@ class Command(BaseCommand):
         # Filter to specific component if requested
         if specific_component:
             all_components = [
-                c for c in all_components
+                c
+                for c in all_components
                 if c.name == specific_component or c.class_name == specific_component
             ]
             if not all_components:
@@ -140,9 +139,13 @@ class Command(BaseCommand):
             stats["with_schema"] += 1
             secret_settings = get_secret_settings(component_class)
 
-            self.stdout.write(f"\n{component_def.name} ({component_def.component_type.value})")
+            self.stdout.write(
+                f"\n{component_def.name} ({component_def.component_type.value})"
+            )
             self.stdout.write(f"  Class: {class_path}")
-            self.stdout.write(f"  Settings: {len(schema)} total, {len(secret_settings)} secrets")
+            self.stdout.write(
+                f"  Settings: {len(schema)} total, {len(secret_settings)} secrets"
+            )
 
             # Prepare settings dicts
             non_secret_settings: dict[str, Any] = {}
@@ -175,11 +178,13 @@ class Command(BaseCommand):
 
                 # Track missing required settings
                 if is_required and (final_value is None or final_value == ""):
-                    stats["missing_required"].append({
-                        "component": class_path,
-                        "setting": setting_name,
-                        "env_var": env_var,
-                    })
+                    stats["missing_required"].append(
+                        {
+                            "component": class_path,
+                            "setting": setting_name,
+                            "env_var": env_var,
+                        }
+                    )
                     if verbose:
                         self.stdout.write(
                             self.style.WARNING(
@@ -203,12 +208,11 @@ class Command(BaseCommand):
                         stats["settings_migrated"] += 1
                         if verbose:
                             display_value = (
-                                final_value if len(str(final_value)) < 50
+                                final_value
+                                if len(str(final_value)) < 50
                                 else str(final_value)[:47] + "..."
                             )
-                            self.stdout.write(
-                                f"    {setting_name}: {display_value}"
-                            )
+                            self.stdout.write(f"    {setting_name}: {display_value}")
 
             # Store in DB (unless dry-run)
             if not dry_run:
@@ -232,9 +236,7 @@ class Command(BaseCommand):
                 )
             except Exception as e:
                 stats["errors"].append(str(e))
-                self.stdout.write(
-                    self.style.ERROR(f"\nError saving settings: {e}")
-                )
+                self.stdout.write(self.style.ERROR(f"\nError saving settings: {e}"))
         else:
             self.stdout.write(
                 self.style.NOTICE("\n[DRY RUN] No changes were made to the database")
@@ -279,7 +281,9 @@ class Command(BaseCommand):
             if not required_settings:
                 if verbose:
                     self.stdout.write(
-                        self.style.SUCCESS(f"  {component_def.name}: OK (no required settings)")
+                        self.style.SUCCESS(
+                            f"  {component_def.name}: OK (no required settings)"
+                        )
                     )
                 continue
 
@@ -304,9 +308,7 @@ class Command(BaseCommand):
                     for m in missing:
                         self.stdout.write(f"    - {m}")
             else:
-                self.stdout.write(
-                    self.style.SUCCESS(f"  {component_def.name}: OK")
-                )
+                self.stdout.write(self.style.SUCCESS(f"  {component_def.name}: OK"))
 
         self.stdout.write("\n" + "=" * 70)
         if all_valid:
@@ -332,7 +334,9 @@ class Command(BaseCommand):
 
         self.stdout.write(f"  Total components scanned: {stats['total']}")
         self.stdout.write(f"  Components with Settings schema: {stats['with_schema']}")
-        self.stdout.write(f"  Non-secret settings migrated: {stats['settings_migrated']}")
+        self.stdout.write(
+            f"  Non-secret settings migrated: {stats['settings_migrated']}"
+        )
         self.stdout.write(f"  Secret settings migrated: {stats['secrets_migrated']}")
 
         if stats["missing_required"]:
@@ -342,21 +346,23 @@ class Command(BaseCommand):
                 )
             )
             for missing in stats["missing_required"]:
-                env_hint = f" (set {missing['env_var']})" if missing.get("env_var") else ""
+                env_hint = (
+                    f" (set {missing['env_var']})" if missing.get("env_var") else ""
+                )
                 self.stdout.write(
                     f"    - {missing['component']}.{missing['setting']}{env_hint}"
                 )
 
         if stats["errors"]:
-            self.stdout.write(
-                self.style.ERROR(f"\n  Errors: {len(stats['errors'])}")
-            )
+            self.stdout.write(self.style.ERROR(f"\n  Errors: {len(stats['errors'])}"))
             for error in stats["errors"]:
                 self.stdout.write(f"    - {error}")
 
         if dry_run:
             self.stdout.write(
-                self.style.NOTICE("\n  [DRY RUN] Run without --dry-run to apply changes")
+                self.style.NOTICE(
+                    "\n  [DRY RUN] Run without --dry-run to apply changes"
+                )
             )
 
         self.stdout.write("=" * 70 + "\n")

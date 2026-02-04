@@ -1,5 +1,8 @@
 import React from "react";
-import { PIPELINE_UI } from "../../assets/configurations/constants";
+import {
+  PIPELINE_UI,
+  KNOWN_ACRONYMS,
+} from "../../assets/configurations/constants";
 
 interface IconProps {
   size?: number;
@@ -619,20 +622,6 @@ export const getComponentIcon = (className: string): React.FC<IconProps> => {
     return TextParserIcon;
 
   return GenericComponentIcon;
-};
-
-// Known acronyms that should be preserved in display names
-const KNOWN_ACRONYMS: Record<string, string> = {
-  openai: "OpenAI",
-  modernbert: "ModernBERT",
-  bert: "BERT",
-  gpt: "GPT",
-  llm: "LLM",
-  api: "API",
-  pdf: "PDF",
-  ocr: "OCR",
-  nlp: "NLP",
-  nlm: "NLM",
 };
 
 /**
