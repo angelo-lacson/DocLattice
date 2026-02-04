@@ -39,7 +39,7 @@ import dataclasses
 import logging
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import Any, Callable, Optional, Type, get_type_hints
+from typing import Any, Callable, Optional, get_type_hints
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ def get_pipeline_setting(field_obj: dataclasses.Field) -> Optional[PipelineSetti
     return field_obj.metadata.get("pipeline_setting")
 
 
-def get_settings_schema(component_class: Type) -> dict[str, dict[str, Any]]:
+def get_settings_schema(component_class: type) -> dict[str, dict[str, Any]]:
     """
     Extract settings schema from a component's Settings dataclass.
 
@@ -188,7 +188,7 @@ def get_settings_schema(component_class: Type) -> dict[str, dict[str, Any]]:
     return schema
 
 
-def get_all_env_vars(component_class: Type) -> dict[str, str]:
+def get_all_env_vars(component_class: type) -> dict[str, str]:
     """
     Get all env_var mappings from a component's Settings schema.
 
@@ -201,13 +201,11 @@ def get_all_env_vars(component_class: Type) -> dict[str, str]:
     """
     schema = get_settings_schema(component_class)
     return {
-        name: info["env_var"]
-        for name, info in schema.items()
-        if info.get("env_var")
+        name: info["env_var"] for name, info in schema.items() if info.get("env_var")
     }
 
 
-def get_required_settings(component_class: Type) -> list[str]:
+def get_required_settings(component_class: type) -> list[str]:
     """
     Get list of required setting names for a component.
 
@@ -221,7 +219,7 @@ def get_required_settings(component_class: Type) -> list[str]:
     return [name for name, info in schema.items() if info.get("required")]
 
 
-def get_secret_settings(component_class: Type) -> list[str]:
+def get_secret_settings(component_class: type) -> list[str]:
     """
     Get list of secret setting names for a component.
 
@@ -233,13 +231,14 @@ def get_secret_settings(component_class: Type) -> list[str]:
     """
     schema = get_settings_schema(component_class)
     return [
-        name for name, info in schema.items()
+        name
+        for name, info in schema.items()
         if info.get("type") == SettingType.SECRET.value
     ]
 
 
 def validate_settings(
-    component_class: Type,
+    component_class: type,
     settings_dict: dict[str, Any],
 ) -> tuple[bool, list[str]]:
     """
@@ -273,20 +272,16 @@ def validate_settings(
                     if setting_info and setting_info.validation:
                         try:
                             if not setting_info.validation(value):
-                                errors.append(
-                                    f"Setting '{name}' failed validation"
-                                )
+                                errors.append(f"Setting '{name}' failed validation")
                         except Exception as e:
-                            errors.append(
-                                f"Setting '{name}' validation error: {e}"
-                            )
+                            errors.append(f"Setting '{name}' validation error: {e}")
                     break
 
     return len(errors) == 0, errors
 
 
 def create_settings_instance(
-    component_class: Type,
+    component_class: type,
     settings_dict: dict[str, Any],
     strict: bool = True,
 ) -> Any:
@@ -314,15 +309,9 @@ def create_settings_instance(
     if strict:
         is_valid, errors = validate_settings(component_class, settings_dict)
         if not is_valid:
-            component_path = (
-                f"{component_class.__module__}.{component_class.__name__}"
-            )
+            component_path = f"{component_class.__module__}.{component_class.__name__}"
             # Extract just the setting names from error messages
-            missing = [
-                err.split("'")[1]
-                for err in errors
-                if "missing" in err.lower()
-            ]
+            missing = [err.split("'")[1] for err in errors if "missing" in err.lower()]
             raise ConfigurationError(
                 component_path=component_path,
                 missing_settings=missing if missing else errors,

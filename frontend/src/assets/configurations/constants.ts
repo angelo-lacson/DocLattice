@@ -178,3 +178,40 @@ export const PIPELINE_UI = {
   /** Minimum width for component cards in grid layout (in pixels) */
   COMPONENT_GRID_MIN_WIDTH: 140,
 } as const;
+
+// Supported MIME types for pipeline configuration
+export const SUPPORTED_MIME_TYPES = [
+  { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
+  { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
+  {
+    value:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    label: "Word Document",
+    shortLabel: "DOCX",
+  },
+] as const;
+
+/**
+ * Lookup map from full MIME type to short label (e.g., "text/plain" → "TXT").
+ * Used for matching component supportedFileTypes which use short forms.
+ */
+export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
+);
+
+/**
+ * Known acronyms that should be preserved in display names.
+ * Used by getComponentDisplayName to properly capitalize technology names.
+ */
+export const KNOWN_ACRONYMS: Record<string, string> = {
+  openai: "OpenAI",
+  modernbert: "ModernBERT",
+  bert: "BERT",
+  gpt: "GPT",
+  llm: "LLM",
+  api: "API",
+  pdf: "PDF",
+  ocr: "OCR",
+  nlp: "NLP",
+  nlm: "NLM",
+};

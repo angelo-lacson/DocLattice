@@ -36,7 +36,11 @@ import {
   PipelineComponentType,
 } from "../../types/graphql-api";
 import { getComponentIcon, getComponentDisplayName } from "./PipelineIcons";
-import { PIPELINE_UI } from "../../assets/configurations/constants";
+import {
+  PIPELINE_UI,
+  SUPPORTED_MIME_TYPES,
+  MIME_TO_SHORT_LABEL,
+} from "../../assets/configurations/constants";
 
 // ============================================================================
 // GraphQL Operations
@@ -177,29 +181,6 @@ const DELETE_COMPONENT_SECRETS = gql`
     }
   }
 `;
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const SUPPORTED_MIME_TYPES = [
-  { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
-  { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
-  {
-    value:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    label: "Word Document",
-    shortLabel: "DOCX",
-  },
-];
-
-/**
- * Lookup map from full MIME type to short label (e.g., "text/plain" → "TXT").
- * Used for matching component supportedFileTypes which use short forms.
- */
-const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
-  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
-);
 
 // ============================================================================
 // Styled Components
@@ -1106,15 +1087,16 @@ export const SystemSettings: React.FC = () => {
         if (!comp.supportedFileTypes || comp.supportedFileTypes.length === 0) {
           return true;
         }
+        // If MIME type is unknown (no short label mapping), exclude component
+        if (!mimeShort) {
+          return false;
+        }
         // Check if the MIME type matches any supported file type
         return comp.supportedFileTypes.some((ft) => {
           if (!ft) return false;
           const ftLower = ft.toLowerCase();
           // Match either short form (e.g., "PDF", "TXT") or full MIME type
-          return (
-            (mimeShort && ft.toUpperCase() === mimeShort) ||
-            ftLower === mimeTypeLower
-          );
+          return ft.toUpperCase() === mimeShort || ftLower === mimeTypeLower;
         });
       });
     },
@@ -1830,8 +1812,10 @@ export const SystemSettings: React.FC = () => {
             <AlertTriangle />
             <WarningText>
               Are you sure you want to delete secrets for{" "}
-              <strong>{deleteSecretsPath}</strong>? This action cannot be
-              undone.
+              <strong>
+                {getComponentDisplayNameByClassName(deleteSecretsPath)}
+              </strong>
+              ? This action cannot be undone.
             </WarningText>
           </WarningBanner>
         </ModalBody>
