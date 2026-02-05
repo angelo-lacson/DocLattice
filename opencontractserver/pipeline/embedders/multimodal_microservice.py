@@ -482,13 +482,13 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
         """Configuration schema for CLIPMicroserviceEmbedder."""
 
         clip_embedder_url: str = field(
-            default="http://vector-embedder:8000",
+            default="http://multimodal-embedder:8000",
             metadata={
                 "pipeline_setting": PipelineSetting(
                     setting_type=SettingType.REQUIRED,
                     required=True,
                     description="URL of the CLIP embedding microservice",
-                    env_var="CLIP_EMBEDDER_URL",
+                    env_var="MULTIMODAL_EMBEDDER_URL",
                 )
             },
         )
@@ -499,7 +499,7 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
                     setting_type=SettingType.SECRET,
                     required=False,
                     description="API key for the CLIP embedding service (optional)",
-                    env_var="CLIP_EMBEDDER_API_KEY",
+                    env_var="MULTIMODAL_EMBEDDER_API_KEY",
                 )
             },
         )
@@ -646,6 +646,63 @@ class QwenMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
     @property
     def _default_url(self) -> str:
         return "http://qwen-embedder:8000"
+
+    def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
+        """
+        Get service URL, API key, and headers for Qwen microservice.
+
+        Uses Settings dataclass when available, with fallback to legacy
+        configuration pattern for backwards compatibility.
+        """
+        # Try to use Settings dataclass first
+        s = self.settings
+        if s is not None:
+            service_url = all_kwargs.get("qwen_embedder_url", s.qwen_embedder_url)
+            api_key = all_kwargs.get("qwen_embedder_api_key", s.qwen_embedder_api_key)
+            use_cloud_run_iam_auth = bool(
+                all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
+            )
+        else:
+            # Legacy fallback for backwards compatibility
+            component_settings = self.get_component_settings()
+
+            url_key = self.url_setting_name.lower()
+            service_url = all_kwargs.get(
+                url_key,
+                component_settings.get(
+                    url_key,
+                    getattr(settings, self.url_setting_name, self._default_url),
+                ),
+            )
+
+            api_key_key = self.api_key_setting_name.lower()
+            api_key = all_kwargs.get(
+                api_key_key,
+                component_settings.get(
+                    api_key_key,
+                    getattr(settings, self.api_key_setting_name, ""),
+                ),
+            )
+
+            use_cloud_run_iam_auth = bool(
+                all_kwargs.get(
+                    "use_cloud_run_iam_auth",
+                    component_settings.get(
+                        "use_cloud_run_iam_auth",
+                        getattr(settings, "USE_CLOUD_RUN_IAM_AUTH", False),
+                    ),
+                )
+            )
+
+        # Build headers
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["X-API-Key"] = api_key
+
+        # Apply Cloud Run IAM auth if enabled
+        headers = maybe_add_cloud_run_auth(service_url, headers, use_cloud_run_iam_auth)
+
+        return service_url, api_key, headers
 
 
 # Backwards compatibility alias - points to CLIP embedder as that was the original
