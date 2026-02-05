@@ -177,6 +177,14 @@ export const PIPELINE_UI = {
   ICON_SIZE: 48,
   /** Minimum width for component cards in grid layout (in pixels) */
   COMPONENT_GRID_MIN_WIDTH: 140,
+  /** Primary accent color used in pipeline configuration UI */
+  PRIMARY_ACCENT_COLOR: "#6366f1",
+  /** Height for pipeline connector line (in pixels) */
+  CONNECTOR_HEIGHT_PX: 24,
+  /** Minimum height for component cards (in pixels) */
+  COMPONENT_CARD_MIN_HEIGHT_PX: 120,
+  /** Maximum allowed secrets payload size (in bytes) */
+  MAX_SECRET_SIZE_BYTES: 10240,
 } as const;
 
 // Supported MIME types for pipeline configuration

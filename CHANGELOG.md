@@ -61,6 +61,32 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Integration with pipeline/utils**: `get_preferred_embedder` and `get_default_embedder` use PipelineSettings
   - Files: `doclatticeserver/pipeline/utils.py:303-361`
 
+### Changed
+- Pipeline configuration UI now reads component settings schema from GraphQL instead of hardcoding config requirements.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:69-129`
+- Pipeline configuration UI now centralizes pipeline UI constants in `PIPELINE_UI` for sizing and validation values.
+  - Files: `frontend/src/assets/configurations/constants.ts:174-187`
+
+### Fixed
+- Secrets modal now validates component existence, required secret fields, and payload size before mutation.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1248-1317`
+- MIME filter accessibility labels now include stage context.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1404-1416`
+
+### Removed
+
+#### ModernBERT Embedders
+- **⚠️ Breaking Change**: ModernBERT embedders have been removed from the codebase
+  - `doclatticeserver/pipeline/embedders/modern_bert_embedder.py` - removed
+  - `doclatticeserver/pipeline/embedders/minn_modern_bert_embedder.py` - removed
+  - `model_preloaders/download_modernbert_model.py` - removed
+  - Tests removed: `doclatticeserver/tests/test_modern_bert_embedder.py`, `doclatticeserver/tests/test_minn_modern_bert_embedder.py`
+  - **Migration path**: Users currently using ModernBERT embedders must switch to alternative embedders:
+    - `SentenceTransformerEmbedder` - General purpose sentence transformer embeddings
+    - `OpenAIEmbedder` - OpenAI API-based embeddings (requires API key)
+    - `VoyageAIEmbedder` - Voyage AI embeddings (requires API key)
+  - Update PipelineSettings via admin UI or management command before upgrading
+
 #### Personal Corpus ("My Documents") Feature
 - **Personal corpus auto-creation**: Each user now automatically receives a personal "My Documents" corpus
   - Created via signal handler when user account is created

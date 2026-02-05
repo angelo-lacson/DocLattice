@@ -237,6 +237,16 @@ def get_secret_settings(component_class: type) -> list[str]:
     ]
 
 
+@dataclass
+class ValidationResult:
+    """Result of settings validation with structured error information."""
+
+    is_valid: bool
+    errors: list[str]
+    missing_required: list[str]
+    validation_failures: list[str]
+
+
 def validate_settings(
     component_class: type,
     settings_dict: dict[str, Any],
@@ -251,8 +261,28 @@ def validate_settings(
     Returns:
         Tuple of (is_valid, list_of_errors)
     """
+    result = validate_settings_detailed(component_class, settings_dict)
+    return result.is_valid, result.errors
+
+
+def validate_settings_detailed(
+    component_class: type,
+    settings_dict: dict[str, Any],
+) -> ValidationResult:
+    """
+    Validate a settings dictionary against a component's schema with detailed results.
+
+    Args:
+        component_class: A pipeline component class
+        settings_dict: Dict of setting name -> value
+
+    Returns:
+        ValidationResult with structured error information
+    """
     schema = get_settings_schema(component_class)
     errors: list[str] = []
+    missing_required: list[str] = []
+    validation_failures: list[str] = []
 
     for name, info in schema.items():
         value = settings_dict.get(name)
@@ -260,6 +290,7 @@ def validate_settings(
         # Check required settings
         if info.get("required"):
             if value is None or (isinstance(value, str) and not value.strip()):
+                missing_required.append(name)
                 errors.append(f"Required setting '{name}' is missing or empty")
                 continue
 
@@ -272,12 +303,19 @@ def validate_settings(
                     if setting_info and setting_info.validation:
                         try:
                             if not setting_info.validation(value):
+                                validation_failures.append(name)
                                 errors.append(f"Setting '{name}' failed validation")
                         except Exception as e:
+                            validation_failures.append(name)
                             errors.append(f"Setting '{name}' validation error: {e}")
                     break
 
-    return len(errors) == 0, errors
+    return ValidationResult(
+        is_valid=len(errors) == 0,
+        errors=errors,
+        missing_required=missing_required,
+        validation_failures=validation_failures,
+    )
 
 
 def create_settings_instance(
@@ -307,30 +345,80 @@ def create_settings_instance(
         )
 
     if strict:
-        is_valid, errors = validate_settings(component_class, settings_dict)
-        if not is_valid:
+        result = validate_settings_detailed(component_class, settings_dict)
+        if not result.is_valid:
             component_path = f"{component_class.__module__}.{component_class.__name__}"
-            # Extract just the setting names from error messages
-            missing = [err.split("'")[1] for err in errors if "missing" in err.lower()]
             raise ConfigurationError(
                 component_path=component_path,
-                missing_settings=missing if missing else errors,
-                message="; ".join(errors),
+                missing_settings=(
+                    result.missing_required
+                    if result.missing_required
+                    else result.validation_failures
+                ),
+                message="; ".join(result.errors),
             )
 
     # Build kwargs for dataclass instantiation
-    # Use defaults for any missing values
+    # Use defaults for any missing values and apply type coercion
     schema = get_settings_schema(component_class)
     kwargs: dict[str, Any] = {}
 
     for name, info in schema.items():
         if name in settings_dict:
-            kwargs[name] = settings_dict[name]
+            value = settings_dict[name]
+            # Apply type coercion for primitive types
+            python_type = info.get("python_type", "")
+            kwargs[name] = _coerce_value(value, python_type)
         elif "default" in info:
             kwargs[name] = info["default"]
         # else: let dataclass use its own default
 
     return settings_class(**kwargs)
+
+
+def _coerce_value(value: Any, python_type: str) -> Any:
+    """
+    Coerce a value to the expected Python type.
+
+    Args:
+        value: The value to coerce
+        python_type: The target type name ('str', 'int', 'float', 'bool')
+
+    Returns:
+        The coerced value, or original value if coercion not needed/possible
+    """
+    if value is None:
+        return value
+
+    try:
+        if python_type == "int":
+            if isinstance(value, bool):
+                return int(value)
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str) and value.strip():
+                return int(value)
+        elif python_type == "float":
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str) and value.strip():
+                return float(value)
+        elif python_type == "bool":
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.lower() in ("true", "1", "yes", "on")
+            if isinstance(value, (int, float)):
+                return bool(value)
+        elif python_type == "str":
+            if not isinstance(value, str):
+                return str(value)
+    except (ValueError, TypeError):
+        # If coercion fails, return original value
+        # Let the dataclass constructor handle the error
+        pass
+
+    return value
 
 
 def _get_type_name(type_hint: Any) -> str:

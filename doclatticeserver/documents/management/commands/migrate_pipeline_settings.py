@@ -58,6 +58,17 @@ class Command(BaseCommand):
             type=str,
             help="Only migrate settings for a specific component (by class name or full path)",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Overwrite existing database values with environment/default values. "
+            "Without this flag, existing DB values are preserved.",
+        )
+        parser.add_argument(
+            "--strict",
+            action="store_true",
+            help="Fail if any required settings are missing (exit code 1)",
+        )
 
     def handle(self, *args, **options):
         """Execute the migration command."""
@@ -65,10 +76,20 @@ class Command(BaseCommand):
         verify_only = options["verify"]
         verbose = options["verbose"]
         specific_component = options.get("component")
+        force_overwrite = options.get("force", False)
+        strict_mode = options.get("strict", False)
 
         self.stdout.write(self.style.NOTICE("\n" + "=" * 70))
         self.stdout.write(self.style.NOTICE("Pipeline Settings Migration"))
         self.stdout.write(self.style.NOTICE("=" * 70 + "\n"))
+
+        if not force_overwrite:
+            self.stdout.write(
+                self.style.NOTICE(
+                    "Note: Existing database values will be preserved. "
+                    "Use --force to overwrite.\n"
+                )
+            )
 
         if verify_only:
             self._verify_all_components(verbose)
@@ -157,24 +178,44 @@ class Command(BaseCommand):
                 is_secret = setting_name in secret_settings
                 is_required = info.get("required", False)
 
-                # Try to get current value from Django settings
-                current_value = None
-                if env_var:
-                    current_value = getattr(django_settings, env_var, None)
-
-                # Check existing DB value
+                # Check existing DB value first
+                existing_db_value = None
                 if class_path in current_component_settings:
-                    db_value = current_component_settings[class_path].get(setting_name)
-                    if db_value is not None:
-                        current_value = db_value
+                    existing_db_value = current_component_settings[class_path].get(
+                        setting_name
+                    )
 
+                existing_secret_value = None
                 if is_secret and class_path in current_secrets:
-                    db_secret = current_secrets[class_path].get(setting_name)
-                    if db_secret is not None:
-                        current_value = db_secret
+                    existing_secret_value = current_secrets[class_path].get(
+                        setting_name
+                    )
 
-                # Determine final value
-                final_value = current_value if current_value is not None else default
+                # Determine if we should use existing DB value (preserve mode)
+                # Without --force, existing DB values are preserved
+                has_existing_db = (
+                    existing_db_value is not None or existing_secret_value is not None
+                )
+
+                if has_existing_db and not force_overwrite:
+                    # Preserve existing DB value
+                    final_value = (
+                        existing_secret_value
+                        if is_secret and existing_secret_value is not None
+                        else existing_db_value
+                    )
+                    if verbose:
+                        self.stdout.write(
+                            f"    {setting_name}: [PRESERVED] (use --force to overwrite)"
+                        )
+                else:
+                    # Try to get value from Django settings/env
+                    env_value = None
+                    if env_var:
+                        env_value = getattr(django_settings, env_var, None)
+
+                    # Determine final value: env_value > default
+                    final_value = env_value if env_value is not None else default
 
                 # Track missing required settings
                 if is_required and (final_value is None or final_value == ""):
@@ -191,6 +232,15 @@ class Command(BaseCommand):
                                 f"    {setting_name}: MISSING (required)"
                             )
                         )
+                    continue
+
+                # Skip if value was preserved from DB (already logged above)
+                if has_existing_db and not force_overwrite:
+                    # Still add to dicts to maintain consistency
+                    if is_secret and final_value is not None and final_value != "":
+                        component_secrets[setting_name] = final_value
+                    elif not is_secret and final_value is not None:
+                        non_secret_settings[setting_name] = final_value
                     continue
 
                 # Add to appropriate dict
@@ -217,7 +267,10 @@ class Command(BaseCommand):
             # Store in DB (unless dry-run)
             if not dry_run:
                 if non_secret_settings:
-                    current_component_settings[class_path] = non_secret_settings
+                    # Merge settings instead of replacing to preserve untracked keys
+                    if class_path not in current_component_settings:
+                        current_component_settings[class_path] = {}
+                    current_component_settings[class_path].update(non_secret_settings)
 
                 if component_secrets:
                     if class_path not in current_secrets:
@@ -244,6 +297,10 @@ class Command(BaseCommand):
 
         # Print summary
         self._print_summary(stats, dry_run)
+
+        # Strict mode: fail if required settings are missing
+        if strict_mode and stats["missing_required"]:
+            raise SystemExit(1)
 
     def _verify_all_components(self, verbose: bool):
         """Verify all components have required settings configured."""
