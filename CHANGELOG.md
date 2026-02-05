@@ -61,6 +61,18 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Integration with pipeline/utils**: `get_preferred_embedder` and `get_default_embedder` use PipelineSettings
   - Files: `opencontractserver/pipeline/utils.py:303-361`
 
+### Changed
+- Pipeline configuration UI now reads component settings schema from GraphQL instead of hardcoding config requirements.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:69-129`
+- Pipeline configuration UI now centralizes pipeline UI constants in `PIPELINE_UI` for sizing and validation values.
+  - Files: `frontend/src/assets/configurations/constants.ts:174-187`
+
+### Fixed
+- Secrets modal now validates component existence, required secret fields, and payload size before mutation.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1248-1317`
+- MIME filter accessibility labels now include stage context.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1404-1416`
+
 #### Personal Corpus ("My Documents") Feature
 - **Personal corpus auto-creation**: Each user now automatically receives a personal "My Documents" corpus
   - Created via signal handler when user account is created

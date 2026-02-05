@@ -34,6 +34,7 @@ import {
   PipelineSettingsType,
   PipelineComponentsType,
   PipelineComponentType,
+  ComponentSettingSchemaType,
 } from "../../types/graphql-api";
 import { getComponentIcon, getComponentDisplayName } from "./PipelineIcons";
 import {
@@ -74,6 +75,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
       embedders {
         name
@@ -82,6 +94,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         className
         vectorSize
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
       thumbnailers {
         name
@@ -89,6 +112,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
     }
   }
@@ -204,7 +238,7 @@ const BackButton = styled.button`
   gap: 0.5rem;
   background: none;
   border: none;
-  color: #6366f1;
+  color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -213,7 +247,7 @@ const BackButton = styled.button`
   transition: color 0.15s ease;
 
   &:hover {
-    color: #4f46e5;
+    color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 
   svg {
@@ -238,7 +272,7 @@ const PageTitle = styled.h1`
   svg {
     width: 28px;
     height: 28px;
-    color: #6366f1;
+    color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 
   @media (max-width: 768px) {
@@ -283,7 +317,7 @@ const PipelineConnector = styled.div`
   &::after {
     content: "";
     width: 2px;
-    height: 24px;
+    height: ${PIPELINE_UI.CONNECTOR_HEIGHT_PX}px;
     background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
   }
 `;
@@ -391,7 +425,7 @@ const ComponentCard = styled.button<{ $selected: boolean; $color: string }>`
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-height: 120px;
+  min-height: ${PIPELINE_UI.COMPONENT_CARD_MIN_HEIGHT_PX}px;
 
   &:hover {
     border-color: ${(props) => props.$color};
@@ -767,31 +801,7 @@ type PipelineMappingKey =
   | "preferredEmbedders"
   | "preferredThumbnailers";
 
-// Components that require API keys or special configuration
-const COMPONENTS_REQUIRING_CONFIG: Record<
-  string,
-  {
-    fields: Array<{
-      key: string;
-      label: string;
-      type: string;
-      placeholder: string;
-      required: boolean;
-    }>;
-  }
-> = {
-  llamaparse: {
-    fields: [
-      {
-        key: "api_key",
-        label: "LlamaParse API Key",
-        type: "password",
-        placeholder: "llx-...",
-        required: true,
-      },
-    ],
-  },
-};
+type SettingsSchemaEntry = ComponentSettingSchemaType;
 
 // Stage configuration with properly typed settings keys
 const STAGE_CONFIG: Record<
@@ -949,10 +959,8 @@ export const SystemSettings: React.FC = () => {
           // Handle pending auto-expand for components requiring configuration
           const pending = pendingAutoExpandRef.current;
           if (pending) {
-            const lowerName = pending.className.toLowerCase();
-            const requiresConfig = Object.keys(
-              COMPONENTS_REQUIRING_CONFIG
-            ).some((key) => lowerName.includes(key));
+            const requiresConfig =
+              getSecretSettingsForComponent(pending.className).length > 0;
             const hasSecretsConfigured =
               data.updatePipelineSettings.pipelineSettings?.componentsWithSecrets?.includes(
                 pending.className
@@ -1044,6 +1052,49 @@ export const SystemSettings: React.FC = () => {
   const settings = settingsData?.pipelineSettings;
   const components = componentsData?.pipelineComponents;
 
+  const componentsByStage = useMemo(() => {
+    const parsers = (components?.parsers || []).filter(
+      (comp): comp is PipelineComponentType & { className: string } =>
+        Boolean(comp?.className)
+    );
+    const embedders = (components?.embedders || []).filter(
+      (comp): comp is PipelineComponentType & { className: string } =>
+        Boolean(comp?.className)
+    );
+    const thumbnailers = (components?.thumbnailers || []).filter(
+      (comp): comp is PipelineComponentType & { className: string } =>
+        Boolean(comp?.className)
+    );
+
+    return { parsers, embedders, thumbnailers };
+  }, [components]);
+
+  const componentByClassName = useMemo(() => {
+    const map = new Map<
+      string,
+      PipelineComponentType & { className: string }
+    >();
+    for (const comp of [
+      ...componentsByStage.parsers,
+      ...componentsByStage.embedders,
+      ...componentsByStage.thumbnailers,
+    ]) {
+      map.set(comp.className, comp);
+    }
+    return map;
+  }, [componentsByStage]);
+
+  const normalizedSupportedFileTypes = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const comp of componentByClassName.values()) {
+      const fileTypes = (comp.supportedFileTypes || [])
+        .filter((ft): ft is NonNullable<typeof ft> => Boolean(ft))
+        .map((ft) => String(ft).toLowerCase());
+      map.set(comp.className, fileTypes);
+    }
+    return map;
+  }, [componentByClassName]);
+
   // Memoize all current selections to avoid repeated lookups during render
   const currentSelections = useMemo(() => {
     if (!settings) return {};
@@ -1072,47 +1123,64 @@ export const SystemSettings: React.FC = () => {
   // Get components for a stage, filtered by MIME type support
   const getComponentsForStage = useCallback(
     (stage: StageType, mimeType: string): PipelineComponentType[] => {
-      if (!components) return [];
-      const stageComponents = components[stage] || [];
+      const stageComponents = componentsByStage[stage] || [];
 
       // Pre-compute normalized values for comparison
       const mimeTypeLower = mimeType.toLowerCase();
       // Use lookup map to get short label (e.g., "text/plain" → "TXT")
-      const mimeShort = MIME_TO_SHORT_LABEL[mimeType]?.toUpperCase();
+      const mimeShortLower = MIME_TO_SHORT_LABEL[mimeType]?.toLowerCase();
 
       // Filter by supported file types if available
-      return stageComponents.filter((comp): comp is PipelineComponentType => {
-        if (!comp) return false;
+      return stageComponents.filter((comp) => {
         // If no supportedFileTypes specified, assume it supports all
-        if (!comp.supportedFileTypes || comp.supportedFileTypes.length === 0) {
+        const fileTypes =
+          normalizedSupportedFileTypes.get(comp.className) || [];
+        if (fileTypes.length === 0) {
           return true;
         }
         // If MIME type is unknown (no short label mapping), exclude component
-        if (!mimeShort) {
+        if (!mimeShortLower) {
           return false;
         }
         // Check if the MIME type matches any supported file type
-        return comp.supportedFileTypes.some((ft) => {
-          if (!ft) return false;
-          const ftLower = ft.toLowerCase();
-          // Match either short form (e.g., "PDF", "TXT") or full MIME type
-          return ft.toUpperCase() === mimeShort || ftLower === mimeTypeLower;
-        });
+        return fileTypes.some(
+          (ft) => ft === mimeShortLower || ft === mimeTypeLower
+        );
       });
     },
-    [components]
+    [componentsByStage, normalizedSupportedFileTypes]
   );
 
-  // Check if a component requires configuration
-  const getComponentConfig = useCallback((className: string) => {
-    const lowerName = className.toLowerCase();
-    for (const [key, config] of Object.entries(COMPONENTS_REQUIRING_CONFIG)) {
-      if (lowerName.includes(key)) {
-        return config;
+  const getComponentSettingsSchema = useCallback(
+    (className: string): SettingsSchemaEntry[] => {
+      const component = componentByClassName.get(className);
+      return (component?.settingsSchema || []).filter(
+        (entry): entry is SettingsSchemaEntry => Boolean(entry)
+      );
+    },
+    [componentByClassName]
+  );
+
+  const getSecretSettingsForComponent = useCallback(
+    (className: string): SettingsSchemaEntry[] => {
+      return getComponentSettingsSchema(className).filter(
+        (entry) => entry.settingType === "secret"
+      );
+    },
+    [getComponentSettingsSchema]
+  );
+
+  const formatSettingLabel = useCallback(
+    (name: string, description?: string | null): string => {
+      if (description && description.trim()) {
+        return description.trim();
       }
-    }
-    return null;
-  }, []);
+      return name
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+    },
+    []
+  );
 
   // Check if component has secrets configured
   const hasSecrets = useCallback(
@@ -1125,19 +1193,10 @@ export const SystemSettings: React.FC = () => {
   // Look up a component's display name by className from loaded components data
   const getComponentDisplayNameByClassName = useCallback(
     (className: string): string => {
-      if (!components) {
-        return getComponentDisplayName(className);
-      }
-      // Search through all component types to find matching className
-      const allComponents = [
-        ...(components.parsers || []),
-        ...(components.embedders || []),
-        ...(components.thumbnailers || []),
-      ];
-      const component = allComponents.find((c) => c?.className === className);
+      const component = componentByClassName.get(className);
       return getComponentDisplayName(className, component?.title || undefined);
     },
-    [components]
+    [componentByClassName]
   );
 
   // Handle component selection
@@ -1184,26 +1243,83 @@ export const SystemSettings: React.FC = () => {
   }, []);
 
   // Handle secrets modal
-  const handleAddSecrets = useCallback((componentPath?: string) => {
-    setSecretsComponentPath(componentPath || "");
-    setSecretsValue('{\n  "api_key": ""\n}');
-    setShowSecretsModal(true);
-  }, []);
+  const handleAddSecrets = useCallback(
+    (componentPath?: string) => {
+      const path = componentPath || "";
+      setSecretsComponentPath(path);
+
+      const secretSettings = path ? getSecretSettingsForComponent(path) : [];
+      const template =
+        secretSettings.length > 0
+          ? Object.fromEntries(secretSettings.map((entry) => [entry.name, ""]))
+          : { api_key: "" };
+      setSecretsValue(JSON.stringify(template, null, 2));
+      setShowSecretsModal(true);
+    },
+    [getSecretSettingsForComponent]
+  );
 
   const handleSaveSecrets = useCallback(() => {
+    const componentPath = secretsComponentPath.trim();
+    if (!componentPath) {
+      toast.error("Please select a component before saving secrets.");
+      return;
+    }
+
+    const component = componentByClassName.get(componentPath);
+    if (!component) {
+      toast.error("Selected component is not available.");
+      return;
+    }
+
+    const secretSettings = getSecretSettingsForComponent(componentPath);
+    if (secretSettings.length === 0) {
+      toast.error("Selected component does not accept secret settings.");
+      return;
+    }
+
     try {
       const secrets = JSON.parse(secretsValue || "{}");
+      const secretsJson = JSON.stringify(secrets);
+      const secretsBytes = new TextEncoder().encode(secretsJson).length;
+      if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
+        toast.error(
+          `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
+        );
+        return;
+      }
+
+      const missingRequired = secretSettings.filter((entry) => {
+        if (!entry.required) return false;
+        const value = secrets?.[entry.name];
+        return value === undefined || value === null || value === "";
+      });
+      if (missingRequired.length > 0) {
+        const missingLabels = missingRequired.map((entry) =>
+          formatSettingLabel(entry.name, entry.description)
+        );
+        toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
+        return;
+      }
+
       updateSecrets({
         variables: {
-          componentPath: secretsComponentPath,
+          componentPath,
           secrets,
           merge: true,
         },
       });
     } catch (err) {
-      toast.error("Invalid JSON format for secrets");
+      toast.error("Secrets must be valid JSON.");
     }
-  }, [secretsComponentPath, secretsValue, updateSecrets]);
+  }, [
+    componentByClassName,
+    formatSettingLabel,
+    getSecretSettingsForComponent,
+    secretsComponentPath,
+    secretsValue,
+    updateSecrets,
+  ]);
 
   const handleDeleteSecretsClick = useCallback((componentPath: string) => {
     setDeleteSecretsPath(componentPath);
@@ -1257,10 +1373,18 @@ export const SystemSettings: React.FC = () => {
       const isExpanded = expandedSettings[settingsKey] || false;
 
       // Check if current selection requires config
-      const selectedConfig = currentSelection
-        ? getComponentConfig(currentSelection)
-        : null;
-      const needsConfig = selectedConfig && !hasSecrets(currentSelection || "");
+      const secretSettings = currentSelection
+        ? getSecretSettingsForComponent(currentSelection)
+        : [];
+      const needsConfig =
+        secretSettings.length > 0 && !hasSecrets(currentSelection || "");
+      const secretLabel =
+        secretSettings.length === 1
+          ? formatSettingLabel(
+              secretSettings[0].name,
+              secretSettings[0].description
+            )
+          : "Secrets";
 
       return (
         <PipelineStage $color={config.color} key={stage}>
@@ -1274,14 +1398,17 @@ export const SystemSettings: React.FC = () => {
                 <StageSubtitle>{config.subtitle}</StageSubtitle>
               </div>
             </StageInfo>
-            <MimeSelector role="group" aria-label="File type filter">
+            <MimeSelector
+              role="group"
+              aria-label={`${config.title} file type filter`}
+            >
               {SUPPORTED_MIME_TYPES.map((mime) => (
                 <MimeButton
                   key={mime.value}
                   $active={mimeType === mime.value}
                   onClick={() => handleMimeTypeChange(stage, mime.value)}
                   aria-pressed={mimeType === mime.value}
-                  aria-label={`Filter by ${mime.label}`}
+                  aria-label={`Filter ${config.title} by ${mime.label}`}
                 >
                   {mime.shortLabel}
                 </MimeButton>
@@ -1344,7 +1471,7 @@ export const SystemSettings: React.FC = () => {
                 $expanded={isExpanded}
                 id={`settings-content-${settingsKey}`}
               >
-                {selectedConfig ? (
+                {secretSettings.length > 0 ? (
                   <>
                     {hasSecrets(currentSelection) ? (
                       <FormField>
@@ -1368,9 +1495,7 @@ export const SystemSettings: React.FC = () => {
                       </FormField>
                     ) : (
                       <FormField>
-                        <FormLabel>
-                          {selectedConfig.fields[0]?.label || "API Key"}
-                        </FormLabel>
+                        <FormLabel>{secretLabel}</FormLabel>
                         <Button
                           variant="secondary"
                           size="sm"
@@ -1379,10 +1504,12 @@ export const SystemSettings: React.FC = () => {
                           <Key
                             style={{ width: 14, height: 14, marginRight: 6 }}
                           />
-                          Configure API Key
+                          {secretSettings.length === 1
+                            ? `Configure ${secretLabel}`
+                            : "Configure Secrets"}
                         </Button>
                         <FormHelperText>
-                          This component requires an API key to function.
+                          This component requires secrets to function.
                         </FormHelperText>
                       </FormField>
                     )}
@@ -1409,7 +1536,8 @@ export const SystemSettings: React.FC = () => {
       getComponentsForStage,
       getCurrentSelection,
       expandedSettings,
-      getComponentConfig,
+      getSecretSettingsForComponent,
+      formatSettingLabel,
       hasSecrets,
       handleMimeTypeChange,
       handleSelectComponent,
