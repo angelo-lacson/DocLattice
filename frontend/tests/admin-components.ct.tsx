@@ -519,6 +519,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
       embedders {
         name
@@ -527,6 +538,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         className
         vectorSize
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
       thumbnailers {
         name
@@ -534,6 +556,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
     }
   }
@@ -654,6 +687,27 @@ const mockPipelineComponents = {
       description: "ML-based document parser",
       className: "opencontractserver.pipeline.parsers.docling.DoclingParser",
       supportedFileTypes: ["application/pdf"],
+      settingsSchema: [],
+    },
+    {
+      name: "llamaparse",
+      title: "LlamaParser",
+      description: "LlamaIndex cloud-based parser",
+      className: "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+      supportedFileTypes: ["application/pdf"],
+      settingsSchema: [
+        {
+          name: "api_key",
+          settingType: "secret",
+          pythonType: "str",
+          required: true,
+          description: "LlamaCloud API Key",
+          default: "",
+          envVar: "LLAMA_CLOUD_API_KEY",
+          hasValue: false,
+          currentValue: null,
+        },
+      ],
     },
   ],
   embedders: [
@@ -664,6 +718,19 @@ const mockPipelineComponents = {
       className: "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
       vectorSize: 1536,
       supportedFileTypes: null,
+      settingsSchema: [
+        {
+          name: "api_key",
+          settingType: "secret",
+          pythonType: "str",
+          required: true,
+          description: "OpenAI API Key",
+          default: "",
+          envVar: "OPENAI_API_KEY",
+          hasValue: false,
+          currentValue: null,
+        },
+      ],
     },
   ],
   thumbnailers: [
@@ -673,6 +740,7 @@ const mockPipelineComponents = {
       description: "Generate thumbnails for PDF documents",
       className: "opencontractserver.pipeline.thumbnailers.pdf.PDFThumbnailer",
       supportedFileTypes: ["application/pdf"],
+      settingsSchema: [],
     },
   ],
 };
@@ -1200,6 +1268,7 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.parsers.docling.DoclingParser",
           supportedFileTypes: ["PDF"], // Only PDF
+          settingsSchema: [],
         },
         {
           name: "text_parser",
@@ -1208,6 +1277,7 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.parsers.text_parser.TextParser",
           supportedFileTypes: ["TXT"], // Only TXT - tests "text/plain" → "TXT" mapping
+          settingsSchema: [],
         },
         {
           name: "universal_parser",
@@ -1216,6 +1286,7 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.parsers.universal.UniversalParser",
           supportedFileTypes: ["PDF", "TXT", "DOCX"], // All types
+          settingsSchema: [],
         },
         {
           name: "docx_parser",
@@ -1224,6 +1295,7 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.parsers.docx_parser.DocxParser",
           supportedFileTypes: ["DOCX"], // Only DOCX - tests long MIME → "DOCX" mapping
+          settingsSchema: [],
         },
       ],
       embedders: [
@@ -1235,6 +1307,19 @@ test.describe("SystemSettings Component", () => {
             "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
           vectorSize: 1536,
           supportedFileTypes: null, // Supports all
+          settingsSchema: [
+            {
+              name: "api_key",
+              settingType: "secret",
+              pythonType: "str",
+              required: true,
+              description: "OpenAI API Key",
+              default: "",
+              envVar: "OPENAI_API_KEY",
+              hasValue: false,
+              currentValue: null,
+            },
+          ],
         },
       ],
       thumbnailers: [
@@ -1245,6 +1330,7 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.thumbnailers.pdf.PDFThumbnailer",
           supportedFileTypes: ["PDF"],
+          settingsSchema: [],
         },
         {
           name: "text_thumb",
@@ -1253,6 +1339,7 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.thumbnailers.text.TextThumbnailer",
           supportedFileTypes: ["TXT"],
+          settingsSchema: [],
         },
       ],
     };

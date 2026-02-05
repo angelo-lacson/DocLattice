@@ -263,6 +263,53 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                         message="component_settings must be a dictionary.",
                         pipeline_settings=None,
                     )
+
+                # Validate each component's settings against its schema
+                for comp_path, comp_settings in component_settings.items():
+                    # Validate component path format
+                    error = validate_component_path(comp_path)
+                    if error:
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Invalid component path in component_settings: {error}",
+                            pipeline_settings=None,
+                        )
+
+                    if not isinstance(comp_settings, dict):
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Settings for '{comp_path}' must be a dictionary.",
+                            pipeline_settings=None,
+                        )
+
+                    # Validate settings values against component schema
+                    component_def = registry.get_by_class_name(comp_path)
+                    if component_def and component_def.component_class:
+                        from opencontractserver.pipeline.base.settings_schema import (
+                            get_secret_settings,
+                            validate_settings,
+                        )
+
+                        # Filter out secrets from validation (they're stored separately)
+                        secret_names = get_secret_settings(
+                            component_def.component_class
+                        )
+                        non_secret_settings = {
+                            k: v
+                            for k, v in comp_settings.items()
+                            if k not in secret_names
+                        }
+
+                        is_valid, errors = validate_settings(
+                            component_def.component_class, non_secret_settings
+                        )
+                        if not is_valid:
+                            return UpdatePipelineSettingsMutation(
+                                ok=False,
+                                message=f"Invalid settings for '{comp_path}': {'; '.join(errors)}",
+                                pipeline_settings=None,
+                            )
+
                 settings_instance.component_settings = component_settings
 
             # Validate default_embedder

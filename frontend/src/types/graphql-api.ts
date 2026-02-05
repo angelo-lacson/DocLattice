@@ -1760,14 +1760,20 @@ export type PipelineComponentType = {
   settingsSchema?: Maybe<Array<Maybe<ComponentSettingSchemaType>>>;
 };
 
+/** Valid setting types for pipeline component configuration. */
+export type SettingTypeEnum = "required" | "optional" | "secret";
+
+/** Common Python type hints used in settings schemas. */
+export type PythonTypeEnum = "str" | "int" | "float" | "bool" | "any" | string;
+
 export type ComponentSettingSchemaType = {
   __typename?: "ComponentSettingSchemaType";
   /** Setting name (used as key in component_settings dict). */
   name: string;
   /** Type: 'required', 'optional', or 'secret'. */
-  settingType: string;
+  settingType: SettingTypeEnum;
   /** Python type hint (e.g., 'str', 'int', 'bool'). */
-  pythonType?: string;
+  pythonType?: PythonTypeEnum;
   /** Whether this setting must have a value for the component to work. */
   required: boolean;
   /** Human-readable description of the setting. */

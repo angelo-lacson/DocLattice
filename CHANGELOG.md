@@ -73,6 +73,20 @@ If rollback is required after deployment, you must write a custom migration to h
 - MIME filter accessibility labels now include stage context.
   - Files: `frontend/src/components/admin/SystemSettings.tsx:1404-1416`
 
+### Removed
+
+#### ModernBERT Embedders
+- **⚠️ Breaking Change**: ModernBERT embedders have been removed from the codebase
+  - `opencontractserver/pipeline/embedders/modern_bert_embedder.py` - removed
+  - `opencontractserver/pipeline/embedders/minn_modern_bert_embedder.py` - removed
+  - `model_preloaders/download_modernbert_model.py` - removed
+  - Tests removed: `opencontractserver/tests/test_modern_bert_embedder.py`, `opencontractserver/tests/test_minn_modern_bert_embedder.py`
+  - **Migration path**: Users currently using ModernBERT embedders must switch to alternative embedders:
+    - `SentenceTransformerEmbedder` - General purpose sentence transformer embeddings
+    - `OpenAIEmbedder` - OpenAI API-based embeddings (requires API key)
+    - `VoyageAIEmbedder` - Voyage AI embeddings (requires API key)
+  - Update PipelineSettings via admin UI or management command before upgrading
+
 #### Personal Corpus ("My Documents") Feature
 - **Personal corpus auto-creation**: Each user now automatically receives a personal "My Documents" corpus
   - Created via signal handler when user account is created

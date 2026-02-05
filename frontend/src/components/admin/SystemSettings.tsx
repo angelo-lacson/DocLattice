@@ -42,6 +42,7 @@ import {
   SUPPORTED_MIME_TYPES,
   MIME_TO_SHORT_LABEL,
 } from "../../assets/configurations/constants";
+import { formatSettingLabel } from "../../utils/formatters";
 
 // ============================================================================
 // GraphQL Operations
@@ -892,6 +893,255 @@ const PipelineComponentCard = memo<PipelineComponentCardProps>(
 PipelineComponentCard.displayName = "PipelineComponentCard";
 
 // ============================================================================
+// Advanced Settings Panel Subcomponent
+// ============================================================================
+
+interface AdvancedSettingsPanelProps {
+  currentSelection: string;
+  secretSettings: ComponentSettingSchemaType[];
+  hasSecretsConfigured: boolean;
+  isExpanded: boolean;
+  settingsKey: string;
+  onToggle: () => void;
+  onAddSecrets: (componentPath: string) => void;
+  onDeleteSecrets: (componentPath: string) => void;
+}
+
+/**
+ * Collapsible panel showing advanced settings for a selected component.
+ * Handles both components requiring secrets and those without configuration.
+ */
+const AdvancedSettingsPanel = memo<AdvancedSettingsPanelProps>(
+  ({
+    currentSelection,
+    secretSettings,
+    hasSecretsConfigured,
+    isExpanded,
+    settingsKey,
+    onToggle,
+    onAddSecrets,
+    onDeleteSecrets,
+  }) => {
+    const needsConfig = secretSettings.length > 0 && !hasSecretsConfigured;
+    const secretLabel =
+      secretSettings.length === 1
+        ? formatSettingLabel(
+            secretSettings[0].name,
+            secretSettings[0].description
+          )
+        : "Secrets";
+
+    return (
+      <>
+        <AdvancedSettingsToggle
+          $expanded={isExpanded}
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          aria-controls={`settings-content-${settingsKey}`}
+        >
+          <ChevronRight />
+          Advanced Settings
+          {needsConfig && (
+            <RequiredBadge>
+              <AlertTriangle />
+              Config Required
+            </RequiredBadge>
+          )}
+        </AdvancedSettingsToggle>
+
+        {isExpanded && (
+          <AdvancedSettingsContent
+            $expanded={isExpanded}
+            id={`settings-content-${settingsKey}`}
+          >
+            {secretSettings.length > 0 ? (
+              <>
+                {hasSecretsConfigured ? (
+                  <FormField>
+                    <FormLabel>API Credentials</FormLabel>
+                    <SecretBadge>
+                      <Key />
+                      Secrets configured
+                      <IconButton
+                        $danger
+                        onClick={() => onDeleteSecrets(currentSelection)}
+                      >
+                        <Trash2 />
+                      </IconButton>
+                    </SecretBadge>
+                    <FormHelperText>
+                      Click the trash icon to remove and reconfigure secrets.
+                    </FormHelperText>
+                  </FormField>
+                ) : (
+                  <FormField>
+                    <FormLabel>{secretLabel}</FormLabel>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => onAddSecrets(currentSelection)}
+                    >
+                      <Key style={{ width: 14, height: 14, marginRight: 6 }} />
+                      {secretSettings.length === 1
+                        ? `Configure ${secretLabel}`
+                        : "Configure Secrets"}
+                    </Button>
+                    <FormHelperText>
+                      This component requires secrets to function.
+                    </FormHelperText>
+                  </FormField>
+                )}
+              </>
+            ) : (
+              <FormField>
+                <FormLabel>Component Path</FormLabel>
+                <DefaultEmbedderPath>{currentSelection}</DefaultEmbedderPath>
+                <FormHelperText>
+                  This component has no additional configuration options.
+                </FormHelperText>
+              </FormField>
+            )}
+          </AdvancedSettingsContent>
+        )}
+      </>
+    );
+  }
+);
+
+AdvancedSettingsPanel.displayName = "AdvancedSettingsPanel";
+
+// ============================================================================
+// Pipeline Stage Section Subcomponent
+// ============================================================================
+
+interface PipelineStageSectionProps {
+  stage: StageType;
+  config: (typeof STAGE_CONFIG)[StageType];
+  mimeType: string;
+  components: (PipelineComponentType & { className: string })[];
+  currentSelection: string | null;
+  secretSettings: ComponentSettingSchemaType[];
+  hasSecretsConfigured: boolean;
+  isExpanded: boolean;
+  settingsKey: string;
+  updating: boolean;
+  onMimeTypeChange: (stage: StageType, mimeType: string) => void;
+  onSelectComponent: (
+    stage: StageType,
+    mimeType: string,
+    className: string
+  ) => void;
+  onToggleSettings: (key: string) => void;
+  onAddSecrets: (componentPath: string) => void;
+  onDeleteSecrets: (componentPath: string) => void;
+}
+
+/**
+ * Renders a complete pipeline stage with header, component grid, and settings.
+ */
+const PipelineStageSection = memo<PipelineStageSectionProps>(
+  ({
+    stage,
+    config,
+    mimeType,
+    components,
+    currentSelection,
+    secretSettings,
+    hasSecretsConfigured,
+    isExpanded,
+    settingsKey,
+    updating,
+    onMimeTypeChange,
+    onSelectComponent,
+    onToggleSettings,
+    onAddSecrets,
+    onDeleteSecrets,
+  }) => {
+    const Icon = config.icon;
+
+    return (
+      <PipelineStage $color={config.color}>
+        <StageHeader $color={config.color}>
+          <StageInfo>
+            <StageIcon $color={config.color}>
+              <Icon />
+            </StageIcon>
+            <div>
+              <StageTitle>{config.title}</StageTitle>
+              <StageSubtitle>{config.subtitle}</StageSubtitle>
+            </div>
+          </StageInfo>
+          <MimeSelector
+            role="group"
+            aria-label={`${config.title} file type filter`}
+          >
+            {SUPPORTED_MIME_TYPES.map((mime) => (
+              <MimeButton
+                key={mime.value}
+                $active={mimeType === mime.value}
+                onClick={() => onMimeTypeChange(stage, mime.value)}
+                aria-pressed={mimeType === mime.value}
+                aria-label={`Filter ${config.title} by ${mime.label}`}
+              >
+                {mime.shortLabel}
+              </MimeButton>
+            ))}
+          </MimeSelector>
+        </StageHeader>
+        <StageContent>
+          {components.length > 0 ? (
+            <ComponentGrid>
+              {components
+                .filter(
+                  (
+                    comp
+                  ): comp is PipelineComponentType & { className: string } =>
+                    Boolean(comp?.className)
+                )
+                .map((comp) => (
+                  <PipelineComponentCard
+                    key={comp.className}
+                    component={comp}
+                    isSelected={currentSelection === comp.className}
+                    color={config.color}
+                    stageTitle={config.title}
+                    disabled={updating}
+                    onSelect={() =>
+                      onSelectComponent(stage, mimeType, comp.className)
+                    }
+                  />
+                ))}
+            </ComponentGrid>
+          ) : (
+            <NoComponents>
+              No components available for{" "}
+              {SUPPORTED_MIME_TYPES.find((m) => m.value === mimeType)?.label ||
+                mimeType}
+            </NoComponents>
+          )}
+
+          {/* Advanced Settings */}
+          {currentSelection && (
+            <AdvancedSettingsPanel
+              currentSelection={currentSelection}
+              secretSettings={secretSettings}
+              hasSecretsConfigured={hasSecretsConfigured}
+              isExpanded={isExpanded}
+              settingsKey={settingsKey}
+              onToggle={() => onToggleSettings(settingsKey)}
+              onAddSecrets={onAddSecrets}
+              onDeleteSecrets={onDeleteSecrets}
+            />
+          )}
+        </StageContent>
+      </PipelineStage>
+    );
+  }
+);
+
+PipelineStageSection.displayName = "PipelineStageSection";
+
+// ============================================================================
 // Component
 // ============================================================================
 
@@ -1170,18 +1420,6 @@ export const SystemSettings: React.FC = () => {
     [getComponentSettingsSchema]
   );
 
-  const formatSettingLabel = useCallback(
-    (name: string, description?: string | null): string => {
-      if (description && description.trim()) {
-        return description.trim();
-      }
-      return name
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (char) => char.toUpperCase());
-    },
-    []
-  );
-
   // Check if component has secrets configured
   const hasSecrets = useCallback(
     (className: string): boolean => {
@@ -1314,7 +1552,6 @@ export const SystemSettings: React.FC = () => {
     }
   }, [
     componentByClassName,
-    formatSettingLabel,
     getSecretSettingsForComponent,
     secretsComponentPath,
     secretsValue,
@@ -1361,174 +1598,44 @@ export const SystemSettings: React.FC = () => {
     }
   }, []);
 
-  // Render a pipeline stage
+  // Render a pipeline stage using the extracted subcomponent
   const renderStage = useCallback(
     (stage: StageType) => {
       const config = STAGE_CONFIG[stage];
-      const Icon = config.icon;
       const mimeType = selectedMimeTypes[stage];
       const stageComponents = getComponentsForStage(stage, mimeType);
       const currentSelection = getCurrentSelection(stage, mimeType);
       const settingsKey = `${stage}-${mimeType}`;
       const isExpanded = expandedSettings[settingsKey] || false;
-
-      // Check if current selection requires config
       const secretSettings = currentSelection
         ? getSecretSettingsForComponent(currentSelection)
         : [];
-      const needsConfig =
-        secretSettings.length > 0 && !hasSecrets(currentSelection || "");
-      const secretLabel =
-        secretSettings.length === 1
-          ? formatSettingLabel(
-              secretSettings[0].name,
-              secretSettings[0].description
-            )
-          : "Secrets";
+
+      // Filter to ensure components have className defined
+      const filteredComponents = stageComponents.filter(
+        (comp): comp is PipelineComponentType & { className: string } =>
+          Boolean(comp?.className)
+      );
 
       return (
-        <PipelineStage $color={config.color} key={stage}>
-          <StageHeader $color={config.color}>
-            <StageInfo>
-              <StageIcon $color={config.color}>
-                <Icon />
-              </StageIcon>
-              <div>
-                <StageTitle>{config.title}</StageTitle>
-                <StageSubtitle>{config.subtitle}</StageSubtitle>
-              </div>
-            </StageInfo>
-            <MimeSelector
-              role="group"
-              aria-label={`${config.title} file type filter`}
-            >
-              {SUPPORTED_MIME_TYPES.map((mime) => (
-                <MimeButton
-                  key={mime.value}
-                  $active={mimeType === mime.value}
-                  onClick={() => handleMimeTypeChange(stage, mime.value)}
-                  aria-pressed={mimeType === mime.value}
-                  aria-label={`Filter ${config.title} by ${mime.label}`}
-                >
-                  {mime.shortLabel}
-                </MimeButton>
-              ))}
-            </MimeSelector>
-          </StageHeader>
-          <StageContent>
-            {stageComponents.length > 0 ? (
-              <ComponentGrid>
-                {stageComponents
-                  .filter(
-                    (
-                      comp
-                    ): comp is PipelineComponentType & { className: string } =>
-                      Boolean(comp?.className)
-                  )
-                  .map((comp) => (
-                    <PipelineComponentCard
-                      key={comp.className}
-                      component={comp}
-                      isSelected={currentSelection === comp.className}
-                      color={config.color}
-                      stageTitle={config.title}
-                      disabled={updating}
-                      onSelect={() =>
-                        handleSelectComponent(stage, mimeType, comp.className)
-                      }
-                    />
-                  ))}
-              </ComponentGrid>
-            ) : (
-              <NoComponents>
-                No components available for{" "}
-                {SUPPORTED_MIME_TYPES.find((m) => m.value === mimeType)
-                  ?.label || mimeType}
-              </NoComponents>
-            )}
-
-            {/* Advanced Settings */}
-            {currentSelection && (
-              <AdvancedSettingsToggle
-                $expanded={isExpanded}
-                onClick={() => toggleAdvancedSettings(settingsKey)}
-                aria-expanded={isExpanded}
-                aria-controls={`settings-content-${settingsKey}`}
-              >
-                <ChevronRight />
-                Advanced Settings
-                {needsConfig && (
-                  <RequiredBadge>
-                    <AlertTriangle />
-                    Config Required
-                  </RequiredBadge>
-                )}
-              </AdvancedSettingsToggle>
-            )}
-
-            {currentSelection && isExpanded && (
-              <AdvancedSettingsContent
-                $expanded={isExpanded}
-                id={`settings-content-${settingsKey}`}
-              >
-                {secretSettings.length > 0 ? (
-                  <>
-                    {hasSecrets(currentSelection) ? (
-                      <FormField>
-                        <FormLabel>API Credentials</FormLabel>
-                        <SecretBadge>
-                          <Key />
-                          Secrets configured
-                          <IconButton
-                            $danger
-                            onClick={() =>
-                              handleDeleteSecretsClick(currentSelection)
-                            }
-                          >
-                            <Trash2 />
-                          </IconButton>
-                        </SecretBadge>
-                        <FormHelperText>
-                          Click the trash icon to remove and reconfigure
-                          secrets.
-                        </FormHelperText>
-                      </FormField>
-                    ) : (
-                      <FormField>
-                        <FormLabel>{secretLabel}</FormLabel>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleAddSecrets(currentSelection)}
-                        >
-                          <Key
-                            style={{ width: 14, height: 14, marginRight: 6 }}
-                          />
-                          {secretSettings.length === 1
-                            ? `Configure ${secretLabel}`
-                            : "Configure Secrets"}
-                        </Button>
-                        <FormHelperText>
-                          This component requires secrets to function.
-                        </FormHelperText>
-                      </FormField>
-                    )}
-                  </>
-                ) : (
-                  <FormField>
-                    <FormLabel>Component Path</FormLabel>
-                    <DefaultEmbedderPath>
-                      {currentSelection}
-                    </DefaultEmbedderPath>
-                    <FormHelperText>
-                      This component has no additional configuration options.
-                    </FormHelperText>
-                  </FormField>
-                )}
-              </AdvancedSettingsContent>
-            )}
-          </StageContent>
-        </PipelineStage>
+        <PipelineStageSection
+          key={stage}
+          stage={stage}
+          config={config}
+          mimeType={mimeType}
+          components={filteredComponents}
+          currentSelection={currentSelection}
+          secretSettings={secretSettings}
+          hasSecretsConfigured={hasSecrets(currentSelection || "")}
+          isExpanded={isExpanded}
+          settingsKey={settingsKey}
+          updating={updating}
+          onMimeTypeChange={handleMimeTypeChange}
+          onSelectComponent={handleSelectComponent}
+          onToggleSettings={toggleAdvancedSettings}
+          onAddSecrets={handleAddSecrets}
+          onDeleteSecrets={handleDeleteSecretsClick}
+        />
       );
     },
     [
@@ -1537,7 +1644,6 @@ export const SystemSettings: React.FC = () => {
       getCurrentSelection,
       expandedSettings,
       getSecretSettingsForComponent,
-      formatSettingLabel,
       hasSecrets,
       handleMimeTypeChange,
       handleSelectComponent,
