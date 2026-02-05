@@ -290,7 +290,7 @@ def create_settings_instance(
 
     Args:
         component_class: A pipeline component class with Settings dataclass
-        settings_dict: Dict of setting name -> value
+        settings_dict: Dict of setting name -> value (from PipelineSettings database)
         strict: If True, raise ConfigurationError for missing required settings
 
     Returns:
