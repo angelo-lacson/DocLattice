@@ -69,22 +69,26 @@ def _get_cached_jwks(domain: str) -> dict:
 
 def jwt_auth0_decode(token):
     logger.debug(
-        f"jwt_auth0_decode() - Attempting to decode token, first 10 chars: {token[:10]}..."
+        "jwt_auth0_decode() - Attempting to decode token, first 10 chars: %s...",
+        token[:10],
     )
     try:
         header = jwt.get_unverified_header(token)
-        logger.debug(f"jwt_auth0_decode() - Header: {header}")
+        logger.debug("jwt_auth0_decode() - Header: %s", header)
         jwks = _get_cached_jwks(auth0_settings.AUTH0_DOMAIN)
         logger.debug(
-            f"jwt_auth0_decode() - Retrieved JWKS with {len(jwks.get('keys', []))} keys"
+            "jwt_auth0_decode() - Retrieved JWKS with %s keys",
+            len(jwks.get("keys", [])),
         )
         public_key = None
         for jwk in jwks["keys"]:
             logger.debug(
-                f"jwt_auth0_decode() - Checking JWK kid: {jwk['kid']} against header kid: {header['kid']}"
+                "jwt_auth0_decode() - Checking JWK kid: %s against header kid: %s",
+                jwk["kid"],
+                header["kid"],
             )
             if jwk["kid"] == header["kid"]:
-                logger.debug(f"jwt_auth0_decode() - Found matching kid: {jwk['kid']}")
+                logger.debug("jwt_auth0_decode() - Found matching kid: %s", jwk["kid"])
                 public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
                 break
 
@@ -95,12 +99,12 @@ def jwt_auth0_decode(token):
             raise Exception("Public key not found.")
 
         issuer = f"https://{auth0_settings.AUTH0_DOMAIN}/"
-        logger.debug(f"jwt_auth0_decode() - Issuer: {issuer}")
+        logger.debug("jwt_auth0_decode() - Issuer: %s", issuer)
         logger.debug(
-            f"jwt_auth0_decode() - API Audience: {auth0_settings.AUTH0_API_AUDIENCE}"
+            "jwt_auth0_decode() - API Audience: %s", auth0_settings.AUTH0_API_AUDIENCE
         )
         logger.debug(
-            f"jwt_auth0_decode() - Algorithm: {auth0_settings.AUTH0_TOKEN_ALGORITHM}"
+            "jwt_auth0_decode() - Algorithm: %s", auth0_settings.AUTH0_TOKEN_ALGORITHM
         )
 
         decoded = jwt.decode(
@@ -111,7 +115,8 @@ def jwt_auth0_decode(token):
             algorithms=[auth0_settings.AUTH0_TOKEN_ALGORITHM],
         )
         logger.debug(
-            f"jwt_auth0_decode() - Successfully decoded token with keys: {list(decoded.keys())}"
+            "jwt_auth0_decode() - Successfully decoded token with keys: %s",
+            list(decoded.keys()),
         )
         return decoded
     except Exception as e:
@@ -121,12 +126,14 @@ def jwt_auth0_decode(token):
 
 def get_payload(token):
     logger.debug(
-        f"get_payload() - Processing token, first 10 chars: {token[:10] if token else 'None'}..."
+        "get_payload() - Processing token, first 10 chars: %s...",
+        token[:10] if token else "None",
     )
     try:
         payload = auth0_settings.AUTH0_DECODE_HANDLER(token)
         logger.debug(
-            f"get_payload() - Successfully got payload with keys: {list(payload.keys())}"
+            "get_payload() - Successfully got payload with keys: %s",
+            list(payload.keys()),
         )
         return payload
     except jwt.ExpiredSignatureError as e:
@@ -149,7 +156,7 @@ def user_can_authenticate(user):
     that attribute are allowed.
     """
     is_active = getattr(user, "is_active", None)
-    logger.debug(f"user_can_authenticate() - User: {user}, is_active: {is_active}")
+    logger.debug("user_can_authenticate() - User: %s, is_active: %s", user, is_active)
     return is_active or is_active is None
 
 
@@ -158,7 +165,7 @@ def configure_user(user):
     Configure a user after creation and return the updated user.
     Also triggers async task to sync user data with auth0 profile.
     """
-    logger.debug(f"configure_user() - Configuring new user: {user}")
+    logger.debug("configure_user() - Configuring new user: %s", user)
     user.is_active = True
     user.set_password(
         uuid.uuid4().__str__()
@@ -166,11 +173,13 @@ def configure_user(user):
     user.first_signed_in = timezone.now()
     user.save()
     logger.debug(
-        f"configure_user() - User configured and saved: {user}, is_active: {user.is_active}"
+        "configure_user() - User configured and saved: %s, is_active: %s",
+        user,
+        user.is_active,
     )
 
     # For new users from outside
-    logger.debug(f"configure_user() - Triggering async sync for user: {user.username}")
+    logger.debug("configure_user() - Triggering async sync for user: %s", user.username)
     # Lazy import to avoid circular dependency when USE_AUTH0 is False
     from opencontractserver.users.tasks import sync_remote_user
 
@@ -183,7 +192,8 @@ def configure_user(user):
 
 def get_auth0_user_from_token(remote_username):
     logger.debug(
-        f"get_auth0_user_from_token() - Starting with remote_username: {remote_username}"
+        "get_auth0_user_from_token() - Starting with remote_username: %s",
+        remote_username,
     )
 
     if not remote_username:
@@ -192,53 +202,61 @@ def get_auth0_user_from_token(remote_username):
     user = None
 
     UserModel = get_user_model()
-    logger.debug(f"get_auth0_user_from_token() - UserModel: {UserModel}")
-    logger.debug(f"get_auth0_user_from_token() - remote_username: {remote_username}")
+    logger.debug("get_auth0_user_from_token() - UserModel: %s", UserModel)
+    logger.debug("get_auth0_user_from_token() - remote_username: %s", remote_username)
     logger.debug(
-        f"get_auth0_user_from_token() - AUTH0_CREATE_NEW_USERS: {auth0_settings.AUTH0_CREATE_NEW_USERS}"
+        "get_auth0_user_from_token() - AUTH0_CREATE_NEW_USERS: %s",
+        auth0_settings.AUTH0_CREATE_NEW_USERS,
     )
 
     if auth0_settings.AUTH0_CREATE_NEW_USERS:
         logger.debug(
-            f"get_auth0_user_from_token() - Attempting to get_or_create user with username: {remote_username}"
+            "get_auth0_user_from_token() - Attempting to get_or_create user with username: %s",
+            remote_username,
         )
         try:
             user, created = UserModel._default_manager.get_or_create(
                 **{UserModel.USERNAME_FIELD: remote_username}
             )
-            logger.debug(f"get_auth0_user_from_token() - user created: {created}")
+            logger.debug("get_auth0_user_from_token() - user created: %s", created)
             logger.debug(
-                f"get_auth0_user_from_token() - user: {user}, id: {user.id if user else 'None'}"
+                "get_auth0_user_from_token() - user: %s, id: %s",
+                user,
+                user.id if user else "None",
             )
             if created:
                 logger.debug(
-                    f"get_auth0_user_from_token() - configuring new user: {user}"
+                    "get_auth0_user_from_token() - configuring new user: %s", user
                 )
                 user = configure_user(user)
                 logger.debug(
-                    f"get_auth0_user_from_token() - user configured: {user}, is_active: {user.is_active if user else 'None'}"  # noqa: E501
+                    "get_auth0_user_from_token() - user configured: %s, is_active: %s",
+                    user,
+                    user.is_active if user else "None",
                 )
         except Exception as e:
-            logger.error(
-                f"get_auth0_user_from_token() - Error in get_or_create: {str(e)}"
-            )
+            logger.error("get_auth0_user_from_token() - Error in get_or_create: %s", e)
     else:
         try:
             logger.debug(
-                f"get_auth0_user_from_token() - Attempting to get user by natural key: {remote_username}"
+                "get_auth0_user_from_token() - Attempting to get user by natural key: %s",
+                remote_username,
             )
             user = UserModel._default_manager.get_by_natural_key(remote_username)
             logger.debug(
-                f"get_auth0_user_from_token() - found existing user: {user}, id: {user.id if user else 'None'}"
+                "get_auth0_user_from_token() - found existing user: %s, id: %s",
+                user,
+                user.id if user else "None",
             )
         except UserModel.DoesNotExist:
             logger.warning(
-                f"get_auth0_user_from_token() - User with username {remote_username} does not exist"
+                "get_auth0_user_from_token() - User with username %s does not exist",
+                remote_username,
             )
             pass
         except Exception as e:
             logger.error(
-                f"get_auth0_user_from_token() - Error getting user by natural key: {str(e)}"
+                "get_auth0_user_from_token() - Error getting user by natural key: %s", e
             )
 
     if user is None:
@@ -249,11 +267,14 @@ def get_auth0_user_from_token(remote_username):
     else:
         is_active = user.is_active and user_can_authenticate(user)
         logger.debug(
-            f"get_auth0_user_from_token() - user {user.username} active status: {is_active}"
+            "get_auth0_user_from_token() - user %s active status: %s",
+            user.username,
+            is_active,
         )
         if not is_active:
             logger.warning(
-                f"get_auth0_user_from_token() - User {user.username} is not active, returning None"
+                "get_auth0_user_from_token() - User %s is not active, returning None",
+                user.username,
             )
         return user if is_active else None
 
@@ -367,27 +388,30 @@ def sync_admin_claims_from_payload(user, payload):
 
 
 def get_user_by_payload(payload):
-    logger.debug(f"get_user_by_payload() - Payload keys: {list(payload.keys())}")
+    logger.debug("get_user_by_payload() - Payload keys: %s", list(payload.keys()))
 
     username = jwt_get_username_from_payload_handler(payload)
-    logger.debug(f"get_user_by_payload() - Extracted username: {username}")
+    logger.debug("get_user_by_payload() - Extracted username: %s", username)
 
     if not username:
         logger.error("get_user_by_payload() - No username in payload")
         raise exceptions.JSONWebTokenError(_("Invalid payload"))
 
     logger.debug(
-        f"get_user_by_payload() - Getting user from token handler with username: {username}"
+        "get_user_by_payload() - Getting user from token handler with username: %s",
+        username,
     )
     user = auth0_settings.AUTH0_GET_USER_FROM_TOKEN_HANDLER(username)
     logger.debug(
-        f"get_user_by_payload() - User returned from handler: {user}, id: {user.id if user else 'None'}"
+        "get_user_by_payload() - User returned from handler: %s, id: %s",
+        user,
+        user.id if user else "None",
     )
 
     if user is not None:
         is_active = getattr(user, "is_active", True)
         logger.debug(
-            f"get_user_by_payload() - User {user.username} is_active: {is_active}"
+            "get_user_by_payload() - User %s is_active: %s", user.username, is_active
         )
         if not is_active:
             logger.error("get_user_by_payload() - User %s is disabled", user.username)
@@ -399,7 +423,9 @@ def get_user_by_payload(payload):
         logger.warning("get_user_by_payload() - No user found for username")
 
     logger.debug(
-        f"get_user_by_payload() - returning user: {user}, id: {user.id if user else 'None'}"
+        "get_user_by_payload() - returning user: %s, id: %s",
+        user,
+        user.id if user else "None",
     )
     return user
 
@@ -412,16 +438,19 @@ def get_user_by_token(token, **kwargs):
     create a user, configure it, and return user obj
     """
     logger.debug(
-        f"get_user_by_token() - Starting with token first 10 chars: {token[:10] if token else 'None'}..."
+        "get_user_by_token() - Starting with token first 10 chars: %s...",
+        token[:10] if token else "None",
     )
     try:
         payload = get_payload(token)
         logger.debug(
-            f"get_user_by_token() - Got payload with keys: {list(payload.keys())}"
+            "get_user_by_token() - Got payload with keys: %s", list(payload.keys())
         )
         user = get_user_by_payload(payload)
         logger.debug(
-            f"get_user_by_token() - User from payload: {user}, id: {user.id if user else 'None'}"
+            "get_user_by_token() - User from payload: %s, id: %s",
+            user,
+            user.id if user else "None",
         )
         return user
     except Exception as e:
