@@ -926,7 +926,7 @@ class TestGetUserByPayloadWithClaimSync(TestCase):
     @override_settings(
         USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
     )
-    @patch("config.graphql_auth0_auth.utils.cache")
+    @patch("django.core.cache.cache")
     def test_sync_claims_cached_handles_cache_failure(self, mock_cache):
         """_sync_admin_claims_cached should sync claims even when cache fails."""
         from config.graphql_auth0_auth.utils import _sync_admin_claims_cached
