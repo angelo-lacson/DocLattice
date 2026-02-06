@@ -45,7 +45,9 @@ def _get_cached_jwks(domain: str) -> dict:
             response.raise_for_status()
             jwks = response.json()
         except requests.RequestException as e:
-            logger.error(f"_get_cached_jwks() - Failed to fetch JWKS from Auth0: {e}")
+            logger.error(
+                "_get_cached_jwks() - Failed to fetch JWKS from Auth0: %s", e
+            )
             # Return stale cache if available as fallback
             if _jwks_cache["data"] is not None:
                 logger.warning(
@@ -54,7 +56,9 @@ def _get_cached_jwks(domain: str) -> dict:
                 return _jwks_cache["data"]
             raise
         except ValueError as e:
-            logger.error(f"_get_cached_jwks() - Invalid JSON response from Auth0: {e}")
+            logger.error(
+                "_get_cached_jwks() - Invalid JSON response from Auth0: %s", e
+            )
             if _jwks_cache["data"] is not None:
                 logger.warning(
                     "_get_cached_jwks() - Using stale JWKS cache due to JSON parse failure"
@@ -115,7 +119,7 @@ def jwt_auth0_decode(token):
         )
         return decoded
     except Exception as e:
-        logger.error(f"jwt_auth0_decode() - Error decoding token: {str(e)}")
+        logger.error("jwt_auth0_decode() - Error decoding token: %s", e)
         raise
 
 
@@ -130,16 +134,16 @@ def get_payload(token):
         )
         return payload
     except jwt.ExpiredSignatureError as e:
-        logger.error(f"get_payload() - Token expired: {str(e)}")
+        logger.error("get_payload() - Token expired: %s", e)
         raise exceptions.JSONWebTokenExpired()
     except jwt.DecodeError as e:
-        logger.error(f"get_payload() - Decode error: {str(e)}")
+        logger.error("get_payload() - Decode error: %s", e)
         raise exceptions.JSONWebTokenError(_("Error decoding signature"))
     except jwt.InvalidTokenError as e:
-        logger.error(f"get_payload() - Invalid token error: {str(e)}")
+        logger.error("get_payload() - Invalid token error: %s", e)
         raise exceptions.JSONWebTokenError(_("Invalid token"))
     except Exception as e:
-        logger.error(f"get_payload() - Unexpected error: {str(e)}")
+        logger.error("get_payload() - Unexpected error: %s", e)
         raise
 
 
@@ -293,14 +297,14 @@ def _parse_boolean_claim(value):
         elif lower_value in ("false", "0", "no"):
             return False, True
         else:
-            logger.warning(f"Invalid boolean claim value: {value}")
+            logger.warning("Invalid boolean claim value: %s", value)
             return None, False
 
     # Handle numeric values (0/1)
     if isinstance(value, (int, float)):
         return bool(value), True
 
-    logger.warning(f"Unexpected claim type: {type(value)}")
+    logger.warning("Unexpected claim type: %s", type(value))
     return None, False
 
 
@@ -319,8 +323,8 @@ def sync_admin_claims_from_payload(user, payload):
         payload: The decoded JWT payload containing claims.
 
     Returns:
-        bool: True if changes were successfully applied, False if no changes
-              needed or if save failed (non-fatal).
+        bool: True on success (whether changes were made or not),
+              False only if save failed (non-fatal error).
     """
     from django.conf import settings
 
@@ -362,7 +366,7 @@ def sync_admin_claims_from_payload(user, payload):
             )
             return False
 
-    return needs_save
+    return True
 
 
 def get_user_by_payload(payload):
@@ -389,7 +393,9 @@ def get_user_by_payload(payload):
             f"get_user_by_payload() - User {user.username} is_active: {is_active}"
         )
         if not is_active:
-            logger.error(f"get_user_by_payload() - User {user.username} is disabled")
+            logger.error(
+                "get_user_by_payload() - User %s is disabled", user.username
+            )
             raise exceptions.JSONWebTokenError(_("User is disabled"))
         # NOTE: Admin claims sync is intentionally NOT called here to avoid
         # performance overhead on every API request. Admin claims are only
@@ -424,5 +430,5 @@ def get_user_by_token(token, **kwargs):
         )
         return user
     except Exception as e:
-        logger.error(f"get_user_by_token() - Error processing token: {str(e)}")
+        logger.error("get_user_by_token() - Error processing token: %s", e)
         raise

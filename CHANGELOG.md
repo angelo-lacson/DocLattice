@@ -34,6 +34,22 @@ If rollback is required after deployment, you must write a custom migration to h
   - Handles boolean, string ("true"/"false"), and numeric (0/1) claim values
   - Configurable namespace via `AUTH0_ADMIN_CLAIM_NAMESPACE` env var
   - Files: `config/graphql_auth0_auth/utils.py:269-360`
+  - **Required Auth0 Action** (Post-Login): Set up the following Auth0 Action to include admin claims in tokens:
+    ```javascript
+    exports.onExecutePostLogin = async (event, api) => {
+      const namespace = 'https://opencontracts.opensource.legal/';
+      const appMetadata = event.user.app_metadata || {};
+
+      // Add admin claims to access token
+      if (appMetadata.is_staff !== undefined) {
+        api.accessToken.setCustomClaim(`${namespace}is_staff`, appMetadata.is_staff);
+      }
+      if (appMetadata.is_superuser !== undefined) {
+        api.accessToken.setCustomClaim(`${namespace}is_superuser`, appMetadata.is_superuser);
+      }
+    };
+    ```
+    Then set `app_metadata.is_staff` and `app_metadata.is_superuser` on users via Auth0 Management API or Dashboard.
 - **Auth0AdminBackend**: Dedicated authentication backend for admin login via Auth0
   - Validates user exists, is active, and has `is_staff=True`
   - Files: `config/admin_auth/backends.py:18-88`

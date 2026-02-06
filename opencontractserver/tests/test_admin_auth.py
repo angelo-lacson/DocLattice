@@ -150,7 +150,7 @@ class TestAdminClaimsSync(TestCase):
         result = sync_admin_claims_from_payload(self.user, payload)
 
         self.user.refresh_from_db()
-        self.assertFalse(result)  # No changes made
+        self.assertTrue(result)  # Success (no changes needed)
         self.assertTrue(self.user.is_staff)  # Unchanged
 
     @override_settings(
@@ -173,7 +173,7 @@ class TestAdminClaimsSync(TestCase):
 
         result = sync_admin_claims_from_payload(self.user, payload)
 
-        self.assertFalse(result)  # No changes needed
+        self.assertTrue(result)  # Success (no changes needed)
 
     @override_settings(USE_AUTH0=True)
     def test_uses_default_namespace(self):
@@ -305,8 +305,28 @@ class TestAdminClaimsSync(TestCase):
         result = sync_admin_claims_from_payload(self.user, payload)
 
         self.user.refresh_from_db()
-        self.assertFalse(result)  # No change
+        self.assertTrue(result)  # Success (no changes needed)
         self.assertTrue(self.user.is_staff)  # Unchanged
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    @patch.object(User, "save")
+    def test_sync_returns_false_on_save_exception(self, mock_save):
+        """sync_admin_claims_from_payload should return False when save() fails."""
+        from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
+
+        mock_save.side_effect = Exception("Database error")
+
+        payload = {
+            "sub": "auth0|test_user",
+            "https://test.example.com/is_staff": True,
+        }
+
+        result = sync_admin_claims_from_payload(self.user, payload)
+
+        self.assertFalse(result)
+        mock_save.assert_called_once()
 
 
 class TestBooleanClaimParsing(TestCase):
@@ -846,29 +866,3 @@ class TestGetUserByPayloadWithClaimSync(TestCase):
         self.user.is_staff = False
         self.user.is_superuser = False
         self.user.save()
-
-    @override_settings(
-        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
-    )
-    @patch("config.graphql_auth0_auth.utils.auth0_settings")
-    def test_get_user_by_payload_syncs_claims(self, mock_settings):
-        """get_user_by_payload should sync admin claims."""
-        from config.graphql_auth0_auth.utils import get_user_by_payload
-
-        # Configure mock settings
-        mock_settings.AUTH0_GET_USER_FROM_TOKEN_HANDLER = MagicMock(
-            return_value=self.user
-        )
-
-        payload = {
-            "sub": "auth0|integration_test",
-            "https://test.example.com/is_staff": True,
-            "https://test.example.com/is_superuser": True,
-        }
-
-        user = get_user_by_payload(payload)
-
-        self.assertEqual(user, self.user)
-        self.user.refresh_from_db()
-        self.assertTrue(self.user.is_staff)
-        self.assertTrue(self.user.is_superuser)
