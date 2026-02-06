@@ -45,9 +45,7 @@ def _get_cached_jwks(domain: str) -> dict:
             response.raise_for_status()
             jwks = response.json()
         except requests.RequestException as e:
-            logger.error(
-                "_get_cached_jwks() - Failed to fetch JWKS from Auth0: %s", e
-            )
+            logger.error("_get_cached_jwks() - Failed to fetch JWKS from Auth0: %s", e)
             # Return stale cache if available as fallback
             if _jwks_cache["data"] is not None:
                 logger.warning(
@@ -56,9 +54,7 @@ def _get_cached_jwks(domain: str) -> dict:
                 return _jwks_cache["data"]
             raise
         except ValueError as e:
-            logger.error(
-                "_get_cached_jwks() - Invalid JSON response from Auth0: %s", e
-            )
+            logger.error("_get_cached_jwks() - Invalid JSON response from Auth0: %s", e)
             if _jwks_cache["data"] is not None:
                 logger.warning(
                     "_get_cached_jwks() - Using stale JWKS cache due to JSON parse failure"
@@ -265,7 +261,8 @@ def get_auth0_user_from_token(remote_username):
 def jwt_get_username_from_payload_handler(payload):
     username = payload.get("sub")
     logger.debug(
-        f"jwt_get_username_from_payload_handler() - Extracted username from payload: {username}"
+        "jwt_get_username_from_payload_handler() - Extracted username from payload: %s",
+        username,
     )
     return username
 
@@ -393,9 +390,7 @@ def get_user_by_payload(payload):
             f"get_user_by_payload() - User {user.username} is_active: {is_active}"
         )
         if not is_active:
-            logger.error(
-                "get_user_by_payload() - User %s is disabled", user.username
-            )
+            logger.error("get_user_by_payload() - User %s is disabled", user.username)
             raise exceptions.JSONWebTokenError(_("User is disabled"))
         # NOTE: Admin claims sync is intentionally NOT called here to avoid
         # performance overhead on every API request. Admin claims are only
