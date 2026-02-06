@@ -23,6 +23,11 @@ from django.views.decorators.csrf import csrf_protect
 logger = logging.getLogger(__name__)
 
 
+def _get_login_url():
+    """Get the admin login URL using reverse() for proper URL resolution."""
+    return reverse("admin_auth0_login")
+
+
 def _get_admin_index_url():
     """Get the admin index URL using reverse() for proper URL resolution."""
     return reverse("admin:index")
@@ -184,7 +189,7 @@ class Auth0AdminLoginView(View):
             return redirect(next_url)
 
         messages.error(request, "Invalid credentials or insufficient permissions.")
-        return redirect(request.path)
+        return redirect(_get_login_url())
 
     def _authenticate_with_token(self, request, token):
         """Authenticate user with Auth0 JWT token."""
@@ -223,12 +228,12 @@ class Auth0AdminLoginView(View):
                 messages.error(
                     request, "You do not have permission to access the admin."
                 )
-                return redirect(request.path)
+                return redirect(_get_login_url())
 
         except Exception as e:
             logger.error("Admin token authentication failed: %s", e)
             messages.error(request, "Authentication failed. Please try again.")
-            return redirect(request.path)
+            return redirect(_get_login_url())
 
     def _sync_admin_claims(self, user, token):
         """
