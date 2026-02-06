@@ -398,6 +398,8 @@ def _sync_admin_claims_cached(user, payload):
     API request. Claims are synced at most once per ADMIN_CLAIMS_CACHE_TTL
     seconds per user.
 
+    If cache is unavailable, claims are synced on every request as fallback.
+
     Args:
         user: The Django user object to potentially update.
         payload: The decoded JWT payload containing claims.
@@ -413,14 +415,22 @@ def _sync_admin_claims_cached(user, payload):
 
     cache_key = f"admin_claims_sync:{user.id}"
 
-    # Check if we've synced recently
-    if cache.get(cache_key):
-        return
+    # Check if we've synced recently (with cache failure fallback)
+    try:
+        if cache.get(cache_key):
+            return
+    except Exception as e:
+        # Cache unavailable, proceed with sync
+        logger.warning("Cache unavailable for admin claims check: %s", e)
 
     # Sync claims and set cache
     try:
         sync_admin_claims_from_payload(user, payload)
-        cache.set(cache_key, True, timeout=ADMIN_CLAIMS_CACHE_TTL)
+        try:
+            cache.set(cache_key, True, timeout=ADMIN_CLAIMS_CACHE_TTL)
+        except Exception as e:
+            # Cache set failed, but sync succeeded - that's fine
+            logger.warning("Failed to cache admin claims sync status: %s", e)
     except Exception as e:
         # Log but don't fail the request - claim sync is secondary
         logger.warning("Failed to sync admin claims for user %s: %s", user.username, e)

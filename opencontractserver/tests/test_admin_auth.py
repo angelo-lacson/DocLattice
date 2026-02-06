@@ -915,3 +915,29 @@ class TestGetUserByPayloadWithClaimSync(TestCase):
         self.user.is_staff = False
         self.user.is_superuser = False
         self.user.save()
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    @patch("config.graphql_auth0_auth.utils.cache")
+    def test_sync_claims_cached_handles_cache_failure(self, mock_cache):
+        """_sync_admin_claims_cached should sync claims even when cache fails."""
+        from config.graphql_auth0_auth.utils import _sync_admin_claims_cached
+
+        # Simulate cache failure
+        mock_cache.get.side_effect = Exception("Cache unavailable")
+        mock_cache.set.side_effect = Exception("Cache unavailable")
+
+        payload = {
+            "sub": self.user.username,
+            "https://test.example.com/is_staff": True,
+            "https://test.example.com/is_superuser": True,
+        }
+
+        # Should not raise, and should still sync claims
+        _sync_admin_claims_cached(self.user, payload)
+
+        # Verify claims were synced despite cache failure
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
+        self.assertTrue(self.user.is_superuser)

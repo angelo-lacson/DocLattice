@@ -120,7 +120,8 @@ def _get_safe_logout_return_url(request):
         else:
             raise ImproperlyConfigured(
                 "Cannot determine safe logout return URL. "
-                "ALLOWED_HOSTS must contain at least one non-wildcard host."
+                "ALLOWED_HOSTS must contain at least one non-wildcard host. "
+                "Example: ALLOWED_HOSTS=['myapp.example.com', 'localhost']"
             )
 
     scheme = "https" if request.is_secure() else "http"
