@@ -31,6 +31,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Admin claims synchronization**: Admin privileges can be set via Auth0 token claims
   - Supports `{namespace}is_staff` and `{namespace}is_superuser` claims
   - Claims synced during admin login (not on every API request for performance)
+  - **Note**: After updating a user's admin claims in Auth0, they must re-login to Django admin for changes to take effect
   - Handles boolean, string ("true"/"false"), and numeric (0/1) claim values
   - Configurable namespace via `AUTH0_ADMIN_CLAIM_NAMESPACE` env var
   - Files: `config/graphql_auth0_auth/utils.py:269-360`
