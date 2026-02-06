@@ -1099,3 +1099,239 @@ class PipelineSettingsSystemCheckTestCase(TestCase):
 
         warnings = check_pipeline_settings_populated(None)
         self.assertEqual(len(warnings), 0)
+
+
+class ModernBERTDetectionCheckTestCase(TestCase):
+    """Tests for the documents.W002 system check (ModernBERT detection)."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_warns_when_modernbert_in_preferred_embedders(self):
+        """System check warns when preferred_embedders references ModernBERT."""
+        from doclatticeserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_embedders={
+                "application/pdf": "doclatticeserver.pipeline.embedders"
+                ".modern_bert_embedder.ModernBERTEmbedder"
+            },
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W002")
+        self.assertIn("ModernBERT", warnings[0].msg)
+
+    def test_warns_when_modernbert_is_default_embedder(self):
+        """System check warns when default_embedder is a ModernBERT path."""
+        from doclatticeserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            default_embedder="doclatticeserver.pipeline.embedders"
+            ".minn_modern_bert_embedder.MinnModernBERTEmbedder",
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W002")
+
+    def test_no_warning_when_no_modernbert_references(self):
+        """No warning when PipelineSettings doesn't reference ModernBERT."""
+        from doclatticeserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_embedders={"application/pdf": "some.other.Embedder"},
+            default_embedder="some.other.DefaultEmbedder",
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_no_pipeline_settings(self):
+        """No warning when PipelineSettings table is empty."""
+        from doclatticeserver.documents.checks import check_modernbert_references
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 0)
+
+
+class JSONSizeValidationTestCase(TestCase):
+    """Tests for JSON field size validation in mutations."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        PipelineSettings.objects.all().delete()
+        PipelineSettings.get_instance()
+
+    def test_oversized_parser_kwargs_rejected(self):
+        """Test that oversized parser_kwargs are rejected."""
+        mutation = """
+            mutation UpdatePipelineSettings($parserKwargs: GenericScalar) {
+                updatePipelineSettings(parserKwargs: $parserKwargs) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Create a payload exceeding 10KB
+        large_kwargs = {"some.parser.Path": {"data": "x" * 15000}}
+
+        result = self.superuser_client.execute(
+            mutation, variables={"parserKwargs": large_kwargs}
+        )
+        self.assertFalse(result["data"]["updatePipelineSettings"]["ok"])
+        self.assertIn("exceeds", result["data"]["updatePipelineSettings"]["message"])
+
+    def test_normal_sized_parser_kwargs_accepted(self):
+        """Test that normal-sized parser_kwargs are accepted."""
+        mutation = """
+            mutation UpdatePipelineSettings($parserKwargs: GenericScalar) {
+                updatePipelineSettings(parserKwargs: $parserKwargs) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        normal_kwargs = {"some.parser.Path": {"force_ocr": True, "timeout": 60}}
+
+        result = self.superuser_client.execute(
+            mutation, variables={"parserKwargs": normal_kwargs}
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+
+class PipelineSettingsSchemaMethodsTestCase(TestCase):
+    """Tests for PipelineSettings component schema and validation methods."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_get_component_schema_returns_schema(self):
+        """get_component_schema returns schema for a registered component."""
+        from doclatticeserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        # Find a component that has a Settings dataclass
+        for comp in registry.parsers + registry.embedders:
+            if comp.settings_schema:
+                schema = instance.get_component_schema(comp.class_name)
+                self.assertIsInstance(schema, dict)
+                # Schema should have at least one setting
+                if schema:
+                    first_setting = next(iter(schema.values()))
+                    self.assertIn("type", first_setting)
+                break
+
+    def test_get_component_schema_not_found_returns_empty(self):
+        """get_component_schema returns empty dict for unknown components."""
+        instance = PipelineSettings.get_instance()
+        schema = instance.get_component_schema("nonexistent.module.FakeParser")
+        self.assertEqual(schema, {})
+
+    def test_get_component_schema_by_name(self):
+        """get_component_schema looks up by simple name if full path fails."""
+        from doclatticeserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        if registry.parsers:
+            parser = registry.parsers[0]
+            # Look up by simple name
+            schema = instance.get_component_schema(parser.name)
+            # May or may not have settings, but should not raise
+            self.assertIsInstance(schema, dict)
+
+    def test_validate_all_components_returns_dict(self):
+        """validate_all_components returns a dict of missing settings."""
+        instance = PipelineSettings.get_instance()
+        result = instance.validate_all_components()
+        self.assertIsInstance(result, dict)
+        # Each value should be a list of setting names
+        for class_path, missing in result.items():
+            self.assertIsInstance(class_path, str)
+            self.assertIsInstance(missing, list)
+
+    def test_get_all_component_schemas_returns_dict(self):
+        """get_all_component_schemas returns schemas for all components."""
+        instance = PipelineSettings.get_instance()
+        schemas = instance.get_all_component_schemas()
+        self.assertIsInstance(schemas, dict)
+        # Each value should be a dict of setting schemas
+        for class_path, comp_schema in schemas.items():
+            self.assertIsInstance(class_path, str)
+            self.assertIsInstance(comp_schema, dict)
+
+    def test_get_component_schema_marks_secret_has_value(self):
+        """get_component_schema sets has_value for secrets without exposing values."""
+        from doclatticeserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        # Find a component with secret settings
+        for comp in registry.parsers + registry.embedders:
+            if comp.settings_schema:
+                schema_info = {s["name"]: s for s in comp.settings_schema}
+                secret_settings = [
+                    n for n, s in schema_info.items() if s.get("type") == "secret"
+                ]
+                if secret_settings:
+                    # Set a secret value
+                    instance.set_secrets(
+                        {comp.class_name: {secret_settings[0]: "test-secret"}}
+                    )
+                    instance.save()
+
+                    schema = instance.get_component_schema(comp.class_name)
+                    if secret_settings[0] in schema:
+                        self.assertTrue(schema[secret_settings[0]]["has_value"])
+                        # Secret value must NOT be exposed
+                        self.assertIsNone(schema[secret_settings[0]]["current_value"])
+                    break
+
+
+class RegistryGetByNameTestCase(TestCase):
+    """Tests for PipelineComponentRegistry.get_by_name."""
+
+    def test_get_by_name_finds_component(self):
+        """get_by_name finds components by simple class name."""
+        from doclatticeserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if registry.parsers:
+            parser = registry.parsers[0]
+            result = registry.get_by_name(parser.name)
+            self.assertIsNotNone(result)
+            self.assertEqual(result.name, parser.name)
+
+    def test_get_by_name_returns_none_for_unknown(self):
+        """get_by_name returns None for unknown component names."""
+        from doclatticeserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        result = registry.get_by_name("NonExistentComponent12345")
+        self.assertIsNone(result)
