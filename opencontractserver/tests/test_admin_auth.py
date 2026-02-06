@@ -671,10 +671,10 @@ class TestAdminLoginView(TestCase):
     @patch("config.graphql_auth0_auth.utils.sync_admin_claims_from_payload")
     @patch("config.graphql_auth0_auth.utils.get_payload")
     @patch("config.jwt_utils.get_user_from_jwt_token")
-    def test_token_login_continues_on_claim_sync_error(
+    def test_token_login_fails_on_claim_sync_error(
         self, mock_get_user, mock_get_payload, mock_sync
     ):
-        """Login should succeed even if claim sync raises exception."""
+        """Login should fail if claim sync raises exception to prevent stale permissions."""
         mock_get_user.return_value = self.staff_user
         mock_get_payload.return_value = {"sub": "auth0|123"}
         mock_sync.side_effect = Exception("Sync failed")
@@ -686,10 +686,44 @@ class TestAdminLoginView(TestCase):
             },
         )
 
-        # Login should still succeed despite sync failure
+        # Login should fail when claim sync fails
         self.assertEqual(response.status_code, 302)
-        self.assertIn("admin", response.url)
+        self.assertIn("login", response.url)
         mock_get_user.assert_called_once_with("valid_test_token")
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    @patch("config.graphql_auth0_auth.utils.get_payload")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
+    def test_admin_login_revokes_staff_when_claim_false(
+        self, mock_get_user, mock_get_payload
+    ):
+        """Admin login with is_staff=False claim should revoke staff access and deny login."""
+        # User is currently staff
+        self.staff_user.is_staff = True
+        self.staff_user.save()
+
+        mock_get_user.return_value = self.staff_user
+        mock_get_payload.return_value = {
+            "sub": self.staff_user.username,
+            "https://test.example.com/is_staff": False,
+        }
+
+        response = self.client.post(
+            "/admin/login/",
+            {
+                "token": "valid_test_token",
+            },
+        )
+
+        # Should be denied (no longer staff)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+        # Verify is_staff was actually revoked
+        self.staff_user.refresh_from_db()
+        self.assertFalse(self.staff_user.is_staff)
 
     @override_settings(USE_AUTH0=True)
     def test_login_page_shows_auth0_button(self):
@@ -846,6 +880,21 @@ class TestAdminLogoutView(TestCase):
         self.assertIn("returnTo=", response.url)
         # Should use first valid host from ALLOWED_HOSTS
         self.assertIn("example.com", response.url)
+
+    @override_settings(
+        USE_AUTH0=True,
+        AUTH0_DOMAIN="test.auth0.com",
+        AUTH0_CLIENT_ID="test_client_id",
+        ALLOWED_HOSTS=[],
+    )
+    def test_logout_raises_error_without_valid_allowed_hosts(self):
+        """Logout should raise ImproperlyConfigured without valid ALLOWED_HOSTS."""
+        from django.core.exceptions import ImproperlyConfigured
+
+        self.client.force_login(self.staff_user)
+
+        with self.assertRaises(ImproperlyConfigured):
+            self.client.post("/admin/logout/")
 
 
 class TestGetUserByPayloadWithClaimSync(TestCase):

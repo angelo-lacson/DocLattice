@@ -97,7 +97,12 @@ def _get_safe_logout_return_url(request):
 
     Returns:
         A safe absolute URL for the Auth0 logout returnTo parameter.
+
+    Raises:
+        ImproperlyConfigured: If no safe host can be determined from ALLOWED_HOSTS.
     """
+    from django.core.exceptions import ImproperlyConfigured
+
     # Use the first allowed host that isn't a wildcard
     allowed_hosts = getattr(settings, "ALLOWED_HOSTS", [])
     safe_host = None
@@ -113,8 +118,10 @@ def _get_safe_logout_return_url(request):
         if request_host in allowed_hosts or "*" in allowed_hosts:
             safe_host = request.get_host()
         else:
-            # Ultimate fallback to localhost
-            safe_host = "localhost"
+            raise ImproperlyConfigured(
+                "Cannot determine safe logout return URL. "
+                "ALLOWED_HOSTS must contain at least one non-wildcard host."
+            )
 
     scheme = "https" if request.is_secure() else "http"
     return f"{scheme}://{safe_host}/"
@@ -202,10 +209,13 @@ class Auth0AdminLoginView(View):
                 # Sync admin claims from token (only during admin login, not API requests)
                 sync_success = self._sync_admin_claims(user, token)
                 if not sync_success:
-                    logger.warning(
-                        "Admin claim sync returned False for user %s, using existing permissions",
+                    # Fail login if claim sync fails to prevent using stale permissions
+                    logger.error(
+                        "Admin claim sync failed for user %s, denying login",
                         user.username,
                     )
+                    messages.error(request, "Authentication failed. Please try again.")
+                    return redirect(_get_login_url())
                 # Refresh user to get updated is_staff status
                 user.refresh_from_db()
 

@@ -30,8 +30,8 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `config/admin_auth/views.py`, `config/admin_auth/backends.py`
 - **Admin claims synchronization**: Admin privileges can be set via Auth0 token claims
   - Supports `{namespace}is_staff` and `{namespace}is_superuser` claims
-  - Claims synced during admin login (not on every API request for performance)
-  - **Note**: After updating a user's admin claims in Auth0, they must re-login to Django admin for changes to take effect
+  - Claims synced on API requests with 5-minute cache TTL (configurable via `ADMIN_CLAIMS_CACHE_TTL` constant)
+  - Immediate sync during admin login ensures fresh permissions for admin access
   - Handles boolean, string ("true"/"false"), and numeric (0/1) claim values
   - Configurable namespace via `AUTH0_ADMIN_CLAIM_NAMESPACE` env var
   - Files: `config/graphql_auth0_auth/utils.py:269-360`
@@ -62,6 +62,8 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Professional login template**: Standalone HTML template with Auth0 SDK integration
   - Loading states, error handling, graceful degradation
   - Uses Subresource Integrity (SRI) for CDN-hosted Auth0 SDK
+  - **CSP Note**: Template uses inline JavaScript; if Content-Security-Policy is enabled,
+    add `script-src 'unsafe-inline'` or implement CSP nonces
   - Files: `opencontractserver/templates/admin/auth0_login.html`
 - **Comprehensive test coverage**: 50+ tests covering security edge cases
   - Open redirect prevention, boolean claim parsing, logout URL safety

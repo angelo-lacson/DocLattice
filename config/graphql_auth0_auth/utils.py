@@ -12,6 +12,7 @@ from django.utils.translation import gettext as _
 from graphql_jwt import exceptions
 
 from config.graphql_auth0_auth.settings import auth0_settings
+from opencontractserver.constants import TOKEN_LOG_PREFIX_LENGTH
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +70,9 @@ def _get_cached_jwks(domain: str) -> dict:
 
 def jwt_auth0_decode(token):
     logger.debug(
-        "jwt_auth0_decode() - Attempting to decode token, first 10 chars: %s...",
-        token[:10],
+        "jwt_auth0_decode() - Attempting to decode token, first %d chars: %s...",
+        TOKEN_LOG_PREFIX_LENGTH,
+        token[:TOKEN_LOG_PREFIX_LENGTH],
     )
     try:
         header = jwt.get_unverified_header(token)
@@ -126,8 +128,9 @@ def jwt_auth0_decode(token):
 
 def get_payload(token):
     logger.debug(
-        "get_payload() - Processing token, first 10 chars: %s...",
-        token[:10] if token else "None",
+        "get_payload() - Processing token, first %d chars: %s...",
+        TOKEN_LOG_PREFIX_LENGTH,
+        token[:TOKEN_LOG_PREFIX_LENGTH] if token else "None",
     )
     try:
         payload = auth0_settings.AUTH0_DECODE_HANDLER(token)
@@ -387,6 +390,42 @@ def sync_admin_claims_from_payload(user, payload):
     return True
 
 
+def _sync_admin_claims_cached(user, payload):
+    """
+    Sync admin claims from payload with caching to limit performance impact.
+
+    This function uses Django's cache to avoid syncing admin claims on every
+    API request. Claims are synced at most once per ADMIN_CLAIMS_CACHE_TTL
+    seconds per user.
+
+    Args:
+        user: The Django user object to potentially update.
+        payload: The decoded JWT payload containing claims.
+    """
+    from django.conf import settings
+
+    if not getattr(settings, "USE_AUTH0", False):
+        return
+
+    from django.core.cache import cache
+
+    from opencontractserver.constants import ADMIN_CLAIMS_CACHE_TTL
+
+    cache_key = f"admin_claims_sync:{user.id}"
+
+    # Check if we've synced recently
+    if cache.get(cache_key):
+        return
+
+    # Sync claims and set cache
+    try:
+        sync_admin_claims_from_payload(user, payload)
+        cache.set(cache_key, True, timeout=ADMIN_CLAIMS_CACHE_TTL)
+    except Exception as e:
+        # Log but don't fail the request - claim sync is secondary
+        logger.warning("Failed to sync admin claims for user %s: %s", user.username, e)
+
+
 def get_user_by_payload(payload):
     logger.debug("get_user_by_payload() - Payload keys: %s", list(payload.keys()))
 
@@ -416,9 +455,10 @@ def get_user_by_payload(payload):
         if not is_active:
             logger.error("get_user_by_payload() - User %s is disabled", user.username)
             raise exceptions.JSONWebTokenError(_("User is disabled"))
-        # NOTE: Admin claims sync is intentionally NOT called here to avoid
-        # performance overhead on every API request. Admin claims are only
-        # synced during admin login in Auth0AdminLoginView._authenticate_with_token()
+        # Sync admin claims with caching to balance security and performance.
+        # Claims are synced periodically (every ADMIN_CLAIMS_CACHE_TTL seconds)
+        # rather than on every request to avoid database overhead.
+        _sync_admin_claims_cached(user, payload)
     else:
         logger.warning("get_user_by_payload() - No user found for username")
 
@@ -438,8 +478,9 @@ def get_user_by_token(token, **kwargs):
     create a user, configure it, and return user obj
     """
     logger.debug(
-        "get_user_by_token() - Starting with token first 10 chars: %s...",
-        token[:10] if token else "None",
+        "get_user_by_token() - Starting with token first %d chars: %s...",
+        TOKEN_LOG_PREFIX_LENGTH,
+        token[:TOKEN_LOG_PREFIX_LENGTH] if token else "None",
     )
     try:
         payload = get_payload(token)
