@@ -1099,3 +1099,120 @@ class PipelineSettingsSystemCheckTestCase(TestCase):
 
         warnings = check_pipeline_settings_populated(None)
         self.assertEqual(len(warnings), 0)
+
+
+class ModernBERTDetectionCheckTestCase(TestCase):
+    """Tests for the documents.W002 system check (ModernBERT detection)."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_warns_when_modernbert_in_preferred_embedders(self):
+        """System check warns when preferred_embedders references ModernBERT."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_embedders={
+                "application/pdf": "opencontractserver.pipeline.embedders"
+                ".modern_bert_embedder.ModernBERTEmbedder"
+            },
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W002")
+        self.assertIn("ModernBERT", warnings[0].msg)
+
+    def test_warns_when_modernbert_is_default_embedder(self):
+        """System check warns when default_embedder is a ModernBERT path."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            default_embedder="opencontractserver.pipeline.embedders"
+            ".minn_modern_bert_embedder.MinnModernBERTEmbedder",
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W002")
+
+    def test_no_warning_when_no_modernbert_references(self):
+        """No warning when PipelineSettings doesn't reference ModernBERT."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_embedders={"application/pdf": "some.other.Embedder"},
+            default_embedder="some.other.DefaultEmbedder",
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_no_pipeline_settings(self):
+        """No warning when PipelineSettings table is empty."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 0)
+
+
+class JSONSizeValidationTestCase(TestCase):
+    """Tests for JSON field size validation in mutations."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        PipelineSettings.objects.all().delete()
+        PipelineSettings.get_instance()
+
+    def test_oversized_parser_kwargs_rejected(self):
+        """Test that oversized parser_kwargs are rejected."""
+        mutation = """
+            mutation UpdatePipelineSettings($parserKwargs: GenericScalar) {
+                updatePipelineSettings(parserKwargs: $parserKwargs) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Create a payload exceeding 10KB
+        large_kwargs = {"some.parser.Path": {"data": "x" * 15000}}
+
+        result = self.superuser_client.execute(
+            mutation, variables={"parserKwargs": large_kwargs}
+        )
+        self.assertFalse(result["data"]["updatePipelineSettings"]["ok"])
+        self.assertIn("exceeds", result["data"]["updatePipelineSettings"]["message"])
+
+    def test_normal_sized_parser_kwargs_accepted(self):
+        """Test that normal-sized parser_kwargs are accepted."""
+        mutation = """
+            mutation UpdatePipelineSettings($parserKwargs: GenericScalar) {
+                updatePipelineSettings(parserKwargs: $parserKwargs) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        normal_kwargs = {"some.parser.Path": {"force_ocr": True, "timeout": 60}}
+
+        result = self.superuser_client.execute(
+            mutation, variables={"parserKwargs": normal_kwargs}
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])

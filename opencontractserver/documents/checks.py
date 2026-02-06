@@ -74,3 +74,61 @@ def check_pipeline_settings_populated(app_configs, **kwargs):
         pass
 
     return errors
+
+
+# Class paths of removed ModernBERT embedders
+_REMOVED_MODERNBERT_PATHS = {
+    "opencontractserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder",
+    "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder",
+}
+
+
+@register()
+def check_modernbert_references(app_configs, **kwargs):
+    """
+    Warn if PipelineSettings references removed ModernBERT embedder class paths.
+
+    ModernBERT embedders were removed in this release. Users with existing
+    references need to update their configuration to use an alternative.
+    """
+    errors = []
+
+    try:
+        from opencontractserver.documents.models import PipelineSettings
+
+        if not PipelineSettings.objects.exists():
+            return errors
+
+        instance = PipelineSettings.get_instance(use_cache=False)
+
+        found_refs = []
+
+        # Check preferred_embedders
+        for mime_type, path in (instance.preferred_embedders or {}).items():
+            if path in _REMOVED_MODERNBERT_PATHS:
+                found_refs.append(f"preferred_embedders[{mime_type}]")
+
+        # Check default_embedder
+        if instance.default_embedder in _REMOVED_MODERNBERT_PATHS:
+            found_refs.append("default_embedder")
+
+        if found_refs:
+            errors.append(
+                Warning(
+                    "PipelineSettings references removed ModernBERT embedders: "
+                    + ", ".join(found_refs),
+                    hint=(
+                        "ModernBERT embedders have been removed. Update your "
+                        "pipeline settings to use an alternative embedder "
+                        "(e.g., MicroserviceEmbedder, OpenAIEmbedder, "
+                        "VoyageAIEmbedder). Use the Admin UI or run: "
+                        "python manage.py migrate_pipeline_settings --list-components"
+                    ),
+                    id="documents.W002",
+                )
+            )
+
+    except Exception:
+        pass
+
+    return errors

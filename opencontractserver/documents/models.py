@@ -899,8 +899,10 @@ class PipelineSettings(django.db.models.Model):
             raise ValidationError(
                 "PipelineSettings is a singleton. Use PipelineSettings.get_instance() instead."
             )
+        # Pre-invalidate cache to minimize stale read window
+        self._invalidate_cache()
         super().save(*args, **kwargs)
-        # Invalidate cache on save
+        # Post-invalidate to ensure clean state after commit
         self._invalidate_cache()
 
     def delete(self, *args, **kwargs):
@@ -934,6 +936,7 @@ class PipelineSettings(django.db.models.Model):
         """
         from django.conf import settings as django_settings
         from django.core.cache import cache
+        from django.db import transaction
 
         # Try cache first (if enabled)
         if use_cache:
@@ -941,20 +944,28 @@ class PipelineSettings(django.db.models.Model):
             if cached is not None:
                 return cached
 
-        # Get from database (select_related for modified_by to avoid N+1 query)
-        instance, created = cls.objects.select_related("modified_by").get_or_create(
-            pk=1,
-            defaults={
-                "preferred_parsers": getattr(django_settings, "PREFERRED_PARSERS", {}),
-                "preferred_embedders": getattr(
-                    django_settings, "PREFERRED_EMBEDDERS", {}
-                ),
-                "preferred_thumbnailers": {},  # No default in Django settings
-                "parser_kwargs": getattr(django_settings, "PARSER_KWARGS", {}),
-                "component_settings": getattr(django_settings, "PIPELINE_SETTINGS", {}),
-                "default_embedder": getattr(django_settings, "DEFAULT_EMBEDDER", ""),
-            },
-        )
+        # Get from database with atomic transaction to prevent race conditions
+        # during concurrent startup or migration.
+        with transaction.atomic():
+            instance, created = cls.objects.select_related("modified_by").get_or_create(
+                pk=1,
+                defaults={
+                    "preferred_parsers": getattr(
+                        django_settings, "PREFERRED_PARSERS", {}
+                    ),
+                    "preferred_embedders": getattr(
+                        django_settings, "PREFERRED_EMBEDDERS", {}
+                    ),
+                    "preferred_thumbnailers": {},  # No default in Django settings
+                    "parser_kwargs": getattr(django_settings, "PARSER_KWARGS", {}),
+                    "component_settings": getattr(
+                        django_settings, "PIPELINE_SETTINGS", {}
+                    ),
+                    "default_embedder": getattr(
+                        django_settings, "DEFAULT_EMBEDDER", ""
+                    ),
+                },
+            )
 
         # Cache the instance
         if use_cache:
