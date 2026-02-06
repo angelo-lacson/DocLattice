@@ -16,11 +16,10 @@ import base64
 import logging
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import ClassVar, Optional
+from typing import Optional
 
 import numpy as np
 import requests
-from django.conf import settings
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
@@ -65,10 +64,11 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
     cross-modal similarity search (e.g., find images similar to text queries).
 
     Subclasses must define:
-        - url_setting_name: Django setting name for service URL
-        - api_key_setting_name: Django setting name for API key
+        - Settings: A dataclass with url, api_key, and use_cloud_run_iam_auth fields
         - vector_size: Embedding dimension for this model
         - title, description: Human-readable metadata
+        - _default_url: Default URL if setting is not configured
+        - _get_service_config(): Get service configuration from Settings dataclass
 
     API Endpoints (expected by all implementations):
         - POST /embeddings: Text embeddings ({"text": "..."})
@@ -76,10 +76,6 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
         - POST /embeddings/batch: Batch text ({"texts": [...]} max 100)
         - POST /embeddings/image/batch: Batch images ({"images": [...]} max 20)
     """
-
-    # Subclasses must override these
-    url_setting_name: ClassVar[str] = ""
-    api_key_setting_name: ClassVar[str] = ""
 
     dependencies = ["numpy", "requests"]
     supported_file_types = [
@@ -104,55 +100,20 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
         """Default URL if setting is not configured."""
         pass
 
+    @abstractmethod
     def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
         """
         Get service URL, API key, and headers for the microservice.
 
-        Configuration precedence:
-        1. Direct keyword arguments passed to embed_* methods
-        2. Settings from PIPELINE_SETTINGS for this component
-        3. Global Django settings as final fallback
+        Subclasses must implement this to read from their Settings dataclass.
+
+        Args:
+            all_kwargs: Keyword arguments that may override settings.
 
         Returns:
             Tuple of (service_url, api_key, headers)
         """
-        component_settings = self.get_component_settings()
-
-        # Service URL - use the setting name defined by subclass
-        url_key = self.url_setting_name.lower()
-        service_url_fallback = component_settings.get(
-            url_key,
-            getattr(settings, self.url_setting_name, self._default_url),
-        )
-        service_url = all_kwargs.get(url_key, service_url_fallback)
-
-        # API Key - use the setting name defined by subclass
-        api_key_key = self.api_key_setting_name.lower()
-        api_key_fallback = component_settings.get(
-            api_key_key,
-            getattr(settings, self.api_key_setting_name, ""),
-        )
-        api_key = all_kwargs.get(api_key_key, api_key_fallback)
-
-        # Cloud Run IAM auth flag
-        use_cloud_run_iam_auth = bool(
-            all_kwargs.get(
-                "use_cloud_run_iam_auth",
-                component_settings.get("use_cloud_run_iam_auth", False),
-            )
-        )
-
-        # Build headers
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if api_key:
-            headers["X-API-Key"] = api_key
-
-        # Add Cloud Run IAM auth if applicable
-        headers = maybe_add_cloud_run_auth(
-            service_url, headers, force=use_cloud_run_iam_auth
-        )
-
-        return service_url, api_key, headers
+        pass
 
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
@@ -468,14 +429,7 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
         "Produces 768-dimensional vectors in a shared embedding space for cross-modal search."
     )
     author = "OpenContracts"
-
-    url_setting_name = "CLIP_EMBEDDER_URL"
-    api_key_setting_name = "CLIP_EMBEDDER_API_KEY"
     vector_size = 768
-
-    # Legacy setting names for backwards compatibility
-    _legacy_url_setting = "MULTIMODAL_EMBEDDER_URL"
-    _legacy_api_key_setting = "MULTIMODAL_EMBEDDER_API_KEY"
 
     @dataclass
     class Settings:
@@ -515,63 +469,31 @@ class CLIPMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
 
     @property
     def _default_url(self) -> str:
-        return "http://vector-embedder:8000"
+        return "http://multimodal-embedder:8000"
 
     def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
         """
-        Get service URL, API key, and headers for the microservice.
+        Get service URL, API key, and headers for the CLIP microservice.
 
-        Uses Settings dataclass when available, with fallback to legacy
-        configuration pattern for backwards compatibility.
+        Reads configuration from the Settings dataclass populated from
+        PipelineSettings database. Keyword arguments can override settings.
+
+        Args:
+            all_kwargs: Keyword arguments that may override settings.
+
+        Returns:
+            Tuple of (service_url, api_key, headers)
         """
-        # Try to use Settings dataclass first
         s = self.settings
-        if s is not None:
-            service_url = all_kwargs.get("clip_embedder_url", s.clip_embedder_url)
-            api_key = all_kwargs.get("clip_embedder_api_key", s.clip_embedder_api_key)
-            use_cloud_run_iam_auth = bool(
-                all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
-            )
-        else:
-            # Legacy fallback for backwards compatibility
-            component_settings = self.get_component_settings()
+        if s is None:
+            # Settings not loaded - use dataclass defaults
+            s = self.Settings()
 
-            # Service URL - check new key, then legacy key in kwargs
-            url_key = self.url_setting_name.lower()
-            legacy_url_key = self._legacy_url_setting.lower()
-
-            if url_key in all_kwargs:
-                service_url = all_kwargs[url_key]
-            elif legacy_url_key in all_kwargs:
-                service_url = all_kwargs[legacy_url_key]
-            elif url_key in component_settings:
-                service_url = component_settings[url_key]
-            elif legacy_url_key in component_settings:
-                service_url = component_settings[legacy_url_key]
-            else:
-                service_url = self._default_url
-
-            # API Key - check new key, then legacy key
-            api_key_key = self.api_key_setting_name.lower()
-            legacy_api_key_key = self._legacy_api_key_setting.lower()
-
-            if api_key_key in all_kwargs:
-                api_key = all_kwargs[api_key_key]
-            elif legacy_api_key_key in all_kwargs:
-                api_key = all_kwargs[legacy_api_key_key]
-            elif api_key_key in component_settings:
-                api_key = component_settings[api_key_key]
-            elif legacy_api_key_key in component_settings:
-                api_key = component_settings[legacy_api_key_key]
-            else:
-                api_key = ""
-
-            use_cloud_run_iam_auth = bool(
-                all_kwargs.get(
-                    "use_cloud_run_iam_auth",
-                    component_settings.get("use_cloud_run_iam_auth", False),
-                )
-            )
+        service_url = all_kwargs.get("clip_embedder_url", s.clip_embedder_url)
+        api_key = all_kwargs.get("clip_embedder_api_key", s.clip_embedder_api_key)
+        use_cloud_run_iam_auth = bool(
+            all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
+        )
 
         # Build headers
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -602,9 +524,6 @@ class QwenMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
         "Produces 1024-dimensional vectors in a shared embedding space for cross-modal search."
     )
     author = "OpenContracts"
-
-    url_setting_name = "QWEN_EMBEDDER_URL"
-    api_key_setting_name = "QWEN_EMBEDDER_API_KEY"
     vector_size = 1024
 
     @dataclass
@@ -651,51 +570,28 @@ class QwenMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
         """
         Get service URL, API key, and headers for Qwen microservice.
 
-        Uses Settings dataclass when available, with fallback to legacy
-        configuration pattern for backwards compatibility.
+        Reads configuration from the Settings dataclass populated from
+        PipelineSettings database. Keyword arguments can override settings.
+
+        Args:
+            all_kwargs: Keyword arguments that may override settings.
+
+        Returns:
+            Tuple of (service_url, api_key, headers)
         """
-        # Try to use Settings dataclass first
         s = self.settings
-        if s is not None:
-            service_url = all_kwargs.get("qwen_embedder_url", s.qwen_embedder_url)
-            api_key = all_kwargs.get("qwen_embedder_api_key", s.qwen_embedder_api_key)
-            use_cloud_run_iam_auth = bool(
-                all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
-            )
-        else:
-            # Legacy fallback for backwards compatibility
-            component_settings = self.get_component_settings()
+        if s is None:
+            # Settings not loaded - use dataclass defaults
+            s = self.Settings()
 
-            url_key = self.url_setting_name.lower()
-            service_url = all_kwargs.get(
-                url_key,
-                component_settings.get(
-                    url_key,
-                    getattr(settings, self.url_setting_name, self._default_url),
-                ),
-            )
-
-            api_key_key = self.api_key_setting_name.lower()
-            api_key = all_kwargs.get(
-                api_key_key,
-                component_settings.get(
-                    api_key_key,
-                    getattr(settings, self.api_key_setting_name, ""),
-                ),
-            )
-
-            use_cloud_run_iam_auth = bool(
-                all_kwargs.get(
-                    "use_cloud_run_iam_auth",
-                    component_settings.get(
-                        "use_cloud_run_iam_auth",
-                        getattr(settings, "USE_CLOUD_RUN_IAM_AUTH", False),
-                    ),
-                )
-            )
+        service_url = all_kwargs.get("qwen_embedder_url", s.qwen_embedder_url)
+        api_key = all_kwargs.get("qwen_embedder_api_key", s.qwen_embedder_api_key)
+        use_cloud_run_iam_auth = bool(
+            all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
+        )
 
         # Build headers
-        headers = {"Content-Type": "application/json"}
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
             headers["X-API-Key"] = api_key
 

@@ -179,12 +179,11 @@ class PipelineComponentBase(ABC):
 
     def get_component_settings(self) -> dict:
         """
-        Get settings for this component from PipelineSettings DB or Django settings.
+        Get settings for this component from PipelineSettings database.
 
         This method fetches settings fresh on each call to support runtime
-        configuration changes. It checks the PipelineSettings database model
-        first (which includes encrypted secrets), then falls back to Django
-        settings.PIPELINE_SETTINGS.
+        configuration changes. Settings are retrieved from the PipelineSettings
+        database model which includes encrypted secrets.
 
         Note: For components with a Settings dataclass, prefer using the
         `settings` property which returns a validated dataclass instance.
@@ -199,7 +198,7 @@ class PipelineComponentBase(ABC):
             )
             return {}
 
-        # Try to get settings from PipelineSettings DB model (includes secrets)
+        # Get settings from PipelineSettings DB model (includes secrets)
         try:
             from opencontractserver.documents.models import PipelineSettings
 
@@ -213,47 +212,6 @@ class PipelineComponentBase(ABC):
                 return db_settings
         except Exception as e:
             # DB not available (e.g., during migrations or early startup)
-            logger.debug(
-                f"Could not load settings from PipelineSettings DB: {e}. "
-                "Falling back to Django settings."
-            )
+            logger.debug(f"Could not load settings from PipelineSettings DB: {e}.")
 
-        # Fallback to Django settings.PIPELINE_SETTINGS
-        return self._get_django_settings_fallback()
-
-    def _get_django_settings_fallback(self) -> dict:
-        """
-        Load settings from Django settings.PIPELINE_SETTINGS as fallback.
-
-        Tries the simple class name first (higher precedence), then falls back
-        to the full class path. This allows simple configuration keys like
-        "MyComponent" to override more specific "mymodule.MyComponent" paths.
-
-        Returns:
-            Dict of settings for this component from Django settings.
-        """
-        pipeline_settings_dict = getattr(settings, "PIPELINE_SETTINGS", {})
-
-        if not isinstance(pipeline_settings_dict, dict):
-            logger.warning("PIPELINE_SETTINGS is defined but is not a dictionary.")
-            return {}
-
-        simple_class_name = self.__class__.__name__
-
-        # Try simple class name first (higher precedence for user convenience)
-        component_settings = pipeline_settings_dict.get(simple_class_name)
-        if isinstance(component_settings, dict) and component_settings:
-            logger.debug(f"Loaded Django settings for '{simple_class_name}'")
-            return component_settings.copy()
-
-        # Fallback to full class path
-        component_settings = pipeline_settings_dict.get(self._full_class_path)
-        if isinstance(component_settings, dict) and component_settings:
-            logger.debug(f"Loaded Django settings for '{self._full_class_path}'")
-            return component_settings.copy()
-
-        logger.debug(
-            f"No settings found for '{simple_class_name}' or "
-            f"'{self._full_class_path}' in PIPELINE_SETTINGS."
-        )
         return {}

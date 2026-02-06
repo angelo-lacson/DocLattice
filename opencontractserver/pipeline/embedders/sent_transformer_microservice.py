@@ -93,34 +93,18 @@ class MicroserviceEmbedder(BaseEmbedder):
         )
         try:
             # Use settings from the Settings dataclass (loaded from PipelineSettings DB)
-            s = self.settings
-            if s is not None:
-                service_url = all_kwargs.get(
-                    "embeddings_microservice_url", s.embeddings_microservice_url
-                )
-                api_key = all_kwargs.get(
-                    "vector_embedder_api_key", s.vector_embedder_api_key
-                )
-                use_cloud_run_iam_auth = bool(
-                    all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
-                )
-            else:
-                # Fallback for backwards compatibility during migration
-                component_settings = self.get_component_settings()
-                service_url = all_kwargs.get(
-                    "embeddings_microservice_url",
-                    component_settings.get("embeddings_microservice_url", ""),
-                )
-                api_key = all_kwargs.get(
-                    "vector_embedder_api_key",
-                    component_settings.get("vector_embedder_api_key", ""),
-                )
-                use_cloud_run_iam_auth = bool(
-                    all_kwargs.get(
-                        "use_cloud_run_iam_auth",
-                        component_settings.get("use_cloud_run_iam_auth", False),
-                    )
-                )
+            # Use dataclass defaults if settings not yet loaded from database
+            s = self.settings if self.settings is not None else self.Settings()
+
+            service_url = all_kwargs.get(
+                "embeddings_microservice_url", s.embeddings_microservice_url
+            )
+            api_key = all_kwargs.get(
+                "vector_embedder_api_key", s.vector_embedder_api_key
+            )
+            use_cloud_run_iam_auth = bool(
+                all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
+            )
 
             headers: dict[str, str] = {"Content-Type": "application/json"}
             if api_key:

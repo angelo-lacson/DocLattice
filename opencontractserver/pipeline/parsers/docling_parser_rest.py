@@ -143,29 +143,18 @@ class DoclingParser(BaseParser):
         super().__init__()  # Loads settings via PipelineComponentBase
 
         # Access settings via the settings property (populated from PipelineSettings DB)
-        # Fall back to defaults if settings not yet configured
-        s = self.settings
-        if s is not None:
-            self.service_url = s.service_url
-            self.request_timeout = s.request_timeout
-            self.use_cloud_run_iam_auth = s.use_cloud_run_iam_auth
-            self.extract_images = s.extract_images
-            self.image_format = s.image_format
-            self.image_quality = s.image_quality
-            self.image_dpi = s.image_dpi
-            self.min_image_width = s.min_image_width
-            self.min_image_height = s.min_image_height
-        else:
-            # Fallback to defaults for backwards compatibility during migration
-            self.service_url = ""
-            self.request_timeout = 300
-            self.use_cloud_run_iam_auth = False
-            self.extract_images = True
-            self.image_format = "jpeg"
-            self.image_quality = 85
-            self.image_dpi = 150
-            self.min_image_width = 50
-            self.min_image_height = 50
+        # Use dataclass defaults if settings not yet loaded from database
+        s = self.settings if self.settings is not None else self.Settings()
+
+        self.service_url = s.service_url
+        self.request_timeout = s.request_timeout
+        self.use_cloud_run_iam_auth = s.use_cloud_run_iam_auth
+        self.extract_images = s.extract_images
+        self.image_format = s.image_format
+        self.image_quality = s.image_quality
+        self.image_dpi = s.image_dpi
+        self.min_image_width = s.min_image_width
+        self.min_image_height = s.min_image_height
 
         logger.info(
             f"DoclingParser initialized with service URL: {self.service_url}, "

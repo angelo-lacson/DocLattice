@@ -69,6 +69,13 @@ class Command(BaseCommand):
             action="store_true",
             help="Fail if any required settings are missing (exit code 1)",
         )
+        parser.add_argument(
+            "--sync-preferences",
+            action="store_true",
+            help="Sync main pipeline preferences (PREFERRED_PARSERS, PREFERRED_EMBEDDERS, etc.) "
+            "from Django settings to database. Useful after upgrading when Django settings "
+            "have new defaults you want to adopt.",
+        )
 
     def handle(self, *args, **options):
         """Execute the migration command."""
@@ -78,6 +85,7 @@ class Command(BaseCommand):
         specific_component = options.get("component")
         force_overwrite = options.get("force", False)
         strict_mode = options.get("strict", False)
+        sync_preferences = options.get("sync_preferences", False)
 
         self.stdout.write(self.style.NOTICE("\n" + "=" * 70))
         self.stdout.write(self.style.NOTICE("Pipeline Settings Migration"))
@@ -93,6 +101,10 @@ class Command(BaseCommand):
 
         if verify_only:
             self._verify_all_components(verbose)
+            return
+
+        if sync_preferences:
+            self._sync_preferences(dry_run, verbose)
             return
 
         # Import here to avoid circular imports
@@ -421,5 +433,89 @@ class Command(BaseCommand):
                     "\n  [DRY RUN] Run without --dry-run to apply changes"
                 )
             )
+
+        self.stdout.write("=" * 70 + "\n")
+
+    def _sync_preferences(self, dry_run: bool, verbose: bool):
+        """
+        Sync main pipeline preferences from Django settings to database.
+
+        This updates:
+        - preferred_parsers from PREFERRED_PARSERS
+        - preferred_embedders from PREFERRED_EMBEDDERS
+        - preferred_thumbnailers from PREFERRED_THUMBNAILERS (if defined)
+        - parser_kwargs from PARSER_KWARGS
+        - default_embedder from DEFAULT_EMBEDDER
+        """
+        from opencontractserver.documents.models import PipelineSettings
+
+        pipeline_settings = PipelineSettings.get_instance(use_cache=False)
+
+        self.stdout.write("Syncing main pipeline preferences from Django settings...\n")
+
+        # Map of DB field -> Django setting name
+        preference_mappings = [
+            ("preferred_parsers", "PREFERRED_PARSERS", {}),
+            ("preferred_embedders", "PREFERRED_EMBEDDERS", {}),
+            ("preferred_thumbnailers", "PREFERRED_THUMBNAILERS", {}),
+            ("parser_kwargs", "PARSER_KWARGS", {}),
+            ("default_embedder", "DEFAULT_EMBEDDER", ""),
+        ]
+
+        changes = []
+
+        for db_field, setting_name, default in preference_mappings:
+            current_value = getattr(pipeline_settings, db_field)
+            new_value = getattr(django_settings, setting_name, default)
+
+            # Normalize for comparison (handle None vs empty dict/string)
+            current_normalized = current_value if current_value else default
+            new_normalized = new_value if new_value else default
+
+            if current_normalized != new_normalized:
+                changes.append(
+                    {
+                        "field": db_field,
+                        "setting": setting_name,
+                        "old": current_value,
+                        "new": new_value,
+                    }
+                )
+                if verbose:
+                    self.stdout.write(f"  {db_field}:")
+                    self.stdout.write(f"    Current: {current_value}")
+                    self.stdout.write(f"    New:     {new_value}")
+
+                if not dry_run:
+                    setattr(pipeline_settings, db_field, new_value)
+            else:
+                if verbose:
+                    self.stdout.write(f"  {db_field}: unchanged")
+
+        if not dry_run and changes:
+            pipeline_settings.save()
+
+        # Print summary
+        self.stdout.write("\n" + "=" * 70)
+        self.stdout.write("SYNC PREFERENCES SUMMARY")
+        self.stdout.write("=" * 70)
+
+        if changes:
+            self.stdout.write(f"  Fields updated: {len(changes)}")
+            for change in changes:
+                self.stdout.write(f"    - {change['field']} (from {change['setting']})")
+        else:
+            self.stdout.write(
+                "  No changes needed - database already matches Django settings"
+            )
+
+        if dry_run:
+            self.stdout.write(
+                self.style.NOTICE(
+                    "\n  [DRY RUN] Run without --dry-run to apply changes"
+                )
+            )
+        elif changes:
+            self.stdout.write(self.style.SUCCESS("\n  Preferences synced successfully"))
 
         self.stdout.write("=" * 70 + "\n")
