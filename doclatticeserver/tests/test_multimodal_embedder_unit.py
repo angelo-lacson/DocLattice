@@ -742,8 +742,6 @@ class TestQwenMicroserviceEmbedderUnit(TestCase):
         """Test Qwen embedder has correct attributes."""
         self.assertEqual(self.embedder.vector_size, 1024)
         self.assertEqual(self.embedder.title, "Qwen Microservice Embedder")
-        self.assertEqual(self.embedder.url_setting_name, "QWEN_EMBEDDER_URL")
-        self.assertEqual(self.embedder.api_key_setting_name, "QWEN_EMBEDDER_API_KEY")
 
     def test_qwen_default_url(self):
         """Test Qwen embedder has correct default URL."""

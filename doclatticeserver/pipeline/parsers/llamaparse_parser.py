@@ -217,34 +217,21 @@ class LlamaParseParser(BaseParser):
         super().__init__()  # Loads settings via PipelineComponentBase
 
         # Access settings via the settings property (populated from PipelineSettings DB)
-        s = self.settings
-        if s is not None:
-            self.api_key = s.api_key
-            self.result_type = s.result_type
-            self.extract_layout = s.extract_layout
-            self.num_workers = s.num_workers
-            self.language = s.language
-            self.verbose = s.verbose
-            self.extract_images = s.extract_images
-            self.image_format = s.image_format
-            self.image_quality = s.image_quality
-            self.image_dpi = s.image_dpi
-            self.min_image_width = s.min_image_width
-            self.min_image_height = s.min_image_height
-        else:
-            # Fallback to defaults for backwards compatibility during migration
-            self.api_key = ""
-            self.result_type = "json"
-            self.extract_layout = True
-            self.num_workers = 4
-            self.language = "en"
-            self.verbose = False
-            self.extract_images = True
-            self.image_format = "jpeg"
-            self.image_quality = 85
-            self.image_dpi = 150
-            self.min_image_width = 50
-            self.min_image_height = 50
+        # Use dataclass defaults if settings not yet loaded from database
+        s = self.settings if self.settings is not None else self.Settings()
+
+        self.api_key = s.api_key
+        self.result_type = s.result_type
+        self.extract_layout = s.extract_layout
+        self.num_workers = s.num_workers
+        self.language = s.language
+        self.verbose = s.verbose
+        self.extract_images = s.extract_images
+        self.image_format = s.image_format
+        self.image_quality = s.image_quality
+        self.image_dpi = s.image_dpi
+        self.min_image_width = s.min_image_width
+        self.min_image_height = s.min_image_height
 
         logger.info(
             f"LlamaParseParser initialized with extract_layout={self.extract_layout}, "
