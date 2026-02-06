@@ -7,16 +7,86 @@ authentication (always available as fallback).
 """
 
 import logging
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
 
 logger = logging.getLogger(__name__)
+
+
+def _get_safe_redirect_url(request, url, default=None):
+    """
+    Validate and return a safe redirect URL.
+
+    Prevents open redirect attacks by validating the URL against
+    allowed hosts.
+
+    Args:
+        request: The HTTP request object.
+        url: The URL to validate.
+        default: Default URL if validation fails.
+
+    Returns:
+        The validated URL or default if validation fails.
+    """
+    if default is None:
+        default = f"/{settings.ADMIN_URL}"
+
+    if not url:
+        return default
+
+    # Validate the URL is safe (same host or in ALLOWED_HOSTS)
+    if url_has_allowed_host_and_scheme(
+        url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return url
+
+    logger.warning(f"Blocked unsafe redirect URL: {url}")
+    return default
+
+
+def _get_safe_logout_return_url(request):
+    """
+    Get a safe return URL for Auth0 logout.
+
+    Uses the configured ALLOWED_HOSTS to build a safe return URL,
+    preventing Host header injection attacks.
+
+    Args:
+        request: The HTTP request object.
+
+    Returns:
+        A safe absolute URL for the Auth0 logout returnTo parameter.
+    """
+    # Use the first allowed host that isn't a wildcard
+    allowed_hosts = getattr(settings, "ALLOWED_HOSTS", [])
+    safe_host = None
+
+    for host in allowed_hosts:
+        if host and host != "*" and not host.startswith("."):
+            safe_host = host
+            break
+
+    # Fall back to request host if it's in ALLOWED_HOSTS
+    if safe_host is None:
+        request_host = request.get_host().split(":")[0]
+        if request_host in allowed_hosts or "*" in allowed_hosts:
+            safe_host = request.get_host()
+        else:
+            # Ultimate fallback to localhost
+            safe_host = "localhost"
+
+    scheme = "https" if request.is_secure() else "http"
+    return f"{scheme}://{safe_host}/"
 
 
 class Auth0AdminLoginView(View):
@@ -46,12 +116,17 @@ class Auth0AdminLoginView(View):
         if token:
             return self._authenticate_with_token(request, token)
 
+        # Validate the next URL to prevent open redirect attacks
+        next_url = _get_safe_redirect_url(
+            request, request.GET.get("next"), f"/{settings.ADMIN_URL}"
+        )
+
         context = {
             "title": "Log in",
             "site_header": admin.site.site_header or "Django administration",
             "site_title": admin.site.site_title or "Django site admin",
             "use_auth0": getattr(settings, "USE_AUTH0", False),
-            "next": request.GET.get("next", f"/{settings.ADMIN_URL}"),
+            "next": next_url,
         }
 
         # Add Auth0 settings if enabled
@@ -80,7 +155,10 @@ class Auth0AdminLoginView(View):
 
         if user is not None and user.is_staff:
             login(request, user)
-            next_url = request.POST.get("next", f"/{settings.ADMIN_URL}")
+            # Validate redirect URL to prevent open redirect attacks
+            next_url = _get_safe_redirect_url(
+                request, request.POST.get("next"), f"/{settings.ADMIN_URL}"
+            )
             return redirect(next_url)
 
         messages.error(request, "Invalid credentials or insufficient permissions.")
@@ -100,8 +178,10 @@ class Auth0AdminLoginView(View):
                     user,
                     backend="config.admin_auth.backends.Auth0AdminBackend",
                 )
-                next_url = request.GET.get(
-                    "next", request.POST.get("next", f"/{settings.ADMIN_URL}")
+                # Validate redirect URL to prevent open redirect attacks
+                raw_next = request.GET.get("next") or request.POST.get("next")
+                next_url = _get_safe_redirect_url(
+                    request, raw_next, f"/{settings.ADMIN_URL}"
                 )
                 logger.info(f"Admin login successful for {user.username}")
                 return redirect(next_url)
@@ -129,14 +209,14 @@ class Auth0AdminLogoutView(View):
 
         if getattr(settings, "USE_AUTH0", False):
             # Redirect to Auth0 logout to clear Auth0 session
-            return_to = request.build_absolute_uri("/")
+            # Use safe return URL to prevent Host header injection
+            return_to = _get_safe_logout_return_url(request)
             auth0_domain = getattr(settings, "AUTH0_DOMAIN", "")
             auth0_client_id = getattr(settings, "AUTH0_CLIENT_ID", "")
-            logout_url = (
-                f"https://{auth0_domain}/v2/logout"
-                f"?client_id={auth0_client_id}"
-                f"&returnTo={return_to}"
-            )
+
+            # Use urlencode to safely encode the returnTo parameter
+            params = urlencode({"client_id": auth0_client_id, "returnTo": return_to})
+            logout_url = f"https://{auth0_domain}/v2/logout?{params}"
             return redirect(logout_url)
 
         return redirect(f"/{settings.ADMIN_URL}")

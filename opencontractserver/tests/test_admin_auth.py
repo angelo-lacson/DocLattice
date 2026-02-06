@@ -191,6 +191,223 @@ class TestAdminClaimsSync(TestCase):
         self.assertTrue(result)
         self.assertTrue(self.user.is_staff)
 
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    def test_sync_string_true_claim(self):
+        """String 'true' should be parsed as boolean True."""
+        from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
+
+        payload = {
+            "sub": "auth0|test_user",
+            "https://test.example.com/is_staff": "true",
+        }
+
+        result = sync_admin_claims_from_payload(self.user, payload)
+
+        self.user.refresh_from_db()
+        self.assertTrue(result)
+        self.assertTrue(self.user.is_staff)
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    def test_sync_string_false_claim(self):
+        """String 'false' should be parsed as boolean False."""
+        from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
+
+        self.user.is_staff = True
+        self.user.save()
+
+        payload = {
+            "sub": "auth0|test_user",
+            "https://test.example.com/is_staff": "false",
+        }
+
+        result = sync_admin_claims_from_payload(self.user, payload)
+
+        self.user.refresh_from_db()
+        self.assertTrue(result)
+        self.assertFalse(self.user.is_staff)
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    def test_sync_string_True_uppercase(self):
+        """String 'True' (uppercase) should be parsed as boolean True."""
+        from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
+
+        payload = {
+            "sub": "auth0|test_user",
+            "https://test.example.com/is_staff": "True",
+        }
+
+        result = sync_admin_claims_from_payload(self.user, payload)
+
+        self.user.refresh_from_db()
+        self.assertTrue(result)
+        self.assertTrue(self.user.is_staff)
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    def test_sync_numeric_1_claim(self):
+        """Numeric 1 should be parsed as boolean True."""
+        from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
+
+        payload = {
+            "sub": "auth0|test_user",
+            "https://test.example.com/is_staff": 1,
+        }
+
+        result = sync_admin_claims_from_payload(self.user, payload)
+
+        self.user.refresh_from_db()
+        self.assertTrue(result)
+        self.assertTrue(self.user.is_staff)
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    def test_sync_numeric_0_claim(self):
+        """Numeric 0 should be parsed as boolean False."""
+        from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
+
+        self.user.is_staff = True
+        self.user.save()
+
+        payload = {
+            "sub": "auth0|test_user",
+            "https://test.example.com/is_staff": 0,
+        }
+
+        result = sync_admin_claims_from_payload(self.user, payload)
+
+        self.user.refresh_from_db()
+        self.assertTrue(result)
+        self.assertFalse(self.user.is_staff)
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    def test_sync_invalid_string_claim_ignored(self):
+        """Invalid string claim should be ignored."""
+        from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
+
+        self.user.is_staff = True
+        self.user.save()
+
+        payload = {
+            "sub": "auth0|test_user",
+            "https://test.example.com/is_staff": "invalid",
+        }
+
+        result = sync_admin_claims_from_payload(self.user, payload)
+
+        self.user.refresh_from_db()
+        self.assertFalse(result)  # No change
+        self.assertTrue(self.user.is_staff)  # Unchanged
+
+
+class TestBooleanClaimParsing(TestCase):
+    """Tests for the _parse_boolean_claim helper function."""
+
+    def test_parse_boolean_true(self):
+        """Boolean True should be parsed correctly."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim(True)
+        self.assertTrue(valid)
+        self.assertTrue(value)
+
+    def test_parse_boolean_false(self):
+        """Boolean False should be parsed correctly."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim(False)
+        self.assertTrue(valid)
+        self.assertFalse(value)
+
+    def test_parse_string_true_lowercase(self):
+        """String 'true' should be parsed as True."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim("true")
+        self.assertTrue(valid)
+        self.assertTrue(value)
+
+    def test_parse_string_false_lowercase(self):
+        """String 'false' should be parsed as False."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim("false")
+        self.assertTrue(valid)
+        self.assertFalse(value)
+
+    def test_parse_string_yes(self):
+        """String 'yes' should be parsed as True."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim("yes")
+        self.assertTrue(valid)
+        self.assertTrue(value)
+
+    def test_parse_string_no(self):
+        """String 'no' should be parsed as False."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim("no")
+        self.assertTrue(valid)
+        self.assertFalse(value)
+
+    def test_parse_string_1(self):
+        """String '1' should be parsed as True."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim("1")
+        self.assertTrue(valid)
+        self.assertTrue(value)
+
+    def test_parse_string_0(self):
+        """String '0' should be parsed as False."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim("0")
+        self.assertTrue(valid)
+        self.assertFalse(value)
+
+    def test_parse_int_1(self):
+        """Integer 1 should be parsed as True."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim(1)
+        self.assertTrue(valid)
+        self.assertTrue(value)
+
+    def test_parse_int_0(self):
+        """Integer 0 should be parsed as False."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim(0)
+        self.assertTrue(valid)
+        self.assertFalse(value)
+
+    def test_parse_none(self):
+        """None should return (None, False)."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim(None)
+        self.assertFalse(valid)
+        self.assertIsNone(value)
+
+    def test_parse_invalid_string(self):
+        """Invalid string should return (None, False)."""
+        from config.graphql_auth0_auth.utils import _parse_boolean_claim
+
+        value, valid = _parse_boolean_claim("invalid")
+        self.assertFalse(valid)
+        self.assertIsNone(value)
+
 
 class TestAuth0AdminBackend(TestCase):
     """Tests for the Auth0 admin authentication backend."""
@@ -447,6 +664,63 @@ class TestAdminLoginView(TestCase):
         self.assertEqual(response.status_code, 200)
         # Auth0 button should not be in content
 
+    def test_open_redirect_blocked_external_url(self):
+        """External URL in next parameter should be blocked."""
+        response = self.client.post(
+            "/admin/login/",
+            {
+                "username": "admin_test",
+                "password": "testpass123",
+                "next": "https://evil.com/steal-cookies",
+            },
+            follow=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        # Should redirect to admin, not evil.com
+        self.assertNotIn("evil.com", response.url)
+        self.assertIn("admin", response.url)
+
+    def test_open_redirect_blocked_protocol_relative(self):
+        """Protocol-relative URL in next parameter should be blocked."""
+        response = self.client.post(
+            "/admin/login/",
+            {
+                "username": "admin_test",
+                "password": "testpass123",
+                "next": "//evil.com/steal-cookies",
+            },
+            follow=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        # Should redirect to admin, not evil.com
+        self.assertNotIn("evil.com", response.url)
+        self.assertIn("admin", response.url)
+
+    def test_valid_internal_redirect_allowed(self):
+        """Valid internal URL in next parameter should be allowed."""
+        response = self.client.post(
+            "/admin/login/",
+            {
+                "username": "admin_test",
+                "password": "testpass123",
+                "next": "/admin/users/",
+            },
+            follow=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/admin/users/")
+
+    def test_open_redirect_blocked_in_get_next_param(self):
+        """External URL in GET next parameter should be sanitized in context."""
+        response = self.client.get("/admin/login/?next=https://evil.com/")
+
+        self.assertEqual(response.status_code, 200)
+        # The next value in context should be safe
+        self.assertNotIn("evil.com", response.content.decode())
+
 
 class TestAdminLogoutView(TestCase):
     """Tests for the custom admin logout view."""
@@ -495,6 +769,24 @@ class TestAdminLogoutView(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("test.auth0.com", response.url)
         self.assertIn("logout", response.url)
+
+    @override_settings(
+        USE_AUTH0=True,
+        AUTH0_DOMAIN="test.auth0.com",
+        AUTH0_CLIENT_ID="test_client_id",
+        ALLOWED_HOSTS=["example.com", "localhost"],
+    )
+    def test_logout_uses_safe_return_url(self):
+        """Logout should use a safe return URL from ALLOWED_HOSTS."""
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get("/admin/logout/")
+
+        self.assertEqual(response.status_code, 302)
+        # returnTo should be URL-encoded and use a safe host
+        self.assertIn("returnTo=", response.url)
+        # Should not use request Host header directly for security
+        self.assertIn("example.com", response.url)
 
 
 class TestGetUserByPayloadWithClaimSync(TestCase):

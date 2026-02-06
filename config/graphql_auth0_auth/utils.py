@@ -266,6 +266,44 @@ def jwt_get_username_from_payload_handler(payload):
     return username
 
 
+def _parse_boolean_claim(value):
+    """
+    Parse a claim value to a boolean, handling string representations.
+
+    Auth0 claims may be sent as booleans or strings depending on configuration.
+    This function handles both cases safely.
+
+    Args:
+        value: The claim value (bool, str, or None).
+
+    Returns:
+        tuple: (parsed_value, is_valid) where is_valid is False if value is None
+               or cannot be parsed.
+    """
+    if value is None:
+        return None, False
+
+    if isinstance(value, bool):
+        return value, True
+
+    if isinstance(value, str):
+        lower_value = value.lower().strip()
+        if lower_value in ("true", "1", "yes"):
+            return True, True
+        elif lower_value in ("false", "0", "no"):
+            return False, True
+        else:
+            logger.warning(f"Invalid boolean claim value: {value}")
+            return None, False
+
+    # Handle numeric values (0/1)
+    if isinstance(value, (int, float)):
+        return bool(value), True
+
+    logger.warning(f"Unexpected claim type: {type(value)}")
+    return None, False
+
+
 def sync_admin_claims_from_payload(user, payload):
     """
     Sync is_staff and is_superuser from Auth0 token claims.
@@ -273,6 +311,8 @@ def sync_admin_claims_from_payload(user, payload):
     Claims are expected at namespace + 'is_staff' and namespace + 'is_superuser'.
     Only updates if claims are explicitly present in the token; never demotes
     unless explicitly set to False.
+
+    Handles both boolean and string claim values (e.g., true, "true", "True").
 
     Args:
         user: The Django user object to update.
@@ -289,18 +329,22 @@ def sync_admin_claims_from_payload(user, payload):
         "https://opencontracts.opensource.legal/",
     )
 
-    is_staff_claim = payload.get(f"{namespace}is_staff")
-    is_superuser_claim = payload.get(f"{namespace}is_superuser")
+    raw_is_staff = payload.get(f"{namespace}is_staff")
+    raw_is_superuser = payload.get(f"{namespace}is_superuser")
+
+    # Parse claims with type safety
+    is_staff_claim, is_staff_valid = _parse_boolean_claim(raw_is_staff)
+    is_superuser_claim, is_superuser_valid = _parse_boolean_claim(raw_is_superuser)
 
     needs_save = False
 
-    # Only update if claim is explicitly present (not None)
-    if is_staff_claim is not None and user.is_staff != is_staff_claim:
+    # Only update if claim is valid and different from current value
+    if is_staff_valid and user.is_staff != is_staff_claim:
         user.is_staff = is_staff_claim
         needs_save = True
         logger.info(f"Synced is_staff={is_staff_claim} for user {user.username}")
 
-    if is_superuser_claim is not None and user.is_superuser != is_superuser_claim:
+    if is_superuser_valid and user.is_superuser != is_superuser_claim:
         user.is_superuser = is_superuser_claim
         needs_save = True
         logger.info(
