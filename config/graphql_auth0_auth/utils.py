@@ -45,7 +45,7 @@ def _get_cached_jwks(domain: str) -> dict:
             response.raise_for_status()
             jwks = response.json()
         except requests.RequestException as e:
-            logger.error(f"_get_cached_jwks() - Failed to fetch JWKS from Auth0: {e}")
+            logger.error("_get_cached_jwks() - Failed to fetch JWKS from Auth0: %s", e)
             # Return stale cache if available as fallback
             if _jwks_cache["data"] is not None:
                 logger.warning(
@@ -54,7 +54,7 @@ def _get_cached_jwks(domain: str) -> dict:
                 return _jwks_cache["data"]
             raise
         except ValueError as e:
-            logger.error(f"_get_cached_jwks() - Invalid JSON response from Auth0: {e}")
+            logger.error("_get_cached_jwks() - Invalid JSON response from Auth0: %s", e)
             if _jwks_cache["data"] is not None:
                 logger.warning(
                     "_get_cached_jwks() - Using stale JWKS cache due to JSON parse failure"
@@ -115,7 +115,7 @@ def jwt_auth0_decode(token):
         )
         return decoded
     except Exception as e:
-        logger.error(f"jwt_auth0_decode() - Error decoding token: {str(e)}")
+        logger.error("jwt_auth0_decode() - Error decoding token: %s", e)
         raise
 
 
@@ -130,16 +130,16 @@ def get_payload(token):
         )
         return payload
     except jwt.ExpiredSignatureError as e:
-        logger.error(f"get_payload() - Token expired: {str(e)}")
+        logger.error("get_payload() - Token expired: %s", e)
         raise exceptions.JSONWebTokenExpired()
     except jwt.DecodeError as e:
-        logger.error(f"get_payload() - Decode error: {str(e)}")
+        logger.error("get_payload() - Decode error: %s", e)
         raise exceptions.JSONWebTokenError(_("Error decoding signature"))
     except jwt.InvalidTokenError as e:
-        logger.error(f"get_payload() - Invalid token error: {str(e)}")
+        logger.error("get_payload() - Invalid token error: %s", e)
         raise exceptions.JSONWebTokenError(_("Invalid token"))
     except Exception as e:
-        logger.error(f"get_payload() - Unexpected error: {str(e)}")
+        logger.error("get_payload() - Unexpected error: %s", e)
         raise
 
 
@@ -261,9 +261,109 @@ def get_auth0_user_from_token(remote_username):
 def jwt_get_username_from_payload_handler(payload):
     username = payload.get("sub")
     logger.debug(
-        f"jwt_get_username_from_payload_handler() - Extracted username from payload: {username}"
+        "jwt_get_username_from_payload_handler() - Extracted username from payload: %s",
+        username,
     )
     return username
+
+
+def _parse_boolean_claim(value):
+    """
+    Parse a claim value to a boolean, handling string representations.
+
+    Auth0 claims may be sent as booleans or strings depending on configuration.
+    This function handles both cases safely.
+
+    Args:
+        value: The claim value (bool, str, or None).
+
+    Returns:
+        tuple: (parsed_value, is_valid) where is_valid is False if value is None
+               or cannot be parsed.
+    """
+    if value is None:
+        return None, False
+
+    if isinstance(value, bool):
+        return value, True
+
+    if isinstance(value, str):
+        lower_value = value.lower().strip()
+        if lower_value in ("true", "1", "yes"):
+            return True, True
+        elif lower_value in ("false", "0", "no"):
+            return False, True
+        else:
+            logger.warning("Invalid boolean claim value: %s", value)
+            return None, False
+
+    # Handle numeric values (0/1)
+    if isinstance(value, (int, float)):
+        return bool(value), True
+
+    logger.warning("Unexpected claim type: %s", type(value))
+    return None, False
+
+
+def sync_admin_claims_from_payload(user, payload):
+    """
+    Sync is_staff and is_superuser from Auth0 token claims.
+
+    Claims are expected at namespace + 'is_staff' and namespace + 'is_superuser'.
+    Only updates if claims are explicitly present in the token; never demotes
+    unless explicitly set to False.
+
+    Handles both boolean and string claim values (e.g., true, "true", "True").
+
+    Args:
+        user: The Django user object to update.
+        payload: The decoded JWT payload containing claims.
+
+    Returns:
+        bool: True on success (whether changes were made or not),
+              False only if save failed (non-fatal error).
+    """
+    from django.conf import settings
+
+    namespace = getattr(
+        settings,
+        "AUTH0_ADMIN_CLAIM_NAMESPACE",
+        "https://doclattice.opensource.legal/",
+    )
+
+    raw_is_staff = payload.get(f"{namespace}is_staff")
+    raw_is_superuser = payload.get(f"{namespace}is_superuser")
+
+    # Parse claims with type safety
+    is_staff_claim, is_staff_valid = _parse_boolean_claim(raw_is_staff)
+    is_superuser_claim, is_superuser_valid = _parse_boolean_claim(raw_is_superuser)
+
+    needs_save = False
+
+    # Only update if claim is valid and different from current value
+    if is_staff_valid and user.is_staff != is_staff_claim:
+        user.is_staff = is_staff_claim
+        needs_save = True
+        logger.info("Synced is_staff=%s for user %s", is_staff_claim, user.username)
+
+    if is_superuser_valid and user.is_superuser != is_superuser_claim:
+        user.is_superuser = is_superuser_claim
+        needs_save = True
+        logger.info(
+            "Synced is_superuser=%s for user %s", is_superuser_claim, user.username
+        )
+
+    if needs_save:
+        try:
+            user.save(update_fields=["is_staff", "is_superuser"])
+        except Exception as e:
+            # Log but don't crash - admin login should still work
+            logger.error(
+                "Failed to save admin claims for user %s: %s", user.username, e
+            )
+            return False
+
+    return True
 
 
 def get_user_by_payload(payload):
@@ -290,8 +390,11 @@ def get_user_by_payload(payload):
             f"get_user_by_payload() - User {user.username} is_active: {is_active}"
         )
         if not is_active:
-            logger.error(f"get_user_by_payload() - User {user.username} is disabled")
+            logger.error("get_user_by_payload() - User %s is disabled", user.username)
             raise exceptions.JSONWebTokenError(_("User is disabled"))
+        # NOTE: Admin claims sync is intentionally NOT called here to avoid
+        # performance overhead on every API request. Admin claims are only
+        # synced during admin login in Auth0AdminLoginView._authenticate_with_token()
     else:
         logger.warning("get_user_by_payload() - No user found for username")
 
@@ -322,5 +425,5 @@ def get_user_by_token(token, **kwargs):
         )
         return user
     except Exception as e:
-        logger.error(f"get_user_by_token() - Error processing token: {str(e)}")
+        logger.error("get_user_by_token() - Error processing token: %s", e)
         raise
