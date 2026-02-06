@@ -266,6 +266,53 @@ def jwt_get_username_from_payload_handler(payload):
     return username
 
 
+def sync_admin_claims_from_payload(user, payload):
+    """
+    Sync is_staff and is_superuser from Auth0 token claims.
+
+    Claims are expected at namespace + 'is_staff' and namespace + 'is_superuser'.
+    Only updates if claims are explicitly present in the token; never demotes
+    unless explicitly set to False.
+
+    Args:
+        user: The Django user object to update.
+        payload: The decoded JWT payload containing claims.
+
+    Returns:
+        bool: True if any changes were made, False otherwise.
+    """
+    from django.conf import settings
+
+    namespace = getattr(
+        settings,
+        "AUTH0_ADMIN_CLAIM_NAMESPACE",
+        "https://opencontracts.opensource.legal/",
+    )
+
+    is_staff_claim = payload.get(f"{namespace}is_staff")
+    is_superuser_claim = payload.get(f"{namespace}is_superuser")
+
+    needs_save = False
+
+    # Only update if claim is explicitly present (not None)
+    if is_staff_claim is not None and user.is_staff != is_staff_claim:
+        user.is_staff = is_staff_claim
+        needs_save = True
+        logger.info(f"Synced is_staff={is_staff_claim} for user {user.username}")
+
+    if is_superuser_claim is not None and user.is_superuser != is_superuser_claim:
+        user.is_superuser = is_superuser_claim
+        needs_save = True
+        logger.info(
+            f"Synced is_superuser={is_superuser_claim} for user {user.username}"
+        )
+
+    if needs_save:
+        user.save(update_fields=["is_staff", "is_superuser"])
+
+    return needs_save
+
+
 def get_user_by_payload(payload):
     logger.debug(f"get_user_by_payload() - Payload keys: {list(payload.keys())}")
 
@@ -292,6 +339,9 @@ def get_user_by_payload(payload):
         if not is_active:
             logger.error(f"get_user_by_payload() - User {user.username} is disabled")
             raise exceptions.JSONWebTokenError(_("User is disabled"))
+
+        # Sync admin claims from token if present
+        sync_admin_claims_from_payload(user, payload)
     else:
         logger.warning("get_user_by_payload() - No user found for username")
 

@@ -9,6 +9,7 @@ from django.views import defaults as default_views
 from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
 
+from config.admin_auth.views import Auth0AdminLoginView, Auth0AdminLogoutView
 from opencontractserver.analyzer.views import AnalysisCallbackView
 from opencontractserver.annotations.views import AnnotationImagesView
 
@@ -25,6 +26,9 @@ def home_redirect(request):
 urlpatterns = [
     path("api/health/", lambda request: JsonResponse({"status": "ok"})),
     path("", home_redirect, name="home_redirect"),  # Root URL redirect to port 3000
+    # Custom admin login/logout views (must be before admin.site.urls to override defaults)
+    path("admin/login/", Auth0AdminLoginView.as_view(), name="admin_auth0_login"),
+    path("admin/logout/", Auth0AdminLogoutView.as_view(), name="admin_auth0_logout"),
     path(settings.ADMIN_URL, admin.site.urls),
     path("graphql/", csrf_exempt(GraphQLView.as_view(graphiql=settings.DEBUG))),
     path(

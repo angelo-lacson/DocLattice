@@ -213,8 +213,16 @@ if USE_AUTH0:
     AUTH0_M2M_MANAGEMENT_API_ID = env("AUTH0_M2M_MANAGEMENT_API_ID")
     AUTH0_M2M_MANAGEMENT_GRANT_TYPE = env("AUTH0_M2M_MANAGEMENT_GRANT_TYPE")
 
+    # Namespace prefix for admin claims in Auth0 access tokens
+    # Claims: {namespace}is_staff and {namespace}is_superuser
+    AUTH0_ADMIN_CLAIM_NAMESPACE = env(
+        "AUTH0_ADMIN_CLAIM_NAMESPACE",
+        default="https://opencontracts.opensource.legal/",
+    )
+
     AUTHENTICATION_BACKENDS += [
         "config.graphql_auth0_auth.backends.Auth0RemoteUserJSONWebTokenBackend",
+        "config.admin_auth.backends.Auth0AdminBackend",  # For Django admin login
     ]
 
 else:
