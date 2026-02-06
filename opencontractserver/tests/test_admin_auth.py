@@ -625,7 +625,7 @@ class TestAdminLoginView(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("admin", response.url)
 
-    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
     def test_token_login_success(self, mock_get_user):
         """Valid token should authenticate staff user."""
         mock_get_user.return_value = self.staff_user
@@ -640,7 +640,7 @@ class TestAdminLoginView(TestCase):
         self.assertEqual(response.status_code, 302)  # Redirect to admin
         mock_get_user.assert_called_once_with("valid_test_token")
 
-    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
     def test_token_login_non_staff_denied(self, mock_get_user):
         """Valid token for non-staff user should be denied."""
         mock_get_user.return_value = self.regular_user
@@ -654,7 +654,7 @@ class TestAdminLoginView(TestCase):
 
         self.assertEqual(response.status_code, 302)  # Redirect back to login
 
-    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
     def test_token_login_invalid_token(self, mock_get_user):
         """Invalid token should show error."""
         mock_get_user.side_effect = Exception("Invalid token")
@@ -668,16 +668,17 @@ class TestAdminLoginView(TestCase):
 
         self.assertEqual(response.status_code, 302)  # Redirect back to login
 
-    @patch("config.graphql_auth0_auth.utils.sync_admin_claims_from_payload")
-    @patch("config.graphql_auth0_auth.utils.get_payload")
     @patch("config.jwt_utils.get_user_from_jwt_token")
-    def test_token_login_fails_on_claim_sync_error(
-        self, mock_get_user, mock_get_payload, mock_sync
-    ):
-        """Login should fail if claim sync raises exception to prevent stale permissions."""
+    @patch.object(
+        __import__(
+            "config.admin_auth.views", fromlist=["Auth0AdminLoginView"]
+        ).Auth0AdminLoginView,
+        "_sync_admin_claims",
+        return_value=False,
+    )
+    def test_token_login_fails_on_claim_sync_error(self, mock_sync, mock_get_user):
+        """Login should fail if claim sync fails to prevent stale permissions."""
         mock_get_user.return_value = self.staff_user
-        mock_get_payload.return_value = {"sub": "auth0|123"}
-        mock_sync.side_effect = Exception("Sync failed")
 
         response = self.client.post(
             "/admin/login/",
@@ -686,10 +687,11 @@ class TestAdminLoginView(TestCase):
             },
         )
 
-        # Login should fail when claim sync fails
+        # Login should fail when claim sync returns False
         self.assertEqual(response.status_code, 302)
         self.assertIn("login", response.url)
         mock_get_user.assert_called_once_with("valid_test_token")
+        mock_sync.assert_called_once()
 
     @override_settings(
         USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
@@ -881,20 +883,25 @@ class TestAdminLogoutView(TestCase):
         # Should use first valid host from ALLOWED_HOSTS
         self.assertIn("example.com", response.url)
 
-    @override_settings(
-        USE_AUTH0=True,
-        AUTH0_DOMAIN="test.auth0.com",
-        AUTH0_CLIENT_ID="test_client_id",
-        ALLOWED_HOSTS=[],
-    )
-    def test_logout_raises_error_without_valid_allowed_hosts(self):
-        """Logout should raise ImproperlyConfigured without valid ALLOWED_HOSTS."""
+    @override_settings(ALLOWED_HOSTS=[])
+    def test_get_safe_logout_return_url_raises_without_valid_hosts(self):
+        """_get_safe_logout_return_url should raise ImproperlyConfigured without valid hosts."""
+        from unittest.mock import MagicMock
+
         from django.core.exceptions import ImproperlyConfigured
 
-        self.client.force_login(self.staff_user)
+        from config.admin_auth.views import _get_safe_logout_return_url
 
-        with self.assertRaises(ImproperlyConfigured):
-            self.client.post("/admin/logout/")
+        # Create a mock request
+        mock_request = MagicMock()
+        mock_request.get_host.return_value = "evil.com"
+        mock_request.is_secure.return_value = False
+
+        with self.assertRaises(ImproperlyConfigured) as context:
+            _get_safe_logout_return_url(mock_request)
+
+        self.assertIn("ALLOWED_HOSTS", str(context.exception))
+        self.assertIn("non-wildcard", str(context.exception))
 
 
 class TestGetUserByPayloadWithClaimSync(TestCase):
