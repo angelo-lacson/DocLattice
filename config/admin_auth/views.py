@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth import authenticate, login, logout
+from django.http import HttpResponseNotAllowed
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -27,7 +28,22 @@ def _get_admin_index_url():
     return reverse("admin:index")
 
 
-def _get_safe_redirect_url(request, url, default=None):
+def _get_next_url_from_request(request):
+    """
+    Extract the 'next' parameter from request, checking POST first then GET.
+
+    This ensures consistent handling across all authentication methods.
+
+    Args:
+        request: The HTTP request object.
+
+    Returns:
+        The next URL from POST or GET params, or None if not present.
+    """
+    return request.POST.get("next") or request.GET.get("next")
+
+
+def _get_safe_redirect_url(request, url=None, default=None):
     """
     Validate and return a safe redirect URL.
 
@@ -36,7 +52,7 @@ def _get_safe_redirect_url(request, url, default=None):
 
     Args:
         request: The HTTP request object.
-        url: The URL to validate.
+        url: The URL to validate. If None, extracts from request params.
         default: Default URL if validation fails.
 
     Returns:
@@ -44,6 +60,10 @@ def _get_safe_redirect_url(request, url, default=None):
     """
     if default is None:
         default = _get_admin_index_url()
+
+    # If no URL provided, extract from request
+    if url is None:
+        url = _get_next_url_from_request(request)
 
     if not url:
         return default
@@ -105,7 +125,7 @@ class Auth0AdminLoginView(View):
     - Falls back to password form if Auth0 fails
 
     When USE_AUTH0 is disabled:
-    - Redirects to standard Django admin login
+    - Uses standard password authentication only
     """
 
     template_name = "admin/auth0_login.html"
@@ -123,7 +143,7 @@ class Auth0AdminLoginView(View):
             return self._authenticate_with_token(request, token)
 
         # Validate the next URL to prevent open redirect attacks
-        next_url = _get_safe_redirect_url(request, request.GET.get("next"))
+        next_url = _get_safe_redirect_url(request)
 
         context = {
             "title": "Log in",
@@ -160,7 +180,7 @@ class Auth0AdminLoginView(View):
         if user is not None and user.is_staff:
             login(request, user)
             # Validate redirect URL to prevent open redirect attacks
-            next_url = _get_safe_redirect_url(request, request.POST.get("next"))
+            next_url = _get_safe_redirect_url(request)
             return redirect(next_url)
 
         messages.error(request, "Invalid credentials or insufficient permissions.")
@@ -175,7 +195,12 @@ class Auth0AdminLoginView(View):
 
             if user and user.is_active:
                 # Sync admin claims from token (only during admin login, not API requests)
-                self._sync_admin_claims(user, token)
+                sync_success = self._sync_admin_claims(user, token)
+                if not sync_success:
+                    logger.warning(
+                        "Admin claim sync returned False for user %s, using existing permissions",
+                        user.username,
+                    )
                 # Refresh user to get updated is_staff status
                 user.refresh_from_db()
 
@@ -187,14 +212,13 @@ class Auth0AdminLoginView(View):
                     backend="config.admin_auth.backends.Auth0AdminBackend",
                 )
                 # Validate redirect URL to prevent open redirect attacks
-                raw_next = request.GET.get("next") or request.POST.get("next")
-                next_url = _get_safe_redirect_url(request, raw_next)
-                logger.info("Admin login successful for %s", user.username)
+                next_url = _get_safe_redirect_url(request)
+                logger.info("Admin login successful for user ID %s", user.id)
                 return redirect(next_url)
             else:
                 logger.warning(
-                    "User %s denied admin access",
-                    user.username if user else "unknown",
+                    "User ID %s denied admin access",
+                    user.id if user else "unknown",
                 )
                 messages.error(
                     request, "You do not have permission to access the admin."
@@ -212,9 +236,12 @@ class Auth0AdminLoginView(View):
 
         This is only called during admin login to avoid performance
         overhead on every API request.
+
+        Returns:
+            bool: True if sync succeeded (or was skipped), False if it failed.
         """
         if not getattr(settings, "USE_AUTH0", False):
-            return
+            return True  # Not applicable, consider success
 
         try:
             from config.graphql_auth0_auth.utils import (
@@ -223,16 +250,23 @@ class Auth0AdminLoginView(View):
             )
 
             payload = get_payload(token)
-            sync_admin_claims_from_payload(user, payload)
+            return sync_admin_claims_from_payload(user, payload)
         except Exception as e:
             # Log but don't fail authentication - claim sync is secondary
-            logger.warning("Failed to sync admin claims for %s: %s", user.username, e)
+            logger.warning("Failed to sync admin claims for user ID %s: %s", user.id, e)
+            return False
 
 
 class Auth0AdminLogoutView(View):
-    """Handle admin logout with Auth0 session cleanup."""
+    """
+    Handle admin logout with Auth0 session cleanup.
 
-    def get(self, request):
+    Logout requires POST for CSRF protection (following Django's LogoutView pattern).
+    GET requests are rejected with 405 Method Not Allowed.
+    """
+
+    @method_decorator(csrf_protect)
+    def post(self, request):
         """Log out the user and redirect appropriately."""
         logout(request)
 
@@ -250,6 +284,20 @@ class Auth0AdminLogoutView(View):
 
         return redirect(_get_admin_index_url())
 
-    def post(self, request):
-        """Handle POST logout requests (for CSRF-protected forms)."""
-        return self.get(request)
+    def get(self, request):
+        """
+        Reject GET requests for logout.
+
+        Logout via GET is insecure (CSRF vulnerability). Use POST instead.
+        However, for backwards compatibility with browser bookmark/history,
+        we redirect to admin index if user is not authenticated.
+        """
+        if not request.user.is_authenticated:
+            return redirect(_get_admin_index_url())
+
+        # Return 405 Method Not Allowed for authenticated users
+        return HttpResponseNotAllowed(
+            ["POST"],
+            content="Logout requires POST request for CSRF protection. "
+            "Please use the logout button in the admin interface.",
+        )

@@ -738,19 +738,35 @@ class TestAdminLogoutView(TestCase):
         self.client = Client()
 
     def test_logout_clears_session(self):
-        """Logout should clear user session."""
+        """Logout via POST should clear user session."""
+        self.client.force_login(self.staff_user)
+
+        response = self.client.post("/admin/logout/")
+
+        # Session should be cleared after logout
+        self.assertEqual(response.status_code, 302)
+
+    def test_logout_get_returns_405_for_authenticated_user(self):
+        """Logout via GET should return 405 Method Not Allowed for authenticated users."""
         self.client.force_login(self.staff_user)
 
         response = self.client.get("/admin/logout/")
 
-        self.assertFalse(response.wsgi_request.user.is_authenticated)
+        self.assertEqual(response.status_code, 405)
+
+    def test_logout_get_redirects_for_unauthenticated_user(self):
+        """Logout via GET should redirect unauthenticated users to admin."""
+        response = self.client.get("/admin/logout/")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("admin", response.url)
 
     @override_settings(USE_AUTH0=False)
     def test_logout_redirects_to_admin_when_auth0_disabled(self):
         """Logout should redirect to admin when Auth0 is disabled."""
         self.client.force_login(self.staff_user)
 
-        response = self.client.get("/admin/logout/")
+        response = self.client.post("/admin/logout/")
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("admin", response.url)
@@ -764,7 +780,7 @@ class TestAdminLogoutView(TestCase):
         """Logout should redirect to Auth0 logout URL when Auth0 is enabled."""
         self.client.force_login(self.staff_user)
 
-        response = self.client.get("/admin/logout/")
+        response = self.client.post("/admin/logout/")
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("test.auth0.com", response.url)
@@ -780,7 +796,7 @@ class TestAdminLogoutView(TestCase):
         """Logout should use a safe return URL from ALLOWED_HOSTS."""
         self.client.force_login(self.staff_user)
 
-        response = self.client.get("/admin/logout/")
+        response = self.client.post("/admin/logout/")
 
         self.assertEqual(response.status_code, 302)
         # returnTo should be URL-encoded and use a safe host
