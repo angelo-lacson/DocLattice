@@ -342,8 +342,22 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
             settings_instance.modified_by = user
             settings_instance.save()
 
+            updated_fields = [
+                name
+                for name, val in [
+                    ("preferred_parsers", preferred_parsers),
+                    ("preferred_embedders", preferred_embedders),
+                    ("preferred_thumbnailers", preferred_thumbnailers),
+                    ("parser_kwargs", parser_kwargs),
+                    ("component_settings", component_settings),
+                    ("default_embedder", default_embedder),
+                ]
+                if val is not None
+            ]
             logger.info(
-                f"Pipeline settings updated by {user.username} (superuser={user.is_superuser})"
+                "Pipeline settings updated by %s: fields=%s",
+                user.username,
+                ", ".join(updated_fields),
             )
 
             return UpdatePipelineSettingsMutation(
@@ -556,7 +570,11 @@ class UpdateComponentSecretsMutation(graphene.Mutation):
             components_with_secrets = list(all_secrets.keys())
 
             logger.info(
-                f"Secrets updated for component '{component_path}' by {user.username}"
+                "Secrets updated for component '%s' by %s (keys=%s, merge=%s)",
+                component_path,
+                user.username,
+                ", ".join(secrets.keys()),
+                merge,
             )
 
             return UpdateComponentSecretsMutation(

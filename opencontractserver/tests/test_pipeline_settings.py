@@ -885,3 +885,217 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
             self.assertEqual(
                 result, {}, "Should return empty dict when SECRET_KEY has changed"
             )
+
+
+class PipelineSettingsIntegrationTestCase(TestCase):
+    """Integration tests: GraphQL mutation → DB → runtime component selection."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        PipelineSettings.objects.all().delete()
+
+    def test_graphql_update_changes_runtime_parser_selection(self):
+        """GraphQL mutation updates DB, which changes runtime parser selection."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if len(registry.parsers) < 2:
+            self.skipTest("Need at least 2 registered parsers for this test")
+
+        parser_a = registry.parsers[0]
+        parser_b = registry.parsers[1]
+
+        # Set initial parser via GraphQL
+        mutation = """
+            mutation UpdatePipelineSettings($preferredParsers: GenericScalar) {
+                updatePipelineSettings(preferredParsers: $preferredParsers) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation,
+            variables={"preferredParsers": {"application/pdf": parser_a.class_name}},
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Verify runtime selection returns parser_a
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(
+            instance.get_preferred_parser("application/pdf"),
+            parser_a.class_name,
+        )
+
+        # Update to parser_b via GraphQL
+        result = self.superuser_client.execute(
+            mutation,
+            variables={"preferredParsers": {"application/pdf": parser_b.class_name}},
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Verify runtime selection now returns parser_b
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(
+            instance.get_preferred_parser("application/pdf"),
+            parser_b.class_name,
+        )
+
+    def test_graphql_update_changes_runtime_embedder_selection(self):
+        """GraphQL mutation updates default embedder used at runtime."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if not registry.embedders:
+            self.skipTest("Need at least 1 registered embedder for this test")
+
+        embedder = registry.embedders[0]
+
+        mutation = """
+            mutation UpdatePipelineSettings($defaultEmbedder: String) {
+                updatePipelineSettings(defaultEmbedder: $defaultEmbedder) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation,
+            variables={"defaultEmbedder": embedder.class_name},
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Verify runtime selection returns the updated embedder
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(instance.get_default_embedder(), embedder.class_name)
+
+    def test_reset_restores_django_defaults_for_runtime(self):
+        """Reset mutation restores Django defaults, affecting runtime selection."""
+        # Set custom parser
+        instance = PipelineSettings.get_instance()
+        instance.preferred_parsers = {"application/pdf": "custom.Parser"}
+        instance.save()
+        PipelineSettings._invalidate_cache()
+
+        self.assertEqual(
+            PipelineSettings.get_instance(use_cache=False).get_preferred_parser(
+                "application/pdf"
+            ),
+            "custom.Parser",
+        )
+
+        # Reset via GraphQL
+        mutation = """
+            mutation {
+                resetPipelineSettings {
+                    ok
+                    message
+                }
+            }
+        """
+        result = self.superuser_client.execute(mutation)
+        self.assertTrue(result["data"]["resetPipelineSettings"]["ok"])
+
+        # Runtime selection should now return Django default (or None)
+        from django.conf import settings as django_settings
+
+        expected = getattr(django_settings, "PREFERRED_PARSERS", {}).get(
+            "application/pdf"
+        )
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(
+            instance.get_preferred_parser("application/pdf"),
+            expected,
+        )
+
+
+class PipelineSettingsSystemCheckTestCase(TestCase):
+    """Tests for the documents.W001 system check."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "some.parser.Parser"},
+        PREFERRED_EMBEDDERS={},
+        DEFAULT_EMBEDDER="",
+    )
+    def test_warns_when_db_empty_but_django_configured(self):
+        """System check warns when DB preferences are empty but Django settings exist."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        # Create PipelineSettings with empty preferences
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={},
+            preferred_embedders={},
+            default_embedder="",
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W001")
+        self.assertIn("migrate_pipeline_settings", warnings[0].hint)
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "some.parser.Parser"},
+    )
+    def test_no_warning_when_db_has_preferences(self):
+        """No warning when DB preferences are populated."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "some.parser.Parser"},
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 0)
+
+    @override_settings(
+        PREFERRED_PARSERS={},
+        PREFERRED_EMBEDDERS={},
+        DEFAULT_EMBEDDER="",
+    )
+    def test_no_warning_when_both_empty(self):
+        """No warning when both DB and Django settings are empty."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={},
+            preferred_embedders={},
+            default_embedder="",
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_no_pipeline_settings_row(self):
+        """No warning when PipelineSettings table is empty (pre-migration)."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 0)
