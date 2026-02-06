@@ -1216,3 +1216,122 @@ class JSONSizeValidationTestCase(TestCase):
             mutation, variables={"parserKwargs": normal_kwargs}
         )
         self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+
+class PipelineSettingsSchemaMethodsTestCase(TestCase):
+    """Tests for PipelineSettings component schema and validation methods."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_get_component_schema_returns_schema(self):
+        """get_component_schema returns schema for a registered component."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        # Find a component that has a Settings dataclass
+        for comp in registry.parsers + registry.embedders:
+            if comp.settings_schema:
+                schema = instance.get_component_schema(comp.class_name)
+                self.assertIsInstance(schema, dict)
+                # Schema should have at least one setting
+                if schema:
+                    first_setting = next(iter(schema.values()))
+                    self.assertIn("type", first_setting)
+                break
+
+    def test_get_component_schema_not_found_returns_empty(self):
+        """get_component_schema returns empty dict for unknown components."""
+        instance = PipelineSettings.get_instance()
+        schema = instance.get_component_schema("nonexistent.module.FakeParser")
+        self.assertEqual(schema, {})
+
+    def test_get_component_schema_by_name(self):
+        """get_component_schema looks up by simple name if full path fails."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        if registry.parsers:
+            parser = registry.parsers[0]
+            # Look up by simple name
+            schema = instance.get_component_schema(parser.name)
+            # May or may not have settings, but should not raise
+            self.assertIsInstance(schema, dict)
+
+    def test_validate_all_components_returns_dict(self):
+        """validate_all_components returns a dict of missing settings."""
+        instance = PipelineSettings.get_instance()
+        result = instance.validate_all_components()
+        self.assertIsInstance(result, dict)
+        # Each value should be a list of setting names
+        for class_path, missing in result.items():
+            self.assertIsInstance(class_path, str)
+            self.assertIsInstance(missing, list)
+
+    def test_get_all_component_schemas_returns_dict(self):
+        """get_all_component_schemas returns schemas for all components."""
+        instance = PipelineSettings.get_instance()
+        schemas = instance.get_all_component_schemas()
+        self.assertIsInstance(schemas, dict)
+        # Each value should be a dict of setting schemas
+        for class_path, comp_schema in schemas.items():
+            self.assertIsInstance(class_path, str)
+            self.assertIsInstance(comp_schema, dict)
+
+    def test_get_component_schema_marks_secret_has_value(self):
+        """get_component_schema sets has_value for secrets without exposing values."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        # Find a component with secret settings
+        for comp in registry.parsers + registry.embedders:
+            if comp.settings_schema:
+                schema_info = {s["name"]: s for s in comp.settings_schema}
+                secret_settings = [
+                    n for n, s in schema_info.items() if s.get("type") == "secret"
+                ]
+                if secret_settings:
+                    # Set a secret value
+                    instance.set_secrets(
+                        {comp.class_name: {secret_settings[0]: "test-secret"}}
+                    )
+                    instance.save()
+
+                    schema = instance.get_component_schema(comp.class_name)
+                    if secret_settings[0] in schema:
+                        self.assertTrue(schema[secret_settings[0]]["has_value"])
+                        # Secret value must NOT be exposed
+                        self.assertIsNone(schema[secret_settings[0]]["current_value"])
+                    break
+
+
+class RegistryGetByNameTestCase(TestCase):
+    """Tests for PipelineComponentRegistry.get_by_name."""
+
+    def test_get_by_name_finds_component(self):
+        """get_by_name finds components by simple class name."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if registry.parsers:
+            parser = registry.parsers[0]
+            result = registry.get_by_name(parser.name)
+            self.assertIsNotNone(result)
+            self.assertEqual(result.name, parser.name)
+
+    def test_get_by_name_returns_none_for_unknown(self):
+        """get_by_name returns None for unknown component names."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        result = registry.get_by_name("NonExistentComponent12345")
+        self.assertIsNone(result)

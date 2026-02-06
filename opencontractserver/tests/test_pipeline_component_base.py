@@ -1,14 +1,59 @@
+from dataclasses import dataclass, field
+
 from django.test import TestCase
 
 from opencontractserver.documents.models import PipelineSettings
 from opencontractserver.pipeline.base.base_component import PipelineComponentBase
+from opencontractserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
+)
 
 # Helper to get the logger from the module being tested
 BASE_COMPONENT_LOGGER = "opencontractserver.pipeline.base.base_component"
 
 
 class DummyComponent(PipelineComponentBase):
-    """A simple component for testing settings loading."""
+    """A simple component for testing settings loading (no Settings dataclass)."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+class DummyComponentWithSettings(PipelineComponentBase):
+    """A component with a Settings dataclass for testing schema-based loading."""
+
+    @dataclass
+    class Settings:
+        api_key: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.SECRET,
+                    required=True,
+                    description="API key for testing",
+                    env_var="DUMMY_API_KEY",
+                )
+            },
+        )
+        timeout: int = field(
+            default=30,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Request timeout in seconds",
+                )
+            },
+        )
+        debug: bool = field(
+            default=False,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Enable debug mode",
+                )
+            },
+        )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -143,3 +188,96 @@ class TestPipelineComponentBaseSettings(TestCase):
 
         result = component.get_component_settings()
         self.assertEqual(result, {})
+
+
+class TestPipelineComponentWithSettingsDataclass(TestCase):
+    """Tests for components with a Settings dataclass."""
+
+    def setUp(self):
+        PipelineSettings.objects.all().delete()
+        self.pipeline_settings = PipelineSettings.objects.create(id=1)
+
+    def _full_path(self):
+        return (
+            f"{DummyComponentWithSettings.__module__}"
+            f".{DummyComponentWithSettings.__name__}"
+        )
+
+    def test_settings_property_returns_dataclass_instance(self):
+        """Settings property returns a populated Settings dataclass."""
+        full_path = self._full_path()
+        self.pipeline_settings.component_settings = {
+            full_path: {"timeout": 60, "debug": True}
+        }
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        component = DummyComponentWithSettings()
+        self.assertIsNotNone(component.settings)
+        self.assertEqual(component.settings.timeout, 60)
+        self.assertTrue(component.settings.debug)
+
+    def test_settings_property_none_without_dataclass(self):
+        """Settings property is None for components without a Settings dataclass."""
+        component = DummyComponent()
+        self.assertIsNone(component.settings)
+
+    def test_settings_defaults_when_no_db_values(self):
+        """Settings use defaults from dataclass when no DB values exist."""
+        component = DummyComponentWithSettings()
+        self.assertIsNotNone(component.settings)
+        self.assertEqual(component.settings.api_key, "")
+        self.assertEqual(component.settings.timeout, 30)
+        self.assertFalse(component.settings.debug)
+
+    def test_reload_settings_refreshes_from_db(self):
+        """reload_settings() fetches updated values from DB."""
+        full_path = self._full_path()
+
+        component = DummyComponentWithSettings()
+        self.assertEqual(component.settings.timeout, 30)
+
+        # Update DB settings
+        self.pipeline_settings.component_settings = {full_path: {"timeout": 120}}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        # Reload
+        component.reload_settings()
+        self.assertEqual(component.settings.timeout, 120)
+
+    def test_validate_settings_reports_missing_required(self):
+        """validate_settings() reports missing required fields."""
+        component = DummyComponentWithSettings()
+        is_valid, errors = component.validate_settings()
+        # api_key is required but empty string, should report missing
+        self.assertFalse(is_valid)
+        self.assertTrue(any("api_key" in e for e in errors))
+
+    def test_validate_settings_passes_when_configured(self):
+        """validate_settings() passes when required settings are present."""
+        full_path = self._full_path()
+        self.pipeline_settings.component_settings = {
+            full_path: {"api_key": "test-key-123"}
+        }
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        component = DummyComponentWithSettings()
+        is_valid, errors = component.validate_settings()
+        self.assertTrue(is_valid)
+        self.assertEqual(errors, [])
+
+    def test_get_settings_schema_returns_schema(self):
+        """get_settings_schema() returns schema from the Settings dataclass."""
+        schema = DummyComponentWithSettings.get_settings_schema()
+        self.assertIn("api_key", schema)
+        self.assertIn("timeout", schema)
+        self.assertIn("debug", schema)
+        self.assertEqual(schema["api_key"]["type"], "secret")
+        self.assertTrue(schema["api_key"]["required"])
+
+    def test_get_settings_schema_empty_without_dataclass(self):
+        """get_settings_schema() returns empty dict without Settings dataclass."""
+        schema = DummyComponent.get_settings_schema()
+        self.assertEqual(schema, {})
