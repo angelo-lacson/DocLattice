@@ -863,3 +863,25 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         # But decryption should still work
         decrypted = instance.get_secrets()
         self.assertEqual(decrypted["test"]["key"], "value")
+
+    def test_secret_key_rotation_graceful_degradation(self):
+        """Test that get_secrets returns {} when SECRET_KEY changes."""
+        instance = PipelineSettings.get_instance()
+
+        # Encrypt secrets with current SECRET_KEY
+        instance.set_secrets({"test.parser": {"api_key": "secret-value"}})
+        instance.save()
+        instance.refresh_from_db()
+
+        # Verify secrets are readable with original key
+        self.assertEqual(
+            instance.get_secrets()["test.parser"]["api_key"], "secret-value"
+        )
+
+        # Simulate SECRET_KEY rotation - secrets become unrecoverable
+        with self.settings(SECRET_KEY="completely-different-secret-key-12345"):
+            instance.refresh_from_db()
+            result = instance.get_secrets()
+            self.assertEqual(
+                result, {}, "Should return empty dict when SECRET_KEY has changed"
+            )
