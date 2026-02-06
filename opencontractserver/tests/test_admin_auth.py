@@ -668,9 +668,9 @@ class TestAdminLoginView(TestCase):
 
         self.assertEqual(response.status_code, 302)  # Redirect back to login
 
-    @patch("config.admin_auth.views.sync_admin_claims_from_payload")
-    @patch("config.admin_auth.views.get_payload")
-    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    @patch("config.graphql_auth0_auth.utils.sync_admin_claims_from_payload")
+    @patch("config.graphql_auth0_auth.utils.get_payload")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
     def test_token_login_continues_on_claim_sync_error(
         self, mock_get_user, mock_get_payload, mock_sync
     ):
@@ -697,7 +697,7 @@ class TestAdminLoginView(TestCase):
         response = self.client.get("/admin/login/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "use_auth0")
+        self.assertContains(response, "Sign in with Auth0")
 
     @override_settings(USE_AUTH0=False)
     def test_login_page_hides_auth0_button(self):
@@ -833,7 +833,7 @@ class TestAdminLogoutView(TestCase):
         USE_AUTH0=True,
         AUTH0_DOMAIN="test.auth0.com",
         AUTH0_CLIENT_ID="test_client_id",
-        ALLOWED_HOSTS=["example.com", "localhost"],
+        ALLOWED_HOSTS=["example.com", "localhost", "testserver"],
     )
     def test_logout_uses_safe_return_url(self):
         """Logout should use a safe return URL from ALLOWED_HOSTS."""
@@ -844,7 +844,7 @@ class TestAdminLogoutView(TestCase):
         self.assertEqual(response.status_code, 302)
         # returnTo should be URL-encoded and use a safe host
         self.assertIn("returnTo=", response.url)
-        # Should not use request Host header directly for security
+        # Should use first valid host from ALLOWED_HOSTS
         self.assertIn("example.com", response.url)
 
 
