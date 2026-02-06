@@ -22,6 +22,34 @@ If rollback is required after deployment, you must write a custom migration to h
 
 ### Added
 
+#### Auth0 Authentication for Django Admin
+- **Auth0 admin login support**: Django admin now supports Auth0 authentication when `USE_AUTH0=True`
+  - Custom login view displays Auth0 "Sign in" button with password fallback
+  - Custom logout view properly clears both Django session and Auth0 session
+  - Backward compatible: password authentication always available
+  - Files: `config/admin_auth/views.py`, `config/admin_auth/backends.py`
+- **Admin claims synchronization**: Admin privileges can be set via Auth0 token claims
+  - Supports `{namespace}is_staff` and `{namespace}is_superuser` claims
+  - Claims synced during admin login (not on every API request for performance)
+  - Handles boolean, string ("true"/"false"), and numeric (0/1) claim values
+  - Configurable namespace via `AUTH0_ADMIN_CLAIM_NAMESPACE` env var
+  - Files: `config/graphql_auth0_auth/utils.py:269-360`
+- **Auth0AdminBackend**: Dedicated authentication backend for admin login via Auth0
+  - Validates user exists, is active, and has `is_staff=True`
+  - Files: `config/admin_auth/backends.py:18-88`
+- **Security hardening**:
+  - Open redirect prevention using `url_has_allowed_host_and_scheme()`
+  - Host header injection prevention for Auth0 logout `returnTo` URL
+  - CSRF protection on all login/logout endpoints
+  - Files: `config/admin_auth/views.py:24-89`
+- **Professional login template**: Standalone HTML template with Auth0 SDK integration
+  - Loading states, error handling, graceful degradation
+  - Uses Subresource Integrity (SRI) for CDN-hosted Auth0 SDK
+  - Files: `opencontractserver/templates/admin/auth0_login.html`
+- **Comprehensive test coverage**: 50+ tests covering security edge cases
+  - Open redirect prevention, boolean claim parsing, logout URL safety
+  - Files: `opencontractserver/tests/test_admin_auth.py`
+
 #### Runtime-Configurable Pipeline Settings (Superuser Only)
 - **PipelineSettings singleton model**: Database-backed configuration for document processing pipeline
   - Stores preferred parsers, embedders, and thumbnailers per MIME type

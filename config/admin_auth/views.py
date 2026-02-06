@@ -13,12 +13,18 @@ from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
 
 logger = logging.getLogger(__name__)
+
+
+def _get_admin_index_url():
+    """Get the admin index URL using reverse() for proper URL resolution."""
+    return reverse("admin:index")
 
 
 def _get_safe_redirect_url(request, url, default=None):
@@ -37,7 +43,7 @@ def _get_safe_redirect_url(request, url, default=None):
         The validated URL or default if validation fails.
     """
     if default is None:
-        default = f"/{settings.ADMIN_URL}"
+        default = _get_admin_index_url()
 
     if not url:
         return default
@@ -50,7 +56,7 @@ def _get_safe_redirect_url(request, url, default=None):
     ):
         return url
 
-    logger.warning(f"Blocked unsafe redirect URL: {url}")
+    logger.warning("Blocked unsafe redirect URL: %s", url)
     return default
 
 
@@ -109,7 +115,7 @@ class Auth0AdminLoginView(View):
         """Display the appropriate login form."""
         # Check if user is already authenticated
         if request.user.is_authenticated and request.user.is_staff:
-            return redirect(f"/{settings.ADMIN_URL}")
+            return redirect(_get_admin_index_url())
 
         # Check for token in query params (from Auth0 callback)
         token = request.GET.get("token")
@@ -117,9 +123,7 @@ class Auth0AdminLoginView(View):
             return self._authenticate_with_token(request, token)
 
         # Validate the next URL to prevent open redirect attacks
-        next_url = _get_safe_redirect_url(
-            request, request.GET.get("next"), f"/{settings.ADMIN_URL}"
-        )
+        next_url = _get_safe_redirect_url(request, request.GET.get("next"))
 
         context = {
             "title": "Log in",
@@ -156,9 +160,7 @@ class Auth0AdminLoginView(View):
         if user is not None and user.is_staff:
             login(request, user)
             # Validate redirect URL to prevent open redirect attacks
-            next_url = _get_safe_redirect_url(
-                request, request.POST.get("next"), f"/{settings.ADMIN_URL}"
-            )
+            next_url = _get_safe_redirect_url(request, request.POST.get("next"))
             return redirect(next_url)
 
         messages.error(request, "Invalid credentials or insufficient permissions.")
@@ -171,6 +173,12 @@ class Auth0AdminLoginView(View):
         try:
             user = get_user_from_jwt_token(token)
 
+            if user and user.is_active:
+                # Sync admin claims from token (only during admin login, not API requests)
+                self._sync_admin_claims(user, token)
+                # Refresh user to get updated is_staff status
+                user.refresh_from_db()
+
             if user and user.is_active and user.is_staff:
                 # Use the Auth0AdminBackend for session login
                 login(
@@ -180,14 +188,13 @@ class Auth0AdminLoginView(View):
                 )
                 # Validate redirect URL to prevent open redirect attacks
                 raw_next = request.GET.get("next") or request.POST.get("next")
-                next_url = _get_safe_redirect_url(
-                    request, raw_next, f"/{settings.ADMIN_URL}"
-                )
-                logger.info(f"Admin login successful for {user.username}")
+                next_url = _get_safe_redirect_url(request, raw_next)
+                logger.info("Admin login successful for %s", user.username)
                 return redirect(next_url)
             else:
                 logger.warning(
-                    f"User {user.username if user else 'unknown'} denied admin access"
+                    "User %s denied admin access",
+                    user.username if user else "unknown",
                 )
                 messages.error(
                     request, "You do not have permission to access the admin."
@@ -195,9 +202,31 @@ class Auth0AdminLoginView(View):
                 return redirect(request.path)
 
         except Exception as e:
-            logger.error(f"Admin token authentication failed: {e}")
+            logger.error("Admin token authentication failed: %s", e)
             messages.error(request, "Authentication failed. Please try again.")
             return redirect(request.path)
+
+    def _sync_admin_claims(self, user, token):
+        """
+        Sync admin claims from Auth0 token to user model.
+
+        This is only called during admin login to avoid performance
+        overhead on every API request.
+        """
+        if not getattr(settings, "USE_AUTH0", False):
+            return
+
+        try:
+            from config.graphql_auth0_auth.utils import (
+                get_payload,
+                sync_admin_claims_from_payload,
+            )
+
+            payload = get_payload(token)
+            sync_admin_claims_from_payload(user, payload)
+        except Exception as e:
+            # Log but don't fail authentication - claim sync is secondary
+            logger.warning("Failed to sync admin claims for %s: %s", user.username, e)
 
 
 class Auth0AdminLogoutView(View):
@@ -219,7 +248,7 @@ class Auth0AdminLogoutView(View):
             logout_url = f"https://{auth0_domain}/v2/logout?{params}"
             return redirect(logout_url)
 
-        return redirect(f"/{settings.ADMIN_URL}")
+        return redirect(_get_admin_index_url())
 
     def post(self, request):
         """Handle POST logout requests (for CSRF-protected forms)."""

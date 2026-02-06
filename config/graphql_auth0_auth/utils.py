@@ -342,17 +342,24 @@ def sync_admin_claims_from_payload(user, payload):
     if is_staff_valid and user.is_staff != is_staff_claim:
         user.is_staff = is_staff_claim
         needs_save = True
-        logger.info(f"Synced is_staff={is_staff_claim} for user {user.username}")
+        logger.info("Synced is_staff=%s for user %s", is_staff_claim, user.username)
 
     if is_superuser_valid and user.is_superuser != is_superuser_claim:
         user.is_superuser = is_superuser_claim
         needs_save = True
         logger.info(
-            f"Synced is_superuser={is_superuser_claim} for user {user.username}"
+            "Synced is_superuser=%s for user %s", is_superuser_claim, user.username
         )
 
     if needs_save:
-        user.save(update_fields=["is_staff", "is_superuser"])
+        try:
+            user.save(update_fields=["is_staff", "is_superuser"])
+        except Exception as e:
+            # Log but don't crash - admin login should still work
+            logger.error(
+                "Failed to save admin claims for user %s: %s", user.username, e
+            )
+            return False
 
     return needs_save
 
@@ -383,9 +390,9 @@ def get_user_by_payload(payload):
         if not is_active:
             logger.error(f"get_user_by_payload() - User {user.username} is disabled")
             raise exceptions.JSONWebTokenError(_("User is disabled"))
-
-        # Sync admin claims from token if present
-        sync_admin_claims_from_payload(user, payload)
+        # NOTE: Admin claims sync is intentionally NOT called here to avoid
+        # performance overhead on every API request. Admin claims are only
+        # synced during admin login in Auth0AdminLoginView._authenticate_with_token()
     else:
         logger.warning("get_user_by_payload() - No user found for username")
 
