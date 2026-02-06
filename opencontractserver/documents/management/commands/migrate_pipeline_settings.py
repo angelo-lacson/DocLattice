@@ -76,6 +76,12 @@ class Command(BaseCommand):
             "from Django settings to database. Useful after upgrading when Django settings "
             "have new defaults you want to adopt.",
         )
+        parser.add_argument(
+            "--list-components",
+            action="store_true",
+            help="List all available pipeline components and their settings schemas. "
+            "Shows required settings, env var names, defaults, and descriptions.",
+        )
 
     def handle(self, *args, **options):
         """Execute the migration command."""
@@ -86,6 +92,12 @@ class Command(BaseCommand):
         force_overwrite = options.get("force", False)
         strict_mode = options.get("strict", False)
         sync_preferences = options.get("sync_preferences", False)
+        list_components = options.get("list_components", False)
+
+        # Handle --list-components first (doesn't need the header)
+        if list_components:
+            self._list_components(specific_component)
+            return
 
         self.stdout.write(self.style.NOTICE("\n" + "=" * 70))
         self.stdout.write(self.style.NOTICE("Pipeline Settings Migration"))
@@ -518,4 +530,161 @@ class Command(BaseCommand):
         elif changes:
             self.stdout.write(self.style.SUCCESS("\n  Preferences synced successfully"))
 
+        self.stdout.write("=" * 70 + "\n")
+
+    def _list_components(self, specific_component: str | None = None):
+        """
+        List all available pipeline components and their settings schemas.
+
+        Shows component metadata, supported file types, and settings with:
+        - Setting name and type
+        - Whether it's required
+        - Whether it's a secret (stored encrypted)
+        - Environment variable name (if defined)
+        - Default value
+        - Description
+        """
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_secret_settings,
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+
+        # Collect all components by type
+        component_groups = [
+            ("Parsers", registry.parsers),
+            ("Embedders", registry.embedders),
+            ("Thumbnailers", registry.thumbnailers),
+            ("Post-Processors", registry.post_processors),
+        ]
+
+        self.stdout.write("\n" + "=" * 70)
+        self.stdout.write(self.style.SUCCESS("AVAILABLE PIPELINE COMPONENTS"))
+        self.stdout.write("=" * 70)
+
+        total_components = 0
+        components_with_settings = 0
+
+        for group_name, components in component_groups:
+            # Filter if specific component requested
+            if specific_component:
+                components = [
+                    c
+                    for c in components
+                    if c.name == specific_component
+                    or c.class_name == specific_component
+                    or specific_component.lower() in c.name.lower()
+                ]
+                if not components:
+                    continue
+
+            if not components:
+                continue
+
+            self.stdout.write(f"\n{self.style.MIGRATE_HEADING(group_name)}")
+            self.stdout.write("-" * 40)
+
+            for component_def in components:
+                total_components += 1
+                component_class = component_def.component_class
+                schema = (
+                    get_settings_schema(component_class) if component_class else None
+                )
+
+                # Component header
+                self.stdout.write(f"\n  {self.style.SUCCESS(component_def.name)}")
+                self.stdout.write(f"    Class: {component_def.class_name}")
+
+                if component_def.title:
+                    self.stdout.write(f"    Title: {component_def.title}")
+                if component_def.description:
+                    # Truncate long descriptions
+                    desc = component_def.description
+                    if len(desc) > 60:
+                        desc = desc[:57] + "..."
+                    self.stdout.write(f"    Description: {desc}")
+
+                # Supported file types
+                if component_def.supported_file_types:
+                    types = ", ".join(
+                        str(ft.value) if hasattr(ft, "value") else str(ft)
+                        for ft in component_def.supported_file_types
+                    )
+                    self.stdout.write(f"    Supported types: {types}")
+
+                # Settings schema
+                if not schema:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "    Settings: None (no configuration needed)"
+                        )
+                    )
+                    continue
+
+                components_with_settings += 1
+                secret_settings = (
+                    get_secret_settings(component_class) if component_class else set()
+                )
+
+                self.stdout.write(f"    Settings ({len(schema)}):")
+
+                for setting_name, info in schema.items():
+                    is_secret = setting_name in secret_settings
+                    is_required = info.get("required", False)
+                    env_var = info.get("env_var")
+                    default = info.get("default")
+                    description = info.get("description", "")
+                    setting_type = info.get("type", "unknown")
+
+                    # Build setting line
+                    flags = []
+                    if is_required:
+                        flags.append(self.style.ERROR("REQUIRED"))
+                    if is_secret:
+                        flags.append(self.style.WARNING("SECRET"))
+
+                    flag_str = f" [{', '.join(flags)}]" if flags else ""
+
+                    self.stdout.write(
+                        f"      - {setting_name}: {setting_type}{flag_str}"
+                    )
+
+                    # Details
+                    if env_var:
+                        self.stdout.write(f"          env: {env_var}")
+                    if default is not None and not is_secret:
+                        default_str = (
+                            repr(default) if len(repr(default)) < 40 else "..."
+                        )
+                        self.stdout.write(f"          default: {default_str}")
+                    if description:
+                        # Truncate long descriptions
+                        if len(description) > 50:
+                            description = description[:47] + "..."
+                        self.stdout.write(f"          {description}")
+
+        # Summary
+        self.stdout.write("\n" + "=" * 70)
+        self.stdout.write("SUMMARY")
+        self.stdout.write("=" * 70)
+        self.stdout.write(f"  Total components: {total_components}")
+        self.stdout.write(f"  Components with settings: {components_with_settings}")
+
+        if specific_component and total_components == 0:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"\n  No components found matching '{specific_component}'"
+                )
+            )
+
+        self.stdout.write("\n" + "=" * 70)
+        self.stdout.write("USAGE")
+        self.stdout.write("=" * 70)
+        self.stdout.write("  1. Set environment variables for required settings")
+        self.stdout.write("  2. Run: python manage.py migrate_pipeline_settings")
+        self.stdout.write(
+            "  3. Verify: python manage.py migrate_pipeline_settings --verify"
+        )
         self.stdout.write("=" * 70 + "\n")

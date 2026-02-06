@@ -15,20 +15,75 @@ The configuration is stored in a singleton `PipelineSettings` model that tracks:
 - **Default embedder** (fallback when no MIME-specific embedder exists)
 - **Encrypted secrets** (API keys, credentials)
 
+## Discovering Available Components
+
+Before configuring, discover what pipeline components are available and what settings they need:
+
+```bash
+# List all components and their settings
+docker compose -f local.yml run django python manage.py migrate_pipeline_settings --list-components
+
+# Filter to a specific component
+docker compose -f local.yml run django python manage.py migrate_pipeline_settings --list-components --component LlamaParse
+```
+
+Example output:
+```
+======================================================================
+AVAILABLE PIPELINE COMPONENTS
+======================================================================
+
+Parsers
+----------------------------------------
+
+  DoclingParser
+    Class: opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser
+    Title: Docling Parser
+    Description: Parse documents using Docling ML service
+    Supported types: application/pdf
+    Settings (2):
+      - force_ocr: bool
+          default: False
+          Force OCR on all pages
+      - roll_up_groups: bool
+          default: True
+          Combine grouped elements
+
+  LlamaParseParser
+    Class: opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser
+    Settings (1):
+      - api_key: str [REQUIRED, SECRET]
+          env: LLAMAPARSE_API_KEY
+          LlamaParse API key
+
+...
+======================================================================
+USAGE
+======================================================================
+  1. Set environment variables for required settings
+  2. Run: python manage.py migrate_pipeline_settings
+  3. Verify: python manage.py migrate_pipeline_settings --verify
+======================================================================
+```
+
 ## First-Time Setup (Fresh Install)
 
 On a fresh installation, pipeline settings are automatically initialized from Django settings during migration.
 
 ```bash
-# 1. Run migrations - this creates the PipelineSettings singleton
-#    and populates it from Django settings (PREFERRED_PARSERS, etc.)
+# 1. Discover what components exist and what they need
+docker compose -f local.yml run django python manage.py migrate_pipeline_settings --list-components
+
+# 2. Set any required environment variables (see output from step 1)
+# export LLAMAPARSE_API_KEY=your-key  # if using LlamaParse
+
+# 3. Run migrations - creates PipelineSettings singleton from Django settings
 docker compose -f local.yml run django python manage.py migrate
 
-# 2. (Optional) If you have component-specific settings in environment variables,
-#    migrate them to the database
+# 4. Migrate component settings from environment variables to database
 docker compose -f local.yml run django python manage.py migrate_pipeline_settings
 
-# 3. (Optional) Verify all components have required settings
+# 5. Verify all components have required settings
 docker compose -f local.yml run django python manage.py migrate_pipeline_settings --verify
 ```
 
@@ -102,6 +157,12 @@ Sensitive configuration (API keys, credentials) is stored encrypted in the datab
 ### `migrate_pipeline_settings`
 
 ```bash
+# List all available components and their settings schemas
+python manage.py migrate_pipeline_settings --list-components
+
+# Filter to specific component
+python manage.py migrate_pipeline_settings --list-components --component DoclingParser
+
 # Preview what would be migrated
 python manage.py migrate_pipeline_settings --dry-run
 
@@ -129,11 +190,12 @@ python manage.py migrate_pipeline_settings --strict
 
 ## Configuration Priority
 
-When determining which component to use, the system checks in this order:
+The system uses **database-only configuration** at runtime:
 
-1. **Database settings** (`PipelineSettings` model) - highest priority
-2. **Django settings** (`PREFERRED_PARSERS`, etc.) - fallback for missing DB entries
-3. **Component defaults** - built-in defaults
+1. **Database settings** (`PipelineSettings` model) - the single source of truth
+2. **Component defaults** - built-in defaults when no DB settings exist
+
+> **Note**: Django settings (`PREFERRED_PARSERS`, etc.) are only read during initial migration to populate the database. At runtime, all configuration comes from the database. Use `--sync-preferences` to re-sync from Django settings after upgrades.
 
 ## Production Deployment
 
