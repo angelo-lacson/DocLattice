@@ -1366,6 +1366,26 @@ class TestArrayFormatHandling(unittest.TestCase):
 
             self.assertEqual(result, [0.4, 0.5, 0.6])
 
+    def test_microservice_embedder_settings_none_fallback(self):
+        """MicroserviceEmbedder falls back to Settings() when self.settings is None."""
+        from opencontractserver.pipeline.embedders.sent_transformer_microservice import (
+            MicroserviceEmbedder,
+        )
+
+        embedder = MicroserviceEmbedder()
+        # Force settings to None to exercise the fallback path
+        embedder._settings = None
+
+        with patch("requests.post") as mock_post:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"embeddings": [0.1, 0.2, 0.3]}
+            mock_post.return_value = mock_response
+
+            result = embedder.embed_text("test")
+
+            self.assertEqual(result, [0.1, 0.2, 0.3])
+
 
 if __name__ == "__main__":
     unittest.main()

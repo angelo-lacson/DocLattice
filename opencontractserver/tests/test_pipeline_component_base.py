@@ -1,10 +1,12 @@
 from dataclasses import dataclass, field
+from unittest.mock import patch
 
 from django.test import TestCase
 
 from opencontractserver.documents.models import PipelineSettings
 from opencontractserver.pipeline.base.base_component import PipelineComponentBase
 from opencontractserver.pipeline.base.settings_schema import (
+    ConfigurationError,
     PipelineSetting,
     SettingType,
 )
@@ -281,3 +283,76 @@ class TestPipelineComponentWithSettingsDataclass(TestCase):
         """get_settings_schema() returns empty dict without Settings dataclass."""
         schema = DummyComponent.get_settings_schema()
         self.assertEqual(schema, {})
+
+
+class TestLoadSettingsErrorPaths(TestCase):
+    """Tests for error handling paths in _load_settings and get_component_settings."""
+
+    def setUp(self):
+        PipelineSettings.objects.all().delete()
+        self.pipeline_settings = PipelineSettings.objects.create(id=1)
+
+    def test_load_settings_strict_raises_configuration_error(self):
+        """reload_settings(strict=True) raises ConfigurationError for missing required."""
+        component = DummyComponentWithSettings()
+        # api_key is required but not set in DB → ConfigurationError
+        with self.assertRaises(ConfigurationError):
+            component.reload_settings(strict=True)
+
+    def test_load_settings_non_strict_fallback_on_configuration_error(self):
+        """Non-strict _load_settings logs warning and retries when ConfigurationError."""
+        component = DummyComponentWithSettings()
+        fallback_instance = DummyComponentWithSettings.Settings(
+            api_key="", timeout=30, debug=False
+        )
+
+        with patch(
+            "opencontractserver.pipeline.base.settings_schema.create_settings_instance",
+            wraps=None,
+        ) as mock_create:
+            mock_create.side_effect = [
+                ConfigurationError("test.path", ["api_key"]),
+                fallback_instance,
+            ]
+            result = component._load_settings(strict=False)
+            self.assertIsNotNone(result)
+            self.assertEqual(result.timeout, 30)
+            self.assertEqual(mock_create.call_count, 2)
+            # Second call should use strict=False
+            _, kwargs = mock_create.call_args
+            self.assertFalse(kwargs.get("strict", True))
+
+    def test_load_settings_value_error_returns_none(self):
+        """_load_settings returns None when ValueError is raised."""
+        component = DummyComponentWithSettings()
+
+        with patch(
+            "opencontractserver.pipeline.base.settings_schema.create_settings_instance",
+            side_effect=ValueError("No Settings dataclass"),
+        ):
+            result = component._load_settings(strict=False)
+            self.assertIsNone(result)
+
+    def test_get_component_settings_django_not_configured(self):
+        """get_component_settings returns {} when Django settings not configured."""
+        component = DummyComponent()
+        with patch(
+            "opencontractserver.pipeline.base.base_component.settings"
+        ) as mock_settings:
+            mock_settings.configured = False
+            result = component.get_component_settings()
+            self.assertEqual(result, {})
+
+    def test_get_component_settings_db_exception(self):
+        """get_component_settings returns {} when DB access raises exception."""
+        component = DummyComponent()
+        with patch(
+            "opencontractserver.pipeline.base.base_component.settings"
+        ) as mock_settings:
+            mock_settings.configured = True
+            with patch(
+                "opencontractserver.documents.models.PipelineSettings.get_instance",
+                side_effect=Exception("DB unavailable"),
+            ):
+                result = component.get_component_settings()
+                self.assertEqual(result, {})
