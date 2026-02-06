@@ -625,7 +625,7 @@ class TestAdminLoginView(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("admin", response.url)
 
-    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
     def test_token_login_success(self, mock_get_user):
         """Valid token should authenticate staff user."""
         mock_get_user.return_value = self.staff_user
@@ -640,7 +640,7 @@ class TestAdminLoginView(TestCase):
         self.assertEqual(response.status_code, 302)  # Redirect to admin
         mock_get_user.assert_called_once_with("valid_test_token")
 
-    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
     def test_token_login_non_staff_denied(self, mock_get_user):
         """Valid token for non-staff user should be denied."""
         mock_get_user.return_value = self.regular_user
@@ -654,7 +654,7 @@ class TestAdminLoginView(TestCase):
 
         self.assertEqual(response.status_code, 302)  # Redirect back to login
 
-    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
     def test_token_login_invalid_token(self, mock_get_user):
         """Invalid token should show error."""
         mock_get_user.side_effect = Exception("Invalid token")
@@ -668,16 +668,17 @@ class TestAdminLoginView(TestCase):
 
         self.assertEqual(response.status_code, 302)  # Redirect back to login
 
-    @patch("config.graphql_auth0_auth.utils.sync_admin_claims_from_payload")
-    @patch("config.graphql_auth0_auth.utils.get_payload")
     @patch("config.jwt_utils.get_user_from_jwt_token")
-    def test_token_login_continues_on_claim_sync_error(
-        self, mock_get_user, mock_get_payload, mock_sync
-    ):
-        """Login should succeed even if claim sync raises exception."""
+    @patch.object(
+        __import__(
+            "config.admin_auth.views", fromlist=["Auth0AdminLoginView"]
+        ).Auth0AdminLoginView,
+        "_sync_admin_claims",
+        return_value=False,
+    )
+    def test_token_login_fails_on_claim_sync_error(self, mock_sync, mock_get_user):
+        """Login should fail if claim sync fails to prevent stale permissions."""
         mock_get_user.return_value = self.staff_user
-        mock_get_payload.return_value = {"sub": "auth0|123"}
-        mock_sync.side_effect = Exception("Sync failed")
 
         response = self.client.post(
             "/admin/login/",
@@ -686,10 +687,45 @@ class TestAdminLoginView(TestCase):
             },
         )
 
-        # Login should still succeed despite sync failure
+        # Login should fail when claim sync returns False
         self.assertEqual(response.status_code, 302)
-        self.assertIn("admin", response.url)
+        self.assertIn("login", response.url)
         mock_get_user.assert_called_once_with("valid_test_token")
+        mock_sync.assert_called_once()
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    @patch("config.graphql_auth0_auth.utils.get_payload")
+    @patch("config.jwt_utils.get_user_from_jwt_token")
+    def test_admin_login_revokes_staff_when_claim_false(
+        self, mock_get_user, mock_get_payload
+    ):
+        """Admin login with is_staff=False claim should revoke staff access and deny login."""
+        # User is currently staff
+        self.staff_user.is_staff = True
+        self.staff_user.save()
+
+        mock_get_user.return_value = self.staff_user
+        mock_get_payload.return_value = {
+            "sub": self.staff_user.username,
+            "https://test.example.com/is_staff": False,
+        }
+
+        response = self.client.post(
+            "/admin/login/",
+            {
+                "token": "valid_test_token",
+            },
+        )
+
+        # Should be denied (no longer staff)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+        # Verify is_staff was actually revoked
+        self.staff_user.refresh_from_db()
+        self.assertFalse(self.staff_user.is_staff)
 
     @override_settings(USE_AUTH0=True)
     def test_login_page_shows_auth0_button(self):
@@ -847,6 +883,26 @@ class TestAdminLogoutView(TestCase):
         # Should use first valid host from ALLOWED_HOSTS
         self.assertIn("example.com", response.url)
 
+    @override_settings(ALLOWED_HOSTS=[])
+    def test_get_safe_logout_return_url_raises_without_valid_hosts(self):
+        """_get_safe_logout_return_url should raise ImproperlyConfigured without valid hosts."""
+        from unittest.mock import MagicMock
+
+        from django.core.exceptions import ImproperlyConfigured
+
+        from config.admin_auth.views import _get_safe_logout_return_url
+
+        # Create a mock request
+        mock_request = MagicMock()
+        mock_request.get_host.return_value = "evil.com"
+        mock_request.is_secure.return_value = False
+
+        with self.assertRaises(ImproperlyConfigured) as context:
+            _get_safe_logout_return_url(mock_request)
+
+        self.assertIn("ALLOWED_HOSTS", str(context.exception))
+        self.assertIn("non-wildcard", str(context.exception))
+
 
 class TestGetUserByPayloadWithClaimSync(TestCase):
     """Integration tests for get_user_by_payload with claim syncing."""
@@ -866,3 +922,29 @@ class TestGetUserByPayloadWithClaimSync(TestCase):
         self.user.is_staff = False
         self.user.is_superuser = False
         self.user.save()
+
+    @override_settings(
+        USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
+    )
+    @patch("django.core.cache.cache")
+    def test_sync_claims_cached_handles_cache_failure(self, mock_cache):
+        """_sync_admin_claims_cached should sync claims even when cache fails."""
+        from config.graphql_auth0_auth.utils import _sync_admin_claims_cached
+
+        # Simulate cache failure
+        mock_cache.get.side_effect = Exception("Cache unavailable")
+        mock_cache.set.side_effect = Exception("Cache unavailable")
+
+        payload = {
+            "sub": self.user.username,
+            "https://test.example.com/is_staff": True,
+            "https://test.example.com/is_superuser": True,
+        }
+
+        # Should not raise, and should still sync claims
+        _sync_admin_claims_cached(self.user, payload)
+
+        # Verify claims were synced despite cache failure
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_staff)
+        self.assertTrue(self.user.is_superuser)
