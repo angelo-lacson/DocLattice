@@ -26,7 +26,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **PipelineSettings singleton model**: Database-backed configuration for document processing pipeline
   - Stores preferred parsers, embedders, and thumbnailers per MIME type
   - Stores parser-specific kwargs and component settings overrides
-  - Falls back to Django settings when database values are not configured
+  - Database is the single source of truth at runtime (no Django settings fallback)
   - Singleton pattern: only one instance exists, cannot be deleted
   - Files: `opencontractserver/documents/models.py:734-1140`
 - **Encrypted secrets storage**: Secure storage for API keys and sensitive credentials
@@ -56,12 +56,21 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `config/graphql/pipeline_settings_mutations.py:414-481`
 - **Migration 0031**: Creates PipelineSettings table with encrypted_secrets field
   - Files: `opencontractserver/documents/migrations/0031_add_pipeline_settings.py`
+- **Management command `migrate_pipeline_settings`**: Self-documenting component discovery and settings migration
+  - `--list-components`: Introspects pipeline registry to show all components with settings schemas, env vars, defaults, and descriptions
+  - `--sync-preferences`: Syncs PREFERRED_PARSERS, PREFERRED_EMBEDDERS, etc. from Django settings to database
+  - `--component <name>`: Filters output to a specific component
+  - Files: `opencontractserver/documents/management/commands/migrate_pipeline_settings.py`
+- **Pipeline Configuration Guide**: Documentation covering first-time setup, upgrades, runtime configuration, and troubleshooting
+  - Files: `docs/pipelines/pipeline_configuration.md`
 - **Integration with doc_tasks**: `ingest_doc` and `extract_thumbnail` now read from PipelineSettings
   - Files: `opencontractserver/tasks/doc_tasks.py:355-374`, `opencontractserver/tasks/doc_tasks.py:686-721`
 - **Integration with pipeline/utils**: `get_preferred_embedder` and `get_default_embedder` use PipelineSettings
   - Files: `opencontractserver/pipeline/utils.py:303-361`
 
 ### Changed
+- Pipeline component settings are now DB-only at runtime (Django settings fallback removed from `PipelineComponentBase.get_component_settings()`)
+  - Files: `opencontractserver/pipeline/base/base_component.py:180-217`
 - Pipeline configuration UI now reads component settings schema from GraphQL instead of hardcoding config requirements.
   - Files: `frontend/src/components/admin/SystemSettings.tsx:69-129`
 - Pipeline configuration UI now centralizes pipeline UI constants in `PIPELINE_UI` for sizing and validation values.
@@ -69,9 +78,13 @@ If rollback is required after deployment, you must write a custom migration to h
 
 ### Fixed
 - Secrets modal now validates component existence, required secret fields, and payload size before mutation.
-  - Files: `frontend/src/components/admin/SystemSettings.tsx:1248-1317`
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1500-1558`
 - MIME filter accessibility labels now include stage context.
-  - Files: `frontend/src/components/admin/SystemSettings.tsx:1404-1416`
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1076-1089`
+- GraphQL `updateComponentSecrets` mutation now validates payload size before encryption attempt.
+  - Files: `config/graphql/pipeline_settings_mutations.py:104-135`
+- Settings schema `_coerce_value` now logs warnings on coercion failures instead of silently swallowing errors.
+  - Files: `opencontractserver/pipeline/base/settings_schema.py:416-419`
 
 ### Removed
 

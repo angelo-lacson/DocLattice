@@ -103,7 +103,7 @@ def validate_component_mapping(
 
 def validate_secrets_input(secrets: dict) -> Optional[str]:
     """
-    Validate secrets input structure.
+    Validate secrets input structure and size.
 
     Args:
         secrets: Dict of secret key-value pairs
@@ -111,6 +111,8 @@ def validate_secrets_input(secrets: dict) -> Optional[str]:
     Returns:
         Error message if invalid, None if valid
     """
+    import json
+
     if not isinstance(secrets, dict):
         return "Secrets must be a dictionary"
 
@@ -121,6 +123,14 @@ def validate_secrets_input(secrets: dict) -> Optional[str]:
             return f"Secret key '{key[:50]}...' exceeds maximum length of 256"
         if not isinstance(value, (str, int, float, bool, type(None))):
             return f"Secret value for '{key}' must be a primitive type (string, number, boolean, null)"
+
+    # Validate payload size before encryption attempt
+    from opencontractserver.documents.models import PipelineSettings
+
+    max_size = PipelineSettings._get_max_secret_size()
+    payload_size = len(json.dumps(secrets).encode("utf-8"))
+    if payload_size > max_size:
+        return f"Secrets payload ({payload_size} bytes) exceeds maximum size of {max_size} bytes"
 
     return None
 

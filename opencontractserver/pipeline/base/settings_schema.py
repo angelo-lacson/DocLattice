@@ -413,10 +413,10 @@ def _coerce_value(value: Any, python_type: str) -> Any:
         elif python_type == "str":
             if not isinstance(value, str):
                 return str(value)
-    except (ValueError, TypeError):
-        # If coercion fails, return original value
-        # Let the dataclass constructor handle the error
-        pass
+    except (ValueError, TypeError) as e:
+        logger.warning(
+            "Failed to coerce value %r to type '%s': %s", value, python_type, e
+        )
 
     return value
 
