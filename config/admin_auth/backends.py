@@ -52,17 +52,19 @@ class Auth0AdminBackend(ModelBackend):
             user = User.objects.get(username=auth0_user_id)
             if user.is_active and user.is_staff:
                 logger.info(
-                    f"Auth0 admin authentication successful for {user.username}"
+                    "Auth0 admin authentication successful for user ID %s", user.id
                 )
                 return user
             else:
                 logger.warning(
-                    f"Auth0 user {auth0_user_id} denied admin access: "
-                    f"is_active={user.is_active}, is_staff={user.is_staff}"
+                    "Auth0 user %s denied admin access: is_active=%s, is_staff=%s",
+                    auth0_user_id,
+                    user.is_active,
+                    user.is_staff,
                 )
                 return None
         except User.DoesNotExist:
-            logger.warning(f"Auth0 admin auth failed: user {auth0_user_id} not found")
+            logger.warning("Auth0 admin auth failed: user %s not found", auth0_user_id)
             return None
 
     def get_user(self, user_id):

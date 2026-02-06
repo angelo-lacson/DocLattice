@@ -648,6 +648,29 @@ class TestAdminLoginView(TestCase):
 
         self.assertEqual(response.status_code, 302)  # Redirect back to login
 
+    @patch("config.admin_auth.views.sync_admin_claims_from_payload")
+    @patch("config.admin_auth.views.get_payload")
+    @patch("config.admin_auth.views.get_user_from_jwt_token")
+    def test_token_login_continues_on_claim_sync_error(
+        self, mock_get_user, mock_get_payload, mock_sync
+    ):
+        """Login should succeed even if claim sync raises exception."""
+        mock_get_user.return_value = self.staff_user
+        mock_get_payload.return_value = {"sub": "auth0|123"}
+        mock_sync.side_effect = Exception("Sync failed")
+
+        response = self.client.post(
+            "/admin/login/",
+            {
+                "token": "valid_test_token",
+            },
+        )
+
+        # Login should still succeed despite sync failure
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("admin", response.url)
+        mock_get_user.assert_called_once_with("valid_test_token")
+
     @override_settings(USE_AUTH0=True)
     def test_login_page_shows_auth0_button(self):
         """Login page should show Auth0 button when USE_AUTH0=True."""

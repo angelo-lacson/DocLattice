@@ -241,7 +241,9 @@ class Auth0AdminLoginView(View):
             bool: True if sync succeeded (or was skipped), False if it failed.
         """
         if not getattr(settings, "USE_AUTH0", False):
-            return True  # Not applicable, consider success
+            # Defensive check - should not be reached in practice since
+            # _authenticate_with_token() is only called when Auth0 is active
+            return True
 
         try:
             from config.graphql_auth0_auth.utils import (

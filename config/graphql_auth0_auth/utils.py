@@ -319,7 +319,8 @@ def sync_admin_claims_from_payload(user, payload):
         payload: The decoded JWT payload containing claims.
 
     Returns:
-        bool: True if any changes were made, False otherwise.
+        bool: True if changes were successfully applied, False if no changes
+              needed or if save failed (non-fatal).
     """
     from django.conf import settings
 
