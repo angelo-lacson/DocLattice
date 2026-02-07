@@ -880,8 +880,10 @@ class TestAdminLogoutView(TestCase):
         self.assertEqual(response.status_code, 302)
         # returnTo should be URL-encoded and use a safe host
         self.assertIn("returnTo=", response.url)
-        # Should use first valid host from ALLOWED_HOSTS
-        self.assertIn("example.com", response.url)
+        # Should prefer the request host when it is allowed
+        self.assertIn("testserver", response.url)
+        # Should redirect to admin login page, not root
+        self.assertIn("admin%2Flogin", response.url)
 
     @override_settings(ALLOWED_HOSTS=[])
     def test_get_safe_logout_return_url_raises_without_valid_hosts(self):
