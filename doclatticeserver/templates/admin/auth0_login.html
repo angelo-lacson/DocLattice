@@ -253,7 +253,7 @@
                         audience: '{{ auth0_audience }}',
                         redirect_uri: window.location.origin + window.location.pathname
                     },
-                    cacheLocation: 'localstorage'
+                    cacheLocation: 'memory'
                 });
 
                 // Handle callback from Auth0

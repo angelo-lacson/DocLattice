@@ -137,8 +137,8 @@ class TestAdminClaimsSync(TestCase):
     @override_settings(
         USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
     )
-    def test_missing_claims_no_change(self):
-        """Missing claims should not modify user."""
+    def test_missing_claims_demotes(self):
+        """Missing claims should demote admin privileges."""
         from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
 
         # Set user to staff first
@@ -150,8 +150,8 @@ class TestAdminClaimsSync(TestCase):
         result = sync_admin_claims_from_payload(self.user, payload)
 
         self.user.refresh_from_db()
-        self.assertTrue(result)  # Success (no changes needed)
-        self.assertTrue(self.user.is_staff)  # Unchanged
+        self.assertTrue(result)
+        self.assertFalse(self.user.is_staff)
 
     @override_settings(
         USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
@@ -290,8 +290,8 @@ class TestAdminClaimsSync(TestCase):
     @override_settings(
         USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
     )
-    def test_sync_invalid_string_claim_ignored(self):
-        """Invalid string claim should be ignored."""
+    def test_sync_invalid_string_claim_demotes(self):
+        """Invalid string claim should demote staff."""
         from config.graphql_auth0_auth.utils import sync_admin_claims_from_payload
 
         self.user.is_staff = True
@@ -305,8 +305,8 @@ class TestAdminClaimsSync(TestCase):
         result = sync_admin_claims_from_payload(self.user, payload)
 
         self.user.refresh_from_db()
-        self.assertTrue(result)  # Success (no changes needed)
-        self.assertTrue(self.user.is_staff)  # Unchanged
+        self.assertTrue(result)
+        self.assertFalse(self.user.is_staff)
 
     @override_settings(
         USE_AUTH0=True, AUTH0_ADMIN_CLAIM_NAMESPACE="https://test.example.com/"
@@ -413,20 +413,20 @@ class TestBooleanClaimParsing(TestCase):
         self.assertFalse(value)
 
     def test_parse_none(self):
-        """None should return (None, False)."""
+        """None should return (False, False)."""
         from config.graphql_auth0_auth.utils import _parse_boolean_claim
 
         value, valid = _parse_boolean_claim(None)
         self.assertFalse(valid)
-        self.assertIsNone(value)
+        self.assertFalse(value)
 
     def test_parse_invalid_string(self):
-        """Invalid string should return (None, False)."""
+        """Invalid string should return (False, False)."""
         from config.graphql_auth0_auth.utils import _parse_boolean_claim
 
         value, valid = _parse_boolean_claim("invalid")
         self.assertFalse(valid)
-        self.assertIsNone(value)
+        self.assertFalse(value)
 
 
 class TestAuth0AdminBackend(TestCase):
