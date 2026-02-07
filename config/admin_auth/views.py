@@ -12,15 +12,36 @@ from urllib.parse import urlencode
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth import authenticate, login, logout
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
+from django_ratelimit.decorators import ratelimit
 
 logger = logging.getLogger(__name__)
+
+# Rate limits for admin login endpoints.
+# Can be overridden via RATELIMIT_AUTH_LOGIN and RATELIMIT_ADMIN_LOGIN_PAGE
+# environment variables through the RATE_LIMIT_OVERRIDES mechanism.
+_overrides = getattr(settings, "RATE_LIMIT_OVERRIDES", {})
+ADMIN_LOGIN_RATE = _overrides.get("AUTH_LOGIN", "5/m")
+ADMIN_LOGIN_PAGE_RATE = _overrides.get("ADMIN_LOGIN_PAGE", "20/m")
+
+
+def _ratelimit_ip_key(group: str, request) -> str:
+    """
+    Extract client IP for rate-limit keying.
+
+    Falls back to REMOTE_ADDR when the X-Forwarded-For header is absent
+    (e.g. in tests or direct connections without a reverse proxy).
+    """
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "unknown")
 
 
 def _get_login_url():
@@ -144,8 +165,17 @@ class Auth0AdminLoginView(View):
     template_name = "admin/auth0_login.html"
 
     @method_decorator(csrf_protect)
+    @method_decorator(ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_PAGE_RATE, block=False))
     def get(self, request):
         """Display the appropriate login form."""
+        if getattr(request, "limited", False):
+            logger.warning("Rate limit exceeded for admin login page GET")
+            return HttpResponse(
+                "Too many requests. Please try again later.",
+                status=429,
+                content_type="text/plain",
+            )
+
         # Check if user is already authenticated
         if request.user.is_authenticated and request.user.is_staff:
             return redirect(_get_admin_index_url())
@@ -174,8 +204,21 @@ class Auth0AdminLoginView(View):
         return render(request, self.template_name, context)
 
     @method_decorator(csrf_protect)
+    @method_decorator(ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_RATE, block=False))
     def post(self, request):
         """Handle token-based login via POST or password authentication."""
+        if getattr(request, "limited", False):
+            logger.warning("Rate limit exceeded for admin login POST")
+            return JsonResponse(
+                {
+                    "error": (
+                        "Too many login attempts. "
+                        "Please wait a minute and try again."
+                    )
+                },
+                status=429,
+            )
+
         token = request.POST.get("token")
         if token:
             return self._authenticate_with_token(request, token)
