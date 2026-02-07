@@ -69,6 +69,12 @@ If rollback is required after deployment, you must write a custom migration to h
   - Open redirect prevention, boolean claim parsing, logout URL safety
   - Files: `opencontractserver/tests/test_admin_auth.py`
 
+### Fixed
+
+- **Admin token handling**: Admin login no longer accepts JWT tokens via query parameters (reduces CSRF/token leakage risk). Files: `config/admin_auth/views.py:146-179`
+- **Admin claims demotion**: Missing or invalid admin claims now default to False to avoid privilege retention. Files: `config/graphql_auth0_auth/utils.py:331-411`
+- **Token storage scope**: Admin Auth0 SPA client now uses in-memory token storage instead of localStorage. Files: `opencontractserver/templates/admin/auth0_login.html:249-257`
+
 #### Runtime-Configurable Pipeline Settings (Superuser Only)
 - **PipelineSettings singleton model**: Database-backed configuration for document processing pipeline
   - Stores preferred parsers, embedders, and thumbnailers per MIME type

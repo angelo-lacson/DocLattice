@@ -291,7 +291,7 @@ def jwt_get_username_from_payload_handler(payload):
     return username
 
 
-def _parse_boolean_claim(value):
+def _parse_boolean_claim(value: object) -> tuple[bool, bool]:
     """
     Parse a claim value to a boolean, handling string representations.
 
@@ -302,12 +302,9 @@ def _parse_boolean_claim(value):
         value: The claim value (bool, str, or None).
 
     Returns:
-        tuple: (parsed_value, is_valid) where is_valid is False if value is None
-               or cannot be parsed.
+        tuple: (parsed_value, is_valid) where is_valid is False if value
+               cannot be parsed.
     """
-    if value is None:
-        return None, False
-
     if isinstance(value, bool):
         return value, True
 
@@ -315,18 +312,47 @@ def _parse_boolean_claim(value):
         lower_value = value.lower().strip()
         if lower_value in ("true", "1", "yes"):
             return True, True
-        elif lower_value in ("false", "0", "no"):
+        if lower_value in ("false", "0", "no"):
             return False, True
-        else:
-            logger.warning("Invalid boolean claim value: %s", value)
-            return None, False
+        logger.warning("Invalid boolean claim value: %s", value)
+        return False, False
 
     # Handle numeric values (0/1)
     if isinstance(value, (int, float)):
         return bool(value), True
 
+    if value is None:
+        return False, False
+
     logger.warning("Unexpected claim type: %s", type(value))
-    return None, False
+    return False, False
+
+
+def _normalize_admin_claim(value: object, claim_name: str) -> tuple[bool, bool]:
+    """
+    Normalize an admin claim with fail-closed semantics.
+
+    Missing or invalid claims are treated as False to avoid privilege retention.
+
+    Args:
+        value: The raw claim value.
+        claim_name: The claim name for logging.
+
+    Returns:
+        tuple: (parsed_value, is_valid)
+    """
+    if value is None:
+        logger.info("Admin claim %s missing; defaulting to False", claim_name)
+        return False, True
+
+    parsed_value, is_valid = _parse_boolean_claim(value)
+    if not is_valid:
+        logger.warning(
+            "Admin claim %s invalid (%r); defaulting to False", claim_name, value
+        )
+        return False, True
+
+    return parsed_value, True
 
 
 def sync_admin_claims_from_payload(user, payload):
@@ -334,8 +360,7 @@ def sync_admin_claims_from_payload(user, payload):
     Sync is_staff and is_superuser from Auth0 token claims.
 
     Claims are expected at namespace + 'is_staff' and namespace + 'is_superuser'.
-    Only updates if claims are explicitly present in the token; never demotes
-    unless explicitly set to False.
+    Missing or invalid claims are treated as False to avoid privilege retention.
 
     Handles both boolean and string claim values (e.g., true, "true", "True").
 
@@ -368,9 +393,11 @@ def sync_admin_claims_from_payload(user, payload):
         raw_is_superuser,
     )
 
-    # Parse claims with type safety
-    is_staff_claim, is_staff_valid = _parse_boolean_claim(raw_is_staff)
-    is_superuser_claim, is_superuser_valid = _parse_boolean_claim(raw_is_superuser)
+    # Parse claims with type safety (fail closed on missing/invalid)
+    is_staff_claim, is_staff_valid = _normalize_admin_claim(raw_is_staff, "is_staff")
+    is_superuser_claim, is_superuser_valid = _normalize_admin_claim(
+        raw_is_superuser, "is_superuser"
+    )
 
     needs_save = False
 

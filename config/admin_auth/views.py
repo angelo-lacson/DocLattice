@@ -150,11 +150,6 @@ class Auth0AdminLoginView(View):
         if request.user.is_authenticated and request.user.is_staff:
             return redirect(_get_admin_index_url())
 
-        # Check for token in query params (from Auth0 callback)
-        token = request.GET.get("token")
-        if token:
-            return self._authenticate_with_token(request, token)
-
         # Validate the next URL to prevent open redirect attacks
         next_url = _get_safe_redirect_url(request)
 
