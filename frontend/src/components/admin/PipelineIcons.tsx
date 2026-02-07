@@ -3,6 +3,9 @@ import {
   PIPELINE_UI,
   KNOWN_ACRONYMS,
 } from "../../assets/configurations/constants";
+import doclingLogo from "../../assets/icons/pipeline/docling.svg";
+import llamaindexLogo from "../../assets/icons/pipeline/llamaindex.svg";
+import sentenceTransformersLogo from "../../assets/icons/pipeline/sentence-transformers.svg";
 
 interface IconProps {
   size?: number;
@@ -12,120 +15,38 @@ interface IconProps {
 const DEFAULT_ICON_SIZE = PIPELINE_UI.ICON_SIZE;
 
 /**
- * Geometric icon for Docling parser (IBM Research)
- * Represents document layers/structure extraction
+ * Helper component for rendering official brand SVG logos as pipeline icons.
+ * Uses <img> to render imported SVG assets at the specified size.
  */
-export const DoclingIcon: React.FC<IconProps> = ({
+const BrandIcon: React.FC<IconProps & { src: string; alt: string }> = ({
   size = DEFAULT_ICON_SIZE,
   className,
+  src,
+  alt,
 }) => (
-  <svg
+  <img
+    src={src}
+    alt={alt}
     width={size}
     height={size}
-    viewBox="0 0 48 48"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
     className={className}
-  >
-    {/* Stacked document layers */}
-    <rect
-      x="8"
-      y="6"
-      width="28"
-      height="36"
-      rx="2"
-      fill="#3B82F6"
-      opacity="0.2"
-    />
-    <rect
-      x="10"
-      y="8"
-      width="28"
-      height="36"
-      rx="2"
-      fill="#3B82F6"
-      opacity="0.4"
-    />
-    <rect x="12" y="10" width="28" height="36" rx="2" fill="#3B82F6" />
-    {/* Document lines */}
-    <rect x="16" y="16" width="16" height="2" rx="1" fill="white" />
-    <rect
-      x="16"
-      y="22"
-      width="20"
-      height="2"
-      rx="1"
-      fill="white"
-      opacity="0.7"
-    />
-    <rect
-      x="16"
-      y="28"
-      width="14"
-      height="2"
-      rx="1"
-      fill="white"
-      opacity="0.7"
-    />
-    <rect
-      x="16"
-      y="34"
-      width="18"
-      height="2"
-      rx="1"
-      fill="white"
-      opacity="0.7"
-    />
-  </svg>
+    style={{ objectFit: "contain" }}
+  />
 );
 
 /**
- * Geometric icon for LlamaParse (LlamaIndex)
- * Represents AI/llama with document parsing
+ * Official Docling logo (IBM Research duckling mascot).
  */
-export const LlamaParseIcon: React.FC<IconProps> = ({
-  size = DEFAULT_ICON_SIZE,
-  className,
-}) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 48 48"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    {/* Llama ear shapes */}
-    <path d="M14 8 L10 18 L18 16 Z" fill="#8B5CF6" />
-    <path d="M34 8 L38 18 L30 16 Z" fill="#8B5CF6" />
-    {/* Head circle */}
-    <circle cx="24" cy="22" r="12" fill="#8B5CF6" />
-    {/* Eyes */}
-    <circle cx="20" cy="20" r="2" fill="white" />
-    <circle cx="28" cy="20" r="2" fill="white" />
-    {/* Snout */}
-    <ellipse cx="24" cy="27" rx="4" ry="3" fill="#A78BFA" />
-    {/* Document below */}
-    <rect
-      x="16"
-      y="36"
-      width="16"
-      height="10"
-      rx="1"
-      fill="#8B5CF6"
-      opacity="0.5"
-    />
-    <rect x="18" y="38" width="8" height="1" rx="0.5" fill="white" />
-    <rect
-      x="18"
-      y="41"
-      width="10"
-      height="1"
-      rx="0.5"
-      fill="white"
-      opacity="0.7"
-    />
-  </svg>
+export const DoclingIcon: React.FC<IconProps> = (props) => (
+  <BrandIcon {...props} src={doclingLogo} alt="Docling" />
+);
+
+/**
+ * Official LlamaIndex logo (gradient llama on black rounded square).
+ * Used for LlamaParse, which is a LlamaIndex product.
+ */
+export const LlamaParseIcon: React.FC<IconProps> = (props) => (
+  <BrandIcon {...props} src={llamaindexLogo} alt="LlamaIndex" />
 );
 
 /**
@@ -422,73 +343,14 @@ export const ModernBertIcon: React.FC<IconProps> = ({
 );
 
 /**
- * Geometric icon for Sentence Transformer microservice
- * Represents distributed/cloud computing
+ * Official Sentence Transformers logo (connected colored nodes network).
  */
-export const SentenceTransformerIcon: React.FC<IconProps> = ({
-  size = DEFAULT_ICON_SIZE,
-  className,
-}) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 48 48"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    {/* Cloud shape */}
-    <path
-      d="M38 28 C42 28 44 24 44 21 C44 17 40 14 36 14 C36 10 32 6 26 6 C20 6 16 10 16 14 C16 14 16 14 16 14 C10 14 6 18 6 23 C6 28 10 32 16 32 L38 32 C38 32 38 28 38 28"
-      fill="#6366F1"
-    />
-    {/* Network dots inside cloud */}
-    <circle cx="18" cy="20" r="3" fill="white" />
-    <circle cx="28" cy="18" r="3" fill="white" />
-    <circle cx="36" cy="22" r="3" fill="white" />
-    <circle cx="24" cy="26" r="3" fill="white" />
-    {/* Connection lines */}
-    <line
-      x1="20"
-      y1="21"
-      x2="25"
-      y2="19"
-      stroke="white"
-      strokeWidth="1"
-      opacity="0.6"
-    />
-    <line
-      x1="30"
-      y1="19"
-      x2="34"
-      y2="21"
-      stroke="white"
-      strokeWidth="1"
-      opacity="0.6"
-    />
-    <line
-      x1="26"
-      y1="25"
-      x2="34"
-      y2="23"
-      stroke="white"
-      strokeWidth="1"
-      opacity="0.6"
-    />
-    <line
-      x1="20"
-      y1="22"
-      x2="22"
-      y2="24"
-      stroke="white"
-      strokeWidth="1"
-      opacity="0.6"
-    />
-    {/* Server base */}
-    <rect x="14" y="36" width="20" height="8" rx="2" fill="#4F46E5" />
-    <circle cx="18" cy="40" r="1.5" fill="#A5B4FC" />
-    <rect x="22" y="39" width="8" height="2" rx="1" fill="#A5B4FC" />
-  </svg>
+export const SentenceTransformerIcon: React.FC<IconProps> = (props) => (
+  <BrandIcon
+    {...props}
+    src={sentenceTransformersLogo}
+    alt="Sentence Transformers"
+  />
 );
 
 /**
