@@ -22,6 +22,59 @@ If rollback is required after deployment, you must write a custom migration to h
 
 ### Added
 
+#### Auth0 Authentication for Django Admin
+- **Auth0 admin login support**: Django admin now supports Auth0 authentication when `USE_AUTH0=True`
+  - Custom login view displays Auth0 "Sign in" button with password fallback
+  - Custom logout view properly clears both Django session and Auth0 session
+  - Backward compatible: password authentication always available
+  - Files: `config/admin_auth/views.py`, `config/admin_auth/backends.py`
+- **Admin claims synchronization**: Admin privileges can be set via Auth0 token claims
+  - Supports `{namespace}is_staff` and `{namespace}is_superuser` claims
+  - Claims synced on API requests with 5-minute cache TTL (configurable via `ADMIN_CLAIMS_CACHE_TTL` constant)
+  - Immediate sync during admin login ensures fresh permissions for admin access
+  - Handles boolean, string ("true"/"false"), and numeric (0/1) claim values
+  - Configurable namespace via `AUTH0_ADMIN_CLAIM_NAMESPACE` env var
+  - Files: `config/graphql_auth0_auth/utils.py:269-360`
+  - **Required Auth0 Action** (Post-Login): Set up the following Auth0 Action to include admin claims in tokens:
+    ```javascript
+    exports.onExecutePostLogin = async (event, api) => {
+      const namespace = 'https://opencontracts.opensource.legal/';
+      const appMetadata = event.user.app_metadata || {};
+
+      // Add admin claims to access token
+      if (appMetadata.is_staff !== undefined) {
+        api.accessToken.setCustomClaim(`${namespace}is_staff`, appMetadata.is_staff);
+      }
+      if (appMetadata.is_superuser !== undefined) {
+        api.accessToken.setCustomClaim(`${namespace}is_superuser`, appMetadata.is_superuser);
+      }
+    };
+    ```
+    Then set `app_metadata.is_staff` and `app_metadata.is_superuser` on users via Auth0 Management API or Dashboard.
+- **Auth0AdminBackend**: Dedicated authentication backend for admin login via Auth0
+  - Validates user exists, is active, and has `is_staff=True`
+  - Files: `config/admin_auth/backends.py:18-88`
+- **Security hardening**:
+  - Open redirect prevention using `url_has_allowed_host_and_scheme()`
+  - Host header injection prevention for Auth0 logout `returnTo` URL
+  - CSRF protection on all login/logout endpoints
+  - Files: `config/admin_auth/views.py:24-89`
+- **Professional login template**: Standalone HTML template with Auth0 SDK integration
+  - Loading states, error handling, graceful degradation
+  - Uses Subresource Integrity (SRI) for CDN-hosted Auth0 SDK
+  - **CSP Note**: Template uses inline JavaScript; if Content-Security-Policy is enabled,
+    add `script-src 'unsafe-inline'` or implement CSP nonces
+  - Files: `opencontractserver/templates/admin/auth0_login.html`
+- **Comprehensive test coverage**: 50+ tests covering security edge cases
+  - Open redirect prevention, boolean claim parsing, logout URL safety
+  - Files: `opencontractserver/tests/test_admin_auth.py`
+
+### Fixed
+
+- **Admin token handling**: Admin login no longer accepts JWT tokens via query parameters (reduces CSRF/token leakage risk). Files: `config/admin_auth/views.py:146-179`
+- **Admin claims demotion**: Missing or invalid admin claims now default to False to avoid privilege retention. Files: `config/graphql_auth0_auth/utils.py:331-411`
+- **Token storage scope**: Admin Auth0 SPA client now uses in-memory token storage instead of localStorage. Files: `opencontractserver/templates/admin/auth0_login.html:249-257`
+
 #### Runtime-Configurable Pipeline Settings (Superuser Only)
 - **PipelineSettings singleton model**: Database-backed configuration for document processing pipeline
   - Stores preferred parsers, embedders, and thumbnailers per MIME type
