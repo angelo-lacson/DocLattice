@@ -91,10 +91,8 @@ nav:
       - Frontend Requirements: metadata/metadata_frontend_requirements.md
   - Configuration:
       - Choose Docker Stack: configuration/choose-and-configure-docker-stack.md
-      - Configure Admin Users: configuration/configure-admin-users.md
-      - Authentication Backend: configuration/choose-an-authentication-backend.md
+      - Authentication: configuration/authentication.md
       - Frontend Configuration: configuration/frontend-configuration.md
-      - Add Users: configuration/add-users.md
       - Storage Backend: configuration/choose-storage-backend.md
   - Pipelines:
       - Pipeline Overview: pipelines/pipeline_overview.md

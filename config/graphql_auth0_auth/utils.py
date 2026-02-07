@@ -355,8 +355,18 @@ def sync_admin_claims_from_payload(user, payload):
         "https://opencontracts.opensource.legal/",
     )
 
+    logger.debug(
+        "sync_admin_claims - namespace: %s, payload keys: %s",
+        namespace,
+        list(payload.keys()),
+    )
     raw_is_staff = payload.get(f"{namespace}is_staff")
     raw_is_superuser = payload.get(f"{namespace}is_superuser")
+    logger.debug(
+        "sync_admin_claims - raw_is_staff: %r, raw_is_superuser: %r",
+        raw_is_staff,
+        raw_is_superuser,
+    )
 
     # Parse claims with type safety
     is_staff_claim, is_staff_valid = _parse_boolean_claim(raw_is_staff)

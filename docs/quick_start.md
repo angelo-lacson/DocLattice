@@ -179,7 +179,7 @@ You can use the same admin credentials to access this interface, where you can:
 - View and manage documents
 - Configure system settings
 
-See our [guide](./configuration/add-users.md) for how to create new users through the admin interface.
+See our [authentication guide](./configuration/authentication.md) for how to create and manage users.
 
 **NOTE: The frontend runs on different ports depending on deployment method (3000 for Docker, 5173 for local dev). The backend API is always on port 8000**.
 
