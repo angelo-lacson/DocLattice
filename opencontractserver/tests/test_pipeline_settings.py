@@ -2,6 +2,8 @@
 Tests for the PipelineSettings singleton model and GraphQL endpoints.
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
@@ -1160,6 +1162,32 @@ class ModernBERTDetectionCheckTestCase(TestCase):
 
         warnings = check_modernbert_references(None)
         self.assertEqual(len(warnings), 0)
+
+
+class CheckExceptionHandlingTestCase(TestCase):
+    """Tests for exception handling in Django system checks."""
+
+    def test_pipeline_settings_check_handles_exception(self):
+        """check_pipeline_settings_populated returns [] when exception occurs."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        with patch.object(
+            PipelineSettings.objects, "exists", side_effect=Exception("DB unavailable")
+        ):
+            warnings = check_pipeline_settings_populated(None)
+            self.assertEqual(warnings, [])
+
+    def test_modernbert_check_handles_exception(self):
+        """check_modernbert_references returns [] when exception occurs."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        with patch.object(
+            PipelineSettings.objects, "exists", side_effect=Exception("DB unavailable")
+        ):
+            warnings = check_modernbert_references(None)
+            self.assertEqual(warnings, [])
 
 
 class JSONSizeValidationTestCase(TestCase):

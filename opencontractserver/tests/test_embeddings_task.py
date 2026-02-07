@@ -1386,6 +1386,34 @@ class TestArrayFormatHandling(unittest.TestCase):
 
             self.assertEqual(result, [0.1, 0.2, 0.3])
 
+    def test_clip_embedder_settings_none_fallback(self):
+        """CLIPMicroserviceEmbedder._get_service_config falls back to Settings()."""
+        from opencontractserver.pipeline.embedders.multimodal_microservice import (
+            CLIPMicroserviceEmbedder,
+        )
+
+        embedder = CLIPMicroserviceEmbedder()
+        embedder._settings = None
+
+        url, api_key, headers = embedder._get_service_config({})
+        # Should use defaults from Settings dataclass
+        self.assertEqual(url, "http://multimodal-embedder:8000")
+        self.assertEqual(api_key, "")
+
+    def test_qwen_embedder_settings_none_fallback(self):
+        """QwenMicroserviceEmbedder._get_service_config falls back to Settings()."""
+        from opencontractserver.pipeline.embedders.multimodal_microservice import (
+            QwenMicroserviceEmbedder,
+        )
+
+        embedder = QwenMicroserviceEmbedder()
+        embedder._settings = None
+
+        url, api_key, headers = embedder._get_service_config({})
+        # Should use defaults from Settings dataclass
+        self.assertEqual(url, "http://qwen-embedder:8000")
+        self.assertEqual(api_key, "")
+
 
 if __name__ == "__main__":
     unittest.main()
