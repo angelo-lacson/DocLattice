@@ -5,11 +5,13 @@ This module tests:
 - Admin claims sync from Auth0 tokens
 - Auth0AdminBackend authentication
 - Auth0AdminLoginView and Auth0AdminLogoutView
+- Rate limiting on admin login endpoints
 """
 
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 
 User = get_user_model()
@@ -568,6 +570,8 @@ class TestAdminLoginView(TestCase):
 
     def setUp(self):
         self.client = Client()
+        # Clear the rate-limit cache so each test starts with a fresh budget
+        cache.clear()
 
     def test_get_login_page(self):
         """GET request should return login page."""
@@ -950,3 +954,102 @@ class TestGetUserByPayloadWithClaimSync(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_staff)
         self.assertTrue(self.user.is_superuser)
+
+
+@override_settings(
+    RATELIMIT_ENABLE=True,
+    RATELIMIT_DISABLE=False,
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "admin-login-ratelimit-test",
+        }
+    },
+)
+class TestAdminLoginRateLimit(TestCase):
+    """Tests for rate limiting on the admin login endpoint."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff_user = User.objects.create_user(
+            username="ratelimit_test",
+            email="ratelimit@example.com",
+            password="testpass123",
+            is_staff=True,
+        )
+
+    def setUp(self):
+        self.client = Client()
+        # Clear the rate-limit cache before each test to ensure isolation
+        cache.clear()
+
+    def test_post_rate_limit_returns_429(self):
+        """Login POST should return 429 after exceeding the rate limit."""
+        # Default rate is 5/m. Send 5 requests to exhaust the limit.
+        for _ in range(5):
+            self.client.post(
+                "/admin/login/",
+                {"username": "wrong", "password": "wrong"},
+            )
+
+        # The 6th request should be rate-limited
+        response = self.client.post(
+            "/admin/login/",
+            {"username": "wrong", "password": "wrong"},
+        )
+
+        self.assertEqual(response.status_code, 429)
+        data = response.json()
+        self.assertIn("error", data)
+        self.assertIn("Too many login attempts", data["error"])
+
+    def test_post_rate_limit_json_content_type(self):
+        """Rate-limited POST should return application/json."""
+        for _ in range(5):
+            self.client.post(
+                "/admin/login/",
+                {"username": "wrong", "password": "wrong"},
+            )
+
+        response = self.client.post(
+            "/admin/login/",
+            {"username": "wrong", "password": "wrong"},
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response["Content-Type"], "application/json")
+
+    def test_successful_login_still_works_within_limit(self):
+        """Valid credentials should still succeed within the rate limit."""
+        response = self.client.post(
+            "/admin/login/",
+            {"username": "ratelimit_test", "password": "testpass123"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+
+    def test_get_rate_limit_returns_429(self):
+        """Login page GET should return 429 after exceeding the rate limit."""
+        # Default GET rate is 20/m. Send 20 requests to exhaust.
+        for _ in range(20):
+            self.client.get("/admin/login/")
+
+        response = self.client.get("/admin/login/")
+
+        self.assertEqual(response.status_code, 429)
+        self.assertIn(
+            "Too many requests",
+            response.content.decode(),
+        )
+
+    def test_get_rate_limit_plain_text(self):
+        """Rate-limited GET should return text/plain."""
+        for _ in range(20):
+            self.client.get("/admin/login/")
+
+        response = self.client.get("/admin/login/")
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response["Content-Type"], "text/plain")
