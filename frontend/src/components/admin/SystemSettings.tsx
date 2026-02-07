@@ -10,7 +10,6 @@ import {
   ModalBody,
   ModalFooter,
   Spinner,
-  Textarea,
 } from "@os-legal/ui";
 import {
   Settings,
@@ -28,6 +27,8 @@ import {
   Search,
   Trash2,
   Check,
+  CircleCheck,
+  CircleAlert,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import {
@@ -612,51 +613,45 @@ const SectionDescription = styled.p`
   margin: 0 0 1rem 0;
 `;
 
-const SecretsList = styled.div`
+const SecretKeyList = styled.div`
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.5rem;
 `;
 
-const SecretBadge = styled.div`
-  display: inline-flex;
+const SecretKeyRow = styled.div`
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  background: #fef3c7;
-  color: #92400e;
-  font-size: 0.75rem;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+`;
+
+const SecretKeyName = styled.span`
   font-weight: 500;
-  border-radius: 6px;
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
+  color: #1e293b;
+  font-family: monospace;
+  font-size: 0.75rem;
 `;
 
-const IconButton = styled.button<{ $danger?: boolean }>`
+const SecretStatusIndicator = styled.span<{ $populated: boolean }>`
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
   border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  background: ${(props) => (props.$danger ? "#fef2f2" : "transparent")};
-  color: ${(props) => (props.$danger ? "#dc2626" : "#475569")};
-
-  &:hover {
-    background: ${(props) => (props.$danger ? "#fee2e2" : "#e2e8f0")};
-    color: ${(props) => (props.$danger ? "#b91c1c" : "#1e293b")};
-  }
+  font-size: 0.6875rem;
+  font-weight: 500;
+  margin-left: auto;
+  background: ${(props) => (props.$populated ? "#ecfdf5" : "#fef3c7")};
+  color: ${(props) => (props.$populated ? "#065f46" : "#92400e")};
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 10px;
+    height: 10px;
   }
 `;
 
@@ -756,8 +751,22 @@ const WarningText = styled.div`
   }
 `;
 
-const JsonEditor = styled.div`
-  margin-bottom: 1rem;
+const SecretFieldGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const SecretFieldRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const SecretFieldHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
 const FormField = styled.div`
@@ -899,7 +908,6 @@ PipelineComponentCard.displayName = "PipelineComponentCard";
 interface AdvancedSettingsPanelProps {
   currentSelection: string;
   secretSettings: ComponentSettingSchemaType[];
-  hasSecretsConfigured: boolean;
   isExpanded: boolean;
   settingsKey: string;
   onToggle: () => void;
@@ -908,28 +916,21 @@ interface AdvancedSettingsPanelProps {
 }
 
 /**
- * Collapsible panel showing advanced settings for a selected component.
- * Handles both components requiring secrets and those without configuration.
+ * Collapsible panel showing per-key secret status for a selected component.
+ * Shows each secret key name, whether it's required, and whether it's populated.
  */
 const AdvancedSettingsPanel = memo<AdvancedSettingsPanelProps>(
   ({
     currentSelection,
     secretSettings,
-    hasSecretsConfigured,
     isExpanded,
     settingsKey,
     onToggle,
     onAddSecrets,
     onDeleteSecrets,
   }) => {
-    const needsConfig = secretSettings.length > 0 && !hasSecretsConfigured;
-    const secretLabel =
-      secretSettings.length === 1
-        ? formatSettingLabel(
-            secretSettings[0].name,
-            secretSettings[0].description
-          )
-        : "Secrets";
+    const anyMissing = secretSettings.some((s) => s.required && !s.hasValue);
+    const anyConfigured = secretSettings.some((s) => s.hasValue);
 
     return (
       <>
@@ -941,7 +942,7 @@ const AdvancedSettingsPanel = memo<AdvancedSettingsPanelProps>(
         >
           <ChevronRight />
           Advanced Settings
-          {needsConfig && (
+          {anyMissing && (
             <RequiredBadge>
               <AlertTriangle />
               Config Required
@@ -955,43 +956,64 @@ const AdvancedSettingsPanel = memo<AdvancedSettingsPanelProps>(
             id={`settings-content-${settingsKey}`}
           >
             {secretSettings.length > 0 ? (
-              <>
-                {hasSecretsConfigured ? (
-                  <FormField>
-                    <FormLabel>API Credentials</FormLabel>
-                    <SecretBadge>
-                      <Key />
-                      Secrets configured
-                      <IconButton
-                        $danger
-                        onClick={() => onDeleteSecrets(currentSelection)}
-                      >
-                        <Trash2 />
-                      </IconButton>
-                    </SecretBadge>
-                    <FormHelperText>
-                      Click the trash icon to remove and reconfigure secrets.
-                    </FormHelperText>
-                  </FormField>
-                ) : (
-                  <FormField>
-                    <FormLabel>{secretLabel}</FormLabel>
+              <FormField>
+                <FormLabel>
+                  <Key style={{ width: 14, height: 14, marginRight: 6 }} />
+                  Secret Keys
+                </FormLabel>
+                <SecretKeyList>
+                  {secretSettings.map((entry) => (
+                    <SecretKeyRow key={entry.name}>
+                      <SecretKeyName>{entry.name}</SecretKeyName>
+                      {entry.required && (
+                        <RequiredBadge>
+                          <AlertTriangle />
+                          Required
+                        </RequiredBadge>
+                      )}
+                      <SecretStatusIndicator $populated={!!entry.hasValue}>
+                        {entry.hasValue ? (
+                          <>
+                            <CircleCheck /> Set
+                          </>
+                        ) : (
+                          <>
+                            <CircleAlert /> Not set
+                          </>
+                        )}
+                      </SecretStatusIndicator>
+                    </SecretKeyRow>
+                  ))}
+                </SecretKeyList>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    marginTop: "0.75rem",
+                  }}
+                >
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onAddSecrets(currentSelection)}
+                  >
+                    <Key style={{ width: 14, height: 14, marginRight: 6 }} />
+                    {anyConfigured ? "Update Secrets" : "Configure Secrets"}
+                  </Button>
+                  {anyConfigured && (
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => onAddSecrets(currentSelection)}
+                      onClick={() => onDeleteSecrets(currentSelection)}
                     >
-                      <Key style={{ width: 14, height: 14, marginRight: 6 }} />
-                      {secretSettings.length === 1
-                        ? `Configure ${secretLabel}`
-                        : "Configure Secrets"}
+                      <Trash2
+                        style={{ width: 14, height: 14, marginRight: 6 }}
+                      />
+                      Delete All
                     </Button>
-                    <FormHelperText>
-                      This component requires secrets to function.
-                    </FormHelperText>
-                  </FormField>
-                )}
-              </>
+                  )}
+                </div>
+              </FormField>
             ) : (
               <FormField>
                 <FormLabel>Component Path</FormLabel>
@@ -1021,7 +1043,6 @@ interface PipelineStageSectionProps {
   components: (PipelineComponentType & { className: string })[];
   currentSelection: string | null;
   secretSettings: ComponentSettingSchemaType[];
-  hasSecretsConfigured: boolean;
   isExpanded: boolean;
   settingsKey: string;
   updating: boolean;
@@ -1047,7 +1068,6 @@ const PipelineStageSection = memo<PipelineStageSectionProps>(
     components,
     currentSelection,
     secretSettings,
-    hasSecretsConfigured,
     isExpanded,
     settingsKey,
     updating,
@@ -1125,7 +1145,6 @@ const PipelineStageSection = memo<PipelineStageSectionProps>(
             <AdvancedSettingsPanel
               currentSelection={currentSelection}
               secretSettings={secretSettings}
-              hasSecretsConfigured={hasSecretsConfigured}
               isExpanded={isExpanded}
               settingsKey={settingsKey}
               onToggle={() => onToggleSettings(settingsKey)}
@@ -1166,7 +1185,9 @@ export const SystemSettings: React.FC = () => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
-  const [secretsValue, setSecretsValue] = useState("");
+  const [secretsValues, setSecretsValues] = useState<Record<string, string>>(
+    {}
+  );
   const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
     useState(false);
   const [defaultEmbedderValue, setDefaultEmbedderValue] = useState("");
@@ -1192,10 +1213,13 @@ export const SystemSettings: React.FC = () => {
     fetchPolicy: "network-only",
   });
 
-  const { data: componentsData, loading: componentsLoading } =
-    useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
-      fetchPolicy: "cache-first",
-    });
+  const {
+    data: componentsData,
+    loading: componentsLoading,
+    refetch: refetchComponents,
+  } = useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
+    fetchPolicy: "cache-and-network",
+  });
 
   // Mutations
   const [updateSettings, { loading: updating }] = useMutation(
@@ -1266,8 +1290,9 @@ export const SystemSettings: React.FC = () => {
           toast.success("Secrets updated successfully");
           setShowSecretsModal(false);
           setSecretsComponentPath("");
-          setSecretsValue("");
+          setSecretsValues({});
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.updateComponentSecrets?.message || "Failed to update secrets"
@@ -1287,6 +1312,7 @@ export const SystemSettings: React.FC = () => {
         if (data.deleteComponentSecrets?.ok) {
           toast.success("Secrets deleted successfully");
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.deleteComponentSecrets?.message || "Failed to delete secrets"
@@ -1420,14 +1446,6 @@ export const SystemSettings: React.FC = () => {
     [getComponentSettingsSchema]
   );
 
-  // Check if component has secrets configured
-  const hasSecrets = useCallback(
-    (className: string): boolean => {
-      return settings?.componentsWithSecrets?.includes(className) || false;
-    },
-    [settings]
-  );
-
   // Look up a component's display name by className from loaded components data
   const getComponentDisplayNameByClassName = useCallback(
     (className: string): string => {
@@ -1482,16 +1500,13 @@ export const SystemSettings: React.FC = () => {
 
   // Handle secrets modal
   const handleAddSecrets = useCallback(
-    (componentPath?: string) => {
-      const path = componentPath || "";
-      setSecretsComponentPath(path);
-
-      const secretSettings = path ? getSecretSettingsForComponent(path) : [];
-      const template =
-        secretSettings.length > 0
-          ? Object.fromEntries(secretSettings.map((entry) => [entry.name, ""]))
-          : { api_key: "" };
-      setSecretsValue(JSON.stringify(template, null, 2));
+    (componentPath: string) => {
+      setSecretsComponentPath(componentPath);
+      const secretSettings = getSecretSettingsForComponent(componentPath);
+      const template = Object.fromEntries(
+        secretSettings.map((entry) => [entry.name, ""])
+      );
+      setSecretsValues(template);
       setShowSecretsModal(true);
     },
     [getSecretSettingsForComponent]
@@ -1504,57 +1519,60 @@ export const SystemSettings: React.FC = () => {
       return;
     }
 
-    const component = componentByClassName.get(componentPath);
-    if (!component) {
-      toast.error("Selected component is not available.");
-      return;
-    }
-
     const secretSettings = getSecretSettingsForComponent(componentPath);
     if (secretSettings.length === 0) {
       toast.error("Selected component does not accept secret settings.");
       return;
     }
 
-    try {
-      const secrets = JSON.parse(secretsValue || "{}");
-      const secretsJson = JSON.stringify(secrets);
-      const secretsBytes = new TextEncoder().encode(secretsJson).length;
-      if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
-        toast.error(
-          `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
-        );
-        return;
+    // Build secrets object from only non-empty values (empty means "don't update")
+    const secrets: Record<string, string> = {};
+    for (const [key, value] of Object.entries(secretsValues)) {
+      if (value.trim()) {
+        secrets[key] = value;
       }
-
-      const missingRequired = secretSettings.filter((entry) => {
-        if (!entry.required) return false;
-        const value = secrets?.[entry.name];
-        return value === undefined || value === null || value === "";
-      });
-      if (missingRequired.length > 0) {
-        const missingLabels = missingRequired.map((entry) =>
-          formatSettingLabel(entry.name, entry.description)
-        );
-        toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
-        return;
-      }
-
-      updateSecrets({
-        variables: {
-          componentPath,
-          secrets,
-          merge: true,
-        },
-      });
-    } catch (err) {
-      toast.error("Secrets must be valid JSON.");
     }
+
+    if (Object.keys(secrets).length === 0) {
+      toast.error("Please provide at least one secret value.");
+      return;
+    }
+
+    const secretsJson = JSON.stringify(secrets);
+    const secretsBytes = new TextEncoder().encode(secretsJson).length;
+    if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
+      toast.error(
+        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
+      );
+      return;
+    }
+
+    // Check required fields that have no existing value and no new value
+    const missingRequired = secretSettings.filter((entry) => {
+      if (!entry.required) return false;
+      const newValue = secretsValues[entry.name]?.trim();
+      // Missing if no new value provided AND no existing value
+      return !newValue && !entry.hasValue;
+    });
+    if (missingRequired.length > 0) {
+      const missingLabels = missingRequired.map((entry) =>
+        formatSettingLabel(entry.name, entry.description)
+      );
+      toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
+      return;
+    }
+
+    updateSecrets({
+      variables: {
+        componentPath,
+        secrets,
+        merge: true,
+      },
+    });
   }, [
-    componentByClassName,
     getSecretSettingsForComponent,
     secretsComponentPath,
-    secretsValue,
+    secretsValues,
     updateSecrets,
   ]);
 
@@ -1626,7 +1644,6 @@ export const SystemSettings: React.FC = () => {
           components={filteredComponents}
           currentSelection={currentSelection}
           secretSettings={secretSettings}
-          hasSecretsConfigured={hasSecrets(currentSelection || "")}
           isExpanded={isExpanded}
           settingsKey={settingsKey}
           updating={updating}
@@ -1644,7 +1661,6 @@ export const SystemSettings: React.FC = () => {
       getCurrentSelection,
       expandedSettings,
       getSecretSettingsForComponent,
-      hasSecrets,
       handleMimeTypeChange,
       handleSelectComponent,
       toggleAdvancedSettings,
@@ -1781,48 +1797,6 @@ export const SystemSettings: React.FC = () => {
         </DefaultEmbedderDisplay>
       </Section>
 
-      {/* Component Secrets Section */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <Key />
-            Component Secrets
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleAddSecrets()}
-          >
-            Add Secrets
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Encrypted API keys and credentials for pipeline components.
-        </SectionDescription>
-        <SecretsList>
-          {settings?.componentsWithSecrets &&
-          settings.componentsWithSecrets.length > 0 ? (
-            settings.componentsWithSecrets
-              .filter((path): path is string => Boolean(path))
-              .map((componentPath) => (
-                <SecretBadge key={componentPath}>
-                  <Key />
-                  {getComponentDisplayNameByClassName(componentPath)}
-                  <IconButton
-                    $danger
-                    onClick={() => handleDeleteSecretsClick(componentPath)}
-                    title="Delete secrets"
-                  >
-                    <Trash2 />
-                  </IconButton>
-                </SecretBadge>
-              ))
-          ) : (
-            <EmptyValue>No component secrets configured</EmptyValue>
-          )}
-        </SecretsList>
-      </Section>
-
       {/* Reset to Defaults */}
       <ActionButtons>
         <Button
@@ -1876,10 +1850,12 @@ export const SystemSettings: React.FC = () => {
       <Modal
         open={showSecretsModal}
         onClose={() => setShowSecretsModal(false)}
-        size="lg"
+        size="md"
       >
         <ModalHeader
-          title="Configure Component Secrets"
+          title={`Configure Secrets \u2014 ${getComponentDisplayNameByClassName(
+            secretsComponentPath
+          )}`}
           onClose={() => setShowSecretsModal(false)}
         />
         <ModalBody>
@@ -1890,35 +1866,61 @@ export const SystemSettings: React.FC = () => {
               securely. They will never be displayed again after saving.
             </WarningText>
           </WarningBanner>
-          <FormField>
-            <FormLabel>Component Class Path</FormLabel>
-            <Input
-              id="secrets-component-path"
-              value={secretsComponentPath}
-              onChange={(e) => setSecretsComponentPath(e.target.value)}
-              placeholder="e.g., opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser"
-              fullWidth
-            />
-            <FormHelperText>
-              Full Python class path for the component.
-            </FormHelperText>
-          </FormField>
-          <JsonEditor>
-            <FormLabel>Secrets (JSON)</FormLabel>
-            <Textarea
-              id="secrets-value"
-              value={secretsValue}
-              onChange={(e) => setSecretsValue(e.target.value)}
-              placeholder='{"api_key": "..."}'
-              fullWidth
-              autoResize
-              maxRows={10}
-              style={{ fontFamily: "monospace", fontSize: "0.875rem" }}
-            />
-            <FormHelperText>
-              JSON object with secret key-value pairs.
-            </FormHelperText>
-          </JsonEditor>
+          <SecretFieldGroup>
+            {getSecretSettingsForComponent(secretsComponentPath).map(
+              (entry) => (
+                <SecretFieldRow key={entry.name}>
+                  <SecretFieldHeader>
+                    <FormLabel
+                      style={{ marginBottom: 0 }}
+                      htmlFor={`secret-${entry.name}`}
+                    >
+                      {formatSettingLabel(entry.name, entry.description)}
+                    </FormLabel>
+                    {entry.required && (
+                      <RequiredBadge>
+                        <AlertTriangle />
+                        Required
+                      </RequiredBadge>
+                    )}
+                    <SecretStatusIndicator $populated={!!entry.hasValue}>
+                      {entry.hasValue ? (
+                        <>
+                          <CircleCheck /> Set
+                        </>
+                      ) : (
+                        <>
+                          <CircleAlert /> Not set
+                        </>
+                      )}
+                    </SecretStatusIndicator>
+                  </SecretFieldHeader>
+                  <Input
+                    id={`secret-${entry.name}`}
+                    type="password"
+                    value={secretsValues[entry.name] ?? ""}
+                    onChange={(e) =>
+                      setSecretsValues((prev) => ({
+                        ...prev,
+                        [entry.name]: e.target.value,
+                      }))
+                    }
+                    placeholder={
+                      entry.hasValue
+                        ? "Leave blank to keep current value"
+                        : "Enter value..."
+                    }
+                    fullWidth
+                  />
+                  {entry.envVar && (
+                    <FormHelperText>
+                      Can also be set via env var: {entry.envVar}
+                    </FormHelperText>
+                  )}
+                </SecretFieldRow>
+              )
+            )}
+          </SecretFieldGroup>
         </ModalBody>
         <ModalFooter>
           <Button
@@ -1931,9 +1933,12 @@ export const SystemSettings: React.FC = () => {
             variant="primary"
             onClick={handleSaveSecrets}
             loading={updatingSecrets}
-            disabled={!secretsComponentPath || !secretsValue}
+            disabled={
+              !secretsComponentPath ||
+              Object.values(secretsValues).every((v) => !v.trim())
+            }
           >
-            <Key style={{ width: 16, height: 16, marginRight: 8 }} />
+            <Save style={{ width: 16, height: 16, marginRight: 8 }} />
             Save Secrets
           </Button>
         </ModalFooter>

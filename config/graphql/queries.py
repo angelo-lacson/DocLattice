@@ -54,6 +54,7 @@ from config.graphql.graphene_types import (
     BulkDocumentUploadStatusType,
     ColumnType,
     CommunityStatsType,
+    ComponentSettingSchemaType,
     ConversationType,
     CorpusActionExecutionType,
     CorpusActionTrailStatsType,
@@ -1853,8 +1854,32 @@ class Query(graphene.ObjectType):
             # Get all components from cached registry
             components_data = get_all_components_cached()
 
+        # Get PipelineSettings instance for augmenting schemas with has_value
+        from opencontractserver.documents.models import PipelineSettings
+
+        settings_instance = PipelineSettings.get_instance()
+
         # Convert PipelineComponentDefinition objects to GraphQL types
         def to_graphql_type(defn, component_type: str) -> PipelineComponentType:
+            # Get schema augmented with has_value/current_value from DB
+            augmented_schema = settings_instance.get_component_schema(defn.class_name)
+            settings_schema = None
+            if augmented_schema:
+                settings_schema = [
+                    ComponentSettingSchemaType(
+                        name=name,
+                        setting_type=info.get("type", "optional"),
+                        python_type=info.get("python_type"),
+                        required=info.get("required", False),
+                        description=info.get("description", ""),
+                        default=info.get("default"),
+                        env_var=info.get("env_var"),
+                        has_value=info.get("has_value", False),
+                        current_value=info.get("current_value"),
+                    )
+                    for name, info in augmented_schema.items()
+                ]
+
             component_info = PipelineComponentType(
                 name=defn.name,
                 class_name=defn.class_name,
@@ -1866,6 +1891,7 @@ class Query(graphene.ObjectType):
                 supported_file_types=list(defn.supported_file_types),
                 component_type=component_type,
                 input_schema=defn.input_schema,
+                settings_schema=settings_schema,
             )
             if defn.vector_size is not None:
                 component_info.vector_size = defn.vector_size
