@@ -5,6 +5,7 @@ import {
   authToken,
   authStatusVar,
   userObj,
+  backendUserObj,
   showExportModal,
 } from "../../graphql/cache";
 import { header_menu_items } from "../../assets/configurations/menus";
@@ -25,6 +26,7 @@ export const useNavMenu = () => {
     isLoading,
   } = useAuth0();
   const cache_user = useReactiveVar(userObj);
+  const backendUser = useReactiveVar(backendUserObj);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { resetOnAuthChange } = useCacheManager();
@@ -119,9 +121,14 @@ export const useNavMenu = () => {
     }
   };
 
+  // isSuperuser is sourced from backendUserObj (populated by GET_ME query),
+  // not from Auth0 user or cache_user which don't carry this field.
+  const isSuperuser = backendUser?.isSuperuser === true;
+
   return {
     // Auth state
     user,
+    isSuperuser,
     isLoading,
     REACT_APP_USE_AUTH0,
     REACT_APP_AUDIENCE,
