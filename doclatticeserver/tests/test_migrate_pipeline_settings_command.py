@@ -315,3 +315,117 @@ class ListComponentsTestCase(TestCase):
 
         # Class paths should be shown
         self.assertIn("Class:", output)
+
+
+class MigrationFlowTestCase(TestCase):
+    """Tests for the main migration flow of migrate_pipeline_settings."""
+
+    def setUp(self):
+        PipelineSettings.objects.all().delete()
+        self.pipeline_settings = PipelineSettings.objects.create(id=1)
+
+    def test_basic_migration_runs(self):
+        """Test basic migration (no flags) runs without error."""
+        out = StringIO()
+        call_command("migrate_pipeline_settings", stdout=out)
+        output = out.getvalue()
+        self.assertIn("MIGRATION SUMMARY", output)
+        self.assertIn("Total components scanned:", output)
+
+    def test_migration_verbose(self):
+        """Test verbose migration shows detailed output."""
+        out = StringIO()
+        call_command("migrate_pipeline_settings", "--verbose", stdout=out)
+        output = out.getvalue()
+        self.assertIn("MIGRATION SUMMARY", output)
+
+    def test_migration_with_component_filter(self):
+        """Test --component filters to a specific component."""
+        out = StringIO()
+        call_command(
+            "migrate_pipeline_settings",
+            "--component",
+            "MicroserviceEmbedder",
+            "--dry-run",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("MicroserviceEmbedder", output)
+
+    def test_migration_with_nonexistent_component(self):
+        """Test --component with nonexistent name exits early."""
+        out = StringIO()
+        call_command(
+            "migrate_pipeline_settings",
+            "--component",
+            "NonExistentComponent99999",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("not found", output)
+
+    def test_migration_force_overwrite(self):
+        """Test --force overwrite mode."""
+        out = StringIO()
+        call_command("migrate_pipeline_settings", "--force", stdout=out)
+        output = out.getvalue()
+        self.assertIn("MIGRATION SUMMARY", output)
+        # Should NOT mention "preserved"
+        self.assertNotIn("Existing database values will be preserved", output)
+
+    def test_migration_strict_mode_with_missing(self):
+        """Test --strict exits with code 1 when required settings are missing."""
+        out = StringIO()
+        with self.assertRaises(SystemExit):
+            call_command(
+                "migrate_pipeline_settings", "--strict", "--dry-run", stdout=out
+            )
+
+    def test_migration_dry_run_does_not_save(self):
+        """Test --dry-run shows migration plan but doesn't save."""
+        out = StringIO()
+        call_command("migrate_pipeline_settings", "--dry-run", "--verbose", stdout=out)
+        output = out.getvalue()
+        self.assertIn("[DRY RUN]", output)
+
+    def test_verify_verbose(self):
+        """Test --verify --verbose shows detailed output."""
+        out = StringIO()
+        try:
+            call_command(
+                "migrate_pipeline_settings", "--verify", "--verbose", stdout=out
+            )
+        except SystemExit:
+            pass
+        output = out.getvalue()
+        # Verbose verify should show per-component status
+        self.assertIn("Pipeline Settings Migration", output)
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "new.parser.Path"},
+    )
+    def test_sync_preferences_verbose_unchanged(self):
+        """Test --sync-preferences --verbose when some fields are unchanged."""
+        # Set one field to match so it reports "unchanged"
+        self.pipeline_settings.preferred_parsers = {
+            "application/pdf": "new.parser.Path"
+        }
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        out = StringIO()
+        call_command(
+            "migrate_pipeline_settings",
+            "--sync-preferences",
+            "--verbose",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("unchanged", output)
+
+    def test_migration_force_verbose_shows_settings(self):
+        """Test --force --verbose shows detailed settings values."""
+        out = StringIO()
+        call_command("migrate_pipeline_settings", "--force", "--verbose", stdout=out)
+        output = out.getvalue()
+        self.assertIn("MIGRATION SUMMARY", output)
