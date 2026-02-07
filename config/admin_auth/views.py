@@ -103,29 +103,29 @@ def _get_safe_logout_return_url(request):
     """
     from django.core.exceptions import ImproperlyConfigured
 
-    # Use the first allowed host that isn't a wildcard
     allowed_hosts = getattr(settings, "ALLOWED_HOSTS", [])
     safe_host = None
 
-    for host in allowed_hosts:
-        if host and host != "*" and not host.startswith("."):
-            safe_host = host
-            break
+    request_host = request.get_host().split(":")[0]
+    if request_host in allowed_hosts or "*" in allowed_hosts:
+        safe_host = request.get_host()
+    else:
+        # Use the first allowed host that isn't a wildcard
+        for host in allowed_hosts:
+            if host and host != "*" and not host.startswith("."):
+                safe_host = host
+                break
 
-    # Fall back to request host if it's in ALLOWED_HOSTS
     if safe_host is None:
-        request_host = request.get_host().split(":")[0]
-        if request_host in allowed_hosts or "*" in allowed_hosts:
-            safe_host = request.get_host()
-        else:
-            raise ImproperlyConfigured(
-                "Cannot determine safe logout return URL. "
-                "ALLOWED_HOSTS must contain at least one non-wildcard host. "
-                "Example: ALLOWED_HOSTS=['myapp.example.com', 'localhost']"
-            )
+        raise ImproperlyConfigured(
+            "Cannot determine safe logout return URL. "
+            "ALLOWED_HOSTS must contain at least one non-wildcard host. "
+            "Example: ALLOWED_HOSTS=['myapp.example.com', 'localhost']"
+        )
 
     scheme = "https" if request.is_secure() else "http"
-    return f"{scheme}://{safe_host}/"
+    login_path = reverse("admin_auth0_login")
+    return f"{scheme}://{safe_host}{login_path}"
 
 
 class Auth0AdminLoginView(View):

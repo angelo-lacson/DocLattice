@@ -88,8 +88,8 @@ This is used by the React frontend to authenticate users.
     - Local: `http://localhost:3000, http://localhost:8000/admin/login/`
     - Production: `https://your-domain.com, https://your-domain.com/admin/login/`
 6. Configure **Allowed Logout URLs**:
-    - Local: `http://localhost:3000, http://localhost:8000`
-    - Production: `https://your-domain.com`
+    - Local: `http://localhost:3000, http://localhost:8000/admin/login/`
+    - Production: `https://your-domain.com, https://your-domain.com/admin/login/`
 7. Configure **Allowed Web Origins**:
     - Local: `http://localhost:3000, http://localhost:8000`
     - Production: `https://your-domain.com`
