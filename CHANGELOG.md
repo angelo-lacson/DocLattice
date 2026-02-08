@@ -231,6 +231,26 @@ If rollback is required after deployment, you must write a custom migration to h
 
 ### Changed
 
+#### BREAKING: Removed Corpus.documents M2M Relationship (PR #840)
+- **Removed `Corpus.documents` ManyToManyField**: DocumentPath is now the sole source of truth for corpus-document relationships
+  - Migration `0039_remove_corpus_documents_m2m` validates no orphaned M2M entries before removal
+  - All code paths now use `corpus.add_document()`, `corpus.remove_document()`, `corpus.get_documents()`, `corpus.document_count()`
+  - GraphQL `CorpusType.documents` field now resolves via explicit DocumentPath-based resolver
+  - Frontend queries updated to use `documentCount` field instead of `documents { totalCount }`
+  - Files: `opencontractserver/corpuses/models.py`, `config/graphql/graphene_types.py`, `config/graphql/queries.py`
+- **Removed deprecated Corpus methods**: `_create_text_document_internal()` and `create_text_document()` removed (use `import_content()` instead)
+  - Removed deprecated `content` parameter from `add_document()` (use `import_content()` for content-based imports)
+  - Files: `opencontractserver/corpuses/models.py`
+- **Removed `sync_m2m_to_documentpath` management command**: No longer needed after M2M removal
+  - Files: `opencontractserver/documents/management/commands/sync_m2m_to_documentpath.py` (deleted)
+- **Added request-level caching to DocumentPathType**: Visible corpus IDs now cached per-request to prevent N+1 queries
+  - Follows same pattern as `ConversationQueryOptimizer` and `DocumentRelationshipQueryOptimizer`
+  - Files: `config/graphql/graphene_types.py:620-636`
+- **Fixed stale frontend GraphQL queries**: Two queries still referenced removed `documents { totalCount }` connection field
+  - `GET_EDITABLE_CORPUSES` in `AddToCorpusModal.tsx` now uses `documentCount`
+  - `GET_MY_CORPUSES` in `queries.ts` now uses `documentCount`
+  - Files: `frontend/src/components/modals/AddToCorpusModal.tsx`, `frontend/src/graphql/queries.ts`
+
 #### Window Resize Performance
 - **Added debounce to window resize handler**: Prevents excessive re-renders during window resize
   - 150ms debounce delay on resize events

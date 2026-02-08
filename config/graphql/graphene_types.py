@@ -617,14 +617,29 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
+    _VISIBLE_CORPUS_IDS_CACHE_KEY = "_docpath_visible_corpus_ids"
+
+    @classmethod
+    def _get_visible_corpus_ids(cls, info):
+        """Get visible corpus IDs with request-level caching to prevent N+1 queries."""
+        from opencontractserver.corpuses.models import Corpus
+
+        user = info.context.user
+        cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user.id}"
+
+        if hasattr(info.context, cache_key):
+            return getattr(info.context, cache_key)
+
+        visible_ids = set(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+        setattr(info.context, cache_key, visible_ids)
+        return visible_ids
+
     @classmethod
     def get_queryset(cls, queryset, info):
         """Filter paths to current, non-deleted paths in visible corpuses."""
-        from opencontractserver.corpuses.models import Corpus
-
-        visible_corpus_ids = Corpus.objects.visible_to_user(
-            info.context.user
-        ).values_list("id", flat=True)
+        visible_corpus_ids = cls._get_visible_corpus_ids(info)
 
         if issubclass(type(queryset), QuerySet):
             return queryset.filter(

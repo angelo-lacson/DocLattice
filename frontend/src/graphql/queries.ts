@@ -3331,9 +3331,7 @@ export const GET_MY_CORPUSES = gql`
         node {
           id
           title
-          documents {
-            totalCount
-          }
+          documentCount
           myPermissions
         }
       }
