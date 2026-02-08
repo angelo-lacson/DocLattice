@@ -126,41 +126,47 @@ class MockParser(BaseParser):
             "labelled_text": [],
         }
 
-        # We'll override settings so that the doc_type -> parser reference name is "mock_parser.MockParser"
-        with self.settings(
-            PREFERRED_PARSERS={
-                "application/mock": "opencontractserver.pipeline.parsers.mock_parser.MockParser"
-            },
-            PARSER_KWARGS={
-                "opencontractserver.pipeline.parsers.mock_parser.MockParser": {
-                    "test_key": "test_value"
-                }
-            },
-        ):
-            # We'll patch the ephemeral parser's parse_document, verifying that it
-            # indeed receives the "test_key" kwarg.
-            with patch(
-                "opencontractserver.pipeline.parsers.mock_parser.MockParser._parse_document_impl",
-                return_value=mock_parsed_data,
-            ) as mock_parse:
-                # Now call our Celery-based ingest_doc as a task signature
-                ingest_doc.s(user_id=self.user.id, doc_id=self.doc.id).apply()
+        # Set parser config directly on PipelineSettings (database is single source of truth)
+        from opencontractserver.documents.models import PipelineSettings
 
-                self.assertTrue(
-                    mock_parse.called,
-                    "MockParser._parse_document_impl should have been called by ingest_doc.",
-                )
-                _, call_kwargs = mock_parse.call_args
-                self.assertIn(
-                    "test_key",
-                    call_kwargs,
-                    "Should pass 'test_key' to _parse_document_impl.",
-                )
-                self.assertEqual(
-                    call_kwargs["test_key"],
-                    "test_value",
-                    "Kwargs from settings should match the ones _parse_document_impl receives.",
-                )
+        pipeline_settings = PipelineSettings.get_instance(use_cache=False)
+        pipeline_settings.preferred_parsers = {
+            **pipeline_settings.preferred_parsers,
+            "application/mock": "opencontractserver.pipeline.parsers.mock_parser.MockParser",
+        }
+        pipeline_settings.parser_kwargs = {
+            **pipeline_settings.parser_kwargs,
+            "opencontractserver.pipeline.parsers.mock_parser.MockParser": {
+                "test_key": "test_value"
+            },
+        }
+        pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        # We'll patch the ephemeral parser's parse_document, verifying that it
+        # indeed receives the "test_key" kwarg.
+        with patch(
+            "opencontractserver.pipeline.parsers.mock_parser.MockParser._parse_document_impl",
+            return_value=mock_parsed_data,
+        ) as mock_parse:
+            # Now call our Celery-based ingest_doc as a task signature
+            ingest_doc.s(user_id=self.user.id, doc_id=self.doc.id).apply()
+
+            self.assertTrue(
+                mock_parse.called,
+                "MockParser._parse_document_impl should have been called by ingest_doc.",
+            )
+            _, call_kwargs = mock_parse.call_args
+            self.assertIn(
+                "test_key",
+                call_kwargs,
+                "Should pass 'test_key' to _parse_document_impl.",
+            )
+            self.assertEqual(
+                call_kwargs["test_key"],
+                "test_value",
+                "Kwargs from settings should match the ones _parse_document_impl receives.",
+            )
 
     def test_mock_parser_relationship_import(self):
         """
