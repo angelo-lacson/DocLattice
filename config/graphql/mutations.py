@@ -175,6 +175,7 @@ from opencontractserver.tasks.export_tasks import (
     on_demand_post_processors,
     package_funsd_exports,
 )
+from opencontractserver.tasks.export_tasks_v2 import package_corpus_export_v2
 from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
 from opencontractserver.tasks.permissioning_tasks import (
     make_analysis_public_task,
@@ -1482,6 +1483,16 @@ class StartCorpusExport(graphene.Mutation):
                     ),
                 ).apply_async()
 
+                ok = True
+                message = "SUCCESS"
+
+            elif export_format == ExportType.OPEN_CONTRACTS_V2.value:
+                package_corpus_export_v2.delay(
+                    export_id=export.id,
+                    corpus_pk=int(corpus_pk),
+                    analysis_pk_list=analysis_pk_list if analysis_pk_list else None,
+                    annotation_filter_mode=annotation_filter_mode,
+                )
                 ok = True
                 message = "SUCCESS"
 

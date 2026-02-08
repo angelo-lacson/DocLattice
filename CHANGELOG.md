@@ -5,6 +5,30 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-08
+
+### Changed
+
+#### Import/Export Pipeline Consolidation
+- **DRY refactor of import/export code**: Extracted shared helpers into `opencontractserver/utils/importing.py`:
+  - `prepare_import_labels()` - eliminates 4x duplicated label loading boilerplate
+  - `create_document_from_export_data()` - eliminates 3x duplicated document creation
+  - `import_doc_annotations()` - eliminates 3x duplicated doc+text annotation import loops
+- **V1 import now delegates to V2 machinery**: `import_corpus()` in `import_tasks.py` delegates to `import_corpus_v2()` which handles both V1 and V2 formats through a unified `_import_corpus()` handler
+- **V2 import fixed to use `corpus.add_document()`**: Previously created documents directly without corpus isolation; now properly uses the versioning API for correct DocumentPath records and corpus isolation
+- **V2 import now sets permissions on annotations**: Previously skipped `set_permissions_for_obj_to_user` on annotations
+- **V2 import now handles `content_modalities`**: Via the shared `import_annotations()` helper
+- **Export finalization DRYed up**: New `finalize_export()` in `export_tasks.py` replaces 4x repeated save/timestamp/notification pattern in `package_annotated_docs`, `package_funsd_exports`, `on_demand_post_processors`, and `package_corpus_export_v2`
+- **Removed duplicate `import_relationships` and `import_document_paths`** from `utils/import_v2.py` - relationship import handled inline in `_import_v2_relationships`, DocumentPaths created by `corpus.add_document()`
+- **Deleted empty `opencontractserver/utils/export.py`**
+
+### Added
+
+#### V2 Export Format
+- **`OPEN_CONTRACTS_V2` export format**: New export type available in `StartCorpusExport` mutation that includes structural annotation sets, folder hierarchy, relationships, agent config, markdown descriptions, and conversations
+- **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
+- **Migration `0025_alter_userexport_format_add_v2`**: Adds `OPEN_CONTRACTS_V2` to UserExport format choices
+
 ## [Unreleased] - 2026-01-31
 
 ### ⚠️ Important Migration Notes
