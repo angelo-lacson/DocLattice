@@ -53,31 +53,41 @@ class MentionParsingTestCase(TestCase):
             slug="private-corpus",
         )
 
-        # Create documents
-        self.doc1 = Document.objects.create(
+        # Create documents and add to corpus (returns corpus-isolated copies)
+        original_doc1 = Document.objects.create(
             title="Contract Template",
             description="Standard contract",
             creator=self.user1,
-            slug="contract-template",
+            slug="contract-template-orig",  # Original gets different slug
             backend_lock=True,  # Skip signal handlers
         )
-        self.corpus1.documents.add(self.doc1)
+        self.doc1, _, _ = self.corpus1.add_document(
+            document=original_doc1, user=self.user1
+        )
+        # Update the corpus copy to have the slug we expect in tests
+        self.doc1.slug = "contract-template"
+        self.doc1.save(update_fields=["slug"])
 
-        self.doc2 = Document.objects.create(
+        original_doc2 = Document.objects.create(
             title="Private Doc",
             description="Private document",
             creator=self.user2,
-            slug="private-doc",
+            slug="private-doc-orig",  # Original gets different slug
             backend_lock=True,  # Skip signal handlers
         )
-        self.corpus2.documents.add(self.doc2)
+        self.doc2, _, _ = self.corpus2.add_document(
+            document=original_doc2, user=self.user2
+        )
+        # Update the corpus copy to have the slug we expect in tests
+        self.doc2.slug = "private-doc"
+        self.doc2.save(update_fields=["slug"])
 
         # Create conversation and message
         self.conversation = Conversation.objects.create(
             title="Test Thread", creator=self.user1, conversation_type="THREAD"
         )
 
-        # Set permissions
+        # Set permissions on corpus and corpus copies (not originals)
         set_permissions_for_obj_to_user(
             self.user1, self.corpus1, [PermissionTypes.READ, PermissionTypes.UPDATE]
         )

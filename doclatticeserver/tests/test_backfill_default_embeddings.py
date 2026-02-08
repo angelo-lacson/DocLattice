@@ -46,14 +46,20 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         )
 
     def _create_document(self, title="Test Doc"):
-        """Helper to create a document."""
-        document = Document.objects.create(
+        """Helper to create a document and add to corpus.
+
+        Returns the corpus-isolated copy (not the original) since that's
+        the document that's actually in the corpus.
+        """
+        original_doc = Document.objects.create(
             title=title,
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus.documents.add(document)
-        return document
+        corpus_doc, _, _ = self.corpus.add_document(
+            document=original_doc, user=self.user
+        )
+        return corpus_doc
 
     def _create_annotation(self, document, raw_text="Test text", corpus=None):
         """Helper to create an annotation."""
@@ -209,13 +215,15 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         annotation1 = self._create_annotation(document1, corpus=self.corpus)
 
         # Doc 2 in corpus 2 - create without adding to self.corpus
-        document2 = Document.objects.create(
+        original_doc2 = Document.objects.create(
             title="Doc 2",
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus2.documents.add(document2)
-        self._create_annotation(document2, raw_text="Other text", corpus=self.corpus2)
+        corpus2_doc, _, _ = self.corpus2.add_document(
+            document=original_doc2, user=self.user
+        )
+        self._create_annotation(corpus2_doc, raw_text="Other text", corpus=self.corpus2)
 
         out = StringIO()
         call_command(

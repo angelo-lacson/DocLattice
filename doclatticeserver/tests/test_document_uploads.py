@@ -319,8 +319,6 @@ class UploadDocumentMutationTestCase(TestCase):
 
         # DocumentPath has PROTECT on documents, so delete paths first
         DocumentPath.objects.all().delete()
-        # Clear corpus-document links first (via the M2M through table)
-        for corpus in Corpus.objects.all():
-            corpus.documents.clear()
+        # Documents are now linked via DocumentPath only - M2M not needed
         DocumentModel.objects.all().delete()
         Corpus.objects.all().delete()

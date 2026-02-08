@@ -10,7 +10,6 @@ from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from doclatticeserver.annotations.models import AnnotationLabel, LabelSet
-from doclatticeserver.documents.models import Document
 from doclatticeserver.tests.base import BaseFixtureTestCase
 from doclatticeserver.types.enums import ExportType, PermissionTypes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -104,9 +103,7 @@ class TestExportMutations(BaseFixtureTestCase):
 
         print("\n=== Test: Basic export without analysis parameters ===")
         print(f"Corpus ID: {self.corpus.id}")
-        print(
-            f"Documents in corpus: {Document.objects.filter(corpus=self.corpus).count()}"
-        )
+        print(f"Documents in corpus: {self.corpus.document_count()}")
 
         response = client.execute(mutation, variables=variables)
 

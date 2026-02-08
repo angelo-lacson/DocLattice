@@ -87,7 +87,7 @@ class ExportCorpusTestCase(TestCase):
         print(
             "4)\tTest that we can burn in each document and produce labelled document"
         )
-        for doc in self.original_corpus_obj.documents.all():
+        for doc in self.original_corpus_obj.get_documents():
 
             build_document_export(
                 label_lookups=label_lookups,
@@ -116,7 +116,7 @@ class ExportCorpusTestCase(TestCase):
         # Build label lookups
         label_lookups = build_label_lookups(corpus_id=self.original_corpus_obj.id)
 
-        for doc in self.original_corpus_obj.documents.all():
+        for doc in self.original_corpus_obj.get_documents():
             (
                 doc_name,
                 base64_encoded_message,

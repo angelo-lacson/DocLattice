@@ -103,9 +103,13 @@ class Command(BaseCommand):
             self.stdout.write(f"Filtering to corpus_id={corpus_id}")
             # Filter to annotations in this corpus (non-structural annotations have corpus_id)
             # For structural annotations, filter by those belonging to documents in this corpus
+            # Note: Documents are associated with corpuses through DocumentPath (path_records)
             queryset = queryset.filter(
                 Q(corpus_id=corpus_id)
-                | Q(structural=True, structural_set__documents__corpus__id=corpus_id)
+                | Q(
+                    structural=True,
+                    structural_set__documents__path_records__corpus_id=corpus_id,
+                )
             )
 
         if document_id:

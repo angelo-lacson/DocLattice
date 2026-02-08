@@ -109,13 +109,13 @@ class TestMigration0055Rollback(TestCase):
             creator=self.user,
         )
 
-        # Create document pointing to isolated set
-        doc = Document.objects.create(
+        # Create document pointing to isolated set and add to corpus
+        original_doc = Document.objects.create(
             title="Test Document",
-            corpus=self.corpus,
             structural_annotation_set=isolated_set,
             creator=self.user,
         )
+        doc, _, _ = self.corpus.add_document(document=original_doc, user=self.user)
 
         # Verify initial state
         self.assertEqual(doc.structural_annotation_set, isolated_set)
@@ -207,18 +207,19 @@ class TestMigration0055Rollback(TestCase):
     def test_full_forward_and_reverse_cycle(self):
         """End-to-end test of forward migration followed by reverse."""
         # Setup: Create shared structural set with multiple documents
-        doc1 = Document.objects.create(
+        original_doc1 = Document.objects.create(
             title="Document 1",
-            corpus=self.corpus,
             structural_annotation_set=self.original_set,
             creator=self.user,
         )
-        doc2 = Document.objects.create(
+        doc1, _, _ = self.corpus.add_document(document=original_doc1, user=self.user)
+
+        original_doc2 = Document.objects.create(
             title="Document 2",
-            corpus=self.corpus,
             structural_annotation_set=self.original_set,
             creator=self.user,
         )
+        doc2, _, _ = self.corpus.add_document(document=original_doc2, user=self.user)
 
         # Verify shared state
         self.assertEqual(doc1.structural_annotation_set, doc2.structural_annotation_set)

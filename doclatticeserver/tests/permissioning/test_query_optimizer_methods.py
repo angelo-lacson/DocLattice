@@ -1426,7 +1426,7 @@ class ExtractQueryOptimizerTestCase(TestCase):
         collab_corpus = Corpus.objects.create(
             title="Collaborator Corpus", creator=self.collaborator, is_public=False
         )
-        collab_corpus.documents.add(self.doc1)
+        collab_corpus.add_document(document=self.doc1, user=self.collaborator)
 
         # Owner creates an extract on collaborator's corpus
         collab_extract = Extract.objects.create(

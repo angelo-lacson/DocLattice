@@ -4058,9 +4058,9 @@ class Query(graphene.ObjectType):
         User = get_user_model()
         try:
             user = User.objects.get(slug=user_slug)
-            # Use annotate to avoid N+1 query for document count
+            # Use annotate to count documents via DocumentPath instead of M2M
             corpus = (
-                Corpus.objects.annotate(doc_count=Count("documents"))
+                Corpus.objects.annotate(doc_count=Count("document_paths"))
                 .select_related("creator")
                 .get(creator=user, slug=corpus_slug, is_public=True)
             )
@@ -4128,7 +4128,13 @@ class Query(graphene.ObjectType):
         try:
             user = User.objects.get(slug=user_slug)
             corpus = Corpus.objects.get(creator=user, slug=corpus_slug, is_public=True)
-            document = corpus.documents.get(slug=document_slug, is_public=True)
+            document = (
+                corpus.get_documents()
+                .filter(slug=document_slug, is_public=True)
+                .first()
+            )
+            if not document:
+                raise Document.DoesNotExist()
 
             # Build icon URL if available
             icon_url = None
