@@ -7,7 +7,10 @@ import source_icon from "../../../assets/icons/noun-bow-and-arrow-559923.png";
 import target_icon from "../../../assets/icons/noun-target-746597.png";
 
 import "./AnnotatorSidebar.css";
-import { ServerTokenAnnotation } from "../types/annotations";
+import {
+  ServerTokenAnnotation,
+  ServerSpanAnnotation,
+} from "../types/annotations";
 import { TruncatedText } from "../../widgets/data-display/TruncatedText";
 
 const AvatarImage = styled.img`
@@ -32,7 +35,7 @@ export const RelationHighlightContainer = styled.div<HasColor>(
 );
 
 interface RelationHighlightItemProps {
-  annotation: ServerTokenAnnotation;
+  annotation: ServerTokenAnnotation | ServerSpanAnnotation;
   className?: string;
   type: "SOURCE" | "TARGET";
   read_only: boolean;

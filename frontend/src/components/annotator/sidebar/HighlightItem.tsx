@@ -7,7 +7,10 @@ import { HorizontallyJustifiedDiv } from "./common";
 import { useAnnotationRefs } from "../hooks/useAnnotationRefs";
 import { useAnnotationSelection } from "../context/UISettingsAtom";
 import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
-import { ServerTokenAnnotation } from "../types/annotations";
+import {
+  ServerTokenAnnotation,
+  ServerSpanAnnotation,
+} from "../types/annotations";
 import { PermissionTypes } from "../../types";
 import { ModalityBadge } from "./ModalityBadge";
 import { AnnotationImagePreview } from "./AnnotationImagePreview";
@@ -133,7 +136,7 @@ const LocationText = styled.div`
 `;
 
 interface HighlightItemProps {
-  annotation: ServerTokenAnnotation;
+  annotation: ServerTokenAnnotation | ServerSpanAnnotation;
   className?: string;
   read_only: boolean;
   relations: Array<{ sourceIds: string[]; targetIds: string[] }>;

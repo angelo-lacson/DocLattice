@@ -5,6 +5,16 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-08
+
+### Fixed
+
+#### Enable Relationships for Span-Based (Text) Annotations (Closes #281)
+- **File type detection inconsistency**: Multiple frontend components checked for text file types using only `startsWith("text/")`, missing documents with `application/txt` MIME type. Created centralized `isTextFileType()` and `isPdfFileType()` utilities in `frontend/src/utils/files.ts` and updated all callers.
+- **Label initialization race condition**: The `initialized.current` ref in `UISettingsAtom.tsx` (line 288) could be set to `true` after span label initialization, preventing relationship labels from auto-initializing on subsequent effect runs. Replaced with separate `spanLabelInitialized` and `relationLabelInitialized` refs.
+- **Type restrictions blocking span annotations in relationship UI**: `RelationItem`, `RelationHighlightItem`, `HighlightItem`, and `annotationSelectedViaRelationship()` only accepted `ServerTokenAnnotation` (PDF annotations). Updated all to accept `ServerTokenAnnotation | ServerSpanAnnotation` union type, enabling the sidebar relationship display and creation flow for text documents.
+- **Files changed**: `frontend/src/utils/files.ts`, `frontend/src/components/annotator/context/UISettingsAtom.tsx`, `frontend/src/components/annotator/sidebar/RelationItem.tsx`, `frontend/src/components/annotator/sidebar/RelationHighlightItem.tsx`, `frontend/src/components/annotator/sidebar/HighlightItem.tsx`, `frontend/src/components/annotator/utils.ts`, `frontend/src/components/annotator/hooks/AnnotationHooks.tsx`, `frontend/src/components/annotator/labels/EnhancedLabelSelector.tsx`, `frontend/src/components/annotator/labels/UnifiedLabelSelector.tsx`, `frontend/src/components/annotator/labels/label_selector/LabelSelector.tsx`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`, `frontend/src/components/widgets/chat/ChatMessage.tsx`
+
 ## [Unreleased] - 2026-01-31
 
 ### ⚠️ Important Migration Notes
