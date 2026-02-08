@@ -5,7 +5,9 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-31
+## [Unreleased]
+
+## [3.0.0.b4] - 2026-02-08
 
 ### ⚠️ Important Migration Notes
 
@@ -665,8 +667,6 @@ If rollback is required after deployment, you must write a custom migration to h
     `opencontractserver/pipeline/base/embedder.py`, `opencontractserver/pipeline/base/post_processor.py`,
     `opencontractserver/pipeline/parsers/llamaparse_parser.py`, `opencontractserver/pipeline/post_processors/pdf_redactor.py`
 
-## [Unreleased] - 2026-01-12
-
 ### Added
 
 #### Image Annotation Display in UnifiedContentFeed
@@ -742,8 +742,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/components/annotator/types/annotations.ts:92,145`
 - **Test coverage**: 5 backend tests for REST endpoint with authentication and permission checking
   - Files: `opencontractserver/tests/test_annotation_images_api.py`
-
-## [3.0.0b4] - 2026-01-11
 
 ### Added
 
@@ -873,10 +871,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - IP hashing uses `TELEMETRY_IP_SALT` setting to prevent rainbow table attacks
 - ContextVar ensures proper isolation in concurrent async requests
 
----
-
-## [Unreleased] - 2026-01-04
-
 ### Changed
 
 #### NavMenu Refactoring (PR #779)
@@ -910,10 +904,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Previously, superuser features (Badge Management, Admin Settings) were broken in non-Auth0 mode
   - Updated `LoginOutputs` interface to include `username`, `isUsageCapped`, and `isSuperuser` fields
 
----
-
-## [Unreleased] - 2026-01-03
-
 ### Fixed
 
 #### WebSocket Connection Performance (Issue: Chat "Reconnecting" delay)
@@ -926,10 +916,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Notification WebSocket auth guard** (`frontend/src/hooks/useNotificationWebSocket.ts:312-318`): Skip connection attempt without auth token
   - Prevents 403 Access Denied errors when connecting before auth token is available
   - Eliminates unnecessary connection attempts and error spam in console
-
----
-
-## [Unreleased] - 2026-01-02
 
 ### Added
 
@@ -963,10 +949,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - **openedExtract reactive var documentation** (`frontend/src/graphql/cache.ts:364-388`): Clarified that route components (like ExtractDetailRoute) can set this var, not just CentralRouteManager
 - **Consolidated constants** (`frontend/src/assets/configurations/constants.ts:47-51`): Moved `EXTRACT_SEARCH_DEBOUNCE_MS` to centralized `DEBOUNCE` object
 - **extractUtils refactor** (`frontend/src/utils/extractUtils.ts:32-55`): Now uses `EXTRACT_STATUS` and `EXTRACT_STATUS_COLORS` constants instead of hardcoded values
-
----
-
-## [Unreleased] - 2026-01-01
 
 ### Added
 
@@ -1023,10 +1005,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Permission-based UI visibility tests
   - Search functionality tests
   - Mobile navigation tests
-
----
-
-## [Unreleased] - 2025-12-31
 
 ### Added
 
@@ -1085,10 +1063,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - `corpusCount` respects user visibility: anonymous sees public corpuses only, authenticated users see corpuses they have access to
 - Removed 632-line `TopContributors.tsx` component, replaced with ~280-line `CompactLeaderboard.tsx`
 
----
-
-## [Unreleased] - 2025-12-29
-
 ### Added
 
 #### Moderation Dashboard and Rollback Features (Issue #742)
@@ -1124,7 +1098,6 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Tool Validation for Inline Agents (Issue #742)
 - **Added tool category validation** (`config/graphql/mutations.py:3875-3897`): CreateCorpusAction now validates that inline agent tools are from the MODERATION category when using thread/message triggers
 
-## [Unreleased] - 2025-12-28
 
 ### Added
 
@@ -1629,7 +1602,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Hardcoded breakpoints replaced with constants**: Updated all hardcoded `768px` references in `FolderDocumentBrowser.tsx` and `folderAtoms.ts` to use `TABLET_BREAKPOINT` constant for maintainability
 - **Improved breakpoint documentation**: Added detailed JSDoc comment in `folderAtoms.ts` explaining why `TABLET_BREAKPOINT` (768px) is used for sidebar collapse rather than `MOBILE_VIEW_BREAKPOINT` (600px)
 
----
+## [3.0.0.b3] - 2025-12-11
 
 ### Added
 
