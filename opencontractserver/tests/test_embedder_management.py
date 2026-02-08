@@ -343,9 +343,14 @@ class TestReEmbedCorpusMutation(TestCase):
         self.assertTrue(data.get("ok"))
         self.assertIn("already uses", data.get("message", ""))
 
-    def test_reembed_rejects_locked_corpus(self):
+    @patch("opencontractserver.pipeline.utils.get_component_by_name")
+    def test_reembed_rejects_locked_corpus(self, mock_get_component):
         """ReEmbedCorpus rejects when corpus is already locked."""
         from graphql_relay import to_global_id
+
+        mock_get_component.return_value = type(
+            "FakeEmbedder", (BaseEmbedder,), {"vector_size": 384}
+        )
 
         self.corpus.backend_lock = True
         self.corpus.save()
@@ -412,7 +417,7 @@ class TestReEmbedCorpusTask(TestCase):
         )
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.calculate_embeddings_for_annotation_batch.delay"
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch.delay"
     )
     def test_reembed_updates_preferred_embedder(self, mock_batch_delay):
         """Task updates corpus.preferred_embedder to the new value."""
@@ -426,7 +431,7 @@ class TestReEmbedCorpusTask(TestCase):
         self.assertEqual(result["errors"], [])
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.calculate_embeddings_for_annotation_batch.delay"
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch.delay"
     )
     def test_reembed_queues_batches_for_missing_embeddings(self, mock_batch_delay):
         """Task queues batch embedding tasks for annotations missing the new embedder."""
@@ -468,7 +473,7 @@ class TestReEmbedCorpusTask(TestCase):
         self.assertIn("Corpus not found", result["errors"])
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.calculate_embeddings_for_annotation_batch.delay"
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch.delay"
     )
     def test_reembed_unlocks_on_error(self, mock_batch_delay):
         """Corpus is unlocked even if the task encounters an error."""
@@ -540,6 +545,7 @@ class TestEmbedderConsistencyCheck(TestCase):
         Corpus.objects.create(
             title="Mismatched",
             creator=self.user,
+            preferred_embedder="some.other.Embedder",
             created_with_embedder="some.other.Embedder",
         )
         warnings = check_default_embedder_consistency(None)
