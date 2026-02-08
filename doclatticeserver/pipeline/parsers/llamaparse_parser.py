@@ -312,7 +312,11 @@ class LlamaParseParser(BaseParser):
             with default_storage.open(doc_path, "rb") as doc_file:
                 doc_bytes = doc_file.read()
 
-            # Determine file extension from document type
+            # Determine file extension from document type.
+            # NOTE: This is NOT a path traversal risk. The suffix is whitelisted
+            # to "pdf" or "docx" only; any other value (including path separators)
+            # falls through to ".pdf". NamedTemporaryFile appends the suffix to a
+            # random filename in $TMPDIR, so it cannot escape the temp directory.
             file_type = document.file_type.lower() if document.file_type else "pdf"
             suffix = f".{file_type}" if file_type in ("pdf", "docx") else ".pdf"
 
