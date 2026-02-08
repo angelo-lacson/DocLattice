@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import styled, { keyframes, css } from "styled-components";
+import styled, { keyframes } from "styled-components";
 import {
   Button,
   Input,
@@ -233,7 +233,6 @@ const Container = styled.div`
   max-width: 900px;
   margin: 0 auto;
   min-height: 100%;
-  overflow-y: auto;
 
   @media (max-width: 768px) {
     padding: 1rem;
@@ -346,40 +345,22 @@ const ChannelTrack = styled.div`
 const ChannelGlow = styled.div`
   position: absolute;
   left: 50%;
-  top: 10px;
-  bottom: 10px;
+  top: 0;
+  bottom: 0;
   transform: translateX(-50%);
   width: 18px;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}06,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}06,
-    transparent
-  );
+  background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08;
   border-radius: 10px;
 `;
 
 const ChannelCenterLine = styled.div`
   position: absolute;
   left: 50%;
-  top: 10px;
-  bottom: 10px;
+  top: 0;
+  bottom: 0;
   transform: translateX(-50%);
   width: 2px;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}18,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}25,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30,
-    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}18,
-    transparent
-  );
+  background: #e0e0e0;
   border-radius: 1px;
 `;
 
@@ -427,42 +408,6 @@ const JunctionColumn = styled.div<{ $active?: boolean }>`
   width: ${PIPELINE_UI.CHANNEL_WIDTH_PX}px;
   flex-shrink: 0;
   position: relative;
-
-  &::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 0;
-    bottom: 0;
-    transform: translateX(-50%);
-    width: 2px;
-    background: ${(props) =>
-      props.$active
-        ? `linear-gradient(180deg, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}40, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20)`
-        : "#E0E0E0"};
-    transition: background 0.4s;
-  }
-
-  ${(props) =>
-    props.$active &&
-    css`
-      &::after {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 0;
-        bottom: 0;
-        transform: translateX(-50%);
-        width: 20px;
-        background: linear-gradient(
-          180deg,
-          ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}04,
-          ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08,
-          ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}04
-        );
-        border-radius: 10px;
-      }
-    `}
 `;
 
 const JunctionDot = styled.div<{ $active?: boolean }>`
