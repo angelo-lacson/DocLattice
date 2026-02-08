@@ -165,7 +165,9 @@ class Auth0AdminLoginView(View):
     template_name = "admin/auth0_login.html"
 
     @method_decorator(csrf_protect)
-    @method_decorator(ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_PAGE_RATE, block=False))
+    @method_decorator(
+        ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_PAGE_RATE, block=False)
+    )
     def get(self, request):
         """Display the appropriate login form."""
         if getattr(request, "limited", False):
@@ -204,7 +206,9 @@ class Auth0AdminLoginView(View):
         return render(request, self.template_name, context)
 
     @method_decorator(csrf_protect)
-    @method_decorator(ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_RATE, block=False))
+    @method_decorator(
+        ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_RATE, block=False)
+    )
     def post(self, request):
         """Handle token-based login via POST or password authentication."""
         if getattr(request, "limited", False):
