@@ -8,6 +8,16 @@ corpus was created. It never changes after creation (audit trail).
 
 For existing corpuses, we backfill created_with_embedder from their
 preferred_embedder (if set) or from DEFAULT_EMBEDDER.
+
+Performance: Uses two bulk UPDATE statements (no row-by-row iteration).
+Expected time: <1s for typical installations (<10K corpuses).
+For very large tables (100K+), expect ~1-2s per 100K rows.
+
+Rollback: The reverse migration is a no-op (RunPython.noop). Rolling back
+will remove the created_with_embedder column via the standard Django
+migration framework (RemoveField is implicit on reverse). No data loss
+occurs because the column is derived from preferred_embedder, which
+remains unchanged.
 """
 
 from django.conf import settings

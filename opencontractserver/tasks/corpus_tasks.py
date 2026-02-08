@@ -903,7 +903,10 @@ def reembed_corpus(
         dict: Summary of re-embedding tasks queued
     """
     from opencontractserver.annotations.models import Annotation, Embedding
-    from opencontractserver.constants.document_processing import EMBEDDING_BATCH_SIZE
+    from opencontractserver.constants.document_processing import (
+        EMBEDDING_BATCH_SIZE,
+        MAX_REEMBED_TASKS_PER_RUN,
+    )
     from opencontractserver.documents.models import DocumentPath
     from opencontractserver.tasks.embeddings_task import (
         calculate_embeddings_for_annotation_batch,
@@ -919,6 +922,7 @@ def reembed_corpus(
         "total_annotations": 0,
         "already_embedded": 0,
         "tasks_queued": 0,
+        "capped": False,
         "errors": [],
     }
 
@@ -987,13 +991,28 @@ def reembed_corpus(
             )
             return result
 
+        total_batches = (
+            len(missing_ids) + EMBEDDING_BATCH_SIZE - 1
+        ) // EMBEDDING_BATCH_SIZE
         logger.info(
             f"Queueing re-embedding for {len(missing_ids)} annotations "
-            f"(of {len(annotation_ids)} total) using {new_embedder_path}"
+            f"(of {len(annotation_ids)} total) in up to {total_batches} batches "
+            f"using {new_embedder_path}"
         )
 
-        # Queue in batches
+        # Queue in batches, capped to prevent flooding the Celery queue.
+        # The task is idempotent: re-running it will skip already-embedded
+        # annotations, so capping here is safe for very large corpuses.
         for i in range(0, len(missing_ids), EMBEDDING_BATCH_SIZE):
+            if result["tasks_queued"] >= MAX_REEMBED_TASKS_PER_RUN:
+                remaining = total_batches - result["tasks_queued"]
+                logger.warning(
+                    f"Reached task queue cap ({MAX_REEMBED_TASKS_PER_RUN}). "
+                    f"{remaining} batches deferred. Re-run to continue."
+                )
+                result["capped"] = True
+                break
+
             batch = missing_ids[i : i + EMBEDDING_BATCH_SIZE]
             calculate_embeddings_for_annotation_batch.delay(
                 annotation_ids=batch,
@@ -1001,6 +1020,13 @@ def reembed_corpus(
                 embedder_path=new_embedder_path,
             )
             result["tasks_queued"] += 1
+
+            # Progress logging every 50 batches
+            if result["tasks_queued"] % 50 == 0:
+                logger.info(
+                    f"reembed_corpus() progress: {result['tasks_queued']}/{total_batches} "
+                    f"batches queued for corpus {corpus_id}"
+                )
 
         logger.info(
             f"reembed_corpus() complete - queued {result['tasks_queued']} tasks "

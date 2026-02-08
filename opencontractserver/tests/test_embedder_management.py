@@ -508,6 +508,206 @@ class TestReEmbedCorpusTask(TestCase):
         self.assertTrue(self.corpus.error)
         self.assertGreater(len(result["errors"]), 0)
 
+    @patch(
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch.delay"
+    )
+    def test_reembed_skips_already_embedded_annotations(self, mock_batch_delay):
+        """Task skips annotations that already have embeddings for the new embedder."""
+        from opencontractserver.annotations.models import Annotation, Embedding
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/test.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        ann = Annotation.objects.create(
+            raw_text="Already embedded",
+            document=doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+        # Pre-create embedding for the target embedder
+        Embedding.objects.create(
+            annotation=ann,
+            embedder_path="new.Embedder",
+            creator=self.user,
+        )
+
+        from opencontractserver.tasks.corpus_tasks import reembed_corpus
+
+        result = reembed_corpus(self.corpus.pk, "new.Embedder")
+
+        self.assertEqual(result["total_annotations"], 1)
+        self.assertEqual(result["already_embedded"], 1)
+        self.assertEqual(result["tasks_queued"], 0)
+        mock_batch_delay.assert_not_called()
+
+    @patch(
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch.delay"
+    )
+    def test_reembed_includes_structural_annotations(self, mock_batch_delay):
+        """Task includes structural annotations linked via StructuralAnnotationSet."""
+        from opencontractserver.annotations.models import (
+            Annotation,
+            StructuralAnnotationSet,
+        )
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        # Create structural annotation set and link it to a document
+        sas = StructuralAnnotationSet.objects.create(
+            content_hash="testhash123",
+            creator=self.user,
+        )
+        doc = Document.objects.create(
+            title="Structural Doc",
+            creator=self.user,
+            structural_annotation_set=sas,
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/test.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        # Create a structural annotation (belongs to the set, not the doc directly)
+        Annotation.objects.create(
+            raw_text="Structural annotation",
+            structural_set=sas,
+            structural=True,
+            creator=self.user,
+        )
+        # Also create a regular corpus annotation
+        Annotation.objects.create(
+            raw_text="Regular annotation",
+            document=doc,
+            corpus=self.corpus,
+            creator=self.user,
+        )
+
+        from opencontractserver.tasks.corpus_tasks import reembed_corpus
+
+        result = reembed_corpus(self.corpus.pk, "new.Embedder")
+
+        # Both annotations should be found
+        self.assertEqual(result["total_annotations"], 2)
+        self.assertGreater(result["tasks_queued"], 0)
+
+    @patch(
+        "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch.delay"
+    )
+    def test_reembed_caps_task_queue(self, mock_batch_delay):
+        """Task respects MAX_REEMBED_TASKS_PER_RUN to prevent queue flooding."""
+        from opencontractserver.annotations.models import Annotation
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        doc = Document.objects.create(title="Test Doc", creator=self.user)
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/test.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        # Create enough annotations to exceed the cap when batch size = 1
+        for i in range(5):
+            Annotation.objects.create(
+                raw_text=f"Annotation {i}",
+                document=doc,
+                corpus=self.corpus,
+                creator=self.user,
+            )
+
+        from opencontractserver.tasks.corpus_tasks import reembed_corpus
+
+        # Set a very low cap for testing
+        with patch(
+            "opencontractserver.tasks.corpus_tasks.MAX_REEMBED_TASKS_PER_RUN", 2
+        ), patch("opencontractserver.tasks.corpus_tasks.EMBEDDING_BATCH_SIZE", 1):
+            result = reembed_corpus(self.corpus.pk, "new.Embedder")
+
+        self.assertEqual(result["tasks_queued"], 2)
+        self.assertTrue(result["capped"])
+        self.assertEqual(mock_batch_delay.call_count, 2)
+
+
+# ---------------------------------------------------------------------------
+# Concurrent re-embedding test (Critique #9)
+# ---------------------------------------------------------------------------
+
+
+class TestConcurrentReEmbedRejection(TestCase):
+    """Test that concurrent re-embed operations on the same corpus are rejected."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="concurrent_test", password="testpass"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Concurrent Test",
+            creator=self.user,
+            preferred_embedder="old.Embedder",
+        )
+        self.factory = RequestFactory()
+
+    def _execute_mutation(self, mutation_str, variables=None):
+        from graphene.test import Client as GrapheneClient
+
+        from config.graphql.schema import schema
+
+        request = self.factory.post("/graphql")
+        request.user = self.user
+        client = GrapheneClient(schema)
+        return client.execute(mutation_str, variables=variables, context_value=request)
+
+    @patch("opencontractserver.tasks.corpus_tasks.reembed_corpus.delay")
+    @patch("opencontractserver.pipeline.utils.get_component_by_name")
+    def test_second_reembed_rejected_while_first_running(
+        self, mock_get_component, mock_delay
+    ):
+        """The second re-embed attempt fails when the corpus is already locked."""
+        from graphql_relay import to_global_id
+
+        mock_get_component.return_value = type(
+            "FakeEmbedder", (BaseEmbedder,), {"vector_size": 384}
+        )
+
+        global_id = to_global_id("CorpusType", self.corpus.pk)
+        mutation = """
+            mutation ReEmbed($corpusId: String!, $newEmbedder: String!) {
+                reEmbedCorpus(corpusId: $corpusId, newEmbedder: $newEmbedder) {
+                    ok
+                    message
+                }
+            }
+        """
+        variables = {"corpusId": global_id, "newEmbedder": "new.Embedder"}
+
+        # First request should succeed
+        result1 = self._execute_mutation(mutation, variables=variables)
+        data1 = result1.get("data", {}).get("reEmbedCorpus", {})
+        self.assertTrue(data1.get("ok"), f"First re-embed failed: {data1}")
+
+        # Corpus should now be locked
+        self.corpus.refresh_from_db()
+        self.assertTrue(self.corpus.backend_lock)
+
+        # Second request should be rejected because corpus is locked
+        result2 = self._execute_mutation(mutation, variables=variables)
+        data2 = result2.get("data", {}).get("reEmbedCorpus", {})
+        self.assertFalse(data2.get("ok"))
+        self.assertIn("locked", data2.get("message", ""))
+
 
 # ---------------------------------------------------------------------------
 # System check tests
