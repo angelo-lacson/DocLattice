@@ -2,10 +2,12 @@
 Tests for the PipelineSettings singleton model and GraphQL endpoints.
 """
 
+from dataclasses import dataclass, field
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from graphene.test import Client
 
@@ -32,10 +34,10 @@ class PipelineSettingsModelTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_model_admin", password="admin", email="ps_model_admin@test.com"
         )
         self.regular_user = User.objects.create_user(
-            username="regular", password="regular"
+            username="ps_model_regular", password="regular"
         )
 
     def test_get_instance_creates_singleton(self):
@@ -52,15 +54,24 @@ class PipelineSettingsModelTestCase(TestCase):
         self.assertEqual(instance.pk, instance2.pk)
 
     def test_cannot_create_second_instance(self):
-        """Test that creating a second instance raises ValidationError."""
+        """Test that creating a second instance raises an error.
+
+        The singleton is enforced at both application level (ValidationError
+        in save()) and database level (CheckConstraint requiring pk=1).
+        Depending on the pk assigned, either error may fire first.
+        Uses a savepoint so IntegrityError doesn't abort the test transaction.
+        """
+        from django.db import transaction
+
         # Create the first instance
         PipelineSettings.get_instance()
 
         # Attempting to create a second instance should fail
-        with self.assertRaises(ValidationError):
-            PipelineSettings.objects.create(
-                preferred_parsers={"test": "test"},
-            )
+        with self.assertRaises((ValidationError, IntegrityError)):
+            with transaction.atomic():
+                PipelineSettings.objects.create(
+                    preferred_parsers={"test": "test"},
+                )
 
     def test_cannot_delete_singleton(self):
         """Test that deleting the singleton raises ValidationError."""
@@ -182,10 +193,10 @@ class PipelineSettingsGraphQLTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.regular_user = User.objects.create_user(
-            username="regular", password="regular"
+            username="ps_test_regular", password="regular"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -437,10 +448,10 @@ class PipelineSettingsSecretsTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.regular_user = User.objects.create_user(
-            username="regular", password="regular"
+            username="ps_test_regular", password="regular"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -694,7 +705,7 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -898,7 +909,7 @@ class PipelineSettingsIntegrationTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -1199,7 +1210,7 @@ class JSONSizeValidationTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -1363,3 +1374,234 @@ class RegistryGetByNameTestCase(TestCase):
         registry = get_registry()
         result = registry.get_by_name("NonExistentComponent12345")
         self.assertIsNone(result)
+
+
+class SingletonConstraintTestCase(TestCase):
+    """Tests for the database-level singleton constraint on PipelineSettings."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_db_constraint_rejects_pk_not_one(self):
+        """Database constraint prevents creating PipelineSettings with pk != 1."""
+        from django.db import connection, transaction
+
+        # Create the singleton with pk=1
+        PipelineSettings.objects.create(id=1)
+
+        # Attempt to insert with pk=2 via raw SQL (bypassing save() validation).
+        # Wrapped in a savepoint so IntegrityError doesn't abort the test transaction.
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "INSERT INTO documents_pipelinesettings (id, preferred_parsers, "
+                        "preferred_embedders, preferred_thumbnailers, parser_kwargs, "
+                        "component_settings, default_embedder, modified) "
+                        "VALUES (2, '{}', '{}', '{}', '{}', '{}', '', NOW())"
+                    )
+
+    def test_db_constraint_allows_pk_one(self):
+        """Database constraint allows the singleton with pk=1."""
+        instance = PipelineSettings.objects.create(id=1)
+        self.assertEqual(instance.pk, 1)
+
+
+class MissingSecretsCheckTestCase(TestCase):
+    """Tests for the documents.W003 system check (missing required secrets)."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_warns_when_configured_component_missing_required_secrets(self):
+        """System check warns when an active component is missing required secrets."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+        from opencontractserver.pipeline.base.settings_schema import (
+            PipelineSetting,
+            SettingType,
+        )
+
+        # Create a mock component class with a required secret
+        @dataclass
+        class MockSettings:
+            api_key: str = field(
+                default="",
+                metadata={
+                    "pipeline_setting": PipelineSetting(
+                        setting_type=SettingType.SECRET,
+                        required=True,
+                        description="Required API key",
+                    )
+                },
+            )
+
+        class MockComponent:
+            Settings = MockSettings
+
+        # Create a mock registry component definition
+        mock_comp_def = type(
+            "MockDef",
+            (),
+            {"component_class": MockComponent, "class_name": "mock.MockComponent"},
+        )()
+
+        # Set up PipelineSettings with this component as the preferred parser
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "mock.MockComponent"},
+        )
+
+        # No secrets configured — should warn
+        mock_registry = type(
+            "MockRegistry",
+            (),
+            {"get_by_class_name": lambda self, path: mock_comp_def},
+        )()
+
+        with patch(
+            "opencontractserver.pipeline.registry.get_registry",
+            return_value=mock_registry,
+        ):
+            warnings = check_configured_components_secrets(None)
+
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W003")
+        self.assertIn("mock.MockComponent", warnings[0].msg)
+        self.assertIn("api_key", warnings[0].msg)
+
+    def test_no_warning_when_secrets_are_configured(self):
+        """No warning when all required secrets are present."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+        from opencontractserver.pipeline.base.settings_schema import (
+            PipelineSetting,
+            SettingType,
+        )
+
+        @dataclass
+        class MockSettings:
+            api_key: str = field(
+                default="",
+                metadata={
+                    "pipeline_setting": PipelineSetting(
+                        setting_type=SettingType.SECRET,
+                        required=True,
+                        description="Required API key",
+                    )
+                },
+            )
+
+        class MockComponent:
+            Settings = MockSettings
+
+        mock_comp_def = type(
+            "MockDef",
+            (),
+            {"component_class": MockComponent, "class_name": "mock.MockComponent"},
+        )()
+
+        instance = PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "mock.MockComponent"},
+        )
+
+        # Configure the required secret
+        instance.set_secrets({"mock.MockComponent": {"api_key": "sk-test-key"}})
+        instance.save()
+
+        mock_registry = type(
+            "MockRegistry",
+            (),
+            {"get_by_class_name": lambda self, path: mock_comp_def},
+        )()
+
+        with patch(
+            "opencontractserver.pipeline.registry.get_registry",
+            return_value=mock_registry,
+        ):
+            warnings = check_configured_components_secrets(None)
+
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_component_has_no_required_secrets(self):
+        """No warning for components with only optional secrets."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+        from opencontractserver.pipeline.base.settings_schema import (
+            PipelineSetting,
+            SettingType,
+        )
+
+        @dataclass
+        class MockSettings:
+            api_key: str = field(
+                default="",
+                metadata={
+                    "pipeline_setting": PipelineSetting(
+                        setting_type=SettingType.SECRET,
+                        required=False,
+                        description="Optional API key",
+                    )
+                },
+            )
+
+        class MockComponent:
+            Settings = MockSettings
+
+        mock_comp_def = type(
+            "MockDef",
+            (),
+            {"component_class": MockComponent, "class_name": "mock.MockComponent"},
+        )()
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "mock.MockComponent"},
+        )
+
+        mock_registry = type(
+            "MockRegistry",
+            (),
+            {"get_by_class_name": lambda self, path: mock_comp_def},
+        )()
+
+        with patch(
+            "opencontractserver.pipeline.registry.get_registry",
+            return_value=mock_registry,
+        ):
+            warnings = check_configured_components_secrets(None)
+
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_no_pipeline_settings(self):
+        """No warning when PipelineSettings table is empty."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+
+        warnings = check_configured_components_secrets(None)
+        self.assertEqual(len(warnings), 0)
+
+    def test_check_handles_exception(self):
+        """check_configured_components_secrets returns [] when exception occurs."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+
+        with patch.object(
+            PipelineSettings.objects,
+            "exists",
+            side_effect=Exception("DB unavailable"),
+        ):
+            warnings = check_configured_components_secrets(None)
+            self.assertEqual(warnings, [])

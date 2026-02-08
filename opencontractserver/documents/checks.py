@@ -132,3 +132,91 @@ def check_modernbert_references(app_configs, **kwargs):
         pass
 
     return errors
+
+
+@register()
+def check_configured_components_secrets(app_configs, **kwargs):
+    """
+    Warn if actively configured pipeline components are missing required secrets.
+
+    Checks each component referenced in preferred_parsers, preferred_embedders,
+    preferred_thumbnailers, and default_embedder against its settings schema.
+    Reports any required secret fields that have no value stored.
+    """
+    errors = []
+
+    try:
+        from opencontractserver.documents.models import PipelineSettings
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_secret_settings,
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        if not PipelineSettings.objects.exists():
+            return errors
+
+        instance = PipelineSettings.get_instance(use_cache=False)
+        registry = get_registry()
+
+        # Collect all actively configured component paths
+        active_paths: set[str] = set()
+        for mapping in (
+            instance.preferred_parsers,
+            instance.preferred_embedders,
+            instance.preferred_thumbnailers,
+        ):
+            if mapping:
+                active_paths.update(mapping.values())
+        if instance.default_embedder:
+            active_paths.add(instance.default_embedder)
+
+        # Get stored secrets
+        stored_secrets = instance.get_secrets()
+
+        missing_components = []
+        for component_path in sorted(active_paths):
+            comp_def = registry.get_by_class_name(component_path)
+            if not comp_def or not comp_def.component_class:
+                continue
+
+            # Get required secret field names
+            schema = get_settings_schema(comp_def.component_class)
+            secret_names = get_secret_settings(comp_def.component_class)
+            required_secrets = [
+                name
+                for name in secret_names
+                if schema.get(name, {}).get("required", False)
+            ]
+
+            if not required_secrets:
+                continue
+
+            # Check which required secrets are missing
+            comp_secrets = stored_secrets.get(component_path, {})
+            missing = [s for s in required_secrets if not comp_secrets.get(s)]
+            if missing:
+                missing_components.append(
+                    f"{component_path} (missing: {', '.join(missing)})"
+                )
+
+        if missing_components:
+            errors.append(
+                Warning(
+                    "Configured pipeline components are missing required secrets: "
+                    + "; ".join(missing_components),
+                    hint=(
+                        "Configure secrets via the Pipeline Settings admin UI "
+                        "or the updateComponentSecrets GraphQL mutation. "
+                        "Components will fall back to environment variables or "
+                        "defaults if available."
+                    ),
+                    id="documents.W003",
+                )
+            )
+
+    except Exception:
+        # Don't fail startup if check can't run
+        pass
+
+    return errors
