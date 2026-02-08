@@ -9,6 +9,7 @@ Tests cover:
 - Edge cases and data integrity
 """
 
+import io
 import json
 import pathlib
 import zipfile
@@ -1039,6 +1040,64 @@ class TestV2ImportExceptionHandling(TransactionTestCase):
         # Should not raise exception - handles it gracefully
         import_agent_config(agent_config, self.corpus)
 
+    @mock.patch(
+        "opencontractserver.tasks.import_tasks_v2._setup_corpus_and_labels",
+        side_effect=Exception("Setup failed"),
+    )
+    def test_import_corpus_exception_handler(self, mock_setup):
+        """Test _import_corpus catches exceptions and returns None."""
+        from opencontractserver.tasks.import_tasks_v2 import _import_corpus
+
+        result = _import_corpus(
+            data_json={"annotated_docs": {}},
+            import_zip=None,
+            user_obj=self.user,
+            seed_corpus_id=None,
+            version="2.0",
+        )
+        self.assertIsNone(result)
+
+    @mock.patch(
+        "opencontractserver.tasks.import_tasks_v2.create_document_from_export_data",
+        side_effect=Exception("PDF corrupt"),
+    )
+    def test_import_document_with_annotations_exception(self, mock_create_doc):
+        """Test _import_document_with_annotations returns (None, {}) on error."""
+        from opencontractserver.tasks.import_tasks_v2 import (
+            _import_document_with_annotations,
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("doc.pdf", b"%PDF-1.4 minimal")
+        buf.seek(0)
+
+        with zipfile.ZipFile(buf, "r") as zf:
+            doc, annot_map = _import_document_with_annotations(
+                doc_filename="doc.pdf",
+                doc_data={"title": "T", "description": "", "page_count": 1},
+                import_zip=zf,
+                user_obj=self.user,
+                corpus_obj=self.corpus,
+                label_lookup={},
+                doc_label_lookup={},
+            )
+
+        self.assertIsNone(doc)
+        self.assertEqual(annot_map, {})
+
+    @mock.patch(
+        "opencontractserver.tasks.export_tasks.Notification.objects.create",
+        side_effect=Exception("DB error"),
+    )
+    def test_create_export_notification_exception(self, mock_create):
+        """Test _create_export_notification handles exceptions gracefully."""
+        from opencontractserver.tasks.export_tasks import _create_export_notification
+
+        export = UserExport.objects.create(backend_lock=False, creator=self.user)
+        # Should not raise - handles gracefully
+        _create_export_notification(export, "Test Corpus")
+
 
 class TestV2FullRoundTrip(TransactionTestCase):
     """Test complete V2 export/import round-trip."""
@@ -1137,6 +1196,35 @@ class TestV2FullRoundTrip(TransactionTestCase):
             page=0,
             creator=self.user,
         )
+
+    def test_export_content_modalities(self):
+        """Test that content_modalities is included in export when set."""
+        # Set content_modalities on the annotation
+        self.annot.content_modalities = ["IMAGE"]
+        self.annot.save(update_fields=["content_modalities"])
+
+        export = UserExport.objects.create(backend_lock=True, creator=self.user)
+
+        package_corpus_export_v2(
+            export_id=export.id,
+            corpus_pk=self.corpus.id,
+            include_conversations=False,
+        )
+
+        export.refresh_from_db()
+        with export.file.open("rb") as f:
+            with zipfile.ZipFile(f, "r") as zip_ref:
+                with zip_ref.open("data.json") as data_file:
+                    data = json.load(data_file)
+
+        # Find annotation in exported docs and check content_modalities
+        for doc_data in data["annotated_docs"].values():
+            for annot_data in doc_data.get("labelled_text", []):
+                if annot_data.get("content_modalities"):
+                    self.assertEqual(annot_data["content_modalities"], ["IMAGE"])
+                    return
+
+        self.fail("content_modalities not found in any exported annotation")
 
     def test_v2_export_import_round_trip(self):
         """Test full V2 export followed by import."""
@@ -1342,6 +1430,62 @@ class TestV2EdgeCases(TransactionTestCase):
                     data = json.load(data_file)
                     self.assertIn("conversations", data)
                     self.assertEqual(len(data["conversations"]), 1)
+
+    def test_import_zip_missing_data_json(self):
+        """Test importing a ZIP that has no data.json returns None."""
+        # Create a ZIP without data.json
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("readme.txt", "no data here")
+        buf.seek(0)
+
+        temp_file = TemporaryFileHandle.objects.create()
+        temp_file.file.save("bad.zip", ContentFile(buf.getvalue()))
+
+        result = import_corpus_v2(
+            temporary_file_handle_id=temp_file.id,
+            user_id=self.user.id,
+            seed_corpus_id=None,
+        )
+        self.assertIsNone(result)
+
+    def test_import_corpus_v2_invalid_handle(self):
+        """Test import_corpus_v2 with non-existent file handle returns None."""
+        result = import_corpus_v2(
+            temporary_file_handle_id=999999,
+            user_id=self.user.id,
+            seed_corpus_id=None,
+        )
+        self.assertIsNone(result)
+
+    @mock.patch(
+        "opencontractserver.tasks.import_tasks_v2._import_corpus",
+        side_effect=Exception("boom"),
+    )
+    def test_import_corpus_v2_exception_in_import_corpus(self, mock_import):
+        """Test import_corpus_v2 catches exceptions from _import_corpus."""
+        # Build a valid minimal ZIP with data.json
+        data = {
+            "annotated_docs": {},
+            "corpus": {"title": "X"},
+            "label_set": {"title": "LS"},
+            "doc_labels": {},
+            "text_labels": {},
+        }
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("data.json", json.dumps(data))
+        buf.seek(0)
+
+        temp_file = TemporaryFileHandle.objects.create()
+        temp_file.file.save("err.zip", ContentFile(buf.getvalue()))
+
+        result = import_corpus_v2(
+            temporary_file_handle_id=temp_file.id,
+            user_id=self.user.id,
+            seed_corpus_id=None,
+        )
+        self.assertIsNone(result)
 
     def test_import_without_optional_fields(self):
         """Test importing V2 export that's missing optional fields."""
