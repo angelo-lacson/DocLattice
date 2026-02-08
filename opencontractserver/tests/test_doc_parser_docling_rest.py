@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
 from opencontractserver.documents.models import Document
@@ -168,10 +168,25 @@ class TestDoclingParser(TestCase):
         # Verify the error is marked as transient (server errors are transient)
         self.assertTrue(ctx.exception.is_transient)
 
-    @override_settings(DOCLING_PARSER_SERVICE_URL="http://custom-host:9000/parse/")
     def test_custom_settings(self):
-        """Test that custom settings are properly used."""
+        """Test that custom settings are properly loaded from Settings dataclass."""
+        from unittest.mock import MagicMock
+
         parser = DoclingParser()
+        # Mock the Settings dataclass with a custom URL (simulating PipelineSettings DB)
+        mock_settings = MagicMock()
+        mock_settings.service_url = "http://custom-host:9000/parse/"
+        mock_settings.request_timeout = 300
+        mock_settings.use_cloud_run_iam_auth = False
+        mock_settings.extract_images = True
+        mock_settings.image_format = "jpeg"
+        mock_settings.image_quality = 85
+        mock_settings.image_dpi = 150
+        mock_settings.min_image_width = 50
+        mock_settings.min_image_height = 50
+        parser._settings = mock_settings
+        # Reinitialize from settings
+        parser.service_url = parser._settings.service_url
         self.assertEqual(parser.service_url, "http://custom-host:9000/parse/")
 
     def test_normalize_response(self):

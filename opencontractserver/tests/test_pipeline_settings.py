@@ -2,8 +2,12 @@
 Tests for the PipelineSettings singleton model and GraphQL endpoints.
 """
 
+from dataclasses import dataclass, field
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from graphene.test import Client
 
@@ -30,10 +34,10 @@ class PipelineSettingsModelTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_model_admin", password="admin", email="ps_model_admin@test.com"
         )
         self.regular_user = User.objects.create_user(
-            username="regular", password="regular"
+            username="ps_model_regular", password="regular"
         )
 
     def test_get_instance_creates_singleton(self):
@@ -50,15 +54,24 @@ class PipelineSettingsModelTestCase(TestCase):
         self.assertEqual(instance.pk, instance2.pk)
 
     def test_cannot_create_second_instance(self):
-        """Test that creating a second instance raises ValidationError."""
+        """Test that creating a second instance raises an error.
+
+        The singleton is enforced at both application level (ValidationError
+        in save()) and database level (CheckConstraint requiring pk=1).
+        Depending on the pk assigned, either error may fire first.
+        Uses a savepoint so IntegrityError doesn't abort the test transaction.
+        """
+        from django.db import transaction
+
         # Create the first instance
         PipelineSettings.get_instance()
 
         # Attempting to create a second instance should fail
-        with self.assertRaises(ValidationError):
-            PipelineSettings.objects.create(
-                preferred_parsers={"test": "test"},
-            )
+        with self.assertRaises((ValidationError, IntegrityError)):
+            with transaction.atomic():
+                PipelineSettings.objects.create(
+                    preferred_parsers={"test": "test"},
+                )
 
     def test_cannot_delete_singleton(self):
         """Test that deleting the singleton raises ValidationError."""
@@ -73,57 +86,57 @@ class PipelineSettingsModelTestCase(TestCase):
         PARSER_KWARGS={"test.parser.TestParser": {"option1": True}},
         DEFAULT_EMBEDDER="test.embedder.DefaultEmbedder",
     )
-    def test_get_preferred_parser_uses_db_then_fallback(self):
-        """Test that get_preferred_parser uses DB first, then Django settings."""
+    def test_get_preferred_parser_uses_db(self):
+        """Test that get_preferred_parser returns DB values (populated from Django settings on creation)."""
         # Delete existing instance and create new one to pick up test settings
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
-        # Initially should fallback to Django settings
+        # Initial DB values populated from Django settings via get_instance()
         self.assertEqual(
             instance.get_preferred_parser("application/pdf"),
             "test.parser.TestParser",
         )
 
-        # Set a value in the database
+        # Override with a new database value
         instance.preferred_parsers = {
             "application/pdf": "db.parser.DBParser",
         }
         instance.save()
 
-        # Now should use the database value
+        # Should use the updated database value
         self.assertEqual(
             instance.get_preferred_parser("application/pdf"),
             "db.parser.DBParser",
         )
 
-        # Unlisted MIME type should fallback to Django settings
+        # Unlisted MIME type returns None
         self.assertIsNone(instance.get_preferred_parser("text/plain"))
 
     @override_settings(
         DEFAULT_EMBEDDER="test.embedder.DefaultEmbedder",
     )
-    def test_get_default_embedder_uses_db_then_fallback(self):
-        """Test that get_default_embedder uses DB first, then Django settings."""
+    def test_get_default_embedder_uses_db(self):
+        """Test that get_default_embedder returns DB values (populated from Django settings on creation)."""
         # Delete existing instance to test creation with settings
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
-        # Initially should fallback to Django settings
+        # Initial DB value populated from Django settings via get_instance()
         self.assertEqual(
             instance.get_default_embedder(),
             "test.embedder.DefaultEmbedder",
         )
 
-        # Set a value in the database
+        # Override with a new database value
         instance.default_embedder = "db.embedder.NewDefault"
         instance.save()
 
-        # Now should use the database value
+        # Should use the updated database value
         self.assertEqual(instance.get_default_embedder(), "db.embedder.NewDefault")
 
-    def test_get_parser_kwargs_uses_db_then_fallback(self):
-        """Test that get_parser_kwargs uses DB first, then Django settings."""
+    def test_get_parser_kwargs_uses_db(self):
+        """Test that get_parser_kwargs returns DB values."""
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
@@ -139,11 +152,11 @@ class PipelineSettingsModelTestCase(TestCase):
         self.assertEqual(kwargs["timeout"], 60)
 
     def test_get_preferred_thumbnailer(self):
-        """Test that get_preferred_thumbnailer uses DB only (no fallback)."""
+        """Test that get_preferred_thumbnailer returns DB values."""
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
-        # Initially should return None (no Django settings fallback)
+        # Initially should return None (no thumbnailer defaults)
         self.assertIsNone(instance.get_preferred_thumbnailer("application/pdf"))
 
         # Set a value in the database
@@ -180,10 +193,10 @@ class PipelineSettingsGraphQLTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.regular_user = User.objects.create_user(
-            username="regular", password="regular"
+            username="ps_test_regular", password="regular"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -435,10 +448,10 @@ class PipelineSettingsSecretsTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.regular_user = User.objects.create_user(
-            username="regular", password="regular"
+            username="ps_test_regular", password="regular"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -692,7 +705,7 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
-            username="admin", password="admin", email="admin@test.com"
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
         )
         self.superuser_client = Client(
             schema, context_value=TestContext(self.superuser)
@@ -863,3 +876,732 @@ class PipelineSettingsEdgeCasesTestCase(TestCase):
         # But decryption should still work
         decrypted = instance.get_secrets()
         self.assertEqual(decrypted["test"]["key"], "value")
+
+    def test_secret_key_rotation_graceful_degradation(self):
+        """Test that get_secrets returns {} when SECRET_KEY changes."""
+        instance = PipelineSettings.get_instance()
+
+        # Encrypt secrets with current SECRET_KEY
+        instance.set_secrets({"test.parser": {"api_key": "secret-value"}})
+        instance.save()
+        instance.refresh_from_db()
+
+        # Verify secrets are readable with original key
+        self.assertEqual(
+            instance.get_secrets()["test.parser"]["api_key"], "secret-value"
+        )
+
+        # Simulate SECRET_KEY rotation - secrets become unrecoverable
+        with self.settings(SECRET_KEY="completely-different-secret-key-12345"):
+            instance.refresh_from_db()
+            result = instance.get_secrets()
+            self.assertEqual(
+                result, {}, "Should return empty dict when SECRET_KEY has changed"
+            )
+
+
+class PipelineSettingsIntegrationTestCase(TestCase):
+    """Integration tests: GraphQL mutation → DB → runtime component selection."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+
+        self.superuser = User.objects.create_superuser(
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        PipelineSettings.objects.all().delete()
+
+    def test_graphql_update_changes_runtime_parser_selection(self):
+        """GraphQL mutation updates DB, which changes runtime parser selection."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if len(registry.parsers) < 2:
+            self.skipTest("Need at least 2 registered parsers for this test")
+
+        parser_a = registry.parsers[0]
+        parser_b = registry.parsers[1]
+
+        # Set initial parser via GraphQL
+        mutation = """
+            mutation UpdatePipelineSettings($preferredParsers: GenericScalar) {
+                updatePipelineSettings(preferredParsers: $preferredParsers) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation,
+            variables={"preferredParsers": {"application/pdf": parser_a.class_name}},
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Verify runtime selection returns parser_a
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(
+            instance.get_preferred_parser("application/pdf"),
+            parser_a.class_name,
+        )
+
+        # Update to parser_b via GraphQL
+        result = self.superuser_client.execute(
+            mutation,
+            variables={"preferredParsers": {"application/pdf": parser_b.class_name}},
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Verify runtime selection now returns parser_b
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(
+            instance.get_preferred_parser("application/pdf"),
+            parser_b.class_name,
+        )
+
+    def test_graphql_update_changes_runtime_embedder_selection(self):
+        """GraphQL mutation updates default embedder used at runtime."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if not registry.embedders:
+            self.skipTest("Need at least 1 registered embedder for this test")
+
+        embedder = registry.embedders[0]
+
+        mutation = """
+            mutation UpdatePipelineSettings($defaultEmbedder: String) {
+                updatePipelineSettings(defaultEmbedder: $defaultEmbedder) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation,
+            variables={"defaultEmbedder": embedder.class_name},
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Verify runtime selection returns the updated embedder
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(instance.get_default_embedder(), embedder.class_name)
+
+    def test_reset_restores_django_defaults_for_runtime(self):
+        """Reset mutation restores Django defaults, affecting runtime selection."""
+        # Set custom parser
+        instance = PipelineSettings.get_instance()
+        instance.preferred_parsers = {"application/pdf": "custom.Parser"}
+        instance.save()
+        PipelineSettings._invalidate_cache()
+
+        self.assertEqual(
+            PipelineSettings.get_instance(use_cache=False).get_preferred_parser(
+                "application/pdf"
+            ),
+            "custom.Parser",
+        )
+
+        # Reset via GraphQL
+        mutation = """
+            mutation {
+                resetPipelineSettings {
+                    ok
+                    message
+                }
+            }
+        """
+        result = self.superuser_client.execute(mutation)
+        self.assertTrue(result["data"]["resetPipelineSettings"]["ok"])
+
+        # Runtime selection should now return Django default (or None)
+        from django.conf import settings as django_settings
+
+        expected = getattr(django_settings, "PREFERRED_PARSERS", {}).get(
+            "application/pdf"
+        )
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(
+            instance.get_preferred_parser("application/pdf"),
+            expected,
+        )
+
+
+class PipelineSettingsSystemCheckTestCase(TestCase):
+    """Tests for the documents.W001 system check."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "some.parser.Parser"},
+        PREFERRED_EMBEDDERS={},
+        DEFAULT_EMBEDDER="",
+    )
+    def test_warns_when_db_empty_but_django_configured(self):
+        """System check warns when DB preferences are empty but Django settings exist."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        # Create PipelineSettings with empty preferences
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={},
+            preferred_embedders={},
+            default_embedder="",
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W001")
+        self.assertIn("migrate_pipeline_settings", warnings[0].hint)
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "some.parser.Parser"},
+    )
+    def test_no_warning_when_db_has_preferences(self):
+        """No warning when DB preferences are populated."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "some.parser.Parser"},
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 0)
+
+    @override_settings(
+        PREFERRED_PARSERS={},
+        PREFERRED_EMBEDDERS={},
+        DEFAULT_EMBEDDER="",
+    )
+    def test_no_warning_when_both_empty(self):
+        """No warning when both DB and Django settings are empty."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={},
+            preferred_embedders={},
+            default_embedder="",
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_no_pipeline_settings_row(self):
+        """No warning when PipelineSettings table is empty (pre-migration)."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        warnings = check_pipeline_settings_populated(None)
+        self.assertEqual(len(warnings), 0)
+
+
+class ModernBERTDetectionCheckTestCase(TestCase):
+    """Tests for the documents.W002 system check (ModernBERT detection)."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_warns_when_modernbert_in_preferred_embedders(self):
+        """System check warns when preferred_embedders references ModernBERT."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_embedders={
+                "application/pdf": "opencontractserver.pipeline.embedders"
+                ".modern_bert_embedder.ModernBERTEmbedder"
+            },
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W002")
+        self.assertIn("ModernBERT", warnings[0].msg)
+
+    def test_warns_when_modernbert_is_default_embedder(self):
+        """System check warns when default_embedder is a ModernBERT path."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            default_embedder="opencontractserver.pipeline.embedders"
+            ".minn_modern_bert_embedder.MinnModernBERTEmbedder",
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W002")
+
+    def test_no_warning_when_no_modernbert_references(self):
+        """No warning when PipelineSettings doesn't reference ModernBERT."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_embedders={"application/pdf": "some.other.Embedder"},
+            default_embedder="some.other.DefaultEmbedder",
+        )
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_no_pipeline_settings(self):
+        """No warning when PipelineSettings table is empty."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        warnings = check_modernbert_references(None)
+        self.assertEqual(len(warnings), 0)
+
+
+class CheckExceptionHandlingTestCase(TestCase):
+    """Tests for exception handling in Django system checks."""
+
+    def test_pipeline_settings_check_handles_exception(self):
+        """check_pipeline_settings_populated returns [] when exception occurs."""
+        from opencontractserver.documents.checks import (
+            check_pipeline_settings_populated,
+        )
+
+        with patch.object(
+            PipelineSettings.objects, "exists", side_effect=Exception("DB unavailable")
+        ):
+            warnings = check_pipeline_settings_populated(None)
+            self.assertEqual(warnings, [])
+
+    def test_modernbert_check_handles_exception(self):
+        """check_modernbert_references returns [] when exception occurs."""
+        from opencontractserver.documents.checks import check_modernbert_references
+
+        with patch.object(
+            PipelineSettings.objects, "exists", side_effect=Exception("DB unavailable")
+        ):
+            warnings = check_modernbert_references(None)
+            self.assertEqual(warnings, [])
+
+
+class JSONSizeValidationTestCase(TestCase):
+    """Tests for JSON field size validation in mutations."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+
+        self.superuser = User.objects.create_superuser(
+            username="ps_test_admin", password="admin", email="ps_test_admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+        PipelineSettings.objects.all().delete()
+        PipelineSettings.get_instance()
+
+    def test_oversized_parser_kwargs_rejected(self):
+        """Test that oversized parser_kwargs are rejected."""
+        mutation = """
+            mutation UpdatePipelineSettings($parserKwargs: GenericScalar) {
+                updatePipelineSettings(parserKwargs: $parserKwargs) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # Create a payload exceeding 10KB
+        large_kwargs = {"some.parser.Path": {"data": "x" * 15000}}
+
+        result = self.superuser_client.execute(
+            mutation, variables={"parserKwargs": large_kwargs}
+        )
+        self.assertFalse(result["data"]["updatePipelineSettings"]["ok"])
+        self.assertIn("exceeds", result["data"]["updatePipelineSettings"]["message"])
+
+    def test_normal_sized_parser_kwargs_accepted(self):
+        """Test that normal-sized parser_kwargs are accepted."""
+        mutation = """
+            mutation UpdatePipelineSettings($parserKwargs: GenericScalar) {
+                updatePipelineSettings(parserKwargs: $parserKwargs) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        normal_kwargs = {"some.parser.Path": {"force_ocr": True, "timeout": 60}}
+
+        result = self.superuser_client.execute(
+            mutation, variables={"parserKwargs": normal_kwargs}
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+
+class PipelineSettingsSchemaMethodsTestCase(TestCase):
+    """Tests for PipelineSettings component schema and validation methods."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_get_component_schema_returns_schema(self):
+        """get_component_schema returns schema for a registered component."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        # Find a component that has a Settings dataclass
+        for comp in registry.parsers + registry.embedders:
+            if comp.settings_schema:
+                schema = instance.get_component_schema(comp.class_name)
+                self.assertIsInstance(schema, dict)
+                # Schema should have at least one setting
+                if schema:
+                    first_setting = next(iter(schema.values()))
+                    self.assertIn("type", first_setting)
+                break
+
+    def test_get_component_schema_not_found_returns_empty(self):
+        """get_component_schema returns empty dict for unknown components."""
+        instance = PipelineSettings.get_instance()
+        schema = instance.get_component_schema("nonexistent.module.FakeParser")
+        self.assertEqual(schema, {})
+
+    def test_get_component_schema_by_name(self):
+        """get_component_schema looks up by simple name if full path fails."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        if registry.parsers:
+            parser = registry.parsers[0]
+            # Look up by simple name
+            schema = instance.get_component_schema(parser.name)
+            # May or may not have settings, but should not raise
+            self.assertIsInstance(schema, dict)
+
+    def test_validate_all_components_returns_dict(self):
+        """validate_all_components returns a dict of missing settings."""
+        instance = PipelineSettings.get_instance()
+        result = instance.validate_all_components()
+        self.assertIsInstance(result, dict)
+        # Each value should be a list of setting names
+        for class_path, missing in result.items():
+            self.assertIsInstance(class_path, str)
+            self.assertIsInstance(missing, list)
+
+    def test_get_all_component_schemas_returns_dict(self):
+        """get_all_component_schemas returns schemas for all components."""
+        instance = PipelineSettings.get_instance()
+        schemas = instance.get_all_component_schemas()
+        self.assertIsInstance(schemas, dict)
+        # Each value should be a dict of setting schemas
+        for class_path, comp_schema in schemas.items():
+            self.assertIsInstance(class_path, str)
+            self.assertIsInstance(comp_schema, dict)
+
+    def test_get_component_schema_marks_secret_has_value(self):
+        """get_component_schema sets has_value for secrets without exposing values."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        instance = PipelineSettings.get_instance()
+        registry = get_registry()
+
+        # Find a component with secret settings
+        for comp in registry.parsers + registry.embedders:
+            if comp.settings_schema:
+                schema_info = {s["name"]: s for s in comp.settings_schema}
+                secret_settings = [
+                    n for n, s in schema_info.items() if s.get("type") == "secret"
+                ]
+                if secret_settings:
+                    # Set a secret value
+                    instance.set_secrets(
+                        {comp.class_name: {secret_settings[0]: "test-secret"}}
+                    )
+                    instance.save()
+
+                    schema = instance.get_component_schema(comp.class_name)
+                    if secret_settings[0] in schema:
+                        self.assertTrue(schema[secret_settings[0]]["has_value"])
+                        # Secret value must NOT be exposed
+                        self.assertIsNone(schema[secret_settings[0]]["current_value"])
+                    break
+
+
+class RegistryGetByNameTestCase(TestCase):
+    """Tests for PipelineComponentRegistry.get_by_name."""
+
+    def test_get_by_name_finds_component(self):
+        """get_by_name finds components by simple class name."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if registry.parsers:
+            parser = registry.parsers[0]
+            result = registry.get_by_name(parser.name)
+            self.assertIsNotNone(result)
+            self.assertEqual(result.name, parser.name)
+
+    def test_get_by_name_returns_none_for_unknown(self):
+        """get_by_name returns None for unknown component names."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        result = registry.get_by_name("NonExistentComponent12345")
+        self.assertIsNone(result)
+
+
+class SingletonConstraintTestCase(TestCase):
+    """Tests for the database-level singleton constraint on PipelineSettings."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_db_constraint_rejects_pk_not_one(self):
+        """Database constraint prevents creating PipelineSettings with pk != 1."""
+        from django.db import connection, transaction
+
+        # Create the singleton with pk=1
+        PipelineSettings.objects.create(id=1)
+
+        # Attempt to insert with pk=2 via raw SQL (bypassing save() validation).
+        # Wrapped in a savepoint so IntegrityError doesn't abort the test transaction.
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "INSERT INTO documents_pipelinesettings (id, preferred_parsers, "
+                        "preferred_embedders, preferred_thumbnailers, parser_kwargs, "
+                        "component_settings, default_embedder, modified) "
+                        "VALUES (2, '{}', '{}', '{}', '{}', '{}', '', NOW())"
+                    )
+
+    def test_db_constraint_allows_pk_one(self):
+        """Database constraint allows the singleton with pk=1."""
+        instance = PipelineSettings.objects.create(id=1)
+        self.assertEqual(instance.pk, 1)
+
+
+class MissingSecretsCheckTestCase(TestCase):
+    """Tests for the documents.W003 system check (missing required secrets)."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+        PipelineSettings.objects.all().delete()
+
+    def test_warns_when_configured_component_missing_required_secrets(self):
+        """System check warns when an active component is missing required secrets."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+        from opencontractserver.pipeline.base.settings_schema import (
+            PipelineSetting,
+            SettingType,
+        )
+
+        # Create a mock component class with a required secret
+        @dataclass
+        class MockSettings:
+            api_key: str = field(
+                default="",
+                metadata={
+                    "pipeline_setting": PipelineSetting(
+                        setting_type=SettingType.SECRET,
+                        required=True,
+                        description="Required API key",
+                    )
+                },
+            )
+
+        class MockComponent:
+            Settings = MockSettings
+
+        # Create a mock registry component definition
+        mock_comp_def = type(
+            "MockDef",
+            (),
+            {"component_class": MockComponent, "class_name": "mock.MockComponent"},
+        )()
+
+        # Set up PipelineSettings with this component as the preferred parser
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "mock.MockComponent"},
+        )
+
+        # No secrets configured — should warn
+        mock_registry = type(
+            "MockRegistry",
+            (),
+            {"get_by_class_name": lambda self, path: mock_comp_def},
+        )()
+
+        with patch(
+            "opencontractserver.pipeline.registry.get_registry",
+            return_value=mock_registry,
+        ):
+            warnings = check_configured_components_secrets(None)
+
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0].id, "documents.W003")
+        self.assertIn("mock.MockComponent", warnings[0].msg)
+        self.assertIn("api_key", warnings[0].msg)
+
+    def test_no_warning_when_secrets_are_configured(self):
+        """No warning when all required secrets are present."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+        from opencontractserver.pipeline.base.settings_schema import (
+            PipelineSetting,
+            SettingType,
+        )
+
+        @dataclass
+        class MockSettings:
+            api_key: str = field(
+                default="",
+                metadata={
+                    "pipeline_setting": PipelineSetting(
+                        setting_type=SettingType.SECRET,
+                        required=True,
+                        description="Required API key",
+                    )
+                },
+            )
+
+        class MockComponent:
+            Settings = MockSettings
+
+        mock_comp_def = type(
+            "MockDef",
+            (),
+            {"component_class": MockComponent, "class_name": "mock.MockComponent"},
+        )()
+
+        instance = PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "mock.MockComponent"},
+        )
+
+        # Configure the required secret
+        instance.set_secrets({"mock.MockComponent": {"api_key": "sk-test-key"}})
+        instance.save()
+
+        mock_registry = type(
+            "MockRegistry",
+            (),
+            {"get_by_class_name": lambda self, path: mock_comp_def},
+        )()
+
+        with patch(
+            "opencontractserver.pipeline.registry.get_registry",
+            return_value=mock_registry,
+        ):
+            warnings = check_configured_components_secrets(None)
+
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_component_has_no_required_secrets(self):
+        """No warning for components with only optional secrets."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+        from opencontractserver.pipeline.base.settings_schema import (
+            PipelineSetting,
+            SettingType,
+        )
+
+        @dataclass
+        class MockSettings:
+            api_key: str = field(
+                default="",
+                metadata={
+                    "pipeline_setting": PipelineSetting(
+                        setting_type=SettingType.SECRET,
+                        required=False,
+                        description="Optional API key",
+                    )
+                },
+            )
+
+        class MockComponent:
+            Settings = MockSettings
+
+        mock_comp_def = type(
+            "MockDef",
+            (),
+            {"component_class": MockComponent, "class_name": "mock.MockComponent"},
+        )()
+
+        PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "mock.MockComponent"},
+        )
+
+        mock_registry = type(
+            "MockRegistry",
+            (),
+            {"get_by_class_name": lambda self, path: mock_comp_def},
+        )()
+
+        with patch(
+            "opencontractserver.pipeline.registry.get_registry",
+            return_value=mock_registry,
+        ):
+            warnings = check_configured_components_secrets(None)
+
+        self.assertEqual(len(warnings), 0)
+
+    def test_no_warning_when_no_pipeline_settings(self):
+        """No warning when PipelineSettings table is empty."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+
+        warnings = check_configured_components_secrets(None)
+        self.assertEqual(len(warnings), 0)
+
+    def test_check_handles_exception(self):
+        """check_configured_components_secrets returns [] when exception occurs."""
+        from opencontractserver.documents.checks import (
+            check_configured_components_secrets,
+        )
+
+        with patch.object(
+            PipelineSettings.objects,
+            "exists",
+            side_effect=Exception("DB unavailable"),
+        ):
+            warnings = check_configured_components_secrets(None)
+            self.assertEqual(warnings, [])

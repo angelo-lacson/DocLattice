@@ -10,20 +10,24 @@ CI environments have the required services running via docker compose.
 
 Run these tests:
     docker compose -f test.yml run django pytest opencontractserver/tests/test_multimodal_integration.py -v
+
+Note: These tests populate PipelineSettings from environment variables to test
+the actual production configuration flow. The env vars are defined in
+.envs/.test/.django and include MULTIMODAL_EMBEDDER_URL and MULTIMODAL_EMBEDDER_API_KEY.
 """
 
 import base64
+import os
 from io import BytesIO
 
 import pytest
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, TransactionTestCase
 from PIL import Image
 
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import Document, PipelineSettings
 from opencontractserver.pipeline.embedders.multimodal_microservice import (
     MultimodalMicroserviceEmbedder,
 )
@@ -38,6 +42,50 @@ User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 
+def setup_pipeline_settings_from_env() -> None:
+    """
+    Populate PipelineSettings database from environment variables.
+
+    This mirrors the production flow where settings are loaded from env vars
+    via the migrate_pipeline_settings management command. For integration tests,
+    we do this directly to ensure PipelineSettings (single source of truth)
+    has the correct values.
+    """
+    # Get the singleton PipelineSettings instance
+    pipeline_settings = PipelineSettings.get_instance()
+
+    # Build component settings from env vars
+    clip_embedder_path = (
+        "opencontractserver.pipeline.embedders."
+        "multimodal_microservice.CLIPMicroserviceEmbedder"
+    )
+
+    component_settings = pipeline_settings.component_settings or {}
+    component_settings[clip_embedder_path] = {
+        "clip_embedder_url": os.environ.get(
+            "MULTIMODAL_EMBEDDER_URL", "http://multimodal-embedder:8000"
+        ),
+        "clip_embedder_api_key": os.environ.get("MULTIMODAL_EMBEDDER_API_KEY", ""),
+        "use_cloud_run_iam_auth": os.environ.get(
+            "USE_CLOUD_RUN_IAM_AUTH", "false"
+        ).lower()
+        in ("true", "1", "yes"),
+    }
+
+    # Also set up docling parser settings
+    docling_parser_path = (
+        "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser"
+    )
+    component_settings[docling_parser_path] = {
+        "service_url": os.environ.get(
+            "DOCLING_PARSER_SERVICE_URL", "http://docling-parser:8000/parse/"
+        ),
+    }
+
+    pipeline_settings.component_settings = component_settings
+    pipeline_settings.save()
+
+
 class TestMultimodalEmbedderService(TestCase):
     """
     Test multimodal embedder service connectivity and basic operations.
@@ -47,6 +95,8 @@ class TestMultimodalEmbedderService(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # Populate PipelineSettings from env vars (single source of truth)
+        setup_pipeline_settings_from_env()
         cls.embedder = MultimodalMicroserviceEmbedder()
 
     def test_text_embedding_returns_768_dimensions(self):
@@ -161,6 +211,8 @@ class TestMultimodalEmbedderBatch(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # Populate PipelineSettings from env vars (single source of truth)
+        setup_pipeline_settings_from_env()
         cls.embedder = MultimodalMicroserviceEmbedder()
 
     def test_batch_text_embedding(self):
@@ -234,6 +286,8 @@ class TestDoclingImageExtraction(TransactionTestCase):
     """
 
     def setUp(self):
+        # Populate PipelineSettings from env vars (single source of truth)
+        setup_pipeline_settings_from_env()
         self.user = User.objects.create_user(
             username="docling_image_test_user",
             password="testpass123",
@@ -324,6 +378,8 @@ class TestFullMultimodalPipeline(TransactionTestCase):
     """
 
     def setUp(self):
+        # Populate PipelineSettings from env vars (single source of truth)
+        setup_pipeline_settings_from_env()
         self.user = User.objects.create_user(
             username="full_pipeline_test_user",
             password="testpass123",
@@ -406,24 +462,50 @@ class TestFullMultimodalPipeline(TransactionTestCase):
     def test_embedder_handles_missing_service_gracefully(self):
         """
         Test that embedder returns None (not exception) when service URL is empty.
-        """
-        # Create embedder with no service URL
-        embedder = MultimodalMicroserviceEmbedder()
 
-        # Temporarily override the setting
-        original_url = getattr(settings, "MULTIMODAL_EMBEDDER_URL", "")
+        This test verifies graceful degradation when the PipelineSettings DB
+        has an empty service URL configured.
+        """
+        # Update PipelineSettings to have empty URL for CLIP embedder
+        # This simulates a misconfigured or not-yet-configured deployment
+        pipeline_settings = PipelineSettings.get_instance()
+        clip_embedder_path = (
+            "opencontractserver.pipeline.embedders."
+            "multimodal_microservice.CLIPMicroserviceEmbedder"
+        )
+
+        # Store original settings to restore later
+        original_settings = (
+            (pipeline_settings.component_settings or {})
+            .get(clip_embedder_path, {})
+            .copy()
+        )
+
+        # Set empty URL in PipelineSettings DB
+        component_settings = pipeline_settings.component_settings or {}
+        component_settings[clip_embedder_path] = {
+            "clip_embedder_url": "",
+            "clip_embedder_api_key": "",
+            "use_cloud_run_iam_auth": False,
+        }
+        pipeline_settings.component_settings = component_settings
+        pipeline_settings.save()
+
         try:
-            settings.MULTIMODAL_EMBEDDER_URL = ""
+            # Create new embedder that will read the empty URL from DB
+            embedder = MultimodalMicroserviceEmbedder()
 
             # Should return None, not raise exception
-            result = embedder.embed_text("test", multimodal_embedder_url="")
+            result = embedder.embed_text("test")
             # With empty URL, should return None (no exception)
             self.assertIsNone(
                 result, "Embedder should return None when service URL is empty"
             )
-
         finally:
-            settings.MULTIMODAL_EMBEDDER_URL = original_url
+            # Restore original settings
+            component_settings[clip_embedder_path] = original_settings
+            pipeline_settings.component_settings = component_settings
+            pipeline_settings.save()
 
     def _extract_image_data(self, token: dict) -> str | None:
         """
@@ -455,6 +537,8 @@ class TestMultimodalEmbedderErrorHandling(TestCase):
     """Test error handling and edge cases."""
 
     def setUp(self):
+        # Populate PipelineSettings from env vars (single source of truth)
+        setup_pipeline_settings_from_env()
         self.embedder = MultimodalMicroserviceEmbedder()
 
     def test_empty_text_handling(self):

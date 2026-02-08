@@ -2,10 +2,12 @@ import importlib
 import os
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
 from graphene.test import Client
 
 from config.graphql.schema import schema
+from opencontractserver.documents.models import PipelineSettings
 from opencontractserver.pipeline.registry import reset_registry
 
 User = get_user_model()
@@ -216,7 +218,31 @@ class TestPostProcessor(BasePostProcessor):
         self.user = User.objects.create_user(
             username="testuser", password="testpassword"
         )
+        self.superuser = User.objects.create_superuser(
+            username="adminuser", password="adminpassword"
+        )
         self.client = Client(schema, context_value=TestContext(self.user))
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+
+        settings_instance = PipelineSettings.get_instance(use_cache=False)
+        settings_instance.preferred_parsers = {
+            "application/pdf": "opencontractserver.pipeline.parsers.test_parser.TestParser"
+        }
+        settings_instance.preferred_embedders = {
+            "application/pdf": "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
+        }
+        settings_instance.preferred_thumbnailers = {
+            "application/pdf": "opencontractserver.pipeline.thumbnailers.test_thumbnailer.TestThumbnailer"
+        }
+        settings_instance.default_embedder = (
+            "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
+        )
+        settings_instance.component_settings = {
+            "opencontractserver.pipeline.post_processors.test_post_processor.TestPostProcessor": {}
+        }
+        settings_instance.save()
 
     def test_pipeline_components_query(self):
         """Test querying all pipeline components without any filters."""
@@ -284,6 +310,39 @@ class TestPostProcessor(BasePostProcessor):
         self.assertIn("TestThumbnailer", thumbnailer_names)
         self.assertIn("TestPostProcessor", post_processor_names)
 
+    def test_pipeline_components_query_requires_auth(self):
+        """Test that pipelineComponents requires authentication."""
+        query = """
+        query {
+            pipelineComponents {
+                parsers {
+                    name
+                }
+            }
+        }
+        """
+        client = Client(schema, context_value=TestContext(AnonymousUser()))
+        result = client.execute(query)
+        self.assertIsNotNone(result.get("errors"))
+
+    def test_pipeline_components_query_non_superuser_filters_configured(self):
+        """Test non-superusers only see configured components."""
+        query = """
+        query {
+            pipelineComponents {
+                parsers {
+                    name
+                }
+            }
+        }
+        """
+        result = self.client.execute(query)
+        self.assertIsNone(result.get("errors"))
+        parsers = result["data"]["pipelineComponents"]["parsers"]
+        parser_names = [parser["name"] for parser in parsers]
+        self.assertIn("TestParser", parser_names)
+        self.assertNotIn("DoclingParser", parser_names)
+
     def test_pipeline_components_query_with_mimetype(self):
         """Test querying pipeline components filtered by mimetype."""
         query = """
@@ -324,7 +383,7 @@ class TestPostProcessor(BasePostProcessor):
 
         variables = {"mimetype": "PDF"}  # This should match the backend enum names
 
-        result = self.client.execute(query, variables=variables)
+        result = self.superuser_client.execute(query, variables=variables)
         self.assertIsNone(result.get("errors"))
 
         data = result["data"]["pipelineComponents"]
@@ -378,7 +437,7 @@ class TestPostProcessor(BasePostProcessor):
 
         variables = {"mimetype": "DOCX"}
 
-        result = self.client.execute(query, variables=variables)
+        result = self.superuser_client.execute(query, variables=variables)
         self.assertIsNone(result.get("errors"))
 
         data = result["data"]["pipelineComponents"]

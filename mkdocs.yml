@@ -97,9 +97,6 @@ nav:
   - Pipelines:
       - Pipeline Overview: pipelines/pipeline_overview.md
       - Docling Parser: pipelines/docling_parser.md
-  - Embedders:
-      - ModernBERT Embedder: embedders/modernbert_embedder.md
-      - MiniLM ModernBERT Embedder: embedders/minn_modernbert_embedder.md
   - Frontend:
       - Routing System: frontend/routing_system.md
       - Document Rendering: frontend/document_rendering_and_annotation.md

@@ -12,15 +12,19 @@ the Docsling microservice implementation.
 import logging
 import os
 import tempfile
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from django.conf import settings
 from django.core.files.storage import default_storage
 
 from opencontractserver.annotations.models import TOKEN_LABEL
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
+from opencontractserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
+)
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
     OpenContractDocExport,
@@ -49,13 +53,8 @@ class LlamaParseParser(BaseParser):
     returning bounding boxes for various document elements (titles, text,
     tables, figures, lists).
 
-    Configuration via environment variables:
-        - LLAMAPARSE_API_KEY: API key for LlamaParse (required)
-        - LLAMAPARSE_RESULT_TYPE: Output type (default: "json")
-        - LLAMAPARSE_EXTRACT_LAYOUT: Whether to extract layout (default: True)
-        - LLAMAPARSE_NUM_WORKERS: Number of parallel workers (default: 4)
-        - LLAMAPARSE_LANGUAGE: Document language (default: "en")
-        - LLAMAPARSE_VERBOSE: Enable verbose logging (default: False)
+    Settings are loaded from PipelineSettings database. Use the management
+    command `migrate_pipeline_settings` to seed initial values from environment.
     """
 
     title = "LlamaParse Parser"
@@ -87,28 +86,152 @@ class LlamaParseParser(BaseParser):
         "code": "Code Block",
     }
 
+    @dataclass
+    class Settings:
+        """Configuration schema for LlamaParseParser."""
+
+        api_key: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.SECRET,
+                    required=True,
+                    description="LlamaParse API key (from LlamaIndex Cloud)",
+                    env_var="LLAMAPARSE_API_KEY",
+                )
+            },
+        )
+        result_type: str = field(
+            default="json",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Output format: json, markdown, or text",
+                    env_var="LLAMAPARSE_RESULT_TYPE",
+                )
+            },
+        )
+        extract_layout: bool = field(
+            default=True,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Extract layout information with bounding boxes",
+                    env_var="LLAMAPARSE_EXTRACT_LAYOUT",
+                )
+            },
+        )
+        num_workers: int = field(
+            default=4,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Number of parallel workers for processing",
+                    env_var="LLAMAPARSE_NUM_WORKERS",
+                )
+            },
+        )
+        language: str = field(
+            default="en",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Document language code (e.g., en, es, fr)",
+                    env_var="LLAMAPARSE_LANGUAGE",
+                )
+            },
+        )
+        verbose: bool = field(
+            default=False,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Enable verbose logging from LlamaParse",
+                    env_var="LLAMAPARSE_VERBOSE",
+                )
+            },
+        )
+        extract_images: bool = field(
+            default=True,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Extract images from PDF for multimodal processing",
+                    env_var="LLAMAPARSE_EXTRACT_IMAGES",
+                )
+            },
+        )
+        image_format: str = field(
+            default="jpeg",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Format for extracted images (jpeg, png, webp)",
+                    env_var="LLAMAPARSE_IMAGE_FORMAT",
+                )
+            },
+        )
+        image_quality: int = field(
+            default=85,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="JPEG quality for extracted images (1-100)",
+                    env_var="LLAMAPARSE_IMAGE_QUALITY",
+                )
+            },
+        )
+        image_dpi: int = field(
+            default=150,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="DPI for cropped images",
+                    env_var="LLAMAPARSE_IMAGE_DPI",
+                )
+            },
+        )
+        min_image_width: int = field(
+            default=50,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Minimum width for extracted images (pixels)",
+                    env_var="LLAMAPARSE_MIN_IMAGE_WIDTH",
+                )
+            },
+        )
+        min_image_height: int = field(
+            default=50,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Minimum height for extracted images (pixels)",
+                    env_var="LLAMAPARSE_MIN_IMAGE_HEIGHT",
+                )
+            },
+        )
+
     def __init__(self):
-        """Initialize the LlamaParse parser with configuration from settings."""
-        super().__init__()
+        """Initialize the LlamaParse parser with settings from PipelineSettings."""
+        super().__init__()  # Loads settings via PipelineComponentBase
 
-        # Get API key from settings (which reads from env vars, supporting both
-        # LLAMAPARSE_API_KEY and LLAMA_CLOUD_API_KEY)
-        self.api_key = getattr(settings, "LLAMAPARSE_API_KEY", "")
+        # Access settings via the settings property (populated from PipelineSettings DB)
+        # Use dataclass defaults if settings not yet loaded from database
+        s = self.settings if self.settings is not None else self.Settings()
 
-        # Get other configuration options
-        self.result_type = getattr(settings, "LLAMAPARSE_RESULT_TYPE", "json")
-        self.extract_layout = getattr(settings, "LLAMAPARSE_EXTRACT_LAYOUT", True)
-        self.num_workers = getattr(settings, "LLAMAPARSE_NUM_WORKERS", 4)
-        self.language = getattr(settings, "LLAMAPARSE_LANGUAGE", "en")
-        self.verbose = getattr(settings, "LLAMAPARSE_VERBOSE", False)
-
-        # Image extraction configuration
-        self.extract_images = getattr(settings, "LLAMAPARSE_EXTRACT_IMAGES", True)
-        self.image_format = getattr(settings, "LLAMAPARSE_IMAGE_FORMAT", "jpeg")
-        self.image_quality = getattr(settings, "LLAMAPARSE_IMAGE_QUALITY", 85)
-        self.image_dpi = getattr(settings, "LLAMAPARSE_IMAGE_DPI", 150)
-        self.min_image_width = getattr(settings, "LLAMAPARSE_MIN_IMAGE_WIDTH", 50)
-        self.min_image_height = getattr(settings, "LLAMAPARSE_MIN_IMAGE_HEIGHT", 50)
+        self.api_key = s.api_key
+        self.result_type = s.result_type
+        self.extract_layout = s.extract_layout
+        self.num_workers = s.num_workers
+        self.language = s.language
+        self.verbose = s.verbose
+        self.extract_images = s.extract_images
+        self.image_format = s.image_format
+        self.image_quality = s.image_quality
+        self.image_dpi = s.image_dpi
+        self.min_image_width = s.min_image_width
+        self.min_image_height = s.min_image_height
 
         logger.info(
             f"LlamaParseParser initialized with extract_layout={self.extract_layout}, "
@@ -189,7 +312,11 @@ class LlamaParseParser(BaseParser):
             with default_storage.open(doc_path, "rb") as doc_file:
                 doc_bytes = doc_file.read()
 
-            # Determine file extension from document type
+            # Determine file extension from document type.
+            # NOTE: This is NOT a path traversal risk. The suffix is whitelisted
+            # to "pdf" or "docx" only; any other value (including path separators)
+            # falls through to ".pdf". NamedTemporaryFile appends the suffix to a
+            # random filename in $TMPDIR, so it cannot escape the temp directory.
             file_type = document.file_type.lower() if document.file_type else "pdf"
             suffix = f".{file_type}" if file_type in ("pdf", "docx") else ".pdf"
 
