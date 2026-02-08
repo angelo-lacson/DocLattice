@@ -2495,7 +2495,7 @@ export const SystemSettings: React.FC = () => {
               id="default-embedder"
               value={defaultEmbedderValue}
               onChange={(e) => setDefaultEmbedderValue(e.target.value)}
-              placeholder="e.g., doclatticeserver.pipeline.embedders.modern_bert_embedder.ModernBERTEmbedder"
+              placeholder="e.g., doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"
               fullWidth
             />
             <FormHelperText>

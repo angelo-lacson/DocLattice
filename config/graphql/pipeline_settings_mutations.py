@@ -644,14 +644,17 @@ class UpdateComponentSecretsMutation(graphene.Mutation):
         except ValueError as e:
             return UpdateComponentSecretsMutation(
                 ok=False,
-                message=f"Failed to update secrets: {e}",
+                message=f"Failed to update secrets for '{component_path}': {e}",
                 components_with_secrets=None,
             )
         except Exception:
-            logger.exception("Unexpected error updating component secrets")
+            logger.exception(
+                "Unexpected error updating secrets for component '%s'",
+                component_path,
+            )
             return UpdateComponentSecretsMutation(
                 ok=False,
-                message="An unexpected error occurred while updating secrets.",
+                message=f"An unexpected error occurred while updating secrets for '{component_path}'.",
                 components_with_secrets=None,
             )
 
@@ -718,9 +721,12 @@ class DeleteComponentSecretsMutation(graphene.Mutation):
             )
 
         except Exception:
-            logger.exception("Unexpected error deleting component secrets")
+            logger.exception(
+                "Unexpected error deleting secrets for component '%s'",
+                component_path,
+            )
             return DeleteComponentSecretsMutation(
                 ok=False,
-                message="An unexpected error occurred while deleting secrets.",
+                message=f"An unexpected error occurred while deleting secrets for '{component_path}'.",
                 components_with_secrets=None,
             )

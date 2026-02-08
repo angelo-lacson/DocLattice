@@ -902,8 +902,11 @@ class PipelineSettings(django.db.models.Model):
                 "PipelineSettings is a singleton. Use PipelineSettings.get_instance() instead."
             )
         super().save(*args, **kwargs)
-        # Invalidate cache only after the transaction commits to avoid
-        # a race where the cache is cleared but the DB write rolls back.
+        # Eagerly invalidate cache after save for immediate consistency
+        # (required in autocommit mode and Django TestCase which never commits).
+        self._invalidate_cache()
+        # Also invalidate on commit in case save() runs inside a larger
+        # transaction that might roll back and be retried.
         transaction.on_commit(lambda: self._invalidate_cache())
 
     def delete(self, *args, **kwargs):
@@ -978,7 +981,8 @@ class PipelineSettings(django.db.models.Model):
         """
         Get the preferred parser class path for a MIME type.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Args:
             mimetype: The MIME type (e.g., "application/pdf")
@@ -986,20 +990,16 @@ class PipelineSettings(django.db.models.Model):
         Returns:
             Parser class path or None if not found.
         """
-        from django.conf import settings as django_settings
-
-        # First check database settings
         if self.preferred_parsers and mimetype in self.preferred_parsers:
             return self.preferred_parsers[mimetype]
-
-        # Fall back to Django settings
-        return getattr(django_settings, "PREFERRED_PARSERS", {}).get(mimetype)
+        return None
 
     def get_preferred_embedder(self, mimetype: str) -> str | None:
         """
         Get the preferred embedder class path for a MIME type.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Args:
             mimetype: The MIME type (e.g., "application/pdf")
@@ -1007,21 +1007,15 @@ class PipelineSettings(django.db.models.Model):
         Returns:
             Embedder class path or None if not found.
         """
-        from django.conf import settings as django_settings
-
-        # First check database settings
         if self.preferred_embedders and mimetype in self.preferred_embedders:
             return self.preferred_embedders[mimetype]
-
-        # Fall back to Django settings
-        return getattr(django_settings, "PREFERRED_EMBEDDERS", {}).get(mimetype)
+        return None
 
     def get_preferred_thumbnailer(self, mimetype: str) -> str | None:
         """
         Get the preferred thumbnailer class path for a MIME type.
 
-        Note: No fallback to Django settings as thumbnailers are dynamically
-        selected by default.
+        Database is the single source of truth at runtime.
 
         Args:
             mimetype: The MIME type (e.g., "application/pdf")
@@ -1037,7 +1031,8 @@ class PipelineSettings(django.db.models.Model):
         """
         Get configuration kwargs for a specific parser.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Args:
             parser_class_path: Full class path of the parser
@@ -1045,14 +1040,9 @@ class PipelineSettings(django.db.models.Model):
         Returns:
             Dict of kwargs for the parser.
         """
-        from django.conf import settings as django_settings
-
-        # First check database settings
         if self.parser_kwargs and parser_class_path in self.parser_kwargs:
             return self.parser_kwargs[parser_class_path]
-
-        # Fall back to Django settings
-        return getattr(django_settings, "PARSER_KWARGS", {}).get(parser_class_path, {})
+        return {}
 
     def get_component_settings(self, component_class_path: str) -> dict:
         """
@@ -1079,17 +1069,13 @@ class PipelineSettings(django.db.models.Model):
         """
         Get the default embedder class path.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Returns:
             Default embedder class path.
         """
-        from django.conf import settings as django_settings
-
-        if self.default_embedder:
-            return self.default_embedder
-
-        return getattr(django_settings, "DEFAULT_EMBEDDER", "")
+        return self.default_embedder or ""
 
     # =====================================================================
     # Encrypted Secrets Management
