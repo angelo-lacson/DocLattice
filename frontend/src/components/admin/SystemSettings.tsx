@@ -233,6 +233,8 @@ const Container = styled.div`
   max-width: 900px;
   margin: 0 auto;
   min-height: 100%;
+  overflow-y: auto;
+  overflow-x: clip;
 
   @media (max-width: 768px) {
     padding: 1rem;
