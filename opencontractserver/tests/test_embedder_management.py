@@ -632,8 +632,11 @@ class TestReEmbedCorpusTask(TestCase):
 
         # Set a very low cap for testing
         with patch(
-            "opencontractserver.tasks.corpus_tasks.MAX_REEMBED_TASKS_PER_RUN", 2
-        ), patch("opencontractserver.tasks.corpus_tasks.EMBEDDING_BATCH_SIZE", 1):
+            "opencontractserver.constants.document_processing.MAX_REEMBED_TASKS_PER_RUN",
+            2,
+        ), patch(
+            "opencontractserver.constants.document_processing.EMBEDDING_BATCH_SIZE", 1
+        ):
             result = reembed_corpus(self.corpus.pk, "new.Embedder")
 
         self.assertEqual(result["tasks_queued"], 2)
