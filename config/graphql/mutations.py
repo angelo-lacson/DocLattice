@@ -1362,6 +1362,7 @@ class ReEmbedCorpus(graphene.Mutation):
 
     @login_required
     def mutate(root, info, corpus_id, new_embedder):
+        from opencontractserver.pipeline.base.embedder import BaseEmbedder
         from opencontractserver.pipeline.utils import get_component_by_name
         from opencontractserver.tasks.corpus_tasks import reembed_corpus
 
@@ -1381,21 +1382,18 @@ class ReEmbedCorpus(graphene.Mutation):
         if corpus.creator != user:
             return ReEmbedCorpus(ok=False, message="Corpus not found")
 
-        # Prevent concurrent operations
-        if corpus.backend_lock:
-            return ReEmbedCorpus(
-                ok=False,
-                message="Corpus is currently locked by another operation. "
-                "Please wait for it to complete.",
-            )
-
-        # Validate the new embedder exists in the registry
+        # Validate the new embedder exists in the registry and is an embedder
         try:
             embedder_class = get_component_by_name(new_embedder)
             if embedder_class is None:
                 return ReEmbedCorpus(
                     ok=False,
                     message=f"Embedder '{new_embedder}' not found in the registry.",
+                )
+            if not issubclass(embedder_class, BaseEmbedder):
+                return ReEmbedCorpus(
+                    ok=False,
+                    message=f"'{new_embedder}' is not an embedder component.",
                 )
         except Exception as e:
             return ReEmbedCorpus(
@@ -1410,9 +1408,18 @@ class ReEmbedCorpus(graphene.Mutation):
                 message="Corpus already uses this embedder. No re-embedding needed.",
             )
 
-        # Lock the corpus and dispatch the re-embed task
-        corpus.backend_lock = True
-        corpus.save(update_fields=["backend_lock", "modified"])
+        # Atomically lock the corpus to prevent concurrent re-embed operations.
+        # Uses UPDATE ... WHERE to avoid TOCTOU race conditions.
+        locked = Corpus.objects.filter(pk=corpus.pk, backend_lock=False).update(
+            backend_lock=True, modified=timezone.now()
+        )
+
+        if locked == 0:
+            return ReEmbedCorpus(
+                ok=False,
+                message="Corpus is currently locked by another operation. "
+                "Please wait for it to complete.",
+            )
 
         transaction.on_commit(
             lambda: reembed_corpus.delay(

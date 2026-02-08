@@ -17,6 +17,7 @@ from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase, override_settings
 
 from opencontractserver.corpuses.models import Corpus
+from opencontractserver.pipeline.base.embedder import BaseEmbedder
 
 User = get_user_model()
 
@@ -30,9 +31,7 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
     """Test that preferred_embedder is frozen at corpus creation time."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="embedtest", password="testpass"
-        )
+        self.user = User.objects.create_user(username="embedtest", password="testpass")
 
     def test_preferred_embedder_auto_populated_from_default(self):
         """Corpus without explicit embedder gets DEFAULT_EMBEDDER frozen."""
@@ -82,9 +81,7 @@ class TestCorpusHasDocuments(TestCase):
     """Test the has_documents() helper method."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="hasdoctest", password="testpass"
-        )
+        self.user = User.objects.create_user(username="hasdoctest", password="testpass")
         self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
 
     def test_empty_corpus_has_no_documents(self):
@@ -130,9 +127,7 @@ class TestUpdateCorpusEmbedderImmutability(TestCase):
         request = self.factory.post("/graphql")
         request.user = self.user
         client = GrapheneClient(schema)
-        return client.execute(
-            mutation_str, variables=variables, context_value=request
-        )
+        return client.execute(mutation_str, variables=variables, context_value=request)
 
     def test_embedder_change_allowed_on_empty_corpus(self):
         """Changing preferred_embedder is allowed when corpus has no documents."""
@@ -255,9 +250,7 @@ class TestReEmbedCorpusMutation(TestCase):
         request = self.factory.post("/graphql")
         request.user = user or self.user
         client = GrapheneClient(schema)
-        return client.execute(
-            mutation_str, variables=variables, context_value=request
-        )
+        return client.execute(mutation_str, variables=variables, context_value=request)
 
     @patch("opencontractserver.tasks.corpus_tasks.reembed_corpus.delay")
     @patch("opencontractserver.pipeline.utils.get_component_by_name")
@@ -265,7 +258,9 @@ class TestReEmbedCorpusMutation(TestCase):
         """ReEmbedCorpus locks corpus and dispatches background task."""
         from graphql_relay import to_global_id
 
-        mock_get_component.return_value = type("FakeEmbedder", (), {})
+        mock_get_component.return_value = type(
+            "FakeEmbedder", (BaseEmbedder,), {"vector_size": 384}
+        )
 
         mutation = """
             mutation ReEmbed($corpusId: String!, $newEmbedder: String!) {
@@ -295,7 +290,9 @@ class TestReEmbedCorpusMutation(TestCase):
         """Only the corpus creator can trigger re-embedding."""
         from graphql_relay import to_global_id
 
-        mock_get_component.return_value = type("FakeEmbedder", (), {})
+        mock_get_component.return_value = type(
+            "FakeEmbedder", (BaseEmbedder,), {"vector_size": 384}
+        )
 
         mutation = """
             mutation ReEmbed($corpusId: String!, $newEmbedder: String!) {
@@ -322,7 +319,9 @@ class TestReEmbedCorpusMutation(TestCase):
         """ReEmbedCorpus is a no-op when the embedder hasn't changed."""
         from graphql_relay import to_global_id
 
-        mock_get_component.return_value = type("FakeEmbedder", (), {})
+        mock_get_component.return_value = type(
+            "FakeEmbedder", (BaseEmbedder,), {"vector_size": 384}
+        )
 
         mutation = """
             mutation ReEmbed($corpusId: String!, $newEmbedder: String!) {
@@ -404,9 +403,7 @@ class TestReEmbedCorpusTask(TestCase):
     """Test the reembed_corpus Celery task."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="tasktest", password="testpass"
-        )
+        self.user = User.objects.create_user(username="tasktest", password="testpass")
         self.corpus = Corpus.objects.create(
             title="Task Test",
             creator=self.user,
@@ -516,9 +513,7 @@ class TestEmbedderConsistencyCheck(TestCase):
     """Test the startup system check for DEFAULT_EMBEDDER changes."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="checktest", password="testpass"
-        )
+        self.user = User.objects.create_user(username="checktest", password="testpass")
 
     def test_no_warning_when_embedders_match(self):
         """No warning when all corpuses match DEFAULT_EMBEDDER."""
@@ -562,9 +557,7 @@ class TestForkWithEmbedderOverride(TestCase):
     """Test that StartCorpusFork accepts and applies preferred_embedder override."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="forktest", password="testpass"
-        )
+        self.user = User.objects.create_user(username="forktest", password="testpass")
         self.corpus = Corpus.objects.create(
             title="Source Corpus",
             creator=self.user,
@@ -590,9 +583,7 @@ class TestForkWithEmbedderOverride(TestCase):
         request = self.factory.post("/graphql")
         request.user = self.user
         client = GrapheneClient(schema)
-        return client.execute(
-            mutation_str, variables=variables, context_value=request
-        )
+        return client.execute(mutation_str, variables=variables, context_value=request)
 
     @patch("opencontractserver.tasks.fork_tasks.fork_corpus.si")
     def test_fork_with_embedder_override(self, mock_fork_si):
@@ -628,9 +619,7 @@ class TestForkWithEmbedderOverride(TestCase):
 
         # Check the forked corpus has the new embedder
         new_corpus_data = data.get("newCorpus", {})
-        self.assertEqual(
-            new_corpus_data.get("preferredEmbedder"), "new.fork.Embedder"
-        )
+        self.assertEqual(new_corpus_data.get("preferredEmbedder"), "new.fork.Embedder")
 
     @patch("opencontractserver.tasks.fork_tasks.fork_corpus.si")
     def test_fork_without_embedder_inherits_source(self, mock_fork_si):
@@ -651,16 +640,12 @@ class TestForkWithEmbedderOverride(TestCase):
                 }
             }
         """
-        result = self._execute_mutation(
-            mutation, variables={"corpusId": global_id}
-        )
+        result = self._execute_mutation(mutation, variables={"corpusId": global_id})
         data = result.get("data", {}).get("forkCorpus", {})
         self.assertTrue(data.get("ok"), f"Fork failed: {data}")
 
         new_corpus_data = data.get("newCorpus", {})
-        self.assertEqual(
-            new_corpus_data.get("preferredEmbedder"), "original.Embedder"
-        )
+        self.assertEqual(new_corpus_data.get("preferredEmbedder"), "original.Embedder")
 
 
 # ---------------------------------------------------------------------------

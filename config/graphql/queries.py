@@ -2230,12 +2230,17 @@ class Query(graphene.ObjectType):
             # even if DEFAULT_EMBEDDER changes after the corpus was created.
             # When no corpus_id is provided (document-only search), fall back to
             # DEFAULT_EMBEDDER for backward compatibility.
-            scoped_embedder_path = (
-                None  # Let CoreAnnotationVectorStore derive from corpus
-            )
-            if not corpus_pk:
-                # Document-only search without corpus context - use DEFAULT_EMBEDDER
-                scoped_embedder_path = settings.DEFAULT_EMBEDDER
+            scoped_embedder_path = settings.DEFAULT_EMBEDDER
+            if corpus_pk:
+                # Fetch the corpus's frozen embedder directly to avoid a
+                # redundant DB lookup inside CoreAnnotationVectorStore.
+                corpus_embedder = (
+                    Corpus.objects.filter(pk=corpus_pk)
+                    .values_list("preferred_embedder", flat=True)
+                    .first()
+                )
+                if corpus_embedder:
+                    scoped_embedder_path = corpus_embedder
 
             # Use instance-based CoreAnnotationVectorStore for scoped search
             # Permission already verified above

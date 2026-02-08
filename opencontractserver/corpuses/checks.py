@@ -87,7 +87,7 @@ def check_default_embedder_consistency(app_configs, **kwargs):
             )
 
     except Exception as e:
-        # Don't crash startup for a check failure
-        logger.debug(f"Embedder consistency check skipped: {e}")
+        # Don't crash startup for a check failure, but make it visible
+        logger.warning(f"Embedder consistency check skipped: {e}")
 
     return errors

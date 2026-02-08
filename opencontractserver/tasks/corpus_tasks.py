@@ -922,13 +922,14 @@ def reembed_corpus(
         "errors": [],
     }
 
+    corpus = None
     try:
-        corpus = Corpus.objects.get(pk=corpus_id)
-    except Corpus.DoesNotExist:
-        result["errors"].append("Corpus not found")
-        return result
+        try:
+            corpus = Corpus.objects.get(pk=corpus_id)
+        except Corpus.DoesNotExist:
+            result["errors"].append("Corpus not found")
+            return result
 
-    try:
         # Update the corpus's preferred_embedder
         old_embedder = corpus.preferred_embedder
         corpus.preferred_embedder = new_embedder_path
@@ -948,8 +949,6 @@ def reembed_corpus(
 
         if not doc_ids:
             logger.info(f"Corpus {corpus_id} has no documents, nothing to re-embed")
-            corpus.backend_lock = False
-            corpus.save(update_fields=["backend_lock", "modified"])
             return result
 
         # Get all annotation IDs for documents in this corpus
@@ -967,8 +966,6 @@ def reembed_corpus(
 
         if not annotation_ids:
             logger.info(f"No annotations found for corpus {corpus_id}")
-            corpus.backend_lock = False
-            corpus.save(update_fields=["backend_lock", "modified"])
             return result
 
         # Find which annotations already have embeddings for the new embedder
@@ -988,8 +985,6 @@ def reembed_corpus(
                 f"All {len(annotation_ids)} annotations already have embeddings "
                 f"for {new_embedder_path}"
             )
-            corpus.backend_lock = False
-            corpus.save(update_fields=["backend_lock", "modified"])
             return result
 
         logger.info(
@@ -1007,12 +1002,6 @@ def reembed_corpus(
             )
             result["tasks_queued"] += 1
 
-        # Unlock the corpus after all tasks are queued.
-        # Note: Individual batch tasks may still be running, but the corpus
-        # is usable with existing embeddings while new ones are generated.
-        corpus.backend_lock = False
-        corpus.save(update_fields=["backend_lock", "modified"])
-
         logger.info(
             f"reembed_corpus() complete - queued {result['tasks_queued']} tasks "
             f"for {len(missing_ids)} annotations"
@@ -1021,12 +1010,23 @@ def reembed_corpus(
     except Exception as e:
         logger.error(f"reembed_corpus() failed: {e}")
         result["errors"].append(str(e))
-        # Ensure corpus is unlocked even on failure
-        try:
-            corpus.backend_lock = False
-            corpus.error = True
-            corpus.save(update_fields=["backend_lock", "error", "modified"])
-        except Exception:
-            pass
+        # Mark corpus as errored so the UI can display the failure
+        if corpus:
+            try:
+                corpus.error = True
+                corpus.save(update_fields=["error", "modified"])
+            except Exception:
+                pass
+
+    finally:
+        # Always unlock the corpus, whether we succeeded, failed, or returned early.
+        # This prevents permanently locked corpuses from any code path.
+        if corpus:
+            try:
+                Corpus.objects.filter(pk=corpus.pk).update(backend_lock=False)
+            except Exception:
+                logger.error(
+                    f"CRITICAL: Failed to unlock corpus {corpus_id} after re-embed"
+                )
 
     return result
