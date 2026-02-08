@@ -905,3 +905,76 @@ class TestDocumentVersioningHelpers(TestCase):
         self.assertIsNotNone(result)
         # Should have a .bin extension for unknown type
         self.assertTrue(result.name.endswith(".bin"))
+
+
+class TestPersonalCorpusDeletionProtection(TestCase):
+    """Tests that personal corpus cannot be deleted via GraphQL mutation."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+        self.client = Client(schema, context_value=TestContext(self.user))
+
+        self.delete_mutation = """
+            mutation($id: String!) {
+                deleteCorpus(id: $id) {
+                    ok
+                    message
+                }
+            }
+        """
+
+    def test_cannot_delete_personal_corpus(self):
+        """Deleting a personal corpus via GraphQL should be blocked."""
+        from graphql_relay import to_global_id
+
+        from opencontractserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
+        personal_corpus = Corpus.objects.get(creator=self.user, is_personal=True)
+        set_permissions_for_obj_to_user(
+            self.user, personal_corpus, [PermissionTypes.CRUD]
+        )
+
+        variables = {"id": to_global_id("CorpusType", personal_corpus.pk)}
+        result = self.client.execute(self.delete_mutation, variable_values=variables)
+
+        # Should return an error
+        self.assertIn("errors", result)
+        error_message = result["errors"][0]["message"]
+        self.assertIn("Cannot delete", error_message)
+        self.assertIn("My Documents", error_message)
+
+        # Corpus should still exist
+        self.assertTrue(Corpus.objects.filter(pk=personal_corpus.pk).exists())
+
+    def test_can_delete_non_personal_corpus(self):
+        """Deleting a non-personal corpus should still work normally."""
+        from graphql_relay import to_global_id
+
+        from opencontractserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
+        regular_corpus = Corpus.objects.create(
+            title="Regular Corpus",
+            creator=self.user,
+            is_personal=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, regular_corpus, [PermissionTypes.CRUD]
+        )
+
+        variables = {"id": to_global_id("CorpusType", regular_corpus.pk)}
+        result = self.client.execute(self.delete_mutation, variable_values=variables)
+
+        # Should succeed
+        self.assertNotIn("errors", result)
+        self.assertTrue(result["data"]["deleteCorpus"]["ok"])
+
+        # Corpus should be deleted
+        self.assertFalse(Corpus.objects.filter(pk=regular_corpus.pk).exists())
