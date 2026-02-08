@@ -1023,6 +1023,34 @@ export const DELETE_MULTIPLE_DOCUMENTS = gql`
   }
 `;
 
+export interface RetryDocumentProcessingOutputType {
+  retryDocumentProcessing: {
+    ok: boolean;
+    message: string;
+    document: DocumentType | null;
+  };
+}
+
+export interface RetryDocumentProcessingInputType {
+  documentId: string;
+}
+
+export const RETRY_DOCUMENT_PROCESSING = gql`
+  mutation ($documentId: String!) {
+    retryDocumentProcessing(documentId: $documentId) {
+      ok
+      message
+      document {
+        id
+        backendLock
+        processingStatus
+        processingError
+        canRetry
+      }
+    }
+  }
+`;
+
 export interface NewAnnotationOutputType {
   addAnnotation: {
     ok: boolean;

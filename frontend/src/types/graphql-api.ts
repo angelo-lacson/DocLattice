@@ -34,6 +34,13 @@ export type Scalars = {
   UUID: any;
 };
 
+export enum DocumentProcessingStatus {
+  PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
+}
+
 export type AddAnnotation = {
   __typename?: "AddAnnotation";
   ok?: Maybe<Scalars["Boolean"]>;
@@ -406,6 +413,10 @@ export type RawDocumentType = Node & {
   canRestore?: Maybe<Scalars["Boolean"]>;
   versionNumber?: Maybe<Scalars["Int"]>;
   lastModified?: Maybe<Scalars["DateTime"]>;
+  // Processing status fields
+  processingStatus?: Maybe<DocumentProcessingStatus>;
+  processingError?: Maybe<Scalars["String"]>;
+  canRetry?: Maybe<Scalars["Boolean"]>;
 };
 
 export type DocumentType = Omit<RawDocumentType, "myPermissions"> & {
