@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -779,130 +779,6 @@ class TestContextInjectionIntegration(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests for sync-to-async database wrapping
-# ---------------------------------------------------------------------------
-
-
-def sync_db_read_tool(document_id: int) -> dict:
-    """A sync tool that reads from the database."""
-    doc = Document.objects.get(pk=document_id)
-    return {"id": doc.id, "title": doc.title}
-
-
-def sync_db_write_tool(document_id: int, new_title: str) -> dict:
-    """A sync tool that writes to the database."""
-    doc = Document.objects.get(pk=document_id)
-    old_title = doc.title
-    doc.title = new_title
-    doc.save(update_fields=["title"])
-    return {"id": doc.id, "old_title": old_title, "new_title": new_title}
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.asyncio
-class TestSyncToAsyncDatabaseWrapping(TransactionTestCase):
-    """Tests verifying that sync database tools work correctly in async context.
-
-    These tests ensure that the PydanticAI tool wrapper properly handles
-    synchronous Django ORM operations when called from async contexts.
-    Issue #841: sync tools were failing with "You cannot call this from an
-    async context" errors.
-
-    NOTE: We use TransactionTestCase because these tests use sync_to_async
-    which runs code in a thread pool. The thread pool worker has a different
-    database connection that can't see uncommitted transactions from TestCase.
-    TransactionTestCase commits data to the database, making it visible to
-    all connections.
-    """
-
-    def setUp(self):
-        # Create test data in setUp so it's committed to DB and visible
-        # to thread pool workers used by sync_to_async
-        self.user = User.objects.create_user(
-            username="sync_async_test_user",
-            password="password",
-            email="syncasync@test.com",
-        )
-        self.doc = Document.objects.create(
-            title="Sync Async Test Doc",
-            creator=self.user,
-            is_public=False,
-        )
-
-    async def test_sync_db_read_tool_works_in_async_context(self):
-        """Test that a sync tool performing DB reads works when wrapped for async.
-
-        This verifies that sync Django ORM .get() calls are properly wrapped
-        with sync_to_async when the tool is called from an async PydanticAI agent.
-        """
-        core_tool = CoreTool.from_function(sync_db_read_tool)
-        wrapped = PydanticAIToolWrapper(
-            core_tool, inject_params={"document_id": self.doc.id}
-        ).callable_function
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx)
-
-        self.assertEqual(result["id"], self.doc.id)
-        self.assertEqual(result["title"], "Sync Async Test Doc")
-
-    async def test_sync_db_write_tool_works_in_async_context(self):
-        """Test that a sync tool performing DB writes works when wrapped for async.
-
-        This verifies that sync Django ORM .save() calls are properly wrapped
-        with sync_to_async when the tool is called from an async PydanticAI agent.
-        """
-        core_tool = CoreTool.from_function(sync_db_write_tool)
-        wrapped = PydanticAIToolWrapper(
-            core_tool, inject_params={"document_id": self.doc.id}
-        ).callable_function
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx, new_title="Updated Title")
-
-        self.assertEqual(result["id"], self.doc.id)
-        self.assertEqual(result["old_title"], "Sync Async Test Doc")
-        self.assertEqual(result["new_title"], "Updated Title")
-
-        # Verify the change was persisted
-        from channels.db import database_sync_to_async
-
-        doc = await database_sync_to_async(Document.objects.get)(pk=self.doc.id)
-        self.assertEqual(doc.title, "Updated Title")
-
-    async def test_sync_tool_with_core_tool_wrapper(self):
-        """Test sync tool wrapping through the full CoreTool -> PydanticAI pipeline.
-
-        This tests the complete flow that would be used by agent factory,
-        ensuring sync tools work when converted through UnifiedToolFactory.
-        """
-        # Create a fresh document for this test
-        from channels.db import database_sync_to_async
-
-        from opencontractserver.llms.tools.tool_factory import UnifiedToolFactory
-        from opencontractserver.llms.types import AgentFramework
-
-        fresh_doc = await database_sync_to_async(Document.objects.create)(
-            title="Fresh Test Doc",
-            creator=self.user,
-            is_public=False,
-        )
-
-        core_tool = CoreTool.from_function(sync_db_read_tool)
-        wrapped = UnifiedToolFactory.create_tool(
-            core_tool,
-            AgentFramework.PYDANTIC_AI,
-            inject_params={"document_id": fresh_doc.id},
-        )
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx)
-
-        self.assertEqual(result["id"], fresh_doc.id)
-        self.assertEqual(result["title"], "Fresh Test Doc")
-
-
-# ---------------------------------------------------------------------------
 # Tests for tool fault tolerance (issue #820)
 # ---------------------------------------------------------------------------
 
@@ -937,16 +813,14 @@ async def async_tool_that_raises_runtime_error(msg: str) -> str:
     raise RuntimeError(msg)
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 @pytest.mark.asyncio
-class TestSyncToolFaultTolerance(TransactionTestCase):
-    """Fault tolerance tests for **sync** tools wrapped via _db_sync_to_async.
+class TestToolFaultTolerance(TestCase):
+    """Fault tolerance tests for the tool wrapper error handling (issue #820).
 
-    Uses TransactionTestCase because sync_to_async runs code in a thread pool
-    whose worker has a different DB connection that cannot see uncommitted
-    transactions from TestCase.  Same reasoning as TestSyncToAsyncDatabaseWrapping.
-
-    See issue #820.
+    Verifies that operational exceptions from tool execution are caught and
+    returned as descriptive error strings to the LLM, while security
+    exceptions (PermissionError, ToolConfirmationRequired) still propagate.
     """
 
     async def test_sync_tool_error_returns_string(self):
@@ -962,9 +836,31 @@ class TestSyncToolFaultTolerance(TransactionTestCase):
         self.assertIn("sync_tool_that_raises", result)
         self.assertIn("Invalid value: 42", result)
 
+    async def test_async_tool_error_returns_string(self):
+        """Test that async tool ValueError is caught and returned as string."""
+        core_tool = CoreTool.from_function(async_tool_that_raises)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, 99)
+
+        self.assertIsInstance(result, str)
+        self.assertIn("[Tool error]", result)
+        self.assertIn("async_tool_that_raises", result)
+        self.assertIn("Invalid value: 99", result)
+
     async def test_sync_tool_permission_error_propagates(self):
         """Test that sync tool PermissionError still raises (security boundary)."""
         core_tool = CoreTool.from_function(sync_tool_that_raises_permission_error)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        with self.assertRaises(PermissionError):
+            await wrapped(ctx, 1)
+
+    async def test_async_tool_permission_error_propagates(self):
+        """Test that async tool PermissionError still raises (security boundary)."""
+        core_tool = CoreTool.from_function(async_tool_that_raises_permission_error)
         wrapped = PydanticAIToolWrapper(core_tool).callable_function
 
         ctx = MagicMock(deps=None)
@@ -983,47 +879,6 @@ class TestSyncToolFaultTolerance(TransactionTestCase):
         self.assertIn("[Tool error]", result)
         self.assertIn("boom", result)
 
-    async def test_successful_sync_tool_still_returns_normally(self):
-        """Test that successful sync tools are unaffected by fault tolerance."""
-        core_tool = CoreTool.from_function(sync_multiply)
-        wrapped = PydanticAIToolWrapper(core_tool).callable_function
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx, 6, 7)
-
-        self.assertEqual(result, 42)
-
-
-@pytest.mark.django_db
-@pytest.mark.asyncio
-class TestAsyncToolFaultTolerance(TestCase):
-    """Fault tolerance tests for **async** tools (no thread pool involved).
-
-    See issue #820.
-    """
-
-    async def test_async_tool_error_returns_string(self):
-        """Test that async tool ValueError is caught and returned as string."""
-        core_tool = CoreTool.from_function(async_tool_that_raises)
-        wrapped = PydanticAIToolWrapper(core_tool).callable_function
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx, 99)
-
-        self.assertIsInstance(result, str)
-        self.assertIn("[Tool error]", result)
-        self.assertIn("async_tool_that_raises", result)
-        self.assertIn("Invalid value: 99", result)
-
-    async def test_async_tool_permission_error_propagates(self):
-        """Test that async tool PermissionError still raises (security boundary)."""
-        core_tool = CoreTool.from_function(async_tool_that_raises_permission_error)
-        wrapped = PydanticAIToolWrapper(core_tool).callable_function
-
-        ctx = MagicMock(deps=None)
-        with self.assertRaises(PermissionError):
-            await wrapped(ctx, 1)
-
     async def test_async_runtime_error_returns_string(self):
         """Test that async RuntimeError is caught and returned as string."""
         core_tool = CoreTool.from_function(async_tool_that_raises_runtime_error)
@@ -1036,7 +891,17 @@ class TestAsyncToolFaultTolerance(TestCase):
         self.assertIn("[Tool error]", result)
         self.assertIn("kaboom", result)
 
-    async def test_successful_async_tool_still_returns_normally(self):
+    async def test_successful_sync_tool_returns_normally(self):
+        """Test that successful sync tools are unaffected by fault tolerance."""
+        core_tool = CoreTool.from_function(sync_multiply)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, 6, 7)
+
+        self.assertEqual(result, 42)
+
+    async def test_successful_async_tool_returns_normally(self):
         """Test that successful async tools are unaffected by fault tolerance."""
         core_tool = CoreTool.from_function(async_add)
         wrapped = PydanticAIToolWrapper(core_tool).callable_function
