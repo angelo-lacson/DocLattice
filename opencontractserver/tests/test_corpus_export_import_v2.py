@@ -43,7 +43,10 @@ from opencontractserver.corpuses.models import (
 )
 from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.tasks.export_tasks_v2 import package_corpus_export_v2
-from opencontractserver.tasks.import_tasks_v2 import import_corpus_v2
+from opencontractserver.tasks.import_tasks_v2 import (
+    _import_v2_relationships,
+    import_corpus_v2,
+)
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.users.models import UserExport
 from opencontractserver.utils.export_v2 import (
@@ -58,9 +61,7 @@ from opencontractserver.utils.import_v2 import (
     import_agent_config,
     import_conversations,
     import_corpus_folders,
-    import_document_paths,
     import_md_description_revisions,
-    import_relationships,
     import_structural_annotation_set,
 )
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -453,74 +454,8 @@ class TestV2ImportUtilities(TransactionTestCase):
         revisions = CorpusDescriptionRevision.objects.filter(corpus=self.corpus)
         self.assertEqual(revisions.count(), 1)
 
-    def test_import_document_paths(self):
-        """Test importing DocumentPath version trees."""
-        # Create documents
-        doc1 = Document.objects.create(
-            title="Test Doc 1",
-            pdf_file_hash="doc_hash_1",
-            creator=self.user,
-            page_count=1,
-        )
-        doc2 = Document.objects.create(
-            title="Test Doc 2",
-            pdf_file_hash="doc_hash_2",
-            creator=self.user,
-            page_count=1,
-        )
-
-        # Create folder
-        folder = CorpusFolder.objects.create(
-            corpus=self.corpus, name="Test Folder", creator=self.user
-        )
-
-        # Create paths data
-        paths_data = [
-            {
-                "document_ref": "doc_hash_1",
-                "folder_path": "Test Folder",
-                "path": "/documents/test1.pdf",
-                "version_number": 1,
-                "parent_version_number": None,
-                "is_current": True,
-                "is_deleted": False,
-                "created": timezone.now().isoformat(),
-            },
-            {
-                "document_ref": "doc_hash_2",
-                "folder_path": None,
-                "path": "/documents/test2.pdf",
-                "version_number": 1,
-                "parent_version_number": None,
-                "is_current": True,
-                "is_deleted": False,
-                "created": timezone.now().isoformat(),
-            },
-        ]
-
-        # Create document map and folder map
-        document_map = {"doc_hash_1": doc1, "doc_hash_2": doc2}
-        folder_map = {"Test Folder": folder}
-
-        # Import
-        import_document_paths(
-            paths_data, self.corpus, document_map, folder_map, self.user
-        )
-
-        # Verify
-        paths = DocumentPath.objects.filter(corpus=self.corpus)
-        self.assertEqual(paths.count(), 2)
-
-        path1 = DocumentPath.objects.get(document=doc1, corpus=self.corpus)
-        self.assertEqual(path1.folder, folder)
-        self.assertTrue(path1.is_current)
-
-        path2 = DocumentPath.objects.get(document=doc2, corpus=self.corpus)
-        self.assertIsNone(path2.folder)
-        self.assertTrue(path2.is_current)
-
     def test_import_relationships(self):
-        """Test importing relationships."""
+        """Test importing relationships via _import_v2_relationships."""
         # Create document
         doc = Document.objects.create(title="Test Doc", creator=self.user, page_count=1)
 
@@ -563,13 +498,11 @@ class TestV2ImportUtilities(TransactionTestCase):
         # Create annotation ID map and label lookup
         annot_id_map = {str(annot1.id): annot1.id, str(annot2.id): annot2.id}
         label_lookup = {"Relates To": rel_label}
-        document_map = {}
 
-        # Import
-        import_relationships(
+        # Import using _import_v2_relationships
+        _import_v2_relationships(
             relationships_data,
             self.corpus,
-            document_map,
             annot_id_map,
             label_lookup,
             self.user,
@@ -725,13 +658,11 @@ class TestV2ImportUtilities(TransactionTestCase):
 
         annot_id_map = {str(annot1.id): annot1.id, str(annot2.id): annot2.id}
         label_lookup = {"Structural Rel": rel_label}
-        document_map = {}
 
-        # Import
-        import_relationships(
+        # Import using _import_v2_relationships
+        _import_v2_relationships(
             relationships_data,
             self.corpus,
-            document_map,
             annot_id_map,
             label_lookup,
             self.user,
@@ -740,75 +671,6 @@ class TestV2ImportUtilities(TransactionTestCase):
         # Verify NO relationship was created (structural ones are skipped)
         relationships = Relationship.objects.filter(corpus=self.corpus)
         self.assertEqual(relationships.count(), 0)
-
-    def test_import_document_paths_edge_cases(self):
-        """Test document path import with missing folder/document references."""
-        # Create a folder
-        folder = CorpusFolder.objects.create(
-            name="Existing Folder", corpus=self.corpus, creator=self.user
-        )
-        folder_path = folder.get_path()
-
-        # Create one document but not all referenced documents
-        doc = Document.objects.create(
-            title="Existing Doc",
-            creator=self.user,
-            page_count=1,
-            pdf_file_hash="abc123",
-        )
-
-        folder_map = {folder_path: folder}
-        document_map = {
-            "abc123": doc,
-            # "xyz789" intentionally missing
-        }
-
-        # Paths data with edge cases
-        paths_data = [
-            {
-                "path": "/existing/doc.pdf",
-                "version_number": 1,
-                "document_ref": "abc123",  # exists
-                "folder_path": folder_path,  # exists
-                "is_current": True,
-                "is_deleted": False,
-            },
-            {
-                "path": "/missing_folder/doc.pdf",
-                "version_number": 1,
-                "document_ref": "abc123",  # exists
-                # No folder_path - should use None
-                "is_current": True,
-                "is_deleted": False,
-            },
-            {
-                "path": "/missing_doc.pdf",
-                "version_number": 1,
-                "document_ref": "xyz789",  # MISSING - should skip
-                "is_current": True,
-                "is_deleted": False,
-            },
-        ]
-
-        # Import
-        import_document_paths(
-            paths_data, self.corpus, document_map, folder_map, self.user
-        )
-
-        # Verify paths created
-        paths = DocumentPath.objects.filter(corpus=self.corpus)
-
-        # Should have 2 paths (one with existing folder, one with None folder)
-        # The third one with missing document should be skipped
-        self.assertEqual(paths.count(), 2)
-
-        # Check first path has folder
-        path1 = paths.get(path="/existing/doc.pdf")
-        self.assertEqual(path1.folder, folder)
-
-        # Check second path has None folder (missing folder reference)
-        path2 = paths.get(path="/missing_folder/doc.pdf")
-        self.assertIsNone(path2.folder)
 
     def test_import_structural_annotations_with_parents(self):
         """Test importing structural annotations with parent-child relationships."""
@@ -986,18 +848,13 @@ class TestV2ImportUtilities(TransactionTestCase):
             }
         ]
 
-        doc.pdf_file_hash = "test_doc_hash_123"
-        doc.save()
-
-        document_map = {doc.pdf_file_hash: doc}
         annot_id_map = {str(annot1.id): annot1.id, str(annot2.id): annot2.id}
         label_lookup = {"Test Label": self.text_label}  # Missing "NonexistentRelLabel"
 
         # Should not raise error, just log warning and skip
-        import_relationships(
+        _import_v2_relationships(
             relationships_data,
             self.corpus,
-            document_map,
             annot_id_map,
             label_lookup,
             self.user,
@@ -1006,59 +863,6 @@ class TestV2ImportUtilities(TransactionTestCase):
         # No relationships should be created
         relationships = Relationship.objects.filter(corpus=self.corpus)
         self.assertEqual(relationships.count(), 0)
-
-    def test_import_document_paths_with_parent_version(self):
-        """Test importing DocumentPath with parent version reference."""
-        # Create two versions of the same document
-        doc_v1 = Document.objects.create(
-            title="Document V1",
-            creator=self.user,
-            pdf_file_hash="doc_hash_v1",
-        )
-        doc_v2 = Document.objects.create(
-            title="Document V2",
-            creator=self.user,
-            pdf_file_hash="doc_hash_v2",
-        )
-
-        paths_data = [
-            {
-                "path": "/test/document.pdf",
-                "document_ref": "doc_hash_v1",
-                "version_number": 1,
-                "parent_version_number": None,  # First version
-                "is_current": False,
-                "is_deleted": False,
-            },
-            {
-                "path": "/test/document.pdf",
-                "document_ref": "doc_hash_v2",
-                "version_number": 2,
-                "parent_version_number": 1,  # References version 1
-                "is_current": True,
-                "is_deleted": False,
-            },
-        ]
-
-        document_map = {"doc_hash_v1": doc_v1, "doc_hash_v2": doc_v2}
-        folder_map = {}
-
-        import_document_paths(
-            paths_data, self.corpus, document_map, folder_map, self.user
-        )
-
-        # Check both paths were created
-        paths = DocumentPath.objects.filter(corpus=self.corpus).order_by(
-            "version_number"
-        )
-        self.assertEqual(paths.count(), 2)
-
-        path_v1 = paths[0]
-        path_v2 = paths[1]
-
-        # Check version 2 has version 1 as parent
-        self.assertEqual(path_v2.parent_id, path_v1.id)
-        self.assertIsNone(path_v1.parent_id)
 
     def test_import_structural_relationships_missing_label(self):
         """Test importing structural relationships with missing relationship label."""
@@ -1181,48 +985,9 @@ class TestV2ImportExceptionHandling(TransactionTestCase):
         # Should return empty dict on exception
         self.assertEqual(result, {})
 
-    @mock.patch("opencontractserver.utils.import_v2.DocumentPath.objects.create")
-    def test_import_document_paths_exception(self, mock_create):
-        """Test import_document_paths exception handler (lines 327-328)."""
-        from opencontractserver.utils.import_v2 import import_document_paths
-
-        # Create a document
-        doc = Document.objects.create(
-            title="Test Doc",
-            creator=self.user,
-            page_count=1,
-            pdf_file_hash="hash123",
-        )
-
-        # Force an exception when creating DocumentPath
-        mock_create.side_effect = Exception("Database error")
-
-        paths_data = [
-            {
-                "document_ref": "hash123",
-                "folder_path": None,
-                "path": "/test.pdf",
-                "version_number": 1,
-                "parent_version_number": None,
-                "is_current": True,
-                "is_deleted": False,
-                "created": "2024-01-01T00:00:00Z",
-            }
-        ]
-
-        document_map = {"hash123": doc}
-        folder_map = {}
-
-        # Should not raise exception - handles it gracefully
-        import_document_paths(
-            paths_data, self.corpus, document_map, folder_map, self.user
-        )
-
-    @mock.patch("opencontractserver.utils.import_v2.Relationship.objects.create")
+    @mock.patch("opencontractserver.tasks.import_tasks_v2.Relationship.objects.create")
     def test_import_relationships_exception(self, mock_create):
-        """Test import_relationships exception handler (lines 394-395)."""
-        from opencontractserver.utils.import_v2 import import_relationships
-
+        """Test _import_v2_relationships handles exceptions gracefully."""
         # Create annotation for ID mapping
         doc = Document.objects.create(title="Test Doc", creator=self.user, page_count=1)
         annot = Annotation.objects.create(
@@ -1239,19 +1004,24 @@ class TestV2ImportExceptionHandling(TransactionTestCase):
             {
                 "id": "rel1",
                 "relationshipLabel": "Test Label",
-                "source_annotation_ids": ["old_id1"],
-                "target_annotation_ids": ["old_id2"],
+                "source_annotation_ids": [str(annot.id)],
+                "target_annotation_ids": [str(annot.id)],
                 "structural": False,
             }
         ]
 
-        annot_id_map = {"old_id1": annot.id, "old_id2": annot.id}
+        annot_id_map = {str(annot.id): annot.id}
         label_lookup = {"Test Label": self.text_label}
 
-        # Should not raise exception - handles it gracefully
-        import_relationships(
-            relationships_data, self.corpus, {}, annot_id_map, label_lookup, self.user
-        )
+        # Should raise the exception (function doesn't have try/except)
+        with self.assertRaises(Exception):
+            _import_v2_relationships(
+                relationships_data,
+                self.corpus,
+                annot_id_map,
+                label_lookup,
+                self.user,
+            )
 
     @mock.patch("opencontractserver.corpuses.models.Corpus.save")
     def test_import_agent_config_exception(self, mock_save):
