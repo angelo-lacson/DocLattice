@@ -745,6 +745,25 @@ const mockPipelineComponents = {
   ],
 };
 
+const mockPipelineComponentsWithConfiguredSecrets = {
+  ...mockPipelineComponents,
+  embedders: mockPipelineComponents.embedders.map((embedder) => {
+    if (
+      embedder.className ===
+      "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder"
+    ) {
+      return {
+        ...embedder,
+        settingsSchema: embedder.settingsSchema.map((entry) => ({
+          ...entry,
+          hasValue: true,
+        })),
+      };
+    }
+    return embedder;
+  }),
+};
+
 test.describe("SystemSettings Component", () => {
   test("should display loading state initially", async ({ mount, page }) => {
     // Use a mock that delays response to see loading state
@@ -808,9 +827,6 @@ test.describe("SystemSettings Component", () => {
     // Check bottom sections
     await expect(
       page.locator("h2", { hasText: "Default Embedder" })
-    ).toBeVisible();
-    await expect(
-      page.locator("h2", { hasText: "Component Secrets" })
     ).toBeVisible();
 
     await component.unmount();
@@ -881,12 +897,26 @@ test.describe("SystemSettings Component", () => {
   test("should display components with secrets", async ({ mount, page }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: { data: { pipelineSettings: mockPipelineSettings } },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            preferredEmbedders: {
+              "application/pdf":
+                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+            },
+          },
+        },
+      },
     };
 
     const componentsMock = {
       request: { query: GET_PIPELINE_COMPONENTS },
-      result: { data: { pipelineComponents: mockPipelineComponents } },
+      result: {
+        data: {
+          pipelineComponents: mockPipelineComponentsWithConfiguredSecrets,
+        },
+      },
     };
 
     const component = await mount(
@@ -900,11 +930,16 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check secrets badge is displayed in Component Secrets section
-    // Uses the title from the loaded component data
-    // Look for the secrets badge specifically (has a key icon and delete button)
-    const secretsBadge = page.locator('[title="Delete secrets"]').locator("..");
-    await expect(secretsBadge).toContainText("OpenAI Ada Embedder");
+    const advancedSettingsButton = page
+      .locator("button:has-text('Advanced Settings')")
+      .last();
+    await advancedSettingsButton.click();
+
+    await expect(page.locator("text=Secret Keys")).toBeVisible();
+    await expect(
+      page.locator("button:has-text('Update Secrets')")
+    ).toBeVisible();
+    await expect(page.locator("button:has-text('Delete All')")).toBeVisible();
 
     await component.unmount();
   });
@@ -980,7 +1015,17 @@ test.describe("SystemSettings Component", () => {
   test("should open secrets modal", async ({ mount, page }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: { data: { pipelineSettings: mockPipelineSettings } },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            preferredParsers: {
+              "application/pdf":
+                "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+            },
+          },
+        },
+      },
     };
 
     const componentsMock = {
@@ -999,12 +1044,17 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Click Add Secrets button
-    await page.locator('button:has-text("Add Secrets")').click();
+    const advancedSettingsButton = page
+      .locator("button:has-text('Advanced Settings')")
+      .first();
+    await advancedSettingsButton.click();
+
+    // Click Configure Secrets button
+    await page.locator('button:has-text("Configure Secrets")').click();
 
     // Modal should open
     await expect(
-      page.locator("text=Configure Component Secrets")
+      page.locator(".oc-modal-header__title:has-text('Configure Secrets')")
     ).toBeVisible();
 
     // Security notice should be visible
@@ -1019,12 +1069,26 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: { data: { pipelineSettings: mockPipelineSettings } },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            preferredEmbedders: {
+              "application/pdf":
+                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+            },
+          },
+        },
+      },
     };
 
     const componentsMock = {
       request: { query: GET_PIPELINE_COMPONENTS },
-      result: { data: { pipelineComponents: mockPipelineComponents } },
+      result: {
+        data: {
+          pipelineComponents: mockPipelineComponentsWithConfiguredSecrets,
+        },
+      },
     };
 
     const component = await mount(
@@ -1038,8 +1102,13 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Click delete button on secrets badge
-    await page.locator('button[title="Delete secrets"]').click();
+    const advancedSettingsButton = page
+      .locator("button:has-text('Advanced Settings')")
+      .last();
+    await advancedSettingsButton.click();
+
+    // Click delete button on secrets section
+    await page.locator('button:has-text("Delete All")').click();
 
     // Confirmation modal should open
     await expect(page.locator("text=Delete Component Secrets")).toBeVisible();
@@ -1092,7 +1161,10 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const emptySettings = {
       ...mockPipelineSettings,
-      preferredParsers: {},
+      preferredParsers: {
+        "application/pdf":
+          "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+      },
       preferredEmbedders: {},
       preferredThumbnailers: {},
       componentsWithSecrets: [],
@@ -1119,11 +1191,14 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // In new UI, component cards are always shown (no empty state for parsers/embedders)
-    // But Component Secrets section shows empty state when no secrets configured
-    await expect(
-      page.locator("text=No component secrets configured")
-    ).toBeVisible();
+    const advancedSettingsButton = page
+      .locator("button:has-text('Advanced Settings')")
+      .first();
+    await advancedSettingsButton.click();
+
+    // Secret keys should be present but unconfigured
+    await expect(page.locator("text=Secret Keys")).toBeVisible();
+    await expect(page.locator("text=Not set")).toBeVisible();
 
     // Using system default is shown when no default embedder configured
     await expect(page.locator("text=Using system default")).toBeVisible();
@@ -1583,7 +1658,17 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: { data: { pipelineSettings: mockPipelineSettings } },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            preferredParsers: {
+              "application/pdf":
+                "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+            },
+          },
+        },
+      },
     };
 
     const componentsMock = {
@@ -1626,14 +1711,33 @@ test.describe("SystemSettings Component", () => {
               "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
               "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
             ],
+            preferredParsers: {
+              "application/pdf":
+                "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+            },
           },
+        },
+      },
+    };
+
+    const componentsRefetchMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: {
+        data: {
+          pipelineComponents: mockPipelineComponents,
         },
       },
     };
 
     const component = await mount(
       <SystemSettingsWrapper
-        mocks={[settingsMock, componentsMock, updateSecretsMock, refetchMock]}
+        mocks={[
+          settingsMock,
+          componentsMock,
+          updateSecretsMock,
+          refetchMock,
+          componentsRefetchMock,
+        ]}
       />
     );
 
@@ -1644,24 +1748,26 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Click Add Secrets button
-    const addSecretsButton = page.locator("button:has-text('Add Secrets')");
-    await expect(addSecretsButton).toBeVisible();
-    await addSecretsButton.click();
+    const advancedSettingsButton = page
+      .locator("button:has-text('Advanced Settings')")
+      .first();
+    await advancedSettingsButton.click();
+
+    // Click Configure Secrets button
+    const configureSecretsButton = page.locator(
+      "button:has-text('Configure Secrets')"
+    );
+    await expect(configureSecretsButton).toBeVisible();
+    await configureSecretsButton.click();
 
     // Modal should appear
     await expect(
-      page.locator("text=Configure Component Secrets")
+      page.locator(".oc-modal-header__title:has-text('Configure Secrets')")
     ).toBeVisible();
 
     // Fill in the form
-    const componentPathInput = page.locator("#secrets-component-path");
-    await componentPathInput.fill(
-      "opencontractserver.pipeline.parsers.llamaparse.LlamaParser"
-    );
-
-    const secretsInput = page.locator("#secrets-value");
-    await secretsInput.fill('{"api_key": "test-api-key"}');
+    const apiKeyInput = page.locator("#secret-api_key");
+    await apiKeyInput.fill("test-api-key");
 
     // Click save button
     const saveButton = page.locator("button:has-text('Save Secrets')");
@@ -1684,12 +1790,26 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: { data: { pipelineSettings: mockPipelineSettings } },
+      result: {
+        data: {
+          pipelineSettings: {
+            ...mockPipelineSettings,
+            preferredEmbedders: {
+              "application/pdf":
+                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+            },
+          },
+        },
+      },
     };
 
     const componentsMock = {
       request: { query: GET_PIPELINE_COMPONENTS },
-      result: { data: { pipelineComponents: mockPipelineComponents } },
+      result: {
+        data: {
+          pipelineComponents: mockPipelineComponentsWithConfiguredSecrets,
+        },
+      },
     };
 
     const deleteSecretsMock = {
@@ -1719,14 +1839,31 @@ test.describe("SystemSettings Component", () => {
           pipelineSettings: {
             ...mockPipelineSettings,
             componentsWithSecrets: [],
+            preferredEmbedders: {
+              "application/pdf":
+                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+            },
           },
         },
       },
     };
 
+    const componentsRefetchMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: {
+        data: { pipelineComponents: mockPipelineComponents },
+      },
+    };
+
     const component = await mount(
       <SystemSettingsWrapper
-        mocks={[settingsMock, componentsMock, deleteSecretsMock, refetchMock]}
+        mocks={[
+          settingsMock,
+          componentsMock,
+          deleteSecretsMock,
+          refetchMock,
+          componentsRefetchMock,
+        ]}
       />
     );
 
@@ -1737,13 +1874,13 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Find the delete button for the existing secret
-    // The secret badge shows the component title from the loaded components data
-    const secretsBadge = page.locator('[title="Delete secrets"]').locator("..");
-    await expect(secretsBadge).toContainText("OpenAI Ada Embedder");
+    const advancedSettingsButton = page
+      .locator("button:has-text('Advanced Settings')")
+      .last();
+    await advancedSettingsButton.click();
 
-    // Click the delete (trash) button next to it
-    const deleteButton = page.locator('[title="Delete secrets"]').first();
+    // Click the delete button in the secrets section
+    const deleteButton = page.locator('button:has-text("Delete All")');
     await expect(deleteButton).toBeVisible();
     await deleteButton.click();
 
