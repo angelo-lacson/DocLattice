@@ -383,9 +383,20 @@ class PydanticAIToolWrapper:
 
                 try:
                     return await original_func(*args, **kwargs)
-                except Exception as e:
-                    logger.error(f"Error in tool {func_name}: {e}")
+                except (PermissionError, ToolConfirmationRequired):
+                    # Security and approval exceptions must propagate to the
+                    # agent loop so they can be handled at the framework level.
                     raise
+                except Exception as e:
+                    # Operational errors (bad input, missing data, network
+                    # failures, etc.) are caught and returned as a descriptive
+                    # string so the LLM can inform the user gracefully instead
+                    # of crashing the entire agent loop.  See issue #820.
+                    logger.error(f"Error in tool {func_name}: {e}")
+                    return (
+                        f"[Tool error] {func_name} failed: {e}. "
+                        "Please inform the user and suggest alternatives."
+                    )
 
             # Set proper metadata
             async_wrapper.__name__ = func_name
@@ -430,9 +441,14 @@ class PydanticAIToolWrapper:
 
                 try:
                     return await async_original_func(*args, **kwargs)
+                except (PermissionError, ToolConfirmationRequired):
+                    raise
                 except Exception as e:
                     logger.error(f"Error in tool {func_name}: {e}")
-                    raise
+                    return (
+                        f"[Tool error] {func_name} failed: {e}. "
+                        "Please inform the user and suggest alternatives."
+                    )
 
             # Set proper metadata
             sync_to_async_wrapper.__name__ = func_name

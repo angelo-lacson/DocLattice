@@ -900,3 +900,127 @@ class TestSyncToAsyncDatabaseWrapping(TransactionTestCase):
 
         self.assertEqual(result["id"], fresh_doc.id)
         self.assertEqual(result["title"], "Fresh Test Doc")
+
+
+# ---------------------------------------------------------------------------
+# Tests for tool fault tolerance (issue #820)
+# ---------------------------------------------------------------------------
+
+
+def sync_tool_that_raises(x: int) -> int:
+    """A sync tool that always raises ValueError."""
+    raise ValueError(f"Invalid value: {x}")
+
+
+async def async_tool_that_raises(x: int) -> int:
+    """An async tool that always raises ValueError."""
+    raise ValueError(f"Invalid value: {x}")
+
+
+def sync_tool_that_raises_permission_error(x: int) -> int:
+    """A sync tool that raises PermissionError."""
+    raise PermissionError("Access denied")
+
+
+async def async_tool_that_raises_permission_error(x: int) -> int:
+    """An async tool that raises PermissionError."""
+    raise PermissionError("Access denied")
+
+
+def sync_tool_that_raises_runtime_error(msg: str) -> str:
+    """A sync tool that raises RuntimeError."""
+    raise RuntimeError(msg)
+
+
+async def async_tool_that_raises_runtime_error(msg: str) -> str:
+    """An async tool that raises RuntimeError."""
+    raise RuntimeError(msg)
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+class TestToolFaultTolerance(TestCase):
+    """Tests for tool fault tolerance (issue #820).
+
+    Verifies that operational exceptions from tool execution are caught and
+    returned as descriptive error strings to the LLM, while security
+    exceptions (PermissionError, ToolConfirmationRequired) still propagate.
+    """
+
+    async def test_sync_tool_error_returns_string(self):
+        """Test that sync tool ValueError is caught and returned as string."""
+        core_tool = CoreTool.from_function(sync_tool_that_raises)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, 42)
+
+        self.assertIsInstance(result, str)
+        self.assertIn("[Tool error]", result)
+        self.assertIn("sync_tool_that_raises", result)
+        self.assertIn("Invalid value: 42", result)
+
+    async def test_async_tool_error_returns_string(self):
+        """Test that async tool ValueError is caught and returned as string."""
+        core_tool = CoreTool.from_function(async_tool_that_raises)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, 99)
+
+        self.assertIsInstance(result, str)
+        self.assertIn("[Tool error]", result)
+        self.assertIn("async_tool_that_raises", result)
+        self.assertIn("Invalid value: 99", result)
+
+    async def test_sync_tool_permission_error_propagates(self):
+        """Test that sync tool PermissionError still raises (security boundary)."""
+        core_tool = CoreTool.from_function(sync_tool_that_raises_permission_error)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        with self.assertRaises(PermissionError):
+            await wrapped(ctx, 1)
+
+    async def test_async_tool_permission_error_propagates(self):
+        """Test that async tool PermissionError still raises (security boundary)."""
+        core_tool = CoreTool.from_function(async_tool_that_raises_permission_error)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        with self.assertRaises(PermissionError):
+            await wrapped(ctx, 1)
+
+    async def test_sync_runtime_error_returns_string(self):
+        """Test that sync RuntimeError is caught and returned as string."""
+        core_tool = CoreTool.from_function(sync_tool_that_raises_runtime_error)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, "boom")
+
+        self.assertIsInstance(result, str)
+        self.assertIn("[Tool error]", result)
+        self.assertIn("boom", result)
+
+    async def test_async_runtime_error_returns_string(self):
+        """Test that async RuntimeError is caught and returned as string."""
+        core_tool = CoreTool.from_function(async_tool_that_raises_runtime_error)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, "kaboom")
+
+        self.assertIsInstance(result, str)
+        self.assertIn("[Tool error]", result)
+        self.assertIn("kaboom", result)
+
+    async def test_successful_tool_still_returns_normally(self):
+        """Test that successful tools are unaffected by fault tolerance."""
+        core_tool = CoreTool.from_function(sync_multiply)
+        wrapped = PydanticAIToolWrapper(core_tool).callable_function
+
+        ctx = MagicMock(deps=None)
+        result = await wrapped(ctx, 6, 7)
+
+        self.assertEqual(result, 42)
