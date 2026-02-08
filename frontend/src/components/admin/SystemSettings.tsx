@@ -332,6 +332,7 @@ const junctionPulse = keyframes`
 const PipelineFlowContainer = styled.div`
   position: relative;
   margin-bottom: 2rem;
+  isolation: isolate;
 `;
 
 const ChannelTrack = styled.div`
