@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import styled from "styled-components";
+import styled, { keyframes, css } from "styled-components";
 import {
   Button,
   Input,
@@ -31,7 +31,6 @@ import {
   Key,
   Info,
   Upload,
-  Search,
   Trash2,
   Check,
   CircleCheck,
@@ -310,103 +309,315 @@ const LastModified = styled.div`
   }
 `;
 
-// Pipeline Flow Styles
-const PipelineFlow = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+// Animation keyframes
+const etherealFlow = keyframes`
+  0% { top: -10px; opacity: 0; transform: scale(0.6); }
+  12% { opacity: 0.7; transform: scale(1); }
+  80% { opacity: 0.5; transform: scale(0.8); }
+  100% { top: calc(100% + 10px); opacity: 0; transform: scale(0.4); }
+`;
+
+const stageReveal = keyframes`
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const junctionPulse = keyframes`
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.5); opacity: 0.1; }
+`;
+
+// Pipeline Flow Styles - Channel Layout
+const PipelineFlowContainer = styled.div`
+  position: relative;
   margin-bottom: 2rem;
 `;
 
-const PipelineConnector = styled.div`
+const ChannelTrack = styled.div`
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: ${PIPELINE_UI.CHANNEL_WIDTH_PX}px;
+  z-index: 1;
+  pointer-events: none;
+`;
+
+const ChannelGlow = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: 18px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}06,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}06,
+    transparent
+  );
+  border-radius: 10px;
+`;
+
+const ChannelCenterLine = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}18,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}25,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}18,
+    transparent
+  );
+  border-radius: 1px;
+`;
+
+const FlowParticle = styled.div<{
+  $size: number;
+  $xOffset: number;
+  $duration: number;
+  $delay: number;
+}>`
+  position: absolute;
+  left: ${(props) => props.$xOffset}px;
+  width: ${(props) => props.$size}px;
+  height: ${(props) => props.$size * 1.8}px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}90,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20
+  );
+  box-shadow: 0 0 ${(props) => props.$size * 2}px
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30;
+  animation: ${etherealFlow} ${(props) => props.$duration}s ease-in-out infinite;
+  animation-delay: ${(props) => props.$delay}s;
+  opacity: 0;
+  filter: blur(0.5px);
+`;
+
+const PipelineContentColumn = styled.div`
+  position: relative;
+  z-index: 3;
+`;
+
+const StageRow = styled.div<{ $delay?: number }>`
   display: flex;
-  justify-content: center;
-  padding: 0.5rem 0;
+  align-items: stretch;
+  animation: ${stageReveal} 0.5s ease-out both;
+  animation-delay: ${(props) => `${0.1 + (props.$delay ?? 0) * 0.12}s`};
+`;
+
+const StageRowSpacer = styled.div`
+  height: ${PIPELINE_UI.STAGE_SPACING_PX}px;
+`;
+
+const JunctionColumn = styled.div<{ $active?: boolean }>`
+  width: ${PIPELINE_UI.CHANNEL_WIDTH_PX}px;
+  flex-shrink: 0;
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 2px;
+    background: ${(props) =>
+      props.$active
+        ? `linear-gradient(180deg, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}40, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20)`
+        : "#E0E0E0"};
+    transition: background 0.4s;
+  }
+
+  ${(props) =>
+    props.$active &&
+    css`
+      &::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        transform: translateX(-50%);
+        width: 20px;
+        background: linear-gradient(
+          180deg,
+          ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}04,
+          ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08,
+          ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}04
+        );
+        border-radius: 10px;
+      }
+    `}
+`;
+
+const JunctionDot = styled.div<{ $active?: boolean }>`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: ${PIPELINE_UI.JUNCTION_SIZE_PX}px;
+  height: ${PIPELINE_UI.JUNCTION_SIZE_PX}px;
+  border-radius: 50%;
+  background: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#fff"};
+  border: 2.5px solid
+    ${(props) => (props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#D0D0D0")};
+  box-shadow: ${(props) =>
+    props.$active ? `0 0 12px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}40` : "none"};
+  transition: all 0.4s ease;
+`;
+
+const JunctionPulseRing = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  width: ${PIPELINE_UI.JUNCTION_SIZE_PX + 16}px;
+  height: ${PIPELINE_UI.JUNCTION_SIZE_PX + 16}px;
+  border-radius: 50%;
+  background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}12;
+  animation: ${junctionPulse} 2.5s ease-in-out infinite;
+`;
+
+const ConnectorArm = styled.div<{ $active?: boolean }>`
+  width: ${PIPELINE_UI.CONNECTOR_ARM_WIDTH_PX}px;
+  position: relative;
+  flex-shrink: 0;
 
   &::after {
     content: "";
-    width: 2px;
-    height: ${PIPELINE_UI.CONNECTOR_HEIGHT_PX}px;
-    background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    background: ${(props) =>
+      props.$active
+        ? `linear-gradient(90deg, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}15)`
+        : "#E0E0E0"};
+    transform: translateY(-50%);
+    transition: background 0.4s;
   }
 `;
 
-const PipelineStage = styled.div<{ $color: string }>`
-  background: white;
-  border: 2px solid ${(props) => props.$color}20;
-  border-radius: 16px;
+const StageCardContainer = styled.div<{ $active?: boolean }>`
+  flex: 1;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid
+    ${(props) =>
+      props.$active ? `${PIPELINE_UI.PRIMARY_ACCENT_COLOR}25` : "#EBEBEB"};
+  box-shadow: ${(props) =>
+    props.$active
+      ? `0 2px 12px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08, 0 1px 4px rgba(0, 0, 0, 0.03)`
+      : "0 1px 4px rgba(0, 0, 0, 0.03)"};
+  position: relative;
+  transition: all 0.3s ease;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
 
-const StageHeader = styled.div<{ $color: string }>`
+const StageCardAccentBar = styled.div`
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}60,
+    transparent
+  );
+`;
+
+const StageCardHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  background: ${(props) => props.$color}08;
-  border-bottom: 1px solid ${(props) => props.$color}15;
 `;
 
-const StageInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-`;
-
-const StageIcon = styled.div<{ $color: string }>`
-  display: flex;
+const StageNumberBadge = styled.span<{ $active?: boolean }>`
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: ${(props) => props.$color}15;
-  border-radius: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: ${(props) =>
+    props.$active ? `${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10` : "#F5F5F5"};
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#BBB"};
+  transition: all 0.3s;
+`;
 
-  svg {
-    width: 20px;
-    height: 20px;
-    color: ${(props) => props.$color};
-  }
+const StageHeaderInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
 `;
 
 const StageTitle = styled.h2`
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1a1a1a;
   margin: 0;
+  letter-spacing: -0.01em;
 `;
 
 const StageSubtitle = styled.p`
   font-size: 0.75rem;
-  color: #64748b;
+  color: #999;
   margin: 0.125rem 0 0 0;
 `;
 
 const MimeSelector = styled.div`
   display: flex;
-  gap: 0.5rem;
+  gap: 0.3125rem;
 `;
 
 const MimeButton = styled.button<{ $active: boolean }>`
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid ${(props) => (props.$active ? "#6366f1" : "#e2e8f0")};
-  background: ${(props) => (props.$active ? "#6366f1" : "white")};
-  color: ${(props) => (props.$active ? "white" : "#64748b")};
-  border-radius: 6px;
+  padding: 0.1875rem 0.5625rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: none;
+  background: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#F0F0F0"};
+  color: ${(props) => (props.$active ? "#fff" : "#999")};
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    border-color: #6366f1;
-    color: ${(props) => (props.$active ? "white" : "#6366f1")};
+    background: ${(props) =>
+      props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#E8E8E8"};
+    color: ${(props) => (props.$active ? "#fff" : "#666")};
   }
 `;
 
-const StageContent = styled.div`
-  padding: 1.25rem;
+const StageCardContent = styled.div`
+  padding: 0 1.25rem 1.125rem;
 `;
 
 const ComponentGrid = styled.div`
@@ -553,32 +764,101 @@ const RequiredBadge = styled.span`
   }
 `;
 
-// Start/End Stages
-const BookendStage = styled.div<{ $variant: "start" | "end" }>`
+// Intake and Output Points
+const IntakeCard = styled.div`
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  background: ${(props) =>
-    props.$variant === "start"
-      ? "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)"
-      : "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)"};
-  border: 2px dashed
-    ${(props) => (props.$variant === "start" ? "#cbd5e1" : "#6ee7b7")};
-  border-radius: 12px;
+  gap: 0.625rem;
+  padding: 1.125rem 1.5rem;
+  border-radius: 14px;
+  border: 1.5px dashed #ddd;
+  background: #fafafa;
+  transition: all 0.25s ease;
 
   svg {
-    width: 24px;
-    height: 24px;
-    color: ${(props) => (props.$variant === "start" ? "#64748b" : "#10b981")};
+    width: 20px;
+    height: 20px;
+    color: #aaa;
   }
 `;
 
-const BookendText = styled.span<{ $variant: "start" | "end" }>`
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: ${(props) => (props.$variant === "start" ? "#64748b" : "#059669")};
+const IntakeText = styled.span`
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #888;
+`;
+
+const IntakeNode = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}50;
+  background: radial-gradient(
+    circle,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20,
+    transparent
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const IntakeNodeCenter = styled.div`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+  box-shadow: 0 0 8px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}50;
+`;
+
+const OutputCheckmark = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR},
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}dd
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}35;
+
+  svg {
+    width: 12px;
+    height: 12px;
+    color: #fff;
+  }
+`;
+
+const OutputInfo = styled.div`
+  flex: 1;
+  padding: 0.5rem 0;
+`;
+
+const OutputTitle = styled.span`
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #666;
+`;
+
+const OutputSubtitle = styled.p`
+  margin: 0.125rem 0 0;
+  font-size: 0.6875rem;
+  color: #aaa;
 `;
 
 // Bottom sections
@@ -909,6 +1189,56 @@ const PipelineComponentCard = memo<PipelineComponentCardProps>(
 PipelineComponentCard.displayName = "PipelineComponentCard";
 
 // ============================================================================
+// Flow Particles Subcomponent
+// ============================================================================
+
+/**
+ * Animated particles flowing through the pipeline channel.
+ * Uses deterministic pseudo-random values for stable rendering.
+ */
+const FlowParticles = memo(() => {
+  const particles = useMemo(() => {
+    return Array.from({ length: PIPELINE_UI.FLOW_PARTICLE_COUNT }).map(
+      (_, i) => {
+        const size = 3 + (((i * 7 + 3) % 11) / 11) * 4;
+        const xOffset =
+          8 + (((i * 13 + 5) % 17) / 17) * (PIPELINE_UI.CHANNEL_WIDTH_PX - 16);
+        const duration = 3 + (((i * 11 + 7) % 13) / 13) * 2.5;
+        const delay = i * (duration / PIPELINE_UI.FLOW_PARTICLE_COUNT);
+        return { size, xOffset, duration, delay };
+      }
+    );
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: PIPELINE_UI.CHANNEL_WIDTH_PX,
+        height: "100%",
+        overflow: "hidden",
+        zIndex: 2,
+        pointerEvents: "none",
+      }}
+    >
+      {particles.map((p, i) => (
+        <FlowParticle
+          key={i}
+          $size={p.size}
+          $xOffset={p.xOffset}
+          $duration={p.duration}
+          $delay={p.delay}
+        />
+      ))}
+    </div>
+  );
+});
+
+FlowParticles.displayName = "FlowParticles";
+
+// ============================================================================
 // Advanced Settings Panel Subcomponent
 // ============================================================================
 
@@ -1183,6 +1513,7 @@ AdvancedSettingsPanel.displayName = "AdvancedSettingsPanel";
 
 interface PipelineStageSectionProps {
   stage: StageType;
+  stageIndex: number;
   config: (typeof STAGE_CONFIG)[StageType];
   mimeType: string;
   components: (PipelineComponentType & { className: string })[];
@@ -1210,6 +1541,7 @@ interface PipelineStageSectionProps {
 const PipelineStageSection = memo<PipelineStageSectionProps>(
   ({
     stage,
+    stageIndex,
     config,
     mimeType,
     components,
@@ -1226,86 +1558,95 @@ const PipelineStageSection = memo<PipelineStageSectionProps>(
     onDeleteSecrets,
     onSaveConfig,
   }) => {
-    const Icon = config.icon;
+    const hasSelection = currentSelection !== null;
 
     return (
-      <PipelineStage $color={config.color}>
-        <StageHeader $color={config.color}>
-          <StageInfo>
-            <StageIcon $color={config.color}>
-              <Icon />
-            </StageIcon>
-            <div>
-              <StageTitle>{config.title}</StageTitle>
-              <StageSubtitle>{config.subtitle}</StageSubtitle>
-            </div>
-          </StageInfo>
-          <MimeSelector
-            role="group"
-            aria-label={`${config.title} file type filter`}
-          >
-            {SUPPORTED_MIME_TYPES.map((mime) => (
-              <MimeButton
-                key={mime.value}
-                $active={mimeType === mime.value}
-                onClick={() => onMimeTypeChange(stage, mime.value)}
-                aria-pressed={mimeType === mime.value}
-                aria-label={`Filter ${config.title} by ${mime.label}`}
-              >
-                {mime.shortLabel}
-              </MimeButton>
-            ))}
-          </MimeSelector>
-        </StageHeader>
-        <StageContent>
-          {components.length > 0 ? (
-            <ComponentGrid>
-              {components
-                .filter(
-                  (
-                    comp
-                  ): comp is PipelineComponentType & { className: string } =>
-                    Boolean(comp?.className)
-                )
-                .map((comp) => (
-                  <PipelineComponentCard
-                    key={comp.className}
-                    component={comp}
-                    isSelected={currentSelection === comp.className}
-                    color={config.color}
-                    stageTitle={config.title}
-                    disabled={updating}
-                    onSelect={() =>
-                      onSelectComponent(stage, mimeType, comp.className)
-                    }
-                  />
-                ))}
-            </ComponentGrid>
-          ) : (
-            <NoComponents>
-              No components available for{" "}
-              {SUPPORTED_MIME_TYPES.find((m) => m.value === mimeType)?.label ||
-                mimeType}
-            </NoComponents>
-          )}
+      <StageRow $delay={stageIndex + 1}>
+        <JunctionColumn $active={hasSelection}>
+          {hasSelection && <JunctionPulseRing />}
+          <JunctionDot $active={hasSelection} />
+        </JunctionColumn>
+        <ConnectorArm $active={hasSelection} />
+        <StageCardContainer $active={hasSelection}>
+          {hasSelection && <StageCardAccentBar />}
+          <StageCardHeader>
+            <StageHeaderInfo>
+              <StageNumberBadge $active={hasSelection}>
+                {stageIndex + 1}
+              </StageNumberBadge>
+              <div>
+                <StageTitle>{config.title}</StageTitle>
+                <StageSubtitle>{config.subtitle}</StageSubtitle>
+              </div>
+            </StageHeaderInfo>
+            <MimeSelector
+              role="group"
+              aria-label={`${config.title} file type filter`}
+            >
+              {SUPPORTED_MIME_TYPES.map((mime) => (
+                <MimeButton
+                  key={mime.value}
+                  $active={mimeType === mime.value}
+                  onClick={() => onMimeTypeChange(stage, mime.value)}
+                  aria-pressed={mimeType === mime.value}
+                  aria-label={`Filter ${config.title} by ${mime.label}`}
+                >
+                  {mime.shortLabel}
+                </MimeButton>
+              ))}
+            </MimeSelector>
+          </StageCardHeader>
+          <StageCardContent>
+            {components.length > 0 ? (
+              <ComponentGrid>
+                {components
+                  .filter(
+                    (
+                      comp
+                    ): comp is PipelineComponentType & {
+                      className: string;
+                    } => Boolean(comp?.className)
+                  )
+                  .map((comp) => (
+                    <PipelineComponentCard
+                      key={comp.className}
+                      component={comp}
+                      isSelected={currentSelection === comp.className}
+                      color={config.color}
+                      stageTitle={config.title}
+                      disabled={updating}
+                      onSelect={() =>
+                        onSelectComponent(stage, mimeType, comp.className)
+                      }
+                    />
+                  ))}
+              </ComponentGrid>
+            ) : (
+              <NoComponents>
+                No components available for{" "}
+                {SUPPORTED_MIME_TYPES.find((m) => m.value === mimeType)
+                  ?.label || mimeType}
+              </NoComponents>
+            )}
 
-          {/* Advanced Settings */}
-          {currentSelection && (
-            <AdvancedSettingsPanel
-              currentSelection={currentSelection}
-              configSettings={configSettings}
-              secretSettings={secretSettings}
-              isExpanded={isExpanded}
-              settingsKey={settingsKey}
-              saving={updating}
-              onToggle={() => onToggleSettings(settingsKey)}
-              onAddSecrets={onAddSecrets}
-              onDeleteSecrets={onDeleteSecrets}
-              onSaveConfig={onSaveConfig}
-            />
-          )}
-        </StageContent>
-      </PipelineStage>
+            {/* Advanced Settings */}
+            {currentSelection && (
+              <AdvancedSettingsPanel
+                currentSelection={currentSelection}
+                configSettings={configSettings}
+                secretSettings={secretSettings}
+                isExpanded={isExpanded}
+                settingsKey={settingsKey}
+                saving={updating}
+                onToggle={() => onToggleSettings(settingsKey)}
+                onAddSecrets={onAddSecrets}
+                onDeleteSecrets={onDeleteSecrets}
+                onSaveConfig={onSaveConfig}
+              />
+            )}
+          </StageCardContent>
+        </StageCardContainer>
+      </StageRow>
     );
   }
 );
@@ -1823,7 +2164,7 @@ export const SystemSettings: React.FC = () => {
 
   // Render a pipeline stage using the extracted subcomponent
   const renderStage = useCallback(
-    (stage: StageType) => {
+    (stage: StageType, stageIndex: number) => {
       const config = STAGE_CONFIG[stage];
       const mimeType = selectedMimeTypes[stage];
       const stageComponents = getComponentsForStage(stage, mimeType);
@@ -1847,6 +2188,7 @@ export const SystemSettings: React.FC = () => {
         <PipelineStageSection
           key={stage}
           stage={stage}
+          stageIndex={stageIndex}
           config={config}
           mimeType={mimeType}
           components={filteredComponents}
@@ -1953,27 +2295,51 @@ export const SystemSettings: React.FC = () => {
       </WarningBanner>
 
       {/* Pipeline Flow */}
-      <PipelineFlow>
-        <BookendStage $variant="start">
-          <Upload />
-          <BookendText $variant="start">Document Upload</BookendText>
-        </BookendStage>
+      <PipelineFlowContainer>
+        <ChannelTrack>
+          <ChannelGlow />
+          <ChannelCenterLine />
+          <FlowParticles />
+        </ChannelTrack>
 
-        <PipelineConnector />
-        {renderStage("parsers")}
+        <PipelineContentColumn>
+          <StageRow $delay={0}>
+            <JunctionColumn $active>
+              <IntakeNode>
+                <IntakeNodeCenter />
+              </IntakeNode>
+            </JunctionColumn>
+            <ConnectorArm $active />
+            <IntakeCard>
+              <Upload />
+              <IntakeText>Document Upload</IntakeText>
+            </IntakeCard>
+          </StageRow>
 
-        <PipelineConnector />
-        {renderStage("thumbnailers")}
+          <StageRowSpacer />
+          {renderStage("parsers", 0)}
 
-        <PipelineConnector />
-        {renderStage("embedders")}
+          <StageRowSpacer />
+          {renderStage("thumbnailers", 1)}
 
-        <PipelineConnector />
-        <BookendStage $variant="end">
-          <Search />
-          <BookendText $variant="end">Ready for Search</BookendText>
-        </BookendStage>
-      </PipelineFlow>
+          <StageRowSpacer />
+          {renderStage("embedders", 2)}
+
+          <StageRowSpacer />
+          <StageRow $delay={4}>
+            <JunctionColumn $active>
+              <OutputCheckmark>
+                <Check />
+              </OutputCheckmark>
+            </JunctionColumn>
+            <ConnectorArm />
+            <OutputInfo>
+              <OutputTitle>Ready for Search</OutputTitle>
+              <OutputSubtitle>Pipeline complete</OutputSubtitle>
+            </OutputInfo>
+          </StageRow>
+        </PipelineContentColumn>
+      </PipelineFlowContainer>
 
       {/* Default Embedder Section */}
       <Section>

@@ -185,6 +185,16 @@ export const PIPELINE_UI = {
   COMPONENT_CARD_MIN_HEIGHT_PX: 120,
   /** Maximum allowed secrets payload size (in bytes) */
   MAX_SECRET_SIZE_BYTES: 10240,
+  /** Width of the left-side flow channel in the pipeline view (in pixels) */
+  CHANNEL_WIDTH_PX: 36,
+  /** Width of the horizontal connector arm from channel to stage card (in pixels) */
+  CONNECTOR_ARM_WIDTH_PX: 28,
+  /** Diameter of the junction node circles on the channel (in pixels) */
+  JUNCTION_SIZE_PX: 16,
+  /** Vertical spacing between stage rows in the pipeline view (in pixels) */
+  STAGE_SPACING_PX: 48,
+  /** Number of flow particles in the channel animation */
+  FLOW_PARTICLE_COUNT: 8,
 } as const;
 
 // Supported MIME types for pipeline configuration

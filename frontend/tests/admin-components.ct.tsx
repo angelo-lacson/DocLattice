@@ -1288,9 +1288,10 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check pipeline bookend stages
+    // Check pipeline intake and output points
     await expect(page.locator("text=Document Upload")).toBeVisible();
     await expect(page.locator("text=Ready for Search")).toBeVisible();
+    await expect(page.locator("text=Pipeline complete")).toBeVisible();
 
     await component.unmount();
   });
