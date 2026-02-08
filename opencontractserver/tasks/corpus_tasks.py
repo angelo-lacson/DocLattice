@@ -871,3 +871,162 @@ def ensure_embeddings_for_corpus(
         logger.error(f"ensure_embeddings_for_corpus() failed: {e}")
         result["errors"].append(str(e))
         return result
+
+
+# --------------------------------------------------------------------------- #
+# Re-Embed Corpus Task (Issue #437)
+# --------------------------------------------------------------------------- #
+
+
+@shared_task
+def reembed_corpus(
+    corpus_id: int | str,
+    new_embedder_path: str,
+) -> dict:
+    """
+    Re-embed all annotations in a corpus with a new embedder.
+
+    This is the controlled migration path for changing a corpus's embedder
+    after documents have been added. It:
+    1. Updates corpus.preferred_embedder to the new embedder
+    2. Finds all annotations in the corpus (via DocumentPath + StructuralAnnotationSets)
+    3. Queues batch embedding tasks for all annotations missing the new embedder
+    4. Unlocks the corpus when complete
+
+    The corpus should be locked (backend_lock=True) before calling this task.
+
+    Args:
+        corpus_id: ID of the corpus to re-embed
+        new_embedder_path: Fully qualified path to the new embedder class
+
+    Returns:
+        dict: Summary of re-embedding tasks queued
+    """
+    from opencontractserver.annotations.models import Annotation, Embedding
+    from opencontractserver.constants.document_processing import EMBEDDING_BATCH_SIZE
+    from opencontractserver.documents.models import DocumentPath
+    from opencontractserver.tasks.embeddings_task import (
+        calculate_embeddings_for_annotation_batch,
+    )
+
+    logger.info(
+        f"reembed_corpus() - corpus={corpus_id}, new_embedder={new_embedder_path}"
+    )
+
+    result = {
+        "corpus_id": corpus_id,
+        "new_embedder_path": new_embedder_path,
+        "total_annotations": 0,
+        "already_embedded": 0,
+        "tasks_queued": 0,
+        "errors": [],
+    }
+
+    try:
+        corpus = Corpus.objects.get(pk=corpus_id)
+    except Corpus.DoesNotExist:
+        result["errors"].append("Corpus not found")
+        return result
+
+    try:
+        # Update the corpus's preferred_embedder
+        old_embedder = corpus.preferred_embedder
+        corpus.preferred_embedder = new_embedder_path
+        # Use update_fields to avoid triggering the full save() logic
+        corpus.save(update_fields=["preferred_embedder", "modified"])
+        logger.info(
+            f"Updated corpus {corpus_id} preferred_embedder: "
+            f"{old_embedder} -> {new_embedder_path}"
+        )
+
+        # Get all document IDs in this corpus
+        doc_ids = list(
+            DocumentPath.objects.filter(
+                corpus=corpus, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+        )
+
+        if not doc_ids:
+            logger.info(f"Corpus {corpus_id} has no documents, nothing to re-embed")
+            corpus.backend_lock = False
+            corpus.save(update_fields=["backend_lock", "modified"])
+            return result
+
+        # Get all annotation IDs for documents in this corpus
+        # Include both corpus-scoped annotations and structural annotations
+        annotation_ids = list(
+            Annotation.objects.filter(
+                Q(document_id__in=doc_ids)
+                | Q(structural=True, structural_set__documents__in=doc_ids)
+            )
+            .distinct()
+            .values_list("id", flat=True)
+        )
+
+        result["total_annotations"] = len(annotation_ids)
+
+        if not annotation_ids:
+            logger.info(f"No annotations found for corpus {corpus_id}")
+            corpus.backend_lock = False
+            corpus.save(update_fields=["backend_lock", "modified"])
+            return result
+
+        # Find which annotations already have embeddings for the new embedder
+        existing_ids = set(
+            Embedding.objects.filter(
+                annotation_id__in=annotation_ids,
+                embedder_path=new_embedder_path,
+            ).values_list("annotation_id", flat=True)
+        )
+        result["already_embedded"] = len(existing_ids)
+
+        # Queue tasks only for annotations missing the new embedder's embeddings
+        missing_ids = [aid for aid in annotation_ids if aid not in existing_ids]
+
+        if not missing_ids:
+            logger.info(
+                f"All {len(annotation_ids)} annotations already have embeddings "
+                f"for {new_embedder_path}"
+            )
+            corpus.backend_lock = False
+            corpus.save(update_fields=["backend_lock", "modified"])
+            return result
+
+        logger.info(
+            f"Queueing re-embedding for {len(missing_ids)} annotations "
+            f"(of {len(annotation_ids)} total) using {new_embedder_path}"
+        )
+
+        # Queue in batches
+        for i in range(0, len(missing_ids), EMBEDDING_BATCH_SIZE):
+            batch = missing_ids[i : i + EMBEDDING_BATCH_SIZE]
+            calculate_embeddings_for_annotation_batch.delay(
+                annotation_ids=batch,
+                corpus_id=corpus_id,
+                embedder_path=new_embedder_path,
+            )
+            result["tasks_queued"] += 1
+
+        # Unlock the corpus after all tasks are queued.
+        # Note: Individual batch tasks may still be running, but the corpus
+        # is usable with existing embeddings while new ones are generated.
+        corpus.backend_lock = False
+        corpus.save(update_fields=["backend_lock", "modified"])
+
+        logger.info(
+            f"reembed_corpus() complete - queued {result['tasks_queued']} tasks "
+            f"for {len(missing_ids)} annotations"
+        )
+
+    except Exception as e:
+        logger.error(f"reembed_corpus() failed: {e}")
+        result["errors"].append(str(e))
+        # Ensure corpus is unlocked even on failure
+        try:
+            corpus.backend_lock = False
+            corpus.error = True
+            corpus.save(update_fields=["backend_lock", "error", "modified"])
+        except Exception:
+            pass
+
+    return result
