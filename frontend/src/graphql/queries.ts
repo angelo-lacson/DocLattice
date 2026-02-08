@@ -605,6 +605,7 @@ export const GET_CORPUSES = gql`
           }
           description
           isPublic
+          isPersonal
           is_selected @client
           is_open @client
           myPermissions
