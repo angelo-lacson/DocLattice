@@ -1,3 +1,4 @@
+import hmac
 import json
 import logging
 
@@ -74,49 +75,34 @@ class AnalysisCallbackView(APIView):
 
         logger.info(f"Handle callback for analysis_id: {analysis_id}")
 
+        # Use a generic error message for all auth failures to prevent
+        # enumeration of analysis IDs and token probing.
+        auth_error_response = Response(
+            {
+                "message": "Invalid analysis_id or callback token.",
+                "analysis_id": f"{analysis_id}",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
         try:
             analysis = Analysis.objects.get(id=analysis_id)
-
         except Analysis.DoesNotExist:
-            return Response(
-                {
-                    "message": "Provided analysis id does not map to an analysis. Are you sure it's correct?",
-                    "analysis_id": f"{analysis_id}",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return auth_error_response
 
         callback_token = request.META.get("HTTP_CALLBACK_TOKEN")
         if callback_token is None:
-            return Response(
-                {
-                    "message": "No CALLBACK_TOKEN provided in headers... Was this provided to the Gremlin Engine? "
-                    "It's required to authenticate the callback to OpenContracts.",
-                    "analysis_id": f"{analysis_id}",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return auth_error_response
         else:
 
-            if analysis.callback_token.__str__() != callback_token:
-
-                with transaction.atomic():
-                    analysis.analysis_completed = timezone.now()
-                    analysis.status = JobStatus.FAILED
-                    analysis.save()
-
-                # Send failure notification (Issue #624)
-                _create_analysis_notification(analysis, success=False)
-
-                return Response(
-                    {
-                        "message": f"CALLBACK_TOKEN provided but it does not match the token issued for analysis "
-                        f"{analysis_id} . Did you provide the right token to the Gremlin Engine? "
-                        f"Check your analysis_id too.",
-                        "analysis_id": f"{analysis_id}",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            # Use timing-safe comparison to prevent token leakage via
+            # response time analysis.
+            if not hmac.compare_digest(str(analysis.callback_token), callback_token):
+                # Do NOT mark the analysis as FAILED here -- an attacker
+                # could enumerate analysis IDs and DoS legitimate runs by
+                # sending requests with invalid tokens.
+                logger.warning(f"Invalid callback token for analysis {analysis_id}")
+                return auth_error_response
             else:
 
                 received_json = json.loads(request.body.decode("utf-8"))

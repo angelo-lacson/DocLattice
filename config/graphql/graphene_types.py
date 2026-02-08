@@ -1131,18 +1131,34 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_summary_revisions(self, info, corpus_id):
         """Returns all revisions for this document's summary in a specific corpus, ordered by version."""
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
 
         _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning summary data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return DocumentSummaryRevision.objects.none()
         return DocumentSummaryRevision.objects.filter(
             document_id=self.pk, corpus_id=corpus_pk
         ).order_by("version")
 
     def resolve_current_summary_version(self, info, corpus_id):
         """Returns the current summary version number for a specific corpus."""
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
 
         _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning version data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return 0
         latest_revision = (
             DocumentSummaryRevision.objects.filter(
                 document_id=self.pk, corpus_id=corpus_pk
@@ -1159,7 +1175,8 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         _, corpus_pk = from_global_id(corpus_id)
         try:
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Use visible_to_user() to prevent cross-corpus data leakage
+            corpus = Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
             return self.get_summary_for_corpus(corpus)
         except Corpus.DoesNotExist:
             return ""
