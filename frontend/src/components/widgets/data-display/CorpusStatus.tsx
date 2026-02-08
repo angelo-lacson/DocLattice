@@ -88,7 +88,7 @@ export const CorpusStats = ({
             </StatIcon>
             Documents
           </StatLabel>
-          <StatValue>{corpus.documents?.totalCount || 0}</StatValue>
+          <StatValue>{corpus.documentCount || 0}</StatValue>
         </StatItem>
         <StatItem>
           <StatLabel>

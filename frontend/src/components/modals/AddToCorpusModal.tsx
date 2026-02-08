@@ -299,7 +299,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
             <Card.Content extra>
               <Label size="small">
                 <Icon name="file" />
-                {corpus.documents?.totalCount || 0} documents
+                {corpus.documentCount || 0} documents
               </Label>
               {corpus.labelSet?.title && (
                 <Label size="small">

@@ -403,51 +403,22 @@ def get_filesystem_at_time(corpus, timestamp):
 
 #### 4.1 Migration Strategy
 
-**Note**: Since CorpusDocumentFolder was never deployed to production, we can implement a clean migration without legacy concerns.
+> **Status (2026-02-01)**: This migration has been completed. The `corpus.documents` M2M relationship has been removed (issue #835). `DocumentPath` is now the **sole source of truth** for corpus-document associations.
+>
+> See the actual migration implementation in:
+> - [`opencontractserver/documents/migrations/`](../../opencontractserver/documents/migrations/) - DocumentPath model creation
+> - [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) - `Corpus.add_document()` and `Corpus.get_documents()` methods
 
-```python
-def migrate_existing_data(apps, schema_editor):
-    """
-    Initialize dual-tree structure for existing documents.
-    Note: CorpusDocumentFolder doesn't exist in production,
-    so we create DocumentPath records from corpus.documents relationships.
-    """
-    Document = apps.get_model('documents', 'Document')
-    DocumentPath = apps.get_model('documents', 'DocumentPath')
-    Corpus = apps.get_model('corpuses', 'Corpus')
+**Current Architecture**:
+- `DocumentPath` records are created via `Corpus.add_document(document, user)`
+- Document queries use `Corpus.get_documents()` which queries via `DocumentPath`
+- No M2M relationship exists; `DocumentPath` is the single source of truth
 
-    # Step 1: Initialize Document trees
-    for doc in Document.objects.all():
-        doc.version_tree_id = uuid.uuid4()
-        doc.is_current = True
-        doc.parent = None  # All existing docs are roots
-        doc.save()
-
-    # Step 2: Create DocumentPath records from existing relationships
-    for corpus in Corpus.objects.prefetch_related('documents'):
-        for doc in corpus.documents.all():
-            # Generate path from document title
-            path = f"/{doc.title}"
-
-            DocumentPath.objects.create(
-                document=doc,
-                corpus=corpus,
-                folder=None,  # Root level by default
-                path=path,
-                version_number=1,  # All existing docs are v1
-                parent=None,  # All are roots initially
-                is_current=True,
-                is_deleted=False
-            )
-
-    print(f"Migrated {Document.objects.count()} documents")
-```
-
-**Benefits of Clean Migration**:
-- No legacy CorpusDocumentFolder to remove
-- Simpler migration with less risk
-- No need for verification phase
-- Direct implementation of new architecture
+**Benefits of Current Architecture**:
+- Single source of truth (no dual-system synchronization)
+- Full audit trail via `DocumentPath` history
+- Support for soft-delete and restore
+- Time-travel queries via `DocumentPath` timestamps
 
 ### Phase 5: Testing (Week 3)
 

@@ -87,9 +87,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             is_deleted=False,
             creator=self.user,
         )
-
-        # Also add to M2M for legacy compatibility
-        self.corpus.documents.add(self.doc)
+        # Document is now linked via DocumentPath above
 
         # Create labels for structural annotations
         self.header_label = AnnotationLabel.objects.create(
@@ -561,7 +559,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             [PermissionTypes.READ, PermissionTypes.UPDATE, PermissionTypes.DELETE],
         )
 
-        # Add to same corpus
+        # Add to same corpus via DocumentPath
         DocumentPath.objects.create(
             document=doc2,
             corpus=self.corpus,
@@ -571,7 +569,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
             is_deleted=False,
             creator=self.user,
         )
-        self.corpus.documents.add(doc2)
+        # Document is now linked via DocumentPath above
 
         # Create structural annotation on doc2
         Annotation.objects.create(
@@ -802,7 +800,7 @@ class StructuralRelationshipGraphQLBackwardsCompatibilityTests(TransactionTestCa
             is_deleted=False,
             creator=self.user,
         )
-        self.corpus.documents.add(self.doc)
+        # Document is now linked via DocumentPath above
 
         # Create labels
         self.header_label = AnnotationLabel.objects.create(

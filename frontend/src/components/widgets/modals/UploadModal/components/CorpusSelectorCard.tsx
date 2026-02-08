@@ -126,7 +126,7 @@ export const CorpusSelectorCard: React.FC<CorpusSelectorCardProps> = ({
               <CorpusCardMeta>
                 <span>
                   <FileText />
-                  {corpus.documents?.totalCount || 0} documents
+                  {corpus.documentCount || 0} documents
                 </span>
                 {corpus.labelSet?.title && (
                   <span>

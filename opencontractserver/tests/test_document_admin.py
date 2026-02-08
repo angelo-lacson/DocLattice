@@ -43,11 +43,13 @@ class TestDocumentAdmin(TestCase):
         cls.corpus = Corpus.objects.create(title="Test Corpus", creator=cls.superuser)
 
         # Create a document with one embedding
-        cls.document = Document.objects.create(
-            corpus=cls.corpus,
+        original_doc = Document.objects.create(
             title="Test Document",
             creator=cls.superuser,
             is_public=True,
+        )
+        cls.document, _, _ = cls.corpus.add_document(
+            document=original_doc, user=cls.superuser
         )
         # Create the Embedding
         cls.embedding_384 = Embedding.objects.create(
@@ -60,11 +62,13 @@ class TestDocumentAdmin(TestCase):
         )
 
         # Create a second document that has multiple embeddings of different dimensions
-        cls.document2 = Document.objects.create(
-            corpus=cls.corpus,
+        original_doc2 = Document.objects.create(
             title="Document with Multiple Embeddings",
             creator=cls.superuser,
             is_public=True,
+        )
+        cls.document2, _, _ = cls.corpus.add_document(
+            document=original_doc2, user=cls.superuser
         )
         # 2 embeddings for document2 with different dimensions
         cls.embedding2_384 = Embedding.objects.create(
@@ -190,11 +194,13 @@ class TestDocumentAdmin(TestCase):
 
         try:
             with transaction.atomic():
-                document = Document.objects.create(
+                original_doc = Document.objects.create(
                     title="Created from admin test",
-                    corpus=self.corpus,
                     creator=self.superuser,
                     is_public=True,
+                )
+                document, _, _ = self.corpus.add_document(
+                    document=original_doc, user=self.superuser
                 )
                 document_id = document.id
 
@@ -224,11 +230,13 @@ class TestDocumentAdmin(TestCase):
         correctly displays all dimensions in the admin.
         """
         # Create a document with embeddings of different dimensions
-        multi_dim_doc = Document.objects.create(
-            corpus=self.corpus,
+        original_multi_dim_doc = Document.objects.create(
             title="Document with Multiple Dimension Embeddings",
             creator=self.superuser,
             is_public=True,
+        )
+        multi_dim_doc, _, _ = self.corpus.add_document(
+            document=original_multi_dim_doc, user=self.superuser
         )
 
         # Create embeddings with different dimensions

@@ -91,7 +91,7 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
     set_permissions_for_obj_to_user(user, corpus_copy, [PermissionTypes.CRUD])
 
     # Now remove references to related objects on our new object, as these point to original docs and labels
-    corpus_copy.documents.clear()
+    # Note: New forked corpus has no DocumentPath records yet, so no document cleanup needed
     corpus_copy.label_set = None
 
     # Copy docs, annotations, folders, relationships, and metadata using async task

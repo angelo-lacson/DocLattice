@@ -619,22 +619,25 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        """Filter paths to only those in corpuses the user can see."""
+        """Filter paths to current, non-deleted paths in visible corpuses."""
+        from opencontractserver.corpuses.models import Corpus
+
+        visible_corpus_ids = Corpus.objects.visible_to_user(
+            info.context.user
+        ).values_list("id", flat=True)
+
         if issubclass(type(queryset), QuerySet):
-            # Filter by corpus visibility
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.filter(corpus_id__in=visible_corpus_ids)
+            return queryset.filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         elif "RelatedManager" in str(type(queryset)):
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.all().filter(corpus_id__in=visible_corpus_ids)
+            return queryset.all().filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         else:
             return queryset
 
@@ -2622,8 +2625,10 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 )
 
                 if document and corpus:
-                    # Check if document is actually in this corpus
-                    if corpus in document.corpus_set.all():
+                    # Check if document is actually in this corpus via DocumentPath
+                    if DocumentPath.objects.filter(
+                        document=document, corpus=corpus
+                    ).exists():
                         mentions.append(
                             MentionedResourceType(
                                 type="document",
@@ -2671,12 +2676,9 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 document = Document.objects.visible_to_user(user).get(slug=doc_slug)
                 url = f"/d/{document.creator.slug}/{document.slug}"
 
-                # Try to get corpus context (documents can be in multiple corpuses)
-                corpus = (
-                    document.corpus_set.first()
-                    if document.corpus_set.exists()
-                    else None
-                )
+                # Try to get corpus context via DocumentPath
+                doc_path = DocumentPath.objects.filter(document=document).first()
+                corpus = doc_path.corpus if doc_path else None
 
                 mentions.append(
                     MentionedResourceType(

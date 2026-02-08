@@ -385,7 +385,9 @@ class TestGlobalSearch(TestCase):
         """Corpus docs are findable via global search using default embedding."""
         corpus = CorpusFactory(preferred_embedder="custom.embedder")
         doc = DocumentFactory()
-        corpus.documents.add(doc)
+        # Use corpus.add_document() which creates DocumentPath records
+        # See opencontractserver/corpuses/models.py for implementation
+        corpus.add_document(doc, user=doc.creator)
         annotation = AnnotationFactory(document=doc, corpus=corpus, raw_text="contract clause")
         calculate_embedding_for_annotation_text(annotation.id, corpus_id=corpus.id)
 

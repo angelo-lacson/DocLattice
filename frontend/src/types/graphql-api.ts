@@ -384,7 +384,7 @@ export type RawDocumentType = Node & {
   created?: Scalars["DateTime"];
   modified?: Scalars["DateTime"];
   assignmentSet?: AssignmentTypeConnection;
-  corpusSet?: CorpusTypeConnection;
+  pathRecords?: DocumentPathTypeConnection;
   annotationSet?: AnnotationTypeConnection;
   isPublic?: Scalars["Boolean"];
   myPermissions?: string[];
@@ -446,6 +446,29 @@ export type DocumentTypeConnection = {
 export type DocumentTypeEdge = {
   __typename?: "DocumentTypeEdge";
   node?: Maybe<DocumentType>;
+  cursor: Scalars["String"];
+};
+
+export type DocumentPathType = Node & {
+  __typename?: "DocumentPathType";
+  id: Scalars["ID"];
+  corpus?: RawCorpusType;
+  path?: Maybe<Scalars["String"]>;
+  versionNumber?: Maybe<Scalars["Int"]>;
+  isCurrent?: Scalars["Boolean"];
+  isDeleted?: Scalars["Boolean"];
+};
+
+export type DocumentPathTypeConnection = {
+  __typename?: "DocumentPathTypeConnection";
+  pageInfo: PageInfo;
+  edges: Array<Maybe<DocumentPathTypeEdge>>;
+  totalCount?: Maybe<Scalars["Int"]>;
+};
+
+export type DocumentPathTypeEdge = {
+  __typename?: "DocumentPathTypeEdge";
+  node?: Maybe<DocumentPathType>;
   cursor: Scalars["String"];
 };
 

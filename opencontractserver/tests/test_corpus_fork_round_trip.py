@@ -309,7 +309,7 @@ class CorpusForkRoundTripTestCase(TransactionTestCase):
                 is_deleted=False,
                 creator=self.user,
             )
-            corpus.documents.add(doc)
+            # Document is already linked to corpus via DocumentPath above
 
             documents.append(doc)
 
@@ -932,7 +932,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         label_set = LabelSet.objects.create(
             title="Test Labels",
@@ -1158,7 +1158,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Verify original setup
         original_path = DocumentPath.objects.get(
@@ -1233,7 +1233,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create note
         _note = Note.objects.create(  # noqa: F841
@@ -1367,7 +1367,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Fork
         forked = Corpus.objects.create(
@@ -1435,7 +1435,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create annotations
         ann1 = Annotation.objects.create(
@@ -1527,7 +1527,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create two annotations
         ann_source = Annotation.objects.create(
@@ -1612,7 +1612,7 @@ class CorpusForkPreservationTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create annotation WITH a label, but we won't fork the label set
         token_label = AnnotationLabel.objects.create(
@@ -1899,7 +1899,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create the forked corpus shell
         forked = Corpus.objects.create(
@@ -1964,7 +1964,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create an annotation
         annotation = Annotation.objects.create(
@@ -2033,7 +2033,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create an annotation linked to the document
         annotation = Annotation.objects.create(
@@ -2174,7 +2174,7 @@ class CorpusForkExceptionHandlingTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create annotations
         ann1 = Annotation.objects.create(
@@ -2399,7 +2399,7 @@ class CorpusForkMetadataTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Create metadata schema
         fieldset = Fieldset.objects.create(
@@ -2590,7 +2590,7 @@ class CorpusForkMetadataTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        original.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         # Add metadata schema
         fieldset = Fieldset.objects.create(
@@ -2743,7 +2743,7 @@ class CorpusForkMetadataTest(TransactionTestCase):
             is_current=True,
             creator=self.user,
         )
-        corpus.documents.add(doc)
+        # Document is already linked to corpus via DocumentPath above
 
         fieldset = Fieldset.objects.create(
             name="Test Schema",
@@ -2839,7 +2839,7 @@ class CorpusForkMetadataTest(TransactionTestCase):
                 is_current=True,
                 creator=self.user,
             )
-            corpus.documents.add(doc)
+            # Document is already linked to corpus via DocumentPath above
 
         fieldset = Fieldset.objects.create(
             name="Test Schema",
