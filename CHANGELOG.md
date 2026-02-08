@@ -83,6 +83,8 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/components/admin/SystemSettings.tsx:1076-1089`
 - GraphQL `updateComponentSecrets` mutation now validates payload size before encryption attempt.
   - Files: `config/graphql/pipeline_settings_mutations.py:104-135`
+- Pipeline components query now requires authentication; non-superusers only see configured components without settings schema details.
+  - Files: `config/graphql/queries.py:1815-1949`
 - Settings schema `_coerce_value` now logs warnings on coercion failures instead of silently swallowing errors.
   - Files: `opencontractserver/pipeline/base/settings_schema.py:416-419`
 
