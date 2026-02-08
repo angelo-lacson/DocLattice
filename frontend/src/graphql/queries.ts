@@ -2656,14 +2656,16 @@ export interface SearchDocumentsForMentionOutput {
         creator: {
           slug: string;
         };
-        corpusSet: {
+        pathRecords: {
           edges: Array<{
             node: {
-              id: string;
-              slug: string;
-              title: string;
-              creator: {
+              corpus: {
+                id: string;
                 slug: string;
+                title: string;
+                creator: {
+                  slug: string;
+                };
               };
             };
           }>;
@@ -2688,14 +2690,16 @@ export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
           creator {
             slug
           }
-          corpusSet(first: 1) {
+          pathRecords(first: 1) {
             edges {
               node {
-                id
-                slug
-                title
-                creator {
+                corpus {
+                  id
                   slug
+                  title
+                  creator {
+                    slug
+                  }
                 }
               }
             }
@@ -3164,11 +3168,13 @@ export interface GetDocumentWithStructureOutput {
       };
       created: string;
     }>;
-    corpusSet?: {
+    pathRecords?: {
       edges: Array<{
         node: {
-          id: string;
-          title: string;
+          corpus: {
+            id: string;
+            title: string;
+          };
         };
       }>;
     };
@@ -3251,11 +3257,13 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
         created
       }
       # Check if document is in any corpus (for UI hints)
-      corpusSet {
+      pathRecords {
         edges {
           node {
-            id
-            title
+            corpus {
+              id
+              title
+            }
           }
         }
       }

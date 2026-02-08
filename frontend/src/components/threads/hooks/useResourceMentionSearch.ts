@@ -82,8 +82,8 @@ export function useResourceMentionSearch(
 
     const documentResults: MentionResource[] =
       documentData?.searchDocumentsForMention?.edges?.map((edge) => {
-        // Documents use ManyToMany - take first corpus if available
-        const firstCorpus = edge.node.corpusSet?.edges?.[0]?.node;
+        // Documents link to corpuses via DocumentPath - take first corpus if available
+        const firstCorpus = edge.node.pathRecords?.edges?.[0]?.node?.corpus;
 
         return {
           id: edge.node.id,
