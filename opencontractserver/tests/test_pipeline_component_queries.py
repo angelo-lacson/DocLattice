@@ -222,7 +222,9 @@ class TestPostProcessor(BasePostProcessor):
             username="adminuser", password="adminpassword"
         )
         self.client = Client(schema, context_value=TestContext(self.user))
-        self.superuser_client = Client(schema, context_value=TestContext(self.superuser))
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
 
         settings_instance = PipelineSettings.get_instance(use_cache=False)
         settings_instance.preferred_parsers = {

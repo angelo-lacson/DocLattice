@@ -841,7 +841,7 @@ class PipelineSettings(django.db.models.Model):
     )
 
     # Audit fields
-    modified = django.db.models.DateTimeField(auto_now=True)
+    modified = django.db.models.DateTimeField(auto_now=True, db_index=True)
     modified_by = django.db.models.ForeignKey(
         get_user_model(),
         on_delete=django.db.models.SET_NULL,
@@ -895,15 +895,16 @@ class PipelineSettings(django.db.models.Model):
 
     def save(self, *args, **kwargs):
         """Ensure singleton pattern and invalidate cache on save."""
+        from django.db import transaction
+
         if not self.pk and PipelineSettings.objects.exists():
             raise ValidationError(
                 "PipelineSettings is a singleton. Use PipelineSettings.get_instance() instead."
             )
-        # Pre-invalidate cache to minimize stale read window
-        self._invalidate_cache()
         super().save(*args, **kwargs)
-        # Post-invalidate to ensure clean state after commit
-        self._invalidate_cache()
+        # Invalidate cache only after the transaction commits to avoid
+        # a race where the cache is cleared but the DB write rolls back.
+        transaction.on_commit(lambda: self._invalidate_cache())
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of the singleton instance."""
