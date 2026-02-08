@@ -75,57 +75,57 @@ class PipelineSettingsModelTestCase(TestCase):
         PARSER_KWARGS={"test.parser.TestParser": {"option1": True}},
         DEFAULT_EMBEDDER="test.embedder.DefaultEmbedder",
     )
-    def test_get_preferred_parser_uses_db_then_fallback(self):
-        """Test that get_preferred_parser uses DB first, then Django settings."""
+    def test_get_preferred_parser_uses_db(self):
+        """Test that get_preferred_parser returns DB values (populated from Django settings on creation)."""
         # Delete existing instance and create new one to pick up test settings
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
-        # Initially should fallback to Django settings
+        # Initial DB values populated from Django settings via get_instance()
         self.assertEqual(
             instance.get_preferred_parser("application/pdf"),
             "test.parser.TestParser",
         )
 
-        # Set a value in the database
+        # Override with a new database value
         instance.preferred_parsers = {
             "application/pdf": "db.parser.DBParser",
         }
         instance.save()
 
-        # Now should use the database value
+        # Should use the updated database value
         self.assertEqual(
             instance.get_preferred_parser("application/pdf"),
             "db.parser.DBParser",
         )
 
-        # Unlisted MIME type should fallback to Django settings
+        # Unlisted MIME type returns None
         self.assertIsNone(instance.get_preferred_parser("text/plain"))
 
     @override_settings(
         DEFAULT_EMBEDDER="test.embedder.DefaultEmbedder",
     )
-    def test_get_default_embedder_uses_db_then_fallback(self):
-        """Test that get_default_embedder uses DB first, then Django settings."""
+    def test_get_default_embedder_uses_db(self):
+        """Test that get_default_embedder returns DB values (populated from Django settings on creation)."""
         # Delete existing instance to test creation with settings
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
-        # Initially should fallback to Django settings
+        # Initial DB value populated from Django settings via get_instance()
         self.assertEqual(
             instance.get_default_embedder(),
             "test.embedder.DefaultEmbedder",
         )
 
-        # Set a value in the database
+        # Override with a new database value
         instance.default_embedder = "db.embedder.NewDefault"
         instance.save()
 
-        # Now should use the database value
+        # Should use the updated database value
         self.assertEqual(instance.get_default_embedder(), "db.embedder.NewDefault")
 
-    def test_get_parser_kwargs_uses_db_then_fallback(self):
-        """Test that get_parser_kwargs uses DB first, then Django settings."""
+    def test_get_parser_kwargs_uses_db(self):
+        """Test that get_parser_kwargs returns DB values."""
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
@@ -141,11 +141,11 @@ class PipelineSettingsModelTestCase(TestCase):
         self.assertEqual(kwargs["timeout"], 60)
 
     def test_get_preferred_thumbnailer(self):
-        """Test that get_preferred_thumbnailer uses DB only (no fallback)."""
+        """Test that get_preferred_thumbnailer returns DB values."""
         PipelineSettings.objects.all().delete()
         instance = PipelineSettings.get_instance()
 
-        # Initially should return None (no Django settings fallback)
+        # Initially should return None (no thumbnailer defaults)
         self.assertIsNone(instance.get_preferred_thumbnailer("application/pdf"))
 
         # Set a value in the database

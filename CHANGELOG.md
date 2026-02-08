@@ -56,6 +56,8 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `config/graphql/pipeline_settings_mutations.py:414-481`
 - **Migration 0031**: Creates PipelineSettings table with encrypted_secrets field
   - Files: `opencontractserver/documents/migrations/0031_add_pipeline_settings.py`
+- **Migration 0032**: Adds database index to `PipelineSettings.modified` for audit query performance
+  - Files: `opencontractserver/documents/migrations/0032_add_index_to_pipeline_settings_modified.py`
 - **Management command `migrate_pipeline_settings`**: Self-documenting component discovery and settings migration
   - `--list-components`: Introspects pipeline registry to show all components with settings schemas, env vars, defaults, and descriptions
   - `--sync-preferences`: Syncs PREFERRED_PARSERS, PREFERRED_EMBEDDERS, etc. from Django settings to database
@@ -69,6 +71,8 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/pipeline/utils.py:303-361`
 
 ### Changed
+- Pipeline settings getters (`get_preferred_parser`, `get_preferred_embedder`, `get_parser_kwargs`, `get_default_embedder`) no longer fall back to Django settings at runtime. Database is the sole source of truth; initial values are populated from Django settings via `get_instance()`.
+  - Files: `opencontractserver/documents/models.py:977-1092`
 - Pipeline component settings are now DB-only at runtime (Django settings fallback removed from `PipelineComponentBase.get_component_settings()`)
   - Files: `opencontractserver/pipeline/base/base_component.py:180-217`
 - Pipeline configuration UI now reads component settings schema from GraphQL instead of hardcoding config requirements.
@@ -87,6 +91,12 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `config/graphql/queries.py:1815-1949`
 - Settings schema `_coerce_value` now logs warnings on coercion failures instead of silently swallowing errors.
   - Files: `opencontractserver/pipeline/base/settings_schema.py:416-419`
+- `PipelineSettings.save()` now invalidates cache via `transaction.on_commit()` to prevent stale cache when DB write rolls back.
+  - Files: `opencontractserver/documents/models.py:896-906`
+- `PipelineComponentCard` memo now uses custom comparison to avoid unnecessary re-renders from object prop references.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1134-1140`
+- Pipeline mutation error messages now consistently include component path for debugging.
+  - Files: `config/graphql/pipeline_settings_mutations.py:644-656, 720-729`
 
 ### Removed
 
@@ -96,6 +106,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - `opencontractserver/pipeline/embedders/minn_modern_bert_embedder.py` - removed
   - `model_preloaders/download_modernbert_model.py` - removed
   - Tests removed: `opencontractserver/tests/test_modern_bert_embedder.py`, `opencontractserver/tests/test_minn_modern_bert_embedder.py`
+  - Documentation removed: `docs/embedders/modernbert_embedder.md`, `docs/embedders/minn_modernbert_embedder.md`
   - **Migration path**: Users currently using ModernBERT embedders must switch to alternative embedders:
     - `SentenceTransformerEmbedder` - General purpose sentence transformer embeddings
     - `OpenAIEmbedder` - OpenAI API-based embeddings (requires API key)
