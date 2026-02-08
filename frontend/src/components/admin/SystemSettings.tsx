@@ -1131,7 +1131,15 @@ const PipelineComponentCard = memo<PipelineComponentCardProps>(
         {vectorSize && <VectorBadge>{vectorSize}d vectors</VectorBadge>}
       </ComponentCard>
     );
-  }
+  },
+  (prevProps, nextProps) =>
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.color === nextProps.color &&
+    prevProps.stageTitle === nextProps.stageTitle &&
+    prevProps.disabled === nextProps.disabled &&
+    prevProps.onSelect === nextProps.onSelect &&
+    prevProps.component.className === nextProps.component.className &&
+    prevProps.component.title === nextProps.component.title
 );
 
 PipelineComponentCard.displayName = "PipelineComponentCard";

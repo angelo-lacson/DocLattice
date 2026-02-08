@@ -1880,7 +1880,9 @@ class Query(graphene.ObjectType):
                 configured_components.update(settings_instance.parser_kwargs.keys())
 
             if settings_instance.component_settings:
-                configured_components.update(settings_instance.component_settings.keys())
+                configured_components.update(
+                    settings_instance.component_settings.keys()
+                )
 
             def filter_configured(definitions):
                 return [
@@ -1893,7 +1895,9 @@ class Query(graphene.ObjectType):
                 "parsers": filter_configured(components_data["parsers"]),
                 "embedders": filter_configured(components_data["embedders"]),
                 "thumbnailers": filter_configured(components_data["thumbnailers"]),
-                "post_processors": filter_configured(components_data["post_processors"]),
+                "post_processors": filter_configured(
+                    components_data["post_processors"]
+                ),
             }
 
         # Convert PipelineComponentDefinition objects to GraphQL types
