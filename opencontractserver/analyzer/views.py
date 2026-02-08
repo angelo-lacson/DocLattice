@@ -97,7 +97,9 @@ class AnalysisCallbackView(APIView):
 
             # Use timing-safe comparison to prevent token leakage via
             # response time analysis.
-            if not hmac.compare_digest(str(analysis.callback_token), callback_token):
+            if not hmac.compare_digest(
+                str(analysis.callback_token), str(callback_token)
+            ):
                 # Do NOT mark the analysis as FAILED here -- an attacker
                 # could enumerate analysis IDs and DoS legitimate runs by
                 # sending requests with invalid tokens.
