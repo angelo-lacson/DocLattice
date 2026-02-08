@@ -854,6 +854,12 @@ class PipelineSettings(django.db.models.Model):
     class Meta:
         verbose_name = "Pipeline Settings"
         verbose_name_plural = "Pipeline Settings"
+        constraints = [
+            django.db.models.CheckConstraint(
+                check=django.db.models.Q(pk=1),
+                name="pipeline_settings_singleton_pk",
+            ),
+        ]
 
     def __str__(self):
         return "PipelineSettings (Singleton)"
