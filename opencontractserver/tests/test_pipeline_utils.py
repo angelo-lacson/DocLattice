@@ -607,6 +607,9 @@ class TestPostProcessor(BasePostProcessor):
         )
         pipeline_settings.save()
         PipelineSettings._invalidate_cache()
+        # Ensure cache is cleared after TestCase rolls back the transaction,
+        # so stale values don't leak to other tests on the same xdist worker.
+        self.addCleanup(PipelineSettings._invalidate_cache)
 
         # Get the default embedder for comparison
         default_embedder = get_default_embedder()
@@ -656,6 +659,7 @@ class TestPostProcessor(BasePostProcessor):
         )
         pipeline_settings.save()
         PipelineSettings._invalidate_cache()
+        self.addCleanup(PipelineSettings._invalidate_cache)
 
         # When a preferred embedder can't be loaded, the function should return None
         embedder = find_embedder_for_filetype("application/pdf")
