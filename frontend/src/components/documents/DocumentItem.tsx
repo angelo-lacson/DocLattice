@@ -12,6 +12,7 @@ import {
 import _ from "lodash";
 import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { useMutation } from "@apollo/client";
 import { navigateToDocument } from "../../utils/navigationUtils";
 
 import {
@@ -22,7 +23,16 @@ import {
   viewingDocument,
   openedCorpus,
 } from "../../graphql/cache";
-import { AnnotationLabelType, DocumentType } from "../../types/graphql-api";
+import {
+  AnnotationLabelType,
+  DocumentType,
+  DocumentProcessingStatus,
+} from "../../types/graphql-api";
+import {
+  RETRY_DOCUMENT_PROCESSING,
+  RetryDocumentProcessingOutputType,
+  RetryDocumentProcessingInputType,
+} from "../../graphql/mutations";
 import { downloadFile } from "../../utils/files";
 import fallback_doc_icon from "../../assets/images/defaults/default_doc_icon.jpg";
 import { getPermissions } from "../../utils/transform";
@@ -398,6 +408,83 @@ const Tag = styled.span`
   }
 `;
 
+// ===============================================
+// PROCESSING FAILURE COMPONENTS
+// ===============================================
+const FailureDimmer = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+`;
+
+const FailureIconWrapper = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fef2f2;
+  border: 2px solid #fecaca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+`;
+
+const FailureLabel = styled.div`
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #dc2626;
+  text-align: center;
+`;
+
+const FailureMessage = styled.div`
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  text-align: center;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+`;
+
+const ClassicRetryButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid #dc2626;
+  border-radius: 6px;
+  background: white;
+  color: #dc2626;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #dc2626;
+    color: white;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 interface DocumentItemProps {
   item: DocumentType;
   delete_caption?: string;
@@ -427,6 +514,11 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  const [retryProcessing, { loading: retryLoading }] = useMutation<
+    RetryDocumentProcessingOutputType,
+    RetryDocumentProcessingInputType
+  >(RETRY_DOCUMENT_PROCESSING);
+
   const {
     id,
     icon,
@@ -436,11 +528,23 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
     description,
     pdfFile,
     backendLock,
+    processingStatus,
+    processingError,
+    canRetry,
     isPublic,
     myPermissions,
     fileType,
     pageCount,
   } = item;
+
+  const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
+  const isProcessing =
+    backendLock && processingStatus !== DocumentProcessingStatus.FAILED;
+
+  const handleRetry = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    retryProcessing({ variables: { documentId: id } });
+  };
 
   const cardClickHandler = (event: React.MouseEvent<HTMLDivElement>) => {
     if (
@@ -529,15 +633,32 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
     <StyledCard
       className={`noselect ${is_open ? "is-open" : ""} ${
         is_selected ? "is-selected" : ""
-      } ${backendLock ? "backend-locked" : ""}`}
-      onClick={backendLock ? undefined : cardClickHandler}
+      } ${isProcessing ? "backend-locked" : ""}`}
+      onClick={isProcessing ? undefined : cardClickHandler}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {backendLock && (
+      {isProcessing && (
         <Dimmer active inverted style={{ borderRadius: "12px" }}>
           <Loader size="small">Processing...</Loader>
         </Dimmer>
+      )}
+      {isFailed && (
+        <FailureDimmer>
+          <FailureIconWrapper>
+            <Icon name="warning sign" style={{ margin: 0 }} />
+          </FailureIconWrapper>
+          <FailureLabel>Processing Failed</FailureLabel>
+          {processingError && (
+            <FailureMessage>{processingError}</FailureMessage>
+          )}
+          {canRetry && (
+            <ClassicRetryButton onClick={handleRetry} disabled={retryLoading}>
+              <Icon name="redo" style={{ margin: 0 }} />
+              {retryLoading ? "Retrying..." : "Retry Processing"}
+            </ClassicRetryButton>
+          )}
+        </FailureDimmer>
       )}
 
       <SelectionControl
