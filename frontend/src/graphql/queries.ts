@@ -3616,6 +3616,7 @@ export const GET_ME = gql`
       firstName
       lastName
       phone
+      isSuperuser
       isUsageCapped # Crucially, fetch this field
       isProfilePublic # Issue #611
     }
