@@ -255,13 +255,13 @@ export function useUnifiedMentionSearch(
           },
         })) || [];
 
-    // Document results (ManyToMany relationship - take first corpus if available)
+    // Document results (via DocumentPath - take first corpus if available)
     const documents: UnifiedMentionResource[] =
       documentData?.searchDocumentsForMention?.edges
         ?.slice(0, limitPerCategory)
         .map((edge) => {
-          // Documents can be in multiple corpuses - take first one for mention format
-          const firstCorpus = edge.node.corpusSet?.edges?.[0]?.node;
+          // Documents link to corpuses via DocumentPath - take first one for mention format
+          const firstCorpus = edge.node.pathRecords?.edges?.[0]?.node?.corpus;
 
           return {
             id: edge.node.id,

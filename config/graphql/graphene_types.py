@@ -619,22 +619,25 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        """Filter paths to only those in corpuses the user can see."""
+        """Filter paths to current, non-deleted paths in visible corpuses."""
+        from opencontractserver.corpuses.models import Corpus
+
+        visible_corpus_ids = Corpus.objects.visible_to_user(
+            info.context.user
+        ).values_list("id", flat=True)
+
         if issubclass(type(queryset), QuerySet):
-            # Filter by corpus visibility
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.filter(corpus_id__in=visible_corpus_ids)
+            return queryset.filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         elif "RelatedManager" in str(type(queryset)):
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.all().filter(corpus_id__in=visible_corpus_ids)
+            return queryset.all().filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         else:
             return queryset
 
