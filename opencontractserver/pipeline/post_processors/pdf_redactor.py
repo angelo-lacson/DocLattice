@@ -85,6 +85,10 @@ class PDFRedactor(BasePostProcessor):
         )
         try:
             labels_to_redact = all_kwargs.get("labels_to_redact", [])
+            dpi = all_kwargs.get(
+                "redaction_dpi",
+                self.settings.redaction_dpi if self.settings else 200,
+            )
 
             output_zip_bytes = io.BytesIO()
             input_zip_bytes = io.BytesIO(zip_bytes)
@@ -145,17 +149,16 @@ class PDFRedactor(BasePostProcessor):
                             pdf_bytes=pdf_data,
                             pawls_pages=pawls_pages,
                             page_annotations=annots_by_page_list,
-                            dpi=200,
+                            dpi=dpi,
                         )
 
-                        # Test with BytesIO
                         output_pdf_bytesio = io.BytesIO()
                         build_text_redacted_pdf(
                             output_pdf=output_pdf_bytesio,
                             redacted_images=redacted_image_list,
                             pawls_pages=pawls_pages,
                             page_redactions=annots_by_page_list,
-                            dpi=200,
+                            dpi=dpi,
                             hide_text=True,
                         )
                         output_zip.writestr(filename, output_pdf_bytesio.getvalue())

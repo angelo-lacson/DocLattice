@@ -78,7 +78,7 @@ class PdfThumbnailGenerator(BaseThumbnailGenerator):
 
         try:
             # Determine desired dimensions
-            thumbnail_size = (width, width)
+            thumbnail_size = (width, height)
             crop_size = (width, height)
 
             if not pdf_bytes:
