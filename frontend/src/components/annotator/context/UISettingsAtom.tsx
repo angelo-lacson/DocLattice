@@ -21,6 +21,7 @@ import {
 } from "./AnnotationControlAtoms";
 import { useCorpusState } from "./CorpusAtom";
 import { useSelectedDocument } from "./DocumentAtom";
+import { isTextFileType, isPdfFileType } from "../../../utils/files";
 import {
   showStructuralAnnotations,
   showSelectedAnnotationOnly,
@@ -285,26 +286,31 @@ export function useAnnotationControls() {
     relationModalVisibleAtom
   );
 
-  const initialized = useRef(false);
+  const spanLabelInitialized = useRef(false);
+  const relationLabelInitialized = useRef(false);
 
-  // Initialize default values only once
+  // Initialize default values - use separate refs per label type to avoid
+  // early cutoff when one label type loads before another
   useEffect(() => {
-    if (!initialized.current && selectedDocument) {
-      const isTextFile =
-        selectedDocument.fileType?.startsWith("text/") ?? false;
-      const isPdfFile = selectedDocument.fileType === "application/pdf";
+    if (!selectedDocument) return;
 
+    const isTextFile = isTextFileType(selectedDocument.fileType);
+    const isPdfFile = isPdfFileType(selectedDocument.fileType);
+
+    if (!spanLabelInitialized.current) {
       if (isTextFile && humanSpanLabelChoices.length > 0 && !activeSpanLabel) {
         setActiveSpanLabel(humanSpanLabelChoices[0]);
-        initialized.current = true;
+        spanLabelInitialized.current = true;
       } else if (isPdfFile && humanTokenLabels.length > 0 && !activeSpanLabel) {
         setActiveSpanLabel(humanTokenLabels[0]);
-        initialized.current = true;
+        spanLabelInitialized.current = true;
       }
+    }
 
+    if (!relationLabelInitialized.current) {
       if (relationLabels.length > 0 && !activeRelationLabel) {
         setActiveRelationLabel(relationLabels[0]);
-        initialized.current = true;
+        relationLabelInitialized.current = true;
       }
     }
   }, [
