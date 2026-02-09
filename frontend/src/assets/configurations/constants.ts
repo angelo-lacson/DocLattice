@@ -197,6 +197,12 @@ export const PIPELINE_UI = {
   FLOW_PARTICLE_COUNT: 8,
 } as const;
 
+/**
+ * Legacy MIME type for plain text files used in some parts of the system.
+ * Standard type is "text/plain", but some documents use this non-standard value.
+ */
+export const LEGACY_TEXT_MIME_TYPE = "application/txt";
+
 // Supported MIME types for pipeline configuration
 export const SUPPORTED_MIME_TYPES = [
   { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
