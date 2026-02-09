@@ -619,22 +619,25 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        """Filter paths to only those in corpuses the user can see."""
+        """Filter paths to current, non-deleted paths in visible corpuses."""
+        from opencontractserver.corpuses.models import Corpus
+
+        visible_corpus_ids = Corpus.objects.visible_to_user(
+            info.context.user
+        ).values_list("id", flat=True)
+
         if issubclass(type(queryset), QuerySet):
-            # Filter by corpus visibility
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.filter(corpus_id__in=visible_corpus_ids)
+            return queryset.filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         elif "RelatedManager" in str(type(queryset)):
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.all().filter(corpus_id__in=visible_corpus_ids)
+            return queryset.all().filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         else:
             return queryset
 
@@ -2639,8 +2642,10 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 )
 
                 if document and corpus:
-                    # Check if document is actually in this corpus
-                    if corpus in document.corpus_set.all():
+                    # Check if document is actually in this corpus via DocumentPath
+                    if DocumentPath.objects.filter(
+                        document=document, corpus=corpus
+                    ).exists():
                         mentions.append(
                             MentionedResourceType(
                                 type="document",
@@ -2688,12 +2693,9 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 document = Document.objects.visible_to_user(user).get(slug=doc_slug)
                 url = f"/d/{document.creator.slug}/{document.slug}"
 
-                # Try to get corpus context (documents can be in multiple corpuses)
-                corpus = (
-                    document.corpus_set.first()
-                    if document.corpus_set.exists()
-                    else None
-                )
+                # Try to get corpus context via DocumentPath
+                doc_path = DocumentPath.objects.filter(document=document).first()
+                corpus = doc_path.corpus if doc_path else None
 
                 mentions.append(
                     MentionedResourceType(
@@ -2870,6 +2872,43 @@ class FileTypeEnum(graphene.Enum):
     # HTML has been removed as we don't support it
 
 
+class ComponentSettingSchemaType(graphene.ObjectType):
+    """
+    Schema for a single pipeline component setting.
+
+    Describes a configuration option that can be set in PipelineSettings
+    for a specific component.
+    """
+
+    name = graphene.String(
+        required=True,
+        description="Setting name (used as key in component_settings dict).",
+    )
+    setting_type = graphene.String(
+        required=True, description="Type: 'required', 'optional', or 'secret'."
+    )
+    python_type = graphene.String(
+        description="Python type hint (e.g., 'str', 'int', 'bool')."
+    )
+    required = graphene.Boolean(
+        required=True,
+        description="Whether this setting must have a value for the component to work.",
+    )
+    description = graphene.String(
+        description="Human-readable description of the setting."
+    )
+    default = GenericScalar(description="Default value if not configured.")
+    env_var = graphene.String(
+        description="Environment variable name used during migration seeding."
+    )
+    has_value = graphene.Boolean(
+        description="Whether this setting currently has a value configured."
+    )
+    current_value = GenericScalar(
+        description="Current value (always null for secrets to avoid exposure)."
+    )
+
+
 class PipelineComponentType(graphene.ObjectType):
     """Graphene type for pipeline components."""
 
@@ -2891,6 +2930,10 @@ class PipelineComponentType(graphene.ObjectType):
     )
     input_schema = GenericScalar(
         description="JSONSchema schema for inputs supported from user (experimental - not fully implemented)."
+    )
+    settings_schema = graphene.List(
+        ComponentSettingSchemaType,
+        description="Schema for component configuration settings stored in PipelineSettings.",
     )
     # Multimodal support flags (for embedders)
     is_multimodal = graphene.Boolean(

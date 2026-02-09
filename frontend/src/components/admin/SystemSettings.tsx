@@ -1,11 +1,17 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useEffect,
+  memo,
+} from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import {
   Button,
   Input,
-  Textarea,
   Modal,
   ModalHeader,
   ModalBody,
@@ -15,23 +21,35 @@ import {
 import {
   Settings,
   ChevronLeft,
+  ChevronRight,
   Save,
   RotateCcw,
   AlertTriangle,
-  X,
   FileText,
   Cpu,
   Image,
   Key,
   Info,
-  Edit2,
+  Upload,
   Trash2,
+  Check,
+  CircleCheck,
+  CircleAlert,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import {
   PipelineSettingsType,
   PipelineComponentsType,
+  PipelineComponentType,
+  ComponentSettingSchemaType,
 } from "../../types/graphql-api";
+import { getComponentIcon, getComponentDisplayName } from "./PipelineIcons";
+import {
+  PIPELINE_UI,
+  SUPPORTED_MIME_TYPES,
+  MIME_TO_SHORT_LABEL,
+} from "../../assets/configurations/constants";
+import { formatSettingLabel } from "../../utils/formatters";
 
 // ============================================================================
 // GraphQL Operations
@@ -65,6 +83,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
       embedders {
         name
@@ -72,6 +101,18 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         vectorSize
+        supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
       thumbnailers {
         name
@@ -79,6 +120,17 @@ const GET_PIPELINE_COMPONENTS = gql`
         description
         className
         supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
       }
     }
   }
@@ -178,10 +230,11 @@ const DELETE_COMPONENT_SECRETS = gql`
 
 const Container = styled.div`
   padding: 2rem;
-  max-width: 1200px;
+  max-width: 900px;
   margin: 0 auto;
   min-height: 100%;
   overflow-y: auto;
+  overflow-x: clip;
 
   @media (max-width: 768px) {
     padding: 1rem;
@@ -194,7 +247,7 @@ const BackButton = styled.button`
   gap: 0.5rem;
   background: none;
   border: none;
-  color: #6366f1;
+  color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -203,7 +256,7 @@ const BackButton = styled.button`
   transition: color 0.15s ease;
 
   &:hover {
-    color: #4f46e5;
+    color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 
   svg {
@@ -228,7 +281,7 @@ const PageTitle = styled.h1`
   svg {
     width: 28px;
     height: 28px;
-    color: #6366f1;
+    color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 
   @media (max-width: 768px) {
@@ -257,6 +310,506 @@ const LastModified = styled.div`
   }
 `;
 
+// Animation keyframes
+const etherealFlow = keyframes`
+  0% { top: -10px; opacity: 0; transform: scale(0.6); }
+  12% { opacity: 0.7; transform: scale(1); }
+  80% { opacity: 0.5; transform: scale(0.8); }
+  100% { top: calc(100% + 10px); opacity: 0; transform: scale(0.4); }
+`;
+
+const stageReveal = keyframes`
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const junctionPulse = keyframes`
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.5); opacity: 0.1; }
+`;
+
+// Pipeline Flow Styles - Channel Layout
+const PipelineFlowContainer = styled.div`
+  position: relative;
+  margin-bottom: 2rem;
+  isolation: isolate;
+`;
+
+const ChannelTrack = styled.div`
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: ${PIPELINE_UI.CHANNEL_WIDTH_PX}px;
+  z-index: 1;
+  pointer-events: none;
+`;
+
+const ChannelGlow = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 18px;
+  background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08;
+  border-radius: 10px;
+`;
+
+const ChannelCenterLine = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 2px;
+  background: #e0e0e0;
+  border-radius: 1px;
+`;
+
+const FlowParticle = styled.div<{
+  $size: number;
+  $xOffset: number;
+  $duration: number;
+  $delay: number;
+}>`
+  position: absolute;
+  left: ${(props) => props.$xOffset}px;
+  width: ${(props) => props.$size}px;
+  height: ${(props) => props.$size * 1.8}px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}90,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20
+  );
+  box-shadow: 0 0 ${(props) => props.$size * 2}px
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30;
+  animation: ${etherealFlow} ${(props) => props.$duration}s ease-in-out infinite;
+  animation-delay: ${(props) => props.$delay}s;
+  opacity: 0;
+  filter: blur(0.5px);
+`;
+
+const PipelineContentColumn = styled.div`
+  position: relative;
+  z-index: 3;
+`;
+
+const StageRow = styled.div<{ $delay?: number }>`
+  display: flex;
+  align-items: stretch;
+  animation: ${stageReveal} 0.5s ease-out both;
+  animation-delay: ${(props) => `${0.1 + (props.$delay ?? 0) * 0.12}s`};
+`;
+
+const StageRowSpacer = styled.div`
+  height: ${PIPELINE_UI.STAGE_SPACING_PX}px;
+`;
+
+const JunctionColumn = styled.div<{ $active?: boolean }>`
+  width: ${PIPELINE_UI.CHANNEL_WIDTH_PX}px;
+  flex-shrink: 0;
+  position: relative;
+`;
+
+const JunctionDot = styled.div<{ $active?: boolean }>`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: ${PIPELINE_UI.JUNCTION_SIZE_PX}px;
+  height: ${PIPELINE_UI.JUNCTION_SIZE_PX}px;
+  border-radius: 50%;
+  background: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#fff"};
+  border: 2.5px solid
+    ${(props) => (props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#D0D0D0")};
+  box-shadow: ${(props) =>
+    props.$active ? `0 0 12px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}40` : "none"};
+  transition: all 0.4s ease;
+`;
+
+const JunctionPulseRing = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  width: ${PIPELINE_UI.JUNCTION_SIZE_PX + 16}px;
+  height: ${PIPELINE_UI.JUNCTION_SIZE_PX + 16}px;
+  border-radius: 50%;
+  background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}12;
+  animation: ${junctionPulse} 2.5s ease-in-out infinite;
+`;
+
+const ConnectorArm = styled.div<{ $active?: boolean }>`
+  width: ${PIPELINE_UI.CONNECTOR_ARM_WIDTH_PX}px;
+  position: relative;
+  flex-shrink: 0;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    background: ${(props) =>
+      props.$active
+        ? `linear-gradient(90deg, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}30, ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}15)`
+        : "#E0E0E0"};
+    transform: translateY(-50%);
+    transition: background 0.4s;
+  }
+`;
+
+const StageCardContainer = styled.div<{ $active?: boolean }>`
+  flex: 1;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid
+    ${(props) =>
+      props.$active ? `${PIPELINE_UI.PRIMARY_ACCENT_COLOR}25` : "#EBEBEB"};
+  box-shadow: ${(props) =>
+    props.$active
+      ? `0 2px 12px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}08, 0 1px 4px rgba(0, 0, 0, 0.03)`
+      : "0 1px 4px rgba(0, 0, 0, 0.03)"};
+  position: relative;
+  transition: all 0.3s ease;
+  overflow: hidden;
+`;
+
+const StageCardAccentBar = styled.div`
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}60,
+    transparent
+  );
+`;
+
+const StageCardHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+`;
+
+const StageNumberBadge = styled.span<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: ${(props) =>
+    props.$active ? `${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10` : "#F5F5F5"};
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#BBB"};
+  transition: all 0.3s;
+`;
+
+const StageHeaderInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+`;
+
+const StageTitle = styled.h2`
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+  letter-spacing: -0.01em;
+`;
+
+const StageSubtitle = styled.p`
+  font-size: 0.75rem;
+  color: #999;
+  margin: 0.125rem 0 0 0;
+`;
+
+const MimeSelector = styled.div`
+  display: flex;
+  gap: 0.3125rem;
+`;
+
+const MimeButton = styled.button<{ $active: boolean }>`
+  padding: 0.1875rem 0.5625rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: none;
+  background: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#F0F0F0"};
+  color: ${(props) => (props.$active ? "#fff" : "#999")};
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${(props) =>
+      props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#E8E8E8"};
+    color: ${(props) => (props.$active ? "#fff" : "#666")};
+  }
+`;
+
+const StageCardContent = styled.div`
+  padding: 0 1.25rem 1.125rem;
+`;
+
+const ComponentGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(${PIPELINE_UI.COMPONENT_GRID_MIN_WIDTH}px, 1fr)
+  );
+  gap: 1rem;
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+`;
+
+const ComponentCard = styled.button<{ $selected: boolean; $color: string }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1rem;
+  background: ${(props) => (props.$selected ? `${props.$color}10` : "#f8fafc")};
+  border: 2px solid ${(props) => (props.$selected ? props.$color : "#e2e8f0")};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-height: ${PIPELINE_UI.COMPONENT_CARD_MIN_HEIGHT_PX}px;
+
+  &:hover {
+    border-color: ${(props) => props.$color};
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  ${(props) =>
+    props.$selected &&
+    `
+    box-shadow: 0 0 0 3px ${props.$color}20;
+  `}
+`;
+
+const SelectedBadge = styled.div<{ $color: string }>`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: ${(props) => props.$color};
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 12px;
+    height: 12px;
+    color: white;
+  }
+`;
+
+const ComponentIconWrapper = styled.div`
+  margin-bottom: 0.5rem;
+`;
+
+const ComponentName = styled.span`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #1e293b;
+  text-align: center;
+  line-height: 1.3;
+`;
+
+const VectorBadge = styled.span`
+  font-size: 0.625rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+`;
+
+const NoComponents = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-style: italic;
+`;
+
+// Collapsible Settings
+const AdvancedSettingsToggle = styled.button<{ $expanded: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem;
+  margin-top: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+    transform: rotate(${(props) => (props.$expanded ? "90deg" : "0deg")});
+  }
+`;
+
+const AdvancedSettingsContent = styled.div<{ $expanded: boolean }>`
+  display: ${(props) => (props.$expanded ? "block" : "none")};
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: #fafafa;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+`;
+
+const RequiredBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.625rem;
+  font-weight: 500;
+  border-radius: 4px;
+  margin-left: auto;
+
+  svg {
+    width: 10px;
+    height: 10px;
+  }
+`;
+
+// Intake and Output Points
+const IntakeCard = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 1.125rem 1.5rem;
+  border-radius: 14px;
+  border: 1.5px dashed #ddd;
+  background: #fafafa;
+  transition: all 0.25s ease;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: #aaa;
+  }
+`;
+
+const IntakeText = styled.span`
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #888;
+`;
+
+const IntakeNode = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}50;
+  background: radial-gradient(
+    circle,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20,
+    transparent
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const IntakeNodeCenter = styled.div`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+  box-shadow: 0 0 8px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}50;
+`;
+
+const OutputCheckmark = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR},
+    ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}dd
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}35;
+
+  svg {
+    width: 12px;
+    height: 12px;
+    color: #fff;
+  }
+`;
+
+const OutputInfo = styled.div`
+  flex: 1;
+  padding: 0.5rem 0;
+`;
+
+const OutputTitle = styled.span`
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #666;
+`;
+
+const OutputSubtitle = styled.p`
+  margin: 0.125rem 0 0;
+  font-size: 0.6875rem;
+  color: #aaa;
+`;
+
+// Bottom sections
 const Section = styled.div`
   background: white;
   border: 1px solid #e2e8f0;
@@ -277,14 +830,14 @@ const SectionTitle = styled.h2`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #1e293b;
   margin: 0;
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     color: #6366f1;
   }
 `;
@@ -295,108 +848,72 @@ const SectionDescription = styled.p`
   margin: 0 0 1rem 0;
 `;
 
-const SettingsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
+const SecretKeyList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 `;
 
-const SettingCard = styled.div`
+const SecretKeyRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 1rem;
+  font-size: 0.8125rem;
 `;
 
-const SettingLabel = styled.div`
-  font-size: 0.75rem;
+const SecretKeyName = styled.span`
   font-weight: 500;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
+  color: #1e293b;
+  font-family: monospace;
+  font-size: 0.75rem;
 `;
 
-const SettingValue = styled.div`
-  font-size: 0.875rem;
-  color: #1e293b;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  word-break: break-all;
+const SecretStatusIndicator = styled.span<{ $populated: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  margin-left: auto;
+  background: ${(props) => (props.$populated ? "#ecfdf5" : "#fef3c7")};
+  color: ${(props) => (props.$populated ? "#065f46" : "#92400e")};
+
+  svg {
+    width: 10px;
+    height: 10px;
+  }
 `;
 
 const EmptyValue = styled.span`
   color: #94a3b8;
   font-style: italic;
+  font-size: 0.875rem;
 `;
 
-const MimeTypeList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-`;
-
-const MimeTypeRow = styled.div`
+const DefaultEmbedderDisplay = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem;
+  padding: 1rem;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-
-  @media (max-width: 640px) {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 `;
 
-const MimeTypeBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.75rem;
-  background: #e0e7ff;
-  color: #3730a3;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 9999px;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-`;
-
-const ComponentPath = styled.span`
+const DefaultEmbedderInfo = styled.div`
   flex: 1;
-  font-size: 0.875rem;
-  color: #1e293b;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  word-break: break-all;
 `;
 
-const SecretsList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-`;
-
-const SecretBadge = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  background: #fef3c7;
-  color: #92400e;
+const DefaultEmbedderPath = styled.code`
   font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 6px;
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`;
-
-const ButtonGroup = styled.div`
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  color: #64748b;
+  word-break: break-all;
 `;
 
 const ActionButtons = styled.div`
@@ -469,8 +986,30 @@ const WarningText = styled.div`
   }
 `;
 
+const SecretFieldGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const SecretFieldRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const SecretFieldHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
 const FormField = styled.div`
   margin-bottom: 1rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 `;
 
 const FormLabel = styled.label`
@@ -487,37 +1026,8 @@ const FormHelperText = styled.p`
   margin: 0.375rem 0 0 0;
 `;
 
-const JsonEditor = styled.div`
-  margin-bottom: 1rem;
-`;
-
-const IconButton = styled.button<{ $danger?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  background: ${(props) => (props.$danger ? "#fef2f2" : "#f1f5f9")};
-  color: ${(props) => (props.$danger ? "#dc2626" : "#475569")};
-
-  &:hover {
-    background: ${(props) => (props.$danger ? "#fee2e2" : "#e2e8f0")};
-    color: ${(props) => (props.$danger ? "#b91c1c" : "#1e293b")};
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-`;
-
 // ============================================================================
-// Component
+// Types
 // ============================================================================
 
 interface PipelineSettingsQueryResult {
@@ -528,22 +1038,619 @@ interface PipelineComponentsQueryResult {
   pipelineComponents: PipelineComponentsType;
 }
 
+type StageType = "parsers" | "embedders" | "thumbnailers";
+
+// Type for pipeline settings keys that hold MIME-type mappings
+type PipelineMappingKey =
+  | "preferredParsers"
+  | "preferredEmbedders"
+  | "preferredThumbnailers";
+
+type SettingsSchemaEntry = ComponentSettingSchemaType;
+
+// Stage configuration with properly typed settings keys
+const STAGE_CONFIG: Record<
+  StageType,
+  {
+    color: string;
+    icon: React.FC;
+    title: string;
+    subtitle: string;
+    settingsKey: PipelineMappingKey;
+  }
+> = {
+  parsers: {
+    color: "#3B82F6",
+    icon: FileText,
+    title: "Parser",
+    subtitle: "Extract text and structure",
+    settingsKey: "preferredParsers",
+  },
+  thumbnailers: {
+    color: "#EC4899",
+    icon: Image,
+    title: "Thumbnailer",
+    subtitle: "Generate document previews",
+    settingsKey: "preferredThumbnailers",
+  },
+  embedders: {
+    color: "#10B981",
+    icon: Cpu,
+    title: "Embedder",
+    subtitle: "Create vector embeddings",
+    settingsKey: "preferredEmbedders",
+  },
+};
+
+// ============================================================================
+// Memoized Sub-components
+// ============================================================================
+
+interface PipelineComponentCardProps {
+  component: PipelineComponentType & { className: string };
+  isSelected: boolean;
+  color: string;
+  stageTitle: string;
+  disabled: boolean;
+  onSelect: () => void;
+}
+
+/**
+ * Memoized component card to prevent unnecessary re-renders.
+ * Only re-renders when its specific props change.
+ */
+const PipelineComponentCard = memo<PipelineComponentCardProps>(
+  ({ component, isSelected, color, stageTitle, disabled, onSelect }) => {
+    const IconComponent = getComponentIcon(component.className);
+    const displayName = getComponentDisplayName(
+      component.className,
+      component.title || undefined
+    );
+    const vectorSize = (
+      component as PipelineComponentType & { vectorSize?: number }
+    ).vectorSize;
+
+    return (
+      <ComponentCard
+        $selected={isSelected}
+        $color={color}
+        onClick={onSelect}
+        disabled={disabled}
+        aria-pressed={isSelected}
+        aria-label={`Select ${displayName} as ${stageTitle.toLowerCase()}`}
+      >
+        {isSelected && (
+          <SelectedBadge $color={color}>
+            <Check />
+          </SelectedBadge>
+        )}
+        <ComponentIconWrapper>
+          <IconComponent size={PIPELINE_UI.ICON_SIZE} />
+        </ComponentIconWrapper>
+        <ComponentName>{displayName}</ComponentName>
+        {vectorSize && <VectorBadge>{vectorSize}d vectors</VectorBadge>}
+      </ComponentCard>
+    );
+  },
+  (prevProps, nextProps) =>
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.color === nextProps.color &&
+    prevProps.stageTitle === nextProps.stageTitle &&
+    prevProps.disabled === nextProps.disabled &&
+    prevProps.onSelect === nextProps.onSelect &&
+    prevProps.component.className === nextProps.component.className &&
+    prevProps.component.title === nextProps.component.title
+);
+
+PipelineComponentCard.displayName = "PipelineComponentCard";
+
+// ============================================================================
+// Flow Particles Subcomponent
+// ============================================================================
+
+/**
+ * Animated particles flowing through the pipeline channel.
+ * Uses deterministic pseudo-random values for stable rendering.
+ */
+const FlowParticles = memo(() => {
+  const particles = useMemo(() => {
+    return Array.from({ length: PIPELINE_UI.FLOW_PARTICLE_COUNT }).map(
+      (_, i) => {
+        const size = 3 + (((i * 7 + 3) % 11) / 11) * 4;
+        const xOffset =
+          8 + (((i * 13 + 5) % 17) / 17) * (PIPELINE_UI.CHANNEL_WIDTH_PX - 16);
+        const duration = 3 + (((i * 11 + 7) % 13) / 13) * 2.5;
+        const delay = i * (duration / PIPELINE_UI.FLOW_PARTICLE_COUNT);
+        return { size, xOffset, duration, delay };
+      }
+    );
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: PIPELINE_UI.CHANNEL_WIDTH_PX,
+        height: "100%",
+        overflow: "hidden",
+        zIndex: 2,
+        pointerEvents: "none",
+      }}
+    >
+      {particles.map((p, i) => (
+        <FlowParticle
+          key={i}
+          $size={p.size}
+          $xOffset={p.xOffset}
+          $duration={p.duration}
+          $delay={p.delay}
+        />
+      ))}
+    </div>
+  );
+});
+
+FlowParticles.displayName = "FlowParticles";
+
+// ============================================================================
+// Advanced Settings Panel Subcomponent
+// ============================================================================
+
+interface AdvancedSettingsPanelProps {
+  currentSelection: string;
+  configSettings: ComponentSettingSchemaType[];
+  secretSettings: ComponentSettingSchemaType[];
+  isExpanded: boolean;
+  settingsKey: string;
+  saving: boolean;
+  onToggle: () => void;
+  onAddSecrets: (componentPath: string) => void;
+  onDeleteSecrets: (componentPath: string) => void;
+  onSaveConfig: (componentPath: string, values: Record<string, string>) => void;
+}
+
+/**
+ * Collapsible panel showing per-key settings for a selected component.
+ * Shows editable fields for required/optional settings and status indicators
+ * for secret keys.
+ */
+const AdvancedSettingsPanel = memo<AdvancedSettingsPanelProps>(
+  ({
+    currentSelection,
+    configSettings,
+    secretSettings,
+    isExpanded,
+    settingsKey,
+    saving,
+    onToggle,
+    onAddSecrets,
+    onDeleteSecrets,
+    onSaveConfig,
+  }) => {
+    const allSettings = [...configSettings, ...secretSettings];
+    const anyMissing = allSettings.some((s) => s.required && !s.hasValue);
+    const anySecretsConfigured = secretSettings.some((s) => s.hasValue);
+
+    // Local editing state for non-secret settings
+    const [editValues, setEditValues] = useState<Record<string, string>>({});
+    const [isDirty, setIsDirty] = useState(false);
+
+    // Reset edit state when component selection changes
+    useEffect(() => {
+      const initial: Record<string, string> = {};
+      for (const entry of configSettings) {
+        initial[entry.name] =
+          entry.currentValue != null ? String(entry.currentValue) : "";
+      }
+      setEditValues(initial);
+      setIsDirty(false);
+    }, [currentSelection, configSettings]);
+
+    const handleFieldChange = useCallback((name: string, value: string) => {
+      setEditValues((prev) => ({ ...prev, [name]: value }));
+      setIsDirty(true);
+    }, []);
+
+    const handleSave = useCallback(() => {
+      onSaveConfig(currentSelection, editValues);
+      setIsDirty(false);
+    }, [currentSelection, editValues, onSaveConfig]);
+
+    const hasSettings = allSettings.length > 0;
+
+    return (
+      <>
+        <AdvancedSettingsToggle
+          $expanded={isExpanded}
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          aria-controls={`settings-content-${settingsKey}`}
+        >
+          <ChevronRight />
+          Advanced Settings
+          {anyMissing && (
+            <RequiredBadge>
+              <AlertTriangle />
+              Config Required
+            </RequiredBadge>
+          )}
+        </AdvancedSettingsToggle>
+
+        {isExpanded && (
+          <AdvancedSettingsContent
+            $expanded={isExpanded}
+            id={`settings-content-${settingsKey}`}
+          >
+            {hasSettings ? (
+              <>
+                {/* Non-secret (required/optional) settings */}
+                {configSettings.length > 0 && (
+                  <FormField>
+                    <FormLabel>
+                      <Settings
+                        style={{ width: 14, height: 14, marginRight: 6 }}
+                      />
+                      Configuration
+                    </FormLabel>
+                    <SecretFieldGroup>
+                      {configSettings.map((entry) => (
+                        <SecretFieldRow key={entry.name}>
+                          <SecretFieldHeader>
+                            <FormLabel
+                              style={{ marginBottom: 0 }}
+                              htmlFor={`config-${settingsKey}-${entry.name}`}
+                            >
+                              {formatSettingLabel(
+                                entry.name,
+                                entry.description
+                              )}
+                            </FormLabel>
+                            {entry.required && (
+                              <RequiredBadge>
+                                <AlertTriangle />
+                                Required
+                              </RequiredBadge>
+                            )}
+                          </SecretFieldHeader>
+                          {entry.pythonType === "bool" ? (
+                            <select
+                              id={`config-${settingsKey}-${entry.name}`}
+                              value={editValues[entry.name] ?? ""}
+                              onChange={(e) =>
+                                handleFieldChange(entry.name, e.target.value)
+                              }
+                              style={{
+                                padding: "0.375rem 0.5rem",
+                                borderRadius: "6px",
+                                border: "1px solid #d1d5db",
+                                fontSize: "0.875rem",
+                                background: "white",
+                              }}
+                            >
+                              <option value="">
+                                Default
+                                {entry.default != null
+                                  ? ` (${entry.default})`
+                                  : ""}
+                              </option>
+                              <option value="true">True</option>
+                              <option value="false">False</option>
+                            </select>
+                          ) : (
+                            <Input
+                              id={`config-${settingsKey}-${entry.name}`}
+                              value={editValues[entry.name] ?? ""}
+                              onChange={(e) =>
+                                handleFieldChange(entry.name, e.target.value)
+                              }
+                              placeholder={
+                                entry.default != null
+                                  ? `Default: ${entry.default}`
+                                  : "Enter value..."
+                              }
+                              fullWidth
+                            />
+                          )}
+                          {entry.envVar && (
+                            <FormHelperText>
+                              Env var: {entry.envVar}
+                            </FormHelperText>
+                          )}
+                        </SecretFieldRow>
+                      ))}
+                    </SecretFieldGroup>
+                    {isDirty && (
+                      <div style={{ marginTop: "0.75rem" }}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleSave}
+                          loading={saving}
+                        >
+                          <Save
+                            style={{ width: 14, height: 14, marginRight: 6 }}
+                          />
+                          Save Configuration
+                        </Button>
+                      </div>
+                    )}
+                  </FormField>
+                )}
+
+                {/* Secret settings */}
+                {secretSettings.length > 0 && (
+                  <FormField>
+                    <FormLabel>
+                      <Key style={{ width: 14, height: 14, marginRight: 6 }} />
+                      Secret Keys
+                    </FormLabel>
+                    <SecretKeyList>
+                      {secretSettings.map((entry) => (
+                        <SecretKeyRow key={entry.name}>
+                          <SecretKeyName>{entry.name}</SecretKeyName>
+                          {entry.required && (
+                            <RequiredBadge>
+                              <AlertTriangle />
+                              Required
+                            </RequiredBadge>
+                          )}
+                          <SecretStatusIndicator $populated={!!entry.hasValue}>
+                            {entry.hasValue ? (
+                              <>
+                                <CircleCheck /> Set
+                              </>
+                            ) : (
+                              <>
+                                <CircleAlert /> Not set
+                              </>
+                            )}
+                          </SecretStatusIndicator>
+                        </SecretKeyRow>
+                      ))}
+                    </SecretKeyList>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        marginTop: "0.75rem",
+                      }}
+                    >
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onAddSecrets(currentSelection)}
+                      >
+                        <Key
+                          style={{ width: 14, height: 14, marginRight: 6 }}
+                        />
+                        {anySecretsConfigured
+                          ? "Update Secrets"
+                          : "Configure Secrets"}
+                      </Button>
+                      {anySecretsConfigured && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onDeleteSecrets(currentSelection)}
+                        >
+                          <Trash2
+                            style={{ width: 14, height: 14, marginRight: 6 }}
+                          />
+                          Delete All
+                        </Button>
+                      )}
+                    </div>
+                  </FormField>
+                )}
+              </>
+            ) : (
+              <FormField>
+                <FormLabel>Component Path</FormLabel>
+                <DefaultEmbedderPath>{currentSelection}</DefaultEmbedderPath>
+                <FormHelperText>
+                  This component has no additional configuration options.
+                </FormHelperText>
+              </FormField>
+            )}
+          </AdvancedSettingsContent>
+        )}
+      </>
+    );
+  }
+);
+
+AdvancedSettingsPanel.displayName = "AdvancedSettingsPanel";
+
+// ============================================================================
+// Pipeline Stage Section Subcomponent
+// ============================================================================
+
+interface PipelineStageSectionProps {
+  stage: StageType;
+  stageIndex: number;
+  config: (typeof STAGE_CONFIG)[StageType];
+  mimeType: string;
+  components: (PipelineComponentType & { className: string })[];
+  currentSelection: string | null;
+  configSettings: ComponentSettingSchemaType[];
+  secretSettings: ComponentSettingSchemaType[];
+  isExpanded: boolean;
+  settingsKey: string;
+  updating: boolean;
+  onMimeTypeChange: (stage: StageType, mimeType: string) => void;
+  onSelectComponent: (
+    stage: StageType,
+    mimeType: string,
+    className: string
+  ) => void;
+  onToggleSettings: (key: string) => void;
+  onAddSecrets: (componentPath: string) => void;
+  onDeleteSecrets: (componentPath: string) => void;
+  onSaveConfig: (componentPath: string, values: Record<string, string>) => void;
+}
+
+/**
+ * Renders a complete pipeline stage with header, component grid, and settings.
+ */
+const PipelineStageSection = memo<PipelineStageSectionProps>(
+  ({
+    stage,
+    stageIndex,
+    config,
+    mimeType,
+    components,
+    currentSelection,
+    configSettings,
+    secretSettings,
+    isExpanded,
+    settingsKey,
+    updating,
+    onMimeTypeChange,
+    onSelectComponent,
+    onToggleSettings,
+    onAddSecrets,
+    onDeleteSecrets,
+    onSaveConfig,
+  }) => {
+    const hasSelection = currentSelection !== null;
+
+    return (
+      <StageRow $delay={stageIndex + 1}>
+        <JunctionColumn $active={hasSelection}>
+          {hasSelection && <JunctionPulseRing />}
+          <JunctionDot $active={hasSelection} />
+        </JunctionColumn>
+        <ConnectorArm $active={hasSelection} />
+        <StageCardContainer $active={hasSelection}>
+          {hasSelection && <StageCardAccentBar />}
+          <StageCardHeader>
+            <StageHeaderInfo>
+              <StageNumberBadge $active={hasSelection}>
+                {stageIndex + 1}
+              </StageNumberBadge>
+              <div>
+                <StageTitle>{config.title}</StageTitle>
+                <StageSubtitle>{config.subtitle}</StageSubtitle>
+              </div>
+            </StageHeaderInfo>
+            <MimeSelector
+              role="group"
+              aria-label={`${config.title} file type filter`}
+            >
+              {SUPPORTED_MIME_TYPES.map((mime) => (
+                <MimeButton
+                  key={mime.value}
+                  $active={mimeType === mime.value}
+                  onClick={() => onMimeTypeChange(stage, mime.value)}
+                  aria-pressed={mimeType === mime.value}
+                  aria-label={`Filter ${config.title} by ${mime.label}`}
+                >
+                  {mime.shortLabel}
+                </MimeButton>
+              ))}
+            </MimeSelector>
+          </StageCardHeader>
+          <StageCardContent>
+            {components.length > 0 ? (
+              <ComponentGrid>
+                {components
+                  .filter(
+                    (
+                      comp
+                    ): comp is PipelineComponentType & {
+                      className: string;
+                    } => Boolean(comp?.className)
+                  )
+                  .map((comp) => (
+                    <PipelineComponentCard
+                      key={comp.className}
+                      component={comp}
+                      isSelected={currentSelection === comp.className}
+                      color={config.color}
+                      stageTitle={config.title}
+                      disabled={updating}
+                      onSelect={() =>
+                        onSelectComponent(stage, mimeType, comp.className)
+                      }
+                    />
+                  ))}
+              </ComponentGrid>
+            ) : (
+              <NoComponents>
+                No components available for{" "}
+                {SUPPORTED_MIME_TYPES.find((m) => m.value === mimeType)
+                  ?.label || mimeType}
+              </NoComponents>
+            )}
+
+            {/* Advanced Settings */}
+            {currentSelection && (
+              <AdvancedSettingsPanel
+                currentSelection={currentSelection}
+                configSettings={configSettings}
+                secretSettings={secretSettings}
+                isExpanded={isExpanded}
+                settingsKey={settingsKey}
+                saving={updating}
+                onToggle={() => onToggleSettings(settingsKey)}
+                onAddSecrets={onAddSecrets}
+                onDeleteSecrets={onDeleteSecrets}
+                onSaveConfig={onSaveConfig}
+              />
+            )}
+          </StageCardContent>
+        </StageCardContainer>
+      </StageRow>
+    );
+  }
+);
+
+PipelineStageSection.displayName = "PipelineStageSection";
+
+// ============================================================================
+// Component
+// ============================================================================
+
 export const SystemSettings: React.FC = () => {
   const navigate = useNavigate();
 
-  // State for edit modals
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editSection, setEditSection] = useState<
-    "parsers" | "embedders" | "thumbnailers" | "default_embedder" | null
-  >(null);
-  const [editValue, setEditValue] = useState("");
+  // Per-stage MIME type selection
+  const [selectedMimeTypes, setSelectedMimeTypes] = useState<
+    Record<StageType, string>
+  >({
+    parsers: "application/pdf",
+    embedders: "application/pdf",
+    thumbnailers: "application/pdf",
+  });
+
+  // Advanced settings expansion state
+  const [expandedSettings, setExpandedSettings] = useState<
+    Record<string, boolean>
+  >({});
+
+  // Modal states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
-  const [secretsValue, setSecretsValue] = useState("");
+  const [secretsValues, setSecretsValues] = useState<Record<string, string>>(
+    {}
+  );
+  const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
+    useState(false);
+  const [defaultEmbedderValue, setDefaultEmbedderValue] = useState("");
   const [showDeleteSecretsConfirm, setShowDeleteSecretsConfirm] =
     useState(false);
   const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
+
+  // Ref for tracking pending auto-expand after component selection
+  // This ensures auto-expand only happens after mutation succeeds
+  const pendingAutoExpandRef = useRef<{
+    stage: StageType;
+    mimeType: string;
+    className: string;
+  } | null>(null);
 
   // GraphQL queries
   const {
@@ -555,10 +1662,13 @@ export const SystemSettings: React.FC = () => {
     fetchPolicy: "network-only",
   });
 
-  const { data: componentsData, loading: componentsLoading } =
-    useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
-      fetchPolicy: "cache-first",
-    });
+  const {
+    data: componentsData,
+    loading: componentsLoading,
+    refetch: refetchComponents,
+  } = useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
+    fetchPolicy: "cache-and-network",
+  });
 
   // Mutations
   const [updateSettings, { loading: updating }] = useMutation(
@@ -567,16 +1677,36 @@ export const SystemSettings: React.FC = () => {
       onCompleted: (data) => {
         if (data.updatePipelineSettings?.ok) {
           toast.success("Settings updated successfully");
-          setShowEditModal(false);
           refetchSettings();
+          refetchComponents();
+
+          // Handle pending auto-expand for components requiring configuration
+          const pending = pendingAutoExpandRef.current;
+          if (pending) {
+            const allSettings = getComponentSettingsSchema(pending.className);
+            const hasAnySettings = allSettings.length > 0;
+            const hasAnyMissing = allSettings.some(
+              (s) => s.required && !s.hasValue
+            );
+
+            if (hasAnySettings && hasAnyMissing) {
+              setExpandedSettings((prev) => ({
+                ...prev,
+                [`${pending.stage}-${pending.mimeType}`]: true,
+              }));
+            }
+            pendingAutoExpandRef.current = null;
+          }
         } else {
           toast.error(
             data.updatePipelineSettings?.message || "Failed to update settings"
           );
+          pendingAutoExpandRef.current = null;
         }
       },
       onError: (err) => {
         toast.error(`Error updating settings: ${err.message}`);
+        pendingAutoExpandRef.current = null;
       },
     }
   );
@@ -609,8 +1739,9 @@ export const SystemSettings: React.FC = () => {
           toast.success("Secrets updated successfully");
           setShowSecretsModal(false);
           setSecretsComponentPath("");
-          setSecretsValue("");
+          setSecretsValues({});
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.updateComponentSecrets?.message || "Failed to update secrets"
@@ -630,6 +1761,7 @@ export const SystemSettings: React.FC = () => {
         if (data.deleteComponentSecrets?.ok) {
           toast.success("Secrets deleted successfully");
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.deleteComponentSecrets?.message || "Failed to delete secrets"
@@ -645,129 +1777,262 @@ export const SystemSettings: React.FC = () => {
   const settings = settingsData?.pipelineSettings;
   const components = componentsData?.pipelineComponents;
 
-  // Helper to format MIME type mappings for display
-  const formatMappings = useCallback(
-    (
-      mappings: Record<string, string> | null | undefined
-    ): Array<{ mimeType: string; component: string }> => {
-      if (!mappings || typeof mappings !== "object") return [];
-      return Object.entries(mappings).map(([mimeType, component]) => ({
-        mimeType,
-        component: String(component),
+  const componentsByStage = useMemo(() => {
+    const parsers = (components?.parsers || []).filter(
+      (comp): comp is PipelineComponentType & { className: string } =>
+        Boolean(comp?.className)
+    );
+    const embedders = (components?.embedders || []).filter(
+      (comp): comp is PipelineComponentType & { className: string } =>
+        Boolean(comp?.className)
+    );
+    const thumbnailers = (components?.thumbnailers || []).filter(
+      (comp): comp is PipelineComponentType & { className: string } =>
+        Boolean(comp?.className)
+    );
+
+    return { parsers, embedders, thumbnailers };
+  }, [components]);
+
+  const componentByClassName = useMemo(() => {
+    const map = new Map<
+      string,
+      PipelineComponentType & { className: string }
+    >();
+    for (const comp of [
+      ...componentsByStage.parsers,
+      ...componentsByStage.embedders,
+      ...componentsByStage.thumbnailers,
+    ]) {
+      map.set(comp.className, comp);
+    }
+    return map;
+  }, [componentsByStage]);
+
+  const normalizedSupportedFileTypes = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const comp of componentByClassName.values()) {
+      const fileTypes = (comp.supportedFileTypes || [])
+        .filter((ft): ft is NonNullable<typeof ft> => Boolean(ft))
+        .map((ft) => String(ft).toLowerCase());
+      map.set(comp.className, fileTypes);
+    }
+    return map;
+  }, [componentByClassName]);
+
+  // Memoize all current selections to avoid repeated lookups during render
+  const currentSelections = useMemo(() => {
+    if (!settings) return {};
+    const selections: Record<string, Record<string, string | null>> = {};
+    for (const stage of Object.keys(STAGE_CONFIG) as StageType[]) {
+      const mapping = settings[STAGE_CONFIG[stage].settingsKey] as
+        | Record<string, string>
+        | null
+        | undefined;
+      selections[stage] = {};
+      for (const mime of SUPPORTED_MIME_TYPES) {
+        selections[stage][mime.value] = mapping?.[mime.value] ?? null;
+      }
+    }
+    return selections;
+  }, [settings]);
+
+  // Get current selection for a stage and MIME type (uses memoized cache)
+  const getCurrentSelection = useCallback(
+    (stage: StageType, mimeType: string): string | null => {
+      return currentSelections[stage]?.[mimeType] ?? null;
+    },
+    [currentSelections]
+  );
+
+  // Get components for a stage, filtered by MIME type support
+  const getComponentsForStage = useCallback(
+    (stage: StageType, mimeType: string): PipelineComponentType[] => {
+      const stageComponents = componentsByStage[stage] || [];
+
+      // Pre-compute normalized values for comparison
+      const mimeTypeLower = mimeType.toLowerCase();
+      // Use lookup map to get short label (e.g., "text/plain" → "TXT")
+      const mimeShortLower = MIME_TO_SHORT_LABEL[mimeType]?.toLowerCase();
+
+      // Filter by supported file types if available
+      return stageComponents.filter((comp) => {
+        // If no supportedFileTypes specified, assume it supports all
+        const fileTypes =
+          normalizedSupportedFileTypes.get(comp.className) || [];
+        if (fileTypes.length === 0) {
+          return true;
+        }
+        // If MIME type is unknown (no short label mapping), exclude component
+        if (!mimeShortLower) {
+          return false;
+        }
+        // Check if the MIME type matches any supported file type
+        return fileTypes.some(
+          (ft) => ft === mimeShortLower || ft === mimeTypeLower
+        );
+      });
+    },
+    [componentsByStage, normalizedSupportedFileTypes]
+  );
+
+  const getComponentSettingsSchema = useCallback(
+    (className: string): SettingsSchemaEntry[] => {
+      const component = componentByClassName.get(className);
+      return (component?.settingsSchema || []).filter(
+        (entry): entry is SettingsSchemaEntry => Boolean(entry)
+      );
+    },
+    [componentByClassName]
+  );
+
+  const getSecretSettingsForComponent = useCallback(
+    (className: string): SettingsSchemaEntry[] => {
+      return getComponentSettingsSchema(className).filter(
+        (entry) => entry.settingType === "secret"
+      );
+    },
+    [getComponentSettingsSchema]
+  );
+
+  const getNonSecretSettingsForComponent = useCallback(
+    (className: string): SettingsSchemaEntry[] => {
+      return getComponentSettingsSchema(className).filter(
+        (entry) => entry.settingType !== "secret"
+      );
+    },
+    [getComponentSettingsSchema]
+  );
+
+  // Look up a component's display name by className from loaded components data
+  const getComponentDisplayNameByClassName = useCallback(
+    (className: string): string => {
+      const component = componentByClassName.get(className);
+      return getComponentDisplayName(className, component?.title || undefined);
+    },
+    [componentByClassName]
+  );
+
+  // Handle component selection
+  const handleSelectComponent = useCallback(
+    (stage: StageType, mimeType: string, className: string) => {
+      const currentMapping =
+        (settings?.[STAGE_CONFIG[stage].settingsKey] as
+          | Record<string, string>
+          | undefined) ?? {};
+      const newMapping = {
+        ...currentMapping,
+        [mimeType]: className,
+      };
+
+      // Store pending auto-expand info (will be processed in mutation onCompleted)
+      pendingAutoExpandRef.current = { stage, mimeType, className };
+
+      updateSettings({
+        variables: {
+          [STAGE_CONFIG[stage].settingsKey]: newMapping,
+        },
+      });
+    },
+    [settings, updateSettings]
+  );
+
+  // Handle MIME type change for a stage
+  const handleMimeTypeChange = useCallback(
+    (stage: StageType, mimeType: string) => {
+      setSelectedMimeTypes((prev) => ({
+        ...prev,
+        [stage]: mimeType,
       }));
     },
     []
   );
 
-  // Get available components for dropdowns
-  const availableParsers = useMemo(() => {
-    return (
-      components?.parsers?.map((p) => ({
-        value: p?.className || "",
-        label: p?.title || p?.name || "",
-      })) || []
-    );
-  }, [components]);
-
-  const availableEmbedders = useMemo(() => {
-    return (
-      components?.embedders?.map((e) => ({
-        value: e?.className || "",
-        label: `${e?.title || e?.name || ""} (${e?.vectorSize || "?"} dim)`,
-      })) || []
-    );
-  }, [components]);
-
-  const availableThumbnailers = useMemo(() => {
-    return (
-      components?.thumbnailers?.map((t) => ({
-        value: t?.className || "",
-        label: t?.title || t?.name || "",
-      })) || []
-    );
-  }, [components]);
-
-  // Handle edit button click
-  const handleEdit = useCallback(
-    (
-      section: "parsers" | "embedders" | "thumbnailers" | "default_embedder"
-    ) => {
-      setEditSection(section);
-      if (section === "default_embedder") {
-        setEditValue(settings?.defaultEmbedder || "");
-      } else if (section === "parsers") {
-        setEditValue(JSON.stringify(settings?.preferredParsers || {}, null, 2));
-      } else if (section === "embedders") {
-        setEditValue(
-          JSON.stringify(settings?.preferredEmbedders || {}, null, 2)
-        );
-      } else if (section === "thumbnailers") {
-        setEditValue(
-          JSON.stringify(settings?.preferredThumbnailers || {}, null, 2)
-        );
-      }
-      setShowEditModal(true);
-    },
-    [settings]
-  );
-
-  // Handle save
-  const handleSave = useCallback(() => {
-    try {
-      if (editSection === "default_embedder") {
-        updateSettings({
-          variables: {
-            defaultEmbedder: editValue || null,
-          },
-        });
-      } else if (editSection === "parsers") {
-        const parsed = JSON.parse(editValue || "{}");
-        updateSettings({
-          variables: {
-            preferredParsers: parsed,
-          },
-        });
-      } else if (editSection === "embedders") {
-        const parsed = JSON.parse(editValue || "{}");
-        updateSettings({
-          variables: {
-            preferredEmbedders: parsed,
-          },
-        });
-      } else if (editSection === "thumbnailers") {
-        const parsed = JSON.parse(editValue || "{}");
-        updateSettings({
-          variables: {
-            preferredThumbnailers: parsed,
-          },
-        });
-      }
-    } catch (err) {
-      toast.error("Invalid JSON format");
-    }
-  }, [editSection, editValue, updateSettings]);
-
-  // Handle secrets
-  const handleAddSecrets = useCallback(() => {
-    setSecretsComponentPath("");
-    setSecretsValue('{\n  "api_key": ""\n}');
-    setShowSecretsModal(true);
+  // Toggle advanced settings
+  const toggleAdvancedSettings = useCallback((key: string) => {
+    setExpandedSettings((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
   }, []);
 
+  // Handle secrets modal
+  const handleAddSecrets = useCallback(
+    (componentPath: string) => {
+      setSecretsComponentPath(componentPath);
+      const secretSettings = getSecretSettingsForComponent(componentPath);
+      const template = Object.fromEntries(
+        secretSettings.map((entry) => [entry.name, ""])
+      );
+      setSecretsValues(template);
+      setShowSecretsModal(true);
+    },
+    [getSecretSettingsForComponent]
+  );
+
   const handleSaveSecrets = useCallback(() => {
-    try {
-      const secrets = JSON.parse(secretsValue || "{}");
-      updateSecrets({
-        variables: {
-          componentPath: secretsComponentPath,
-          secrets,
-          merge: true,
-        },
-      });
-    } catch (err) {
-      toast.error("Invalid JSON format for secrets");
+    const componentPath = secretsComponentPath.trim();
+    if (!componentPath) {
+      toast.error("Please select a component before saving secrets.");
+      return;
     }
-  }, [secretsComponentPath, secretsValue, updateSecrets]);
+
+    const secretSettings = getSecretSettingsForComponent(componentPath);
+    if (secretSettings.length === 0) {
+      toast.error("Selected component does not accept secret settings.");
+      return;
+    }
+
+    // Build secrets object from only non-empty values (empty means "don't update")
+    const secrets: Record<string, string> = {};
+    for (const [key, value] of Object.entries(secretsValues)) {
+      if (value.trim()) {
+        secrets[key] = value;
+      }
+    }
+
+    if (Object.keys(secrets).length === 0) {
+      toast.error("Please provide at least one secret value.");
+      return;
+    }
+
+    const secretsJson = JSON.stringify(secrets);
+    const secretsBytes = new TextEncoder().encode(secretsJson).length;
+    if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
+      toast.error(
+        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
+      );
+      return;
+    }
+
+    // Check required fields that have no existing value and no new value
+    const missingRequired = secretSettings.filter((entry) => {
+      if (!entry.required) return false;
+      const newValue = secretsValues[entry.name]?.trim();
+      // Missing if no new value provided AND no existing value
+      return !newValue && !entry.hasValue;
+    });
+    if (missingRequired.length > 0) {
+      const missingLabels = missingRequired.map((entry) =>
+        formatSettingLabel(entry.name, entry.description)
+      );
+      toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
+      return;
+    }
+
+    updateSecrets({
+      variables: {
+        componentPath,
+        secrets,
+        merge: true,
+      },
+    });
+  }, [
+    getSecretSettingsForComponent,
+    secretsComponentPath,
+    secretsValues,
+    updateSecrets,
+  ]);
 
   const handleDeleteSecretsClick = useCallback((componentPath: string) => {
     setDeleteSecretsPath(componentPath);
@@ -784,6 +2049,65 @@ export const SystemSettings: React.FC = () => {
     setDeleteSecretsPath("");
   }, [deleteSecrets, deleteSecretsPath]);
 
+  // Handle saving non-secret component settings
+  const handleSaveComponentSettings = useCallback(
+    (componentPath: string, values: Record<string, string>) => {
+      // Build the component_settings update: merge with existing
+      const existing = settings?.componentSettings ?? {};
+      const existingForComponent =
+        (existing as Record<string, Record<string, unknown>>)[componentPath] ??
+        {};
+
+      // Coerce values to proper types based on schema
+      const schema = getNonSecretSettingsForComponent(componentPath);
+      const coerced: Record<string, unknown> = {};
+      for (const entry of schema) {
+        const raw = values[entry.name];
+        if (raw === undefined || raw === "") continue;
+        switch (entry.pythonType) {
+          case "int":
+            coerced[entry.name] = parseInt(raw, 10);
+            break;
+          case "float":
+            coerced[entry.name] = parseFloat(raw);
+            break;
+          case "bool":
+            coerced[entry.name] = raw === "true";
+            break;
+          default:
+            coerced[entry.name] = raw;
+        }
+      }
+
+      const updatedComponentSettings = {
+        ...existing,
+        [componentPath]: { ...existingForComponent, ...coerced },
+      };
+
+      updateSettings({
+        variables: {
+          componentSettings: updatedComponentSettings,
+        },
+      });
+    },
+    [settings, getNonSecretSettingsForComponent, updateSettings]
+  );
+
+  // Handle default embedder
+  const handleEditDefaultEmbedder = useCallback(() => {
+    setDefaultEmbedderValue(settings?.defaultEmbedder || "");
+    setShowDefaultEmbedderModal(true);
+  }, [settings]);
+
+  const handleSaveDefaultEmbedder = useCallback(() => {
+    updateSettings({
+      variables: {
+        defaultEmbedder: defaultEmbedderValue || null,
+      },
+    });
+    setShowDefaultEmbedderModal(false);
+  }, [defaultEmbedderValue, updateSettings]);
+
   // Format date
   const formatDate = useCallback((dateStr: string | null | undefined) => {
     if (!dateStr) return "Never";
@@ -793,6 +2117,68 @@ export const SystemSettings: React.FC = () => {
       return dateStr;
     }
   }, []);
+
+  // Render a pipeline stage using the extracted subcomponent
+  const renderStage = useCallback(
+    (stage: StageType, stageIndex: number) => {
+      const config = STAGE_CONFIG[stage];
+      const mimeType = selectedMimeTypes[stage];
+      const stageComponents = getComponentsForStage(stage, mimeType);
+      const currentSelection = getCurrentSelection(stage, mimeType);
+      const settingsKey = `${stage}-${mimeType}`;
+      const isExpanded = expandedSettings[settingsKey] || false;
+      const configSettings = currentSelection
+        ? getNonSecretSettingsForComponent(currentSelection)
+        : [];
+      const secretSettings = currentSelection
+        ? getSecretSettingsForComponent(currentSelection)
+        : [];
+
+      // Filter to ensure components have className defined
+      const filteredComponents = stageComponents.filter(
+        (comp): comp is PipelineComponentType & { className: string } =>
+          Boolean(comp?.className)
+      );
+
+      return (
+        <PipelineStageSection
+          key={stage}
+          stage={stage}
+          stageIndex={stageIndex}
+          config={config}
+          mimeType={mimeType}
+          components={filteredComponents}
+          currentSelection={currentSelection}
+          configSettings={configSettings}
+          secretSettings={secretSettings}
+          isExpanded={isExpanded}
+          settingsKey={settingsKey}
+          updating={updating}
+          onMimeTypeChange={handleMimeTypeChange}
+          onSelectComponent={handleSelectComponent}
+          onToggleSettings={toggleAdvancedSettings}
+          onAddSecrets={handleAddSecrets}
+          onDeleteSecrets={handleDeleteSecretsClick}
+          onSaveConfig={handleSaveComponentSettings}
+        />
+      );
+    },
+    [
+      selectedMimeTypes,
+      getComponentsForStage,
+      getCurrentSelection,
+      expandedSettings,
+      getNonSecretSettingsForComponent,
+      getSecretSettingsForComponent,
+      handleMimeTypeChange,
+      handleSelectComponent,
+      toggleAdvancedSettings,
+      handleAddSecrets,
+      handleDeleteSecretsClick,
+      handleSaveComponentSettings,
+      updating,
+    ]
+  );
 
   // Loading state
   if (settingsLoading || componentsLoading) {
@@ -839,11 +2225,11 @@ export const SystemSettings: React.FC = () => {
       <PageHeader>
         <PageTitle>
           <Settings />
-          System Settings
+          Pipeline Configuration
         </PageTitle>
         <PageDescription>
-          Configure system-wide document processing pipeline settings. Changes
-          take effect immediately for new document processing tasks.
+          Configure how documents are processed through the ingestion pipeline.
+          Select components for each stage based on file type.
         </PageDescription>
         {settings?.modified && (
           <LastModified>
@@ -858,84 +2244,60 @@ export const SystemSettings: React.FC = () => {
       <WarningBanner>
         <AlertTriangle />
         <WarningText>
-          <strong>Superuser Only:</strong> These settings affect all users and
-          document processing across the entire system. Changes take effect
-          immediately for new uploads. Existing documents are not affected.
+          <strong>Superuser Only:</strong> Changes affect all users and take
+          effect immediately for new uploads. Existing documents are not
+          reprocessed.
         </WarningText>
       </WarningBanner>
 
-      {/* Preferred Parsers */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <FileText />
-            Preferred Parsers
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleEdit("parsers")}
-          >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
-            Edit
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Configure which parser to use for each document MIME type.
-        </SectionDescription>
-        <MimeTypeList>
-          {formatMappings(settings?.preferredParsers).length > 0 ? (
-            formatMappings(settings?.preferredParsers).map(
-              ({ mimeType, component }) => (
-                <MimeTypeRow key={mimeType}>
-                  <MimeTypeBadge>{mimeType}</MimeTypeBadge>
-                  <ComponentPath>{component}</ComponentPath>
-                </MimeTypeRow>
-              )
-            )
-          ) : (
-            <EmptyValue>No custom parser mappings configured</EmptyValue>
-          )}
-        </MimeTypeList>
-      </Section>
+      {/* Pipeline Flow */}
+      <PipelineFlowContainer>
+        <ChannelTrack>
+          <ChannelGlow />
+          <ChannelCenterLine />
+          <FlowParticles />
+        </ChannelTrack>
 
-      {/* Preferred Embedders */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <Cpu />
-            Preferred Embedders
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleEdit("embedders")}
-          >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
-            Edit
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Configure which embedder to use for generating vector embeddings per
-          MIME type.
-        </SectionDescription>
-        <MimeTypeList>
-          {formatMappings(settings?.preferredEmbedders).length > 0 ? (
-            formatMappings(settings?.preferredEmbedders).map(
-              ({ mimeType, component }) => (
-                <MimeTypeRow key={mimeType}>
-                  <MimeTypeBadge>{mimeType}</MimeTypeBadge>
-                  <ComponentPath>{component}</ComponentPath>
-                </MimeTypeRow>
-              )
-            )
-          ) : (
-            <EmptyValue>No custom embedder mappings configured</EmptyValue>
-          )}
-        </MimeTypeList>
-      </Section>
+        <PipelineContentColumn>
+          <StageRow $delay={0}>
+            <JunctionColumn $active>
+              <IntakeNode>
+                <IntakeNodeCenter />
+              </IntakeNode>
+            </JunctionColumn>
+            <ConnectorArm $active />
+            <IntakeCard>
+              <Upload />
+              <IntakeText>Document Upload</IntakeText>
+            </IntakeCard>
+          </StageRow>
 
-      {/* Default Embedder */}
+          <StageRowSpacer />
+          {renderStage("parsers", 0)}
+
+          <StageRowSpacer />
+          {renderStage("thumbnailers", 1)}
+
+          <StageRowSpacer />
+          {renderStage("embedders", 2)}
+
+          <StageRowSpacer />
+          <StageRow $delay={4}>
+            <JunctionColumn $active>
+              <OutputCheckmark>
+                <Check />
+              </OutputCheckmark>
+            </JunctionColumn>
+            <ConnectorArm />
+            <OutputInfo>
+              <OutputTitle>Ready for Search</OutputTitle>
+              <OutputSubtitle>Pipeline complete</OutputSubtitle>
+            </OutputInfo>
+          </StageRow>
+        </PipelineContentColumn>
+      </PipelineFlowContainer>
+
+      {/* Default Embedder Section */}
       <Section>
         <SectionHeader>
           <SectionTitle>
@@ -945,102 +2307,28 @@ export const SystemSettings: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => handleEdit("default_embedder")}
+            onClick={handleEditDefaultEmbedder}
           >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
             Edit
           </Button>
         </SectionHeader>
         <SectionDescription>
-          The default embedder used when no MIME-type-specific embedder is
-          configured.
+          Fallback embedder when no MIME-type-specific embedder is configured.
         </SectionDescription>
-        <SettingsGrid>
-          <SettingCard>
-            <SettingLabel>Current Default</SettingLabel>
-            <SettingValue>
-              {settings?.defaultEmbedder || (
-                <EmptyValue>Using system default</EmptyValue>
-              )}
-            </SettingValue>
-          </SettingCard>
-        </SettingsGrid>
-      </Section>
-
-      {/* Preferred Thumbnailers */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <Image />
-            Preferred Thumbnailers
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleEdit("thumbnailers")}
-          >
-            <Edit2 style={{ width: 14, height: 14, marginRight: 6 }} />
-            Edit
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Configure which thumbnailer to use for generating document previews
-          per MIME type.
-        </SectionDescription>
-        <MimeTypeList>
-          {formatMappings(settings?.preferredThumbnailers).length > 0 ? (
-            formatMappings(settings?.preferredThumbnailers).map(
-              ({ mimeType, component }) => (
-                <MimeTypeRow key={mimeType}>
-                  <MimeTypeBadge>{mimeType}</MimeTypeBadge>
-                  <ComponentPath>{component}</ComponentPath>
-                </MimeTypeRow>
-              )
-            )
+        <DefaultEmbedderDisplay>
+          {settings?.defaultEmbedder ? (
+            <DefaultEmbedderInfo>
+              <ComponentName>
+                {getComponentDisplayName(settings.defaultEmbedder)}
+              </ComponentName>
+              <DefaultEmbedderPath>
+                {settings.defaultEmbedder}
+              </DefaultEmbedderPath>
+            </DefaultEmbedderInfo>
           ) : (
-            <EmptyValue>No custom thumbnailer mappings configured</EmptyValue>
+            <EmptyValue>Using system default</EmptyValue>
           )}
-        </MimeTypeList>
-      </Section>
-
-      {/* Component Secrets */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <Key />
-            Component Secrets
-          </SectionTitle>
-          <Button variant="secondary" size="sm" onClick={handleAddSecrets}>
-            <Key style={{ width: 14, height: 14, marginRight: 6 }} />
-            Add Secrets
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Encrypted secrets (API keys, credentials) for pipeline components.
-          Actual secret values are never exposed.
-        </SectionDescription>
-        <SecretsList>
-          {settings?.componentsWithSecrets &&
-          settings.componentsWithSecrets.length > 0 ? (
-            settings.componentsWithSecrets.map((componentPath) =>
-              componentPath ? (
-                <SecretBadge key={componentPath}>
-                  <Key />
-                  {componentPath}
-                  <IconButton
-                    $danger
-                    onClick={() => handleDeleteSecretsClick(componentPath)}
-                    title="Delete secrets"
-                  >
-                    <Trash2 />
-                  </IconButton>
-                </SecretBadge>
-              ) : null
-            )
-          ) : (
-            <EmptyValue>No component secrets configured</EmptyValue>
-          )}
-        </SecretsList>
+        </DefaultEmbedderDisplay>
       </Section>
 
       {/* Reset to Defaults */}
@@ -1054,107 +2342,6 @@ export const SystemSettings: React.FC = () => {
           Reset to Defaults
         </Button>
       </ActionButtons>
-
-      {/* Edit Modal */}
-      <Modal
-        open={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        size="lg"
-      >
-        <ModalHeader
-          title={`Edit ${
-            editSection === "default_embedder"
-              ? "Default Embedder"
-              : editSection === "parsers"
-              ? "Preferred Parsers"
-              : editSection === "embedders"
-              ? "Preferred Embedders"
-              : "Preferred Thumbnailers"
-          }`}
-          onClose={() => setShowEditModal(false)}
-        />
-        <ModalBody>
-          {editSection === "default_embedder" ? (
-            <FormField>
-              <FormLabel>Default Embedder Class Path</FormLabel>
-              <Input
-                id="default-embedder"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                placeholder="e.g., opencontractserver.pipeline.embedders.openai_ada_embedder.OpenAIAdaEmbedder"
-                fullWidth
-              />
-              <FormHelperText>
-                Full Python class path for the default embedder. Leave empty to
-                use system default.
-              </FormHelperText>
-              {availableEmbedders.length > 0 && (
-                <div style={{ marginTop: "1rem" }}>
-                  <FormLabel>Available Embedders:</FormLabel>
-                  {availableEmbedders.map((e) => (
-                    <div
-                      key={e.value}
-                      style={{
-                        padding: "0.5rem",
-                        fontSize: "0.875rem",
-                        cursor: "pointer",
-                        borderRadius: "4px",
-                        background:
-                          editValue === e.value ? "#e0e7ff" : "transparent",
-                      }}
-                      onClick={() => setEditValue(e.value)}
-                    >
-                      <strong>{e.label}</strong>
-                      <div
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#64748b",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {e.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </FormField>
-          ) : (
-            <JsonEditor>
-              <FormLabel>
-                {editSection === "parsers"
-                  ? "Parser Mappings (MIME Type → Class Path)"
-                  : editSection === "embedders"
-                  ? "Embedder Mappings (MIME Type → Class Path)"
-                  : "Thumbnailer Mappings (MIME Type → Class Path)"}
-              </FormLabel>
-              <Textarea
-                id={`edit-${editSection}`}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                placeholder='{"application/pdf": "opencontractserver.pipeline..."}'
-                fullWidth
-                autoResize
-                maxRows={15}
-                style={{ fontFamily: "monospace", fontSize: "0.875rem" }}
-              />
-              <FormHelperText>
-                JSON object mapping MIME types to component class paths.
-              </FormHelperText>
-            </JsonEditor>
-          )}
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => setShowEditModal(false)}>
-            <X style={{ width: 16, height: 16, marginRight: 8 }} />
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSave} loading={updating}>
-            <Save style={{ width: 16, height: 16, marginRight: 8 }} />
-            Save Changes
-          </Button>
-        </ModalFooter>
-      </Modal>
 
       {/* Reset Confirmation Modal */}
       <Modal
@@ -1197,51 +2384,77 @@ export const SystemSettings: React.FC = () => {
       <Modal
         open={showSecretsModal}
         onClose={() => setShowSecretsModal(false)}
-        size="lg"
+        size="md"
       >
         <ModalHeader
-          title="Add Component Secrets"
+          title={`Configure Secrets \u2014 ${getComponentDisplayNameByClassName(
+            secretsComponentPath
+          )}`}
           onClose={() => setShowSecretsModal(false)}
         />
         <ModalBody>
           <WarningBanner>
             <AlertTriangle />
             <WarningText>
-              <strong>Security Notice:</strong> Secrets are encrypted using
-              Fernet symmetric encryption tied to Django's SECRET_KEY. If the
-              SECRET_KEY is rotated, all secrets will become unrecoverable.
+              <strong>Security Notice:</strong> Secrets are encrypted and stored
+              securely. They will never be displayed again after saving.
             </WarningText>
           </WarningBanner>
-          <FormField>
-            <FormLabel>Component Class Path</FormLabel>
-            <Input
-              id="secrets-component-path"
-              value={secretsComponentPath}
-              onChange={(e) => setSecretsComponentPath(e.target.value)}
-              placeholder="e.g., opencontractserver.pipeline.embedders.openai_ada_embedder.OpenAIAdaEmbedder"
-              fullWidth
-            />
-            <FormHelperText>
-              Full Python class path for the component that needs secrets.
-            </FormHelperText>
-          </FormField>
-          <JsonEditor>
-            <FormLabel>Secrets (JSON)</FormLabel>
-            <Textarea
-              id="secrets-value"
-              value={secretsValue}
-              onChange={(e) => setSecretsValue(e.target.value)}
-              placeholder='{"api_key": "sk-...", "secret_key": "..."}'
-              fullWidth
-              autoResize
-              maxRows={10}
-              style={{ fontFamily: "monospace", fontSize: "0.875rem" }}
-            />
-            <FormHelperText>
-              JSON object with secret key-value pairs. Values must be primitive
-              types (strings, numbers, booleans).
-            </FormHelperText>
-          </JsonEditor>
+          <SecretFieldGroup>
+            {getSecretSettingsForComponent(secretsComponentPath).map(
+              (entry) => (
+                <SecretFieldRow key={entry.name}>
+                  <SecretFieldHeader>
+                    <FormLabel
+                      style={{ marginBottom: 0 }}
+                      htmlFor={`secret-${entry.name}`}
+                    >
+                      {formatSettingLabel(entry.name, entry.description)}
+                    </FormLabel>
+                    {entry.required && (
+                      <RequiredBadge>
+                        <AlertTriangle />
+                        Required
+                      </RequiredBadge>
+                    )}
+                    <SecretStatusIndicator $populated={!!entry.hasValue}>
+                      {entry.hasValue ? (
+                        <>
+                          <CircleCheck /> Set
+                        </>
+                      ) : (
+                        <>
+                          <CircleAlert /> Not set
+                        </>
+                      )}
+                    </SecretStatusIndicator>
+                  </SecretFieldHeader>
+                  <Input
+                    id={`secret-${entry.name}`}
+                    type="password"
+                    value={secretsValues[entry.name] ?? ""}
+                    onChange={(e) =>
+                      setSecretsValues((prev) => ({
+                        ...prev,
+                        [entry.name]: e.target.value,
+                      }))
+                    }
+                    placeholder={
+                      entry.hasValue
+                        ? "Leave blank to keep current value"
+                        : "Enter value..."
+                    }
+                    fullWidth
+                  />
+                  {entry.envVar && (
+                    <FormHelperText>
+                      Can also be set via env var: {entry.envVar}
+                    </FormHelperText>
+                  )}
+                </SecretFieldRow>
+              )
+            )}
+          </SecretFieldGroup>
         </ModalBody>
         <ModalFooter>
           <Button
@@ -1254,10 +2467,105 @@ export const SystemSettings: React.FC = () => {
             variant="primary"
             onClick={handleSaveSecrets}
             loading={updatingSecrets}
-            disabled={!secretsComponentPath || !secretsValue}
+            disabled={
+              !secretsComponentPath ||
+              Object.values(secretsValues).every((v) => !v.trim())
+            }
           >
-            <Key style={{ width: 16, height: 16, marginRight: 8 }} />
+            <Save style={{ width: 16, height: 16, marginRight: 8 }} />
             Save Secrets
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Default Embedder Modal */}
+      <Modal
+        open={showDefaultEmbedderModal}
+        onClose={() => setShowDefaultEmbedderModal(false)}
+        size="md"
+      >
+        <ModalHeader
+          title="Edit Default Embedder"
+          onClose={() => setShowDefaultEmbedderModal(false)}
+        />
+        <ModalBody>
+          <FormField>
+            <FormLabel>Default Embedder Class Path</FormLabel>
+            <Input
+              id="default-embedder"
+              value={defaultEmbedderValue}
+              onChange={(e) => setDefaultEmbedderValue(e.target.value)}
+              placeholder="e.g., opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"
+              fullWidth
+            />
+            <FormHelperText>
+              Full Python class path. Leave empty to use system default.
+            </FormHelperText>
+          </FormField>
+          {components?.embedders && components.embedders.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <FormLabel>Available Embedders:</FormLabel>
+              {components.embedders
+                .filter(
+                  (e): e is PipelineComponentType & { className: string } =>
+                    Boolean(e?.className)
+                )
+                .map((e) => (
+                  <div
+                    key={e.className}
+                    style={{
+                      padding: "0.75rem",
+                      fontSize: "0.875rem",
+                      cursor: "pointer",
+                      borderRadius: "8px",
+                      marginBottom: "0.5rem",
+                      background:
+                        defaultEmbedderValue === e.className
+                          ? "#e0e7ff"
+                          : "#f8fafc",
+                      border: `1px solid ${
+                        defaultEmbedderValue === e.className
+                          ? "#6366f1"
+                          : "#e2e8f0"
+                      }`,
+                    }}
+                    onClick={() => setDefaultEmbedderValue(e.className)}
+                  >
+                    <strong>{e.title || e.name}</strong>
+                    {e.vectorSize && (
+                      <span style={{ color: "#64748b", marginLeft: "0.5rem" }}>
+                        ({e.vectorSize}d)
+                      </span>
+                    )}
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#64748b",
+                        fontFamily: "monospace",
+                        marginTop: "0.25rem",
+                      }}
+                    >
+                      {e.className}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => setShowDefaultEmbedderModal(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSaveDefaultEmbedder}
+            loading={updating}
+          >
+            <Save style={{ width: 16, height: 16, marginRight: 8 }} />
+            Save
           </Button>
         </ModalFooter>
       </Modal>
@@ -1277,8 +2585,10 @@ export const SystemSettings: React.FC = () => {
             <AlertTriangle />
             <WarningText>
               Are you sure you want to delete secrets for{" "}
-              <strong>{deleteSecretsPath}</strong>? This action cannot be
-              undone.
+              <strong>
+                {getComponentDisplayNameByClassName(deleteSecretsPath)}
+              </strong>
+              ? This action cannot be undone.
             </WarningText>
           </WarningBanner>
         </ModalBody>

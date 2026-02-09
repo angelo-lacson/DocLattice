@@ -10,7 +10,6 @@ from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from opencontractserver.annotations.models import AnnotationLabel, LabelSet
-from opencontractserver.documents.models import Document
 from opencontractserver.tests.base import BaseFixtureTestCase
 from opencontractserver.types.enums import ExportType, PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -104,9 +103,7 @@ class TestExportMutations(BaseFixtureTestCase):
 
         print("\n=== Test: Basic export without analysis parameters ===")
         print(f"Corpus ID: {self.corpus.id}")
-        print(
-            f"Documents in corpus: {Document.objects.filter(corpus=self.corpus).count()}"
-        )
+        print(f"Documents in corpus: {self.corpus.document_count()}")
 
         response = client.execute(mutation, variables=variables)
 

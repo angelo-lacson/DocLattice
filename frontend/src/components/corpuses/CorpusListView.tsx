@@ -452,11 +452,7 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
     const list = corpuses || [];
     return {
       totalCorpuses: list.length,
-      totalDocuments: list.reduce(
-        (sum, c) =>
-          sum + (c.documents?.totalCount || c.documents?.edges?.length || 0),
-        0
-      ),
+      totalDocuments: list.reduce((sum, c) => sum + (c.documentCount || 0), 0),
       totalAnnotations: list.reduce(
         (sum, c) => sum + (c.annotations?.totalCount || 0),
         0

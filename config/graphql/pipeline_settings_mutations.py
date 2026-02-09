@@ -9,17 +9,25 @@ import re
 from typing import Optional
 
 import graphene
+from django.core.exceptions import ValidationError
 from graphene.types.generic import GenericScalar
 from graphql_jwt.decorators import login_required
 
 from config.graphql.graphene_types import PipelineSettingsType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 
+# All pipeline mutations use RateLimits.WRITE_LIGHT (30 requests/minute).
+# This is appropriate for superuser-only admin operations that are
+# infrequent by nature. Secret operations share this limit, which also
+# provides brute-force protection for credential storage endpoints.
+
 logger = logging.getLogger(__name__)
 
 # Validation constants
 MAX_COMPONENT_PATH_LENGTH = 256
 MAX_MIME_TYPE_LENGTH = 128
+# Maximum size (bytes) for JSON settings fields (parsers, embedders, kwargs, etc.)
+MAX_JSON_FIELD_SIZE_BYTES = 10240  # 10KB
 VALID_COMPONENT_PATH_PATTERN = re.compile(
     r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+$"
 )
@@ -103,7 +111,7 @@ def validate_component_mapping(
 
 def validate_secrets_input(secrets: dict) -> Optional[str]:
     """
-    Validate secrets input structure.
+    Validate secrets input structure and size.
 
     Args:
         secrets: Dict of secret key-value pairs
@@ -111,6 +119,8 @@ def validate_secrets_input(secrets: dict) -> Optional[str]:
     Returns:
         Error message if invalid, None if valid
     """
+    import json
+
     if not isinstance(secrets, dict):
         return "Secrets must be a dictionary"
 
@@ -122,6 +132,36 @@ def validate_secrets_input(secrets: dict) -> Optional[str]:
         if not isinstance(value, (str, int, float, bool, type(None))):
             return f"Secret value for '{key}' must be a primitive type (string, number, boolean, null)"
 
+    # Validate payload size before encryption attempt
+    from opencontractserver.documents.models import PipelineSettings
+
+    max_size = PipelineSettings._get_max_secret_size()
+    payload_size = len(json.dumps(secrets).encode("utf-8"))
+    if payload_size > max_size:
+        return f"Secrets payload ({payload_size} bytes) exceeds maximum size of {max_size} bytes"
+
+    return None
+
+
+def validate_json_field_size(value: dict, field_name: str) -> Optional[str]:
+    """
+    Validate that a JSON field does not exceed the maximum allowed size.
+
+    Args:
+        value: The dict to validate
+        field_name: Human-readable field name for error messages
+
+    Returns:
+        Error message if too large, None if valid
+    """
+    import json
+
+    payload_size = len(json.dumps(value).encode("utf-8"))
+    if payload_size > MAX_JSON_FIELD_SIZE_BYTES:
+        return (
+            f"{field_name} payload ({payload_size} bytes) exceeds "
+            f"maximum size of {MAX_JSON_FIELD_SIZE_BYTES} bytes"
+        )
     return None
 
 
@@ -216,7 +256,7 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
             if preferred_parsers is not None:
                 error = validate_component_mapping(
                     preferred_parsers, registry, "Parser"
-                )
+                ) or validate_json_field_size(preferred_parsers, "preferred_parsers")
                 if error:
                     return UpdatePipelineSettingsMutation(
                         ok=False, message=error, pipeline_settings=None
@@ -227,6 +267,8 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
             if preferred_embedders is not None:
                 error = validate_component_mapping(
                     preferred_embedders, registry, "Embedder"
+                ) or validate_json_field_size(
+                    preferred_embedders, "preferred_embedders"
                 )
                 if error:
                     return UpdatePipelineSettingsMutation(
@@ -238,6 +280,8 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
             if preferred_thumbnailers is not None:
                 error = validate_component_mapping(
                     preferred_thumbnailers, registry, "Thumbnailer"
+                ) or validate_json_field_size(
+                    preferred_thumbnailers, "preferred_thumbnailers"
                 )
                 if error:
                     return UpdatePipelineSettingsMutation(
@@ -253,6 +297,11 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                         message="parser_kwargs must be a dictionary.",
                         pipeline_settings=None,
                     )
+                error = validate_json_field_size(parser_kwargs, "parser_kwargs")
+                if error:
+                    return UpdatePipelineSettingsMutation(
+                        ok=False, message=error, pipeline_settings=None
+                    )
                 settings_instance.parser_kwargs = parser_kwargs
 
             # Validate component_settings
@@ -263,6 +312,60 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                         message="component_settings must be a dictionary.",
                         pipeline_settings=None,
                     )
+                error = validate_json_field_size(
+                    component_settings, "component_settings"
+                )
+                if error:
+                    return UpdatePipelineSettingsMutation(
+                        ok=False, message=error, pipeline_settings=None
+                    )
+
+                # Validate each component's settings against its schema
+                for comp_path, comp_settings in component_settings.items():
+                    # Validate component path format
+                    error = validate_component_path(comp_path)
+                    if error:
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Invalid component path in component_settings: {error}",
+                            pipeline_settings=None,
+                        )
+
+                    if not isinstance(comp_settings, dict):
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Settings for '{comp_path}' must be a dictionary.",
+                            pipeline_settings=None,
+                        )
+
+                    # Validate settings values against component schema
+                    component_def = registry.get_by_class_name(comp_path)
+                    if component_def and component_def.component_class:
+                        from opencontractserver.pipeline.base.settings_schema import (
+                            get_secret_settings,
+                            validate_settings,
+                        )
+
+                        # Filter out secrets from validation (they're stored separately)
+                        secret_names = get_secret_settings(
+                            component_def.component_class
+                        )
+                        non_secret_settings = {
+                            k: v
+                            for k, v in comp_settings.items()
+                            if k not in secret_names
+                        }
+
+                        is_valid, errors = validate_settings(
+                            component_def.component_class, non_secret_settings
+                        )
+                        if not is_valid:
+                            return UpdatePipelineSettingsMutation(
+                                ok=False,
+                                message=f"Invalid settings for '{comp_path}': {'; '.join(errors)}",
+                                pipeline_settings=None,
+                            )
+
                 settings_instance.component_settings = component_settings
 
             # Validate default_embedder
@@ -285,8 +388,22 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
             settings_instance.modified_by = user
             settings_instance.save()
 
+            updated_fields = [
+                name
+                for name, val in [
+                    ("preferred_parsers", preferred_parsers),
+                    ("preferred_embedders", preferred_embedders),
+                    ("preferred_thumbnailers", preferred_thumbnailers),
+                    ("parser_kwargs", parser_kwargs),
+                    ("component_settings", component_settings),
+                    ("default_embedder", default_embedder),
+                ]
+                if val is not None
+            ]
             logger.info(
-                f"Pipeline settings updated by {user.username} (superuser={user.is_superuser})"
+                "Pipeline settings updated by %s: fields=%s",
+                user.username,
+                ", ".join(updated_fields),
             )
 
             return UpdatePipelineSettingsMutation(
@@ -308,11 +425,17 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                 ),
             )
 
-        except Exception as e:
-            logger.exception("Error updating pipeline settings")
+        except (ValidationError, ValueError) as e:
             return UpdatePipelineSettingsMutation(
                 ok=False,
-                message=f"Failed to update pipeline settings: {str(e)}",
+                message=f"Failed to update pipeline settings: {e}",
+                pipeline_settings=None,
+            )
+        except Exception:
+            logger.exception("Unexpected error updating pipeline settings")
+            return UpdatePipelineSettingsMutation(
+                ok=False,
+                message="An unexpected error occurred while updating pipeline settings.",
                 pipeline_settings=None,
             )
 
@@ -393,11 +516,17 @@ class ResetPipelineSettingsMutation(graphene.Mutation):
                 ),
             )
 
-        except Exception as e:
-            logger.exception("Error resetting pipeline settings")
+        except (ValidationError, ValueError) as e:
             return ResetPipelineSettingsMutation(
                 ok=False,
-                message=f"Failed to reset pipeline settings: {str(e)}",
+                message=f"Failed to reset pipeline settings: {e}",
+                pipeline_settings=None,
+            )
+        except Exception:
+            logger.exception("Unexpected error resetting pipeline settings")
+            return ResetPipelineSettingsMutation(
+                ok=False,
+                message="An unexpected error occurred while resetting pipeline settings.",
                 pipeline_settings=None,
             )
 
@@ -499,7 +628,11 @@ class UpdateComponentSecretsMutation(graphene.Mutation):
             components_with_secrets = list(all_secrets.keys())
 
             logger.info(
-                f"Secrets updated for component '{component_path}' by {user.username}"
+                "Secrets updated for component '%s' by %s (keys=%s, merge=%s)",
+                component_path,
+                user.username,
+                ", ".join(secrets.keys()),
+                merge,
             )
 
             return UpdateComponentSecretsMutation(
@@ -508,11 +641,20 @@ class UpdateComponentSecretsMutation(graphene.Mutation):
                 components_with_secrets=components_with_secrets,
             )
 
-        except Exception as e:
-            logger.exception("Error updating component secrets")
+        except ValueError as e:
             return UpdateComponentSecretsMutation(
                 ok=False,
-                message=f"Failed to update secrets: {str(e)}",
+                message=f"Failed to update secrets for '{component_path}': {e}",
+                components_with_secrets=None,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error updating secrets for component '%s'",
+                component_path,
+            )
+            return UpdateComponentSecretsMutation(
+                ok=False,
+                message=f"An unexpected error occurred while updating secrets for '{component_path}'.",
                 components_with_secrets=None,
             )
 
@@ -578,10 +720,13 @@ class DeleteComponentSecretsMutation(graphene.Mutation):
                 components_with_secrets=components_with_secrets,
             )
 
-        except Exception as e:
-            logger.exception("Error deleting component secrets")
+        except Exception:
+            logger.exception(
+                "Unexpected error deleting secrets for component '%s'",
+                component_path,
+            )
             return DeleteComponentSecretsMutation(
                 ok=False,
-                message=f"Failed to delete secrets: {str(e)}",
+                message=f"An unexpected error occurred while deleting secrets for '{component_path}'.",
                 components_with_secrets=None,
             )

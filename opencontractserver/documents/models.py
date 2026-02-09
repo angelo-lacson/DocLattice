@@ -841,7 +841,7 @@ class PipelineSettings(django.db.models.Model):
     )
 
     # Audit fields
-    modified = django.db.models.DateTimeField(auto_now=True)
+    modified = django.db.models.DateTimeField(auto_now=True, db_index=True)
     modified_by = django.db.models.ForeignKey(
         get_user_model(),
         on_delete=django.db.models.SET_NULL,
@@ -854,6 +854,12 @@ class PipelineSettings(django.db.models.Model):
     class Meta:
         verbose_name = "Pipeline Settings"
         verbose_name_plural = "Pipeline Settings"
+        constraints = [
+            django.db.models.CheckConstraint(
+                check=django.db.models.Q(pk=1),
+                name="pipeline_settings_singleton_pk",
+            ),
+        ]
 
     def __str__(self):
         return "PipelineSettings (Singleton)"
@@ -895,13 +901,19 @@ class PipelineSettings(django.db.models.Model):
 
     def save(self, *args, **kwargs):
         """Ensure singleton pattern and invalidate cache on save."""
+        from django.db import transaction
+
         if not self.pk and PipelineSettings.objects.exists():
             raise ValidationError(
                 "PipelineSettings is a singleton. Use PipelineSettings.get_instance() instead."
             )
         super().save(*args, **kwargs)
-        # Invalidate cache on save
+        # Eagerly invalidate cache after save for immediate consistency
+        # (required in autocommit mode and Django TestCase which never commits).
         self._invalidate_cache()
+        # Also invalidate on commit in case save() runs inside a larger
+        # transaction that might roll back and be retried.
+        transaction.on_commit(lambda: self._invalidate_cache())
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of the singleton instance."""
@@ -934,6 +946,7 @@ class PipelineSettings(django.db.models.Model):
         """
         from django.conf import settings as django_settings
         from django.core.cache import cache
+        from django.db import transaction
 
         # Try cache first (if enabled)
         if use_cache:
@@ -941,20 +954,28 @@ class PipelineSettings(django.db.models.Model):
             if cached is not None:
                 return cached
 
-        # Get from database (select_related for modified_by to avoid N+1 query)
-        instance, created = cls.objects.select_related("modified_by").get_or_create(
-            pk=1,
-            defaults={
-                "preferred_parsers": getattr(django_settings, "PREFERRED_PARSERS", {}),
-                "preferred_embedders": getattr(
-                    django_settings, "PREFERRED_EMBEDDERS", {}
-                ),
-                "preferred_thumbnailers": {},  # No default in Django settings
-                "parser_kwargs": getattr(django_settings, "PARSER_KWARGS", {}),
-                "component_settings": getattr(django_settings, "PIPELINE_SETTINGS", {}),
-                "default_embedder": getattr(django_settings, "DEFAULT_EMBEDDER", ""),
-            },
-        )
+        # Get from database with atomic transaction to prevent race conditions
+        # during concurrent startup or migration.
+        with transaction.atomic():
+            instance, created = cls.objects.select_related("modified_by").get_or_create(
+                pk=1,
+                defaults={
+                    "preferred_parsers": getattr(
+                        django_settings, "PREFERRED_PARSERS", {}
+                    ),
+                    "preferred_embedders": getattr(
+                        django_settings, "PREFERRED_EMBEDDERS", {}
+                    ),
+                    "preferred_thumbnailers": {},  # No default in Django settings
+                    "parser_kwargs": getattr(django_settings, "PARSER_KWARGS", {}),
+                    "component_settings": getattr(
+                        django_settings, "PIPELINE_SETTINGS", {}
+                    ),
+                    "default_embedder": getattr(
+                        django_settings, "DEFAULT_EMBEDDER", ""
+                    ),
+                },
+            )
 
         # Cache the instance
         if use_cache:
@@ -966,7 +987,8 @@ class PipelineSettings(django.db.models.Model):
         """
         Get the preferred parser class path for a MIME type.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Args:
             mimetype: The MIME type (e.g., "application/pdf")
@@ -974,20 +996,16 @@ class PipelineSettings(django.db.models.Model):
         Returns:
             Parser class path or None if not found.
         """
-        from django.conf import settings as django_settings
-
-        # First check database settings
         if self.preferred_parsers and mimetype in self.preferred_parsers:
             return self.preferred_parsers[mimetype]
-
-        # Fall back to Django settings
-        return getattr(django_settings, "PREFERRED_PARSERS", {}).get(mimetype)
+        return None
 
     def get_preferred_embedder(self, mimetype: str) -> str | None:
         """
         Get the preferred embedder class path for a MIME type.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Args:
             mimetype: The MIME type (e.g., "application/pdf")
@@ -995,21 +1013,15 @@ class PipelineSettings(django.db.models.Model):
         Returns:
             Embedder class path or None if not found.
         """
-        from django.conf import settings as django_settings
-
-        # First check database settings
         if self.preferred_embedders and mimetype in self.preferred_embedders:
             return self.preferred_embedders[mimetype]
-
-        # Fall back to Django settings
-        return getattr(django_settings, "PREFERRED_EMBEDDERS", {}).get(mimetype)
+        return None
 
     def get_preferred_thumbnailer(self, mimetype: str) -> str | None:
         """
         Get the preferred thumbnailer class path for a MIME type.
 
-        Note: No fallback to Django settings as thumbnailers are dynamically
-        selected by default.
+        Database is the single source of truth at runtime.
 
         Args:
             mimetype: The MIME type (e.g., "application/pdf")
@@ -1025,7 +1037,8 @@ class PipelineSettings(django.db.models.Model):
         """
         Get configuration kwargs for a specific parser.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Args:
             parser_class_path: Full class path of the parser
@@ -1033,14 +1046,9 @@ class PipelineSettings(django.db.models.Model):
         Returns:
             Dict of kwargs for the parser.
         """
-        from django.conf import settings as django_settings
-
-        # First check database settings
         if self.parser_kwargs and parser_class_path in self.parser_kwargs:
             return self.parser_kwargs[parser_class_path]
-
-        # Fall back to Django settings
-        return getattr(django_settings, "PARSER_KWARGS", {}).get(parser_class_path, {})
+        return {}
 
     def get_component_settings(self, component_class_path: str) -> dict:
         """
@@ -1067,17 +1075,13 @@ class PipelineSettings(django.db.models.Model):
         """
         Get the default embedder class path.
 
-        Falls back to Django settings if not configured in database.
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
 
         Returns:
             Default embedder class path.
         """
-        from django.conf import settings as django_settings
-
-        if self.default_embedder:
-            return self.default_embedder
-
-        return getattr(django_settings, "DEFAULT_EMBEDDER", "")
+        return self.default_embedder or ""
 
     # =====================================================================
     # Encrypted Secrets Management
@@ -1275,3 +1279,188 @@ class PipelineSettings(django.db.models.Model):
         settings.update(secrets)
 
         return settings
+
+    # =====================================================================
+    # Component Schema and Validation Methods
+    # =====================================================================
+
+    def get_component_schema(self, component_path: str) -> dict:
+        """
+        Get the settings schema for a specific component.
+
+        This is useful for the admin UI to dynamically generate configuration
+        forms based on what a component requires.
+
+        Args:
+            component_path: Full class path or simple name of the component
+
+        Returns:
+            Dict mapping setting names to their schema information:
+            {
+                "api_key": {
+                    "type": "secret",
+                    "required": True,
+                    "default": "",
+                    "description": "API key",
+                    "python_type": "str",
+                    "has_value": True,  # Whether a value is currently configured
+                },
+                ...
+            }
+        """
+        import logging
+
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        logger = logging.getLogger(__name__)
+        registry = get_registry()
+
+        # Try to find component by full path or simple name
+        component_def = registry.get_by_class_name(component_path)
+        if not component_def:
+            component_def = registry.get_by_name(component_path)
+
+        if not component_def or not component_def.component_class:
+            logger.warning(f"Component not found: {component_path}")
+            return {}
+
+        schema = get_settings_schema(component_def.component_class)
+
+        # Augment schema with current value status
+        current_settings = self.get_full_component_settings(component_def.class_name)
+        for setting_name, info in schema.items():
+            value = current_settings.get(setting_name)
+            # For secrets, only indicate whether a value exists, never the value itself
+            if info.get("type") == "secret":
+                info["has_value"] = value is not None and value != ""
+                info["current_value"] = None  # Never expose secret values
+            else:
+                info["has_value"] = value is not None
+                info["current_value"] = value
+
+        return schema
+
+    def validate_all_components(self) -> dict[str, list[str]]:
+        """
+        Validate that all registered components have their required settings configured.
+
+        Scans all parsers, embedders, thumbnailers, and post-processors,
+        checks their Settings schemas, and reports any missing required settings.
+
+        Returns:
+            Dict mapping component class paths to lists of missing settings:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": [
+                    "api_key"
+                ],
+                ...
+            }
+            Empty dict if all required settings are configured.
+        """
+        import logging
+
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_required_settings,
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        logger = logging.getLogger(__name__)
+        registry = get_registry()
+        missing_by_component: dict[str, list[str]] = {}
+
+        # Collect all components
+        all_components = []
+        all_components.extend(registry.parsers)
+        all_components.extend(registry.embedders)
+        all_components.extend(registry.thumbnailers)
+        all_components.extend(registry.post_processors)
+
+        for component_def in all_components:
+            component_class = component_def.component_class
+            if component_class is None:
+                continue
+
+            class_path = component_def.class_name
+            schema = get_settings_schema(component_class)
+
+            if not schema:
+                # Component has no Settings schema, skip
+                continue
+
+            required_settings = get_required_settings(component_class)
+            if not required_settings:
+                # No required settings, skip
+                continue
+
+            # Get current settings from DB
+            current_settings = self.get_full_component_settings(class_path)
+
+            missing = []
+            for setting_name in required_settings:
+                value = current_settings.get(setting_name)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    missing.append(setting_name)
+
+            if missing:
+                missing_by_component[class_path] = missing
+                logger.warning(
+                    f"Component '{class_path}' is missing required settings: "
+                    f"{', '.join(missing)}"
+                )
+
+        return missing_by_component
+
+    def get_all_component_schemas(self) -> dict[str, dict]:
+        """
+        Get settings schemas for all registered components.
+
+        Returns:
+            Dict mapping component class paths to their schemas:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": {...},
+                    "num_workers": {...},
+                },
+                ...
+            }
+        """
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        schemas: dict[str, dict] = {}
+
+        all_components = []
+        all_components.extend(registry.parsers)
+        all_components.extend(registry.embedders)
+        all_components.extend(registry.thumbnailers)
+        all_components.extend(registry.post_processors)
+
+        for component_def in all_components:
+            if component_def.component_class is None:
+                continue
+
+            schema = get_settings_schema(component_def.component_class)
+            if schema:
+                # Augment with current value status
+                current_settings = self.get_full_component_settings(
+                    component_def.class_name
+                )
+                for setting_name, info in schema.items():
+                    value = current_settings.get(setting_name)
+                    if info.get("type") == "secret":
+                        info["has_value"] = value is not None and value != ""
+                        info["current_value"] = None
+                    else:
+                        info["has_value"] = value is not None
+                        info["current_value"] = value
+
+                schemas[component_def.class_name] = schema
+
+        return schemas

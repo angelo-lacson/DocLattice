@@ -127,11 +127,9 @@ class BaseVisibilityManager(Manager):
                     "creator",
                     "label_set",
                     "user_lock",  # If user_lock info is displayed
-                ).prefetch_related(
-                    "documents"  # Very important if showing document counts or list previews
-                    # Add other prefetches if CorpusType uses them:
-                    # 'annotations', 'relationships', 'queries', 'actions', 'notes'
                 )
+                # NOTE: documents M2M was removed in favor of DocumentPath
+                # Document counts are now computed via DocumentPath subqueries
             elif model_name.upper() == "DOCUMENT":
                 logger.debug("Applying Document specific optimizations")
                 from opencontractserver.annotations.models import Annotation

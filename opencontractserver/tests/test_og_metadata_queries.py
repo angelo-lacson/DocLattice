@@ -67,7 +67,7 @@ class OGCorpusMetadataTestCase(TestCase):
                 creator=cls.user,
                 is_public=True,
             )
-            cls.public_corpus.documents.add(doc)
+            cls.public_corpus.add_document(document=doc, user=cls.user)
 
     def setUp(self):
         """Set up test client with request context."""
@@ -272,22 +272,27 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
             creator=cls.user,
             is_public=True,
         )
-        cls.public_doc = Document.objects.create(
+        original_public_doc = Document.objects.create(
             title="Public Doc in Corpus",
             description="Document in public corpus",
             creator=cls.user,
             is_public=True,
         )
-        cls.public_corpus.documents.add(cls.public_doc)
+        # add_document creates a corpus-isolated copy - capture it
+        cls.public_doc, _, _ = cls.public_corpus.add_document(
+            document=original_public_doc, user=cls.user
+        )
 
         # Public corpus with private document
-        cls.private_doc = Document.objects.create(
+        original_private_doc = Document.objects.create(
             title="Private Doc in Corpus",
             description="Private document in public corpus",
             creator=cls.user,
             is_public=False,
         )
-        cls.public_corpus.documents.add(cls.private_doc)
+        cls.private_doc, _, _ = cls.public_corpus.add_document(
+            document=original_private_doc, user=cls.user
+        )
 
         # Private corpus
         cls.private_corpus = Corpus.objects.create(

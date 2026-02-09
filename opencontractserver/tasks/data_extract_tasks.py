@@ -136,10 +136,12 @@ async def doc_extract_query_task(
 
     @sync_to_async
     def sync_get_corpus_id(document):
-        """Get corpus ID for document."""
-        corpus_set = document.corpus_set.all()
-        if corpus_set.exists():
-            return corpus_set.first().id
+        """Get corpus ID for document via DocumentPath."""
+        from opencontractserver.documents.models import DocumentPath
+
+        doc_path = DocumentPath.objects.filter(document=document).first()
+        if doc_path:
+            return doc_path.corpus_id
         return None
 
     @sync_to_async

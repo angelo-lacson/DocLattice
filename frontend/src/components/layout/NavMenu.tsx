@@ -11,23 +11,21 @@ import useWindowDimensions from "../hooks/WindowDimensionHook";
 import logo from "../../assets/images/os_legal_128.png";
 
 /**
- * User properties accessed by NavMenu.
- * Covers both Auth0 User (name) and local UserType (username, isSuperuser).
+ * User display properties accessed by NavMenu.
+ * Covers both Auth0 User (name) and local UserType (username).
  */
 interface NavMenuUserProps {
   name?: string;
   username?: string;
-  isSuperuser?: boolean;
 }
 
-/** Type guard to safely access user properties from Auth0 User or local UserType */
+/** Type guard to safely access display properties from Auth0 User or local UserType */
 const getUserProps = (user: unknown): NavMenuUserProps => {
   if (!user || typeof user !== "object") return {};
   const u = user as Record<string, unknown>;
   return {
     name: typeof u.name === "string" ? u.name : undefined,
     username: typeof u.username === "string" ? u.username : undefined,
-    isSuperuser: typeof u.isSuperuser === "boolean" ? u.isSuperuser : false,
   };
 };
 
@@ -65,6 +63,7 @@ const navbarCustomStyles = `
 export const NavMenu = () => {
   const {
     user,
+    isSuperuser,
     isLoading,
     REACT_APP_USE_AUTH0,
     public_header_items,
@@ -81,9 +80,8 @@ export const NavMenu = () => {
   const isMobile = width < 1100;
   const versionDisplay = isMobile ? undefined : VERSION_TAG;
 
-  // Extract typed user properties
+  // Extract typed user properties for display (name/username)
   const userProps = getUserProps(user);
-  const isSuperuser = userProps.isSuperuser;
 
   // Build nav items from menu configuration
   const baseNavItems = [

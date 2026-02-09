@@ -59,6 +59,7 @@ class PipelineComponentDefinition:
     dependencies: tuple[str, ...]
     supported_file_types: tuple[str, ...]  # FileTypeEnum values as strings
     input_schema: dict = field(default_factory=dict)
+    settings_schema: tuple[dict, ...] = field(default_factory=tuple)  # Settings schema
     vector_size: Optional[int] = None  # Only for embedders
     # Modality support (only for embedders) - stored as tuple of strings for serializability
     supported_modalities: tuple[str, ...] = ("TEXT",)
@@ -95,6 +96,7 @@ class PipelineComponentDefinition:
             "dependencies": list(self.dependencies),
             "supported_file_types": list(self.supported_file_types),
             "input_schema": self.input_schema,
+            "settings_schema": list(self.settings_schema),
         }
         if self.vector_size is not None:
             result["vector_size"] = self.vector_size
@@ -243,6 +245,24 @@ class PipelineComponentRegistry:
             component_class, "vector_size", None
         )
 
+        # Extract settings schema if the component has a Settings dataclass
+        settings_schema: tuple[dict, ...] = ()
+        try:
+            from opencontractserver.pipeline.base.settings_schema import (
+                get_settings_schema,
+            )
+
+            schema_dict = get_settings_schema(component_class)
+            if schema_dict:
+                # Convert schema dict to list of dicts for GraphQL
+                settings_schema = tuple(
+                    {"name": name, **info} for name, info in schema_dict.items()
+                )
+        except Exception as e:
+            logger.debug(
+                f"Could not extract settings schema for {component_class}: {e}"
+            )
+
         # Build definition
         definition = PipelineComponentDefinition(
             name=component_class.__name__,
@@ -255,6 +275,7 @@ class PipelineComponentRegistry:
             dependencies=tuple(getattr(component_class, "dependencies", [])),
             supported_file_types=tuple(supported_file_types),
             input_schema=dict(getattr(component_class, "input_schema", {})),
+            settings_schema=settings_schema,
             vector_size=vector_size,
             supported_modalities=supported_modalities,
             component_class=component_class,

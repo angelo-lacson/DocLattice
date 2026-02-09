@@ -81,7 +81,7 @@ class PermissionedTreeQuerySet(TreeQuerySet):
                 "creator",
                 "label_set",
                 "user_lock",
-            ).prefetch_related("documents")
+            )
 
         return queryset.with_tree_fields()
 

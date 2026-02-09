@@ -384,7 +384,7 @@ export type RawDocumentType = Node & {
   created?: Scalars["DateTime"];
   modified?: Scalars["DateTime"];
   assignmentSet?: AssignmentTypeConnection;
-  corpusSet?: CorpusTypeConnection;
+  pathRecords?: DocumentPathTypeConnection;
   annotationSet?: AnnotationTypeConnection;
   isPublic?: Scalars["Boolean"];
   myPermissions?: string[];
@@ -446,6 +446,29 @@ export type DocumentTypeConnection = {
 export type DocumentTypeEdge = {
   __typename?: "DocumentTypeEdge";
   node?: Maybe<DocumentType>;
+  cursor: Scalars["String"];
+};
+
+export type DocumentPathType = Node & {
+  __typename?: "DocumentPathType";
+  id: Scalars["ID"];
+  corpus?: RawCorpusType;
+  path?: Maybe<Scalars["String"]>;
+  versionNumber?: Maybe<Scalars["Int"]>;
+  isCurrent?: Scalars["Boolean"];
+  isDeleted?: Scalars["Boolean"];
+};
+
+export type DocumentPathTypeConnection = {
+  __typename?: "DocumentPathTypeConnection";
+  pageInfo: PageInfo;
+  edges: Array<Maybe<DocumentPathTypeEdge>>;
+  totalCount?: Maybe<Scalars["Int"]>;
+};
+
+export type DocumentPathTypeEdge = {
+  __typename?: "DocumentPathTypeEdge";
+  node?: Maybe<DocumentPathType>;
   cursor: Scalars["String"];
 };
 
@@ -1756,6 +1779,36 @@ export type PipelineComponentType = {
   componentType?: string;
   /** JSONSchema schema for inputs supported from user (experimental - not fully implemented). */
   inputSchema?: Record<any, any>;
+  /** Schema for component configuration settings stored in PipelineSettings. */
+  settingsSchema?: Maybe<Array<Maybe<ComponentSettingSchemaType>>>;
+};
+
+/** Valid setting types for pipeline component configuration. */
+export type SettingTypeEnum = "required" | "optional" | "secret";
+
+/** Common Python type hints used in settings schemas. */
+export type PythonTypeEnum = "str" | "int" | "float" | "bool" | "any" | string;
+
+export type ComponentSettingSchemaType = {
+  __typename?: "ComponentSettingSchemaType";
+  /** Setting name (used as key in component_settings dict). */
+  name: string;
+  /** Type: 'required', 'optional', or 'secret'. */
+  settingType: SettingTypeEnum;
+  /** Python type hint (e.g., 'str', 'int', 'bool'). */
+  pythonType?: PythonTypeEnum;
+  /** Whether this setting must have a value for the component to work. */
+  required: boolean;
+  /** Human-readable description of the setting. */
+  description?: string;
+  /** Default value if not configured. */
+  default?: Scalars["GenericScalar"];
+  /** Environment variable name used during migration seeding. */
+  envVar?: string;
+  /** Whether this setting currently has a value configured. */
+  hasValue?: boolean;
+  /** Current value (always null for secrets to avoid exposure). */
+  currentValue?: Scalars["GenericScalar"];
 };
 
 /** Graphene type for grouping pipeline components. */

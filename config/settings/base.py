@@ -899,15 +899,6 @@ ANALYZER_KWARGS = {
     },
 }
 
-# Minnesota Case Law ModernBERT embedder settings
-MINN_MODERNBERT_EMBEDDERS = {
-    "application/pdf": "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
-    "text/plain": "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
-    "text/html": "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "opencontractserver.pipeline.embedders.minn_modern_bert_embedder.MinnModernBERTEmbedder768",  # noqa
-}
-
-
 # Pipeline-specific settings that override global settings
 # These are only set if you want to override the global settings for specific components
 # Otherwise, components will fall back to the global settings (which read from env vars)
