@@ -777,7 +777,7 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
                             }}
                           />
                         )}
-                        {canRemove && (
+                        {canRemove && !corpus.isPersonal && (
                           <Menu.Item
                             className="danger"
                             icon="trash"
