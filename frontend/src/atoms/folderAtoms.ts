@@ -50,6 +50,13 @@ export const folderCorpusIdAtom = atom<string | null>(null);
  */
 export const folderListAtom = atom<CorpusFolderType[]>([]);
 
+/**
+ * Corpus permissions for the current folder context.
+ * Populated by FolderDocumentBrowser from openedCorpus reactive var.
+ * Used to determine if user can create/modify folders.
+ */
+export const corpusPermissionsAtom = atom<string[]>([]);
+
 // ============================================================================
 // DERIVED ATOMS (Computed from Base State)
 // ============================================================================
@@ -215,22 +222,19 @@ export const enableDragDropAtom = atom<boolean>(true);
 
 /**
  * Can user create folders in current corpus?
- * Checks permissions on current folder or corpus
+ * Checks UPDATE permission on the corpus (per permission model).
+ * Folder write operations require corpus UPDATE permission.
  */
 export const canCreateFoldersAtom = atom<boolean>((get) => {
-  const currentFolder = get(currentFolderAtom);
+  const corpusPermissions = get(corpusPermissionsAtom);
 
-  // If we have a folder, check its permissions (inherited from corpus)
-  if (currentFolder) {
-    const perms = currentFolder.myPermissions;
-    // Handle case where permissions haven't loaded yet
-    if (!perms || !Array.isArray(perms)) return true;
-    return perms.includes("update_corpus") || perms.includes("create_corpus");
+  // No permissions loaded yet - fail safe (hide button)
+  if (!corpusPermissions || corpusPermissions.length === 0) {
+    return false;
   }
 
-  // TODO: Check corpus permissions from Apollo cache
-  // For now, return true as placeholder
-  return true;
+  // Per permission model: folder write operations require UPDATE on corpus
+  return corpusPermissions.includes("update_corpus");
 });
 
 /**
@@ -244,7 +248,7 @@ export const canUpdateCurrentFolderAtom = atom<boolean>((get) => {
   const perms = currentFolder.myPermissions;
   // Handle case where permissions haven't loaded yet
   if (!perms || !Array.isArray(perms)) return false;
-  return perms.includes("update_corpus");
+  return perms.includes("update_corpusfolder");
 });
 
 /**
@@ -258,7 +262,7 @@ export const canDeleteCurrentFolderAtom = atom<boolean>((get) => {
   const perms = currentFolder.myPermissions;
   // Handle case where permissions haven't loaded yet
   if (!perms || !Array.isArray(perms)) return false;
-  return perms.includes("delete_corpus");
+  return perms.includes("remove_corpusfolder");
 });
 
 // ============================================================================
@@ -386,4 +390,37 @@ export const closeAllFolderModalsAtom = atom(null, (_get, set) => {
   set(showDeleteFolderModalAtom, false);
   set(activeFolderModalIdAtom, null);
   set(createFolderParentIdAtom, null);
+});
+
+// ============================================================================
+// REMOVE DOCUMENTS MODAL STATE
+// ============================================================================
+
+/**
+ * Show/hide remove documents confirmation modal
+ */
+export const showRemoveDocumentsModalAtom = atom<boolean>(false);
+
+/**
+ * Document IDs to be removed (set when opening the modal)
+ */
+export const removeDocumentsIdsAtom = atom<string[]>([]);
+
+/**
+ * Open remove documents confirmation modal
+ */
+export const openRemoveDocumentsModalAtom = atom(
+  null,
+  (_get, set, documentIds: string[]) => {
+    set(removeDocumentsIdsAtom, documentIds);
+    set(showRemoveDocumentsModalAtom, true);
+  }
+);
+
+/**
+ * Close remove documents modal
+ */
+export const closeRemoveDocumentsModalAtom = atom(null, (_get, set) => {
+  set(showRemoveDocumentsModalAtom, false);
+  set(removeDocumentsIdsAtom, []);
 });

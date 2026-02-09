@@ -1,20 +1,31 @@
 """
 PDF Token Extraction Utility.
 
-This module provides functions to extract word-level tokens from PDFs
+This module provides functions to extract word-level tokens and images from PDFs
 and calculate which tokens fall within annotation bounding boxes.
 
 Based on the Docsling microservice implementation:
 https://github.com/JSv4/Docsling/blob/main/app/core/parser.py
+
+Image extraction capabilities added for LLM image annotation support.
 """
 
+import base64
+import hashlib
 import io
+import json
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
 from shapely.geometry import box
 from shapely.strtree import STRtree
+
+if TYPE_CHECKING:
+    from opencontractserver.documents.models import Document
+    from PIL import Image as PILImage
+
+from django.conf import settings
 
 from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
@@ -24,6 +35,44 @@ from opencontractserver.types.dicts import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Image size limits - use settings with fallback defaults
+# These can be overridden via environment variables:
+#   MAX_IMAGE_SIZE_BYTES (default: 10MB per image)
+#   MAX_TOTAL_IMAGES_SIZE_BYTES (default: 100MB per document)
+MAX_IMAGE_SIZE_BYTES = getattr(settings, "MAX_IMAGE_SIZE_BYTES", 10 * 1024 * 1024)
+MAX_TOTAL_IMAGES_SIZE_BYTES = getattr(
+    settings, "MAX_TOTAL_IMAGES_SIZE_BYTES", 100 * 1024 * 1024
+)
+
+
+def load_pawls_data(document: "Document") -> Optional[list[dict[str, Any]]]:
+    """
+    Load PAWLs data from a document.
+
+    This is a shared utility for loading PAWLs JSON from a document's
+    pawls_parse_file field.
+
+    Args:
+        document: The Document instance.
+
+    Returns:
+        Parsed PAWLs data as list of page dicts, or None if unavailable.
+    """
+    pawls_file = document.pawls_parse_file
+    if not pawls_file:
+        return None
+
+    try:
+        pawls_file.open("r")
+        try:
+            pawls_data = json.load(pawls_file)
+        finally:
+            pawls_file.close()
+        return pawls_data
+    except Exception as e:
+        logger.error(f"Failed to load PAWLs data for document {document.pk}: {e}")
+        return None
 
 
 def has_extractable_text(pdf_bytes: bytes, min_chars: int = 10) -> bool:
@@ -370,3 +419,621 @@ def find_tokens_in_bbox(
     except Exception as e:
         logger.error(f"Error during spatial query for page {page_idx}: {e}")
         return []
+
+
+# =============================================================================
+# Image Storage Functions
+# =============================================================================
+
+
+def _save_image_to_storage(
+    image_bytes: bytes,
+    storage_path: str,
+    page_idx: int,
+    img_idx: int,
+    image_format: str,
+) -> Optional[str]:
+    """
+    Save image bytes to Django storage (S3, GCS, local filesystem).
+
+    Uses Django's default_storage backend, which may be local filesystem,
+    S3, GCS, or any other configured storage backend.
+
+    Args:
+        image_bytes: The raw image bytes to save.
+        storage_path: Base path for storing images (e.g., "documents/123/images").
+        page_idx: 0-based page index.
+        img_idx: 0-based image index within the page.
+        image_format: Image format ("jpeg" or "png").
+
+    Returns:
+        The full storage path where the image was saved (e.g.,
+        "documents/123/images/page_0_img_1.jpg"), or None on failure.
+        This path can be used with `_load_image_from_storage()` to retrieve
+        the image later.
+    """
+    try:
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+
+        # Build the filename
+        extension = "jpg" if image_format == "jpeg" else image_format
+        filename = f"page_{page_idx}_img_{img_idx}.{extension}"
+        full_path = f"{storage_path}/{filename}"
+
+        # Save to storage
+        saved_path = default_storage.save(full_path, ContentFile(image_bytes))
+        logger.debug(f"Saved image to storage: {saved_path}")
+        return saved_path
+
+    except Exception as e:
+        logger.warning(f"Failed to save image to storage: {e}")
+        return None
+
+
+def _load_image_from_storage(image_path: str) -> Optional[bytes]:
+    """
+    Load image bytes from Django storage.
+
+    Args:
+        image_path: The storage path to the image.
+
+    Returns:
+        The raw image bytes, or None if loading fails.
+    """
+    try:
+        from django.core.files.storage import default_storage
+
+        with default_storage.open(image_path, "rb") as f:
+            return f.read()
+
+    except Exception as e:
+        logger.warning(f"Failed to load image from storage '{image_path}': {e}")
+        return None
+
+
+# =============================================================================
+# Image Extraction Functions
+# =============================================================================
+
+
+def extract_images_from_pdf(
+    pdf_bytes: bytes,
+    min_width: int = 50,
+    min_height: int = 50,
+    max_images_per_page: int = 20,
+    image_format: Literal["jpeg", "png"] = "jpeg",
+    jpeg_quality: int = 85,
+    storage_path: Optional[str] = None,
+) -> dict[int, list[PawlsTokenPythonType]]:
+    """
+    Extract embedded images from a PDF as unified image tokens.
+
+    Uses pdfplumber to detect embedded images and extracts them. If a storage_path
+    is provided, images are saved to storage and referenced by path (recommended
+    to avoid PAWLs file bloat). Otherwise, images are embedded as base64.
+
+    Image tokens are returned as unified PawlsTokenPythonType with is_image=True,
+    allowing them to be stored alongside text tokens in the PAWLs format and
+    referenced using the same TokenIdPythonType.
+
+    Args:
+        pdf_bytes: The raw bytes of the PDF file.
+        min_width: Minimum image width in pixels to include (default: 50).
+        min_height: Minimum image height in pixels to include (default: 50).
+        max_images_per_page: Maximum number of images to extract per page (default: 20).
+        image_format: Output format for extracted images ("jpeg" or "png").
+        jpeg_quality: JPEG quality if using jpeg format (1-100, default: 85).
+        storage_path: Base path for storing images (e.g., "user_123/doc_456/images").
+                     If provided, images are saved to storage and referenced by path.
+                     If None, images are embedded as base64 (not recommended for large docs).
+
+    Returns:
+        Dict mapping 0-based page index to list of PawlsTokenPythonType (image tokens).
+        Each image token has is_image=True and text="" to identify it as an image.
+    """
+    try:
+        import pdfplumber
+        from PIL import Image
+    except ImportError as e:
+        logger.error(f"Required library not installed: {e}")
+        return {}
+
+    images_by_page: dict[int, list[PawlsTokenPythonType]] = {}
+
+    # Track total size across all images for document-level limit
+    total_images_size = 0
+    size_limit_reached = False
+
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page_idx, page in enumerate(pdf.pages):
+                # Check if we've hit the document-level size limit
+                if size_limit_reached:
+                    images_by_page[page_idx] = []
+                    continue
+                page_images: list[PawlsTokenPythonType] = []
+                page_width = float(page.width)
+                page_height = float(page.height)
+
+                # Get embedded images from the page
+                if not hasattr(page, "images") or not page.images:
+                    images_by_page[page_idx] = []
+                    continue
+
+                for img_idx, img_info in enumerate(page.images[:max_images_per_page]):
+                    try:
+                        # pdfplumber image info contains: x0, top, x1, bottom, etc.
+                        x0 = float(img_info.get("x0", 0))
+                        top = float(img_info.get("top", 0))
+                        x1 = float(img_info.get("x1", page_width))
+                        bottom = float(img_info.get("bottom", page_height))
+
+                        # Calculate dimensions
+                        width = x1 - x0
+                        height = bottom - top
+
+                        # Skip images that are too small
+                        if width < min_width or height < min_height:
+                            logger.debug(
+                                f"Skipping small image on page {page_idx}: "
+                                f"{width}x{height}"
+                            )
+                            continue
+
+                        # Try to extract the actual image data
+                        # pdfplumber may provide a 'stream' or we need to crop
+                        pil_image = None
+
+                        # Method 1: Try to get image stream directly
+                        if "stream" in img_info:
+                            stream = img_info["stream"]
+                            if hasattr(stream, "get_data"):
+                                try:
+                                    raw_data = stream.get_data()
+                                    pil_image = Image.open(io.BytesIO(raw_data))
+                                except Exception:
+                                    pass
+
+                        # Method 2: Crop the region from rendered page
+                        if pil_image is None:
+                            pil_image = _crop_pdf_region(
+                                pdf_bytes,
+                                page_idx,
+                                x0,
+                                top,
+                                x1,
+                                bottom,
+                                page_width,
+                                page_height,
+                            )
+
+                        if pil_image is None:
+                            logger.debug(
+                                f"Could not extract image {img_idx} on page {page_idx}"
+                            )
+                            continue
+
+                        # Convert to target format
+                        img_bytes_io = io.BytesIO()
+                        if image_format == "jpeg":
+                            # Convert to RGB for JPEG (no alpha channel)
+                            if pil_image.mode in ("RGBA", "LA", "P"):
+                                pil_image = pil_image.convert("RGB")
+                            pil_image.save(
+                                img_bytes_io, format="JPEG", quality=jpeg_quality
+                            )
+                        else:
+                            pil_image.save(img_bytes_io, format="PNG")
+
+                        image_bytes = img_bytes_io.getvalue()
+                        image_size = len(image_bytes)
+
+                        # Check individual image size limit
+                        if image_size > MAX_IMAGE_SIZE_BYTES:
+                            logger.warning(
+                                f"Skipping oversized image on page {page_idx}: "
+                                f"{image_size} bytes exceeds {MAX_IMAGE_SIZE_BYTES} limit"
+                            )
+                            continue
+
+                        # Check document-level total size limit
+                        if total_images_size + image_size > MAX_TOTAL_IMAGES_SIZE_BYTES:
+                            logger.warning(
+                                f"Document image size limit reached "
+                                f"({MAX_TOTAL_IMAGES_SIZE_BYTES} bytes), "
+                                f"stopping extraction at page {page_idx}"
+                            )
+                            size_limit_reached = True
+                            break
+
+                        total_images_size += image_size
+
+                        # Calculate content hash for deduplication
+                        content_hash = hashlib.sha256(image_bytes).hexdigest()
+
+                        # Create unified image token with is_image=True and text=""
+                        # This allows image tokens to be stored alongside text tokens
+                        # in the PAWLs format and referenced using TokenIdPythonType
+                        image_token: PawlsTokenPythonType = {
+                            "x": x0,
+                            "y": top,
+                            "width": width,
+                            "height": height,
+                            "text": "",  # Required field, empty for images
+                            "is_image": True,  # Identifies this as an image token
+                            "format": image_format,
+                            "original_width": pil_image.width,
+                            "original_height": pil_image.height,
+                            "content_hash": content_hash,
+                            "image_type": "embedded",
+                        }
+
+                        # Save to storage if path provided, otherwise embed base64
+                        if storage_path:
+                            saved_path = _save_image_to_storage(
+                                image_bytes,
+                                storage_path,
+                                page_idx,
+                                img_idx,
+                                image_format,
+                            )
+                            if saved_path:
+                                image_token["image_path"] = saved_path
+                            else:
+                                # Fallback to base64 if storage fails
+                                image_token["base64_data"] = base64.b64encode(
+                                    image_bytes
+                                ).decode("utf-8")
+                        else:
+                            # No storage path - embed as base64 (not recommended)
+                            image_token["base64_data"] = base64.b64encode(
+                                image_bytes
+                            ).decode("utf-8")
+
+                        page_images.append(image_token)
+                        logger.debug(
+                            f"Extracted image {img_idx} on page {page_idx}: "
+                            f"{pil_image.width}x{pil_image.height}"
+                        )
+
+                    except Exception as img_error:
+                        logger.warning(
+                            f"Error extracting image {img_idx} on page {page_idx}: "
+                            f"{img_error}"
+                        )
+                        continue
+
+                images_by_page[page_idx] = page_images
+
+        logger.info(
+            f"Extracted images from {len(pdf.pages)} pages: "
+            f"{sum(len(imgs) for imgs in images_by_page.values())} total images"
+        )
+
+    except Exception as e:
+        logger.error(f"Error extracting images from PDF: {e}")
+
+    return images_by_page
+
+
+def _crop_pdf_region(
+    pdf_bytes: bytes,
+    page_idx: int,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    page_width: float,
+    page_height: float,
+    dpi: int = 150,
+) -> Optional["PILImage.Image"]:
+    """
+    Crop a specific region from a PDF page by rendering it first.
+
+    This is a fallback method when embedded image streams cannot be extracted
+    directly from the PDF.
+
+    Args:
+        pdf_bytes: The raw bytes of the PDF file.
+        page_idx: 0-based page index.
+        x0, y0, x1, y1: Bounding box coordinates in PDF points.
+        page_width, page_height: Full page dimensions in PDF points.
+        dpi: Resolution for rendering (default: 150).
+
+    Returns:
+        PIL Image of the cropped region, or None on failure.
+    """
+    try:
+        from pdf2image import convert_from_bytes
+        from PIL import Image  # noqa: F401 - imported to verify PIL is installed
+    except ImportError:
+        logger.warning("pdf2image or PIL not installed for region cropping")
+        return None
+
+    try:
+        # Render the specific page
+        images = convert_from_bytes(
+            pdf_bytes,
+            first_page=page_idx + 1,  # pdf2image uses 1-based indexing
+            last_page=page_idx + 1,
+            dpi=dpi,
+        )
+
+        if not images:
+            return None
+
+        page_image = images[0]
+        img_width, img_height = page_image.size
+
+        # Calculate scale factors
+        scale_x = img_width / page_width
+        scale_y = img_height / page_height
+
+        # Convert PDF coordinates to pixel coordinates
+        px_x0 = int(x0 * scale_x)
+        px_y0 = int(y0 * scale_y)
+        px_x1 = int(x1 * scale_x)
+        px_y1 = int(y1 * scale_y)
+
+        # Ensure valid crop bounds
+        px_x0 = max(0, min(px_x0, img_width - 1))
+        px_y0 = max(0, min(px_y0, img_height - 1))
+        px_x1 = max(px_x0 + 1, min(px_x1, img_width))
+        px_y1 = max(px_y0 + 1, min(px_y1, img_height))
+
+        # Crop the region
+        cropped = page_image.crop((px_x0, px_y0, px_x1, px_y1))
+        return cropped
+
+    except Exception as e:
+        logger.warning(f"Error cropping PDF region: {e}")
+        return None
+
+
+def crop_image_from_pdf(
+    pdf_bytes: bytes,
+    page_idx: int,
+    bbox: BoundingBoxPythonType,
+    page_width: float,
+    page_height: float,
+    image_format: Literal["jpeg", "png"] = "jpeg",
+    jpeg_quality: int = 85,
+    dpi: int = 150,
+    storage_path: Optional[str] = None,
+    img_idx: int = 0,
+) -> Optional[PawlsTokenPythonType]:
+    """
+    Crop a specific bounding box region from a PDF page as a unified image token.
+
+    This is useful for extracting figure/image regions identified by parsers
+    like LlamaParse or Docling that provide bounding boxes for visual elements.
+
+    The returned image token is a unified PawlsTokenPythonType with is_image=True,
+    allowing it to be stored alongside text tokens and referenced using
+    TokenIdPythonType.
+
+    Args:
+        pdf_bytes: The raw bytes of the PDF file.
+        page_idx: 0-based page index.
+        bbox: Bounding box in PDF coordinates {left, top, right, bottom}.
+        page_width: Page width in PDF points.
+        page_height: Page height in PDF points.
+        image_format: Output format ("jpeg" or "png").
+        jpeg_quality: JPEG quality (1-100).
+        dpi: Resolution for rendering (default: 150).
+        storage_path: Base path for storing images. If provided, cropped images
+                     are saved to storage and referenced by path (recommended).
+                     If None, images are embedded as base64.
+        img_idx: Image index for filename generation when using storage_path.
+
+    Returns:
+        PawlsTokenPythonType with is_image=True and cropped image data,
+        or None on failure.
+    """
+    # Note: PIL availability is checked in _crop_pdf_region
+    try:
+        left = float(bbox["left"])
+        top = float(bbox["top"])
+        right = float(bbox["right"])
+        bottom = float(bbox["bottom"])
+
+        # Ensure valid bounds
+        if left > right:
+            left, right = right, left
+        if top > bottom:
+            top, bottom = bottom, top
+
+        width = right - left
+        height = bottom - top
+
+        # Crop the region
+        pil_image = _crop_pdf_region(
+            pdf_bytes, page_idx, left, top, right, bottom, page_width, page_height, dpi
+        )
+
+        if pil_image is None:
+            return None
+
+        # Convert to target format
+        img_bytes_io = io.BytesIO()
+        if image_format == "jpeg":
+            if pil_image.mode in ("RGBA", "LA", "P"):
+                pil_image = pil_image.convert("RGB")
+            pil_image.save(img_bytes_io, format="JPEG", quality=jpeg_quality)
+        else:
+            pil_image.save(img_bytes_io, format="PNG")
+
+        image_bytes = img_bytes_io.getvalue()
+
+        # Check image size limit
+        if len(image_bytes) > MAX_IMAGE_SIZE_BYTES:
+            logger.warning(
+                f"Cropped image on page {page_idx} exceeds size limit: "
+                f"{len(image_bytes)} bytes > {MAX_IMAGE_SIZE_BYTES}"
+            )
+            return None
+
+        content_hash = hashlib.sha256(image_bytes).hexdigest()
+
+        # Create unified image token with is_image=True and text=""
+        # This allows the cropped image to be stored alongside text tokens
+        # and referenced using TokenIdPythonType
+        image_token: PawlsTokenPythonType = {
+            "x": left,
+            "y": top,
+            "width": width,
+            "height": height,
+            "text": "",  # Required field, empty for images
+            "is_image": True,  # Identifies this as an image token
+            "format": image_format,
+            "original_width": pil_image.width,
+            "original_height": pil_image.height,
+            "content_hash": content_hash,
+            "image_type": "cropped",
+        }
+
+        # Save to storage if path provided, otherwise embed base64
+        if storage_path:
+            # Use "cropped" prefix to distinguish from embedded images
+            saved_path = _save_image_to_storage(
+                image_bytes,
+                storage_path,
+                page_idx,
+                img_idx,
+                image_format,
+            )
+            if saved_path:
+                image_token["image_path"] = saved_path
+            else:
+                # Fallback to base64 if storage fails
+                image_token["base64_data"] = base64.b64encode(image_bytes).decode(
+                    "utf-8"
+                )
+        else:
+            # No storage path - embed as base64 (not recommended for large images)
+            image_token["base64_data"] = base64.b64encode(image_bytes).decode("utf-8")
+
+        return image_token
+
+    except Exception as e:
+        logger.error(f"Error cropping image from PDF: {e}")
+        return None
+
+
+def get_image_as_base64(
+    image_token: PawlsTokenPythonType,
+) -> Optional[str]:
+    """
+    Get the base64-encoded image data from a unified image token.
+
+    This function retrieves image data for LLM consumption. It first checks for
+    inline base64 data, then falls back to loading from storage if an image_path
+    is provided.
+
+    Image tokens are unified PawlsTokenPythonType with is_image=True. They may
+    contain either base64_data (inline) or image_path (storage reference).
+
+    Args:
+        image_token: A unified PawlsTokenPythonType with is_image=True,
+                    containing either base64_data or image_path.
+
+    Returns:
+        Base64-encoded image data string, or None if not available.
+    """
+    # First check for inline base64 data (small thumbnails, legacy)
+    if "base64_data" in image_token and image_token["base64_data"]:
+        return image_token["base64_data"]
+
+    # Load from storage if image_path is provided (preferred method)
+    if "image_path" in image_token and image_token["image_path"]:
+        image_bytes = _load_image_from_storage(image_token["image_path"])
+        if image_bytes:
+            return base64.b64encode(image_bytes).decode("utf-8")
+        else:
+            logger.warning(
+                f"Failed to load image from storage: {image_token['image_path']}"
+            )
+            return None
+
+    return None
+
+
+def get_image_data_url(
+    image_token: PawlsTokenPythonType,
+) -> Optional[str]:
+    """
+    Get the image as a data URL suitable for embedding in HTML or LLM prompts.
+
+    Image tokens are unified PawlsTokenPythonType with is_image=True.
+
+    Args:
+        image_token: A unified PawlsTokenPythonType with is_image=True,
+                    containing either base64_data or image_path.
+
+    Returns:
+        Data URL string (e.g., "data:image/jpeg;base64,..."), or None if not available.
+    """
+    base64_data = get_image_as_base64(image_token)
+    if not base64_data:
+        return None
+
+    img_format = image_token.get("format", "jpeg")
+    mime_type = f"image/{img_format}"
+
+    return f"data:{mime_type};base64,{base64_data}"
+
+
+def find_image_tokens_in_bounds(
+    bounds: BoundingBoxPythonType,
+    page_idx: int,
+    image_tokens: list[dict[str, Any]],
+    token_offset: int = 0,
+) -> list[TokenIdPythonType]:
+    """
+    Find image tokens that overlap with a bounding box.
+
+    This is a shared utility for finding image tokens that intersect with an
+    annotation's bounding box. Used by parsers to link figure/image annotations
+    to their corresponding image tokens in the unified PAWLs format.
+
+    Args:
+        bounds: The annotation bounding box {left, top, right, bottom}.
+        page_idx: 0-based page index.
+        image_tokens: List of image token dicts with x, y, width, height fields.
+                     These can be either raw image dicts from extract_images_from_pdf
+                     or PawlsTokenPythonType with is_image=True.
+        token_offset: The starting token index for image tokens in the unified
+                     tokens array. Images are typically appended after text tokens,
+                     so this offset accounts for the text token count.
+
+    Returns:
+        List of TokenIdPythonType references for overlapping image tokens.
+    """
+    if not image_tokens:
+        return []
+
+    token_refs: list[TokenIdPythonType] = []
+    ann_left = float(bounds["left"])
+    ann_top = float(bounds["top"])
+    ann_right = float(bounds["right"])
+    ann_bottom = float(bounds["bottom"])
+
+    for img_idx, img_data in enumerate(image_tokens):
+        img_left = float(img_data["x"])
+        img_top = float(img_data["y"])
+        img_right = img_left + float(img_data["width"])
+        img_bottom = img_top + float(img_data["height"])
+
+        # Check for overlap (standard AABB intersection test)
+        if (
+            ann_left < img_right
+            and ann_right > img_left
+            and ann_top < img_bottom
+            and ann_bottom > img_top
+        ):
+            # Calculate the token index for this image
+            token_index = token_offset + img_idx
+            token_refs.append({"pageIndex": page_idx, "tokenIndex": token_index})
+
+    return token_refs

@@ -129,10 +129,8 @@ def check_document_in_corpus(cls, document: Document, corpus: Corpus) -> bool:
     """
     Verify document belongs to corpus.
 
-    Checks both:
-    - DocumentPath records (primary)
-    - CorpusDocumentFolder records (legacy)
-    - corpus.documents M2M (fallback)
+    Checks via DocumentPath records (sole source of truth).
+    See opencontractserver/corpuses/models.py for implementation.
     """
 ```
 

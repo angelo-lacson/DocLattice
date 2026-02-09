@@ -104,7 +104,7 @@ function CorpusItem({ corpus, selected, onClick }: CorpusItemProps) {
       <Card.Content extra>
         <Label size="small">
           <Icon name="file text outline" />
-          {corpus?.documents?.totalCount || 0} Documents
+          {corpus?.documentCount || 0} Documents
         </Label>
         <Label size="small">
           <Icon name="tags" />

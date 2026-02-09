@@ -1,5 +1,7 @@
+import dataclasses
 import logging
 from abc import ABC
+from typing import Any, ClassVar, Optional
 
 from django.conf import settings
 
@@ -11,88 +13,205 @@ class PipelineComponentBase(ABC):
     Base class for pipeline components, providing automatic settings injection.
 
     Pipeline components inheriting from this class will have settings
-    defined in Django's `settings.PIPELINE_SETTINGS` dictionary automatically
-    made available to their operative methods.
+    automatically loaded from the PipelineSettings database singleton.
 
-    The `PIPELINE_SETTINGS` dictionary should be structured as follows:
-    PIPELINE_SETTINGS = {
-        "full.python.path.to.ComponentClass": {
-            "setting_key_1": "value1",
-            "setting_key_2": True,
-            # ...
-        },
-        # ...
-    }
+    Components should declare a nested `Settings` dataclass to define their
+    configuration schema:
+
+        from dataclasses import dataclass, field
+        from opencontractserver.pipeline.base.settings_schema import (
+            PipelineSetting,
+            SettingType,
+        )
+
+        class MyParser(BaseParser):
+            @dataclass
+            class Settings:
+                api_key: str = field(
+                    default="",
+                    metadata={"pipeline_setting": PipelineSetting(
+                        setting_type=SettingType.SECRET,
+                        required=True,
+                        description="API key",
+                        env_var="MY_PARSER_API_KEY",
+                    )}
+                )
+
+    Settings are loaded once during __init__ and cached. Use reload_settings()
+    to refresh settings from the database if needed.
+
+    For backwards compatibility, components without a Settings dataclass can
+    still use get_component_settings() to get a raw dictionary of settings.
     """
+
+    # Subclasses should override this with their Settings dataclass
+    Settings: ClassVar[Optional[type[Any]]] = None
 
     def __init__(self, **kwargs):
         """
-        Initializes the PipelineComponentBase.
-        Any kwargs passed are typically for other base classes in an MRO,
-        or can be used by subclasses after calling super().__init__().
-        """
-        super().__init__()  # Ensures MRO is handled correctly, e.g. if ABC has __init__
-        self._component_settings: dict = {}
-        self._load_component_settings()
+        Initialize the PipelineComponentBase.
 
-    def _load_component_settings(self):
-        """
-        Loads settings for this component from Django settings.
-        It first tries the simple class name, then the full class path.
-        """
-        simple_class_name = self.__class__.__name__
-        full_class_path = f"{self.__class__.__module__}.{self.__class__.__name__}"
+        Loads and validates settings from PipelineSettings database if the
+        component has a Settings dataclass defined.
 
-        # Ensure settings are loaded, especially in non-Django managed scripts or tests
-        if not settings.configured:
+        Args:
+            **kwargs: Passed to superclass constructors in MRO.
+        """
+        super().__init__()  # Ensures MRO is handled correctly
+        # Cache the class path for efficient lookups
+        self._full_class_path = f"{self.__class__.__module__}.{self.__class__.__name__}"
+        # Load settings (will be None if no Settings dataclass)
+        self._settings: Optional[Any] = self._load_settings()
+
+    @property
+    def settings(self) -> Optional[Any]:
+        """
+        Access the validated settings dataclass instance.
+
+        Returns:
+            An instance of the component's Settings dataclass, or None if
+            the component has no Settings dataclass defined.
+        """
+        return self._settings
+
+    def _load_settings(self, strict: bool = False) -> Optional[Any]:
+        """
+        Load and validate settings from PipelineSettings database.
+
+        If the component has a Settings dataclass defined, this method:
+        1. Fetches stored settings from PipelineSettings database
+        2. Merges with defaults from the Settings dataclass
+        3. Validates required fields if strict=True
+        4. Returns a populated Settings dataclass instance
+
+        Args:
+            strict: If True, raise ConfigurationError for missing required settings.
+                    Default is False during __init__ to allow graceful degradation.
+
+        Returns:
+            An instance of self.Settings dataclass populated with values,
+            or None if the component has no Settings dataclass.
+
+        Raises:
+            ConfigurationError: If strict=True and required settings are missing.
+        """
+        if self.Settings is None or not dataclasses.is_dataclass(self.Settings):
+            return None
+
+        # Import here to avoid circular imports
+        from opencontractserver.pipeline.base.settings_schema import (
+            ConfigurationError,
+            create_settings_instance,
+        )
+
+        # Get settings from database
+        settings_dict = self.get_component_settings()
+
+        try:
+            return create_settings_instance(
+                self.__class__,
+                settings_dict,
+                strict=strict,
+            )
+        except ConfigurationError:
+            if strict:
+                raise
+            # Non-strict mode: log warning and return instance with defaults
             logger.warning(
-                "Django settings not configured. PIPELINE_SETTINGS will not be available."
+                f"Component '{self._full_class_path}' has missing required settings. "
+                "Using defaults where available."
             )
-            # Depending on strictness, you might want to raise an error or allow proceeding
-            # For now, we'll allow proceeding, _component_settings will remain empty.
-            # In a typical Django app flow, settings would be configured.
-            # Consider if `settings.configure()` needs to be called in specific entry points
-            # if this code runs outside the standard manage.py/WSGI/ASGI flow.
-            return  # Return early if settings aren't configured, _component_settings remains {}
-
-        pipeline_settings_dict = getattr(settings, "PIPELINE_SETTINGS", {})
-
-        if not isinstance(pipeline_settings_dict, dict):
-            logger.warning(
-                f"PIPELINE_SETTINGS is defined but is not a dictionary. "
-                f"Settings for {simple_class_name} (or {full_class_path}) will not be loaded."
+            return create_settings_instance(
+                self.__class__,
+                settings_dict,
+                strict=False,
             )
-            return
+        except ValueError as e:
+            # No Settings dataclass (shouldn't happen since we check above)
+            logger.debug(f"Could not load settings: {e}")
+            return None
 
-        # Try simple class name first
-        component_settings = pipeline_settings_dict.get(simple_class_name)
-        if (
-            isinstance(component_settings, dict) and component_settings
-        ):  # Check if it's a non-empty dict
-            self._component_settings = component_settings
-            logger.debug(
-                f"Loaded settings for component using simple name '{simple_class_name}': {self._component_settings}"
-            )
-        else:
-            # Fallback to full class path
-            component_settings_fallback = pipeline_settings_dict.get(full_class_path)
-            if (
-                isinstance(component_settings_fallback, dict)
-                and component_settings_fallback
-            ):
-                self._component_settings = component_settings_fallback
-                logger.debug(
-                    f"Loaded settings for component using full path '{full_class_path}': {self._component_settings}"
-                )
-            else:
-                logger.debug(
-                    f"No specific settings found for component using simple name '{simple_class_name}' "
-                    f"or full path '{full_class_path}' in PIPELINE_SETTINGS."
-                )
-        # If neither key yields settings, self._component_settings remains the default {}
+    def reload_settings(self, strict: bool = False) -> Optional[Any]:
+        """
+        Reload settings from the database.
+
+        Call this method to refresh settings after they've been modified
+        in the PipelineSettings database.
+
+        Args:
+            strict: If True, raise ConfigurationError for missing required settings.
+
+        Returns:
+            The reloaded Settings dataclass instance.
+        """
+        self._settings = self._load_settings(strict=strict)
+        return self._settings
+
+    def validate_settings(self) -> tuple[bool, list[str]]:
+        """
+        Validate this component's current settings.
+
+        Returns:
+            Tuple of (is_valid, list_of_error_messages)
+        """
+        if self.Settings is None:
+            return True, []
+
+        from opencontractserver.pipeline.base.settings_schema import validate_settings
+
+        settings_dict = self.get_component_settings()
+        return validate_settings(self.__class__, settings_dict)
+
+    @classmethod
+    def get_settings_schema(cls) -> dict[str, dict[str, Any]]:
+        """
+        Get the settings schema for this component class.
+
+        Returns:
+            Dict mapping setting names to their schema information.
+            Empty dict if the component has no Settings dataclass.
+        """
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_settings_schema as extract_schema,
+        )
+
+        return extract_schema(cls)
 
     def get_component_settings(self) -> dict:
         """
-        Returns a copy of the settings loaded for this component.
+        Get settings for this component from PipelineSettings database.
+
+        This method fetches settings fresh on each call to support runtime
+        configuration changes. Settings are retrieved from the PipelineSettings
+        database model which includes encrypted secrets.
+
+        Note: For components with a Settings dataclass, prefer using the
+        `settings` property which returns a validated dataclass instance.
+
+        Returns:
+            Dict of settings for this component, including decrypted secrets.
         """
-        return self._component_settings.copy()
+        # Ensure Django settings are configured
+        if not settings.configured:
+            logger.warning(
+                "Django settings not configured. Component settings unavailable."
+            )
+            return {}
+
+        # Get settings from PipelineSettings DB model (includes secrets)
+        try:
+            from opencontractserver.documents.models import PipelineSettings
+
+            pipeline_settings = PipelineSettings.get_instance()
+            # get_full_component_settings merges component_settings with secrets
+            db_settings = pipeline_settings.get_full_component_settings(
+                self._full_class_path
+            )
+            if db_settings:
+                logger.debug(f"Loaded settings from DB for '{self._full_class_path}'")
+                return db_settings
+        except Exception as e:
+            # DB not available (e.g., during migrations or early startup)
+            logger.debug(f"Could not load settings from PipelineSettings DB: {e}.")
+
+        return {}

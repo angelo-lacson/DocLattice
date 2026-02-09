@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useReactiveVar, useQuery } from "@apollo/client";
 import { useAtom } from "jotai";
 import styled from "styled-components";
@@ -12,17 +11,27 @@ import {
   Lightbulb,
   AlertCircle,
 } from "lucide-react";
-import { openedCorpus } from "../../graphql/cache";
-import { navigateToCorpusThread } from "../../utils/navigationUtils";
+import { authToken, openedCorpus } from "../../graphql/cache";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import { ThreadList } from "../threads/ThreadList";
 import { CreateThreadForm } from "../threads/CreateThreadForm";
+import { ThreadDetailWithContext } from "../threads/ThreadDetailWithContext";
 import { ThreadSearch } from "../search/ThreadSearch";
 import { ModerationDashboard } from "../moderation";
 import { ThreadFilterToggles } from "../threads/ThreadFilterToggles";
-import { color } from "../../theme/colors";
-import { threadSortAtom, ThreadSortOption } from "../../atoms/threadAtoms";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "../threads/styles/discussionStyles";
+import {
+  threadSortAtom,
+  ThreadSortOption,
+  inlineSelectedThreadIdAtom,
+} from "../../atoms/threadAtoms";
 import {
   GET_CONVERSATIONS,
   GetConversationsInputs,
@@ -37,20 +46,20 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: ${color.N2};
+  background: #fafafa;
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1.5rem;
-  background: ${color.N1};
-  border-bottom: 1px solid ${color.N4};
+  padding: 1rem 2rem;
+  background: ${CORPUS_COLORS.white};
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
   gap: 1rem;
 
   @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
+    padding: 0.875rem 1rem;
     flex-wrap: wrap;
   }
 `;
@@ -63,16 +72,18 @@ const TitleSection = styled.div`
 `;
 
 const Breadcrumb = styled.div`
-  font-size: 13px;
-  color: ${color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[500]};
   white-space: nowrap;
 
   a {
-    color: ${color.N6};
+    color: ${CORPUS_COLORS.slate[500]};
     text-decoration: none;
+    transition: color ${CORPUS_TRANSITIONS.fast};
 
     &:hover {
-      color: ${color.G7};
+      color: ${CORPUS_COLORS.teal[700]};
       text-decoration: underline;
     }
   }
@@ -83,11 +94,11 @@ const Breadcrumb = styled.div`
 `;
 
 const Title = styled.h1`
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: ${color.N10};
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 24px;
+  font-weight: 400;
+  color: #0f766e;
   margin: 0;
-  letter-spacing: -0.025em;
 `;
 
 const CreateButton = styled.button`
@@ -96,26 +107,40 @@ const CreateButton = styled.button`
   gap: 0.375rem;
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
-  background: ${color.G6};
-  color: white;
+  border-radius: ${CORPUS_RADII.md};
+  background: linear-gradient(
+    135deg,
+    ${CORPUS_COLORS.teal[600]} 0%,
+    ${CORPUS_COLORS.teal[700]} 100%
+  );
+  color: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.normal};
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
 
-  &:hover {
-    background: ${color.G7};
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(15, 118, 110, 0.45);
+  }
+
+  &:disabled {
+    background: ${CORPUS_COLORS.slate[300]};
+    cursor: not-allowed;
+    opacity: 0.7;
+    box-shadow: none;
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
   }
 
-  @media (max-width: 480px) {
+  ${mediaQuery.mobile} {
     padding: 0.5rem;
     span {
       display: none;
@@ -127,13 +152,13 @@ const Toolbar = styled.div`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 1.5rem;
-  background: ${color.N1};
-  border-bottom: 1px solid ${color.N4};
+  padding: 0.75rem 2rem;
+  background: ${CORPUS_COLORS.white};
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
   flex-wrap: wrap;
 
   @media (max-width: 768px) {
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1rem;
     gap: 0.5rem;
   }
 `;
@@ -149,25 +174,32 @@ const FilterPill = styled.button<{ $isActive: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.375rem 0.625rem;
-  border: 1px solid ${(props) => (props.$isActive ? color.G5 : color.N4)};
-  border-radius: 16px;
-  background: ${(props) => (props.$isActive ? color.G6 : color.N1)};
-  color: ${(props) => (props.$isActive ? "white" : color.N7)};
-  font-size: 12px;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid
+    ${(props) =>
+      props.$isActive ? CORPUS_COLORS.teal[500] : CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.full};
+  background: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.teal[600] : CORPUS_COLORS.white};
+  color: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.white : CORPUS_COLORS.slate[600]};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    border-color: ${color.G5};
-    background: ${(props) => (props.$isActive ? color.G7 : color.G1)};
-    color: ${(props) => (props.$isActive ? "white" : color.G8)};
+    border-color: ${CORPUS_COLORS.teal[400]};
+    background: ${(props) =>
+      props.$isActive ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.teal[50]};
+    color: ${(props) =>
+      props.$isActive ? CORPUS_COLORS.white : CORPUS_COLORS.teal[700]};
   }
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 0.75rem;
+    height: 0.75rem;
   }
 `;
 
@@ -175,23 +207,23 @@ const FilterCount = styled.span<{ $isActive: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: ${CORPUS_RADII.full};
   background: ${(props) =>
-    props.$isActive ? "rgba(255,255,255,0.25)" : color.N3};
-  font-size: 10px;
+    props.$isActive ? "rgba(255,255,255,0.25)" : CORPUS_COLORS.slate[100]};
+  font-size: 0.625rem;
   font-weight: 600;
 `;
 
 const ToolbarDivider = styled.div`
   width: 1px;
-  height: 24px;
-  background: ${color.N4};
+  height: 1.5rem;
+  background: ${CORPUS_COLORS.slate[200]};
   margin: 0 0.25rem;
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     display: none;
   }
 `;
@@ -199,41 +231,42 @@ const ToolbarDivider = styled.div`
 const SearchInput = styled.div`
   position: relative;
   flex: 1;
-  min-width: 150px;
-  max-width: 280px;
+  min-width: 9.375rem;
+  max-width: 17.5rem;
 
   svg {
     position: absolute;
-    left: 10px;
+    left: 0.625rem;
     top: 50%;
     transform: translateY(-50%);
-    width: 14px;
-    height: 14px;
-    color: ${color.N6};
+    width: 0.875rem;
+    height: 0.875rem;
+    color: ${CORPUS_COLORS.slate[400]};
   }
 
   input {
     width: 100%;
     padding: 0.375rem 0.75rem 0.375rem 2rem;
-    border: 1px solid ${color.N4};
-    border-radius: 6px;
-    background: ${color.N1};
-    font-size: 13px;
-    color: ${color.N10};
-    transition: all 0.15s;
+    border: 1px solid ${CORPUS_COLORS.slate[200]};
+    border-radius: ${CORPUS_RADII.md};
+    background: ${CORPUS_COLORS.white};
+    font-family: ${CORPUS_FONTS.sans};
+    font-size: 0.8125rem;
+    color: ${CORPUS_COLORS.slate[800]};
+    transition: all ${CORPUS_TRANSITIONS.fast};
 
     &:focus {
       outline: none;
-      border-color: ${color.G5};
-      box-shadow: 0 0 0 2px ${color.G1};
+      border-color: ${CORPUS_COLORS.teal[500]};
+      box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]};
     }
 
     &::placeholder {
-      color: ${color.N6};
+      color: ${CORPUS_COLORS.slate[400]};
     }
   }
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     max-width: none;
     flex-basis: 100%;
     order: 10;
@@ -242,24 +275,25 @@ const SearchInput = styled.div`
 
 const SortDropdown = styled.select`
   padding: 0.375rem 1.75rem 0.375rem 0.625rem;
-  border: 1px solid ${color.N4};
-  border-radius: 6px;
-  background: ${color.N1}
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  background: ${CORPUS_COLORS.white}
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238C96A3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
     no-repeat right 8px center;
-  font-size: 13px;
-  color: ${color.N9};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[700]};
   cursor: pointer;
   appearance: none;
-  transition: all 0.15s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:focus {
     outline: none;
-    border-color: ${color.G5};
+    border-color: ${CORPUS_COLORS.teal[500]};
   }
 
   &:hover {
-    border-color: ${color.N5};
+    border-color: ${CORPUS_COLORS.slate[300]};
   }
 `;
 
@@ -269,7 +303,7 @@ const TabGroup = styled.div`
   gap: 0.25rem;
   margin-left: auto;
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     margin-left: 0;
   }
 `;
@@ -279,23 +313,29 @@ const TabButton = styled.button<{ $isActive: boolean }>`
   align-items: center;
   gap: 0.375rem;
   padding: 0.375rem 0.75rem;
-  border: 1px solid ${(props) => (props.$isActive ? color.G5 : color.N4)};
-  border-radius: 6px;
-  background: ${(props) => (props.$isActive ? color.G1 : color.N1)};
-  color: ${(props) => (props.$isActive ? color.G7 : color.N6)};
-  font-size: 12px;
+  border: 1px solid
+    ${(props) =>
+      props.$isActive ? CORPUS_COLORS.teal[500] : CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  background: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.teal[50] : CORPUS_COLORS.white};
+  color: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.slate[500]};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    border-color: ${color.G5};
-    color: ${color.G7};
+    border-color: ${CORPUS_COLORS.teal[400]};
+    color: ${CORPUS_COLORS.teal[700]};
+    background: ${CORPUS_COLORS.teal[50]};
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
   }
 `;
 
@@ -311,6 +351,11 @@ interface CorpusDiscussionsViewProps {
   corpusId: string;
   /** When true, hides the built-in header (for embedding in corpus tabs) */
   hideHeader?: boolean;
+  /**
+   * Callback fired when the component transitions between list view and thread detail view.
+   * Parent components can use this to adjust their navigation headers.
+   */
+  onViewModeChange?: (inThreadView: boolean) => void;
 }
 
 /**
@@ -326,10 +371,11 @@ interface CorpusDiscussionsViewProps {
 export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   corpusId,
   hideHeader = false,
+  onViewModeChange,
 }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
   const corpus = useReactiveVar(openedCorpus);
+  const token = useReactiveVar(authToken);
+  const isAuthenticated = Boolean(token);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"list" | "search" | "moderation">(
     "list"
@@ -337,6 +383,25 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useAtom(threadSortAtom);
+
+  // Track selected thread for inline viewing
+  const [selectedThreadId, setSelectedThreadId] = useAtom(
+    inlineSelectedThreadIdAtom
+  );
+  const inThreadView = selectedThreadId !== null;
+
+  // Notify parent when view mode changes
+  useEffect(() => {
+    onViewModeChange?.(inThreadView);
+  }, [inThreadView, onViewModeChange]);
+
+  // Reset inline selection when unmounting to prevent stale state
+  // when navigating back to the Discussions tab
+  useEffect(() => {
+    return () => {
+      setSelectedThreadId(null);
+    };
+  }, [setSelectedThreadId]);
 
   // Fetch all threads for stats calculation
   const { data: threadsData } = useQuery<
@@ -393,14 +458,18 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     return hasUpdate || hasPermission;
   }, [corpus]);
 
+  // Handle thread click - show inline instead of navigating away
   const handleThreadClick = useCallback(
     (threadId: string) => {
-      if (corpus) {
-        navigateToCorpusThread(corpus, threadId, navigate, location.pathname);
-      }
+      setSelectedThreadId(threadId);
     },
-    [corpus, navigate, location.pathname]
+    [setSelectedThreadId]
   );
+
+  // Handle back from thread detail - return to list view
+  const handleBackToList = useCallback(() => {
+    setSelectedThreadId(null);
+  }, [setSelectedThreadId]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -423,7 +492,22 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   if (!corpus) {
     return (
       <Container>
-        <p style={{ padding: "2rem", color: color.N6 }}>Loading corpus...</p>
+        <p style={{ padding: "2rem", color: CORPUS_COLORS.slate[500] }}>
+          Loading corpus...
+        </p>
+      </Container>
+    );
+  }
+
+  // If a thread is selected, show it inline with context sidebar
+  if (inThreadView && selectedThreadId) {
+    return (
+      <Container>
+        <ThreadDetailWithContext
+          conversationId={selectedThreadId}
+          corpusId={corpusId}
+          onBack={handleBackToList}
+        />
       </Container>
     );
   }
@@ -443,18 +527,31 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
             </Breadcrumb>
             <Title>Discussions</Title>
           </TitleSection>
-          <CreateButton
-            onClick={() => setShowCreateModal(true)}
-            aria-label="Create new discussion"
-          >
-            <Plus />
-            <span>New Discussion</span>
-          </CreateButton>
+          {isAuthenticated && (
+            <CreateButton
+              onClick={() => setShowCreateModal(true)}
+              aria-label="Create new discussion"
+            >
+              <Plus />
+              <span>New Discussion</span>
+            </CreateButton>
+          )}
         </Header>
       )}
 
       {/* Single Toolbar: Category filters + Search + Sort + Tabs */}
       <Toolbar>
+        {/* Create button when header is hidden (embedded mode) */}
+        {hideHeader && isAuthenticated && (
+          <CreateButton
+            onClick={() => setShowCreateModal(true)}
+            aria-label="Create new discussion"
+          >
+            <Plus />
+            <span>New</span>
+          </CreateButton>
+        )}
+
         {/* Category filter pills */}
         <FilterPills>
           <FilterPill

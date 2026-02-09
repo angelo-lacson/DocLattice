@@ -52,8 +52,11 @@ MIME_TO_EXTENSION = {
     "text/plain": ".txt",
 }
 
+# File types that are stored as txt_extract_file (plain text, no parsing needed)
+TEXT_MIMETYPES = {"text/plain", "application/txt"}
 
-def _create_pdf_file_from_content(
+
+def _create_content_file(
     content: bytes,
     content_hash: str,
     path: str,
@@ -74,6 +77,10 @@ def _create_pdf_file_from_content(
     Returns:
         ContentFile ready for assignment to a FileField
     """
+    # Handle None file_type - default to binary
+    if not file_type:
+        file_type = "application/octet-stream"
+
     # Get extension from MIME type
     extension = MIME_TO_EXTENSION.get(file_type)
     if not extension:
@@ -93,6 +100,13 @@ def _create_pdf_file_from_content(
 
     filename = f"{base_name}{extension}"
     return ContentFile(content, name=filename)
+
+
+def _is_text_file(file_type: str | None) -> bool:
+    """Check if the file type should be stored as txt_extract_file."""
+    if not file_type:
+        return False
+    return file_type in TEXT_MIMETYPES
 
 
 def compute_sha256(content: bytes) -> str:
@@ -122,6 +136,7 @@ def import_document(
     user: User,
     folder: Optional[CorpusFolder] = None,
     pdf_file=None,
+    txt_file=None,
     **doc_kwargs,
 ) -> tuple[Document, str, DocumentPath]:
     """
@@ -131,26 +146,33 @@ def import_document(
     within each corpus with independent version trees. Provenance is tracked
     via source_document field for traceability.
 
+    Supports all file types with unified versioning:
+    - Binary formats (PDF, DOCX, etc.): Stored in pdf_file field
+    - Text files: Stored in txt_extract_file field
+
     Args:
         corpus: The corpus to import into
         path: The filesystem path within the corpus
-        content: The PDF file content as bytes
+        content: The file content as bytes
         user: The user performing the import
         folder: Optional folder to place the document in
-        pdf_file: Optional Django file object for the PDF
+        pdf_file: Optional Django file object for binary files
+        txt_file: Optional Django file object for text files
         **doc_kwargs: Additional keyword arguments for Document creation
+            - file_type: MIME type (determines storage field)
 
     Returns:
         Tuple of (document, status, path_record) where status is one of:
-        - 'created': Brand new document (first time this content seen globally)
-        - 'updated': Content changed at existing path (version increment)
-        - 'unchanged': No change detected
-        - 'linked': Same content already exists in THIS corpus at different path
-        - 'created_from_existing': New corpus-isolated doc, content exists elsewhere
+        - 'created': New document at new path
+        - 'updated': New version at existing path
 
-    Implements: Rules C1, C2, C3, P1, P2, P4, P5, I1 (NEW), I2, I3
+    Note: No content-based deduplication is performed. Each upload creates
+    a new document regardless of content hash.
     """
     content_hash = compute_sha256(content)
+    # Handle file_type - use default if None or missing
+    file_type = doc_kwargs.get("file_type") or "application/pdf"
+    is_text = _is_text_file(file_type)
 
     with transaction.atomic():
         # Step 1: Check if this path already exists in THIS corpus
@@ -163,77 +185,61 @@ def import_document(
         )
 
         if current_path:
-            # Path exists in this corpus - check if content changed
-            if current_path.document.pdf_file_hash == content_hash:
-                logger.info(
-                    f"No content change detected for {path} in corpus {corpus.id}"
-                )
-                return current_path.document, "unchanged", current_path
-
-            # Content changed - apply Rule C2 (update within corpus version tree)
+            # Path exists - always create new version (no content-based deduplication)
             old_doc = current_path.document
 
-            # Check if this exact content already exists in THIS corpus
-            # (Rule I1: corpus isolation - only check within this corpus)
-            # Check both current AND historical paths (for content reuse within corpus)
-            corpus_doc_with_hash = (
-                DocumentPath.objects.filter(
-                    corpus=corpus,
-                    document__pdf_file_hash=content_hash,
-                )
-                .select_related("document")
-                .first()
+            logger.info(
+                f"Creating new version of doc {old_doc.id} for {path} "
+                f"in corpus {corpus.id}"
             )
 
-            if corpus_doc_with_hash:
-                # Content already exists in THIS corpus (current or historical) - reuse
-                new_doc = corpus_doc_with_hash.document
-                logger.info(
-                    f"Content already exists in corpus {corpus.id} as doc "
-                    f"{new_doc.id}, reusing for {path}"
-                )
-            else:
-                # Create new version (Rule C2) - within this corpus's version tree
-                logger.info(
-                    f"Creating new version of doc {old_doc.id} for {path} "
-                    f"in corpus {corpus.id}"
-                )
+            # Mark old as not current in this version tree
+            Document.objects.filter(version_tree_id=old_doc.version_tree_id).update(
+                is_current=False
+            )
 
-                # Rule C3: Mark old as not current in this version tree
-                Document.objects.filter(version_tree_id=old_doc.version_tree_id).update(
-                    is_current=False
-                )
-
-                # Determine pdf_file: use provided, fall back to old doc, or create from content
-                file_type = doc_kwargs.get("file_type", old_doc.file_type)
-                effective_pdf_file = pdf_file or old_doc.pdf_file
-                if not effective_pdf_file:
-                    # Neither provided nor available from old doc - create from content
-                    effective_pdf_file = _create_pdf_file_from_content(
+            # Determine file storage based on file type
+            # Text files go to txt_extract_file, everything else to pdf_file
+            if is_text:
+                effective_txt_file = txt_file or old_doc.txt_extract_file
+                if not effective_txt_file:
+                    effective_txt_file = _create_content_file(
                         content=content,
                         content_hash=content_hash,
                         path=path,
                         file_type=file_type,
                     )
+                effective_pdf_file = None
+            else:
+                effective_pdf_file = pdf_file or old_doc.pdf_file
+                if not effective_pdf_file:
+                    effective_pdf_file = _create_content_file(
+                        content=content,
+                        content_hash=content_hash,
+                        path=path,
+                        file_type=file_type,
+                    )
+                effective_txt_file = None
 
-                # Create new document version (isolated within corpus)
-                new_doc = Document.objects.create(
-                    title=doc_kwargs.get("title", old_doc.title),
-                    description=doc_kwargs.get("description", old_doc.description),
-                    file_type=file_type,
-                    pdf_file=effective_pdf_file,
-                    pdf_file_hash=content_hash,
-                    version_tree_id=old_doc.version_tree_id,  # Same tree
-                    parent=old_doc,  # Rule C2
-                    is_current=True,  # Rule C3
-                    structural_annotation_set=old_doc.structural_annotation_set,  # Inherit structural annotations
-                    creator=user,
-                    **{
-                        k: v
-                        for k, v in doc_kwargs.items()
-                        if k not in ["title", "description", "file_type"]
-                    },
-                )
+            # Create new document version (isolated within corpus)
+            new_doc = Document.objects.create(
+                title=doc_kwargs.get("title", old_doc.title),
+                description=doc_kwargs.get("description", old_doc.description),
+                file_type=file_type,
+                pdf_file=effective_pdf_file,
+                txt_extract_file=effective_txt_file,
+                pdf_file_hash=content_hash,
+                version_tree_id=old_doc.version_tree_id,  # Same tree
+                parent=old_doc,
+                is_current=True,
+                structural_annotation_set=old_doc.structural_annotation_set,  # Inherit structural annotations
+                creator=user,
+                **{
+                    k: v
+                    for k, v in doc_kwargs.items()
+                    if k not in ["title", "description", "file_type"]
+                },
+            )
 
             # Apply Rules P1, P2, P3
             current_path.is_current = False
@@ -280,96 +286,54 @@ def import_document(
             return new_doc, "updated", new_path
 
         else:
-            # New path in this corpus - ALWAYS create a new document
-            # This ensures each upload gets its own document with proper pdf_file
-            # Check if content exists anywhere (for artifact sharing - Rule I3)
-            existing_doc_with_hash = (
-                Document.objects.filter(pdf_file_hash=content_hash)
-                .select_for_update()
-                .first()
-            )
+            # New path in this corpus - create fresh document (no content-based deduplication)
+            # Each upload is processed independently regardless of content hash
+            tree_id = uuid.uuid4()
 
-            tree_id = uuid.uuid4()  # Always new tree for each upload
-
-            if existing_doc_with_hash:
-                # Content exists elsewhere - share artifacts, track provenance (Rule I2, I3)
-                file_type = doc_kwargs.get("file_type", "application/pdf")
-                effective_pdf_file = pdf_file or existing_doc_with_hash.pdf_file
-                if not effective_pdf_file:
-                    # Neither provided nor available - create from content
-                    effective_pdf_file = _create_pdf_file_from_content(
+            # Determine file storage based on file type
+            # Text files go to txt_extract_file, everything else to pdf_file
+            if is_text:
+                effective_txt_file = txt_file
+                if not effective_txt_file:
+                    effective_txt_file = _create_content_file(
                         content=content,
                         content_hash=content_hash,
                         path=path,
                         file_type=file_type,
                     )
-
-                doc = Document.objects.create(
-                    title=doc_kwargs.get("title", f"Document at {path}"),
-                    description=doc_kwargs.get("description", ""),
-                    file_type=file_type,
-                    pdf_file=effective_pdf_file,
-                    pdf_file_hash=content_hash,
-                    # Share parsing artifacts (file blobs, not duplicated)
-                    pawls_parse_file=existing_doc_with_hash.pawls_parse_file,
-                    txt_extract_file=existing_doc_with_hash.txt_extract_file,
-                    icon=existing_doc_with_hash.icon,
-                    md_summary_file=existing_doc_with_hash.md_summary_file,
-                    page_count=existing_doc_with_hash.page_count,
-                    is_public=doc_kwargs.get(
-                        "is_public", existing_doc_with_hash.is_public
-                    ),
-                    version_tree_id=tree_id,  # New isolated tree
-                    is_current=True,
-                    parent=None,  # Root of NEW content tree
-                    source_document=existing_doc_with_hash,  # Rule I2: provenance
-                    structural_annotation_set=existing_doc_with_hash.structural_annotation_set,
-                    creator=user,
-                    **{
-                        k: v
-                        for k, v in doc_kwargs.items()
-                        if k not in ["title", "description", "file_type", "is_public"]
-                    },
-                )
-                version = 1
-                status = "created"
-                logger.info(
-                    f"Created new doc {doc.id} at {path} in corpus {corpus.id} "
-                    f"(shared artifacts from doc {existing_doc_with_hash.id})"
-                )
+                effective_pdf_file = None
             else:
-                # Brand new content globally (Rule C1)
-                # Create pdf_file from content if not provided
-                file_type = doc_kwargs.get("file_type", "application/pdf")
                 effective_pdf_file = pdf_file
                 if not effective_pdf_file:
-                    effective_pdf_file = _create_pdf_file_from_content(
+                    effective_pdf_file = _create_content_file(
                         content=content,
                         content_hash=content_hash,
                         path=path,
                         file_type=file_type,
                     )
+                effective_txt_file = None
 
-                doc = Document.objects.create(
-                    title=doc_kwargs.get("title", f"Document at {path}"),
-                    description=doc_kwargs.get("description", ""),
-                    file_type=file_type,
-                    pdf_file=effective_pdf_file,
-                    pdf_file_hash=content_hash,
-                    version_tree_id=tree_id,
-                    is_current=True,
-                    parent=None,  # Root of content tree
-                    source_document=None,  # No provenance
-                    creator=user,
-                    **{
-                        k: v
-                        for k, v in doc_kwargs.items()
-                        if k not in ["title", "description", "file_type"]
-                    },
-                )
-                version = 1
-                status = "created"
-                logger.info(f"Created new doc {doc.id} at {path} in corpus {corpus.id}")
+            doc = Document.objects.create(
+                title=doc_kwargs.get("title", f"Document at {path}"),
+                description=doc_kwargs.get("description", ""),
+                file_type=file_type,
+                pdf_file=effective_pdf_file,
+                txt_extract_file=effective_txt_file,
+                pdf_file_hash=content_hash,
+                version_tree_id=tree_id,
+                is_current=True,
+                parent=None,  # Root of content tree
+                source_document=None,  # Set via add_document() when dragging existing docs
+                creator=user,
+                **{
+                    k: v
+                    for k, v in doc_kwargs.items()
+                    if k not in ["title", "description", "file_type"]
+                },
+            )
+            version = 1
+            status = "created"
+            logger.info(f"Created new doc {doc.id} at {path} in corpus {corpus.id}")
 
             # Create root of path tree (Rule P1)
             new_path = DocumentPath.objects.create(

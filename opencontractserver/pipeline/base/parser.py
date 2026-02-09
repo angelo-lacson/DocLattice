@@ -8,8 +8,14 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from plasmapdf.models.PdfDataLayer import build_translation_layer
 
-from opencontractserver.annotations.models import RELATIONSHIP_LABEL
+from opencontractserver.annotations.models import (
+    RELATIONSHIP_LABEL,
+    Annotation,
+    Relationship,
+    StructuralAnnotationSet,
+)
 from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.types.dicts import OpenContractDocExport
 from opencontractserver.utils.importing import (
@@ -128,12 +134,32 @@ class BaseParser(PipelineComponentBase, ABC):
             from django.apps import apps
 
             Corpus = apps.get_model("corpuses", "Corpus")
+            DocumentPath = apps.get_model("documents", "DocumentPath")
             corpus_obj = Corpus.objects.get(id=corpus_id)
-            # Use add_document for corpus isolation (creates DocumentPath)
-            document, status, _ = corpus_obj.add_document(document=document, user=user)
-            logger.info(
-                f"Associated document with corpus: {corpus_obj.title} (status: {status})"
-            )
+
+            # Check if document is ALREADY in this corpus via DocumentPath
+            # (e.g., created by import_content in process_documents_zip)
+            existing_path = DocumentPath.objects.filter(
+                document=document,
+                corpus=corpus_obj,
+                is_current=True,
+                is_deleted=False,
+            ).first()
+
+            if existing_path:
+                # Document already in corpus - don't create another copy
+                logger.info(
+                    f"Document {doc_id} already in corpus {corpus_obj.title} "
+                    f"via DocumentPath {existing_path.id}, skipping add_document"
+                )
+            else:
+                # Document not yet in corpus - use add_document for corpus isolation
+                document, status, _ = corpus_obj.add_document(
+                    document=document, user=user
+                )
+                logger.info(
+                    f"Associated document with corpus: {corpus_obj.title} (status: {status})"
+                )
         else:
             corpus_obj = None
 
@@ -202,6 +228,7 @@ class BaseParser(PipelineComponentBase, ABC):
         logger.info(f"Existing text label lookup: {existing_text_labels}")
 
         # 3) Import annotations & store mapping of old annotation IDs to new DB IDs
+        # Pass PAWLs data for pre-extracting image content (faster embeddings)
         annotation_id_map = import_annotations(
             user_id=user_id,
             doc_obj=document,
@@ -209,6 +236,7 @@ class BaseParser(PipelineComponentBase, ABC):
             annotations_data=open_contracts_data.get("labelled_text", []),
             label_lookup=existing_text_labels,
             label_type=target_label_type,
+            pawls_data=pawls_file_content,
         )
 
         # 4) If there are relationships, load/create relationship labels and then import
@@ -248,13 +276,108 @@ class BaseParser(PipelineComponentBase, ABC):
                 annotation_id_map=annotation_id_map,
             )
 
+        # 5) Create StructuralAnnotationSet and migrate structural annotations to it
+        self._create_structural_annotation_set(document, user)
+
         logger.info(
             f"Document {doc_id} parsed (with annotations & relationships) and saved successfully."
         )
 
+    def _create_structural_annotation_set(self, document: Document, user) -> None:
+        """
+        Create a StructuralAnnotationSet for the document and migrate structural
+        annotations and relationships to it.
+
+        This ensures structural annotations are properly isolated per document and
+        can be embedded using corpus-specific embedders.
+
+        Args:
+            document: The Document object
+            user: The user creating the set
+        """
+        # Check if document already has a structural annotation set
+        if document.structural_annotation_set:
+            logger.info(
+                f"Document {document.pk} already has StructuralAnnotationSet "
+                f"{document.structural_annotation_set.pk}"
+            )
+            return
+
+        # Find structural annotations on this document
+        structural_annotations = Annotation.objects.filter(
+            document=document, structural=True, structural_set__isnull=True
+        )
+
+        if not structural_annotations.exists():
+            logger.info(
+                f"Document {document.pk} has no structural annotations to migrate"
+            )
+            return
+
+        # Generate content hash for the set
+        content_hash = document.pdf_file_hash or f"doc_{document.pk}"
+
+        # Use get_or_create to handle retry scenarios where the set was created
+        # but the document link wasn't saved (e.g., task failed after line 298
+        # but before document.save() at line 337)
+        struct_set, created = StructuralAnnotationSet.objects.get_or_create(
+            content_hash=content_hash,
+            defaults={
+                "creator": user,
+                "parser_name": self.title or self.__class__.__name__,
+                "parser_version": "1.0",
+                "page_count": document.page_count,
+                "pawls_parse_file": document.pawls_parse_file,
+                "txt_extract_file": document.txt_extract_file,
+            },
+        )
+
+        if created:
+            logger.info(
+                f"Created StructuralAnnotationSet {struct_set.pk} for document {document.pk}"
+            )
+        else:
+            logger.info(
+                f"Reusing existing StructuralAnnotationSet {struct_set.pk} "
+                f"for document {document.pk} (retry scenario)"
+            )
+
+        # Migrate structural annotations to the set
+        structural_annotation_ids = set(
+            structural_annotations.values_list("id", flat=True)
+        )
+
+        for annot in structural_annotations:
+            annot.structural_set = struct_set
+            annot.document = None  # XOR constraint: either document or structural_set
+            annot.save()
+
+        # Migrate structural relationships to the set
+        structural_relationships = Relationship.objects.filter(
+            document=document, structural=True, structural_set__isnull=True
+        ).filter(
+            source_annotations__id__in=structural_annotation_ids,
+            target_annotations__id__in=structural_annotation_ids,
+        )
+
+        for rel in structural_relationships:
+            rel.structural_set = struct_set
+            rel.document = None  # XOR constraint
+            rel.save()
+
+        # Link document to the structural set
+        document.structural_annotation_set = struct_set
+        document.save()
+
+        logger.info(
+            f"Migrated {structural_annotations.count()} annotations and "
+            f"{structural_relationships.count()} relationships to StructuralAnnotationSet "
+            f"{struct_set.pk}"
+        )
+
     def process_document(
         self, user_id: int, doc_id: int, **kwargs
-    ) -> Optional[OpenContractDocExport]:
+    ) -> OpenContractDocExport:
         """
         Process a document by parsing it and then saving the parsed data.
         This method calls parse_document(...) and then save_parsed_data(...).
@@ -263,20 +386,32 @@ class BaseParser(PipelineComponentBase, ABC):
             user_id (int): ID of the user.
             doc_id (int): ID of the document to process.
             **kwargs: Arbitrary keyword arguments that may be provided
-                      for specific parser functionalities.
+                      for specific parser functionalities. Notably:
+                      - corpus_id (Optional[int]): ID of corpus for corpus-specific embeddings
 
         Returns:
-            Optional[OpenContractDocExport]: The parsed document data, or None if parsing failed.
+            OpenContractDocExport: The parsed document data.
+
+        Raises:
+            DocumentParsingError: If parsing fails. The exception's is_transient
+                attribute indicates whether the error might succeed on retry.
         """
+        # Extract corpus_id for save_parsed_data (not needed by parse_document)
+        corpus_id = kwargs.pop("corpus_id", None)
+
         logger.info(
             f"Processing document {doc_id} with possible parser kwargs: {kwargs}"
+            + (f" (corpus_id={corpus_id})" if corpus_id else "")
         )
 
         parsed_data = self.parse_document(user_id, doc_id, **kwargs)
-        if parsed_data is not None:
-            self.save_parsed_data(user_id, doc_id, parsed_data)
-            logger.info(f"Document {doc_id} processed successfully.")
-        else:
-            logger.warning(f"Document {doc_id} parsing failed.")
+        if parsed_data is None:
+            raise DocumentParsingError(
+                f"Parser {self.__class__.__name__} returned None for document {doc_id}",
+                is_transient=True,  # Assume transient by default; subclasses override
+            )
+
+        self.save_parsed_data(user_id, doc_id, parsed_data, corpus_id=corpus_id)
+        logger.info(f"Document {doc_id} processed successfully.")
 
         return parsed_data

@@ -12,7 +12,7 @@ from django.utils import timezone
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import Annotation, AnnotationLabel
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import DocumentPath
 from opencontractserver.tasks.import_tasks import import_corpus
 from opencontractserver.tasks.utils import package_zip_into_base64
 from opencontractserver.types.enums import AnnotationFilterMode, PermissionTypes
@@ -67,7 +67,9 @@ class ExportCorpusWithAnalysesTestCase(TestCase):
 
         import_task.apply().get()
 
-        self.document = Document.objects.get(corpus=self.original_corpus_obj)
+        # Get document via DocumentPath since Document no longer has corpus field
+        doc_path = DocumentPath.objects.filter(corpus=self.original_corpus_obj).first()
+        self.document = doc_path.document
 
         # 4) Create two Analyzers & two Analyses referencing this corpus
         self.analyzer_a = Analyzer.objects.create(

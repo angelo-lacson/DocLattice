@@ -26,17 +26,8 @@ from django.conf import settings  # noqa: E402
 from django.core.asgi import get_asgi_application  # noqa: E402
 from django.urls import re_path  # noqa: E402
 
-from config.websocket.consumers.corpus_conversation import (  # noqa: E402
-    CorpusQueryConsumer,
-)
-from config.websocket.consumers.document_conversation import (  # noqa: E402
-    DocumentQueryConsumer,
-)
 from config.websocket.consumers.notification_updates import (  # noqa: E402
     NotificationUpdatesConsumer,
-)
-from config.websocket.consumers.standalone_document_conversation import (  # noqa: E402
-    StandaloneDocumentQueryConsumer,
 )
 from config.websocket.consumers.thread_updates import (  # noqa: E402
     ThreadUpdatesConsumer,
@@ -62,15 +53,17 @@ def create_http_router(django_app, mcp_app):
     Create an HTTP router that dispatches to MCP or Django based on path.
 
     Routes MCP endpoints to the MCP ASGI app, everything else to Django.
-    The MCP server supports two transports:
+    The MCP server supports multiple transports:
     - Streamable HTTP at /mcp (recommended, stateless mode)
+    - Corpus-scoped HTTP at /mcp/corpus/{slug}/ (scoped to single corpus)
     - SSE at /sse (deprecated, for backward compatibility)
     """
 
     async def router(scope, receive, send):
         path = scope.get("path", "")
-        # Match MCP Streamable HTTP endpoints: /mcp or /mcp/*
-        # Match MCP SSE endpoints: /sse or /sse/*
+        # Match MCP endpoints:
+        # - /mcp or /mcp/* (global and corpus-scoped)
+        # - /sse or /sse/* (deprecated SSE transport)
         if (
             path == "/mcp"
             or path.startswith("/mcp/")
@@ -86,37 +79,22 @@ def create_http_router(django_app, mcp_app):
 
 http_application = create_http_router(django_application, mcp_asgi_app)
 
-document_query_pattern = re_path(
-    r"ws/document/(?P<document_id>[-a-zA-Z0-9_=]+)/query/(?:corpus/(?P<corpus_id>[-a-zA-Z0-9_=]+)/)?$",
-    DocumentQueryConsumer.as_asgi(),
-)
-
-corpus_query_pattern = re_path(
-    r"ws/corpus/(?P<corpus_id>[-a-zA-Z0-9_=]+)/query/$",
-    CorpusQueryConsumer.as_asgi(),
-)
-
-# NEW - stand-alone document chat (no corpus_id in URL)
-standalone_document_query_pattern = re_path(
-    r"ws/standalone/document/(?P<document_id>[-a-zA-Z0-9_=]+)/query/$",
-    StandaloneDocumentQueryConsumer.as_asgi(),
-)
-
-# NEW - unified agent consumer (query params for context)
+# Unified agent consumer - handles all agent conversation contexts
+# Replaces legacy DocumentQueryConsumer, CorpusQueryConsumer, StandaloneDocumentQueryConsumer
 # Supports: ?corpus_id=X, ?document_id=X, ?agent_id=X, ?conversation_id=X
 unified_agent_query_pattern = re_path(
     r"ws/agent-chat/$",
     UnifiedAgentConsumer.as_asgi(),
 )
 
-# NEW - thread updates consumer for agent mention responses
+# Thread updates consumer for agent mention responses
 # Supports: ?conversation_id=X (required)
 thread_updates_pattern = re_path(
     r"ws/thread-updates/$",
     ThreadUpdatesConsumer.as_asgi(),
 )
 
-# NEW - notification updates consumer for real-time notifications
+# Notification updates consumer for real-time notifications
 # No query parameters required (uses authenticated user)
 # Issue #637: Migrate badge notifications from polling to WebSocket
 notification_updates_pattern = re_path(
@@ -125,36 +103,23 @@ notification_updates_pattern = re_path(
 )
 
 websocket_urlpatterns = [
-    # NEW: Unified agent consumer (preferred for new integrations)
+    # Unified agent consumer for all corpus/document chat interactions
     unified_agent_query_pattern,
-    # NEW: Thread updates consumer for agent mention streaming
+    # Thread updates consumer for agent mention streaming
     thread_updates_pattern,
-    # NEW: Notification updates consumer for real-time notifications (Issue #637)
+    # Notification updates consumer for real-time notifications (Issue #637)
     notification_updates_pattern,
-    # Legacy routes (kept for backwards compatibility)
-    document_query_pattern,
-    corpus_query_pattern,
-    standalone_document_query_pattern,
 ]
 
 # Log all registered websocket patterns
 for pattern in websocket_urlpatterns:
     logger.info(f"Registered WebSocket URL pattern: {pattern.pattern}")
 
-# Choose the appropriate middleware based on USE_AUTH0
-if settings.USE_AUTH0:
-    logger.info("USE_AUTH0 set to True, using WebsocketAuth0TokenMiddleware")
-    from config.websocket.middlewares.websocket_auth0_middleware import (
-        WebsocketAuth0TokenMiddleware,  # type: ignore
-    )
+# Unified JWT auth middleware - handles both Auth0 and non-Auth0 automatically
+# based on USE_AUTH0 setting via the shared jwt_utils module
+from config.websocket.middleware import JWTAuthMiddleware  # noqa: E402
 
-    websocket_auth_middleware = WebsocketAuth0TokenMiddleware
-else:
-    logger.info("USE_AUTH0 set to False, using GraphQLJWTTokenAuthMiddleware")
-    from config.websocket.middleware import GraphQLJWTTokenAuthMiddleware
-
-    websocket_auth_middleware = GraphQLJWTTokenAuthMiddleware
-
+logger.info(f"Using JWTAuthMiddleware (USE_AUTH0={settings.USE_AUTH0})")
 
 # Create the ASGI application with proper middleware order
 # 1. Protocol routing
@@ -165,7 +130,7 @@ application = ProtocolTypeRouter(
     {
         # Routes /mcp/* and /sse/* to MCP, rest to Django
         "http": http_application,
-        "websocket": websocket_auth_middleware(URLRouter(websocket_urlpatterns)),
+        "websocket": JWTAuthMiddleware(URLRouter(websocket_urlpatterns)),
     }
 )
 

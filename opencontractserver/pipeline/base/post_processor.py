@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 
 from opencontractserver.types.dicts import OpenContractsExportDataJsonPythonType
+from opencontractserver.utils.logging import redact_sensitive_kwargs
 
 from .base_component import PipelineComponentBase
 
@@ -79,5 +80,8 @@ class BasePostProcessor(PipelineComponentBase, ABC):
                 - Modified export data dictionary
         """
         merged_kwargs = {**self.get_component_settings(), **direct_kwargs}
-        logger.info(f"Calling _process_export_impl with merged kwargs: {merged_kwargs}")
+        logger.info(
+            f"Calling _process_export_impl with merged kwargs: "
+            f"{redact_sensitive_kwargs(merged_kwargs)}"
+        )
         return self._process_export_impl(zip_bytes, export_data, **merged_kwargs)

@@ -80,8 +80,8 @@ describe("CentralRouteManager", () => {
           isPublic: true,
           myPermissions: ["read"],
           labelSet: null,
-          documents: { totalCount: 5 },
-          analyses: { totalCount: 3 },
+          documentCount: 5,
+          annotationCount: 3,
           creator: { id: "user-1", slug: "john", username: "john" },
         };
 
@@ -376,8 +376,8 @@ describe("CentralRouteManager", () => {
         isPublic: true,
         myPermissions: ["read"],
         labelSet: null,
-        documents: { totalCount: 10 },
-        analyses: { totalCount: 5 },
+        documentCount: 10,
+        annotationCount: 5,
         creator: { id: "user-1", slug: "john-doe", username: "johndoe" },
       };
 
@@ -595,10 +595,6 @@ describe("CentralRouteManager", () => {
         slug: "my-corpus",
         title: "My Corpus",
         creator: { id: "user-1", slug: "john", email: "john@example.com" },
-        analyses: {
-          edges: [],
-          pageInfo: { hasNextPage: false, hasPreviousPage: false },
-        },
       };
 
       const queryMock = vi.fn(() => ({
@@ -649,14 +645,10 @@ describe("CentralRouteManager", () => {
         slug: "my-corpus",
         title: "My Corpus",
         creator: { id: "user-1", slug: "john", email: "john@example.com" },
-        analyses: {
-          edges: [],
-          pageInfo: { hasNextPage: false, hasPreviousPage: false },
-        },
       };
 
       // Set initial corpus
-      openedCorpus(mockCorpus);
+      openedCorpus(mockCorpus as any);
 
       render(
         <MockedProvider mocks={[]} addTypename={false}>

@@ -10,7 +10,14 @@ import {
   GetConversationsOutputs,
 } from "../graphql/queries";
 import { ThreadListItem } from "../components/threads/ThreadListItem";
-import { color } from "../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "../components/threads/styles/discussionStyles";
 import { ModernLoadingDisplay } from "../components/widgets/ModernLoadingDisplay";
 
 // Custom hook for debounced value
@@ -32,8 +39,9 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 
 // Styled components
 const Container = styled.div`
+  max-width: 75rem;
   margin: 0 auto;
-  padding: 2rem 4rem;
+  padding: 2.5rem 4rem;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -46,31 +54,32 @@ const Container = styled.div`
     padding: 1.5rem 2rem;
   }
 
-  @media (max-width: 768px) {
+  ${mediaQuery.mobile} {
     padding: 1rem;
   }
 `;
 
 const Header = styled.div`
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 `;
 
 const TitleRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 `;
 
 const Title = styled.h1`
-  font-size: 2rem;
-  font-weight: 800;
-  color: ${color.N10};
+  font-family: ${CORPUS_FONTS.serif};
+  font-size: 2.25rem;
+  font-weight: 600;
+  color: ${CORPUS_COLORS.slate[900]};
   margin: 0;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
 
-  @media (max-width: 768px) {
-    font-size: 1.5rem;
+  ${mediaQuery.mobile} {
+    font-size: 1.75rem;
   }
 `;
 
@@ -84,35 +93,37 @@ const FilterBar = styled.div`
 
 const TabContainer = styled.div`
   display: flex;
-  gap: 0.5rem;
-  background: ${color.N2};
-  padding: 0.375rem;
-  border-radius: 12px;
-  border: 1px solid ${color.N4};
+  gap: 0.25rem;
+  background: ${CORPUS_COLORS.slate[100]};
+  padding: 0.25rem;
+  border-radius: ${CORPUS_RADII.lg};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
 `;
 
 const Tab = styled(motion.button)<{ $isActive: boolean }>`
   padding: 0.625rem 1.25rem;
-  border-radius: 8px;
+  border-radius: ${CORPUS_RADII.md};
   border: none;
-  background: ${(props) => (props.$isActive ? "white" : "transparent")};
-  color: ${(props) => (props.$isActive ? color.N10 : color.N7)};
+  background: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.white : "transparent"};
+  color: ${(props) =>
+    props.$isActive ? CORPUS_COLORS.slate[800] : CORPUS_COLORS.slate[600]};
+  font-family: ${CORPUS_FONTS.sans};
   font-weight: ${(props) => (props.$isActive ? "600" : "500")};
   font-size: 0.9375rem;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: ${(props) =>
-    props.$isActive ? "0 1px 3px rgba(0,0,0,0.1)" : "none"};
+  transition: all ${CORPUS_TRANSITIONS.fast};
+  box-shadow: ${(props) => (props.$isActive ? CORPUS_SHADOWS.sm : "none")};
   display: flex;
   align-items: center;
   gap: 0.5rem;
 
   &:hover {
     background: ${(props) =>
-      props.$isActive ? "white" : "rgba(255,255,255,0.6)"};
+      props.$isActive ? CORPUS_COLORS.white : "rgba(255,255,255,0.6)"};
   }
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     padding: 0.5rem 0.875rem;
     font-size: 0.875rem;
   }
@@ -120,8 +131,8 @@ const Tab = styled(motion.button)<{ $isActive: boolean }>`
 
 const SearchInputContainer = styled.div`
   flex: 1;
-  min-width: 200px;
-  max-width: 400px;
+  min-width: 12.5rem;
+  max-width: 25rem;
   position: relative;
 `;
 
@@ -130,27 +141,29 @@ const SearchIconStyled = styled(Search)`
   left: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: ${color.N6};
+  color: ${CORPUS_COLORS.slate[400]};
   pointer-events: none;
 `;
 
 const SearchInput = styled.input`
   width: 100%;
   padding: 0.625rem 1rem 0.625rem 2.75rem;
-  border: 1px solid ${color.N4};
-  border-radius: 8px;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
   font-size: 0.9375rem;
-  color: ${color.N10};
-  background: white;
+  color: ${CORPUS_COLORS.slate[800]};
+  background: ${CORPUS_COLORS.white};
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:focus {
     outline: none;
-    border-color: ${color.B5};
-    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+    border-color: ${CORPUS_COLORS.teal[500]};
+    box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]};
   }
 
   &::placeholder {
-    color: ${color.N6};
+    color: ${CORPUS_COLORS.slate[400]};
   }
 `;
 
@@ -158,31 +171,35 @@ const FAB = styled(motion.button)`
   position: fixed;
   bottom: 2rem;
   right: 2rem;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, ${color.B6} 0%, ${color.B7} 100%);
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: ${CORPUS_RADII.xl};
+  background: linear-gradient(
+    135deg,
+    ${CORPUS_COLORS.teal[600]} 0%,
+    ${CORPUS_COLORS.teal[700]} 100%
+  );
   border: none;
-  color: white;
+  color: ${CORPUS_COLORS.white};
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(74, 144, 226, 0.4);
+  box-shadow: 0 8px 24px rgba(15, 118, 110, 0.4);
   z-index: 100;
 
   &:hover {
-    box-shadow: 0 12px 32px rgba(74, 144, 226, 0.5);
+    box-shadow: 0 12px 32px rgba(15, 118, 110, 0.5);
   }
 
-  @media (max-width: 768px) {
+  ${mediaQuery.mobile} {
     bottom: 1rem;
     right: 1rem;
   }
 `;
 
 const SectionContainer = styled(motion.div)`
-  margin-bottom: 2.5rem;
+  margin-bottom: 3rem;
 `;
 
 const SectionHeader = styled.div`
@@ -191,31 +208,33 @@ const SectionHeader = styled.div`
   gap: 0.75rem;
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-  border-bottom: 2px solid ${color.N4};
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
 `;
 
 const SectionIcon = styled.div<{ $color: string }>`
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 2rem;
+  height: 2rem;
+  border-radius: ${CORPUS_RADII.md};
   background: ${(props) => props.$color};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: ${CORPUS_COLORS.white};
   flex-shrink: 0;
 `;
 
 const SectionTitle = styled.h2`
+  font-family: ${CORPUS_FONTS.serif};
   font-size: 1.25rem;
-  font-weight: 700;
-  color: ${color.N10};
+  font-weight: 600;
+  color: ${CORPUS_COLORS.slate[800]};
   margin: 0;
 `;
 
 const SectionCount = styled.span`
+  font-family: ${CORPUS_FONTS.sans};
   font-size: 0.875rem;
-  color: ${color.N6};
+  color: ${CORPUS_COLORS.slate[500]};
   font-weight: 500;
   margin-left: auto;
 `;
@@ -228,8 +247,9 @@ const ThreadGrid = styled.div`
 
 const EmptyState = styled.div`
   text-align: center;
-  padding: 2rem 1rem;
-  color: ${color.N6};
+  padding: 3rem 1.5rem;
+  color: ${CORPUS_COLORS.slate[500]};
+  font-family: ${CORPUS_FONTS.sans};
   font-size: 0.9375rem;
 `;
 

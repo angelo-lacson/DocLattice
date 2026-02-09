@@ -268,10 +268,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             self.user_bob, self.corpus_shared, [PermissionTypes.READ]
         )
 
-        # Add document to corpus
-        self.corpus_shared.documents.add(self.doc_shared)
-
-        # Create DocumentPath for versioning system
+        # Add document to corpus via DocumentPath (new pattern)
         DocumentPath.objects.create(
             document=self.doc_shared,
             corpus=self.corpus_shared,
@@ -347,10 +344,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             [PermissionTypes.READ],  # Only READ, not UPDATE
         )
 
-        # Add document to corpus
-        self.corpus_shared.documents.add(self.doc_shared)
-
-        # Create DocumentPath for versioning system
+        # Add document to corpus via DocumentPath (new pattern)
         DocumentPath.objects.create(
             document=self.doc_shared,
             corpus=self.corpus_shared,
@@ -423,10 +417,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             [PermissionTypes.READ, PermissionTypes.UPDATE, PermissionTypes.CREATE],
         )
 
-        # Add document to corpus
-        self.corpus_shared.documents.add(self.doc_shared)
-
-        # Create DocumentPath for versioning system
+        # Add document to corpus via DocumentPath (new pattern)
         DocumentPath.objects.create(
             document=self.doc_shared,
             corpus=self.corpus_shared,
@@ -501,10 +492,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
             [PermissionTypes.READ, PermissionTypes.UPDATE, PermissionTypes.CREATE],
         )
 
-        # Add document to corpus
-        self.corpus_shared.documents.add(self.doc_shared)
-
-        # Create DocumentPath for versioning system
+        # Add document to corpus via DocumentPath (new pattern)
         DocumentPath.objects.create(
             document=self.doc_shared,
             corpus=self.corpus_shared,
@@ -576,10 +564,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
         )
         # Explicitly NO permissions on document
 
-        # Add document to corpus
-        self.corpus_shared.documents.add(self.doc_shared)
-
-        # Create DocumentPath for versioning system
+        # Add document to corpus via DocumentPath (new pattern)
         DocumentPath.objects.create(
             document=self.doc_shared,
             corpus=self.corpus_shared,
@@ -635,10 +620,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
         logger.info("TEST: Superuser → Full Access to Everything")
         logger.info("=" * 80)
 
-        # Add document to corpus
-        self.corpus_private.documents.add(self.doc_private)
-
-        # Create DocumentPath for versioning system
+        # Add document to corpus via DocumentPath (new pattern)
         DocumentPath.objects.create(
             document=self.doc_private,
             corpus=self.corpus_private,
@@ -697,10 +679,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
         logger.info("TEST: Permission Format Frontend Compatibility")
         logger.info("=" * 80)
 
-        # Add document to corpus
-        self.corpus_private.documents.add(self.doc_private)
-
-        # Create DocumentPath for versioning system
+        # Add document to corpus via DocumentPath (new pattern)
         DocumentPath.objects.create(
             document=self.doc_private,
             corpus=self.corpus_private,

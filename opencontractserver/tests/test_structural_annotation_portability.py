@@ -1,8 +1,18 @@
 """
 Integration tests for structural annotation portability across corpuses.
 
-These tests verify that structural annotations properly travel with documents
-when they are added to multiple corpuses via corpus isolation.
+These tests verify that structural annotations are properly SHARED across corpuses
+when documents are added. The same StructuralAnnotationSet is reused across all
+corpus copies of the same document content, which:
+- Saves storage (no duplicate annotation data)
+- Enables consistent embeddings across corpuses
+- Reduces processing time when adding documents to multiple corpuses
+
+CURRENT BEHAVIOR (shared structural sets):
+- When a document is added to a corpus, it SHARES the same structural annotation set
+- Structural annotation sets are NOT duplicated per corpus
+- Total structural annotation count does NOT increase when adding to multiple corpuses
+- Corpus-specific (non-structural) annotations remain isolated per corpus
 """
 
 import hashlib
@@ -23,7 +33,7 @@ User = get_user_model()
 
 
 class StructuralAnnotationPortabilityTests(TestCase):
-    """Tests for structural annotations traveling with documents across corpuses."""
+    """Tests for structural annotations being SHARED across corpuses."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="testuser", password="test")
@@ -96,7 +106,7 @@ class StructuralAnnotationPortabilityTests(TestCase):
         )
 
     def test_structural_set_shared_when_adding_to_corpus(self):
-        """When adding a document to corpus, the corpus copy should share the structural set."""
+        """When adding a document to corpus, the corpus copy SHARES the same structural set."""
         corpus_doc, status, path = self.corpus_a.add_document(
             document=self.original_doc, user=self.user
         )
@@ -104,18 +114,28 @@ class StructuralAnnotationPortabilityTests(TestCase):
         # Status should be 'added' for new copy
         self.assertEqual(status, "added")
 
-        # Corpus doc should be a different object (corpus isolation)
+        # Corpus doc should be a different document object (corpus isolation)
         self.assertNotEqual(corpus_doc.id, self.original_doc.id)
 
-        # But should share the same structural annotation set
+        # Corpus doc should have the SAME structural annotation set (shared)
+        self.assertIsNotNone(corpus_doc.structural_annotation_set)
         self.assertEqual(
             corpus_doc.structural_annotation_set_id,
             self.original_doc.structural_annotation_set_id,
         )
-        self.assertEqual(corpus_doc.structural_annotation_set, self.structural_set)
 
-    def test_structural_annotations_accessible_via_all_corpus_copies(self):
-        """All corpus copies should access the same structural annotations."""
+        # Same set metadata
+        shared_set = corpus_doc.structural_annotation_set
+        self.assertEqual(shared_set.parser_name, self.structural_set.parser_name)
+        self.assertEqual(shared_set.parser_version, self.structural_set.parser_version)
+        self.assertEqual(shared_set.page_count, self.structural_set.page_count)
+        self.assertEqual(shared_set.token_count, self.structural_set.token_count)
+
+        # Content hash is unchanged (no corpus suffix for shared sets)
+        self.assertEqual(shared_set.content_hash, self.content_hash)
+
+    def test_structural_annotations_shared_across_corpuses(self):
+        """All corpus copies share the SAME structural annotation set and annotations."""
         # Add document to three different corpuses
         corpus_a_doc, _, _ = self.corpus_a.add_document(
             document=self.original_doc, user=self.user
@@ -127,7 +147,7 @@ class StructuralAnnotationPortabilityTests(TestCase):
             document=self.original_doc, user=self.user
         )
 
-        # All should share the same structural set
+        # All should have the SAME structural set (shared)
         self.assertEqual(
             corpus_a_doc.structural_annotation_set_id,
             corpus_b_doc.structural_annotation_set_id,
@@ -136,28 +156,35 @@ class StructuralAnnotationPortabilityTests(TestCase):
             corpus_b_doc.structural_annotation_set_id,
             corpus_c_doc.structural_annotation_set_id,
         )
-
-        # All should have access to the same structural annotations
-        annots_a = list(
-            corpus_a_doc.structural_annotation_set.structural_annotations.all()
-        )
-        annots_b = list(
-            corpus_b_doc.structural_annotation_set.structural_annotations.all()
-        )
-        annots_c = list(
-            corpus_c_doc.structural_annotation_set.structural_annotations.all()
+        self.assertEqual(
+            corpus_a_doc.structural_annotation_set_id,
+            self.original_doc.structural_annotation_set_id,
         )
 
-        self.assertEqual(set(annots_a), set(annots_b))
-        self.assertEqual(set(annots_b), set(annots_c))
+        # Each should access the same annotations (shared)
+        annots_a = set(
+            corpus_a_doc.structural_annotation_set.structural_annotations.values_list(
+                "id", flat=True
+            )
+        )
+        annots_b = set(
+            corpus_b_doc.structural_annotation_set.structural_annotations.values_list(
+                "id", flat=True
+            )
+        )
+        annots_c = set(
+            corpus_c_doc.structural_annotation_set.structural_annotations.values_list(
+                "id", flat=True
+            )
+        )
+
+        # All sets should have the same annotation IDs
+        self.assertEqual(annots_a, annots_b)
+        self.assertEqual(annots_b, annots_c)
         self.assertEqual(len(annots_a), 2)  # header and paragraph
 
-        # Verify the specific annotations are there
-        self.assertIn(self.header_annot, annots_a)
-        self.assertIn(self.para_annot, annots_a)
-
-    def test_structural_relationships_accessible_via_all_corpus_copies(self):
-        """All corpus copies should access the same structural relationships."""
+    def test_structural_relationships_shared(self):
+        """Structural relationships are also shared via the shared structural set."""
         corpus_a_doc, _, _ = self.corpus_a.add_document(
             document=self.original_doc, user=self.user
         )
@@ -165,7 +192,7 @@ class StructuralAnnotationPortabilityTests(TestCase):
             document=self.original_doc, user=self.user
         )
 
-        # Both should have access to the same structural relationships
+        # Relationships are shared (same set)
         rels_a = list(
             corpus_a_doc.structural_annotation_set.structural_relationships.all()
         )
@@ -173,13 +200,20 @@ class StructuralAnnotationPortabilityTests(TestCase):
             corpus_b_doc.structural_annotation_set.structural_relationships.all()
         )
 
-        self.assertEqual(set(rels_a), set(rels_b))
+        # Same relationships in both (shared)
         self.assertEqual(len(rels_a), 1)
-        self.assertIn(self.structural_rel, rels_a)
+        self.assertEqual(len(rels_b), 1)
+        self.assertEqual(rels_a[0].id, rels_b[0].id)
 
-    def test_structural_annotations_count_not_duplicated(self):
-        """Structural annotations should not be duplicated across corpus copies."""
-        # Initially we have 2 structural annotations
+        # Same as original
+        self.assertEqual(
+            self.original_doc.structural_annotation_set.structural_relationships.count(),
+            1,
+        )
+
+    def test_structural_annotations_count_unchanged_across_corpuses(self):
+        """Total structural annotation count does NOT increase when adding to multiple corpuses."""
+        # Initially we have 2 structural annotations (in the shared set)
         initial_count = Annotation.objects.filter(structural=True).count()
         self.assertEqual(initial_count, 2)
 
@@ -188,37 +222,27 @@ class StructuralAnnotationPortabilityTests(TestCase):
         self.corpus_b.add_document(document=self.original_doc, user=self.user)
         self.corpus_c.add_document(document=self.original_doc, user=self.user)
 
-        # Count should remain the same (no duplication)
+        # Count should NOT increase (same annotations shared)
         final_count = Annotation.objects.filter(structural=True).count()
-        self.assertEqual(final_count, initial_count)
+        self.assertEqual(final_count, initial_count)  # Still 2
 
-    def test_structural_set_reference_only_once_per_content(self):
-        """Documents with same content hash should reuse the same structural set."""
-        # Original doc already has the structural set
-        self.assertEqual(
-            self.original_doc.structural_annotation_set_id, self.structural_set.id
-        )
+    def test_structural_set_count_unchanged_across_corpuses(self):
+        """StructuralAnnotationSet count does NOT increase when adding to multiple corpuses."""
+        # Initially we have 1 structural set
+        initial_set_count = StructuralAnnotationSet.objects.count()
+        self.assertEqual(initial_set_count, 1)
 
-        # Create another document with same content hash
-        another_doc = Document.objects.create(
-            title="Another Document",
-            creator=self.user,
-            pdf_file_hash=self.content_hash,
-            structural_annotation_set=self.structural_set,
-        )
+        # Add document to multiple corpuses
+        self.corpus_a.add_document(document=self.original_doc, user=self.user)
+        self.corpus_b.add_document(document=self.original_doc, user=self.user)
+        self.corpus_c.add_document(document=self.original_doc, user=self.user)
 
-        # Both should reference the same set
-        self.assertEqual(
-            self.original_doc.structural_annotation_set_id,
-            another_doc.structural_annotation_set_id,
-        )
-
-        # The set should have both documents
-        self.assertIn(self.original_doc, self.structural_set.documents.all())
-        self.assertIn(another_doc, self.structural_set.documents.all())
+        # Should still have 1 set (shared)
+        final_set_count = StructuralAnnotationSet.objects.count()
+        self.assertEqual(final_set_count, 1)
 
     def test_corpus_specific_annotations_remain_isolated(self):
-        """Corpus-specific annotations should not be shared across corpus copies."""
+        """Corpus-specific (non-structural) annotations remain isolated per corpus."""
         corpus_a_doc, _, _ = self.corpus_a.add_document(
             document=self.original_doc, user=self.user
         )
@@ -245,7 +269,7 @@ class StructuralAnnotationPortabilityTests(TestCase):
             corpus_b_doc.doc_annotations.filter(structural=False).count(), 0
         )
 
-        # But both should have access to structural annotations via the set
+        # Both should have access to the SAME structural annotations via shared set
         self.assertEqual(
             corpus_a_doc.structural_annotation_set.structural_annotations.count(), 2
         )
@@ -253,8 +277,14 @@ class StructuralAnnotationPortabilityTests(TestCase):
             corpus_b_doc.structural_annotation_set.structural_annotations.count(), 2
         )
 
-    def test_structural_set_with_no_annotations(self):
-        """Document with structural set but no annotations should still share the set."""
+        # These ARE the same annotation objects (shared set)
+        self.assertEqual(
+            corpus_a_doc.structural_annotation_set_id,
+            corpus_b_doc.structural_annotation_set_id,
+        )
+
+    def test_structural_set_shared_even_with_no_annotations(self):
+        """Document with structural set but no annotations still shares that set."""
         empty_hash = hashlib.sha256(b"empty content").hexdigest()
         empty_set = StructuralAnnotationSet.objects.create(
             content_hash=empty_hash, creator=self.user
@@ -269,7 +299,8 @@ class StructuralAnnotationPortabilityTests(TestCase):
 
         corpus_doc, _, _ = self.corpus_a.add_document(document=doc, user=self.user)
 
-        # Should share the empty set
+        # Should share the same set
+        self.assertIsNotNone(corpus_doc.structural_annotation_set)
         self.assertEqual(corpus_doc.structural_annotation_set, empty_set)
         self.assertEqual(
             corpus_doc.structural_annotation_set.structural_annotations.count(), 0
@@ -288,8 +319,8 @@ class ImportContentStructuralSetTests(TransactionTestCase):
             title="Corpus B", creator=self.user, is_public=True
         )
 
-    def test_created_from_existing_inherits_structural_set(self):
-        """When import_content finds existing content, it should inherit structural set."""
+    def test_import_creates_new_document_not_linked_to_global(self):
+        """When import_document creates a document, it's a new corpus-isolated document."""
         from opencontractserver.documents.versioning import import_document
 
         content = b"test pdf content"
@@ -301,7 +332,7 @@ class ImportContentStructuralSetTests(TransactionTestCase):
         )
 
         # Create a global document with this content and structural set
-        global_doc = Document.objects.create(
+        _global_doc = Document.objects.create(  # noqa: F841
             title="Global Doc",
             creator=self.user,
             pdf_file_hash=content_hash,
@@ -316,17 +347,15 @@ class ImportContentStructuralSetTests(TransactionTestCase):
             user=self.user,
         )
 
-        # Status should be 'created_from_existing'
+        # Status should be 'created' (new document created)
         self.assertEqual(status, "created")
 
-        # Document should inherit the structural set
-        self.assertEqual(doc.structural_annotation_set, structural_set)
+        # Document should NOT have a structural set yet (parser will create it)
+        # import_document doesn't copy structural sets from existing docs
+        self.assertIsNone(doc.structural_annotation_set)
 
-        # Source document should be the global doc
-        self.assertEqual(doc.source_document, global_doc)
-
-    def test_version_update_preserves_structural_set(self):
-        """When content is updated, the new version should preserve the structural set."""
+    def test_version_update_inherits_structural_set_from_previous_version(self):
+        """When content is updated, the new version INHERITS the structural set from previous version."""
         from opencontractserver.documents.versioning import import_document
 
         content_v1 = b"test pdf content v1"
@@ -361,8 +390,9 @@ class ImportContentStructuralSetTests(TransactionTestCase):
         )
         self.assertEqual(status_v2, "updated")
 
-        # v2 should inherit structural set from v1
-        # (In a real scenario, parser would create new set for new content)
+        # v2 INHERITS structural set from v1 (version updates carry forward the set)
+        # This is different from add_document() which DUPLICATES the set
+        # The parser may later update the set if needed for new content
         self.assertEqual(doc_v2.structural_annotation_set, structural_set_v1)
 
     def test_brand_new_content_has_no_structural_set(self):

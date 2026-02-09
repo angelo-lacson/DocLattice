@@ -5,6 +5,7 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.test import TransactionTestCase
 
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
 from opencontractserver.tasks import import_corpus
@@ -16,7 +17,7 @@ from opencontractserver.utils.permissioning import set_permissions_for_obj_to_us
 User = get_user_model()
 
 
-class CorpusForkTestCase:
+class CorpusForkTestCase(TransactionTestCase):
 
     fixtures_path = pathlib.Path(__file__).parent / "fixtures"
 
@@ -57,19 +58,23 @@ class CorpusForkTestCase:
         )
 
         import_task.apply().get()
+        # Refresh from DB to get imported data (label_set, etc.)
+        original_corpus_obj.refresh_from_db()
         print("\t\tCOMPLETED")
 
-        print("2)\tBuild the import task...")
+        print("2)\tBuild the fork task...")
         fork_task = build_fork_corpus_task(
             corpus_pk_to_fork=original_corpus_obj.id, user=self.user
         )
         print("\t\tBUILT")
 
-        print("3)\tRun the import task...")
+        print("3)\tRun the fork task...")
         task_results = fork_task.apply().get()
         print("\t\tCOMPLETED")
 
         forked_corpus = Corpus.objects.get(id=task_results)
+        # Ensure we have the latest data from the DB
+        forked_corpus.refresh_from_db()
 
         print("4)\tMake sure we were able to get corpus obj...")
         assert isinstance(forked_corpus, Corpus)
@@ -80,10 +85,15 @@ class CorpusForkTestCase:
         print("\t\tSUCCESS")
 
         print("6)\tMake sure the forked corpus has same annotations")
-        assert (
-            forked_corpus.parent.annotation_set.all().count()
-            == original_corpus_obj.annotation_set.all().count()
-        )
+        from opencontractserver.annotations.models import Annotation
+
+        forked_annotation_count = Annotation.objects.filter(
+            corpus=forked_corpus, analysis__isnull=True
+        ).count()
+        original_annotation_count = Annotation.objects.filter(
+            corpus=original_corpus_obj, analysis__isnull=True
+        ).count()
+        assert forked_annotation_count == original_annotation_count
         print("\t\tSUCCESS")
 
         print("7)\tMake sure the document count is the same")
@@ -96,7 +106,7 @@ class CorpusForkTestCase:
         print("8)\tMake sure the labelset label counts are the same")
         original_labelset_labels = original_corpus_obj.label_set.annotation_labels.all()
         forked_labelset_labels = forked_corpus.label_set.annotation_labels.all()
-        assert forked_labelset_labels.count() == original_labelset_labels.all()
+        assert forked_labelset_labels.count() == original_labelset_labels.count()
         print("\t\tSUCCESS")
 
         # TODO - improve tests to actually check data integrity of cloned objs...

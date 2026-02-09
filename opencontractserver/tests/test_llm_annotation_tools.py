@@ -6,6 +6,7 @@ import logging
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
 from opencontractserver.annotations.models import SPAN_LABEL, TOKEN_LABEL, Annotation
 from opencontractserver.corpuses.models import Corpus
@@ -42,6 +43,7 @@ class TestLLMAnnotationTools(TestCase):
             title="PDF Doc",
             file_type="application/pdf",
             page_count=len(pawls_tokens),
+            processing_started=timezone.now(),  # Skip processing signal - fixture is pre-parsed
         )
         cls.doc.pawls_parse_file.save(
             SAMPLE_PAWLS_FILE_ONE_PATH.name, ContentFile(pawls_json.encode())
@@ -88,6 +90,7 @@ class TestLLMAnnotationTools(TestCase):
             creator=self.user,
             title="Text Doc",
             file_type="text/plain",
+            processing_started=timezone.now(),  # Skip processing signal - fixture is pre-parsed
         )
         doc.txt_extract_file.save(
             SAMPLE_TXT_FILE_ONE_PATH.name, ContentFile(text_content.encode())
@@ -181,6 +184,7 @@ class AsyncTestLLMAnnotationTools(TransactionTestCase):
             creator=cls.user,
             title="Async PDF",
             file_type="application/pdf",
+            processing_started=timezone.now(),  # Skip processing signal - fixture is pre-parsed
         )
         pawls_json = SAMPLE_PAWLS_FILE_ONE_PATH.read_text()
         cls.pdf_doc.pawls_parse_file.save(
@@ -195,6 +199,7 @@ class AsyncTestLLMAnnotationTools(TransactionTestCase):
             creator=cls.user,
             title="Async TXT",
             file_type="text/plain",
+            processing_started=timezone.now(),  # Skip processing signal - fixture is pre-parsed
         )
         cls.txt_doc.txt_extract_file.save(
             SAMPLE_TXT_FILE_ONE_PATH.name,

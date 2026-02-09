@@ -706,3 +706,168 @@ def process_message_corpus_action(
 
     logger.info(f"process_message_corpus_action() completed - {summary}")
     return summary
+
+
+# --------------------------------------------------------------------------- #
+# Embedding Tasks for Shared StructuralAnnotationSets
+# --------------------------------------------------------------------------- #
+
+
+@shared_task
+def ensure_embeddings_for_corpus(
+    structural_set_id: int | str,
+    corpus_id: int | str,
+) -> dict:
+    """
+    Ensure all annotations in a StructuralAnnotationSet have embeddings for the
+    corpus's required embedders.
+
+    When a document is added to a corpus and reuses a shared StructuralAnnotationSet,
+    this task checks if embeddings exist for the corpus's embedder(s) and queues
+    embedding generation only for missing ones.
+
+    Required embedders:
+    - DEFAULT_EMBEDDER (from settings) - always required for global search
+    - corpus.preferred_embedder (if different from DEFAULT_EMBEDDER)
+
+    Args:
+        structural_set_id: ID of the StructuralAnnotationSet to check
+        corpus_id: ID of the Corpus (to determine required embedders)
+
+    Returns:
+        dict: Summary of embedding tasks queued
+    """
+    from django.conf import settings
+
+    from opencontractserver.annotations.models import (
+        Embedding,
+        StructuralAnnotationSet,
+    )
+    from opencontractserver.corpuses.models import Corpus
+
+    logger.info(
+        f"ensure_embeddings_for_corpus() - structural_set={structural_set_id}, "
+        f"corpus={corpus_id}"
+    )
+
+    result = {
+        "structural_set_id": structural_set_id,
+        "corpus_id": corpus_id,
+        "embedders_checked": [],
+        "tasks_queued": 0,
+        "annotations_already_embedded": 0,
+        "errors": [],
+    }
+
+    try:
+        # Get the structural annotation set
+        try:
+            structural_set = StructuralAnnotationSet.objects.get(pk=structural_set_id)
+        except StructuralAnnotationSet.DoesNotExist:
+            logger.warning(f"StructuralAnnotationSet {structural_set_id} not found")
+            result["errors"].append("StructuralAnnotationSet not found")
+            return result
+
+        # Get the corpus
+        try:
+            corpus = Corpus.objects.get(pk=corpus_id)
+        except Corpus.DoesNotExist:
+            logger.warning(f"Corpus {corpus_id} not found")
+            result["errors"].append("Corpus not found")
+            return result
+
+        # Determine required embedders
+        default_embedder = getattr(settings, "DEFAULT_EMBEDDER", None)
+        corpus_embedder = corpus.preferred_embedder
+
+        required_embedders = set()
+        if default_embedder:
+            required_embedders.add(default_embedder)
+        if corpus_embedder and corpus_embedder != default_embedder:
+            required_embedders.add(corpus_embedder)
+
+        if not required_embedders:
+            logger.warning(
+                f"No embedders configured for corpus {corpus_id} "
+                "(DEFAULT_EMBEDDER not set)"
+            )
+            result["errors"].append("No embedders configured")
+            return result
+
+        result["embedders_checked"] = list(required_embedders)
+        logger.info(f"Required embedders: {required_embedders}")
+
+        # Get all annotation IDs in this structural set
+        annotation_ids = list(
+            structural_set.structural_annotations.values_list("id", flat=True)
+        )
+
+        if not annotation_ids:
+            logger.info(
+                f"No annotations in structural set {structural_set_id}, nothing to embed"
+            )
+            return result
+
+        logger.info(
+            f"Checking embeddings for {len(annotation_ids)} annotations "
+            f"across {len(required_embedders)} embedder(s)"
+        )
+
+        # For each required embedder, find missing embeddings and queue tasks
+        for embedder_path in required_embedders:
+            # Find which annotations already have embeddings for this embedder
+            existing_annotation_ids = set(
+                Embedding.objects.filter(
+                    annotation_id__in=annotation_ids,
+                    embedder_path=embedder_path,
+                ).values_list("annotation_id", flat=True)
+            )
+
+            # Find annotations missing embeddings for this embedder
+            missing_annotation_ids = set(annotation_ids) - existing_annotation_ids
+
+            result["annotations_already_embedded"] += len(existing_annotation_ids)
+
+            if not missing_annotation_ids:
+                logger.info(
+                    f"All {len(annotation_ids)} annotations already have embeddings "
+                    f"for {embedder_path}"
+                )
+                continue
+
+            logger.info(
+                f"Queueing embedding tasks for {len(missing_annotation_ids)} annotations "
+                f"missing embeddings for {embedder_path}"
+            )
+
+            # Queue embedding tasks in batches to prevent queue flooding
+            # Import batch size constant
+            from opencontractserver.constants.document_processing import (
+                EMBEDDING_BATCH_SIZE,
+            )
+            from opencontractserver.tasks.embeddings_task import (
+                calculate_embeddings_for_annotation_batch,
+            )
+
+            missing_ids_list = list(missing_annotation_ids)
+            for i in range(0, len(missing_ids_list), EMBEDDING_BATCH_SIZE):
+                batch = missing_ids_list[i : i + EMBEDDING_BATCH_SIZE]
+                calculate_embeddings_for_annotation_batch.delay(
+                    annotation_ids=batch,
+                    corpus_id=corpus_id,
+                    embedder_path=embedder_path,
+                )
+                result["tasks_queued"] += 1
+
+        logger.info(
+            f"ensure_embeddings_for_corpus() completed - "
+            f"queued {result['tasks_queued']} tasks, "
+            f"{result['annotations_already_embedded']} already embedded"
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"ensure_embeddings_for_corpus() failed: {e}")
+        result["errors"].append(str(e))
+        return result

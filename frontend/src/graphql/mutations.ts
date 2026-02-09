@@ -795,8 +795,10 @@ export interface RemoveDocumentsFromCorpusInputs {
 }
 
 export interface RemoveDocumentsFromCorpusOutputs {
-  ok?: boolean;
-  message?: string;
+  removeDocumentsFromCorpus: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const REMOVE_DOCUMENTS_FROM_CORPUS = gql`

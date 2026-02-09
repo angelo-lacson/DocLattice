@@ -45,6 +45,7 @@ export interface QueryParams {
   messageId?: string | null;
   homeView?: string | null; // "about" | "toc" - corpus home view selection
   tocExpanded?: boolean; // true to expand all TOC nodes
+  view?: string | null; // "landing" | "details" - corpus detail view selection
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
@@ -235,6 +236,10 @@ export function buildQueryParams(params: QueryParams): string {
   }
   if (params.tocExpanded) {
     searchParams.set("tocExpanded", "true");
+  }
+  if (params.view && params.view !== "landing") {
+    // Only add to URL if not default value
+    searchParams.set("view", params.view);
   }
 
   // Visualization state - only add non-default values to keep URLs clean
@@ -860,6 +865,29 @@ export function updateTocExpandedParam(
     searchParams.set("tocExpanded", "true");
   } else {
     searchParams.delete("tocExpanded");
+  }
+  navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update corpus detail view selection in URL
+ * Used for switching between landing view and details view on corpus home
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param view - View identifier ("landing" or "details")
+ *               Pass "landing" or null to clear and use default (landing)
+ */
+export function updateDetailViewParam(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  view: "landing" | "details" | null
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (view && view !== "landing") {
+    // Only add to URL if not default value
+    searchParams.set("view", view);
+  } else {
+    searchParams.delete("view");
   }
   navigate({ search: searchParams.toString() }, { replace: true });
 }

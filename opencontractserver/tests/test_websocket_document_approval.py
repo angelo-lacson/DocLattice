@@ -11,12 +11,10 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
-from urllib.parse import quote
 
 import pytest
 from channels.testing import WebsocketCommunicator
 from django.test.utils import override_settings
-from graphql_relay import to_global_id
 
 from opencontractserver.llms.agents.core_agents import (
     ApprovalNeededEvent,
@@ -103,11 +101,8 @@ class WebsocketApprovalGateTestCase(WebsocketFixtureBaseTestCase):
         ), pytest.MonkeyPatch().context() as mp:
             mp.setattr(_agents_module, "for_document", _fake_for_document, raising=True)
 
-            # Build websocket path (re-use helper fixtures)
-            graphql_doc_id = to_global_id("DocumentType", self.doc.id)
-            encoded_doc = quote(graphql_doc_id)
-            encoded_corpus = quote(to_global_id("CorpusType", self.corpus.id))
-            ws_path = f"ws/document/{encoded_doc}/query/corpus/{encoded_corpus}/?token={self.token}"
+            # Build websocket path using unified agent-chat endpoint
+            ws_path = f"ws/agent-chat/?document_id={self.doc.id}&corpus_id={self.corpus.id}&token={self.token}"
 
             communicator = WebsocketCommunicator(self.application, ws_path)
             connected, _ = await communicator.connect()

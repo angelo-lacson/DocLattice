@@ -1,0 +1,322 @@
+"""Tests for annotation images REST API endpoint."""
+
+import base64
+import json
+from io import BytesIO
+
+import pytest
+from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.test import TestCase
+from PIL import Image
+from rest_framework.test import APIClient
+
+from opencontractserver.annotations.models import Annotation, AnnotationLabel, LabelSet
+from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import Document
+from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
+
+User = get_user_model()
+
+pytestmark = pytest.mark.django_db
+
+
+class AnnotationImagesAPITestCase(TestCase):
+    """Test the /api/annotations/<id>/images/ REST endpoint."""
+
+    @classmethod
+    def setUpTestData(cls):
+        """Set up test data that will be used across test methods."""
+        cls.user = User.objects.create_user(
+            username="api_test_user", password="testpass123"
+        )
+        cls.other_user = User.objects.create_user(
+            username="api_other_user", password="otherpass123"
+        )
+
+        # Create label set and label
+        cls.label_set = LabelSet.objects.create(
+            title="Test Label Set", creator=cls.user
+        )
+        cls.annotation_label = AnnotationLabel.objects.create(
+            text="Figure", label_type="TOKEN_LABEL", color="#FF0000", creator=cls.user
+        )
+        cls.label_set.annotation_labels.add(cls.annotation_label)
+
+        # Create corpus
+        cls.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=cls.user, label_set=cls.label_set
+        )
+        set_permissions_for_obj_to_user(
+            cls.user, cls.corpus, [PermissionTypes.READ, PermissionTypes.CRUD]
+        )
+
+    def _create_sample_image_base64(self, width: int = 100, height: int = 100) -> str:
+        """Create a sample base64-encoded image for testing."""
+        img = Image.new("RGB", (width, height), color="red")
+        buffer = BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    def _create_pawls_with_images(
+        self, num_pages: int = 1, images_per_page: int = 2
+    ) -> list[dict]:
+        """Create PAWLS data with embedded images using unified token format."""
+        pages = []
+        for page_idx in range(num_pages):
+            page_tokens = [
+                {"x": 100, "y": 100, "width": 50, "height": 12, "text": "Test"}
+            ]
+
+            for img_idx in range(images_per_page):
+                base64_data = self._create_sample_image_base64(
+                    width=100 + img_idx * 10, height=100 + img_idx * 10
+                )
+                page_tokens.append(
+                    {
+                        "x": 50 + img_idx * 100,
+                        "y": 50 + img_idx * 100,
+                        "width": 80,
+                        "height": 60,
+                        "text": "",
+                        "is_image": True,
+                        "format": "jpeg",
+                        "original_width": 100 + img_idx * 10,
+                        "original_height": 100 + img_idx * 10,
+                        "content_hash": f"hash_{page_idx}_{img_idx}",
+                        "image_type": "embedded",
+                        "base64_data": base64_data,
+                    }
+                )
+
+            pages.append(
+                {
+                    "page": {"width": 612, "height": 792, "index": page_idx},
+                    "tokens": page_tokens,
+                }
+            )
+        return pages
+
+    def _create_test_document_with_images(
+        self, owner: User
+    ) -> tuple[Document, Annotation]:
+        """Create a test document with images and an annotation referencing them."""
+        pawls_data = self._create_pawls_with_images(num_pages=1, images_per_page=2)
+
+        # Create document with PAWLS data
+        document = Document.objects.create(
+            creator=owner,
+            title="Test Document with Images",
+            description="Test document",
+            pdf_file="test.pdf",
+        )
+
+        # Save PAWLS data to document
+        pawls_json = json.dumps(pawls_data).encode("utf-8")
+        document.pawls_parse_file.save("test_pawls.json", ContentFile(pawls_json))
+
+        # Set permissions
+        set_permissions_for_obj_to_user(
+            owner, document, [PermissionTypes.READ, PermissionTypes.CRUD]
+        )
+
+        # Create annotation referencing image tokens (indices 1 and 2)
+        annotation = Annotation.objects.create(
+            document=document,
+            corpus=self.corpus,
+            creator=owner,
+            page=0,
+            annotation_label=self.annotation_label,
+            raw_text="",
+            json={
+                "0": {
+                    "bounds": {"top": 50, "bottom": 110, "left": 50, "right": 230},
+                    "tokensJsons": [
+                        {"pageIndex": 0, "tokenIndex": 1},  # First image
+                        {"pageIndex": 0, "tokenIndex": 2},  # Second image
+                    ],
+                    "rawText": "",
+                }
+            },
+            content_modalities=["IMAGE"],
+        )
+
+        return document, annotation
+
+    def test_fetch_images_with_permission(self):
+        """Test fetching images for annotation user has access to."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        document, annotation = self._create_test_document_with_images(self.user)
+
+        response = client.get(f"/api/annotations/{annotation.id}/images/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("images", data)
+        self.assertIn("count", data)
+        self.assertEqual(data["annotation_id"], str(annotation.id))
+        self.assertEqual(data["count"], 2)  # Should have 2 images
+        self.assertGreater(len(data["images"]), 0)
+
+        # Verify image data structure
+        first_image = data["images"][0]
+        self.assertIn("base64_data", first_image)
+        self.assertIn("format", first_image)
+        self.assertIn("data_url", first_image)
+        self.assertIn("page_index", first_image)
+        self.assertIn("token_index", first_image)
+        self.assertEqual(first_image["format"], "jpeg")
+
+    def test_fetch_images_without_permission(self):
+        """Test IDOR protection - returns empty for unauthorized."""
+        client = APIClient()
+        client.force_authenticate(user=self.other_user)
+
+        document, annotation = self._create_test_document_with_images(self.user)
+
+        response = client.get(f"/api/annotations/{annotation.id}/images/")
+
+        # Should return 200 with empty array (IDOR protection)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["images"]), 0)
+        self.assertEqual(data["count"], 0)
+
+    def test_fetch_images_unauthenticated(self):
+        """Test authentication required."""
+        client = APIClient()
+        document, annotation = self._create_test_document_with_images(self.user)
+
+        response = client.get(f"/api/annotations/{annotation.id}/images/")
+
+        # Should require authentication
+        # DRF returns 403 for IsAuthenticated with SessionAuth
+        # or 401 for JWT authentication
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_fetch_images_for_text_only_annotation(self):
+        """Test fetching images for annotation with no images."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        # Create document with images but annotation without image tokens
+        pawls_data = self._create_pawls_with_images(num_pages=1, images_per_page=2)
+        document = Document.objects.create(
+            creator=self.user,
+            title="Test Document",
+            pdf_file="test.pdf",
+        )
+        pawls_json = json.dumps(pawls_data).encode("utf-8")
+        document.pawls_parse_file.save("test_pawls.json", ContentFile(pawls_json))
+        set_permissions_for_obj_to_user(self.user, document, [PermissionTypes.READ])
+
+        # Create annotation referencing only text token (index 0)
+        annotation = Annotation.objects.create(
+            document=document,
+            corpus=self.corpus,
+            creator=self.user,
+            page=0,
+            annotation_label=self.annotation_label,
+            raw_text="Test",
+            json={
+                "0": {
+                    "bounds": {"top": 100, "bottom": 112, "left": 100, "right": 150},
+                    "tokensJsons": [{"pageIndex": 0, "tokenIndex": 0}],  # Text token
+                    "rawText": "Test",
+                }
+            },
+            content_modalities=["TEXT"],
+        )
+
+        response = client.get(f"/api/annotations/{annotation.id}/images/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["images"]), 0)
+        self.assertEqual(data["count"], 0)
+
+    def test_invalid_annotation_id(self):
+        """Test with non-existent annotation ID."""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        response = client.get("/api/annotations/99999/images/")
+
+        # Should return 200 with empty array (IDOR protection)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["images"]), 0)
+        self.assertEqual(data["count"], 0)
+
+    def test_fetch_images_for_structural_annotation(self):
+        """Test fetching images for structural annotation without document."""
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        # Create PAWLS data with images
+        pawls_data = self._create_pawls_with_images(num_pages=1, images_per_page=2)
+        pawls_json = json.dumps(pawls_data).encode("utf-8")
+
+        # Create StructuralAnnotationSet with PAWLS data
+        structural_set = StructuralAnnotationSet.objects.create(
+            content_hash="test_hash_structural",
+            parser_name="test_parser",
+            page_count=1,
+        )
+        structural_set.pawls_parse_file.save(
+            "structural_pawls.json", ContentFile(pawls_json)
+        )
+
+        # Create document using this structural set
+        document = Document.objects.create(
+            creator=self.user,
+            title="Test Structural Document",
+            description="Test document",
+            pdf_file="test_structural.pdf",
+            structural_annotation_set=structural_set,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, document, [PermissionTypes.READ, PermissionTypes.CRUD]
+        )
+
+        # Create structural annotation (no document reference, references structural_set)
+        annotation = Annotation.objects.create(
+            document=None,  # Structural annotations don't have document
+            corpus=None,
+            structural_set=structural_set,
+            structural=True,
+            creator=self.user,
+            page=0,
+            annotation_label=self.annotation_label,
+            raw_text="",
+            json={
+                "0": {
+                    "bounds": {"top": 50, "bottom": 110, "left": 50, "right": 230},
+                    "tokensJsons": [
+                        {"pageIndex": 0, "tokenIndex": 1},  # First image
+                        {"pageIndex": 0, "tokenIndex": 2},  # Second image
+                    ],
+                    "rawText": "",
+                }
+            },
+            content_modalities=["IMAGE"],
+        )
+
+        response = client.get(f"/api/annotations/{annotation.id}/images/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("images", data)
+        self.assertEqual(data["count"], 2)  # Should have 2 images
+        self.assertGreater(len(data["images"]), 0)
+
+        # Verify image data structure
+        first_image = data["images"][0]
+        self.assertIn("base64_data", first_image)
+        self.assertIn("format", first_image)
+        self.assertEqual(first_image["format"], "jpeg")

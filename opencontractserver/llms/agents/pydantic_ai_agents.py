@@ -84,6 +84,7 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
+from opencontractserver.utils.tools import deduplicate_tools
 
 from .timeline_schema import TimelineEntry
 from .timeline_utils import TimelineBuilder
@@ -958,16 +959,23 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             )
             seeded_tools = list(seeded_tools_dict.values())
 
-            # Merge per-call tool overrides
-            extra_tools: list[Callable] = []
+            # Per-call tools take precedence over seeded tools.
+            # If a per-call tool has the same name as a seeded tool, replace it.
+            override_tools: list[Callable] = []
+
             if tools:
                 from opencontractserver.llms.api import _resolve_tools
 
                 resolved_core_tools = _resolve_tools(tools)
-                extra_tools = PydanticAIToolFactory.create_tools(resolved_core_tools)
+                override_tools = PydanticAIToolFactory.create_tools(resolved_core_tools)
             elif self.config.tools:
-                # If caller did not pass tools but config has additional wrappers, include them
-                extra_tools = list(self.config.tools)
+                # If caller did not pass tools but config has additional wrappers
+                override_tools = list(self.config.tools)
+
+            # Build the final tool list, preferring override tools over seeded
+            final_tools = deduplicate_tools(
+                seeded_tools, override_tools, context="Per-call"
+            )
 
             # Build a dedicated system prompt for structured extraction via hook
             structured_system_prompt = self._build_structured_system_prompt(
@@ -981,7 +989,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 system_prompt=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
-                tools=[*seeded_tools, *extra_tools],
+                tools=final_tools,
                 model_settings=model_settings,
             )
 
@@ -1116,16 +1124,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     break
 
             # Helper stub ctx carrying call-id for wrappers that expect it.
+            # _EmptyDeps must have user_id, document_id, corpus_id for _check_user_permissions
             class _EmptyDeps:  # noqa: D401 – simple placeholder for deps
                 skip_approval_gate = True
+                user_id = None
+                document_id = None
+                corpus_id = None
 
             class _EmptyCtx:  # noqa: D401 – simple placeholder
                 tool_call_id = pending.get("tool_call_id")
                 skip_approval_gate = True
                 deps = _EmptyDeps()
-
-                class deps:  # noqa: F811,D401 – nested stub for PydanticAIDependencies
-                    skip_approval_gate = True
 
             import inspect
 
@@ -2037,7 +2046,9 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 ]
             )
         if tools:
-            effective_tools.extend(tools)
+            effective_tools = deduplicate_tools(
+                effective_tools, tools, context="Caller"
+            )
 
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(
@@ -2267,13 +2278,23 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                     description="Event timeline (thoughts, tool calls, etc.) from the document agent run",
                 )
 
-            # Guard against cross-corpus leakage
+            # Guard against cross-corpus leakage – return a structured error
+            # payload instead of raising so the LLM can inform the user
+            # gracefully (see issue #820).
             if document_id not in {d.id for d in context.documents}:
+                available = [{"id": d.id, "title": d.title} for d in context.documents]
                 logger.warning(
                     f"[ask_document] Document {document_id} not found in corpus documents. "
                     f"Available document IDs: {[d.id for d in context.documents]}"
                 )
-                raise ValueError("Document does not belong to current corpus")
+                return DocAnswer(
+                    answer=(
+                        f"Error: Document {document_id} does not belong to the "
+                        f"current corpus. Available documents: {available}"
+                    ),
+                    sources=[],
+                    timeline=[],
+                ).model_dump()
 
             doc_agent = await _agents_api.for_document(
                 document=document_id,
@@ -2359,22 +2380,10 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             ask_doc_tool_wrapped,
         ]
 
-        # Default tool names to filter out duplicates
-        default_tool_names = {
-            "get_corpus_description",
-            "update_corpus_description",
-            "list_documents",
-            "ask_document",
-        }
-
         if tools:
-            # Filter out tools that would conflict with default tools
-            for tool in tools:
-                tool_name = getattr(tool, "name", None) or getattr(
-                    tool, "__name__", None
-                )
-                if tool_name not in default_tool_names:
-                    effective_tools.append(tool)
+            effective_tools = deduplicate_tools(
+                effective_tools, tools, context="Caller"
+            )
 
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,

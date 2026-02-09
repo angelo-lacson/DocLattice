@@ -1330,6 +1330,396 @@ agent = await agents.for_document(
 # LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"
 ```
 
+## Agent Permission Model
+
+The LLM framework implements a comprehensive permission system that ensures agents always execute with the calling user's permissions, never escalating privileges. This security model applies at multiple layers: consumer validation, agent factory filtering, and runtime tool execution.
+
+### Permission Architecture Overview
+
+The permission system operates on three key principles:
+
+1. **User Context Inheritance**: Agents inherit and operate within the permissions of the user who invokes them
+2. **Defense in Depth**: Multiple validation layers ensure permission checks cannot be bypassed
+3. **Graceful Degradation**: Tools requiring unavailable permissions are filtered out rather than causing errors
+
+### Tool Permission Flags
+
+Every tool in the system can declare its permission requirements through three boolean flags:
+
+```python
+from opencontractserver.llms.tools.tool_factory import CoreTool
+
+# Example tool with permission flags
+dangerous_tool = CoreTool.from_function(
+    my_function,
+    name="delete_data",
+    description="Delete data from the system",
+    requires_corpus=True,          # Tool needs corpus context
+    requires_approval=True,         # Tool needs user confirmation before execution
+    requires_write_permission=True  # Tool performs write operations (NEW)
+)
+```
+
+#### Permission Flag Definitions
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `requires_corpus` | `bool` | `False` | Tool requires a corpus context to function. Automatically filtered when `corpus=None`. |
+| `requires_approval` | `bool` | `False` | Tool execution pauses for human approval before running. See "Tool Approval & Human-in-the-Loop" section. |
+| `requires_write_permission` | `bool` | `False` | Tool performs write operations (create, update, delete). Filtered if user lacks WRITE permission on the corpus. |
+
+### Permission Filtering Flow
+
+The framework enforces permissions at three distinct layers, creating a defense-in-depth security model:
+
+#### Layer 1: Consumer Validation (Entry Point)
+
+**Location**: `opencontractserver/consumers/unified_agent_consumer.py`
+
+The WebSocket consumer (or API endpoint) performs initial READ permission validation:
+
+```python
+# Consumer checks READ access before creating agent
+if not user_has_permission_for_obj(user, corpus, "READ"):
+    raise PermissionDenied("User lacks READ access to corpus")
+
+# Similarly for documents
+if not user_has_permission_for_obj(user, document, "READ"):
+    raise PermissionDenied("User lacks READ access to document")
+```
+
+**Purpose**: Ensure the user can even access the document/corpus before creating an agent.
+
+#### Layer 2: Agent Factory Filtering (Agent Creation)
+
+**Location**: `opencontractserver/llms/agents/agent_factory.py`
+
+When creating an agent, the factory filters out tools requiring WRITE permission if the user lacks it:
+
+```python
+# In UnifiedAgentFactory._filter_tools_by_write_permission()
+def _user_has_write_permission(user_id: Optional[int], corpus: Optional[Corpus]) -> bool:
+    """Check if user has WRITE permission for the corpus."""
+    if not user_id or not corpus:
+        return False
+
+    user = User.objects.get(id=user_id)
+    return user_has_permission_for_obj(user, corpus, "WRITE")
+
+# Filter tools based on write permission
+filtered_tools = []
+for tool in tools:
+    if getattr(tool, "requires_write_permission", False):
+        if not _user_has_write_permission(user_id, corpus):
+            logger.info(f"Filtering tool '{tool.name}' - user lacks WRITE permission")
+            continue
+    filtered_tools.append(tool)
+```
+
+**Purpose**: Prevent the agent from even seeing tools it shouldn't be allowed to use, reducing attack surface.
+
+#### Layer 3: Runtime Validation (Tool Execution)
+
+**Location**: `opencontractserver/llms/tools/pydantic_ai_tools.py`
+
+Even if a tool somehow makes it to execution, the wrapper performs a final permission check:
+
+```python
+# In PydanticAIToolWrapper.__call__()
+async def __call__(self, ctx: AgentContext, **kwargs):
+    # Check permissions before execution
+    await self._check_user_permissions(ctx)
+
+    # Execute tool
+    result = await self.core_tool.function(**kwargs)
+    return result
+
+async def _check_user_permissions(self, ctx: AgentContext):
+    """Validate user permissions before tool execution."""
+    if self.core_tool.requires_write_permission:
+        user_id = ctx.config.user_id
+        corpus = ctx.corpus
+
+        if not user_id or not corpus:
+            raise PermissionDenied("Write operation requires authenticated user and corpus")
+
+        user = await User.objects.aget(id=user_id)
+        if not await user_has_permission_for_obj(user, corpus, "WRITE"):
+            raise PermissionDenied(f"User lacks WRITE permission for tool '{self.core_tool.name}'")
+```
+
+**Purpose**: Final safety check that catches any bypass attempts or edge cases, ensuring write operations never execute without proper permissions.
+
+### Permission Enforcement by Tool Type
+
+Different tools have different permission requirements based on their operations:
+
+#### Read-Only Tools (No Special Permissions)
+
+Tools that only read data don't require write permission:
+
+```python
+# Examples from opencontractserver/llms/tools/tool_registry.py
+tools_registry = [
+    CoreTool.from_function(
+        load_document_md_summary,
+        name="load_md_summary",
+        description="Load markdown summary of the document",
+        requires_corpus=False,
+        requires_approval=False,
+        requires_write_permission=False  # Read-only operation
+    ),
+    CoreTool.from_function(
+        get_notes_for_document_corpus,
+        name="get_notes_for_document_corpus",
+        description="Retrieve notes for document",
+        requires_corpus=True,
+        requires_approval=False,
+        requires_write_permission=False  # Read-only operation
+    ),
+]
+```
+
+These tools are available to users with READ permission.
+
+#### Write Tools (Require WRITE Permission)
+
+Tools that modify data require explicit write permission:
+
+```python
+# Examples from opencontractserver/llms/tools/tool_registry.py
+tools_registry = [
+    CoreTool.from_function(
+        add_document_note,
+        name="add_document_note",
+        description="Create a new note for the document",
+        requires_corpus=True,
+        requires_approval=True,
+        requires_write_permission=True  # Creates new data
+    ),
+    CoreTool.from_function(
+        update_document_summary,
+        name="update_document_summary",
+        description="Update document summary",
+        requires_corpus=True,
+        requires_approval=True,
+        requires_write_permission=True  # Modifies existing data
+    ),
+]
+```
+
+These tools are automatically filtered out for users with only READ permission.
+
+### Security Guarantees
+
+The permission model provides several critical security guarantees:
+
+#### 1. No Privilege Escalation
+
+Even if an agent's creator has higher permissions, the agent executes with the caller's permissions:
+
+```python
+# Scenario: Admin creates a shared agent, regular user calls it
+# Admin has WRITE permission, regular user has READ only
+
+# User invokes agent
+agent = await agents.for_document(
+    document=doc_id,
+    corpus=corpus_id,
+    user_id=regular_user_id  # ← Regular user's ID, not admin's
+)
+
+# Agent filters tools based on regular_user_id's permissions
+# Write tools are automatically excluded, even though admin could use them
+```
+
+#### 2. Consistent Permission Checks
+
+All three validation layers check the same permission rules using `user_has_permission_for_obj()` from `opencontractserver.utils.permissioning`:
+
+```python
+from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+# Same check used at all three layers
+has_write = user_has_permission_for_obj(user, corpus, "WRITE")
+```
+
+#### 3. Fail-Safe Defaults
+
+Tools default to the most restrictive permission model:
+
+- `requires_write_permission=False` by default (must explicitly opt-in)
+- Tools without permission flags are treated as read-only
+- Missing user context blocks all write operations
+
+### Permission Model in Action
+
+Here's a complete example showing how permissions flow through the system:
+
+```python
+from opencontractserver.llms import agents
+
+# User with READ-only permission attempts to use agent
+user_id = 123  # User with READ permission, no WRITE
+corpus_id = 456
+
+# Create agent for document
+agent = await agents.for_document(
+    document=789,
+    corpus=corpus_id,
+    user_id=user_id
+)
+
+# Agent creation succeeds, but write tools are filtered:
+# ✅ Available: load_md_summary, get_notes_for_document_corpus, similarity_search
+# ❌ Filtered: add_document_note, update_document_summary, duplicate_annotations
+
+# User can query the agent
+response = await agent.chat("What are the key contract terms?")
+# ✅ Works - uses read-only tools (similarity_search, load_md_summary)
+
+# User asks agent to create a note
+response = await agent.chat("Create a note summarizing the payment terms")
+# ✅ Request succeeds, but agent can't call add_document_note (not available)
+# Agent responds: "I cannot create notes as that tool is not available"
+
+# If write tool somehow executed (impossible due to multi-layer checks):
+# ❌ Layer 3 validation raises PermissionDenied exception
+```
+
+### Key Implementation Files
+
+Understanding the permission model requires familiarity with these key files:
+
+| File | Purpose | Key Functions/Classes |
+|------|---------|----------------------|
+| `opencontractserver/llms/tools/tool_factory.py` | Core tool definition with permission flags | `CoreTool`, `requires_write_permission` flag |
+| `opencontractserver/llms/tools/tool_registry.py` | Registry of all built-in tools with their permissions | `tools_registry` list with flag definitions |
+| `opencontractserver/llms/agents/agent_factory.py` | Agent creation with tool filtering | `_filter_tools_by_write_permission()`, `_user_has_write_permission()` |
+| `opencontractserver/llms/tools/pydantic_ai_tools.py` | Runtime permission validation wrapper | `PydanticAIToolWrapper`, `_check_user_permissions()` |
+| `opencontractserver/utils/permissioning.py` | Core permission checking utilities | `user_has_permission_for_obj()` |
+| `opencontractserver/consumers/unified_agent_consumer.py` | WebSocket consumer with entry validation | Initial READ permission checks |
+
+### Best Practices for Tool Development
+
+When creating custom tools, follow these guidelines:
+
+#### 1. Always Declare Write Requirements
+
+```python
+# ❌ Bad - doesn't declare write requirement
+custom_tool = CoreTool.from_function(
+    delete_annotations,
+    name="delete_annotations",
+    description="Delete annotations"
+    # Missing requires_write_permission=True
+)
+
+# ✅ Good - explicitly declares write requirement
+custom_tool = CoreTool.from_function(
+    delete_annotations,
+    name="delete_annotations",
+    description="Delete annotations",
+    requires_write_permission=True  # ← Explicit declaration
+)
+```
+
+#### 2. Combine Permission Flags Appropriately
+
+Some tools need multiple permission checks:
+
+```python
+# Tool that writes data AND needs user confirmation
+risky_tool = CoreTool.from_function(
+    bulk_delete_notes,
+    name="bulk_delete_notes",
+    description="Delete multiple notes at once",
+    requires_corpus=True,          # Needs corpus context
+    requires_approval=True,         # Dangerous operation
+    requires_write_permission=True  # Modifies data
+)
+```
+
+#### 3. Document Permission Requirements
+
+```python
+def create_annotation(document_id: int, label: str, text: str) -> str:
+    """Create a new annotation on the document.
+
+    **Permission Requirements**:
+    - User must have WRITE permission on the corpus
+    - Tool requires corpus context (requires_corpus=True)
+    - Does not require approval (low-risk operation)
+
+    Args:
+        document_id: ID of the document to annotate
+        label: Annotation label
+        text: Text content to annotate
+
+    Returns:
+        Success message with annotation ID
+    """
+    # Implementation
+    pass
+```
+
+### Testing Permission Enforcement
+
+When testing agents with permission-gated tools:
+
+```python
+import pytest
+from opencontractserver.llms import agents
+
+@pytest.mark.asyncio
+async def test_write_permission_filtering(user_factory, corpus_factory, document_factory):
+    # Create user with READ-only permission
+    user = await user_factory.create()
+    corpus = await corpus_factory.create()
+    document = await document_factory.create(corpus=corpus)
+
+    # Grant READ permission only
+    await grant_permission(user, corpus, "READ")
+
+    # Create agent with write tools
+    agent = await agents.for_document(
+        document=document.id,
+        corpus=corpus.id,
+        user_id=user.id,
+        tools=["add_document_note", "update_document_summary"]  # Write tools
+    )
+
+    # Verify write tools were filtered
+    available_tool_names = [t.name for t in agent.config.tools]
+    assert "add_document_note" not in available_tool_names
+    assert "update_document_summary" not in available_tool_names
+
+    # Verify read-only tools still work
+    response = await agent.chat("What is this document about?")
+    assert response.content  # Should succeed with read-only tools
+```
+
+### Migration Notes for Existing Tools
+
+If you have existing custom tools that perform write operations:
+
+1. **Add the `requires_write_permission` flag**:
+   ```python
+   # Update your tool definition
+   my_tool = CoreTool.from_function(
+       my_function,
+       name="my_tool",
+       description="Tool description",
+       requires_write_permission=True  # ← Add this line
+   )
+   ```
+
+2. **Test with read-only users**: Verify that users without WRITE permission can still use your agent (without the write tool)
+
+3. **Document the permission requirement**: Update your tool's docstring to note the WRITE permission requirement
+
+---
+
 ## Advanced Usage
 
 ### Custom Configuration
@@ -1482,6 +1872,57 @@ standard_tools = create_document_tools()
 #     tools=standard_tools + custom_tools
 # )
 ```
+
+#### Tool Precedence and Overrides
+
+When you pass tools to an agent, **caller-provided tools take precedence** over built-in defaults if there's a name conflict. This allows you to customize tool behavior without modifying the framework.
+
+**When conflicts occur:**
+- You pass a tool with `__name__` matching a default tool (e.g., `"update_document_description"`)
+- The framework detects the duplicate and uses YOUR tool's configuration
+
+**What gets overridden:**
+- Tool description (affects LLM's understanding of the tool)
+- `requires_approval` flag (enables/disables human-in-the-loop)
+- `parameter_descriptions` (affects LLM parameter usage)
+- The actual function implementation
+
+**Example: Disabling approval for a tool**
+```python
+from opencontractserver.llms.tools.tool_factory import CoreTool
+from opencontractserver.llms.tools.core_tools import update_document_description
+
+# Create a version of update_document_description that doesn't require approval
+no_approval_tool = CoreTool.from_function(
+    update_document_description,
+    name="update_document_description",  # Same name as default
+    description="Update the document description (auto-approved)",
+    requires_approval=False,  # Override the default's requires_approval=True
+)
+
+agent = await agents.for_document(
+    document=123,
+    corpus=1,
+    tools=[no_approval_tool],  # Your tool replaces the default
+)
+# Now update_document_description won't pause for approval
+```
+
+**Precedence rules:**
+1. Per-call `tools` parameter → highest priority
+2. `AgentConfig.tools` → used if no per-call tools
+3. Built-in defaults → lowest priority (replaced by above)
+
+**Logging:** When a caller tool overrides a default, an INFO-level log is emitted:
+```
+Caller tool 'update_document_description' overrides default - using caller's configuration
+```
+
+**Security Considerations:**
+- Only pass **trusted tools** via the `tools` parameter
+- Overriding tools can **bypass `requires_approval` safeguards** that provide human-in-the-loop protection
+- If tools originate from user-controlled configurations (e.g., stored in database), **validate them against an approved registry** before passing to agents
+- The `deduplicate_tools()` utility in `opencontractserver/utils/tools.py` documents these security implications
 
 ### Vector Store Integration
 

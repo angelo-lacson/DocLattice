@@ -62,12 +62,8 @@ export interface ResolveCorpusFullQuery {
       id: string;
       title: string;
     } | null;
-    documents: {
-      totalCount: number;
-    };
-    analyses: {
-      totalCount: number;
-    };
+    documentCount: number | null;
+    annotationCount: number | null;
   } | null;
 }
 

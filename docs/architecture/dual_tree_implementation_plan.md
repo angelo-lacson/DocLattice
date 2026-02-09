@@ -139,18 +139,24 @@ The `get_filesystem_at_time(corpus, timestamp)` function reconstructs the filesy
 
 #### 4.1 Migration Strategy
 
-The data migration bootstrapped DocumentPath records from the legacy M2M corpus-document relationship:
+> **Status (2026-02-01)**: This migration has been completed. The `corpus.documents` M2M relationship has been removed (issue #835). `DocumentPath` is now the **sole source of truth** for corpus-document associations.
+>
+> See the actual migration implementation in:
+> - [`opencontractserver/documents/migrations/`](../../opencontractserver/documents/migrations/) - DocumentPath model creation
+> - [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) - `Corpus.add_document()` and `Corpus.get_documents()` methods
 
-1. **Step 1**: Initialized Document trees with `version_tree_id` (UUID) and set all existing documents as roots (`parent=None`, `is_current=True`)
+<!-- TODO: Investigate current architecture and ensure this section aligns with the actual latest code -->
 
-2. **Step 2**: Created DocumentPath records from existing corpus-document relationships, generating paths from document titles
+**Current Architecture**:
+- `DocumentPath` records are created via `Corpus.add_document(document, user)`
+- Document queries use `Corpus.get_documents()` which queries via `DocumentPath`
+- No M2M relationship exists; `DocumentPath` is the single source of truth
 
-**Key migrations**:
-- `documents/0023_*`: Schema changes (DocumentPath model, TreeNode fields)
-- `documents/0024_*`: Data migration (initialize version_tree_id, create paths)
-- `documents/0026_*`: Add structural_annotation_set FK
-
-**Result**: `DocumentPath` is now the single source of truth for corpus-document relationships.
+**Benefits of Current Architecture**:
+- Single source of truth (no dual-system synchronization)
+- Full audit trail via `DocumentPath` history
+- Support for soft-delete and restore
+- Time-travel queries via `DocumentPath` timestamps
 
 ### Phase 5: Testing (Week 3)
 

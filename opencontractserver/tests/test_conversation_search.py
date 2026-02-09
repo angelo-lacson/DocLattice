@@ -108,13 +108,17 @@ class ConversationVectorSearchTest(TestCase):
             permissions=[PermissionTypes.ALL],
         )
 
-        # Create a conversation owned by other_user
+        # Create a private CHAT conversation owned by other_user
+        # Note: We use CHAT type (not THREAD) because THREAD type conversations
+        # inherit visibility from their corpus - anyone who can see the corpus
+        # can see its threads. CHAT type uses restrictive permissions (only
+        # creator, explicit guardian permissions, or public).
         self.other_conv = Conversation.objects.create(
             title="Private Discussion",
             description="This should not be visible to main user",
             chat_with_corpus=self.corpus,
             creator=self.other_user,
-            conversation_type="thread",
+            conversation_type="chat",
             is_public=False,
         )
 
@@ -1046,12 +1050,15 @@ class ConversationPermissionTest(TestCase):
         )
 
         # 4. User2's completely private conversation (not accessible to user1)
+        # Note: We use CHAT type (not THREAD) because THREAD type conversations
+        # inherit visibility from their corpus - anyone who can see the corpus
+        # can see its threads. CHAT type uses restrictive permissions.
         self.user2_private_conv = Conversation.objects.create(
-            title="User2 Private Thread",
+            title="User2 Private Chat",
             description="Not visible to user1",
             chat_with_corpus=self.corpus,
             creator=self.user2,
-            conversation_type="thread",
+            conversation_type="chat",
             is_public=False,
         )
         set_permissions_for_obj_to_user(
@@ -2181,19 +2188,48 @@ class ConversationModelVisibilityTest(TestCase):
         )
 
     def test_visible_to_user_with_none_user(self):
-        """Test visible_to_user handles None user (anonymous)."""
-        # Create public conversation
-        public_conv = Conversation.objects.create(
-            title="Public Conversation",
+        """Test visible_to_user handles None user (anonymous).
+
+        Per the permission model:
+        - Anonymous users can only see THREADs (not CHATs)
+        - Context inheritance: threads on public corpuses are visible
+        - Thread's own is_public flag provides direct access, but
+          context inheritance works independently
+        - Threads on PRIVATE corpuses are NOT visible to anonymous
+        """
+        # Make corpus public for context inheritance
+        self.corpus.is_public = True
+        self.corpus.save()
+
+        # Create a private corpus
+        private_corpus = Corpus.objects.create(
+            title="Private Corpus", creator=self.user, is_public=False
+        )
+
+        # Create thread on public corpus (is_public=True)
+        public_thread = Conversation.objects.create(
+            title="Public Thread",
+            conversation_type="thread",
             chat_with_corpus=self.corpus,
             creator=self.user,
             is_public=True,
         )
 
-        # Create private conversation
-        private_conv = Conversation.objects.create(
-            title="Private Conversation",
+        # Create thread on public corpus (is_public=False)
+        # This SHOULD be visible via context inheritance
+        inherited_thread = Conversation.objects.create(
+            title="Inherited Thread",
+            conversation_type="thread",
             chat_with_corpus=self.corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+        # Create thread on PRIVATE corpus - should NOT be visible
+        private_corpus_thread = Conversation.objects.create(
+            title="Private Corpus Thread",
+            conversation_type="thread",
+            chat_with_corpus=private_corpus,
             creator=self.user,
             is_public=False,
         )
@@ -2203,9 +2239,12 @@ class ConversationModelVisibilityTest(TestCase):
 
         visible_ids = set(visible.values_list("id", flat=True))
 
-        # Anonymous should only see public
-        self.assertIn(public_conv.id, visible_ids)
-        self.assertNotIn(private_conv.id, visible_ids)
+        # Both threads on public corpus should be visible
+        self.assertIn(public_thread.id, visible_ids)
+        self.assertIn(inherited_thread.id, visible_ids)
+
+        # Thread on private corpus should NOT be visible
+        self.assertNotIn(private_corpus_thread.id, visible_ids)
 
     def test_visible_to_user_fallback_no_permission_model(self):
         """Test visible_to_user fallback when permission model doesn't exist."""

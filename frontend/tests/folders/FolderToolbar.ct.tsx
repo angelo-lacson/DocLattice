@@ -292,4 +292,250 @@ test.describe("FolderToolbar", () => {
       await expect(tableButton).toHaveAttribute("aria-label", "Table view");
     });
   });
+
+  test.describe("Selection Controls", () => {
+    test("shows selection group when documents exist and onSelectAll is provided", async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={0}
+            onSelectAll={() => {}}
+          />
+        </FolderTestWrapper>
+      );
+
+      // Selection group should be visible with Select All button
+      const selectAllButton = component.getByRole("button", {
+        name: "Select all",
+      });
+      await expect(selectAllButton).toBeVisible();
+    });
+
+    test("hides selection group when no documents exist", async ({ mount }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={0}
+            selectedDocumentCount={0}
+            onSelectAll={() => {}}
+          />
+        </FolderTestWrapper>
+      );
+
+      // Selection group should not be visible
+      const selectAllButtons = component.locator(
+        'button:has-text("Select All")'
+      );
+      await expect(selectAllButtons).toHaveCount(0);
+    });
+
+    test("shows selection count when documents are selected", async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={3}
+            onSelectAll={() => {}}
+            onClearSelection={() => {}}
+          />
+        </FolderTestWrapper>
+      );
+
+      // Should show "3 of 10" text
+      await expect(component.locator("text=3 of 10")).toBeVisible();
+    });
+
+    test("shows clear selection button when documents are selected", async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={3}
+            onSelectAll={() => {}}
+            onClearSelection={() => {}}
+          />
+        </FolderTestWrapper>
+      );
+
+      const clearButton = component.getByRole("button", {
+        name: "Clear selection",
+      });
+      await expect(clearButton).toBeVisible();
+    });
+
+    test("calls onSelectAll when Select All button is clicked", async ({
+      mount,
+    }) => {
+      let selectAllCalled = false;
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={0}
+            onSelectAll={() => {
+              selectAllCalled = true;
+            }}
+          />
+        </FolderTestWrapper>
+      );
+
+      const selectAllButton = component.getByRole("button", {
+        name: "Select all",
+      });
+      await selectAllButton.click();
+
+      expect(selectAllCalled).toBe(true);
+    });
+
+    test("calls onClearSelection when clear button is clicked", async ({
+      mount,
+    }) => {
+      let clearCalled = false;
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={3}
+            onSelectAll={() => {}}
+            onClearSelection={() => {
+              clearCalled = true;
+            }}
+          />
+        </FolderTestWrapper>
+      );
+
+      const clearButton = component.getByRole("button", {
+        name: "Clear selection",
+      });
+      await clearButton.click();
+
+      expect(clearCalled).toBe(true);
+    });
+
+    test("Select All button is disabled when loading", async ({ mount }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={0}
+            onSelectAll={() => {}}
+            isLoading={true}
+          />
+        </FolderTestWrapper>
+      );
+
+      const selectAllButton = component.getByRole("button", {
+        name: "Loading documents",
+      });
+      await expect(selectAllButton).toBeDisabled();
+    });
+
+    test("shows checkmark icon when all documents are selected", async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={10}
+            onSelectAll={() => {}}
+            allSelected={true}
+          />
+        </FolderTestWrapper>
+      );
+
+      // When all selected, button should say "Deselect all"
+      const deselectButton = component.getByRole("button", {
+        name: "Deselect all",
+      });
+      await expect(deselectButton).toBeVisible();
+    });
+  });
+
+  test.describe("Remove from Corpus Button", () => {
+    test("shows Remove button when documents are selected", async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={3}
+            onSelectAll={() => {}}
+            onRemoveFromCorpus={() => {}}
+          />
+        </FolderTestWrapper>
+      );
+
+      // Remove button should show count
+      const removeButton = component.locator('button:has-text("Remove (3)")');
+      await expect(removeButton).toBeVisible();
+    });
+
+    test("hides Remove button when no documents are selected", async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={0}
+            onSelectAll={() => {}}
+            onRemoveFromCorpus={() => {}}
+          />
+        </FolderTestWrapper>
+      );
+
+      const removeButtons = component.locator('button:has-text("Remove")');
+      await expect(removeButtons).toHaveCount(0);
+    });
+
+    test("calls onRemoveFromCorpus when Remove button is clicked", async ({
+      mount,
+    }) => {
+      let removeCalled = false;
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={3}
+            onSelectAll={() => {}}
+            onRemoveFromCorpus={() => {
+              removeCalled = true;
+            }}
+          />
+        </FolderTestWrapper>
+      );
+
+      const removeButton = component.locator('button:has-text("Remove (3)")');
+      await removeButton.click();
+
+      expect(removeCalled).toBe(true);
+    });
+
+    test("Remove button shows correct singular text for 1 document", async ({
+      mount,
+    }) => {
+      const component = await mount(
+        <FolderTestWrapper>
+          <ToolbarFixture
+            totalDocumentCount={10}
+            selectedDocumentCount={1}
+            onSelectAll={() => {}}
+            onRemoveFromCorpus={() => {}}
+          />
+        </FolderTestWrapper>
+      );
+
+      const removeButton = component.locator('button:has-text("Remove (1)")');
+      await expect(removeButton).toBeVisible();
+    });
+  });
 });

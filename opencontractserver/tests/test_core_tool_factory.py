@@ -119,7 +119,7 @@ class TestUnifiedToolFactory(SimpleTestCase):
             self.core_tool, AgentFramework.PYDANTIC_AI
         )
         self.assertEqual(result, "pydantic_proxy")
-        mock_create_tool.assert_called_once_with(self.core_tool)
+        mock_create_tool.assert_called_once_with(self.core_tool, inject_params=None)
 
     def test_create_tool_invalid_framework(self):
         """An unsupported framework name should raise ``ValueError`` from the factory."""
@@ -164,6 +164,10 @@ class TestCreateDocumentTools(SimpleTestCase):
             "get_note_content_token_length",
             "get_partial_note_content",
             "aget_page_image",
+            # Image tools for multimodal support
+            "alist_document_images",
+            "aget_document_image",
+            "aget_annotation_images",
         }
         self.assertEqual({tool.name for tool in tools}, expected_names)
         # Ensure all returned objects are CoreTool instances

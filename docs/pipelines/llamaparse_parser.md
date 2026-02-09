@@ -208,16 +208,16 @@ LlamaParse elements are mapped to OpenContracts annotation labels:
 
 ## Comparison with Other Parsers
 
-| Feature | LlamaParse | Docling | NLM-Ingest |
-|---------|------------|---------|------------|
-| Deployment | Cloud API | Local microservice | Local microservice |
-| API Key Required | Yes | No | No |
-| Layout Extraction | Yes | Yes | Yes |
-| Relationship Detection | No | Yes (groups) | Limited |
-| OCR Support | Yes (automatic) | Yes (Tesseract) | Yes |
-| DOCX Support | Yes | Yes | No |
-| Cost | Per-page pricing | Free | Free |
-| Privacy | Cloud processing | Local processing | Local processing |
+| Feature | LlamaParse | Docling |
+|---------|------------|---------|
+| Deployment | Cloud API | Local microservice |
+| API Key Required | Yes | No |
+| Layout Extraction | Yes | Yes |
+| Relationship Detection | No | Yes (groups) |
+| OCR Support | Yes (automatic) | Yes (Tesseract) |
+| DOCX Support | Yes | Yes |
+| Cost | Per-page pricing | Free |
+| Privacy | Cloud processing | Local processing |
 
 ## Error Handling
 
@@ -347,7 +347,7 @@ LlamaParse returns **flat layout blocks** without hierarchical structure:
 - Subject to LlamaIndex's data handling policies
 - Not suitable for highly sensitive documents that cannot leave your network
 
-**Workaround**: Use Docling or NLM-Ingest for fully local processing.
+**Workaround**: Use Docling for fully local processing.
 
 ### Per-Page Pricing
 
@@ -371,6 +371,5 @@ LlamaParse returns **flat layout blocks** without hierarchical structure:
 
 - [Pipeline Overview](pipeline_overview.md)
 - [Docling Parser](docling_parser.md) - Local ML-based alternative with token-level data and relationships
-- [NLM-Ingest Parser](nlm_ingest_parser.md) - Another local alternative
 - [LlamaParse Documentation](https://developers.llamaindex.ai/python/cloud/llamaparse/)
 - [LlamaIndex Cloud](https://cloud.llamaindex.ai/)

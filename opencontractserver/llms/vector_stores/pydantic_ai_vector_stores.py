@@ -140,6 +140,7 @@ class PydanticAIAnnotationVectorStore:
         embedder_path: Optional[str] = None,
         must_have_text: Optional[str] = None,
         embed_dim: int = 384,
+        modalities: Optional[list[str]] = None,
         **kwargs,
     ):
         """Initialize the PydanticAI vector store wrapper.
@@ -151,6 +152,9 @@ class PydanticAIAnnotationVectorStore:
             embedder_path: Path to embedder model to use
             must_have_text: Filter by text content
             embed_dim: Embedding dimension (384, 768, 1536, or 3072)
+            modalities: Filter by content modalities (e.g., ["TEXT"], ["IMAGE"],
+                       ["TEXT", "IMAGE"]). With multimodal embedders, all embeddings
+                       are in the same vector space so cross-modal search is possible.
             **kwargs: Additional arguments passed to core store
         """
         self.core_store = CoreAnnotationVectorStore(
@@ -160,6 +164,7 @@ class PydanticAIAnnotationVectorStore:
             embedder_path=embedder_path,
             must_have_text=must_have_text,
             embed_dim=embed_dim,
+            modalities=modalities,
         )
 
         # Store initialization parameters for tool use
@@ -167,6 +172,7 @@ class PydanticAIAnnotationVectorStore:
         self.corpus_id = corpus_id
         self.document_id = document_id
         self.embedder_path = embedder_path
+        self.modalities = modalities
 
     async def search_annotations(
         self,
@@ -248,6 +254,7 @@ class PydanticAIAnnotationVectorStore:
         query: str,
         *,
         k: int = 8,
+        modalities: Optional[list[str]] = None,
         **kwargs: Any,
     ) -> list[dict[str, Any]]:
         """Async wrapper that adapts to pydantic-ai's expected signature.
@@ -257,7 +264,36 @@ class PydanticAIAnnotationVectorStore:
         of dicts.  We delegate to ``search_annotations`` and then expose the
         list of hits so that the tool can feed them directly to the model
         (and propagate them to ``result.sources``).
+
+        With multimodal embedders (CLIP), all embeddings are in the same vector
+        space, so text queries can find image annotations and vice versa.
+
+        Args:
+            query: Text query for semantic search
+            k: Maximum number of results to return (default 8)
+            modalities: Optional filter by content type: ["TEXT"], ["IMAGE"], or
+                       ["TEXT", "IMAGE"]. If not provided, searches all modalities.
         """
+        # If modalities filter provided, create a temporary store with that filter
+        if modalities is not None:
+            temp_store = CoreAnnotationVectorStore(
+                user_id=self.user_id,
+                corpus_id=self.corpus_id,
+                document_id=self.document_id,
+                embedder_path=self.embedder_path,
+                embed_dim=self.core_store.embed_dim,
+                modalities=modalities,
+            )
+            search_query = VectorSearchQuery(
+                query_text=query,
+                similarity_top_k=k,
+            )
+            results = await temp_store.async_search(search_query)
+            return (
+                await PydanticAIVectorSearchResponse.async_from_core_results(results)
+            ).results
+
+        # Use the default store
         response = await self.search_annotations(query_text=query, similarity_top_k=k)
         return response.results
 
@@ -273,6 +309,7 @@ class PydanticAIAnnotationVectorStore:
             "document_id": self.document_id,
             "embedder_path": self.embedder_path,
             "embed_dim": self.core_store.embed_dim,
+            "modalities": self.modalities,
         }
 
     async def create_vector_search_tool(self) -> callable:
@@ -333,6 +370,7 @@ async def create_vector_search_tool(
     corpus_id: Optional[Union[str, int]] = None,
     document_id: Optional[Union[str, int]] = None,
     embedder_path: Optional[str] = None,
+    modalities: Optional[list[str]] = None,
     **kwargs,
 ) -> callable:
     """Create a vector search tool for PydanticAI agents.
@@ -342,6 +380,9 @@ async def create_vector_search_tool(
         corpus_id: Filter by corpus ID
         document_id: Filter by document ID
         embedder_path: Path to embedder model to use
+        modalities: Filter by content modalities (e.g., ["TEXT"], ["IMAGE"],
+                   ["TEXT", "IMAGE"]). With multimodal embedders (CLIP), all
+                   embeddings are in the same vector space for cross-modal search.
         **kwargs: Additional arguments
 
     Returns:
@@ -352,6 +393,7 @@ async def create_vector_search_tool(
         corpus_id=corpus_id,
         document_id=document_id,
         embedder_path=embedder_path,
+        modalities=modalities,
         **kwargs,
     )
 

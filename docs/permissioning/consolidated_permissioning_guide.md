@@ -48,7 +48,8 @@
 11. [Component Integration](#component-integration)
 12. [Testing](#testing)
 13. [Troubleshooting](#troubleshooting)
-14. [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation)
+14. [Agent/LLM Permission Model](#agentllm-permission-model)
+15. [resolve_oc_model_queryset Deprecation](#resolve_oc_model_queryset-deprecation)
 
 ## Overview
 
@@ -344,11 +345,12 @@ This section provides a comprehensive reference for how permissions work across 
 | **CorpusFolder** | Inherited (Corpus) | Parent corpus permissions | None | No individual permissions; write requires UPDATE on corpus |
 | **Annotation** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
 | **Relationship** | Inherited (Doc+Corpus) | Document permissions | Corpus permissions | `Effective = MIN(doc, corpus)`; Structural always READ-ONLY |
+| **Metadata (Datacell)** | Corpus-primary | Corpus permissions | Document READ required | Corpus UPDATE + Doc READ = can edit; corpus-level feature |
 | **Analysis** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
 | **Extract** | Hybrid | Object permissions | Corpus READ required | Content filtered by doc permissions |
-| **Conversation (CHAT)** | Context-based | `chat_with_corpus` OR `chat_with_document` | `is_public` flag | Only ONE context field can be set |
-| **Conversation (THREAD)** | Context-based | `chat_with_corpus` AND/OR `chat_with_document` | `is_public` flag | BOTH context fields can be set for doc-in-corpus threads |
-| **ChatMessage** | Inherited (Conversation) + Moderator | Parent conversation permissions | Moderator access | Moderators see all messages; see [ChatMessage Visibility](#chatmessage-visibility-moderator-access) |
+| **Conversation (CHAT)** | Restrictive | Creator + explicit permissions + public | `is_public` flag | Personal agent chats; NO context inheritance |
+| **Conversation (THREAD)** | Context-based | Base rules + context inheritance | `is_public` flag | Collaborative discussions; inherits from corpus/document |
+| **ChatMessage** | Inherited (Conversation) + Moderator | Parent conversation visibility | Moderator access | See [ChatMessage Visibility](#chatmessage-visibility-moderator-access) |
 | **UserBadge** | Privacy-filtered | Recipient's profile privacy | Corpus membership | Follows recipient's `is_profile_public` |
 | **User** | Privacy-controlled | `is_profile_public` | Corpus membership | Private users visible via shared corpus with > READ |
 
@@ -415,37 +417,95 @@ Can See Object = has_object_permission AND can_read_corpus
 Can See Content = can_see_object AND can_read_document
 ```
 
-#### Conversations (THREAD Type) - Document-in-Corpus Model
-```
-Access Check (when both chat_with_corpus AND chat_with_document set):
-  can_access = (has_corpus_permission OR corpus_is_public)
-               AND (has_document_permission OR document_is_public)
+#### Metadata (Datacell) - Corpus-Primary Model
 
+Metadata values (Datacells) follow a **corpus-primary** permission model, which differs from annotations:
+
+```
+READ Check:
+  can_read = can_read_document AND can_read_corpus
+
+UPDATE Check:
+  can_update = can_read_document AND has_UPDATE_permission_on_corpus
+
+DELETE Check:
+  can_delete = can_read_document AND has_DELETE_permission_on_corpus
+```
+
+**Why this differs from annotations:**
+- Metadata schemas (columns) are defined at the **corpus level**, not document level
+- Corpus owners/editors should be able to fill in metadata for any document they can see
+- Explicit document UPDATE permissions aren't always assigned for corpus-scoped documents (performance optimization)
+- This aligns with CorpusFolder's permission model (inherits from corpus)
+
+**Key characteristics:**
+- Requires only Document READ (not UPDATE) - user just needs to see the document
+- Corpus permission determines write access - UPDATE to edit, DELETE to remove
+- Anonymous users: READ-only access if both document and corpus are public
+- Superusers: Full access to all metadata
+
+**Implementation**: `MetadataQueryOptimizer.check_metadata_mutation_permission()` in `opencontractserver/extracts/query_optimizer.py`
+
+#### Conversations - Bifurcated Permission Model
+
+Conversations use a **bifurcated permission model** based on `conversation_type`:
+
+##### CHAT Type (Restrictive - Personal Agent Chats)
+```
+Visibility Check:
+  can_see = is_superuser
+            OR is_creator
+            OR has_explicit_guardian_permission (read_conversation)
+            OR is_public
+
+Note: CHAT type does NOT inherit visibility from corpus/document context.
+      Even if a user can read the corpus, they cannot see another user's CHAT.
+```
+
+##### THREAD Type (Context-Based - Collaborative Discussions)
+```
+Visibility Check:
+  can_see = CHAT_rules (creator OR explicit_permission OR is_public)
+            OR context_inheritance (see below)
+
+Context Inheritance (AND logic when both set):
+  IF only chat_with_corpus set:
+    can_see = user can READ corpus
+  ELIF only chat_with_document set:
+    can_see = user can READ document
+  ELIF both chat_with_corpus AND chat_with_document set:
+    can_see = user can READ corpus AND user can READ document
+```
+
+##### Moderation (Applies to Both Types)
+```
 Moderation Check:
   can_moderate = is_superuser
+                 OR is_conversation_creator
                  OR corpus.creator == user
                  OR document.creator == user
-                 OR user has EDIT permission on corpus
-                 OR user has EDIT permission on document
+                 OR user is CorpusModerator with permissions
 ```
 
-#### Conversations (CHAT Type) - Single Context Model
-```
-Access Check (only ONE of corpus/document set):
-  IF chat_with_corpus:
-    can_access = has_corpus_permission OR corpus_is_public
-  ELIF chat_with_document:
-    can_access = has_document_permission OR document_is_public
-```
+##### Key Differences Summary
+
+| Aspect | CHAT | THREAD |
+|--------|------|--------|
+| Purpose | Personal agent conversations | Collaborative discussions |
+| Context Inheritance | NO | YES |
+| Context Fields | Only ONE (corpus OR document) | BOTH allowed (doc-in-corpus) |
+| Corpus Reader Visibility | Cannot see others' CHATs | CAN see corpus THREADs |
+
+**Implementation**: `ConversationQuerySet.visible_to_user()` in `opencontractserver/conversations/models.py`
 
 #### ChatMessage Visibility (Moderator Access)
 
-ChatMessages use a custom `visible_to_user()` method that extends visibility to include moderator access. This ensures that corpus owners, document owners, and thread creators can see all messages in their conversations for moderation purposes.
+ChatMessages inherit visibility from their parent conversation via `Conversation.objects.visible_to_user()`. This means messages automatically inherit the bifurcated CHAT/THREAD permission logic. Additionally, moderator access is provided for corpus/document owners.
 
 ```
 Visibility Check (ChatMessage.visible_to_user):
   can_see_message = is_superuser
-                    OR message is in public conversation
+                    OR message is in VISIBLE conversation (inherits bifurcated logic)
                     OR user created the message
                     OR user has explicit permission on the message
                     OR user can moderate the conversation
@@ -458,23 +518,37 @@ Moderator Conditions (for visibility):
 
 **Key Implementation Details:**
 - Located in `ChatMessageQuerySet.visible_to_user()` (`opencontractserver/conversations/models.py`)
+- **Primary visibility check**: Uses `Conversation.objects.visible_to_user()` to inherit bifurcated permissions
 - Moderators can see ALL messages in conversations they moderate, even without explicit message permissions
-- This extends the base `SoftDeleteQuerySet.visible_to_user()` method
 - Mutations like UpdateMessage and DeleteMessage use this visibility check and additionally verify the user has edit/delete permissions (or is a moderator)
 
-**Example:**
+**Example - Bifurcated Behavior:**
 ```python
-# Corpus owner can see all messages in threads linked to their corpus
+# Setup: Alice owns corpus, Bob has corpus READ permission
 corpus = Corpus.objects.create(title="Legal Docs", creator=alice)
-thread = Conversation.objects.create(chat_with_corpus=corpus, creator=bob)
-message = ChatMessage.objects.create(conversation=thread, creator=charlie)
+assign_perm("read_corpus", bob, corpus)
 
-# Alice can see and moderate charlie's message (as corpus owner)
-visible = ChatMessage.objects.visible_to_user(alice)
-assert message in visible  # Alice sees it
+# Alice creates a CHAT (agent conversation) on the corpus
+chat = Conversation.objects.create(
+    chat_with_corpus=corpus, creator=alice, conversation_type="chat"
+)
+chat_msg = ChatMessage.objects.create(conversation=chat, creator=alice)
 
-# Alice can also edit the message (as moderator)
-can_edit = thread.can_moderate(alice)  # True
+# Alice creates a THREAD (discussion) on the corpus
+thread = Conversation.objects.create(
+    chat_with_corpus=corpus, creator=alice, conversation_type="thread"
+)
+thread_msg = ChatMessage.objects.create(conversation=thread, creator=alice)
+
+# Bob (corpus reader) can see THREAD messages but NOT CHAT messages
+visible_to_bob = ChatMessage.objects.visible_to_user(bob)
+assert thread_msg in visible_to_bob  # THREAD inherits corpus visibility
+assert chat_msg not in visible_to_bob  # CHAT is private to creator
+
+# Alice (corpus owner) can see ALL messages as moderator
+visible_to_alice = ChatMessage.objects.visible_to_user(alice)
+assert chat_msg in visible_to_alice  # Moderator access
+assert thread_msg in visible_to_alice  # Moderator access
 ```
 
 ### Anonymous User Access Summary
@@ -502,6 +576,35 @@ can_edit = thread.can_moderate(alice)  # True
 **Enforcement Locations:**
 - Annotations: `permissioning.py:297-303`
 - Relationships: `permissioning.py:388-394`
+
+### Discussion Thread Permissions
+
+Discussions follow a **visibility-based participation model**: if you can READ a resource, you can participate in discussions about it.
+
+| Action | Permission Required | Code Location |
+|--------|---------------------|---------------|
+| Create thread on corpus | READ on corpus | `conversation_mutations.py:122` |
+| Create thread on document | READ on document | `conversation_mutations.py:142` |
+| Create thread on both | READ on corpus AND document | `conversation_mutations.py:122,142` |
+| Post message in thread | READ on conversation | `conversation_mutations.py:232` |
+| Reply to message | READ on conversation | `conversation_mutations.py:330` |
+| Vote on message/thread | READ on conversation | Visibility-based |
+| Edit own message | Creator OR moderator | `conversation_mutations.py:488` |
+| Delete own message | Creator OR moderator | `conversation_mutations.py:676` |
+| Moderate thread (lock/pin/delete) | See below | `moderation_mutations.py` |
+
+**Moderator Access:**
+A user can moderate a thread if any of the following are true:
+- User is a superuser
+- User is the thread creator
+- User owns the corpus (`chat_with_corpus.creator == user`)
+- User owns the document (`chat_with_document.creator == user`)
+- User has EDIT permission on the corpus
+- User has EDIT permission on the document
+
+**Rationale**: Discussions are meant to be collaborative. Anyone who can view a resource should be able to ask questions and participate in conversations about it. This encourages engagement and knowledge sharing while still maintaining moderation controls for resource owners.
+
+**Anonymous Users**: Can only view threads on public resources (`is_public=True`). Cannot create threads or post messages (requires authentication).
 
 ## COMMENT Permission System
 
@@ -1972,9 +2075,20 @@ user_has_permission_for_obj(
 **Problem**: Using `annotations` instead of `allAnnotations` in queries
 **Solution**: Always use `allAnnotations` field name for querying document annotations
 
-### Pitfall 7: Bypassing user_has_permission_for_obj
-**Problem**: Implementing custom permission logic that doesn't handle all cases
-**Solution**: ALWAYS use `user_has_permission_for_obj` - it's the single source of truth
+### Pitfall 7: Using user_has_permission_for_obj for corpus-scoped visibility
+**Problem**: `user_has_permission_for_obj` only checks explicit guardian permissions, not corpus context
+**Solution**: For corpus-scoped objects (documents in corpus, metadata), use `visible_to_user()` pattern:
+```python
+# WRONG - misses creator access, corpus context
+has_read = user_has_permission_for_obj(user, document, PermissionTypes.READ)
+
+# CORRECT - handles full visibility model
+is_visible = Document.objects.visible_to_user(user).filter(id=doc_id).exists()
+```
+
+**When to use each:**
+- `user_has_permission_for_obj`: Top-level objects (Corpus, Analysis), write permissions, annotations (has special handling)
+- `Model.objects.visible_to_user()`: READ/visibility checks for corpus-scoped objects
 
 ## @ Mention Permissions (NEW)
 
@@ -2213,6 +2327,368 @@ When deploying this feature:
 - [ ] Frontend tests verify rendering behavior
 - [ ] Anonymous user handling tested
 - [ ] Public vs. private resource scenarios tested
+
+---
+
+## Agent/LLM Permission Model
+
+### Overview
+
+The Agent/LLM system implements a defense-in-depth permission model where agents inherit the calling user's permissions and can never escalate beyond them. This ensures that agents operate as proxies for users, not as privileged entities.
+
+**Core Principle**: Agents execute with the **minimum** of the user's permissions, never exceeding what the user themselves could do directly.
+
+### Architecture Layers
+
+The permission system operates at three layers:
+
+1. **WebSocket Consumer Layer** - Initial connection authorization
+2. **Tool Filtering Layer** - Removes unauthorized tools before agent initialization
+3. **Runtime Validation Layer** - Defense-in-depth checks before each tool execution
+
+### 1. WebSocket Consumer Layer
+
+**Location**: `config/websocket/consumers/unified_agent_conversation.py`
+
+The `UnifiedAgentConsumer` validates user permissions **before** accepting the WebSocket connection:
+
+```python
+# Lines 131-187 in unified_agent_conversation.py
+
+# For corpus context
+if self.corpus_id:
+    self.corpus = await Corpus.objects.aget(id=self.corpus_id)
+    if is_authenticated:
+        has_perm = await database_sync_to_async(
+            user_has_permission_for_obj
+        )(user, self.corpus, PermissionTypes.READ)
+        if not has_perm:
+            await self.close(code=4003)
+            return
+    elif not self.corpus.is_public:
+        await self.close(code=4003)
+        return
+
+# For document context
+if self.document_id:
+    self.document = await Document.objects.aget(id=self.document_id)
+    if is_authenticated:
+        has_perm = await database_sync_to_async(
+            user_has_permission_for_obj
+        )(user, self.document, PermissionTypes.READ)
+        if not has_perm:
+            await self.close(code=4003)
+            return
+    elif not self.document.is_public:
+        await self.close(code=4003)
+        return
+```
+
+**Key Rules:**
+- **Authenticated users**: Must have READ permission on corpus/document
+- **Anonymous users**: Only allowed if resource is `is_public=True`
+- **Connection rejection**: Closes with code 4003 (Forbidden) if unauthorized
+- **Early validation**: Prevents agent initialization for unauthorized users
+
+### 2. Tool Filtering Layer
+
+**Location**: `opencontractserver/llms/agents/agent_factory.py`
+
+Before agent initialization, tools are filtered based on user permissions. This happens in `UnifiedAgentFactory.create_document_agent()` and `UnifiedAgentFactory.create_corpus_agent()`.
+
+#### Tool Filtering Logic
+
+```python
+# Lines 178-210 in agent_factory.py
+
+# Check user's write permission on document
+has_write_permission = await _user_has_write_permission(user_id, doc_obj)
+
+filtered_tools = []
+for t in tools:
+    # Filter approval-required tools in public contexts
+    if public_context and isinstance(t, CoreTool) and t.requires_approval:
+        logger.warning("Skipping approval-required tool '%s' for public context", t.name)
+        continue
+
+    # Filter corpus-dependent tools when no corpus provided
+    if corpus is None and isinstance(t, CoreTool) and t.requires_corpus:
+        logger.info("Skipping corpus-required tool '%s' - no corpus provided", t.name)
+        continue
+
+    # Filter write tools if user lacks write permission
+    if (
+        not has_write_permission
+        and isinstance(t, CoreTool)
+        and t.requires_write_permission
+    ):
+        logger.info(
+            "Skipping write tool '%s' - user %s lacks WRITE permission on document %s",
+            t.name, user_id, doc_obj.id
+        )
+        continue
+
+    filtered_tools.append(t)
+```
+
+#### Tool Flags
+
+Each `CoreTool` has three permission-related flags:
+
+| Flag | Purpose | Filter Condition |
+|------|---------|------------------|
+| `requires_approval` | Tool needs user confirmation | Filtered if `public_context=True` |
+| `requires_corpus` | Tool needs corpus context | Filtered if `corpus=None` |
+| `requires_write_permission` | Tool performs write operations | Filtered if user lacks CRUD permission |
+
+**Examples:**
+- **Create Annotation Tool**: `requires_write_permission=True` - Only available to users with CREATE/UPDATE/DELETE on document
+- **Vector Search Tool**: `requires_write_permission=False` - Available to all users with READ access
+- **Corpus Summary Tool**: `requires_corpus=True` - Filtered out for standalone document agents
+
+### 3. Runtime Validation Layer
+
+**Location**: `opencontractserver/llms/tools/pydantic_ai_tools.py`
+
+The `_check_user_permissions()` function runs **before every tool execution** as a defense-in-depth measure:
+
+```python
+# Lines 20-111 in pydantic_ai_tools.py
+
+def _check_user_permissions(ctx: RunContext[PydanticAIDependencies]) -> None:
+    """
+    Validate that the user in context has permission to access the resources.
+
+    This is a defense-in-depth check that runs BEFORE any tool execution to
+    ensure an agent cannot escalate beyond the calling user's permissions.
+    Even if the consumer layer has a bug, tools won't leak data.
+    """
+    deps = ctx.deps
+    user_id = deps.user_id
+    document_id = deps.document_id
+    corpus_id = deps.corpus_id
+
+    if user_id is None:
+        # Anonymous user - only allow if resources are public
+        if document_id:
+            doc = Document.objects.get(pk=document_id)
+            if not doc.is_public:
+                raise PermissionError("Anonymous access denied to private document")
+        if corpus_id:
+            corpus = Corpus.objects.get(pk=corpus_id)
+            if not corpus.is_public:
+                raise PermissionError("Anonymous access denied to private corpus")
+        return
+
+    # Authenticated user - check actual permissions
+    user = User.objects.get(pk=user_id)
+
+    if document_id:
+        doc = Document.objects.get(pk=document_id)
+        if not user_has_permission_for_obj(user, doc, PermissionTypes.READ):
+            raise PermissionError(f"User {user_id} lacks READ permission on document")
+
+    if corpus_id:
+        corpus = Corpus.objects.get(pk=corpus_id)
+        if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
+            raise PermissionError(f"User {user_id} lacks READ permission on corpus")
+```
+
+**Injection Point**: This check is automatically injected into every tool wrapper at lines 264 and 299 in `pydantic_ai_tools.py`:
+
+```python
+async def async_wrapper(ctx: RunContext[PydanticAIDependencies], *args, **kwargs):
+    # Defense-in-depth: validate user permissions BEFORE any tool execution
+    _check_user_permissions(ctx)
+
+    # Then execute tool...
+    return await original_func(*args, **kwargs)
+```
+
+### 4. Vector Search Permission Layer
+
+**Locations**:
+- GraphQL: `config/graphql/queries.py:resolve_semantic_search`
+- Vector Store: `opencontractserver/llms/vector_stores/core_vector_stores.py`
+
+The vector search system implements its own permission layer to ensure users can only search annotations they have access to.
+
+#### GraphQL `semantic_search` Query
+
+The `semantic_search` query validates document/corpus access before creating the vector store:
+
+```python
+# Defense-in-depth check at GraphQL layer
+if document_pk:
+    if not Document.objects.visible_to_user(user).filter(id=document_pk).exists():
+        return []  # IDOR-safe: same response for not found vs. no permission
+
+if corpus_pk:
+    if not Corpus.objects.visible_to_user(user).filter(id=corpus_pk).exists():
+        return []  # IDOR-safe: same response for not found vs. no permission
+```
+
+#### CoreAnnotationVectorStore Permission Check
+
+The `CoreAnnotationVectorStore` class performs its own permission verification in `_build_base_queryset()`:
+
+```python
+# From core_vector_stores.py:_build_base_queryset()
+
+# Verify user has access to document
+if self.document_id is not None:
+    has_access = Document.objects.visible_to_user(user).filter(id=self.document_id).exists()
+    if not has_access:
+        return Annotation.objects.none()  # IDOR-safe
+
+# Verify user has access to corpus
+if self.corpus_id is not None:
+    has_access = Corpus.objects.visible_to_user(user).filter(id=self.corpus_id).exists()
+    if not has_access:
+        return Annotation.objects.none()  # IDOR-safe
+```
+
+#### Global Search Method
+
+The `global_search` class method uses the canonical `visible_to_user()` pattern:
+
+```python
+# Get all documents visible to user
+accessible_doc_ids = Document.objects.visible_to_user(user).filter(is_current=True).values_list("id", flat=True)
+
+# Filter annotations to accessible documents
+queryset = Annotation.objects.filter(
+    Q(document_id__in=accessible_doc_ids) |
+    Q(structural=True, structural_set__documents__in=accessible_doc_ids)
+)
+```
+
+#### Key Security Properties
+
+| Property | Implementation |
+|----------|----------------|
+| **IDOR Protection** | Returns empty results for both non-existent and inaccessible resources |
+| **Defense-in-depth** | Checks at GraphQL layer AND vector store layer |
+| **Visibility Pattern** | Uses `visible_to_user()` for all permission checks |
+| **Anonymous Support** | Anonymous users can search public documents/corpuses only |
+| **Structural Annotations** | Visible if user can access the document (always READ-only) |
+
+### Permission Inheritance Model
+
+Agents inherit permissions from the **calling user**, not from the agent creator or any other privileged entity.
+
+**Formula**: `Effective Tool Permission = MIN(caller_permission, tool_requirement)`
+
+#### Example Scenarios
+
+**Scenario 1: Read-Only User with Document Agent**
+
+```python
+# Setup
+user = create_user("viewer")
+document = create_document("Contract.pdf", is_public=False)
+set_permissions_for_obj_to_user(user, document, [PermissionTypes.READ])
+
+# Agent initialization
+agent = await create_document_agent(document=document, user_id=user.id)
+
+# Available tools:
+# - vector_search (read-only) ✅
+# - extract_entities (read-only) ✅
+# - create_annotation (write) ❌ FILTERED OUT
+
+# If somehow a write tool wasn't filtered, runtime check would block:
+# _check_user_permissions() → PermissionError
+```
+
+**Scenario 2: Anonymous User with Public Corpus**
+
+```python
+# Setup
+corpus = create_corpus("Public Legal Docs", is_public=True)
+
+# Agent initialization
+agent = await create_corpus_agent(corpus=corpus, user_id=None)  # Anonymous
+
+# Available tools:
+# - vector_search ✅
+# - document_search ✅
+# - create_annotation ❌ FILTERED OUT (anonymous = no write)
+# - export_data ❌ FILTERED OUT (anonymous = no write)
+
+# Runtime validation:
+# _check_user_permissions() checks corpus.is_public → allows read tools
+```
+
+**Scenario 3: Owner with Full Permissions**
+
+```python
+# Setup
+owner = create_user("owner")
+document = create_document("Contract.pdf", creator=owner)
+corpus = create_corpus("Legal Docs", creator=owner)
+
+# Agent initialization (owner has CRUD by default)
+agent = await create_document_agent(
+    document=document,
+    corpus=corpus,
+    user_id=owner.id
+)
+
+# Available tools:
+# - vector_search ✅
+# - create_annotation ✅
+# - update_annotation ✅
+# - delete_annotation ✅
+# - All tools available (owner has full permissions)
+```
+
+### Legacy Consumers (Deprecated)
+
+The following WebSocket consumers have been **removed/deprecated** in favor of `UnifiedAgentConsumer`:
+
+- ❌ `DocumentQueryConsumer` - Use `UnifiedAgentConsumer` with `document_id` param
+- ❌ `CorpusQueryConsumer` - Use `UnifiedAgentConsumer` with `corpus_id` param
+- ❌ `StandaloneDocumentQueryConsumer` - Use `UnifiedAgentConsumer` with `document_id` only
+
+**Migration Example:**
+
+```javascript
+// OLD (deprecated)
+const ws = new WebSocket(`/ws/corpus_query/${corpusId}/`);
+
+// NEW (unified)
+const ws = new WebSocket(`/ws/agent/?corpus_id=${corpusId}`);
+```
+
+### Key Security Properties
+
+1. **No Privilege Escalation**: Agents cannot access resources the user cannot access
+2. **Defense in Depth**: Three layers of permission checks (consumer, factory, runtime)
+3. **Fail-Safe**: Permission checks default to denial on errors
+4. **Audit Trail**: All permission failures are logged with user/resource context
+5. **Anonymous Safety**: Anonymous users limited to public resources, read-only tools
+
+### Cross-Reference: Full LLM Architecture
+
+For complete details on the LLM/Agent system architecture, see:
+- **`docs/architecture/llms/README.md`** - Full LLM framework documentation
+- **`docs/architecture/llms/agent_lifecycle.md`** - Agent lifecycle and conversation management
+- **`docs/architecture/llms/tool_system.md`** - Tool registration and execution
+
+### Testing
+
+Comprehensive tests for the agent permission model are located in:
+- `opencontractserver/tests/llms/test_agent_permissions.py` - Agent factory permission filtering
+- `opencontractserver/tests/websocket/test_unified_agent_consumer_permissions.py` - WebSocket layer validation
+- `opencontractserver/tests/llms/test_tool_permission_enforcement.py` - Runtime permission checks
+
+Key test scenarios:
+- Anonymous users can only access public resources
+- Read-only users cannot execute write tools
+- Write tools are filtered for users without CRUD permissions
+- Runtime checks block tool execution even if filtering fails
+- Permission changes take effect immediately (no caching)
 
 ---
 

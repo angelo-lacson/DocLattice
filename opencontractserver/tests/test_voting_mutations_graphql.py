@@ -284,7 +284,9 @@ class VotingMutationsTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         data = result["data"]["voteMessage"]
         self.assertFalse(data["ok"])
-        self.assertIn("permission", data["message"].lower())
+        # IDOR prevention: invisible messages return "not found" instead of
+        # a permission error to avoid leaking object existence.
+        self.assertIn("not found", data["message"].lower())
 
     def test_remove_vote(self):
         """Test removing a vote from a message."""

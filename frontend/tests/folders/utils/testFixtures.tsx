@@ -6,6 +6,7 @@ import {
   FolderToolbar,
   ViewMode,
 } from "../../../src/components/corpuses/folders/FolderToolbar";
+import { RemoveDocumentsModal } from "../../../src/components/corpuses/folders/RemoveDocumentsModal";
 import {
   selectedFolderIdAtom,
   folderListAtom,
@@ -13,6 +14,9 @@ import {
   createFolderParentIdAtom,
   folderCorpusIdAtom,
   sidebarCollapsedAtom,
+  corpusPermissionsAtom,
+  showRemoveDocumentsModalAtom,
+  removeDocumentsIdsAtom,
 } from "../../../src/atoms/folderAtoms";
 
 /**
@@ -73,6 +77,14 @@ interface ToolbarFixtureProps {
   onGoUp?: () => void;
   onNewFolder?: () => void;
   onUpload?: () => void;
+  // Selection-related props
+  selectedDocumentCount?: number;
+  totalDocumentCount?: number;
+  onSelectAll?: () => void;
+  onClearSelection?: () => void;
+  onRemoveFromCorpus?: () => void;
+  allSelected?: boolean;
+  isLoading?: boolean;
 }
 
 export function ToolbarFixture({
@@ -87,46 +99,28 @@ export function ToolbarFixture({
   onGoUp = () => {},
   onNewFolder = () => {},
   onUpload = () => {},
+  // Selection props with defaults
+  selectedDocumentCount = 0,
+  totalDocumentCount = 0,
+  onSelectAll,
+  onClearSelection,
+  onRemoveFromCorpus,
+  allSelected = false,
+  isLoading = false,
 }: ToolbarFixtureProps) {
-  // Create a folder with permissions that will allow/disallow folder creation
-  // canCreateFoldersAtom checks for "update_corpus" or "create_corpus" permissions
-  // When canCreateFolders=false, we need to select a folder with restricted permissions
-  // (at root/null folder, canCreateFoldersAtom returns true by default)
-  const effectiveFolderId = canCreateFolders
-    ? selectedFolderId
-    : selectedFolderId || "restricted-folder";
-
-  const foldersWithPermissions = canCreateFolders
-    ? [
-        {
-          id: selectedFolderId || "root-folder",
-          name: "Test Folder",
-          parent: null,
-          path: "Test Folder",
-          myPermissions: ["update_corpus", "create_corpus"], // Allows folder creation
-          documentCount: 0,
-          children: [],
-        },
-      ]
-    : [
-        {
-          id: "restricted-folder",
-          name: "Restricted Folder",
-          parent: null,
-          path: "Restricted Folder",
-          myPermissions: ["read_corpus"], // No create/update permissions
-          documentCount: 0,
-          children: [],
-        },
-      ];
+  // canCreateFoldersAtom now reads from corpusPermissionsAtom
+  // which checks for "update_corpus" permission on the corpus
+  const corpusPermissions = canCreateFolders
+    ? ["read_corpus", "update_corpus"]
+    : ["read_corpus"];
 
   // Hydrate atoms for the toolbar to read from
-  // canCreateFoldersAtom and folderBreadcrumbAtom are derived atoms,
-  // so we set their source atoms (folderListAtom, selectedFolderIdAtom)
+  // canCreateFoldersAtom is derived from corpusPermissionsAtom
   useHydrateAtoms([
-    [selectedFolderIdAtom, effectiveFolderId],
-    [folderListAtom, foldersWithPermissions],
+    [selectedFolderIdAtom, selectedFolderId],
+    [folderListAtom, []],
     [sidebarCollapsedAtom, false],
+    [corpusPermissionsAtom, corpusPermissions],
   ] as const);
 
   return (
@@ -142,7 +136,38 @@ export function ToolbarFixture({
         onGoUp={onGoUp}
         onNewFolder={onNewFolder}
         onUpload={onUpload}
+        selectedDocumentCount={selectedDocumentCount}
+        totalDocumentCount={totalDocumentCount}
+        onSelectAll={onSelectAll}
+        onClearSelection={onClearSelection}
+        onRemoveFromCorpus={onRemoveFromCorpus}
+        allSelected={allSelected}
+        isLoading={isLoading}
       />
     </div>
   );
+}
+
+// ============================================================================
+// Remove Documents Modal Fixture
+// ============================================================================
+
+interface RemoveDocumentsModalFixtureProps {
+  showModal?: boolean;
+  documentIds?: string[];
+  corpusId?: string;
+}
+
+export function RemoveDocumentsModalFixture({
+  showModal = true,
+  documentIds = [],
+  corpusId = "corpus-1",
+}: RemoveDocumentsModalFixtureProps) {
+  useHydrateAtoms([
+    [showRemoveDocumentsModalAtom, showModal],
+    [removeDocumentsIdsAtom, documentIds],
+    [folderCorpusIdAtom, corpusId],
+  ] as const);
+
+  return <RemoveDocumentsModal />;
 }

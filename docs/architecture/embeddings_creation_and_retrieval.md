@@ -1,5 +1,28 @@
 ## Overview of Creating and Searching Embeddings
 
+### Dual Embedding Strategy
+
+OpenContracts uses a **dual embedding strategy** to enable both global cross-corpus search and corpus-optimized search:
+
+1. **DEFAULT_EMBEDDER Embedding (Always Created)**
+   - Every annotation, document, and note ALWAYS gets an embedding using the platform's `DEFAULT_EMBEDDER`
+   - This creates a common vector space for global search across all corpuses
+   - Enables users to search all their documents regardless of which corpus they belong to
+
+2. **Corpus-Specific Embedding (Created When Different)**
+   - If a corpus has a `preferred_embedder` that differs from `DEFAULT_EMBEDDER`, annotations also get an embedding using the corpus embedder
+   - Enables optimized search within a corpus using domain-specific models (e.g., legal-bert for legal documents)
+
+**Example Scenarios:**
+
+| Corpus Embedder | Embeddings Created |
+|-----------------|-------------------|
+| None (default) | 1x DEFAULT_EMBEDDER |
+| Same as DEFAULT_EMBEDDER | 1x DEFAULT_EMBEDDER |
+| Different embedder | 2x (DEFAULT_EMBEDDER + corpus embedder) |
+
+This strategy is implemented in the embedding tasks (`opencontractserver/tasks/embeddings_task.py`) which automatically handle the dual embedding creation.
+
 ### Creating Embeddings
 
 1. **Generate the Embeddings (Text → Vector)**
@@ -86,6 +109,45 @@ Our search architecture is designed with two layers: a **core API** that contain
    - **Document Filtering**: When `document_id` is provided, only annotations from that document are included.
    - **Visibility Filtering**: Annotations are visible if they are structural, public, or created by the requesting user.
    - **Metadata Filtering**: Additional filters can be applied on annotation labels and other fields.
+
+#### Global Search
+
+The `CoreAnnotationVectorStore` provides a `global_search` class method for cross-corpus search:
+
+```python
+from opencontractserver.llms.vector_stores.core_vector_stores import (
+    CoreAnnotationVectorStore,
+    VectorSearchResult,
+)
+
+# Search across ALL documents the user has access to
+results = CoreAnnotationVectorStore.global_search(
+    user_id=my_user_id,
+    query_text="contract termination clause",
+    top_k=100,
+    modalities=["TEXT"],  # Optional: filter by content type
+)
+
+# Async version
+results = await CoreAnnotationVectorStore.async_global_search(
+    user_id=my_user_id,
+    query_text="contract termination clause",
+    top_k=100,
+)
+
+# Process results
+for result in results:
+    annotation = result.annotation
+    similarity = result.similarity_score
+    document_title = annotation.document.title if annotation.document else "N/A"
+    print(f"Found: {annotation.raw_text[:50]}... (score: {similarity:.3f})")
+```
+
+**Key Features:**
+- Uses `DEFAULT_EMBEDDER` embeddings for consistent cross-corpus search
+- Respects user permissions (only searches documents the user can access)
+- Supports modality filtering (TEXT, IMAGE, etc.)
+- Works with both standalone and corpus-bound documents
 
 #### Vector Search Mixin
 

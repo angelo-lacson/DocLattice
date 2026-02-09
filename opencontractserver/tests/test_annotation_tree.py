@@ -42,8 +42,9 @@ class AnnotationTreeTestCase(TestCase):
 
         # Create test data
         self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
-        self.document = Document.objects.create(
-            title="Test Document", creator=self.user, corpus=self.corpus
+        original_doc = Document.objects.create(title="Test Document", creator=self.user)
+        self.document, _, _ = self.corpus.add_document(
+            document=original_doc, user=self.user
         )
         self.annotation_label = AnnotationLabel.objects.create(
             text="Test Label", creator=self.user

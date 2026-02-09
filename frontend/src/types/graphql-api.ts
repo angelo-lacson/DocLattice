@@ -143,6 +143,9 @@ export type RawServerAnnotationType = Node & {
   /** Raw permission strings straight from the API */
   myPermissions?: string[];
 
+  /** Content modalities present in this annotation: TEXT, IMAGE, etc. */
+  contentModalities?: string[];
+
   analysis?: Maybe<AnalysisType>;
   assignmentSet?: AssignmentTypeConnection;
   sourceNodeInRelationships?: RelationshipTypeConnection;
@@ -286,6 +289,8 @@ export type RawCorpusType = Node & {
   description?: Scalars["String"];
   icon?: Maybe<Scalars["String"]>;
   documents?: DocumentTypeConnection;
+  documentCount?: Scalars["Int"];
+  annotationCount?: Scalars["Int"];
   labelSet?: Maybe<LabelSetType>;
   preferredEmbedder?: Maybe<Scalars["String"]>;
   creator?: UserType;
@@ -301,6 +306,7 @@ export type RawCorpusType = Node & {
   allAnnotationSummaries?: ServerAnnotationType[];
   analyses: AnalysisTypeConnection;
   isPublic?: Scalars["Boolean"];
+  isPersonal?: Scalars["Boolean"];
   myPermissions?: string[];
   conversations?: ConversationTypeConnection;
   // Note: categories is returned as a List (array), not a Connection, from the backend
@@ -379,7 +385,7 @@ export type RawDocumentType = Node & {
   created?: Scalars["DateTime"];
   modified?: Scalars["DateTime"];
   assignmentSet?: AssignmentTypeConnection;
-  corpusSet?: CorpusTypeConnection;
+  pathRecords?: DocumentPathTypeConnection;
   annotationSet?: AnnotationTypeConnection;
   isPublic?: Scalars["Boolean"];
   myPermissions?: string[];
@@ -441,6 +447,29 @@ export type DocumentTypeConnection = {
 export type DocumentTypeEdge = {
   __typename?: "DocumentTypeEdge";
   node?: Maybe<DocumentType>;
+  cursor: Scalars["String"];
+};
+
+export type DocumentPathType = Node & {
+  __typename?: "DocumentPathType";
+  id: Scalars["ID"];
+  corpus?: RawCorpusType;
+  path?: Maybe<Scalars["String"]>;
+  versionNumber?: Maybe<Scalars["Int"]>;
+  isCurrent?: Scalars["Boolean"];
+  isDeleted?: Scalars["Boolean"];
+};
+
+export type DocumentPathTypeConnection = {
+  __typename?: "DocumentPathTypeConnection";
+  pageInfo: PageInfo;
+  edges: Array<Maybe<DocumentPathTypeEdge>>;
+  totalCount?: Maybe<Scalars["Int"]>;
+};
+
+export type DocumentPathTypeEdge = {
+  __typename?: "DocumentPathTypeEdge";
+  node?: Maybe<DocumentPathType>;
   cursor: Scalars["String"];
 };
 
@@ -1751,6 +1780,36 @@ export type PipelineComponentType = {
   componentType?: string;
   /** JSONSchema schema for inputs supported from user (experimental - not fully implemented). */
   inputSchema?: Record<any, any>;
+  /** Schema for component configuration settings stored in PipelineSettings. */
+  settingsSchema?: Maybe<Array<Maybe<ComponentSettingSchemaType>>>;
+};
+
+/** Valid setting types for pipeline component configuration. */
+export type SettingTypeEnum = "required" | "optional" | "secret";
+
+/** Common Python type hints used in settings schemas. */
+export type PythonTypeEnum = "str" | "int" | "float" | "bool" | "any" | string;
+
+export type ComponentSettingSchemaType = {
+  __typename?: "ComponentSettingSchemaType";
+  /** Setting name (used as key in component_settings dict). */
+  name: string;
+  /** Type: 'required', 'optional', or 'secret'. */
+  settingType: SettingTypeEnum;
+  /** Python type hint (e.g., 'str', 'int', 'bool'). */
+  pythonType?: PythonTypeEnum;
+  /** Whether this setting must have a value for the component to work. */
+  required: boolean;
+  /** Human-readable description of the setting. */
+  description?: string;
+  /** Default value if not configured. */
+  default?: Scalars["GenericScalar"];
+  /** Environment variable name used during migration seeding. */
+  envVar?: string;
+  /** Whether this setting currently has a value configured. */
+  hasValue?: boolean;
+  /** Current value (always null for secrets to avoid exposure). */
+  currentValue?: Scalars["GenericScalar"];
 };
 
 /** Graphene type for grouping pipeline components. */
@@ -1774,3 +1833,69 @@ export enum FileTypeEnum {
   /** DOCX file type. */
   DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
+
+/**
+ * Pipeline Settings Type - represents system-wide document processing configuration.
+ * Only modifiable by superusers.
+ */
+export type PipelineSettingsType = {
+  __typename?: "PipelineSettingsType";
+  /** Mapping of MIME types to parser class paths. */
+  preferredParsers?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of MIME types to embedder class paths. */
+  preferredEmbedders?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of MIME types to thumbnailer class paths. */
+  preferredThumbnailers?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of parser class paths to configuration kwargs. */
+  parserKwargs?: Maybe<Scalars["GenericScalar"]>;
+  /** Mapping of component class paths to settings overrides. */
+  componentSettings?: Maybe<Scalars["GenericScalar"]>;
+  /** Default embedder class path. */
+  defaultEmbedder?: Maybe<Scalars["String"]>;
+  /** List of components with encrypted secrets configured (actual secrets never exposed). */
+  componentsWithSecrets?: Maybe<Array<Maybe<Scalars["String"]>>>;
+  /** When settings were last modified. */
+  modified?: Maybe<Scalars["DateTime"]>;
+  /** User who last modified the settings. */
+  modifiedBy?: Maybe<UserType>;
+};
+
+/**
+ * Mutation response for updating pipeline settings.
+ */
+export type UpdatePipelineSettingsResponse = {
+  __typename?: "UpdatePipelineSettingsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  pipelineSettings?: Maybe<PipelineSettingsType>;
+};
+
+/**
+ * Mutation response for resetting pipeline settings.
+ */
+export type ResetPipelineSettingsResponse = {
+  __typename?: "ResetPipelineSettingsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  pipelineSettings?: Maybe<PipelineSettingsType>;
+};
+
+/**
+ * Mutation response for updating component secrets.
+ */
+export type UpdateComponentSecretsResponse = {
+  __typename?: "UpdateComponentSecretsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  componentsWithSecrets?: Maybe<Array<Maybe<Scalars["String"]>>>;
+};
+
+/**
+ * Mutation response for deleting component secrets.
+ */
+export type DeleteComponentSecretsResponse = {
+  __typename?: "DeleteComponentSecretsMutation";
+  ok?: Maybe<Scalars["Boolean"]>;
+  message?: Maybe<Scalars["String"]>;
+  componentsWithSecrets?: Maybe<Array<Maybe<Scalars["String"]>>>;
+};

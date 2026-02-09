@@ -13,6 +13,12 @@ from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from tree_queries.models import TreeNode
 
+from opencontractserver.constants.document_processing import (
+    DEFAULT_DOCUMENT_PATH_PREFIX,
+    MAX_FILENAME_LENGTH,
+    PERSONAL_CORPUS_DESCRIPTION,
+    PERSONAL_CORPUS_TITLE,
+)
 from opencontractserver.corpuses.managers import CorpusActionExecutionManager
 from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.QuerySets import PermissionedTreeQuerySet
@@ -120,8 +126,7 @@ class Corpus(TreeNode):
         blank=True, null=True, upload_to=calculate_icon_filepath
     )
 
-    # Documents and Labels in the Corpus
-    documents = django.db.models.ManyToManyField("documents.Document", blank=True)
+    # Categories and Labels in the Corpus
     categories = django.db.models.ManyToManyField(
         "CorpusCategory",
         blank=True,
@@ -193,6 +198,12 @@ class Corpus(TreeNode):
 
     # Error status
     error = django.db.models.BooleanField(default=False)
+
+    # Personal corpus flag
+    is_personal = django.db.models.BooleanField(
+        default=False,
+        help_text="True if this is the user's personal 'My Documents' corpus",
+    )
 
     # Timing variables
     created = django.db.models.DateTimeField(default=timezone.now)
@@ -310,13 +321,19 @@ class Corpus(TreeNode):
             django.db.models.Index(fields=["user_lock"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
+            django.db.models.Index(fields=["creator", "is_personal"]),
         ]
         ordering = ("created",)
         base_manager_name = "objects"
         constraints = [
             django.db.models.UniqueConstraint(
                 fields=["creator", "slug"], name="uniq_corpus_slug_per_creator_cs"
-            )
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["creator"],
+                condition=django.db.models.Q(is_personal=True),
+                name="one_personal_corpus_per_user",
+            ),
         ]
 
     # Override save to update modified on save
@@ -376,6 +393,50 @@ class Corpus(TreeNode):
         return generate_embeddings_from_text(text, corpus_id=self.pk)
 
     # --------------------------------------------------------------------- #
+    # Personal Corpus Management                                            #
+    # --------------------------------------------------------------------- #
+
+    @classmethod
+    def get_or_create_personal_corpus(cls, user) -> "Corpus":
+        """
+        Get or create the user's personal "My Documents" corpus.
+
+        Each user has exactly one personal corpus (enforced by UniqueConstraint).
+        This method is idempotent - calling it multiple times returns the same corpus.
+
+        Args:
+            user: The User instance to get/create personal corpus for
+
+        Returns:
+            Corpus: The user's personal corpus
+
+        Raises:
+            IntegrityError: If concurrent creation attempts occur (handled by get_or_create)
+        """
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
+        with transaction.atomic():
+            corpus, created = cls.objects.get_or_create(
+                creator=user,
+                is_personal=True,
+                defaults={
+                    "title": PERSONAL_CORPUS_TITLE,
+                    "description": PERSONAL_CORPUS_DESCRIPTION,
+                    "is_public": False,
+                },
+            )
+
+            if created:
+                logger.info(f"Created personal corpus {corpus.pk} for user {user.pk}")
+                # Grant full permissions to the user
+                set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.ALL])
+
+        return corpus
+
+    # --------------------------------------------------------------------- #
     # Document Management - Issue #654                                     #
     # --------------------------------------------------------------------- #
 
@@ -385,7 +446,6 @@ class Corpus(TreeNode):
         path: str = None,
         user=None,
         folder=None,
-        content: bytes = None,
         **doc_kwargs,
     ):
         """
@@ -404,14 +464,16 @@ class Corpus(TreeNode):
             path: The filesystem path within the corpus (auto-generated if not provided)
             user: The user performing the operation (required)
             folder: Optional CorpusFolder to place the document in
-            content: DEPRECATED - use import_content() for content-based imports
             **doc_kwargs: Override properties for the corpus copy
 
         Returns:
             Tuple of (document, status, document_path) where:
             - document: The NEW corpus-isolated document (NOT the original)
-            - status: 'added' (new copy created) or 'already_exists' (content already in corpus)
-            - document_path: The DocumentPath record created or existing
+            - status: 'added' (always - no content-based deduplication)
+            - document_path: The DocumentPath record created
+
+        Note: No content-based deduplication is performed. Each call creates
+        a new corpus-isolated document regardless of content hash.
 
         Raises:
             ValueError: If user or document is not provided
@@ -424,13 +486,6 @@ class Corpus(TreeNode):
                 "Document is required. For content-based imports, use import_content()"
             )
 
-        # Handle deprecated content parameter
-        if content is not None:
-            logger.warning(
-                "content parameter is deprecated in add_document(). "
-                "Use import_content() for content-based imports."
-            )
-
         from opencontractserver.documents.models import Document, DocumentPath
 
         # Generate path if not provided
@@ -438,40 +493,15 @@ class Corpus(TreeNode):
             if document.title:
                 safe_title = "".join(
                     c if c.isalnum() or c in "-_." else "_"
-                    for c in document.title[:100]
+                    for c in document.title[:MAX_FILENAME_LENGTH]
                 )
-                path = f"/documents/{safe_title or f'doc_{document.pk}'}"
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_title or f'doc_{document.pk}'}"
             else:
-                path = f"/documents/doc_{document.pk}"
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/doc_{document.pk}"
 
         with transaction.atomic():
-            # Check if this content already exists in THIS corpus (by hash)
-            # This implements corpus isolation - we check within corpus, not globally
-            # IMPORTANT: Only deduplicate if hash is not None (avoid treating all NULL hashes as same)
-            corpus_doc_with_hash = None
-            if document.pdf_file_hash is not None:
-                corpus_doc_with_hash = (
-                    DocumentPath.objects.filter(
-                        corpus=self,
-                        document__pdf_file_hash=document.pdf_file_hash,
-                        is_current=True,
-                        is_deleted=False,
-                    )
-                    .select_related("document")
-                    .first()
-                )
-
-            if corpus_doc_with_hash:
-                # Content already exists in THIS corpus
-                existing_doc = corpus_doc_with_hash.document
-                logger.info(
-                    f"Content from doc {document.pk} already exists in corpus {self.pk} "
-                    f"as doc {existing_doc.pk}"
-                )
-                # Return the existing corpus-isolated document
-                return existing_doc, "already_exists", corpus_doc_with_hash
-
-            # Create corpus-isolated copy with new version tree
+            # Always create corpus-isolated copy (no content-based deduplication)
+            # Each add_document() call creates a new document regardless of content hash
             tree_id = uuid.uuid4()
             corpus_copy = Document.objects.create(
                 title=doc_kwargs.get("title", document.title),
@@ -490,19 +520,50 @@ class Corpus(TreeNode):
                 is_current=True,
                 parent=None,  # Root of NEW content tree
                 source_document=document,  # Provenance tracking (Rule I2)
-                structural_annotation_set=document.structural_annotation_set,  # Share structural annotations
+                # Reuse structural_annotation_set instead of duplicating
+                # This avoids duplicating annotations/embeddings - embeddings are
+                # added incrementally based on the corpus's preferred_embedder
+                structural_annotation_set=(
+                    doc_kwargs.get("structural_annotation_set")
+                    or document.structural_annotation_set
+                ),
                 creator=user,
+                # CRITICAL: Set processing_started to prevent ingest signal from firing
+                # Corpus copies share parsing artifacts - they don't need re-parsing
+                processing_started=timezone.now(),
+                backend_lock=False,  # Already processed, not locked
                 **{
                     k: v
                     for k, v in doc_kwargs.items()
-                    if k not in ["title", "description", "file_type"]
+                    if k
+                    not in [
+                        "title",
+                        "description",
+                        "file_type",
+                        "structural_annotation_set",
+                    ]
                 },
             )
 
             logger.info(
                 f"Created corpus-isolated copy {corpus_copy.pk} from doc {document.pk} "
-                f"in corpus {self.pk} (structural_set={document.structural_annotation_set_id})"
+                f"in corpus {self.pk} (structural_set={corpus_copy.structural_annotation_set_id})"
             )
+
+            # Queue task to ensure embeddings exist for this corpus's embedder
+            # This handles the case where the structural set was created with a different
+            # embedder than this corpus uses
+            if corpus_copy.structural_annotation_set:
+                from opencontractserver.tasks.corpus_tasks import (
+                    ensure_embeddings_for_corpus,
+                )
+
+                ss_id = corpus_copy.structural_annotation_set_id
+                c_id = self.pk
+                # Use default args to capture values at lambda creation (not by reference)
+                transaction.on_commit(
+                    lambda ss=ss_id, c=c_id: ensure_embeddings_for_corpus.delay(ss, c)
+                )
 
             # Check if path is occupied
             occupied_path = DocumentPath.objects.filter(
@@ -536,10 +597,6 @@ class Corpus(TreeNode):
                 creator=user,
             )
 
-            # Maintain M2M relationship for backwards compatibility
-            # This allows legacy queries like Document.objects.filter(corpus=...)
-            self.documents.add(corpus_copy)
-
             logger.info(
                 f"Added corpus-isolated doc {corpus_copy.pk} to corpus {self.pk} at {path}"
             )
@@ -566,35 +623,48 @@ class Corpus(TreeNode):
 
             return corpus_copy, "added", new_path
 
+    # File types that go through the parsing pipeline
+    PARSEABLE_MIMETYPES = {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+
+    # File types that are stored as-is without parsing
+    TEXT_MIMETYPES = {"text/plain", "application/txt"}
+
     def import_content(
         self,
         content: bytes,
+        user,
         path: str = None,
-        user=None,
         folder=None,
+        filename: str = None,
+        file_type: str = None,
         **doc_kwargs,
     ):
         """
-        Import content into this corpus with corpus-isolated deduplication.
+        Import content into this corpus with automatic file type handling.
 
-        This uses SHA-256 hashing to detect duplicate content within THIS corpus.
-        Documents are isolated within the corpus with independent version trees.
-        Provenance is tracked via source_document field when content exists elsewhere.
+        All file types now use the unified import_document() pipeline which provides:
+        - Full versioning support (uploading to same path creates new version)
+        - Consistent storage (text files → txt_extract_file, binary → pdf_file)
+        - Path-based version tracking for all document types
 
         Args:
-            content: PDF content bytes (required)
-            path: The filesystem path within the corpus (auto-generated if not provided)
+            content: File content bytes (required)
             user: The user performing the operation (required)
+            path: The filesystem path within the corpus (auto-generated if not provided)
             folder: Optional CorpusFolder to place the document in
+            filename: Original filename (used for path generation if path not provided)
+            file_type: MIME type of the content (determines storage field)
             **doc_kwargs: Additional arguments for document creation (title, description, etc.)
 
         Returns:
             Tuple of (document, status, document_path) where status is one of:
-            - 'created': Brand new document (content hash first seen globally)
-            - 'updated': Content changed at existing path (version increment)
-            - 'unchanged': No change detected at path
-            - 'linked': Same content already exists in THIS corpus at different path
-            - 'created_from_existing': New corpus-isolated doc, content exists elsewhere
+            - 'created': New document at new path
+            - 'updated': New version at existing path
 
         Raises:
             ValueError: If user or content is not provided
@@ -607,18 +677,34 @@ class Corpus(TreeNode):
 
         from opencontractserver.documents.versioning import import_document
 
+        # Determine file type - check doc_kwargs for backwards compatibility
+        effective_file_type = file_type or doc_kwargs.get("file_type")
+
         # Generate path if not provided
         if not path:
-            path = f"/documents/doc_{uuid.uuid4().hex[:8]}"
+            if filename:
+                # Use filename to generate path
+                safe_filename = "".join(
+                    c if c.isalnum() or c in "-_." else "_"
+                    for c in filename[:MAX_FILENAME_LENGTH]
+                )
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
+            else:
+                path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/doc_{uuid.uuid4().hex[:8]}"
 
-        return import_document(
+        # All file types now go through the unified versioning pipeline
+        # Text files are stored in txt_extract_file, binary files in pdf_file
+        doc, status, doc_path = import_document(
             corpus=self,
             path=path,
             content=content,
             user=user,
             folder=folder,
+            file_type=effective_file_type,
             **doc_kwargs,
         )
+
+        return doc, status, doc_path
 
     def remove_document(self, document=None, path: str = None, user=None):
         """

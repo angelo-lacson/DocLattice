@@ -16,7 +16,6 @@ Each test is named descriptively to serve as documentation of expected behavior.
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.db.models.signals import post_save
 from django.test import TransactionTestCase
 
 from opencontractserver.corpuses.folder_service import DocumentFolderService
@@ -25,10 +24,6 @@ from opencontractserver.corpuses.models import (
     CorpusFolder,
 )
 from opencontractserver.documents.models import Document, DocumentPath
-from opencontractserver.documents.signals import (
-    DOC_CREATE_UID,
-    process_doc_on_create_atomic,
-)
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -42,27 +37,13 @@ User = get_user_model()
 
 class DocumentFolderServiceTestBase(TransactionTestCase):
     """
-    Base test class that disconnects document processing signals.
+    Base test class for document folder service tests.
 
-    This prevents Celery tasks from being triggered during test setup,
-    which would cause tests to hang or fail in non-Celery environments.
+    Note: Signal management is handled globally by conftest.py fixture
+    `disable_document_processing_signals` - no need to disconnect/reconnect here.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        """Disconnect document processing signals before tests."""
-        super().setUpClass()
-        post_save.disconnect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-
-    @classmethod
-    def tearDownClass(cls):
-        """Reconnect document processing signals after tests."""
-        post_save.connect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-        super().tearDownClass()
+    pass
 
 
 # =============================================================================
@@ -1381,8 +1362,8 @@ class TestCorpusIsolation_Deduplication(DocumentFolderServiceTestBase):
             pdf_file_hash=None,
         )
 
-    def test_adding_same_document_twice_with_hash_returns_existing(self):
-        """Adding document with same hash returns existing copy."""
+    def test_adding_same_document_twice_creates_separate_copies(self):
+        """Adding document multiple times creates separate corpus copies (no dedup)."""
         corpus_doc1, status1, _ = DocumentFolderService.add_document_to_corpus(
             user=self.owner, document=self.document_with_hash, corpus=self.corpus
         )
@@ -1390,12 +1371,14 @@ class TestCorpusIsolation_Deduplication(DocumentFolderServiceTestBase):
             user=self.owner, document=self.document_with_hash, corpus=self.corpus
         )
 
+        # Both should be "added" - no content-based deduplication
         self.assertEqual(status1, "added")
-        self.assertEqual(status2, "already_exists")
-        self.assertEqual(corpus_doc1.id, corpus_doc2.id)  # Same document returned
+        self.assertEqual(status2, "added")
+        # Different corpus-isolated documents created
+        self.assertNotEqual(corpus_doc1.id, corpus_doc2.id)
 
     def test_adding_document_without_hash_creates_new_each_time(self):
-        """Documents without hash are not deduplicated (each add creates new)."""
+        """Documents are not deduplicated regardless of hash presence."""
         corpus_doc1, status1, _ = DocumentFolderService.add_document_to_corpus(
             user=self.owner, document=self.document_without_hash, corpus=self.corpus
         )
@@ -1403,11 +1386,10 @@ class TestCorpusIsolation_Deduplication(DocumentFolderServiceTestBase):
             user=self.owner, document=self.document_without_hash, corpus=self.corpus
         )
 
-        # Both should be "added" status since no hash for deduplication
-        # Note: Current implementation still uses hash-based dedup, so without hash
-        # each call creates a new document
-        self.assertIsNotNone(corpus_doc1)
-        self.assertIsNotNone(corpus_doc2)
+        # Both should be "added" - each call creates a new document
+        self.assertEqual(status1, "added")
+        self.assertEqual(status2, "added")
+        self.assertNotEqual(corpus_doc1.id, corpus_doc2.id)
 
 
 class TestCorpusIsolation_AddToFolder(DocumentFolderServiceTestBase):
@@ -1693,23 +1675,19 @@ class TestM2MBackwardCompatibility(DocumentFolderServiceTestBase):
             title="Source Document", creator=self.owner, pdf_file="source.pdf"
         )
 
-    def test_add_document_updates_m2m_relationship(self):
-        """Adding document to corpus should also add to M2M relationship."""
+    def test_document_path_query_finds_added_document(self):
+        """Documents can be found via DocumentPath query after add_document."""
         corpus_doc, _, _ = DocumentFolderService.add_document_to_corpus(
             user=self.owner, document=self.source_document, corpus=self.corpus
         )
 
-        # Should be findable via M2M
-        self.assertTrue(self.corpus.documents.filter(id=corpus_doc.id).exists())
+        # Query via DocumentPath - the new pattern
+        from opencontractserver.documents.models import DocumentPath
 
-    def test_legacy_query_finds_added_document(self):
-        """Legacy query Document.objects.filter(corpus=...) should find document."""
-        corpus_doc, _, _ = DocumentFolderService.add_document_to_corpus(
-            user=self.owner, document=self.source_document, corpus=self.corpus
-        )
-
-        # This is the legacy query pattern used in many places
-        found = Document.objects.filter(corpus=self.corpus)
+        doc_ids = DocumentPath.objects.filter(
+            corpus=self.corpus, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+        found = Document.objects.filter(id__in=doc_ids)
         self.assertIn(corpus_doc, found)
 
 

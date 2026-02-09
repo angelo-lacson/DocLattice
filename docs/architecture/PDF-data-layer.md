@@ -17,22 +17,17 @@ OpenContracts implements a modular pipeline architecture with four main parser o
    - Hierarchical document structure extraction
    - Group relationship detection for contract clauses
 
-2. **NLM Ingest Parser** - Alternative parser using NLM Ingest library
-   - Source: [`opencontractserver/pipeline/parsers/nlm_ingest_parser.py`](../../opencontractserver/pipeline/parsers/nlm_ingest_parser.py)
-   - Faster processing for standard PDFs
-   - Good layout analysis without ML overhead
-   - Suitable for documents not requiring OCR
+2. **LlamaParse Parser** - Cloud-based parser using LlamaIndex API
+   - Source: [`opencontractserver/pipeline/parsers/llamaparse_parser.py`](../../opencontractserver/pipeline/parsers/llamaparse_parser.py)
+   - High-quality layout extraction
+   - Automatic OCR support
+   - Good for complex document structures
 
 3. **Text Parser** - Simple parser for plain text and markdown files
    - Source: [`opencontractserver/pipeline/parsers/oc_text_parser.py`](../../opencontractserver/pipeline/parsers/oc_text_parser.py)
    - Direct text extraction
    - Minimal processing overhead
    - Preserves original formatting
-
-4. **LlamaParse Parser** - Cloud-based parsing via LlamaIndex
-   - Source: [`opencontractserver/pipeline/parsers/llamaparse_parser.py`](../../opencontractserver/pipeline/parsers/llamaparse_parser.py)
-   - Leverages LlamaIndex's cloud parsing API
-   - Good for complex document layouts
 
 ### Data Layers
 
@@ -88,7 +83,7 @@ Advanced parsers like Docling can detect relationships between document elements
 graph LR
     A[PDF Upload] --> B{Parser Selection}
     B --> C[Docling REST API]
-    B --> D[NLM Ingest]
+    B --> D[LlamaParse API]
     B --> E[Text Parser]
     B --> P[LlamaParse API]
 
@@ -142,7 +137,6 @@ Parsers are configured in Django settings. See the base settings file for curren
 
 **Available Parser Classes:**
 - `opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser` - Primary ML-based parser
-- `opencontractserver.pipeline.parsers.nlm_ingest_parser.NLMIngestParser` - NLM Ingest library parser
 - `opencontractserver.pipeline.parsers.oc_text_parser.TxtParser` - Plain text parser
 - `opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser` - LlamaIndex cloud parser
 
@@ -183,5 +177,5 @@ DOCLING_PARSER_TIMEOUT = 300
 
 - [Pipeline Overview](../pipelines/pipeline_overview.md)
 - [Docling Parser Documentation](../pipelines/docling_parser.md)
-- [NLM Ingest Parser Documentation](../pipelines/nlm_ingest_parser.md)
+- [LlamaParse Parser Documentation](../pipelines/llamaparse_parser.md)
 - [Original PAWLs Project](https://github.com/allenai/pawls)

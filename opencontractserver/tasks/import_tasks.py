@@ -11,26 +11,25 @@ if TYPE_CHECKING:
 import filetype
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.files.base import ContentFile, File
+from django.core.files.base import ContentFile
 
 from config import celery_app
 from opencontractserver.annotations.models import (
     DOC_TYPE_LABEL,
     TOKEN_LABEL,
-    Annotation,
+)
+from opencontractserver.constants.document_processing import (
+    DEFAULT_DOCUMENT_PATH_PREFIX,
+    MAX_FILENAME_LENGTH,
 )
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
 from opencontractserver.documents.models import Document
-from opencontractserver.types.dicts import (
-    OpenContractsAnnotatedDocumentImportType,
-    OpenContractsExportDataJsonPythonType,
-)
+from opencontractserver.types.dicts import OpenContractsAnnotatedDocumentImportType
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.files import is_plaintext_content
-from opencontractserver.utils.importing import import_annotations, load_or_create_labels
-from opencontractserver.utils.packaging import (
-    unpack_corpus_from_export,
-    unpack_label_set_from_export,
+from opencontractserver.utils.importing import (
+    import_doc_annotations,
+    load_or_create_labels,
 )
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -44,196 +43,16 @@ User = get_user_model()
 def import_corpus(
     temporary_file_handle_id: str | int, user_id: int, seed_corpus_id: Optional[int]
 ) -> Optional[str]:
-    try:
-        logger.info(f"import_corpus() - for user_id: {user_id}")
+    """
+    Import a corpus from a V1-format export ZIP.
 
-        temporary_file_handle = TemporaryFileHandle.objects.get(
-            id=temporary_file_handle_id
-        )
-        user_obj = User.objects.get(id=user_id)
+    Delegates to import_corpus_v2 which handles both V1 and V2 formats
+    using shared helpers for label loading, document creation, and
+    annotation import.
+    """
+    from opencontractserver.tasks.import_tasks_v2 import import_corpus_v2
 
-        with temporary_file_handle.file.open("rb") as import_file, zipfile.ZipFile(
-            import_file, mode="r"
-        ) as import_zip:
-            logger.info("import_corpus() - Data decoded successfully")
-            files = import_zip.namelist()
-            logger.info(f"import_corpus() - Raw files: {files}")
-
-            if "data.json" in files:
-                files.remove("data.json")
-                with import_zip.open("data.json") as corpus_data:
-                    data_json: OpenContractsExportDataJsonPythonType = json.loads(
-                        corpus_data.read().decode("UTF-8")
-                    )
-
-                    text_labels = data_json["text_labels"]
-                    doc_labels = data_json["doc_labels"]
-                    label_set_data = {**data_json["label_set"]}
-                    label_set_data.pop("id", None)
-                    corpus_data_json = {**data_json["corpus"]}
-                    corpus_data_json.pop("id", None)
-
-                    # Create LabelSet
-                    labelset_obj = unpack_label_set_from_export(
-                        label_set_data, user_obj
-                    )
-                    logger.info(f"LabelSet created: {labelset_obj}")
-
-                    # Create Corpus
-                    corpus_kwargs = {
-                        "data": corpus_data_json,
-                        "user": user_obj,
-                        "label_set_id": labelset_obj.id,
-                        "corpus_id": seed_corpus_id if seed_corpus_id else None,
-                    }
-                    corpus_obj = unpack_corpus_from_export(**corpus_kwargs)
-                    logger.info(f"Created corpus_obj: {corpus_obj}")
-
-                    # Prepare label data
-                    existing_text_labels = {}
-                    existing_doc_labels = {}
-                    text_label_data_dict = {
-                        label_name: label_info
-                        for label_name, label_info in text_labels.items()
-                    }
-                    doc_label_data_dict = {
-                        label_name: label_info
-                        for label_name, label_info in doc_labels.items()
-                    }
-
-                    # Load or create labels
-                    existing_text_labels = load_or_create_labels(
-                        user_id=user_id,
-                        labelset_obj=labelset_obj,
-                        label_data_dict=text_label_data_dict,
-                        existing_labels=existing_text_labels,
-                    )
-                    logger.info(
-                        f"import_corpus() - existing_text_labels: {existing_text_labels}"
-                    )
-                    # This is super hacky... need to rebuild entire import / export pipeline (one day)
-                    existing_doc_labels = load_or_create_labels(
-                        user_id=user_id,
-                        labelset_obj=labelset_obj,
-                        label_data_dict=doc_label_data_dict,
-                        existing_labels=existing_doc_labels,
-                    )
-                    doc_label_lookup = {
-                        label.text: label for label in existing_doc_labels.values()
-                    }
-                    logger.info(
-                        f"import_corpus() - existing_doc_labels: {existing_doc_labels}"
-                    )
-                    label_lookup = {**existing_text_labels, **existing_doc_labels}
-
-                    # Iterate over documents
-                    for doc_filename in data_json["annotated_docs"]:
-                        logger.info(f"Start load for doc: {doc_filename}")
-                        doc_data = data_json["annotated_docs"][doc_filename]
-                        txt_content = doc_data["content"]
-                        pawls_layers = doc_data["pawls_file_content"]
-
-                        try:
-                            with import_zip.open(doc_filename) as pdf_file_handle:
-                                pdf_file = File(pdf_file_handle, doc_filename)
-                                logger.info("pdf_file obj created in memory")
-
-                                pawls_parse_file = ContentFile(
-                                    json.dumps(pawls_layers).encode("utf-8"),
-                                    name="pawls_tokens.json",
-                                )
-                                logger.info("Pawls parse file obj created in memory")
-
-                                txt_extract_file = ContentFile(
-                                    txt_content.encode("utf-8"),
-                                    name="extracted_text.txt",
-                                )
-                                logger.info("Text extract file obj created in memory")
-
-                                # Create Document instance
-                                doc_obj = Document.objects.create(
-                                    title=doc_data["title"],
-                                    description=f"Imported document with filename {doc_filename}",
-                                    pdf_file=pdf_file,
-                                    pawls_parse_file=pawls_parse_file,
-                                    txt_extract_file=txt_extract_file,
-                                    backend_lock=True,  # Prevent immediate processing
-                                    creator=user_obj,
-                                    page_count=len(pawls_layers),
-                                )
-                                logger.info(f"Doc created: {doc_obj}")
-
-                                set_permissions_for_obj_to_user(
-                                    user_obj, doc_obj, [PermissionTypes.ALL]
-                                )
-
-                                # Link Document to Corpus using proper versioning method
-                                # This creates a corpus-isolated copy with DocumentPath
-                                corpus_copy, _status, _doc_path = (
-                                    corpus_obj.add_document(
-                                        document=doc_obj, user=user_obj
-                                    )
-                                )
-
-                                # Import Document-level annotations
-                                # IMPORTANT: Use corpus_copy for annotations, not the original doc_obj
-                                doc_labels_list = doc_data.get("doc_labels", [])
-                                logger.info(
-                                    f"import_corpus() - Found {len(doc_labels_list)} doc labels to import"
-                                )
-
-                                for doc_label_name in doc_labels_list:
-                                    label_obj = doc_label_lookup.get(doc_label_name)
-                                    logger.info(
-                                        f"import_corpus() - Found doc label_obj: {label_obj}"
-                                    )
-                                    if label_obj:
-                                        annot_obj = Annotation.objects.create(
-                                            annotation_label=label_obj,
-                                            document=corpus_copy,
-                                            corpus=corpus_obj,
-                                            creator=user_obj,
-                                        )
-                                        set_permissions_for_obj_to_user(
-                                            user_obj, annot_obj, [PermissionTypes.ALL]
-                                        )
-
-                                # Import Text annotations
-                                # IMPORTANT: Use corpus_copy for annotations, not the original doc_obj
-                                text_annotations_data = doc_data.get(
-                                    "labelled_text", []
-                                )
-                                logger.info(
-                                    f"import_corpus() - Found {len(text_annotations_data)} text annotations to import"
-                                )
-                                import_annotations(
-                                    user_id=user_id,
-                                    doc_obj=corpus_copy,
-                                    corpus_obj=corpus_obj,
-                                    annotations_data=text_annotations_data,
-                                    label_lookup=label_lookup,
-                                    label_type=TOKEN_LABEL,
-                                )
-
-                                # Unlock the document
-                                doc_obj.backend_lock = False
-                                doc_obj.save()
-                                logger.info("Doc load complete.")
-
-                        except Exception as e:
-                            logger.error(
-                                f"import_corpus() - Error loading document {doc_filename}: {e}"
-                            )
-
-                    return corpus_obj.id
-
-            # If data.json is not found
-            logger.error("import_corpus() - data.json not found in import zip.")
-            return None
-
-    except Exception as e:
-        logger.error(f"import_corpus() - Exception encountered in corpus import: {e}")
-        return None
+    return import_corpus_v2(temporary_file_handle_id, user_id, seed_corpus_id)
 
 
 @celery_app.task()
@@ -242,21 +61,21 @@ def import_document_to_corpus(
     user_id: int,
     document_import_data: OpenContractsAnnotatedDocumentImportType,
 ) -> Optional[str]:
+    """
+    Import a single annotated document into an existing corpus.
+
+    Uses shared helpers for label loading, document creation, and annotation
+    import. Creates a standalone document then adds it to the corpus via
+    corpus.add_document() for proper corpus isolation.
+    """
     try:
         logger.info(f"import_document_to_corpus() - for user_id: {user_id}")
-        logger.info(
-            f"import_document_to_corpus() - target_corpus_id: {target_corpus_id}"
-        )
 
-        # Load target corpus
         corpus_obj = Corpus.objects.get(id=target_corpus_id)
-        logger.info(f"Loaded corpus: {corpus_obj.title}")
-
-        # Load labelset
+        user_obj = User.objects.get(id=user_id)
         labelset_obj = corpus_obj.label_set
-        logger.info(f"Loaded labelset: {labelset_obj.title}")
 
-        # Load existing labels
+        # Load existing labels from labelset, then create any new ones
         existing_text_labels = {
             label.text: label
             for label in labelset_obj.annotation_labels.filter(label_type=TOKEN_LABEL)
@@ -268,7 +87,6 @@ def import_document_to_corpus(
             )
         }
 
-        # Create new labels if needed
         existing_text_labels = load_or_create_labels(
             user_id,
             labelset_obj,
@@ -282,71 +100,51 @@ def import_document_to_corpus(
             existing_doc_labels,
         )
 
-        label_lookup = {
-            **existing_text_labels,
-            **existing_doc_labels,
-        }
-        logger.info(f"Label lookup: {label_lookup}")
+        label_lookup = {**existing_text_labels, **existing_doc_labels}
+        doc_label_lookup = {label.text: label for label in existing_doc_labels.values()}
 
-        # Import the document
-        logger.info("Starting document import")
-        pdf_base64 = document_import_data["pdf_base64"]
-        pdf_data = base64.b64decode(pdf_base64)
-
+        # Decode and create document
+        pdf_data = base64.b64decode(document_import_data["pdf_base64"])
         pdf_file = ContentFile(pdf_data, name=f"{document_import_data['pdf_name']}.pdf")
+
+        doc_data = document_import_data["doc_data"]
         pawls_parse_file = ContentFile(
-            json.dumps(document_import_data["doc_data"]["pawls_file_content"]).encode(
-                "utf-8"
-            ),
+            json.dumps(doc_data["pawls_file_content"]).encode("utf-8"),
             name="pawls_tokens.json",
         )
 
         doc_obj = Document.objects.create(
-            title=document_import_data["doc_data"]["title"],
-            description=document_import_data["doc_data"].get(
-                "description", "No Description"
-            ),
+            title=doc_data["title"],
+            description=doc_data.get("description", ""),
             pdf_file=pdf_file,
             pawls_parse_file=pawls_parse_file,
-            creator_id=user_id,
-            page_count=document_import_data["doc_data"]["page_count"],
+            creator=user_obj,
+            backend_lock=True,
+            page_count=doc_data.get("page_count", 0),
         )
-        logger.info(f"Created document: {doc_obj.title}")
-        user_obj = User.objects.get(id=user_id)
         set_permissions_for_obj_to_user(user_obj, doc_obj, [PermissionTypes.ALL])
 
-        # Link to corpus using proper versioning method
-        # This creates a corpus-isolated copy with DocumentPath
-        corpus_obj.add_document(document=doc_obj, user=user_obj)
-        logger.info(f"Linked document to corpus: {corpus_obj.title}")
-
-        # Import text annotations
-        doc_annotations_data = document_import_data["doc_data"]["labelled_text"]
-        logger.info(f"Importing {len(doc_annotations_data)} text annotations")
-        import_annotations(
-            user_id,
-            doc_obj,
-            corpus_obj,
-            doc_annotations_data,
-            label_lookup,
-            label_type=TOKEN_LABEL,
+        # Add to corpus - creates corpus-isolated copy
+        corpus_doc, _status, _doc_path = corpus_obj.add_document(
+            document=doc_obj, user=user_obj
         )
 
-        # Import document-level annotations
-        doc_labels = document_import_data["doc_data"]["doc_labels"]
-        logger.info(f"Importing {len(doc_labels)} doc labels")
-        for doc_label in doc_labels:
-            label_obj = existing_doc_labels[doc_label]
-            annot_obj = Annotation.objects.create(
-                annotation_label=label_obj,
-                document=doc_obj,
-                corpus=corpus_obj,
-                creator_id=user_id,
-            )
-            set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
+        # Import all annotations onto the corpus copy using shared helper
+        import_doc_annotations(
+            doc_data=doc_data,
+            corpus_doc=corpus_doc,
+            corpus_obj=corpus_obj,
+            user_id=user_id,
+            label_lookup=label_lookup,
+            doc_label_lookup=doc_label_lookup,
+        )
+
+        # Unlock original document
+        doc_obj.backend_lock = False
+        doc_obj.save(update_fields=["backend_lock"])
 
         logger.info("Document import completed successfully")
-        return doc_obj.id
+        return corpus_doc.id
 
     except Exception as e:
         logger.error(f"Exception encountered in document import: {e}")
@@ -492,6 +290,13 @@ def process_documents_zip(
                             or f"Uploaded as part of batch upload (job: {job_id})"
                         )
 
+                        # Generate path for corpus document
+                        safe_filename = "".join(
+                            c if c.isalnum() or c in "-_." else "_"
+                            for c in base_filename[:MAX_FILENAME_LENGTH]
+                        )
+                        doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
+
                         # Create the document based on file type
                         document = None
 
@@ -501,46 +306,75 @@ def process_documents_zip(
                             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         ]:
-                            pdf_file = ContentFile(file_bytes, name=filename)
-                            document = Document(
-                                creator=user_obj,
-                                title=doc_title,
-                                description=doc_description,
-                                custom_meta=custom_meta,
-                                pdf_file=pdf_file,
-                                backend_lock=True,
-                                is_public=make_public,
-                                file_type=kind,
+                            # Use corpus_obj if provided, otherwise use personal corpus
+                            target_corpus = corpus_obj
+                            if target_corpus is None:
+                                # Get or create user's personal corpus
+                                target_corpus = Corpus.get_or_create_personal_corpus(
+                                    user_obj
+                                )
+                                logger.info(
+                                    f"process_documents_zip() - Using personal corpus "
+                                    f"{target_corpus.id} for user {user_obj.id}"
+                                )
+
+                            # Use import_content to create document directly in corpus
+                            # This avoids creating orphan standalone documents
+                            # backend_lock=True ensures document shows as processing
+                            document, status, path_record = (
+                                target_corpus.import_content(
+                                    content=file_bytes,
+                                    path=doc_path,
+                                    user=user_obj,
+                                    title=doc_title,
+                                    description=doc_description,
+                                    custom_meta=custom_meta,
+                                    is_public=make_public,
+                                    file_type=kind,
+                                    backend_lock=True,
+                                )
                             )
-                            document.save()
+                            logger.info(
+                                f"process_documents_zip() - Created document {document.id} "
+                                f"in corpus {target_corpus.id} (status: {status})"
+                            )
                         elif kind in ["text/plain", "application/txt"]:
-                            txt_extract_file = ContentFile(file_bytes, name=filename)
-                            document = Document(
-                                creator=user_obj,
-                                title=doc_title,
-                                description=doc_description,
-                                custom_meta=custom_meta,
-                                txt_extract_file=txt_extract_file,
-                                backend_lock=True,
-                                is_public=make_public,
-                                file_type=kind,
+                            # Use corpus_obj if provided, otherwise use personal corpus
+                            target_corpus = corpus_obj
+                            if target_corpus is None:
+                                target_corpus = Corpus.get_or_create_personal_corpus(
+                                    user_obj
+                                )
+                                logger.info(
+                                    f"process_documents_zip() - Using personal corpus "
+                                    f"{target_corpus.id} for text upload by user {user_obj.id}"
+                                )
+
+                            # Use import_content() which routes based on file_type
+                            document, status, path_record = (
+                                target_corpus.import_content(
+                                    content=file_bytes,
+                                    user=user_obj,
+                                    path=doc_path,
+                                    filename=filename,
+                                    file_type=kind,
+                                    title=doc_title,
+                                    description=doc_description,
+                                    custom_meta=custom_meta,
+                                    backend_lock=True,
+                                    is_public=make_public,
+                                )
                             )
-                            document.save()
+                            logger.info(
+                                f"process_documents_zip() - Created text document {document.id} "
+                                f"in corpus {target_corpus.id} (status: {status})"
+                            )
 
                         if document:
                             # Set permissions for the document
                             set_permissions_for_obj_to_user(
                                 user_obj, document, [PermissionTypes.CRUD]
                             )
-
-                            # Add to corpus if needed
-                            if corpus_obj:
-                                # Use the new versioning system to create proper DocumentPath
-                                added_doc, status, doc_path = corpus_obj.add_document(
-                                    document=document, user=user_obj
-                                )
-                                # Update document reference in case versioning returned a different doc
-                                document = added_doc
 
                             # Update results
                             results["processed_files"] += 1
@@ -1003,65 +837,50 @@ def import_zip_with_folder_structure(
                         doc_path_str = f"/{entry.sanitized_path}"
 
                     # Create document based on file type
-                    document = None
+                    # Use import_content to create document directly in corpus
+                    # This avoids creating orphan standalone documents
+                    added_doc = None
+                    doc_path = None
 
-                    if mime_type in [
-                        "application/pdf",
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    ]:
-                        pdf_file = ContentFile(file_bytes, name=entry.filename)
-                        document = Document(
-                            creator=user_obj,
+                    try:
+                        # All file types now use the unified import_content pipeline
+                        # which handles versioning and proper file storage (text files
+                        # go to txt_extract_file, binary files to pdf_file)
+                        added_doc, status, doc_path = corpus_obj.import_content(
+                            content=file_bytes,
+                            path=doc_path_str,
+                            user=user_obj,
+                            folder=doc_folder,
+                            filename=entry.filename,
                             title=doc_title,
                             description=doc_description,
                             custom_meta=custom_meta,
-                            pdf_file=pdf_file,
-                            backend_lock=True,
                             is_public=make_public,
                             file_type=mime_type,
-                        )
-                        document.save()
-                    elif mime_type in ["text/plain", "application/txt"]:
-                        txt_extract_file = ContentFile(file_bytes, name=entry.filename)
-                        document = Document(
-                            creator=user_obj,
-                            title=doc_title,
-                            description=doc_description,
-                            custom_meta=custom_meta,
-                            txt_extract_file=txt_extract_file,
                             backend_lock=True,
-                            is_public=make_public,
-                            file_type=mime_type,
                         )
-                        document.save()
-
-                    if document:
-                        # Set permissions for the document
-                        set_permissions_for_obj_to_user(
-                            user_obj, document, [PermissionTypes.CRUD]
+                        logger.info(
+                            f"import_zip_with_folder_structure() - Created document "
+                            f"{added_doc.id} in corpus {corpus_obj.id} (status: {status})"
                         )
 
-                        # Add to corpus with folder assignment and path for versioning
-                        # If a document already exists at this path, it will be upversioned
-                        try:
-                            added_doc, status, doc_path = corpus_obj.add_document(
-                                document=document,
-                                user=user_obj,
-                                folder=doc_folder,
-                                path=doc_path_str,
+                        if added_doc:
+                            # Set permissions for the document
+                            set_permissions_for_obj_to_user(
+                                user_obj, added_doc, [PermissionTypes.CRUD]
                             )
-                        except PermissionError as e:
-                            logger.warning(
-                                f"Permission error adding document at {doc_path_str}: {e}"
-                            )
-                            results["files_errored"] += 1
-                            results["errors"].append(
-                                f"Permission error for {entry.sanitized_path}: {str(e)}"
-                            )
-                            continue
 
+                    except PermissionError as e:
+                        logger.warning(
+                            f"Permission error adding document at {doc_path_str}: {e}"
+                        )
+                        results["files_errored"] += 1
+                        results["errors"].append(
+                            f"Permission error for {entry.sanitized_path}: {str(e)}"
+                        )
+                        continue
+
+                    if added_doc:
                         results["files_processed"] += 1
                         results["document_ids"].append(str(added_doc.id))
 

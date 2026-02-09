@@ -17,6 +17,8 @@ services:
         condition: service_healthy
       vector-embedder:
         condition: service_started
+      multimodal-embedder:
+        condition: service_started
       docling-parser:
         condition: service_started
     volumes:
@@ -67,6 +69,15 @@ services:
       PORT: 8000
       TRANSFORMERS_OFFLINE: 1
       HF_DATASETS_OFFLINE: 1
+
+  multimodal-embedder:
+    image: ghcr.io/jsv4/vectorembeddermicroservice-multimodal:latest
+    container_name: multimodal-embedder
+    environment:
+      PORT: 8000
+      TRANSFORMERS_OFFLINE: 1
+      HF_DATASETS_OFFLINE: 1
+      API_KEY: abc123
 
   celeryworker:
     image: opencontractserver_local_django

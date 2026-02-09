@@ -230,8 +230,8 @@ class PermissioningTestCase(TestCase):
         user_one_corpus_response = self.graphene_client.execute(request_corpuses)
         logger.info(f"user_one_corpus_response: {user_one_corpus_response}")
 
-        # User one created the corpus... so it can see the corpus
-        self.assertEqual(user_one_corpus_response["data"]["corpuses"]["totalCount"], 1)
+        # User one can see 2 corpuses: their auto-created personal corpus + the test corpus
+        self.assertEqual(user_one_corpus_response["data"]["corpuses"]["totalCount"], 2)
 
         # User one should have PermissionType.READ for corpus
         self.assertTrue(
@@ -397,8 +397,8 @@ class PermissioningTestCase(TestCase):
         user_two_corpus_response = self.graphene_client_2.execute(request_corpuses)
         logger.info(f"user_two_corpus_response: {user_two_corpus_response}")
 
-        # User two did not create the corpus and it's not public, so user one sees nothing
-        self.assertEqual(user_two_corpus_response["data"]["corpuses"]["totalCount"], 0)
+        # User two can only see their auto-created personal corpus (not user_one's test corpus)
+        self.assertEqual(user_two_corpus_response["data"]["corpuses"]["totalCount"], 1)
 
     def __test_make_corpus_public_mutation(self):
         """
@@ -552,10 +552,10 @@ class PermissioningTestCase(TestCase):
         )
         logger.info(f"Improper permission response: {prohibited_graphql_response}")
         self.assertEqual(prohibited_graphql_response["data"]["deleteCorpus"], None)
-        self.assertEqual(
-            prohibited_graphql_response["errors"][0]["message"],
-            "You do no have sufficient permissions to delete requested object",
-        )
+        # IDOR prevention: visible_to_user() makes the corpus invisible to
+        # user_2, so a DoesNotExist error is raised instead of a permission error.
+        self.assertIn("errors", prohibited_graphql_response)
+        self.assertTrue(len(prohibited_graphql_response["errors"]) > 0)
 
     def __test_permission_annotator(self):
 

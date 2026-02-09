@@ -3,11 +3,11 @@ from __future__ import annotations
 import enum
 import json
 import logging
+import traceback
 from typing import Any
 
 from celery import shared_task
 from celery.utils.log import get_task_logger
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
 from django.db.models import Q
@@ -16,7 +16,11 @@ from pydantic import validate_arguments
 
 from config import celery_app
 from opencontractserver.annotations.models import TOKEN_LABEL, Annotation
-from opencontractserver.documents.models import Document
+from opencontractserver.constants import (
+    MAX_PROCESSING_ERROR_LENGTH,
+    MAX_PROCESSING_TRACEBACK_LENGTH,
+)
+from opencontractserver.documents.models import Document, DocumentProcessingStatus
 from opencontractserver.notifications.models import (
     Notification,
     NotificationTypeChoices,
@@ -24,6 +28,7 @@ from opencontractserver.notifications.models import (
 from opencontractserver.notifications.signals import (
     broadcast_notification_via_websocket,
 )
+from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
 from opencontractserver.pipeline.utils import (
     get_component_by_name,
@@ -57,15 +62,105 @@ class TaskStates(str, enum.Enum):
 TEMP_DIR = "./tmp"
 
 
+def _mark_document_failed(
+    document: Document,
+    error_msg: str,
+    traceback_str: str = "",
+    create_notification: bool = True,
+) -> None:
+    """
+    Mark a document as failed WITHOUT unlocking.
+
+    This is called when document processing fails after all retries are exhausted
+    or when a permanent (non-transient) error occurs.
+
+    The document remains locked (backend_lock=True) to prevent it from appearing
+    ready for use when it's actually in a broken state.
+
+    Args:
+        document: The Document instance to mark as failed.
+        error_msg: Human-readable error message (truncated to MAX_PROCESSING_ERROR_LENGTH).
+        traceback_str: Full traceback string (truncated to MAX_PROCESSING_TRACEBACK_LENGTH).
+        create_notification: Whether to create a failure notification.
+    """
+    document.processing_status = DocumentProcessingStatus.FAILED
+    document.processing_error = error_msg[:MAX_PROCESSING_ERROR_LENGTH]
+    document.processing_error_traceback = traceback_str[
+        :MAX_PROCESSING_TRACEBACK_LENGTH
+    ]
+    document.processing_finished = timezone.now()
+    # NOTE: backend_lock stays True - document is not ready for use
+    document.save(
+        update_fields=[
+            "processing_status",
+            "processing_error",
+            "processing_error_traceback",
+            "processing_finished",
+        ]
+    )
+
+    logger.warning(
+        f"[_mark_document_failed] Document {document.pk} marked as FAILED: {error_msg}"
+    )
+
+    if create_notification:
+        _create_document_processing_failed_notification(document, error_msg)
+
+
+def _create_document_processing_failed_notification(
+    document: Document, error_msg: str
+) -> None:
+    """
+    Create a notification for document processing failure.
+
+    Notifies the document creator when processing fails.
+
+    Args:
+        document: The failed document.
+        error_msg: The error message to include in the notification.
+    """
+    if not document.creator:
+        return
+
+    # Get document title for notification
+    doc_title = document.title
+    if not doc_title and document.description:
+        doc_title = document.description[:50]
+    if not doc_title:
+        doc_title = "Untitled"
+
+    try:
+        notification = Notification.objects.create(
+            recipient=document.creator,
+            notification_type=NotificationTypeChoices.DOCUMENT_PROCESSING_FAILED,
+            data={
+                "document_id": document.id,
+                "document_title": doc_title,
+                "error_message": error_msg[:500],  # Limit for notification data
+                "file_type": document.file_type,
+            },
+        )
+        broadcast_notification_via_websocket(notification)
+        logger.debug(
+            f"[_mark_document_failed] Created DOCUMENT_PROCESSING_FAILED notification "
+            f"for {document.creator.username}"
+        )
+    except Exception as e:
+        logger.warning(
+            f"[_mark_document_failed] Failed to create failure notification "
+            f"for document {document.pk}: {e}"
+        )
+
+
 @celery_app.task()
 def set_doc_lock_state(*args, locked: bool, doc_id: int):
     """
     Set the backend lock state for a document.
 
-    When unlocking (locked=False), triggers corpus actions for all corpuses
-    the document belongs to. This enables deferred corpus actions - actions
-    that were skipped because the document was still being parsed/thumbnailed
-    can now run.
+    When unlocking (locked=False):
+    - First checks if processing failed - if so, keeps the document locked
+    - If processing succeeded, unlocks and sets status to COMPLETED
+    - Triggers corpus actions for all corpuses the document belongs to
 
     Uses DocumentPath as the source of truth for corpus membership (not M2M).
 
@@ -76,9 +171,25 @@ def set_doc_lock_state(*args, locked: bool, doc_id: int):
     from opencontractserver.tasks.corpus_tasks import process_corpus_action
 
     document = Document.objects.get(pk=doc_id)
+
+    # If unlocking, check if processing actually succeeded
+    if not locked:
+        if document.processing_status == DocumentProcessingStatus.FAILED:
+            # Document failed processing - keep it locked
+            logger.warning(
+                f"[set_doc_lock_state] Document {doc_id} failed processing, "
+                "keeping locked (status=FAILED)"
+            )
+            return
+
+        # Processing succeeded - set status to COMPLETED
+        document.processing_status = DocumentProcessingStatus.COMPLETED
+
     document.backend_lock = locked
     document.processing_finished = timezone.now()
-    document.save()
+    document.save(
+        update_fields=["backend_lock", "processing_finished", "processing_status"]
+    )
 
     # Trigger corpus actions when unlocking (document is now ready)
     # Query DocumentPath as the source of truth for corpus membership
@@ -132,15 +243,15 @@ def _create_document_processed_notifications(
     if document.creator:
         recipients.add(document.creator)
 
-    # Add corpus owners from DocumentPath data
-    for data in corpus_data:
-        corpus_creator_id = data.get("corpus__creator_id")
-        if corpus_creator_id:
-            try:
-                corpus_creator = User.objects.get(pk=corpus_creator_id)
-                recipients.add(corpus_creator)
-            except User.DoesNotExist:
-                pass
+    # Add corpus owners from DocumentPath data (bulk fetch to avoid N+1)
+    corpus_creator_ids = {
+        data.get("corpus__creator_id")
+        for data in corpus_data
+        if data.get("corpus__creator_id")
+    }
+    if corpus_creator_ids:
+        corpus_creators = User.objects.filter(pk__in=corpus_creator_ids)
+        recipients.update(corpus_creators)
 
     # Get document title for notification
     doc_title = document.title
@@ -176,68 +287,153 @@ def _create_document_processed_notifications(
 
 @shared_task(
     bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 60},
+    autoretry_for=(DocumentParsingError,),
+    retry_backoff=60,  # Base delay: 60 seconds
+    retry_backoff_max=300,  # Cap at 5 minutes
+    retry_jitter=True,  # Add randomness to prevent thundering herd
+    retry_kwargs={"max_retries": 3},
 )
-def ingest_doc(self, user_id: int, doc_id: int) -> None:
+def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
     """
     Ingests a document using the appropriate parser based on the document's MIME type.
-    The parser class is determined using get_component_by_name.
-    If there is a dict in settings named <parser_name>_kwargs, it is passed to the parser
-    as keyword arguments.
 
-    This Celery task will retry up to 3 times (with a 60-second wait between attempts)
-    in case of transient errors or exceptions.
+    The parser class is determined using get_component_by_name. If there is a dict
+    in settings named <parser_name>_kwargs, it is passed to the parser as keyword
+    arguments.
+
+    This task uses automatic retry with exponential backoff for transient errors:
+    - Up to 3 retries with backoff starting at 60s, capped at 300s
+    - Only retries for DocumentParsingError with is_transient=True
+    - Permanent errors (is_transient=False) fail immediately
+
+    When all retries are exhausted or a permanent error occurs, the document is
+    marked as FAILED and remains locked (not ready for use).
 
     Args:
         self: Celery task instance (passed automatically when bind=True).
         user_id (int): The ID of the user.
         doc_id (int): The ID of the document to ingest.
 
+    Returns:
+        dict: Status information with keys:
+            - status: "success" or "failed"
+            - doc_id: The document ID
+            - error: Error message (only if failed)
+
     Raises:
-        ValueError: If no parser is defined for the document's MIME type.
-        Exception: If parsing fails.
+        DocumentParsingError: Re-raised for transient errors to trigger Celery retry.
     """
-    logger.info(f"[ingest_doc] Ingesting doc {doc_id} for user {user_id}")
+    from opencontractserver.documents.models import DocumentPath
+
+    logger.info(
+        f"[ingest_doc] Ingesting doc {doc_id} for user {user_id} "
+        f"(attempt {self.request.retries + 1}/{self.max_retries + 1})"
+    )
 
     # Fetch the document
     try:
         document: Document = Document.objects.get(pk=doc_id)
     except Document.DoesNotExist:
         logger.error(f"Document with id {doc_id} does not exist.")
-        return
+        return {"status": "failed", "doc_id": doc_id, "error": "Document not found"}
 
-    parser_name: str | None = getattr(settings, "PREFERRED_PARSERS", {}).get(
-        document.file_type
-    )
+    # Set processing status to PROCESSING at start of first attempt
+    if self.request.retries == 0:
+        document.processing_status = DocumentProcessingStatus.PROCESSING
+        document.save(update_fields=["processing_status"])
+
+    # Look up corpus from DocumentPath (if document is in a corpus)
+    # This ensures structural annotations get the corpus context for proper embeddings
+    doc_path = DocumentPath.objects.filter(
+        document_id=doc_id, is_current=True, is_deleted=False
+    ).first()
+    corpus_id = doc_path.corpus_id if doc_path else None
+    if corpus_id:
+        logger.info(f"[ingest_doc] Document {doc_id} is in corpus {corpus_id}")
+
+    # Get preferred parser from database settings (with fallback to Django settings)
+    from opencontractserver.documents.models import PipelineSettings
+
+    pipeline_settings = PipelineSettings.get_instance()
+    parser_name: str | None = pipeline_settings.get_preferred_parser(document.file_type)
+
     if not parser_name:
-        raise ValueError(f"No parser defined for MIME type '{document.file_type}'")
+        error_msg = f"No parser defined for MIME type '{document.file_type}'"
+        _mark_document_failed(document, error_msg)
+        return {"status": "failed", "doc_id": doc_id, "error": error_msg}
 
-    # Attempt to load parser kwargs
-    parser_kwargs = {}
-    if hasattr(settings, "PARSER_KWARGS"):
-        kwargs = getattr(settings, "PARSER_KWARGS", {})
-        parser_kwargs = kwargs.get(parser_name, {})
-        logger.debug(f"Resolved parser kwargs for '{parser_name}': {parser_kwargs}")
+    # Attempt to load parser kwargs from database settings (with fallback)
+    from opencontractserver.utils.logging import redact_sensitive_kwargs
+
+    parser_kwargs = pipeline_settings.get_parser_kwargs(parser_name)
+    if parser_kwargs:
+        logger.debug(
+            f"Resolved parser kwargs for '{parser_name}': "
+            f"{redact_sensitive_kwargs(parser_kwargs)}"
+        )
 
     # Get the parser class using get_component_by_name
     try:
         parser_class = get_component_by_name(parser_name)
         parser_instance = parser_class()
     except ValueError as e:
-        logger.error(f"Failed to load parser '{parser_name}': {e}")
-        raise
+        error_msg = f"Failed to load parser '{parser_name}': {e}"
+        logger.error(error_msg)
+        _mark_document_failed(document, error_msg, traceback.format_exc())
+        return {"status": "failed", "doc_id": doc_id, "error": error_msg}
 
     # Call the parser's process_document method
     try:
-        parser_instance.process_document(user_id, doc_id, **parser_kwargs)
+        parser_instance.process_document(
+            user_id, doc_id, corpus_id=corpus_id, **parser_kwargs
+        )
         logger.info(
             f"[ingest_doc] Document {doc_id} ingested successfully with '{parser_name}'"
         )
-    except Exception as e:
-        logger.error(f"[ingest_doc] Failed to ingest document {doc_id}: {e}")
-        # Raise again so Celery can trigger a retry
+        return {"status": "success", "doc_id": doc_id}
+
+    except DocumentParsingError as e:
+        logger.error(
+            f"[ingest_doc] DocumentParsingError for document {doc_id}: {e} "
+            f"(is_transient={e.is_transient}, retries={self.request.retries}/"
+            f"{self.max_retries})"
+        )
+
+        # For permanent errors, fail immediately without retry
+        if not e.is_transient:
+            logger.warning(
+                f"[ingest_doc] Permanent error for document {doc_id}, not retrying"
+            )
+            _mark_document_failed(document, str(e), traceback.format_exc())
+            return {"status": "failed", "doc_id": doc_id, "error": str(e)}
+
+        # For transient errors, check if we've exhausted retries
+        if self.request.retries >= self.max_retries:
+            logger.warning(
+                f"[ingest_doc] Max retries ({self.max_retries}) exhausted for "
+                f"document {doc_id}"
+            )
+            _mark_document_failed(document, str(e), traceback.format_exc())
+            return {"status": "failed", "doc_id": doc_id, "error": str(e)}
+
+        # Re-raise to trigger Celery retry
         raise
+
+    except Exception as e:
+        # Unexpected exception - treat as transient, let Celery retry
+        error_msg = f"Unexpected error ingesting document {doc_id}: {e}"
+        logger.error(f"[ingest_doc] {error_msg}")
+
+        if self.request.retries >= self.max_retries:
+            logger.warning(
+                f"[ingest_doc] Max retries ({self.max_retries}) exhausted for "
+                f"document {doc_id} after unexpected error"
+            )
+            _mark_document_failed(document, error_msg, traceback.format_exc())
+            return {"status": "failed", "doc_id": doc_id, "error": error_msg}
+
+        # Wrap in DocumentParsingError to trigger retry
+        raise DocumentParsingError(error_msg, is_transient=True) from e
 
 
 @celery_app.task()
@@ -486,17 +682,42 @@ def extract_thumbnail(self, doc_id: int) -> None:
 
     file_type: str = document.file_type
 
-    # Get compatible thumbnailers for the document's MIME type
-    components = get_components_by_mimetype(file_type)
-    thumbnailers = components.get("thumbnailers", [])
+    # Check for preferred thumbnailer in database settings first
+    from opencontractserver.documents.models import PipelineSettings
 
-    if not thumbnailers:
-        logger.error(f"No thumbnailer found for file type '{file_type}'.")
-        return
+    pipeline_settings = PipelineSettings.get_instance()
+    preferred_thumbnailer = pipeline_settings.get_preferred_thumbnailer(file_type)
 
-    # Use the first available thumbnailer
-    thumbnailer_class = thumbnailers[0]
-    logger.info(f"Using thumbnailer '{thumbnailer_class.__name__}' for doc {doc_id}")
+    thumbnailer_class = None
+
+    if preferred_thumbnailer:
+        # Try to load the preferred thumbnailer
+        try:
+            thumbnailer_class = get_component_by_name(preferred_thumbnailer)
+            logger.info(
+                f"Using preferred thumbnailer '{preferred_thumbnailer}' for doc {doc_id}"
+            )
+        except ValueError:
+            logger.warning(
+                f"Preferred thumbnailer '{preferred_thumbnailer}' not found, "
+                "falling back to auto-discovery"
+            )
+
+    if not thumbnailer_class:
+        # Fall back to auto-discovered thumbnailers for the MIME type
+        components = get_components_by_mimetype(file_type)
+        thumbnailers = components.get("thumbnailers", [])
+
+        if not thumbnailers:
+            logger.error(f"No thumbnailer found for file type '{file_type}'.")
+            return
+
+        # Use the first available thumbnailer
+        thumbnailer_class = thumbnailers[0]
+        logger.info(
+            f"Using auto-discovered thumbnailer '{thumbnailer_class.__name__}' "
+            f"for doc {doc_id}"
+        )
 
     try:
         thumbnailer: BaseThumbnailGenerator = thumbnailer_class()
@@ -515,3 +736,86 @@ def extract_thumbnail(self, doc_id: int) -> None:
         )
         # Raise for Celery to attempt retries
         raise
+
+
+@shared_task
+def retry_document_processing(user_id: int, doc_id: int) -> dict[str, Any]:
+    """
+    Re-attempt processing for a failed document (manual trigger).
+
+    This task is used when automatic retries have been exhausted due to transient
+    infrastructure issues that are later resolved. Users can manually trigger
+    reprocessing via the GraphQL API.
+
+    The task:
+    1. Verifies the document is in FAILED state
+    2. Resets the processing state (status=PENDING, clears error fields)
+    3. Re-triggers the document processing pipeline (thumbnail + ingest + unlock)
+
+    Args:
+        user_id (int): The ID of the user requesting the retry.
+        doc_id (int): The ID of the document to reprocess.
+
+    Returns:
+        dict: Status information with keys:
+            - status: "queued" (success) or "error"
+            - doc_id: The document ID
+            - message: Status message
+    """
+    from celery import chain
+
+    logger.info(
+        f"[retry_document_processing] Manual retry requested for doc {doc_id} "
+        f"by user {user_id}"
+    )
+
+    # Atomic update: only reset if document is in FAILED state
+    # This prevents race conditions if user clicks retry multiple times
+    updated_count = Document.objects.filter(
+        pk=doc_id,
+        processing_status=DocumentProcessingStatus.FAILED,
+    ).update(
+        processing_status=DocumentProcessingStatus.PENDING,
+        processing_error="",
+        processing_error_traceback="",
+        processing_started=timezone.now(),
+        processing_finished=None,
+        backend_lock=True,  # Lock document during reprocessing
+    )
+
+    if updated_count == 0:
+        # Either document doesn't exist or isn't in FAILED state
+        try:
+            document = Document.objects.get(pk=doc_id)
+            return {
+                "status": "error",
+                "doc_id": doc_id,
+                "message": (
+                    f"Document is not in failed state "
+                    f"(current status: {document.processing_status})"
+                ),
+            }
+        except Document.DoesNotExist:
+            return {
+                "status": "error",
+                "doc_id": doc_id,
+                "message": "Document not found",
+            }
+
+    logger.info(
+        f"[retry_document_processing] Reset document {doc_id} state, "
+        "triggering reprocessing pipeline"
+    )
+
+    # Re-trigger the processing pipeline
+    chain(
+        extract_thumbnail.si(doc_id=doc_id),
+        ingest_doc.si(user_id=user_id, doc_id=doc_id),
+        set_doc_lock_state.si(locked=False, doc_id=doc_id),
+    ).apply_async()
+
+    return {
+        "status": "queued",
+        "doc_id": doc_id,
+        "message": "Document reprocessing has been queued",
+    }

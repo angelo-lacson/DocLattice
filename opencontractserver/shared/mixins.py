@@ -30,10 +30,16 @@ class VectorSearchViaEmbeddingMixin:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_384"
         elif dimension == 768:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_768"
+        elif dimension == 1024:
+            return f"{self.EMBEDDING_RELATED_NAME}__vector_1024"
         elif dimension == 1536:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
+        elif dimension == 2048:
+            return f"{self.EMBEDDING_RELATED_NAME}__vector_2048"
         elif dimension == 3072:
             return f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
+        elif dimension == 4096:
+            return f"{self.EMBEDDING_RELATED_NAME}__vector_4096"
         else:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
 
@@ -70,23 +76,35 @@ class VectorSearchViaEmbeddingMixin:
         )
 
         # Use annotate(...) plus the CosineDistance from pgvector
+        # CosineDistance returns distance (0 = identical, 1 = orthogonal, 2 = opposite)
+        # We convert to similarity (1 = identical, 0 = different) for frontend display
+        # Formula: similarity = 1 - distance (for normalized vectors, distance is 0-1)
         base_qs = base_qs.annotate(
-            similarity_score=CosineDistance(vector_field, query_vector)
+            _cosine_distance=CosineDistance(vector_field, query_vector)
         )
 
         # PostgreSQL DISTINCT ON approach to handle JOIN duplicates:
         # When an object has multiple Embedding rows with the same embedder_path,
         # we want to keep only one result per unique object ID.
         # DISTINCT ON (id) requires id to be first in ORDER BY, so we order by id first,
-        # then similarity_score to pick the best score for each ID (though they should be identical).
-        base_qs = base_qs.order_by("id", "similarity_score").distinct("id")
+        # then distance to pick the best score for each ID (though they should be identical).
+        base_qs = base_qs.order_by("id", "_cosine_distance").distinct("id")
 
-        # Convert to list to materialize the query, then sort by similarity_score in Python
+        # Materialize to list, sort by distance, and take top_k
+        # Note: DISTINCT ON requires id first in ORDER BY, so we can't do the final
+        # sort by distance in PostgreSQL. Python sort is efficient for typical result
+        # sizes (hundreds to low thousands). For extreme scale, consider raw SQL with CTE.
         results = list(base_qs)
-        results.sort(key=lambda obj: obj.similarity_score)
+        results.sort(key=lambda obj: obj._cosine_distance)
+        results = results[:top_k]
 
-        # Return top_k results
-        return results[:top_k]
+        # Convert distance to similarity score for each result
+        # similarity = 1 - distance (clamped to 0-1 range)
+        for obj in results:
+            distance = getattr(obj, "_cosine_distance", 0)
+            obj.similarity_score = max(0.0, min(1.0, 1.0 - distance))
+
+        return results
 
 
 class HasEmbeddingMixin:
@@ -131,10 +149,16 @@ class HasEmbeddingMixin:
             vector_field = "vector_384"
         elif dimension == 768:
             vector_field = "vector_768"
+        elif dimension == 1024:
+            vector_field = "vector_1024"
         elif dimension == 1536:
             vector_field = "vector_1536"
+        elif dimension == 2048:
+            vector_field = "vector_2048"
         elif dimension == 3072:
             vector_field = "vector_3072"
+        elif dimension == 4096:
+            vector_field = "vector_4096"
         else:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
 

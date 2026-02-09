@@ -5,7 +5,8 @@ from typing import Optional
 
 import graphene
 from django.conf import settings
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
+from django.db.models.functions import Coalesce
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django.debug import DjangoDebug
@@ -53,6 +54,7 @@ from config.graphql.graphene_types import (
     BulkDocumentUploadStatusType,
     ColumnType,
     CommunityStatsType,
+    ComponentSettingSchemaType,
     ConversationType,
     CorpusActionExecutionType,
     CorpusActionTrailStatsType,
@@ -86,6 +88,7 @@ from config.graphql.graphene_types import (
     PipelineComponentsType,
     PipelineComponentType,
     RelationshipType,
+    SemanticSearchResultType,
     UserBadgeType,
     UserExportType,
     UserImportType,
@@ -129,11 +132,41 @@ from opencontractserver.documents.query_optimizer import (
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.notifications.models import Notification
-from opencontractserver.types.enums import LabelType, PermissionTypes
+from opencontractserver.types.enums import LabelType
 from opencontractserver.users.models import Assignment, UserExport, UserImport
-from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
 logger = logging.getLogger(__name__)
+
+
+def _corpus_count_subqueries():
+    """
+    Build subqueries for efficient document and annotation counting on Corpus
+    querysets. Used by resolve_corpuses and resolve_corpus_by_slugs to annotate
+    _document_count and _annotation_count without N+1 queries.
+    """
+    from opencontractserver.documents.models import DocumentPath
+
+    document_count_sq = (
+        DocumentPath.objects.filter(
+            corpus_id=OuterRef("id"),
+            is_current=True,
+            is_deleted=False,
+        )
+        .values("corpus_id")
+        .annotate(count=Count("document_id", distinct=True))
+        .values("count")
+    )
+    annotation_count_sq = (
+        Annotation.objects.filter(
+            document__path_records__corpus_id=OuterRef("id"),
+            document__path_records__is_current=True,
+            document__path_records__is_deleted=False,
+        )
+        .values("document__path_records__corpus_id")
+        .annotate(count=Count("id", distinct=True))
+        .values("count")
+    )
+    return document_count_sq, annotation_count_sq
 
 
 class MetadataCompletionStatusType(graphene.ObjectType):
@@ -144,6 +177,15 @@ class MetadataCompletionStatusType(graphene.ObjectType):
     missing_fields = graphene.Int()
     percentage = graphene.Float()
     missing_required = graphene.List(graphene.String)
+
+
+class DocumentMetadataResultType(graphene.ObjectType):
+    """Type for batch metadata query results - groups datacells by document."""
+
+    document_id = graphene.ID(description="The document's global ID")
+    datacells = graphene.List(
+        DatacellType, description="Metadata datacells for this document"
+    )
 
 
 class Query(graphene.ObjectType):
@@ -205,6 +247,15 @@ class Query(graphene.ObjectType):
             return None
         qs = Corpus.objects.filter(creator=owner, slug=corpus_slug)
         qs = qs.visible_to_user(info.context.user)
+
+        # Add count annotations for efficient documentCount/annotationCount
+        # resolution without N+1 queries. Coalesce ensures 0 instead of NULL.
+        doc_sq, annot_sq = _corpus_count_subqueries()
+        qs = qs.annotate(
+            _document_count=Coalesce(Subquery(doc_sq), 0),
+            _annotation_count=Coalesce(Subquery(annot_sq), 0),
+        )
+
         return qs.first()
 
     def resolve_document_by_slugs(self, info, user_slug, document_slug):
@@ -275,16 +326,16 @@ class Query(graphene.ObjectType):
     def resolve_annotations(
         self, info, analysis_isnull=None, structural=None, **kwargs
     ):
-        # Check if we should use the query optimizer (when document_id is provided)
+        # Import the query optimizer
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
         document_id = kwargs.get("document_id")
         corpus_id = kwargs.get("corpus_id")
 
         if document_id:
-            # Import the query optimizer
-            from opencontractserver.annotations.query_optimizer import (
-                AnnotationQueryOptimizer,
-            )
-
+            # Use document-specific query optimizer
             doc_django_pk = int(from_global_id(document_id)[1])
             corpus_django_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
 
@@ -298,8 +349,23 @@ class Query(graphene.ObjectType):
                 use_cache=False,
             )
 
+        elif corpus_id:
+            # Use corpus-wide query optimizer (handles structural annotations correctly)
+            # This optimizer already applies structural, analysis_isnull, and corpus filters
+            corpus_django_pk = int(from_global_id(corpus_id)[1])
+            queryset = AnnotationQueryOptimizer.get_corpus_annotations(
+                corpus_id=corpus_django_pk,
+                user=info.context.user,
+                structural=structural,
+                analysis_isnull=analysis_isnull,
+            )
+            # Mark filters already applied by optimizer to prevent double-filtering
+            corpus_id = None
+            structural = None
+            analysis_isnull = None
+
         else:
-            # Fallback to old behavior for non-document queries
+            # Fallback to visible_to_user for queries without document or corpus
             queryset = Annotation.objects.visible_to_user(info.context.user)
             logger.info(
                 f"Using visible_to_user for annotations query, found {queryset.count()} annotations"
@@ -821,10 +887,40 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_corpuses(self, info, **kwargs):
+        from opencontractserver.annotations.models import AnnotationLabel
+
+        doc_sq, annot_sq = _corpus_count_subqueries()
+
+        # Subqueries for label counts (via corpus.label_set_id)
+        # Note: 'included_in_labelset' is the related_query_name for filtering
+        def label_count_subquery(label_type: str):
+            return (
+                AnnotationLabel.objects.filter(
+                    included_in_labelset=OuterRef("label_set_id"),
+                    label_type=label_type,
+                )
+                .values("included_in_labelset")
+                .annotate(count=Count("id"))
+                .values("count")
+            )
+
         return (
             Corpus.objects.visible_to_user(info.context.user)
-            .select_related("creator", "engagement_metrics")
+            .select_related("creator", "engagement_metrics", "label_set", "parent")
             .prefetch_related("categories")
+            .annotate(
+                _document_count=Coalesce(Subquery(doc_sq), 0),
+                _annotation_count=Coalesce(Subquery(annot_sq), 0),
+                _label_doc_count=Coalesce(
+                    Subquery(label_count_subquery("DOC_TYPE_LABEL")), 0
+                ),
+                _label_span_count=Coalesce(
+                    Subquery(label_count_subquery("SPAN_LABEL")), 0
+                ),
+                _label_token_count=Coalesce(
+                    Subquery(label_count_subquery("TOKEN_LABEL")), 0
+                ),
+            )
         )
 
     corpus = OpenContractsNode.Field(CorpusType)  # relay.Node.Field(CorpusType)
@@ -1561,6 +1657,24 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
     def resolve_corpus_stats(self, info, corpus_id):
+        """
+        Resolve corpus statistics with proper permission filtering.
+
+        SECURITY: All counts respect the permission model:
+        - Documents: Uses visible_to_user() + DocumentPath filtering
+        - Annotations: Filtered by visible documents (inherit doc+corpus permissions)
+        - Analyses: Uses AnalysisQueryOptimizer (hybrid permission model)
+        - Extracts: Uses ExtractQueryOptimizer (hybrid permission model)
+        - Relationships: Uses DocumentRelationshipQueryOptimizer (inherit doc+corpus)
+        - Threads/Chats: Uses ConversationQueryOptimizer (single visibility query)
+        """
+        from opencontractserver.annotations.query_optimizer import (
+            AnalysisQueryOptimizer,
+            ExtractQueryOptimizer,
+        )
+        from opencontractserver.conversations.query_optimizer import (
+            ConversationQueryOptimizer,
+        )
 
         total_docs = 0
         total_annotations = 0
@@ -1568,29 +1682,79 @@ class Query(graphene.ObjectType):
         total_analyses = 0
         total_extracts = 0
         total_threads = 0
+        total_chats = 0
+        total_relationships = 0
 
+        user = info.context.user
         corpus_pk = from_global_id(corpus_id)[1]
-        corpuses = Corpus.objects.visible_to_user(info.context.user).filter(
-            id=corpus_pk
-        )
 
-        if corpuses.count() == 1:
-            corpus = corpuses[0]
-            # Use DocumentPath-based method for accurate count
-            total_docs = corpus.document_count()
-            total_annotations = corpus.annotations.all().count()
-            total_comments = UserFeedback.objects.filter(
-                commented_annotation__corpus=corpus
-            ).count()
-            total_analyses = corpus.analyses.all().count()
-            total_extracts = corpus.extracts.all().count()
-            total_threads = (
-                Conversation.objects.filter(
-                    conversation_type="thread", chat_with_corpus=corpus
+        try:
+            corpuses = Corpus.objects.visible_to_user(user).filter(id=corpus_pk)
+
+            if corpuses.count() == 1:
+                corpus = corpuses[0]
+
+                # Get visible document IDs in this corpus (for filtering annotations)
+                # Uses DocumentPath to respect folder structure and versioning
+                # Note: path_records is the related_name for Document FK in DocumentPath
+                visible_doc_ids = (
+                    Document.objects.visible_to_user(user)
+                    .filter(
+                        path_records__corpus=corpus,
+                        path_records__is_current=True,
+                        path_records__is_deleted=False,
+                    )
+                    .values_list("id", flat=True)
                 )
-                .visible_to_user(info.context.user)
-                .count()
-            )
+
+                # total_docs: Count of visible documents with active paths in corpus
+                total_docs = visible_doc_ids.count()
+
+                # total_annotations: Annotations inherit permissions from document + corpus
+                # Since user has corpus permission, filter by visible documents
+                # Include both document-attached and structural annotations
+                # Note: structural_set.documents is the reverse FK from Document to StructuralAnnotationSet
+                total_annotations = corpus.annotations.filter(
+                    Q(document_id__in=visible_doc_ids)
+                    | Q(
+                        structural_set__documents__in=visible_doc_ids,
+                        structural=True,
+                    )
+                ).count()
+
+                # total_comments: Comments on visible annotations
+                total_comments = UserFeedback.objects.filter(
+                    commented_annotation__corpus=corpus,
+                    commented_annotation__document_id__in=visible_doc_ids,
+                ).count()
+
+                # total_analyses: Uses hybrid permission model (analysis perm + corpus perm)
+                total_analyses = AnalysisQueryOptimizer.get_visible_analyses(
+                    user, corpus_id=corpus.id
+                ).count()
+
+                # total_extracts: Uses hybrid permission model (extract perm + corpus perm)
+                total_extracts = ExtractQueryOptimizer.get_visible_extracts(
+                    user, corpus_id=corpus.id
+                ).count()
+
+                # total_threads and total_chats: Use ConversationQueryOptimizer
+                # to execute visibility subqueries once instead of twice
+                conv_optimizer = ConversationQueryOptimizer(user)
+                total_threads, total_chats = (
+                    conv_optimizer.get_corpus_conversation_counts(corpus.id)
+                )
+
+                # total_relationships: Uses DocumentRelationshipQueryOptimizer
+                # Relationships inherit from source_doc + target_doc + corpus
+                total_relationships = (
+                    DocumentRelationshipQueryOptimizer.get_visible_relationships(
+                        user, corpus_id=corpus.id, context=info.context
+                    ).count()
+                )
+        except Exception as e:
+            logger.error(f"Error in resolve_corpus_stats: {e}", exc_info=True)
+            raise
 
         return CorpusStatsType(
             total_docs=total_docs,
@@ -1599,6 +1763,8 @@ class Query(graphene.ObjectType):
             total_analyses=total_analyses,
             total_extracts=total_extracts,
             total_threads=total_threads,
+            total_chats=total_chats,
+            total_relationships=total_relationships,
         )
 
     document_corpus_actions = graphene.Field(
@@ -1652,6 +1818,7 @@ class Query(graphene.ObjectType):
         description="Retrieve all registered pipeline components, optionally filtered by MIME type.",
     )
 
+    @login_required
     def resolve_pipeline_components(
         self, info, mimetype: Optional[FileTypeEnum] = None
     ) -> PipelineComponentsType:
@@ -1688,8 +1855,75 @@ class Query(graphene.ObjectType):
             # Get all components from cached registry
             components_data = get_all_components_cached()
 
+        user = info.context.user
+
+        # Get PipelineSettings instance for configured component filtering
+        from opencontractserver.documents.models import PipelineSettings
+
+        settings_instance = PipelineSettings.get_instance()
+
+        if not user.is_superuser:
+            configured_components: set[str] = set()
+
+            preferred_parsers = settings_instance.preferred_parsers or {}
+            preferred_embedders = settings_instance.preferred_embedders or {}
+            preferred_thumbnailers = settings_instance.preferred_thumbnailers or {}
+
+            configured_components.update(preferred_parsers.values())
+            configured_components.update(preferred_embedders.values())
+            configured_components.update(preferred_thumbnailers.values())
+
+            if settings_instance.default_embedder:
+                configured_components.add(settings_instance.default_embedder)
+
+            if settings_instance.parser_kwargs:
+                configured_components.update(settings_instance.parser_kwargs.keys())
+
+            if settings_instance.component_settings:
+                configured_components.update(
+                    settings_instance.component_settings.keys()
+                )
+
+            def filter_configured(definitions):
+                return [
+                    defn
+                    for defn in definitions
+                    if defn.class_name in configured_components
+                ]
+
+            components_data = {
+                "parsers": filter_configured(components_data["parsers"]),
+                "embedders": filter_configured(components_data["embedders"]),
+                "thumbnailers": filter_configured(components_data["thumbnailers"]),
+                "post_processors": filter_configured(
+                    components_data["post_processors"]
+                ),
+            }
+
         # Convert PipelineComponentDefinition objects to GraphQL types
         def to_graphql_type(defn, component_type: str) -> PipelineComponentType:
+            settings_schema = None
+            if user.is_superuser:
+                # Get schema augmented with has_value/current_value from DB
+                augmented_schema = settings_instance.get_component_schema(
+                    defn.class_name
+                )
+                if augmented_schema:
+                    settings_schema = [
+                        ComponentSettingSchemaType(
+                            name=name,
+                            setting_type=info.get("type", "optional"),
+                            python_type=info.get("python_type"),
+                            required=info.get("required", False),
+                            description=info.get("description", ""),
+                            default=info.get("default"),
+                            env_var=info.get("env_var"),
+                            has_value=info.get("has_value", False),
+                            current_value=info.get("current_value"),
+                        )
+                        for name, info in augmented_schema.items()
+                    ]
+
             component_info = PipelineComponentType(
                 name=defn.name,
                 class_name=defn.class_name,
@@ -1701,6 +1935,7 @@ class Query(graphene.ObjectType):
                 supported_file_types=list(defn.supported_file_types),
                 component_type=component_type,
                 input_schema=defn.input_schema,
+                settings_schema=settings_schema,
             )
             if defn.vector_size is not None:
                 component_info.vector_size = defn.vector_size
@@ -1925,6 +2160,221 @@ class Query(graphene.ObjectType):
 
         # Extract messages from results
         return [result.message for result in results]
+
+    # SEMANTIC SEARCH QUERIES #############################################
+    semantic_search = graphene.List(
+        SemanticSearchResultType,
+        query=graphene.String(required=True, description="Search query text"),
+        corpus_id=graphene.ID(
+            required=False, description="Optional corpus ID to search within"
+        ),
+        document_id=graphene.ID(
+            required=False, description="Optional document ID to search within"
+        ),
+        modalities=graphene.List(
+            graphene.String,
+            required=False,
+            description="Filter by content modalities (TEXT, IMAGE)",
+        ),
+        label_text=graphene.String(
+            required=False,
+            description="Filter by annotation label text (case-insensitive substring match)",
+        ),
+        raw_text_contains=graphene.String(
+            required=False,
+            description="Filter by raw_text content (case-insensitive substring match)",
+        ),
+        limit=graphene.Int(
+            default_value=50,
+            description="Maximum number of results to return (default: 50, max: 200)",
+        ),
+        offset=graphene.Int(
+            default_value=0,
+            description="Number of results to skip for pagination",
+        ),
+        description=(
+            "Hybrid search combining vector similarity with text filters. "
+            "Uses DEFAULT_EMBEDDER for global cross-corpus search. "
+            "Results are first filtered by text criteria, then ranked by similarity."
+        ),
+    )
+
+    @login_required
+    def resolve_semantic_search(
+        self,
+        info,
+        query,
+        corpus_id=None,
+        document_id=None,
+        modalities=None,
+        label_text=None,
+        raw_text_contains=None,
+        limit=50,
+        offset=0,
+    ):
+        """
+        Hybrid search combining vector similarity with text filters.
+
+        This query enables semantic (meaning-based) search across all annotations
+        the user has access to, using the DEFAULT_EMBEDDER embeddings that are
+        created for every annotation as part of the dual embedding strategy.
+
+        HYBRID SEARCH:
+        - Vector similarity search ranks results by semantic relevance
+        - Text filters (label_text, raw_text_contains) narrow down results
+        - Filters are applied BEFORE vector search for efficiency
+
+        PERMISSION MODEL (follows consolidated_permissioning_guide.md):
+        - Uses Document.objects.visible_to_user() for document access control
+        - Structural annotations are always visible if document is accessible
+        - Non-structural annotations follow: visible if public OR owned by user
+        - Corpus permissions are respected via document visibility
+
+        Args:
+            info: GraphQL execution info
+            query: Search query text for vector similarity
+            corpus_id: Optional corpus ID to limit search to (global ID)
+            document_id: Optional document ID to limit search to (global ID)
+            modalities: Optional list of modalities to filter by (TEXT, IMAGE)
+            label_text: Optional filter by annotation label text (case-insensitive)
+            raw_text_contains: Optional filter by raw_text substring (case-insensitive)
+            limit: Maximum number of results (capped at 200)
+            offset: Pagination offset
+
+        Returns:
+            List[SemanticSearchResultType]: List of matching annotations with scores
+        """
+        from opencontractserver.llms.vector_stores.core_vector_stores import (
+            CoreAnnotationVectorStore,
+        )
+
+        # N+1 OPTIMIZATION NOTE: The CoreAnnotationVectorStore already applies
+        # select_related("annotation_label", "document", "corpus") to the base
+        # queryset (see core_vector_stores.py:200-202 and :639-641). This means
+        # all related objects are eagerly loaded and no additional queries are
+        # made when accessing annotation.document, annotation.corpus, or
+        # annotation.annotation_label in the filter loops or result types below.
+        # Cap limit to prevent abuse
+        limit = min(limit, 200)
+
+        # Convert global IDs to database IDs
+        corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
+        document_pk = int(from_global_id(document_id)[1]) if document_id else None
+
+        user = info.context.user
+
+        # -------------------------------------------------------------------------
+        # SECURITY: Verify user has access to requested document/corpus (IDOR prevention)
+        # Uses visible_to_user() which returns empty queryset if no access.
+        # We return empty results for both "not found" and "no permission" cases
+        # to prevent enumeration attacks.
+        # -------------------------------------------------------------------------
+        if document_pk:
+            if (
+                not Document.objects.visible_to_user(user)
+                .filter(id=document_pk)
+                .exists()
+            ):
+                # Document doesn't exist or user lacks permission - return empty results
+                return []
+
+        if corpus_pk:
+            if not Corpus.objects.visible_to_user(user).filter(id=corpus_pk).exists():
+                # Corpus doesn't exist or user lacks permission - return empty results
+                return []
+
+        # Build metadata filters for hybrid search
+        metadata_filters = {}
+        if label_text:
+            metadata_filters["annotation_label"] = label_text
+        if raw_text_contains:
+            metadata_filters["raw_text"] = raw_text_contains
+
+        # If document_id or corpus_id provided, use the instance-based search
+        # which respects corpus-specific embedders
+        if document_pk or corpus_pk:
+            # Use instance-based CoreAnnotationVectorStore for scoped search
+            # Permission already verified above
+            vector_store = CoreAnnotationVectorStore(
+                user_id=user.id,
+                corpus_id=corpus_pk,
+                document_id=document_pk,
+                modalities=modalities,
+                must_have_text=raw_text_contains,  # Additional text filter
+                # Use DEFAULT_EMBEDDER for consistent global search
+                embedder_path=settings.DEFAULT_EMBEDDER,
+            )
+
+            from opencontractserver.llms.vector_stores.core_vector_stores import (
+                VectorSearchQuery,
+            )
+
+            search_query = VectorSearchQuery(
+                query_text=query,
+                similarity_top_k=limit + offset,  # Fetch extra for pagination
+                filters={"annotation_label": label_text} if label_text else None,
+            )
+
+            results = vector_store.search(search_query)
+
+            # Apply pagination
+            paginated_results = results[offset : offset + limit]
+        else:
+            # Use global_search for cross-corpus search
+            # Then apply additional filters post-search
+            results = CoreAnnotationVectorStore.global_search(
+                user_id=user.id,
+                query_text=query,
+                top_k=(limit + offset) * 3,  # Fetch more for post-filtering
+                modalities=modalities,
+            )
+
+            # Apply hybrid text filters post-search
+            if label_text or raw_text_contains:
+                filtered_results = []
+                for result in results:
+                    annotation = result.annotation
+                    # Check label_text filter
+                    if label_text:
+                        label = getattr(annotation.annotation_label, "text", None)
+                        if not label or label_text.lower() not in label.lower():
+                            continue
+                    # Check raw_text filter
+                    if raw_text_contains:
+                        raw_text = annotation.raw_text or ""
+                        if raw_text_contains.lower() not in raw_text.lower():
+                            continue
+                    filtered_results.append(result)
+                results = filtered_results
+
+            # Apply pagination
+            paginated_results = results[offset : offset + limit]
+
+        # Defensive select_related: Re-fetch annotations with explicit prefetching
+        # to guard against changes in CoreAnnotationVectorStore implementation
+        if paginated_results:
+            from opencontractserver.annotations.models import Annotation
+
+            annotation_ids = [r.annotation.id for r in paginated_results]
+            annotations_by_id = {
+                a.id: a
+                for a in Annotation.objects.filter(
+                    id__in=annotation_ids
+                ).select_related("annotation_label", "document", "corpus")
+            }
+            # Update results with explicitly prefetched annotations
+            for result in paginated_results:
+                if result.annotation.id in annotations_by_id:
+                    result.annotation = annotations_by_id[result.annotation.id]
+
+        # Convert to GraphQL result types
+        return [
+            SemanticSearchResultType(
+                annotation=result.annotation,
+                similarity_score=result.similarity_score,
+            )
+            for result in paginated_results
+        ]
 
     # MODERATION QUERIES ##################################################
     moderation_actions = DjangoFilterConnectionField(
@@ -2795,121 +3245,96 @@ class Query(graphene.ObjectType):
         description="Get metadata completion status for a document using column/datacell system",
     )
 
+    documents_metadata_datacells_batch = graphene.List(
+        DocumentMetadataResultType,
+        document_ids=graphene.List(graphene.ID, required=True),
+        corpus_id=graphene.ID(required=True),
+        description="Get metadata datacells for multiple documents in a single query (batch)",
+    )
+
     def resolve_corpus_metadata_columns(self, info, corpus_id):
-        """Get metadata columns for a corpus."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata columns for a corpus using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
-                return []
-
-            # Get metadata fieldset
-            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
-                return corpus.metadata_schema.columns.filter(
-                    is_manual_entry=True
-                ).order_by("display_order")
-
-            return []
-
-        except Corpus.DoesNotExist:
-            return []
+        return MetadataQueryOptimizer.get_corpus_metadata_columns(
+            user, local_corpus_id, manual_only=True
+        )
 
     def resolve_document_metadata_datacells(self, info, document_id, corpus_id):
-        """Get metadata datacells for a document in a corpus."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata datacells for a document using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_doc_id = int(from_global_id(document_id)[1])
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, document, PermissionTypes.READ):
-                return []
-
-            # Get metadata datacells
-            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
-                return Datacell.objects.filter(
-                    document=document,
-                    column__fieldset=corpus.metadata_schema,
-                    column__is_manual_entry=True,
-                ).select_related("column")
-
-            return []
-
-        except (Document.DoesNotExist, Corpus.DoesNotExist):
-            return []
+        return MetadataQueryOptimizer.get_document_metadata(
+            user, local_doc_id, local_corpus_id, manual_only=True
+        )
 
     def resolve_metadata_completion_status_v2(self, info, document_id, corpus_id):
-        """Get metadata completion status using column/datacell system."""
-        from opencontractserver.corpuses.models import Corpus
+        """Get metadata completion status using MetadataQueryOptimizer."""
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-        try:
-            user = info.context.user
-            document = Document.objects.get(pk=from_global_id(document_id)[1])
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+        user = info.context.user
+        local_doc_id = int(from_global_id(document_id)[1])
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Check permissions
-            if not user_has_permission_for_obj(user, document, PermissionTypes.READ):
-                return None
+        return MetadataQueryOptimizer.get_metadata_completion_status(
+            user, local_doc_id, local_corpus_id
+        )
 
-            # Get metadata columns and datacells
-            if not hasattr(corpus, "metadata_schema") or not corpus.metadata_schema:
-                return {
-                    "total_fields": 0,
-                    "filled_fields": 0,
-                    "missing_fields": 0,
-                    "percentage": 100.0,
-                    "missing_required": [],
-                }
+    def resolve_documents_metadata_datacells_batch(self, info, document_ids, corpus_id):
+        """
+        Get metadata datacells for multiple documents using MetadataQueryOptimizer.
 
-            columns = corpus.metadata_schema.columns.filter(is_manual_entry=True)
-            total_fields = columns.count()
+        This batch query solves the N+1 problem when loading metadata for a grid view.
+        Uses the centralized MetadataQueryOptimizer which applies proper permission
+        filtering: Effective Permission = MIN(document_permission, corpus_permission)
+        """
+        from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
-            if total_fields == 0:
-                return {
-                    "total_fields": 0,
-                    "filled_fields": 0,
-                    "missing_fields": 0,
-                    "percentage": 100.0,
-                    "missing_required": [],
-                }
+        user = info.context.user
+        local_corpus_id = int(from_global_id(corpus_id)[1])
 
-            # Get filled datacells
-            filled_datacells = Datacell.objects.filter(
-                document=document, column__in=columns
-            ).exclude(data__value__isnull=True)
+        # Convert global IDs to local IDs (single pass)
+        local_doc_ids = []
+        local_id_by_global = {}  # global_id -> local_id
+        for global_id in document_ids:
+            _, local_id = from_global_id(global_id)
+            local_id_int = int(local_id)
+            local_doc_ids.append(local_id_int)
+            local_id_by_global[global_id] = local_id_int
 
-            filled_count = filled_datacells.count()
-            filled_column_ids = set(
-                filled_datacells.values_list("column_id", flat=True)
-            )
+        # Use optimizer to get batch metadata with proper permissions
+        datacells_by_doc = MetadataQueryOptimizer.get_documents_metadata_batch(
+            user,
+            local_doc_ids,
+            local_corpus_id,
+            manual_only=True,
+            context=info.context,
+        )
 
-            # Find missing required fields
-            missing_required = []
-            for column in columns:
-                if column.id not in filled_column_ids:
-                    config = column.validation_config or {}
-                    if config.get("required", False):
-                        missing_required.append(column.name)
+        # Build response - maintain order of requested document_ids
+        # The optimizer returns a dict with keys for all readable documents,
+        # so we only include documents the user has permission to read
+        results = []
+        for global_id in document_ids:
+            local_id = local_id_by_global[global_id]
 
-            # Calculate percentage
-            percentage = (filled_count / total_fields * 100) if total_fields > 0 else 0
+            # Only include documents that are in the result (user has permission)
+            if local_id in datacells_by_doc:
+                results.append(
+                    {
+                        "document_id": global_id,
+                        "datacells": datacells_by_doc[local_id],
+                    }
+                )
 
-            return {
-                "total_fields": total_fields,
-                "filled_fields": filled_count,
-                "missing_fields": total_fields - filled_count,
-                "percentage": percentage,
-                "missing_required": missing_required,
-            }
-
-        except (Corpus.DoesNotExist, Document.DoesNotExist):
-            return None
+        return results
 
     # BADGE RESOLVERS ####################################
     badges = DjangoFilterConnectionField(BadgeType, filterset_class=BadgeFilter)
@@ -3259,6 +3684,8 @@ class Query(graphene.ObjectType):
         Get top contributors globally by reputation.
 
         Returns users ordered by global reputation score.
+        Attaches _reputation_global to each user to avoid N+1 queries
+        when resolving reputationGlobal on UserType.
 
         Epic: #565 - Corpus Engagement Metrics & Analytics
         Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
@@ -3274,8 +3701,12 @@ class Query(graphene.ObjectType):
             .order_by("-reputation_score")[:limit]
         )
 
-        # Return user objects (badges are already prefetched)
-        return [rep.user for rep in top_reputations]
+        # Attach reputation score to user objects to avoid N+1 queries
+        users = []
+        for rep in top_reputations:
+            rep.user._reputation_global = rep.reputation_score
+            users.append(rep.user)
+        return users
 
     # LEADERBOARD QUERIES (Issue #613) ###################
     leaderboard = graphene.Field(
@@ -3697,9 +4128,9 @@ class Query(graphene.ObjectType):
         User = get_user_model()
         try:
             user = User.objects.get(slug=user_slug)
-            # Use annotate to avoid N+1 query for document count
+            # Use annotate to count documents via DocumentPath instead of M2M
             corpus = (
-                Corpus.objects.annotate(doc_count=Count("documents"))
+                Corpus.objects.annotate(doc_count=Count("document_paths"))
                 .select_related("creator")
                 .get(creator=user, slug=corpus_slug, is_public=True)
             )
@@ -3767,7 +4198,13 @@ class Query(graphene.ObjectType):
         try:
             user = User.objects.get(slug=user_slug)
             corpus = Corpus.objects.get(creator=user, slug=corpus_slug, is_public=True)
-            document = corpus.documents.get(slug=document_slug, is_public=True)
+            document = (
+                corpus.get_documents()
+                .filter(slug=document_slug, is_public=True)
+                .first()
+            )
+            if not document:
+                raise Document.DoesNotExist()
 
             # Build icon URL if available
             icon_url = None
@@ -3864,6 +4301,44 @@ class Query(graphene.ObjectType):
             )
         except Extract.DoesNotExist:
             return None
+
+    # PIPELINE SETTINGS ########################################
+    pipeline_settings = graphene.Field(
+        "config.graphql.graphene_types.PipelineSettingsType",
+        description="Retrieve the singleton pipeline settings for document processing configuration.",
+    )
+
+    @login_required
+    def resolve_pipeline_settings(self, info):
+        """
+        Resolve the singleton PipelineSettings instance.
+
+        This query returns the runtime-configurable document processing settings.
+        Any authenticated user can read these settings, but only superusers can
+        modify them via the UpdatePipelineSettings mutation.
+
+        Returns:
+            PipelineSettingsType: The singleton pipeline settings.
+        """
+        from config.graphql.graphene_types import PipelineSettingsType
+        from opencontractserver.documents.models import PipelineSettings
+
+        settings_instance = PipelineSettings.get_instance()
+
+        # Get list of components that have secrets (don't expose actual secrets)
+        components_with_secrets = list(settings_instance.get_secrets().keys())
+
+        return PipelineSettingsType(
+            preferred_parsers=settings_instance.preferred_parsers or {},
+            preferred_embedders=settings_instance.preferred_embedders or {},
+            preferred_thumbnailers=settings_instance.preferred_thumbnailers or {},
+            parser_kwargs=settings_instance.parser_kwargs or {},
+            component_settings=settings_instance.component_settings or {},
+            default_embedder=settings_instance.default_embedder or "",
+            components_with_secrets=components_with_secrets,
+            modified=settings_instance.modified,
+            modified_by=settings_instance.modified_by,
+        )
 
     # DEBUG FIELD ########################################
     if settings.ALLOW_GRAPHQL_DEBUG:

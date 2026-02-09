@@ -15,14 +15,14 @@ v3.0.0.b3 introduces a sophisticated document versioning system:
 - **Time travel**: Query the filesystem state at any point in history
 - **Soft delete/restore**: Documents can be deleted and restored without data loss
 
-### Structural Annotation Sets (Optional)
+### Structural Annotation Sets
 
-A storage optimization for deployments with documents in multiple corpuses:
+Corpus-isolated containers for structural annotations:
 
-- **StructuralAnnotationSet**: Shared container for structural annotations (headers, sections, paragraphs)
-- **Content-based deduplication**: Documents with the same content share structural annotations
-- **Storage efficiency**: O(1) storage for structural annotations instead of O(n) per corpus copy
-- **Optional migration**: Existing installations can choose to migrate for storage savings
+- **StructuralAnnotationSet**: Corpus-specific container for structural annotations (headers, sections, paragraphs)
+- **Corpus isolation**: Each corpus gets its own copy of structural annotations when documents are added
+- **Complete separation**: No data sharing across corpus boundaries
+- **Automatic duplication**: When adding documents to a corpus, structural annotation sets are duplicated
 
 ## Pre-Upgrade Checklist
 
@@ -78,31 +78,30 @@ python manage.py validate_v3_migration
 OpenContracts v3.0.0.b3 Migration Validation
 ======================================================================
 
-[1/7] Checking Document.version_tree_id...
+[1/6] Checking Document.version_tree_id...
   PASSED: All documents have version_tree_id
 
-[2/7] Checking Document.is_current...
+[2/6] Checking Document.is_current...
   PASSED: X current, 0 non-current (versioned)
 
-[3/7] Checking DocumentPath records...
-  PASSED: All M2M relationships have DocumentPath records
-
-[4/7] Checking Annotation XOR constraint...
+[3/6] Checking Annotation XOR constraint...
   PASSED: All X annotations satisfy XOR constraint
 
-[5/7] Checking Relationship XOR constraint...
+[4/6] Checking Relationship XOR constraint...
   PASSED: All X relationships satisfy XOR constraint
 
-[6/7] Checking StructuralAnnotationSet uniqueness...
+[5/6] Checking StructuralAnnotationSet uniqueness...
   PASSED: All 0 structural sets have unique content_hash
 
-[7/7] Checking structural migration candidates...
+[6/6] Checking structural migration candidates...
   INFO: X documents eligible for structural migration
 
 ======================================================================
 VALIDATION PASSED
 ======================================================================
 ```
+
+> **Note**: As of v3.0.0.b3+, the `corpus.documents` M2M relationship has been removed (issue #835). DocumentPath is now the sole source of truth for corpus-document associations, so there is no longer an M2M validation check.
 
 ### Step 3: Migrate Structural Annotations (OPTIONAL)
 
