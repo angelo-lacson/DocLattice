@@ -1,7 +1,12 @@
 import logging
+from dataclasses import dataclass, field
 from typing import Optional
 
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
+)
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
 from opencontractserver.thumbnails.pdfs import pdf_thumbnail_from_bytes
 
@@ -10,7 +15,10 @@ logger = logging.getLogger(__name__)
 
 class PdfThumbnailGenerator(BaseThumbnailGenerator):
     """
-    A thumbnail generator that creates thumbnails from pdf files.
+    A thumbnail generator that creates thumbnails from PDF files.
+
+    Settings are loaded from PipelineSettings database. Use the management
+    command `migrate_pipeline_settings` to seed initial values from environment.
     """
 
     title = "PDF Thumbnail Generator"
@@ -19,8 +27,31 @@ class PdfThumbnailGenerator(BaseThumbnailGenerator):
     dependencies = []
     supported_file_types = [FileTypeEnum.PDF]
 
+    @dataclass
+    class Settings:
+        """Configuration schema for PdfThumbnailGenerator."""
+
+        height: int = field(
+            default=300,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Height of generated thumbnail in pixels",
+                )
+            },
+        )
+        width: int = field(
+            default=300,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Width of generated thumbnail in pixels",
+                )
+            },
+        )
+
     def __init__(self, **kwargs_super):
-        """Initializes the PdfThumbnailGenerator."""
+        """Initialize the PdfThumbnailGenerator."""
         super().__init__(**kwargs_super)
         logger.info("PdfThumbnailGenerator initialized.")
 
@@ -47,7 +78,7 @@ class PdfThumbnailGenerator(BaseThumbnailGenerator):
 
         try:
             # Determine desired dimensions
-            thumbnail_size = (width, width)
+            thumbnail_size = (width, height)
             crop_size = (width, height)
 
             if not pdf_bytes:

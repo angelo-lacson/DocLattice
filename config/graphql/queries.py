@@ -54,6 +54,7 @@ from config.graphql.graphene_types import (
     BulkDocumentUploadStatusType,
     ColumnType,
     CommunityStatsType,
+    ComponentSettingSchemaType,
     ConversationType,
     CorpusActionExecutionType,
     CorpusActionTrailStatsType,
@@ -1817,6 +1818,7 @@ class Query(graphene.ObjectType):
         description="Retrieve all registered pipeline components, optionally filtered by MIME type.",
     )
 
+    @login_required
     def resolve_pipeline_components(
         self, info, mimetype: Optional[FileTypeEnum] = None
     ) -> PipelineComponentsType:
@@ -1853,8 +1855,75 @@ class Query(graphene.ObjectType):
             # Get all components from cached registry
             components_data = get_all_components_cached()
 
+        user = info.context.user
+
+        # Get PipelineSettings instance for configured component filtering
+        from opencontractserver.documents.models import PipelineSettings
+
+        settings_instance = PipelineSettings.get_instance()
+
+        if not user.is_superuser:
+            configured_components: set[str] = set()
+
+            preferred_parsers = settings_instance.preferred_parsers or {}
+            preferred_embedders = settings_instance.preferred_embedders or {}
+            preferred_thumbnailers = settings_instance.preferred_thumbnailers or {}
+
+            configured_components.update(preferred_parsers.values())
+            configured_components.update(preferred_embedders.values())
+            configured_components.update(preferred_thumbnailers.values())
+
+            if settings_instance.default_embedder:
+                configured_components.add(settings_instance.default_embedder)
+
+            if settings_instance.parser_kwargs:
+                configured_components.update(settings_instance.parser_kwargs.keys())
+
+            if settings_instance.component_settings:
+                configured_components.update(
+                    settings_instance.component_settings.keys()
+                )
+
+            def filter_configured(definitions):
+                return [
+                    defn
+                    for defn in definitions
+                    if defn.class_name in configured_components
+                ]
+
+            components_data = {
+                "parsers": filter_configured(components_data["parsers"]),
+                "embedders": filter_configured(components_data["embedders"]),
+                "thumbnailers": filter_configured(components_data["thumbnailers"]),
+                "post_processors": filter_configured(
+                    components_data["post_processors"]
+                ),
+            }
+
         # Convert PipelineComponentDefinition objects to GraphQL types
         def to_graphql_type(defn, component_type: str) -> PipelineComponentType:
+            settings_schema = None
+            if user.is_superuser:
+                # Get schema augmented with has_value/current_value from DB
+                augmented_schema = settings_instance.get_component_schema(
+                    defn.class_name
+                )
+                if augmented_schema:
+                    settings_schema = [
+                        ComponentSettingSchemaType(
+                            name=name,
+                            setting_type=info.get("type", "optional"),
+                            python_type=info.get("python_type"),
+                            required=info.get("required", False),
+                            description=info.get("description", ""),
+                            default=info.get("default"),
+                            env_var=info.get("env_var"),
+                            has_value=info.get("has_value", False),
+                            current_value=info.get("current_value"),
+                        )
+                        for name, info in augmented_schema.items()
+                    ]
+
             component_info = PipelineComponentType(
                 name=defn.name,
                 class_name=defn.class_name,
@@ -1866,6 +1935,7 @@ class Query(graphene.ObjectType):
                 supported_file_types=list(defn.supported_file_types),
                 component_type=component_type,
                 input_schema=defn.input_schema,
+                settings_schema=settings_schema,
             )
             if defn.vector_size is not None:
                 component_info.vector_size = defn.vector_size

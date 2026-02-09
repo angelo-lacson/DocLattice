@@ -1,13 +1,61 @@
+from dataclasses import dataclass, field
+from unittest.mock import patch
+
 from django.test import TestCase
 
+from opencontractserver.documents.models import PipelineSettings
 from opencontractserver.pipeline.base.base_component import PipelineComponentBase
+from opencontractserver.pipeline.base.settings_schema import (
+    ConfigurationError,
+    PipelineSetting,
+    SettingType,
+)
 
 # Helper to get the logger from the module being tested
 BASE_COMPONENT_LOGGER = "opencontractserver.pipeline.base.base_component"
 
 
 class DummyComponent(PipelineComponentBase):
-    """A simple component for testing settings loading."""
+    """A simple component for testing settings loading (no Settings dataclass)."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+class DummyComponentWithSettings(PipelineComponentBase):
+    """A component with a Settings dataclass for testing schema-based loading."""
+
+    @dataclass
+    class Settings:
+        api_key: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.SECRET,
+                    required=True,
+                    description="API key for testing",
+                    env_var="DUMMY_API_KEY",
+                )
+            },
+        )
+        timeout: int = field(
+            default=30,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Request timeout in seconds",
+                )
+            },
+        )
+        debug: bool = field(
+            default=False,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Enable debug mode",
+                )
+            },
+        )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -15,161 +63,296 @@ class DummyComponent(PipelineComponentBase):
 
 class TestPipelineComponentBaseSettings(TestCase):
     """
-    Tests the settings loading mechanism of PipelineComponentBase,
-    ensuring it checks for simple class names first, then full Python paths.
+    Tests the settings loading mechanism of PipelineComponentBase.
+
+    Settings are loaded exclusively from the PipelineSettings database
+    singleton (DB-only, no Django settings fallback).
     """
+
+    def setUp(self):
+        """Ensure clean PipelineSettings state."""
+        PipelineSettings.objects.all().delete()
+        self.pipeline_settings = PipelineSettings.objects.create(id=1)
 
     def get_dummy_component_full_path(self) -> str:
         """Returns the full Python path to the DummyComponent class."""
         return f"{DummyComponent.__module__}.{DummyComponent.__name__}"
 
-    def test_load_settings_by_simple_name(self):
-        """Ensures settings are loaded using the simple class name if available."""
-        expected_settings = {"key_simple": "value_from_simple_name"}
-        pipeline_settings_override = {
-            "DummyComponent": expected_settings,
-            self.get_dummy_component_full_path(): {
-                "key_full": "value_from_full_path_ignored"
-            },
-        }
-        with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
-            component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), expected_settings)
+    def test_load_settings_from_db(self):
+        """Settings are loaded from PipelineSettings DB by full class path."""
+        expected_settings = {"api_key": "test-key", "timeout": 30}
+        full_path = self.get_dummy_component_full_path()
 
-    def test_load_settings_by_full_path_as_fallback(self):
-        """Ensures settings are loaded by full path if simple name is not found."""
-        expected_settings = {"key_full": "value_from_full_path"}
-        pipeline_settings_override = {
-            "AnotherComponent": {
-                "key_other": "other_value"
-            },  # Ensure simple name key is different
-            self.get_dummy_component_full_path(): expected_settings,
-        }
-        with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
-            component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), expected_settings)
+        self.pipeline_settings.component_settings = {full_path: expected_settings}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
 
-    def test_simple_name_takes_precedence_over_full_path(self):
-        """Confirms simple name settings are used even if full path settings also exist."""
-        expected_settings = {"key_simple_precedence": "simple_name_wins"}
-        pipeline_settings_override = {
-            "DummyComponent": expected_settings,
-            self.get_dummy_component_full_path(): {
-                "key_full_precedence": "full_path_loses"
-            },
-        }
-        with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
-            component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), expected_settings)
+        component = DummyComponent()
+        result = component.get_component_settings()
+        self.assertEqual(result["api_key"], expected_settings["api_key"])
+        self.assertEqual(result["timeout"], expected_settings["timeout"])
 
     def test_no_settings_found_for_component(self):
-        """Tests behavior when no settings exist for the component by any key."""
-        pipeline_settings_override = {
-            "AnotherComponent": {"key_another": "value_another"}
+        """Returns empty dict when no DB settings exist for the component."""
+        self.pipeline_settings.component_settings = {
+            "some.other.Component": {"key": "value"}
         }
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        component = DummyComponent()
+        self.assertEqual(component.get_component_settings(), {})
+
+    def test_empty_component_settings_returns_empty(self):
+        """Returns empty dict when component_settings is empty."""
+        self.pipeline_settings.component_settings = {}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        component = DummyComponent()
+        self.assertEqual(component.get_component_settings(), {})
+
+    def test_no_django_settings_fallback(self):
+        """Django settings PIPELINE_SETTINGS is NOT used as fallback."""
+        full_path = self.get_dummy_component_full_path()
+
+        # Set Django settings but keep DB empty
+        pipeline_settings_override = {
+            "DummyComponent": {"key_simple": "should_not_load"},
+            full_path: {"key_full": "should_not_load_either"},
+        }
+        self.pipeline_settings.component_settings = {}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
         with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
             component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), {})
+            result = component.get_component_settings()
+            # Should be empty - Django settings are NOT consulted
+            self.assertEqual(result, {})
+
+    def test_db_settings_take_precedence(self):
+        """DB settings are used even when Django settings differ."""
+        full_path = self.get_dummy_component_full_path()
+        db_settings = {"source": "database", "api_key": "db-key"}
+
+        self.pipeline_settings.component_settings = {full_path: db_settings}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        django_settings_override = {
+            full_path: {"source": "django", "api_key": "django-key"},
+        }
+        with self.settings(PIPELINE_SETTINGS=django_settings_override):
+            component = DummyComponent()
+            result = component.get_component_settings()
+            self.assertEqual(result["source"], "database")
+            self.assertEqual(result["api_key"], "db-key")
 
     def test_pipeline_settings_globally_missing(self):
-        """
-        Tests behavior if PIPELINE_SETTINGS is not defined in Django settings at all.
-        The getattr in PipelineComponentBase should provide a default empty dict.
-        """
-        # Ensure PIPELINE_SETTINGS is not present for this test context
-        # One way is to override it with a value that indicates it's "unset"
-        # for the purpose of getattr(settings, "PIPELINE_SETTINGS", {})
-        # However, the most direct is to ensure it's not in django_settings.
-        # This is tricky with override_settings as it restores.
-        # The component's `getattr(settings, "PIPELINE_SETTINGS", {})` handles this.
-        # If `PIPELINE_SETTINGS` isn't in `django_settings`, `getattr` will use its default.
-
-        # To robustly test getattr's default, we'd ideally remove the attribute.
-        # This is fragile in tests. We rely on `override_settings(PIPELINE_SETTINGS={})` and
-        # knowing `getattr` in the component works.
-        # A direct test of getattr is implicit.
-        # The following simulates it being empty.
-        with self.settings(PIPELINE_SETTINGS={}):  # No settings for any component
+        """Returns empty dict when no settings exist anywhere."""
+        with self.settings(PIPELINE_SETTINGS={}):
             component = DummyComponent()
             self.assertEqual(
                 component.get_component_settings(),
                 {},
-                "Should be empty if PIPELINE_SETTINGS is empty.",
+                "Should be empty if no DB settings exist.",
             )
 
-        # To truly test it being undefined, you might need to mock settings object,
-        # but PipelineComponentBase already uses getattr with a default.
+    def test_component_settings_not_a_dict_returns_empty(self):
+        """Returns empty dict when component_settings DB value is not a dict."""
+        self.pipeline_settings.component_settings = {}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
 
-    def test_pipeline_settings_is_not_a_dictionary(self):
-        """Tests that a warning is logged if PIPELINE_SETTINGS is not a dict."""
-        # The new implementation loads settings lazily when get_component_settings()
-        # is called, so we need to call it to trigger the warning.
-        # Also, we need to ensure DB settings are empty so the fallback is used.
-        with self.settings(PIPELINE_SETTINGS="this_is_not_a_dictionary"):
-            component = DummyComponent()
-            # Clear DB settings so fallback to Django settings is used
-            from opencontractserver.documents.models import PipelineSettings
+        component = DummyComponent()
+        self.assertEqual(component.get_component_settings(), {})
 
-            pipeline_settings = PipelineSettings.get_instance(use_cache=False)
-            pipeline_settings.component_settings = {}
-            pipeline_settings.save()
-            PipelineSettings._invalidate_cache()
+    def test_full_class_path_used_for_lookup(self):
+        """Verifies the full Python path is used for DB lookup."""
+        full_path = self.get_dummy_component_full_path()
 
-            with self.assertLogs(logger=BASE_COMPONENT_LOGGER, level="WARNING") as cm:
-                result = component.get_component_settings()
+        # Only store settings under the full path
+        self.pipeline_settings.component_settings = {full_path: {"found": True}}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
 
+        component = DummyComponent()
+        result = component.get_component_settings()
+        self.assertTrue(result.get("found"))
+
+        # Simple class name should NOT match
+        self.pipeline_settings.component_settings = {
+            "DummyComponent": {"found_simple": True}
+        }
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        result = component.get_component_settings()
         self.assertEqual(result, {})
-        self.assertIn(
-            "PIPELINE_SETTINGS is defined but is not a dictionary", cm.output[0]
+
+
+class TestPipelineComponentWithSettingsDataclass(TestCase):
+    """Tests for components with a Settings dataclass."""
+
+    def setUp(self):
+        PipelineSettings.objects.all().delete()
+        self.pipeline_settings = PipelineSettings.objects.create(id=1)
+
+    def _full_path(self):
+        return (
+            f"{DummyComponentWithSettings.__module__}"
+            f".{DummyComponentWithSettings.__name__}"
         )
 
-    def test_component_setting_is_not_a_dictionary_simple_name_fallback(self):
-        """
-        Tests if fallback to full_path occurs when simple name's value isn't a dict.
-        """
-        expected_settings = {"key_full_fallback": "value_full_fallback_succeeded"}
-        pipeline_settings_override = {
-            "DummyComponent": "not_a_dictionary_for_simple_name",
-            self.get_dummy_component_full_path(): expected_settings,
+    def test_settings_property_returns_dataclass_instance(self):
+        """Settings property returns a populated Settings dataclass."""
+        full_path = self._full_path()
+        self.pipeline_settings.component_settings = {
+            full_path: {"timeout": 60, "debug": True}
         }
-        with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
-            component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), expected_settings)
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
 
-    def test_component_setting_is_not_a_dictionary_full_path(self):
-        """
-        Tests that settings are empty if full path's value (after simple name check) isn't a dict.
-        """
-        pipeline_settings_override = {
-            "DummyComponent": "not_a_dictionary_either",  # Simple name is not a dict
-            self.get_dummy_component_full_path(): "also_not_a_dictionary_for_full_path",
-        }
-        with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
-            component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), {})
+        component = DummyComponentWithSettings()
+        self.assertIsNotNone(component.settings)
+        self.assertEqual(component.settings.timeout, 60)
+        self.assertTrue(component.settings.debug)
 
-    def test_empty_dict_for_simple_name_falls_back_to_full_path(self):
-        """
-        If simple name maps to an empty dict, it should be treated as 'no settings'
-        and fallback to the full path.
-        """
-        expected_settings = {"key_full_after_empty_simple": "full_path_prevails_here"}
-        pipeline_settings_override = {
-            "DummyComponent": {},  # Empty dict for simple name
-            self.get_dummy_component_full_path(): expected_settings,
-        }
-        with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
-            component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), expected_settings)
+    def test_settings_property_none_without_dataclass(self):
+        """Settings property is None for components without a Settings dataclass."""
+        component = DummyComponent()
+        self.assertIsNone(component.settings)
 
-    def test_empty_dict_for_simple_name_and_no_full_path_is_empty_settings(self):
-        """
-        If simple name is an empty dict and no full path settings exist, result is empty settings.
-        """
-        pipeline_settings_override = {
-            "DummyComponent": {},  # Empty dict for simple name
-            # No setting for self.get_dummy_component_full_path()
+    def test_settings_defaults_when_no_db_values(self):
+        """Settings use defaults from dataclass when no DB values exist."""
+        component = DummyComponentWithSettings()
+        self.assertIsNotNone(component.settings)
+        self.assertEqual(component.settings.api_key, "")
+        self.assertEqual(component.settings.timeout, 30)
+        self.assertFalse(component.settings.debug)
+
+    def test_reload_settings_refreshes_from_db(self):
+        """reload_settings() fetches updated values from DB."""
+        full_path = self._full_path()
+
+        component = DummyComponentWithSettings()
+        self.assertEqual(component.settings.timeout, 30)
+
+        # Update DB settings
+        self.pipeline_settings.component_settings = {full_path: {"timeout": 120}}
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        # Reload
+        component.reload_settings()
+        self.assertEqual(component.settings.timeout, 120)
+
+    def test_validate_settings_reports_missing_required(self):
+        """validate_settings() reports missing required fields."""
+        component = DummyComponentWithSettings()
+        is_valid, errors = component.validate_settings()
+        # api_key is required but empty string, should report missing
+        self.assertFalse(is_valid)
+        self.assertTrue(any("api_key" in e for e in errors))
+
+    def test_validate_settings_passes_when_configured(self):
+        """validate_settings() passes when required settings are present."""
+        full_path = self._full_path()
+        self.pipeline_settings.component_settings = {
+            full_path: {"api_key": "test-key-123"}
         }
-        with self.settings(PIPELINE_SETTINGS=pipeline_settings_override):
-            component = DummyComponent()
-            self.assertEqual(component.get_component_settings(), {})
+        self.pipeline_settings.save()
+        PipelineSettings._invalidate_cache()
+
+        component = DummyComponentWithSettings()
+        is_valid, errors = component.validate_settings()
+        self.assertTrue(is_valid)
+        self.assertEqual(errors, [])
+
+    def test_get_settings_schema_returns_schema(self):
+        """get_settings_schema() returns schema from the Settings dataclass."""
+        schema = DummyComponentWithSettings.get_settings_schema()
+        self.assertIn("api_key", schema)
+        self.assertIn("timeout", schema)
+        self.assertIn("debug", schema)
+        self.assertEqual(schema["api_key"]["type"], "secret")
+        self.assertTrue(schema["api_key"]["required"])
+
+    def test_get_settings_schema_empty_without_dataclass(self):
+        """get_settings_schema() returns empty dict without Settings dataclass."""
+        schema = DummyComponent.get_settings_schema()
+        self.assertEqual(schema, {})
+
+
+class TestLoadSettingsErrorPaths(TestCase):
+    """Tests for error handling paths in _load_settings and get_component_settings."""
+
+    def setUp(self):
+        PipelineSettings.objects.all().delete()
+        self.pipeline_settings = PipelineSettings.objects.create(id=1)
+
+    def test_load_settings_strict_raises_configuration_error(self):
+        """reload_settings(strict=True) raises ConfigurationError for missing required."""
+        component = DummyComponentWithSettings()
+        # api_key is required but not set in DB → ConfigurationError
+        with self.assertRaises(ConfigurationError):
+            component.reload_settings(strict=True)
+
+    def test_load_settings_non_strict_fallback_on_configuration_error(self):
+        """Non-strict _load_settings logs warning and retries when ConfigurationError."""
+        component = DummyComponentWithSettings()
+        fallback_instance = DummyComponentWithSettings.Settings(
+            api_key="", timeout=30, debug=False
+        )
+
+        with patch(
+            "opencontractserver.pipeline.base.settings_schema.create_settings_instance",
+            wraps=None,
+        ) as mock_create:
+            mock_create.side_effect = [
+                ConfigurationError("test.path", ["api_key"]),
+                fallback_instance,
+            ]
+            result = component._load_settings(strict=False)
+            self.assertIsNotNone(result)
+            self.assertEqual(result.timeout, 30)
+            self.assertEqual(mock_create.call_count, 2)
+            # Second call should use strict=False
+            _, kwargs = mock_create.call_args
+            self.assertFalse(kwargs.get("strict", True))
+
+    def test_load_settings_value_error_returns_none(self):
+        """_load_settings returns None when ValueError is raised."""
+        component = DummyComponentWithSettings()
+
+        with patch(
+            "opencontractserver.pipeline.base.settings_schema.create_settings_instance",
+            side_effect=ValueError("No Settings dataclass"),
+        ):
+            result = component._load_settings(strict=False)
+            self.assertIsNone(result)
+
+    def test_get_component_settings_django_not_configured(self):
+        """get_component_settings returns {} when Django settings not configured."""
+        component = DummyComponent()
+        with patch(
+            "opencontractserver.pipeline.base.base_component.settings"
+        ) as mock_settings:
+            mock_settings.configured = False
+            result = component.get_component_settings()
+            self.assertEqual(result, {})
+
+    def test_get_component_settings_db_exception(self):
+        """get_component_settings returns {} when DB access raises exception."""
+        component = DummyComponent()
+        with patch(
+            "opencontractserver.pipeline.base.base_component.settings"
+        ) as mock_settings:
+            mock_settings.configured = True
+            with patch(
+                "opencontractserver.documents.models.PipelineSettings.get_instance",
+                side_effect=Exception("DB unavailable"),
+            ):
+                result = component.get_component_settings()
+                self.assertEqual(result, {})
