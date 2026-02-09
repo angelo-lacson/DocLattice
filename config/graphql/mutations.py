@@ -3838,6 +3838,21 @@ class DeleteCorpusMutation(DRFDeletion):
     class Arguments:
         id = graphene.String(required=True)
 
+    @classmethod
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
+    def mutate(cls, root, info, *args, **kwargs):
+        id = from_global_id(kwargs.get(cls.IOSettings.lookup_field, None))[1]
+        obj = cls.IOSettings.model.objects.get(pk=id)
+
+        if obj.is_personal:
+            raise GraphQLError(
+                "Cannot delete your personal 'My Documents' corpus. "
+                "This corpus is automatically managed and stores your uploaded documents."
+            )
+
+        return super().mutate(root, info, *args, **kwargs)
+
 
 class CreateLabelMutation(DRFMutation):
     class IOSettings:

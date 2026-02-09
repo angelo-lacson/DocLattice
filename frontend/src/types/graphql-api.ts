@@ -306,6 +306,7 @@ export type RawCorpusType = Node & {
   allAnnotationSummaries?: ServerAnnotationType[];
   analyses: AnalysisTypeConnection;
   isPublic?: Scalars["Boolean"];
+  isPersonal?: Scalars["Boolean"];
   myPermissions?: string[];
   conversations?: ConversationTypeConnection;
   // Note: categories is returned as a List (array), not a Connection, from the backend
