@@ -187,6 +187,8 @@
                 <span>Authenticating...</span>
             </div>
 
+            <ul id="client-messages" class="messages" style="display:none;"></ul>
+
             <form id="login-form" method="post">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
@@ -217,6 +219,93 @@
         </div>
     </main>
 
+    <!-- Shared helpers for rate-limit handling (always available) -->
+    <script>
+        function showMessage(text, type) {
+            var container = document.getElementById('client-messages');
+            container.style.display = '';
+            var li = document.createElement('li');
+            li.className = type || 'error';
+            li.textContent = text;
+            container.appendChild(li);
+        }
+
+        function clearClientMessages() {
+            var container = document.getElementById('client-messages');
+            container.innerHTML = '';
+            container.style.display = 'none';
+        }
+
+        function showLoading(show) {
+            var loading = document.getElementById('loading');
+            var form = document.getElementById('login-form');
+            if (show) {
+                loading.classList.add('active');
+                form.style.display = 'none';
+            } else {
+                loading.classList.remove('active');
+                form.style.display = 'block';
+            }
+        }
+
+        /**
+         * Submit form data via fetch and handle rate-limit (429) responses.
+         * On success the browser is navigated to the redirect target.
+         * On 429 a user-friendly message is shown in-page.
+         */
+        async function submitFormViaFetch(formData) {
+            var form = document.getElementById('login-form');
+            var url = form.action || window.location.pathname;
+
+            try {
+                var response = await fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (response.status === 429) {
+                    try {
+                        var data = await response.json();
+                        showMessage(data.error || 'Too many login attempts. Please wait and try again.', 'error');
+                    } catch (e) {
+                        showMessage('Too many login attempts. Please wait and try again.', 'error');
+                    }
+                    showLoading(false);
+                    return;
+                }
+
+                // fetch follows redirects automatically.
+                // On success the server redirects to /admin/ and response.url
+                // reflects the final destination. On auth failure it redirects
+                // back to /admin/login/ where server-set messages are displayed.
+                if (response.redirected && response.url) {
+                    window.location.href = response.url;
+                } else {
+                    window.location.reload();
+                }
+            } catch (error) {
+                console.error('Form submission error:', error);
+                showMessage('An error occurred. Please try again.', 'error');
+                showLoading(false);
+            }
+        }
+
+        // Intercept the standard password form submission so we can
+        // inspect the response status and show rate-limit errors in-page
+        // instead of displaying raw JSON.
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            // Skip interception when the token field is populated because
+            // that path is handled by submitToken() directly.
+            if (document.getElementById('token-input').value) {
+                return;
+            }
+
+            e.preventDefault();
+            clearClientMessages();
+            submitFormViaFetch(new FormData(this));
+        });
+    </script>
+
     {% if use_auth0 %}
     <!-- Define error handler before loading Auth0 SDK -->
     <script>
@@ -236,7 +325,7 @@
             crossorigin="anonymous"
             onerror="handleScriptError()"></script>
     <script>
-        let auth0Client = null;
+        var auth0Client = null;
 
         async function initAuth0() {
             // Check if Auth0 SDK loaded successfully
@@ -261,9 +350,9 @@
                     showLoading(true);
                     try {
                         await auth0Client.handleRedirectCallback();
-                        const token = await auth0Client.getTokenSilently();
+                        var token = await auth0Client.getTokenSilently();
                         // Restore the next URL from localStorage
-                        const nextUrl = localStorage.getItem('admin_auth0_next') || '/admin/';
+                        var nextUrl = localStorage.getItem('admin_auth0_next') || '/admin/';
                         localStorage.removeItem('admin_auth0_next');
                         submitToken(token, nextUrl);
                     } catch (error) {
@@ -277,7 +366,7 @@
             } catch (error) {
                 console.error('Auth0 initialization error:', error);
                 // Disable Auth0 button if initialization fails
-                const btn = document.getElementById('auth0-login-btn');
+                var btn = document.getElementById('auth0-login-btn');
                 if (btn) {
                     btn.disabled = true;
                     btn.textContent = 'Auth0 unavailable';
@@ -306,24 +395,14 @@
             }
         }
 
-        function submitToken(token, nextUrl) {
+        async function submitToken(token, nextUrl) {
+            var form = document.getElementById('login-form');
             document.getElementById('token-input').value = token;
             if (nextUrl) {
-                document.querySelector('input[name="next"]').value = nextUrl;
+                form.querySelector('input[name="next"]').value = nextUrl;
             }
-            document.getElementById('login-form').submit();
-        }
-
-        function showLoading(show) {
-            const loading = document.getElementById('loading');
-            const form = document.getElementById('login-form');
-            if (show) {
-                loading.classList.add('active');
-                form.style.display = 'none';
-            } else {
-                loading.classList.remove('active');
-                form.style.display = 'block';
-            }
+            clearClientMessages();
+            await submitFormViaFetch(new FormData(form));
         }
 
         // Initialize Auth0 when page loads

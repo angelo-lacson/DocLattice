@@ -32,6 +32,7 @@ RATELIMIT_FAIL_OPEN = False
 # Override specific rate limits from environment if provided
 RATE_LIMIT_OVERRIDES = {
     "AUTH_LOGIN": os.environ.get("RATELIMIT_AUTH_LOGIN"),
+    "ADMIN_LOGIN_PAGE": os.environ.get("RATELIMIT_ADMIN_LOGIN_PAGE"),
     "AUTH_REGISTER": os.environ.get("RATELIMIT_AUTH_REGISTER"),
     "AUTH_PASSWORD_RESET": os.environ.get("RATELIMIT_AUTH_PASSWORD_RESET"),
     "READ_LIGHT": os.environ.get("RATELIMIT_READ_LIGHT"),

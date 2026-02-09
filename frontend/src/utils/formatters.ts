@@ -103,3 +103,20 @@ export function formatShortDate(dateString?: string | null): string {
     year: "numeric",
   });
 }
+
+/**
+ * Formats a setting name into a human-readable label.
+ * Uses the description if provided, otherwise converts snake_case to Title Case.
+ * @param name - The setting name (e.g., "api_key")
+ * @param description - Optional description to use as the label
+ * @returns Formatted label (e.g., "API Key" or the provided description)
+ */
+export function formatSettingLabel(
+  name: string,
+  description?: string | null
+): string {
+  if (description && description.trim()) {
+    return description.trim();
+  }
+  return name.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}

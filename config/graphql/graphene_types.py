@@ -625,7 +625,8 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         from opencontractserver.corpuses.models import Corpus
 
         user = info.context.user
-        cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user.id}"
+        user_id = getattr(user, "id", "anonymous")
+        cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user_id}"
 
         if hasattr(info.context, cache_key):
             return getattr(info.context, cache_key)
@@ -1930,18 +1931,13 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         Custom resolver for documents field that uses DocumentPath.
         Returns documents with active paths in this corpus.
-        """
-        user = getattr(info.context, "user", None)
-        # Use the Corpus method that queries via DocumentPath
-        documents = self.get_documents()
-        # Apply visibility filtering
-        from opencontractserver.documents.models import Document
 
-        if hasattr(Document.objects, "visible_to_user"):
-            return Document.objects.filter(
-                id__in=documents.values_list("id", flat=True)
-            ).visible_to_user(user)
-        return documents
+        Note: No additional visible_to_user() filtering is applied because
+        document visibility is inherited from the corpus. If the user can
+        see this corpus (which they must, since this resolver is executing),
+        they can see all documents within it.
+        """
+        return self.get_documents()
 
     def resolve_annotations(self, info):
         """
@@ -2870,6 +2866,43 @@ class FileTypeEnum(graphene.Enum):
     # HTML has been removed as we don't support it
 
 
+class ComponentSettingSchemaType(graphene.ObjectType):
+    """
+    Schema for a single pipeline component setting.
+
+    Describes a configuration option that can be set in PipelineSettings
+    for a specific component.
+    """
+
+    name = graphene.String(
+        required=True,
+        description="Setting name (used as key in component_settings dict).",
+    )
+    setting_type = graphene.String(
+        required=True, description="Type: 'required', 'optional', or 'secret'."
+    )
+    python_type = graphene.String(
+        description="Python type hint (e.g., 'str', 'int', 'bool')."
+    )
+    required = graphene.Boolean(
+        required=True,
+        description="Whether this setting must have a value for the component to work.",
+    )
+    description = graphene.String(
+        description="Human-readable description of the setting."
+    )
+    default = GenericScalar(description="Default value if not configured.")
+    env_var = graphene.String(
+        description="Environment variable name used during migration seeding."
+    )
+    has_value = graphene.Boolean(
+        description="Whether this setting currently has a value configured."
+    )
+    current_value = GenericScalar(
+        description="Current value (always null for secrets to avoid exposure)."
+    )
+
+
 class PipelineComponentType(graphene.ObjectType):
     """Graphene type for pipeline components."""
 
@@ -2891,6 +2924,10 @@ class PipelineComponentType(graphene.ObjectType):
     )
     input_schema = GenericScalar(
         description="JSONSchema schema for inputs supported from user (experimental - not fully implemented)."
+    )
+    settings_schema = graphene.List(
+        ComponentSettingSchemaType,
+        description="Schema for component configuration settings stored in PipelineSettings.",
     )
     # Multimodal support flags (for embedders)
     is_multimodal = graphene.Boolean(

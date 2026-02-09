@@ -3,12 +3,16 @@ Comprehensive tests for Issue #654: DocumentPath as single source of truth.
 
 This test file covers:
 1. New Corpus methods (add_document, remove_document, get_documents, document_count)
+2. DocumentPathType request-level caching
 
 Note: Backward compatibility layer has been removed. All corpus-document
 relationships must now use DocumentPath-based methods.
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.files.base import ContentFile
 from django.test import TransactionTestCase
 
@@ -420,3 +424,80 @@ class TestCorpusDocumentMethods(TransactionTestCase):
             self.corpus.import_content(content=None, user=self.user)
 
         self.assertIn("Content is required", str(cm.exception))
+
+
+class TestDocumentPathTypeCaching(TransactionTestCase):
+    """Test request-level caching in DocumentPathType._get_visible_corpus_ids."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="cacheuser", email="cache@example.com", password="testpass123"
+        )
+
+    def _make_info(self, user):
+        """Create a mock GraphQL info object with a context that supports attr caching."""
+
+        class MockContext:
+            pass
+
+        ctx = MockContext()
+        ctx.user = user
+        info = MockContext()
+        info.context = ctx
+        return info
+
+    def test_cache_returns_same_result_on_repeated_calls(self):
+        """Verify that repeated calls return cached result without re-querying."""
+        from config.graphql.graphene_types import DocumentPathType
+
+        info = self._make_info(self.user)
+
+        result1 = DocumentPathType._get_visible_corpus_ids(info)
+        result2 = DocumentPathType._get_visible_corpus_ids(info)
+
+        self.assertEqual(result1, result2)
+        self.assertIs(result1, result2)  # Same object reference = cache hit
+
+    def test_cache_executes_query_only_once(self):
+        """Verify the visibility query is only executed once per request context."""
+        from config.graphql.graphene_types import DocumentPathType
+
+        info = self._make_info(self.user)
+
+        with patch(
+            "opencontractserver.corpuses.models.CorpusManager.visible_to_user",
+            wraps=Corpus.objects.visible_to_user,
+        ) as mock_visible:
+            DocumentPathType._get_visible_corpus_ids(info)
+            DocumentPathType._get_visible_corpus_ids(info)
+            DocumentPathType._get_visible_corpus_ids(info)
+
+            mock_visible.assert_called_once()
+
+    def test_cache_scoped_per_user(self):
+        """Verify different users get separate cache entries."""
+        from config.graphql.graphene_types import DocumentPathType
+
+        user2 = User.objects.create_user(
+            username="otheruser", email="other@example.com", password="testpass123"
+        )
+
+        # Shared context simulates two users in same request (e.g., impersonation)
+        info = self._make_info(self.user)
+        result1 = DocumentPathType._get_visible_corpus_ids(info)
+
+        info2 = self._make_info(user2)
+        result2 = DocumentPathType._get_visible_corpus_ids(info2)
+
+        # Different contexts, different cache entries
+        self.assertIsNot(result1, result2)
+
+    def test_cache_handles_anonymous_user(self):
+        """Verify anonymous users don't cause cache key collisions."""
+        from config.graphql.graphene_types import DocumentPathType
+
+        anon = AnonymousUser()
+        info = self._make_info(anon)
+
+        result = DocumentPathType._get_visible_corpus_ids(info)
+        self.assertIsInstance(result, set)

@@ -170,3 +170,66 @@ export const MENTION_TYPES = {
 } as const;
 
 export type MentionType = keyof typeof MENTION_TYPES;
+
+// Pipeline configuration UI constants
+export const PIPELINE_UI = {
+  /** Default icon size for pipeline component icons (in pixels) */
+  ICON_SIZE: 48,
+  /** Minimum width for component cards in grid layout (in pixels) */
+  COMPONENT_GRID_MIN_WIDTH: 140,
+  /** Primary accent color used in pipeline configuration UI */
+  PRIMARY_ACCENT_COLOR: "#6366f1",
+  /** Height for pipeline connector line (in pixels) */
+  CONNECTOR_HEIGHT_PX: 24,
+  /** Minimum height for component cards (in pixels) */
+  COMPONENT_CARD_MIN_HEIGHT_PX: 120,
+  /** Maximum allowed secrets payload size (in bytes) */
+  MAX_SECRET_SIZE_BYTES: 10240,
+  /** Width of the left-side flow channel in the pipeline view (in pixels) */
+  CHANNEL_WIDTH_PX: 36,
+  /** Width of the horizontal connector arm from channel to stage card (in pixels) */
+  CONNECTOR_ARM_WIDTH_PX: 28,
+  /** Diameter of the junction node circles on the channel (in pixels) */
+  JUNCTION_SIZE_PX: 16,
+  /** Vertical spacing between stage rows in the pipeline view (in pixels) */
+  STAGE_SPACING_PX: 48,
+  /** Number of flow particles in the channel animation */
+  FLOW_PARTICLE_COUNT: 8,
+} as const;
+
+// Supported MIME types for pipeline configuration
+export const SUPPORTED_MIME_TYPES = [
+  { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
+  { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
+  {
+    value:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    label: "Word Document",
+    shortLabel: "DOCX",
+  },
+] as const;
+
+/**
+ * Lookup map from full MIME type to short label (e.g., "text/plain" → "TXT").
+ * Used for matching component supportedFileTypes which use short forms.
+ */
+export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
+);
+
+/**
+ * Known acronyms that should be preserved in display names.
+ * Used by getComponentDisplayName to properly capitalize technology names.
+ */
+export const KNOWN_ACRONYMS: Record<string, string> = {
+  openai: "OpenAI",
+  modernbert: "ModernBERT",
+  bert: "BERT",
+  gpt: "GPT",
+  llm: "LLM",
+  api: "API",
+  pdf: "PDF",
+  ocr: "OCR",
+  nlp: "NLP",
+  nlm: "NLM",
+};

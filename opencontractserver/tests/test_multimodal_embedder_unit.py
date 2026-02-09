@@ -3,13 +3,16 @@ Unit tests for MultimodalMicroserviceEmbedder.
 
 These tests use mocks to test all code paths without requiring the actual
 multimodal embedder service to be running.
+
+Note: These tests mock the Settings dataclass to test configuration behavior.
+The actual Settings dataclass is populated from PipelineSettings DB at runtime.
 """
 
 import base64
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from PIL import Image
 from requests.exceptions import ConnectionError, Timeout
 
@@ -17,6 +20,32 @@ from opencontractserver.pipeline.embedders.multimodal_microservice import (
     MultimodalMicroserviceEmbedder,
 )
 from opencontractserver.types.enums import ContentModality
+
+
+def create_mock_clip_settings(
+    clip_embedder_url: str = "http://vector-embedder:8000",
+    clip_embedder_api_key: str = "",
+    use_cloud_run_iam_auth: bool = False,
+):
+    """Create a mock Settings object for CLIPMicroserviceEmbedder."""
+    mock_settings = MagicMock()
+    mock_settings.clip_embedder_url = clip_embedder_url
+    mock_settings.clip_embedder_api_key = clip_embedder_api_key
+    mock_settings.use_cloud_run_iam_auth = use_cloud_run_iam_auth
+    return mock_settings
+
+
+def create_mock_qwen_settings(
+    qwen_embedder_url: str = "http://qwen-embedder:8000",
+    qwen_embedder_api_key: str = "",
+    use_cloud_run_iam_auth: bool = False,
+):
+    """Create a mock Settings object for QwenMicroserviceEmbedder."""
+    mock_settings = MagicMock()
+    mock_settings.qwen_embedder_url = qwen_embedder_url
+    mock_settings.qwen_embedder_api_key = qwen_embedder_api_key
+    mock_settings.use_cloud_run_iam_auth = use_cloud_run_iam_auth
+    return mock_settings
 
 
 class MockResponse:
@@ -68,7 +97,9 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
     )
     def test_embed_text_no_service_url(self, mock_post):
         """Test text embedding returns None when no service URL configured."""
-        result = self.embedder.embed_text("Test text", multimodal_embedder_url="")
+        # Mock the Settings dataclass to have empty URL
+        self.embedder._settings = create_mock_clip_settings(clip_embedder_url="")
+        result = self.embedder.embed_text("Test text")
 
         self.assertIsNone(result)
         mock_post.assert_not_called()
@@ -163,8 +194,10 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
     )
     def test_embed_image_no_service_url(self, mock_post):
         """Test image embedding returns None when no service URL configured."""
+        # Mock the Settings dataclass to have empty URL
+        self.embedder._settings = create_mock_clip_settings(clip_embedder_url="")
         image_base64 = create_test_image_base64()
-        result = self.embedder.embed_image(image_base64, multimodal_embedder_url="")
+        result = self.embedder.embed_image(image_base64)
 
         self.assertIsNone(result)
         mock_post.assert_not_called()
@@ -297,7 +330,9 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
     )
     def test_embed_texts_batch_no_service_url(self, mock_post):
         """Test batch text embedding returns None when no service URL."""
-        result = self.embedder.embed_texts_batch(["Text 1"], multimodal_embedder_url="")
+        # Mock the Settings dataclass to have empty URL
+        self.embedder._settings = create_mock_clip_settings(clip_embedder_url="")
+        result = self.embedder.embed_texts_batch(["Text 1"])
 
         self.assertIsNone(result)
         mock_post.assert_not_called()
@@ -405,9 +440,9 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
     )
     def test_embed_images_batch_no_service_url(self, mock_post):
         """Test batch image embedding returns None when no service URL."""
-        result = self.embedder.embed_images_batch(
-            [create_test_image_base64()], multimodal_embedder_url=""
-        )
+        # Mock the Settings dataclass to have empty URL
+        self.embedder._settings = create_mock_clip_settings(clip_embedder_url="")
+        result = self.embedder.embed_images_batch([create_test_image_base64()])
 
         self.assertIsNone(result)
         mock_post.assert_not_called()
@@ -476,18 +511,19 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
     # Service Config Tests
     # =========================================================================
 
-    @override_settings(
-        MULTIMODAL_EMBEDDER_URL="http://settings-url:8000",
-        MULTIMODAL_EMBEDDER_API_KEY="settings-api-key",
-    )
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_service_config_from_settings(self, mock_post):
-        """Test that service config is loaded from Django settings."""
+        """Test that service config is loaded from Settings dataclass (PipelineSettings DB)."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
 
+        # Mock the Settings dataclass with specific values (simulating PipelineSettings DB)
         embedder = MultimodalMicroserviceEmbedder()
+        embedder._settings = create_mock_clip_settings(
+            clip_embedder_url="http://settings-url:8000",
+            clip_embedder_api_key="settings-api-key",
+        )
         embedder.embed_text("Test")
 
         call_args = mock_post.call_args
@@ -500,17 +536,24 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_service_config_direct_kwargs_override(self, mock_post):
-        """Test that direct kwargs override settings."""
+        """Test that direct kwargs override Settings dataclass values."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
 
+        # Set default settings that should be overridden
+        self.embedder._settings = create_mock_clip_settings(
+            clip_embedder_url="http://default-url:8000",
+            clip_embedder_api_key="default-api-key",
+        )
+
+        # Pass kwargs that should override the Settings
         self.embedder.embed_text(
             "Test",
-            multimodal_embedder_url="http://direct-url:9000",
-            multimodal_embedder_api_key="direct-api-key",
+            clip_embedder_url="http://direct-url:9000",
+            clip_embedder_api_key="direct-api-key",
         )
 
         call_args = mock_post.call_args
-        # Check URL used
+        # Check URL used - kwargs should override Settings
         self.assertTrue(call_args.args[0].startswith("http://direct-url:9000"))
         # Check API key header
         self.assertEqual(call_args.kwargs["headers"]["X-API-Key"], "direct-api-key")
@@ -639,21 +682,19 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
         # Check API key header
         self.assertEqual(call_args.kwargs["headers"]["X-API-Key"], "new-style-api-key")
 
-    @override_settings(
-        CLIP_EMBEDDER_URL="http://new-settings-url:8000",
-        CLIP_EMBEDDER_API_KEY="new-settings-api-key",
-        # Clear legacy settings so new-style settings take effect
-        MULTIMODAL_EMBEDDER_URL="",
-        MULTIMODAL_EMBEDDER_API_KEY="",
-    )
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_service_config_new_style_settings(self, mock_post):
-        """Test that new-style Django settings (CLIP_EMBEDDER_URL) work."""
+        """Test that Settings dataclass values are used correctly."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
 
+        # Mock the Settings dataclass (simulating values from PipelineSettings DB)
         embedder = MultimodalMicroserviceEmbedder()
+        embedder._settings = create_mock_clip_settings(
+            clip_embedder_url="http://new-settings-url:8000",
+            clip_embedder_api_key="new-settings-api-key",
+        )
         embedder.embed_text("Test")
 
         call_args = mock_post.call_args
@@ -701,8 +742,6 @@ class TestQwenMicroserviceEmbedderUnit(TestCase):
         """Test Qwen embedder has correct attributes."""
         self.assertEqual(self.embedder.vector_size, 1024)
         self.assertEqual(self.embedder.title, "Qwen Microservice Embedder")
-        self.assertEqual(self.embedder.url_setting_name, "QWEN_EMBEDDER_URL")
-        self.assertEqual(self.embedder.api_key_setting_name, "QWEN_EMBEDDER_API_KEY")
 
     def test_qwen_default_url(self):
         """Test Qwen embedder has correct default URL."""
@@ -738,19 +777,12 @@ class TestQwenMicroserviceEmbedderUnit(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 1024)
 
-    @override_settings(
-        QWEN_EMBEDDER_URL="http://qwen-settings-url:8000",
-        QWEN_EMBEDDER_API_KEY="qwen-settings-api-key",
-    )
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_qwen_service_config_from_settings(self, mock_post):
         """
-        Test Qwen embedder loads config from Django settings.
-
-        Covers base class _get_service_config fallback path to Django settings
-        (lines 116-129 in BaseMultimodalMicroserviceEmbedder).
+        Test Qwen embedder loads config from Settings dataclass (PipelineSettings DB).
         """
         from opencontractserver.pipeline.embedders.multimodal_microservice import (
             QwenMicroserviceEmbedder,
@@ -758,12 +790,16 @@ class TestQwenMicroserviceEmbedderUnit(TestCase):
 
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 1024]})
 
-        # Create new instance to pick up overridden settings
+        # Create instance and mock its Settings
         embedder = QwenMicroserviceEmbedder()
+        embedder._settings = create_mock_qwen_settings(
+            qwen_embedder_url="http://qwen-settings-url:8000",
+            qwen_embedder_api_key="qwen-settings-api-key",
+        )
         embedder.embed_text("Test")
 
         call_args = mock_post.call_args
-        # Check URL used - should use the setting
+        # Check URL used - should use the Settings value
         self.assertTrue(call_args.args[0].startswith("http://qwen-settings-url:8000"))
         # Check API key header
         self.assertEqual(

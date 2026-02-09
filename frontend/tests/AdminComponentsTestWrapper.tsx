@@ -1,6 +1,7 @@
 import React from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { MemoryRouter } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
 import { GlobalSettingsPanel } from "../src/components/admin/GlobalSettingsPanel";
 import { GlobalAgentManagement } from "../src/components/admin/GlobalAgentManagement";
 import { CorpusAgentManagement } from "../src/components/corpuses/CorpusAgentManagement";
@@ -52,6 +53,7 @@ export const SystemSettingsWrapper: React.FC<SystemSettingsWrapperProps> = ({
   <MockedProvider mocks={mocks} addTypename={false}>
     <MemoryRouter>
       <SystemSettings />
+      <ToastContainer />
     </MemoryRouter>
   </MockedProvider>
 );

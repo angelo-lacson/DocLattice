@@ -5,7 +5,9 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-01-31
+## [Unreleased]
+
+## [3.0.0.b4] - 2026-02-08
 
 ### ⚠️ Important Migration Notes
 
@@ -79,7 +81,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **PipelineSettings singleton model**: Database-backed configuration for document processing pipeline
   - Stores preferred parsers, embedders, and thumbnailers per MIME type
   - Stores parser-specific kwargs and component settings overrides
-  - Falls back to Django settings when database values are not configured
+  - Database is the single source of truth at runtime (no Django settings fallback)
   - Singleton pattern: only one instance exists, cannot be deleted
   - Files: `opencontractserver/documents/models.py:734-1140`
 - **Encrypted secrets storage**: Secure storage for API keys and sensitive credentials
@@ -109,10 +111,62 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `config/graphql/pipeline_settings_mutations.py:414-481`
 - **Migration 0031**: Creates PipelineSettings table with encrypted_secrets field
   - Files: `opencontractserver/documents/migrations/0031_add_pipeline_settings.py`
+- **Migration 0032**: Adds database index to `PipelineSettings.modified` for audit query performance
+  - Files: `opencontractserver/documents/migrations/0032_add_index_to_pipeline_settings_modified.py`
+- **Management command `migrate_pipeline_settings`**: Self-documenting component discovery and settings migration
+  - `--list-components`: Introspects pipeline registry to show all components with settings schemas, env vars, defaults, and descriptions
+  - `--sync-preferences`: Syncs PREFERRED_PARSERS, PREFERRED_EMBEDDERS, etc. from Django settings to database
+  - `--component <name>`: Filters output to a specific component
+  - Files: `opencontractserver/documents/management/commands/migrate_pipeline_settings.py`
+- **Pipeline Configuration Guide**: Documentation covering first-time setup, upgrades, runtime configuration, and troubleshooting
+  - Files: `docs/pipelines/pipeline_configuration.md`
 - **Integration with doc_tasks**: `ingest_doc` and `extract_thumbnail` now read from PipelineSettings
   - Files: `opencontractserver/tasks/doc_tasks.py:355-374`, `opencontractserver/tasks/doc_tasks.py:686-721`
 - **Integration with pipeline/utils**: `get_preferred_embedder` and `get_default_embedder` use PipelineSettings
   - Files: `opencontractserver/pipeline/utils.py:303-361`
+
+### Changed
+- Pipeline settings getters (`get_preferred_parser`, `get_preferred_embedder`, `get_parser_kwargs`, `get_default_embedder`) no longer fall back to Django settings at runtime. Database is the sole source of truth; initial values are populated from Django settings via `get_instance()`.
+  - Files: `opencontractserver/documents/models.py:977-1092`
+- Pipeline component settings are now DB-only at runtime (Django settings fallback removed from `PipelineComponentBase.get_component_settings()`)
+  - Files: `opencontractserver/pipeline/base/base_component.py:180-217`
+- Pipeline configuration UI now reads component settings schema from GraphQL instead of hardcoding config requirements.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:69-129`
+- Pipeline configuration UI now centralizes pipeline UI constants in `PIPELINE_UI` for sizing and validation values.
+  - Files: `frontend/src/assets/configurations/constants.ts:174-187`
+
+### Fixed
+- Secrets modal now validates component existence, required secret fields, and payload size before mutation.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1500-1558`
+- MIME filter accessibility labels now include stage context.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1076-1089`
+- GraphQL `updateComponentSecrets` mutation now validates payload size before encryption attempt.
+  - Files: `config/graphql/pipeline_settings_mutations.py:104-135`
+- Pipeline components query now requires authentication; non-superusers only see configured components without settings schema details.
+  - Files: `config/graphql/queries.py:1815-1949`
+- Settings schema `_coerce_value` now logs warnings on coercion failures instead of silently swallowing errors.
+  - Files: `opencontractserver/pipeline/base/settings_schema.py:416-419`
+- `PipelineSettings.save()` now invalidates cache via `transaction.on_commit()` to prevent stale cache when DB write rolls back.
+  - Files: `opencontractserver/documents/models.py:896-906`
+- `PipelineComponentCard` memo now uses custom comparison to avoid unnecessary re-renders from object prop references.
+  - Files: `frontend/src/components/admin/SystemSettings.tsx:1134-1140`
+- Pipeline mutation error messages now consistently include component path for debugging.
+  - Files: `config/graphql/pipeline_settings_mutations.py:644-656, 720-729`
+
+### Removed
+
+#### ModernBERT Embedders
+- **⚠️ Breaking Change**: ModernBERT embedders have been removed from the codebase
+  - `opencontractserver/pipeline/embedders/modern_bert_embedder.py` - removed
+  - `opencontractserver/pipeline/embedders/minn_modern_bert_embedder.py` - removed
+  - `model_preloaders/download_modernbert_model.py` - removed
+  - Tests removed: `opencontractserver/tests/test_modern_bert_embedder.py`, `opencontractserver/tests/test_minn_modern_bert_embedder.py`
+  - Documentation removed: `docs/embedders/modernbert_embedder.md`, `docs/embedders/minn_modernbert_embedder.md`
+  - **Migration path**: Users currently using ModernBERT embedders must switch to alternative embedders:
+    - `SentenceTransformerEmbedder` - General purpose sentence transformer embeddings
+    - `OpenAIEmbedder` - OpenAI API-based embeddings (requires API key)
+    - `VoyageAIEmbedder` - Voyage AI embeddings (requires API key)
+  - Update PipelineSettings via admin UI or management command before upgrading
 
 #### Personal Corpus ("My Documents") Feature
 - **Personal corpus auto-creation**: Each user now automatically receives a personal "My Documents" corpus
@@ -250,6 +304,25 @@ If rollback is required after deployment, you must write a custom migration to h
   - `GET_EDITABLE_CORPUSES` in `AddToCorpusModal.tsx` now uses `documentCount`
   - `GET_MY_CORPUSES` in `queries.ts` now uses `documentCount`
   - Files: `frontend/src/components/modals/AddToCorpusModal.tsx`, `frontend/src/graphql/queries.ts`
+
+#### Pipeline Configuration UI Redesign
+- **Replaced JSON-based configuration with visual pipeline flow**: System Settings page redesigned for intuitive configuration
+  - Visual pipeline stages: Document Upload → Parser → Thumbnailer → Embedder → Ready for Search
+  - Clickable component cards replace JSON text editing
+  - Per-stage MIME type selectors (PDF, TXT, DOCX)
+  - Auto-expanding advanced settings for components requiring API keys
+  - Collapsible advanced settings to reduce visual clutter
+  - Files: `frontend/src/components/admin/SystemSettings.tsx`
+- **New component icon system**: Custom SVG icons for each pipeline component type
+  - Docling, LlamaParse, ModernBERT, OpenAI, and more
+  - Semantic icons that are visually distinctive
+  - Generic fallback icon for unknown components
+  - Files: `frontend/src/components/admin/PipelineIcons.tsx`
+- **Added accessibility attributes**: ARIA support for screen readers
+  - `aria-pressed` on MIME type and component selection buttons
+  - `aria-expanded` on collapsible settings sections
+  - `aria-label` on interactive elements
+  - Files: `frontend/src/components/admin/SystemSettings.tsx`
 
 #### Window Resize Performance
 - **Added debounce to window resize handler**: Prevents excessive re-renders during window resize
@@ -614,8 +687,6 @@ If rollback is required after deployment, you must write a custom migration to h
     `opencontractserver/pipeline/base/embedder.py`, `opencontractserver/pipeline/base/post_processor.py`,
     `opencontractserver/pipeline/parsers/llamaparse_parser.py`, `opencontractserver/pipeline/post_processors/pdf_redactor.py`
 
-## [Unreleased] - 2026-01-12
-
 ### Added
 
 #### Image Annotation Display in UnifiedContentFeed
@@ -691,8 +762,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/components/annotator/types/annotations.ts:92,145`
 - **Test coverage**: 5 backend tests for REST endpoint with authentication and permission checking
   - Files: `opencontractserver/tests/test_annotation_images_api.py`
-
-## [3.0.0b4] - 2026-01-11
 
 ### Added
 
@@ -822,10 +891,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - IP hashing uses `TELEMETRY_IP_SALT` setting to prevent rainbow table attacks
 - ContextVar ensures proper isolation in concurrent async requests
 
----
-
-## [Unreleased] - 2026-01-04
-
 ### Changed
 
 #### NavMenu Refactoring (PR #779)
@@ -859,10 +924,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Previously, superuser features (Badge Management, Admin Settings) were broken in non-Auth0 mode
   - Updated `LoginOutputs` interface to include `username`, `isUsageCapped`, and `isSuperuser` fields
 
----
-
-## [Unreleased] - 2026-01-03
-
 ### Fixed
 
 #### WebSocket Connection Performance (Issue: Chat "Reconnecting" delay)
@@ -875,10 +936,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Notification WebSocket auth guard** (`frontend/src/hooks/useNotificationWebSocket.ts:312-318`): Skip connection attempt without auth token
   - Prevents 403 Access Denied errors when connecting before auth token is available
   - Eliminates unnecessary connection attempts and error spam in console
-
----
-
-## [Unreleased] - 2026-01-02
 
 ### Added
 
@@ -912,10 +969,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - **openedExtract reactive var documentation** (`frontend/src/graphql/cache.ts:364-388`): Clarified that route components (like ExtractDetailRoute) can set this var, not just CentralRouteManager
 - **Consolidated constants** (`frontend/src/assets/configurations/constants.ts:47-51`): Moved `EXTRACT_SEARCH_DEBOUNCE_MS` to centralized `DEBOUNCE` object
 - **extractUtils refactor** (`frontend/src/utils/extractUtils.ts:32-55`): Now uses `EXTRACT_STATUS` and `EXTRACT_STATUS_COLORS` constants instead of hardcoded values
-
----
-
-## [Unreleased] - 2026-01-01
 
 ### Added
 
@@ -972,10 +1025,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Permission-based UI visibility tests
   - Search functionality tests
   - Mobile navigation tests
-
----
-
-## [Unreleased] - 2025-12-31
 
 ### Added
 
@@ -1034,10 +1083,6 @@ If rollback is required after deployment, you must write a custom migration to h
 - `corpusCount` respects user visibility: anonymous sees public corpuses only, authenticated users see corpuses they have access to
 - Removed 632-line `TopContributors.tsx` component, replaced with ~280-line `CompactLeaderboard.tsx`
 
----
-
-## [Unreleased] - 2025-12-29
-
 ### Added
 
 #### Moderation Dashboard and Rollback Features (Issue #742)
@@ -1073,7 +1118,6 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Tool Validation for Inline Agents (Issue #742)
 - **Added tool category validation** (`config/graphql/mutations.py:3875-3897`): CreateCorpusAction now validates that inline agent tools are from the MODERATION category when using thread/message triggers
 
-## [Unreleased] - 2025-12-28
 
 ### Added
 
@@ -1578,7 +1622,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Hardcoded breakpoints replaced with constants**: Updated all hardcoded `768px` references in `FolderDocumentBrowser.tsx` and `folderAtoms.ts` to use `TABLET_BREAKPOINT` constant for maintainability
 - **Improved breakpoint documentation**: Added detailed JSDoc comment in `folderAtoms.ts` explaining why `TABLET_BREAKPOINT` (768px) is used for sidebar collapse rather than `MOBILE_VIEW_BREAKPOINT` (600px)
 
----
+## [3.0.0.b3] - 2025-12-11
 
 ### Added
 
