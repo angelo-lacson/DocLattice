@@ -9,12 +9,12 @@ Note: Backward compatibility layer has been removed. All corpus-document
 relationships must now use DocumentPath-based methods.
 """
 
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.files.base import ContentFile
+from django.db import connection
 from django.test import TransactionTestCase
+from django.test.utils import CaptureQueriesContext
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
@@ -464,15 +464,16 @@ class TestDocumentPathTypeCaching(TransactionTestCase):
 
         info = self._make_info(self.user)
 
-        with patch(
-            "opencontractserver.corpuses.models.CorpusManager.visible_to_user",
-            wraps=Corpus.objects.visible_to_user,
-        ) as mock_visible:
+        # First call should execute at least one query
+        with CaptureQueriesContext(connection) as first_call:
             DocumentPathType._get_visible_corpus_ids(info)
-            DocumentPathType._get_visible_corpus_ids(info)
-            DocumentPathType._get_visible_corpus_ids(info)
+        self.assertGreater(len(first_call), 0)
 
-            mock_visible.assert_called_once()
+        # Subsequent calls should execute zero queries (cached)
+        with CaptureQueriesContext(connection) as cached_calls:
+            DocumentPathType._get_visible_corpus_ids(info)
+            DocumentPathType._get_visible_corpus_ids(info)
+        self.assertEqual(len(cached_calls), 0)
 
     def test_cache_scoped_per_user(self):
         """Verify different users get separate cache entries."""

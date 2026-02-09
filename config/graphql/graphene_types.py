@@ -1930,14 +1930,19 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_documents(self, info):
         """
         Custom resolver for documents field that uses DocumentPath.
-        Returns documents with active paths in this corpus.
+        Returns documents with active paths in this corpus, filtered by
+        document-level visibility.
 
-        Note: No additional visible_to_user() filtering is applied because
-        document visibility is inherited from the corpus. If the user can
-        see this corpus (which they must, since this resolver is executing),
-        they can see all documents within it.
+        Document visibility is independent of corpus visibility:
+        Effective Permission = MIN(document_permission, corpus_permission).
+        A private document in a public corpus is still hidden from
+        users without document-level access.
         """
-        return self.get_documents()
+        from opencontractserver.documents.models import Document
+
+        user = getattr(info.context, "user", None)
+        corpus_doc_ids = self.get_documents().values_list("id", flat=True)
+        return Document.objects.filter(id__in=corpus_doc_ids).visible_to_user(user)
 
     def resolve_annotations(self, info):
         """
