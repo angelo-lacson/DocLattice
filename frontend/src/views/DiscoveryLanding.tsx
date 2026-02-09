@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import styled from "styled-components";
 import { gql, useQuery, useReactiveVar } from "@apollo/client";
 import { RefreshCw, X, AlertCircle } from "lucide-react";
-import { authToken } from "../graphql/cache";
+import { userObj } from "../graphql/cache";
 import {
   // New components using OS-Legal-Style library
   NewHeroSection,
@@ -212,11 +212,12 @@ interface DiscoveryLandingProps {
 export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
   isAuthenticatedOverride,
 }) => {
-  const auth_token = useReactiveVar(authToken);
+  const currentUser = useReactiveVar(userObj);
+  // Use userObj for auth check - consistent with NavMenu pattern
   const isAuthenticated =
     isAuthenticatedOverride !== undefined
       ? isAuthenticatedOverride
-      : Boolean(auth_token);
+      : Boolean(currentUser);
 
   // State for error banner dismiss
   const [errorDismissed, setErrorDismissed] = useState(false);
@@ -287,7 +288,7 @@ export const DiscoveryLanding: React.FC<DiscoveryLandingProps> = ({
     }
     // Auth state changed (login/logout) - refetch to get updated data
     refetch();
-  }, [auth_token, refetch]);
+  }, [currentUser, refetch]);
 
   // Handle retry with loading state
   const handleRetry = useCallback(async () => {

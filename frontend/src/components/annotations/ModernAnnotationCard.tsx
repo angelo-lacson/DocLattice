@@ -13,10 +13,14 @@ import {
   Users,
   Lock,
   AlignLeft,
+  Sparkles,
 } from "lucide-react";
 
 import { ServerAnnotationType } from "../../types/graphql-api";
 import { sanitizeForTooltip } from "../../utils/textSanitization";
+import { useAnnotationImages } from "../annotator/hooks/useAnnotationImages";
+import { AnnotationImagePreview } from "../annotator/sidebar/AnnotationImagePreview";
+import { ModalityBadge } from "../annotator/sidebar/ModalityBadge";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -30,6 +34,8 @@ export interface ModernAnnotationCardProps {
   annotation: ServerAnnotationType;
   onClick?: () => void;
   isSelected?: boolean;
+  /** Similarity score from semantic search (0.0-1.0, higher is more similar) */
+  similarityScore?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -136,6 +142,27 @@ const TypeBadge = styled.div<{ $type: "doc" | "text" }>`
   border-radius: 4px;
   background: ${(props) => (props.$type === "doc" ? "#dbeafe" : "#f0fdfa")};
   color: ${(props) => (props.$type === "doc" ? "#2563eb" : "#0f766e")};
+`;
+
+const SimilarityBadge = styled.div<{ $score: number }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: ${(props) => {
+    // Color gradient based on score: green for high, yellow for medium, gray for low
+    if (props.$score >= 0.8) return "#dcfce7"; // green
+    if (props.$score >= 0.6) return "#fef9c3"; // yellow
+    return "#f1f5f9"; // gray
+  }};
+  color: ${(props) => {
+    if (props.$score >= 0.8) return "#166534"; // green
+    if (props.$score >= 0.6) return "#854d0e"; // yellow
+    return "#64748b"; // gray
+  }};
 `;
 
 const LabelsetTag = styled.div`
@@ -410,10 +437,23 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
   annotation,
   onClick,
   isSelected = false,
+  similarityScore,
 }) => {
   const source = getAnnotationSource(annotation);
   const labelType = getAnnotationLabelType(annotation);
   const visibility = getAnnotationVisibility(annotation);
+
+  // Get content modalities for image display
+  const contentModalities = annotation.contentModalities || [];
+  const hasImageModality = contentModalities.includes("IMAGE");
+  const hasTextModality = contentModalities.includes("TEXT");
+
+  // Fetch images if annotation has IMAGE modality
+  const {
+    images,
+    loading: imagesLoading,
+    error: imagesError,
+  } = useAnnotationImages(annotation.id, contentModalities);
 
   const labelColor = annotation.annotationLabel?.color || "#94a3b8";
   const labelName = annotation.annotationLabel?.text || "Unknown Label";
@@ -426,6 +466,8 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
   // Get labelset name from the corpus if available
   const labelsetName = annotation.corpus?.labelSet?.title || "Annotations";
 
+  const hasText = annotation.rawText && annotation.rawText.trim() !== "";
+
   return (
     <CardContainer $isSelected={isSelected} onClick={onClick}>
       <CardHeader>
@@ -434,7 +476,17 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
           <LabelName>{labelName}</LabelName>
         </LabelContainer>
         <BadgesContainer>
+          {similarityScore !== undefined && (
+            <SimilarityBadge
+              $score={similarityScore}
+              title={`${Math.round(similarityScore * 100)}% semantic match`}
+            >
+              <Sparkles size={12} />
+              {Math.round(similarityScore * 100)}%
+            </SimilarityBadge>
+          )}
           <SourceBadgeComponent source={source} />
+          <ModalityBadge modalities={contentModalities} />
           <TypeBadge $type={labelType}>
             {labelType === "doc" ? (
               <>
@@ -453,27 +505,57 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
         <Tag size={12} /> {labelsetName}
       </LabelsetTag>
 
-      {/*
-        XSS Protection: React's JSX automatically escapes HTML entities in text content.
-        We use sanitizeForTooltip to normalize whitespace for cleaner display.
-        See: frontend/src/utils/textSanitization.ts
-      */}
-      {labelType === "text" && annotation.rawText ? (
-        <TaggedText>
-          <HighlightedText>
-            {sanitizeForTooltip(
-              annotation.rawText.length > 150
-                ? `${annotation.rawText.substring(0, 150)}...`
-                : annotation.rawText
-            )}
-          </HighlightedText>
-        </TaggedText>
-      ) : (
-        <DocLabelPlaceholder>
-          <FileText size={16} color="#2563eb" />
-          Applies to entire document
-        </DocLabelPlaceholder>
-      )}
+      {/* Content display based on modality */}
+      {(() => {
+        // IMAGE modality - show featured image first
+        if (hasImageModality) {
+          return (
+            <>
+              <AnnotationImagePreview
+                images={images}
+                loading={imagesLoading}
+                error={imagesError}
+                compact={false}
+              />
+              {/* Show text below image if mixed content */}
+              {hasTextModality && hasText && (
+                <TaggedText style={{ marginTop: "0.5rem" }}>
+                  <HighlightedText>
+                    {sanitizeForTooltip(
+                      annotation.rawText!.length > 100
+                        ? `${annotation.rawText!.substring(0, 100)}...`
+                        : annotation.rawText!
+                    )}
+                  </HighlightedText>
+                </TaggedText>
+              )}
+            </>
+          );
+        }
+
+        // TEXT only modality or doc label
+        if (labelType === "text" && hasText) {
+          return (
+            <TaggedText>
+              <HighlightedText>
+                {sanitizeForTooltip(
+                  annotation.rawText!.length > 150
+                    ? `${annotation.rawText!.substring(0, 150)}...`
+                    : annotation.rawText!
+                )}
+              </HighlightedText>
+            </TaggedText>
+          );
+        }
+
+        // Doc label placeholder
+        return (
+          <DocLabelPlaceholder>
+            <FileText size={16} color="#2563eb" />
+            Applies to entire document
+          </DocLabelPlaceholder>
+        );
+      })()}
 
       <CardFooter>
         <DocumentLink>

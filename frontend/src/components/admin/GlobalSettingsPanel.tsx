@@ -201,10 +201,10 @@ const settingsItems: SettingItem[] = [
     id: "system-settings",
     title: "System Settings",
     description:
-      "Configure system-wide settings including defaults, limits, and feature flags.",
+      "Configure system-wide pipeline settings including parsers, embedders, and document processing.",
     icon: "cog",
     color: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
-    comingSoon: true,
+    route: "/system_settings",
   },
   {
     id: "user-management",

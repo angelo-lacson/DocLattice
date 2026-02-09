@@ -317,7 +317,6 @@ Common issues and solutions:
 
 - [Pipeline Overview](pipeline_overview.md)
 - [LlamaParse Parser](llamaparse_parser.md) - Cloud-based alternative
-- [NLM-Ingest Parser](nlm_ingest_parser.md) - Another local alternative
 - [PDF Data Layer Architecture](../architecture/PDF-data-layer.md)
 - [Document Processing Flow](../architecture/asynchronous-processing.md)
 - [Docling Library](https://github.com/DS4SD/docling)

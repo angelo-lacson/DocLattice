@@ -63,6 +63,7 @@ const dummyCorpus: CorpusType = {
       endCursor: null,
     },
     edges: [],
+    totalCount: 2,
   },
   __typename: "CorpusType",
 };
@@ -180,6 +181,32 @@ const corpusDocumentsMock: MockedResponse = {
   },
 };
 
+const corpusHistoryMock: MockedResponse = {
+  request: {
+    query: GET_CORPUS_WITH_HISTORY,
+    variables: { id: dummyCorpus.id },
+  },
+  result: {
+    data: {
+      corpus: {
+        id: dummyCorpus.id,
+        slug: "test-corpus",
+        title: dummyCorpus.title,
+        description: dummyCorpus.description,
+        mdDescription: null,
+        created: dummyCorpus.created,
+        modified: dummyCorpus.modified,
+        isPublic: dummyCorpus.isPublic,
+        myPermissions: dummyCorpus.myPermissions,
+        creator: dummyCorpus.creator,
+        labelSet: dummyCorpus.labelSet,
+        descriptionRevisions: [],
+        __typename: "CorpusType",
+      },
+    },
+  },
+};
+
 const mocks: MockedResponse[] = [
   {
     request: {
@@ -191,44 +218,26 @@ const mocks: MockedResponse[] = [
         corpusStats: {
           totalDocs: 3,
           totalAnnotations: 5,
+          totalComments: 0,
           totalAnalyses: 0,
           totalExtracts: 0,
+          totalThreads: 0,
+          totalChats: 0,
+          totalRelationships: 0,
           __typename: "CorpusStatsType",
         },
       },
     },
   },
-  // Duplicate for cache-and-network fetch policy
+  // Duplicate mocks for cache-and-network fetch policy
   documentRelationshipsMock,
   { ...documentRelationshipsMock },
   // Documents mock for TOC
   corpusDocumentsMock,
   { ...corpusDocumentsMock },
-  {
-    request: {
-      query: GET_CORPUS_WITH_HISTORY,
-      variables: { id: dummyCorpus.id },
-    },
-    result: {
-      data: {
-        corpus: {
-          id: dummyCorpus.id,
-          slug: "test-corpus",
-          title: dummyCorpus.title,
-          description: dummyCorpus.description,
-          mdDescription: null,
-          created: dummyCorpus.created,
-          modified: dummyCorpus.modified,
-          isPublic: dummyCorpus.isPublic,
-          myPermissions: dummyCorpus.myPermissions,
-          creator: dummyCorpus.creator,
-          labelSet: dummyCorpus.labelSet,
-          descriptionRevisions: [],
-          __typename: "CorpusType",
-        },
-      },
-    },
-  },
+  // Corpus history mock
+  corpusHistoryMock,
+  { ...corpusHistoryMock },
 ];
 
 /**
@@ -239,105 +248,67 @@ function mountCorpusHome(mount: any) {
 }
 
 /* --------------------------------------------------------------------------
- * Tests
+ * Tests for Landing View
  * -------------------------------------------------------------------------- */
 
 test.use({ viewport: { width: 1200, height: 800 } });
 
-test("defaults to About tab when no homeView URL param", async ({
+test("defaults to landing view when no view URL param", async ({
   mount,
   page,
 }) => {
   await mountCorpusHome(mount);
 
-  // About tab should be active by default
-  const aboutTab = page.getByRole("tab", { name: "About" });
-  await expect(aboutTab).toHaveAttribute("aria-selected", "true");
+  // Landing view should be visible
+  const landingView = page.getByTestId("corpus-home-landing");
+  await expect(landingView).toBeVisible();
 
-  // TOC tab should not be selected
-  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
-  await expect(tocTab).toHaveAttribute("aria-selected", "false");
-
-  // About content should be visible
-  const aboutPanel = page.locator("#about-panel");
-  await expect(aboutPanel).toBeVisible();
+  // Details view should not be visible
+  const detailsView = page.getByTestId("corpus-home-details");
+  await expect(detailsView).toBeHidden();
 });
 
-test("shows TOC tab when homeView=toc URL param is set", async ({
-  mount,
-  page,
-}) => {
-  // Mount with initialHomeView="toc"
-  await mount(
-    <CorpusHomeTestWrapper
-      mocks={mocks}
-      corpus={dummyCorpus}
-      initialHomeView="toc"
-    />
-  );
-
-  // TOC tab should be active
-  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
-  await expect(tocTab).toHaveAttribute("aria-selected", "true");
-
-  // About tab should not be selected
-  const aboutTab = page.getByRole("tab", { name: "About" });
-  await expect(aboutTab).toHaveAttribute("aria-selected", "false");
-
-  // TOC panel should be visible
-  const tocPanel = page.locator("#toc-panel");
-  await expect(tocPanel).toBeVisible();
-});
-
-test("switching tabs updates URL (via click)", async ({ mount, page }) => {
-  await mountCorpusHome(mount);
-
-  // Initially on About tab
-  const aboutTab = page.getByRole("tab", { name: "About" });
-  await expect(aboutTab).toHaveAttribute("aria-selected", "true");
-
-  // Click TOC tab
-  const tocTab = page.getByRole("tab", { name: "Table of Contents" });
-  await tocTab.click();
-
-  // TOC tab should now be selected
-  await expect(tocTab).toHaveAttribute("aria-selected", "true");
-  await expect(aboutTab).toHaveAttribute("aria-selected", "false");
-
-  // TOC panel should be visible
-  const tocPanel = page.locator("#toc-panel");
-  await expect(tocPanel).toBeVisible();
-});
-
-test("renders corpus hero, chat bar and description controls", async ({
+test("renders landing view with corpus title and badge", async ({
   mount,
   page,
 }) => {
   await mountCorpusHome(mount);
 
-  /* ------------------------------------------------------------------
-   * Hero section (title, privacy badge, breadcrumbs)
-   * ------------------------------------------------------------------ */
-  const hero = page.getByTestId("corpus-home-hero");
-  await expect(hero).toBeVisible();
+  // CORPUS badge should be visible (exact match to avoid matching "Corpuses" breadcrumb)
+  await expect(page.getByText("CORPUS", { exact: true })).toBeVisible();
 
-  // Breadcrumbs are rendered
-  await expect(hero.locator("text=Corpuses")).toBeVisible();
-
-  // Title contains corpus name with "Corpus" accent
-  const title = page.getByTestId("corpus-home-hero-title");
+  // Title should be visible
+  const title = page.getByTestId("corpus-home-landing-title");
   await expect(title).toBeVisible();
-  await expect(title.locator("text=Corpus")).toBeVisible();
   await expect(title).toContainText(dummyCorpus.title);
+});
+
+test("renders landing view with metadata and access badge", async ({
+  mount,
+  page,
+}) => {
+  await mountCorpusHome(mount);
+
+  // Metadata row should be visible
+  const metadata = page.getByTestId("corpus-home-landing-metadata");
+  await expect(metadata).toBeVisible();
 
   // Privacy badge reflects corpus.isPublic
   const privacyText = dummyCorpus.isPublic ? "Public" : "Private";
-  await expect(hero.locator(`text=${privacyText}`)).toBeVisible();
+  await expect(metadata.locator(`text=${privacyText}`)).toBeVisible();
 
-  /* ------------------------------------------------------------------
-   * Inline chat bar
-   * ------------------------------------------------------------------ */
-  const chatBar = page.getByTestId("corpus-home-hero-chat");
+  // Creator name
+  await expect(metadata.locator("text=tester")).toBeVisible();
+});
+
+test("renders landing view with chat bar and quick actions", async ({
+  mount,
+  page,
+}) => {
+  await mountCorpusHome(mount);
+
+  // Chat bar should be visible
+  const chatBar = page.getByTestId("corpus-home-landing-chat");
   await expect(chatBar).toBeVisible();
 
   // Chat input placeholder
@@ -349,32 +320,176 @@ test("renders corpus hero, chat bar and description controls", async ({
   await expect(chatBar.locator("text=Summarize")).toBeVisible();
   await expect(chatBar.locator("text=Search")).toBeVisible();
   await expect(chatBar.locator("text=Analyze")).toBeVisible();
+});
 
-  /* ------------------------------------------------------------------
-   * Description card
-   * ------------------------------------------------------------------ */
-  const descriptionCard = page.locator("#corpus-home-description-card");
-  await expect(descriptionCard).toBeVisible();
+test("renders landing view with description as subtitle", async ({
+  mount,
+  page,
+}) => {
+  await mountCorpusHome(mount);
 
-  // Section heading
-  await expect(descriptionCard.locator("text=About this Corpus")).toBeVisible();
+  // Description should be visible as subtitle in hero section
+  const description = page.getByTestId("corpus-home-landing-description");
+  await expect(description).toBeVisible();
 
-  // Description text
+  // Description text (first line of the description)
+  await expect(description).toContainText("Dummy corpus for component-testing");
+});
+
+test("renders View Details button in landing view", async ({ mount, page }) => {
+  await mountCorpusHome(mount);
+
+  // View Details button should be visible
+  const viewDetailsBtn = page.getByTestId(
+    "corpus-home-landing-view-details-btn"
+  );
+  await expect(viewDetailsBtn).toBeVisible();
+  await expect(viewDetailsBtn).toContainText("View Details");
+});
+
+test("clicking View Details switches to details view", async ({
+  mount,
+  page,
+}) => {
+  await mountCorpusHome(mount);
+
+  // Initially in landing view
+  await expect(page.getByTestId("corpus-home-landing")).toBeVisible();
+
+  // Click View Details button
+  const viewDetailsBtn = page.getByTestId(
+    "corpus-home-landing-view-details-btn"
+  );
+  await viewDetailsBtn.click();
+
+  // Should now show details view
+  await expect(page.getByTestId("corpus-home-details")).toBeVisible();
+  await expect(page.getByTestId("corpus-home-landing")).toBeHidden();
+});
+
+/* --------------------------------------------------------------------------
+ * Tests for Details View
+ * -------------------------------------------------------------------------- */
+
+test("shows details view when view=details URL param is set", async ({
+  mount,
+  page,
+}) => {
+  // Mount with initialView="details"
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      initialView="details"
+    />
+  );
+
+  // Details view should be visible
+  const detailsView = page.getByTestId("corpus-home-details");
+  await expect(detailsView).toBeVisible();
+
+  // Landing view should not be visible
+  const landingView = page.getByTestId("corpus-home-landing");
+  await expect(landingView).toBeHidden();
+});
+
+test("details view shows back button", async ({ mount, page }) => {
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      initialView="details"
+    />
+  );
+
+  // Back button should be visible
+  const backBtn = page.getByTestId("corpus-home-details-back-btn");
+  await expect(backBtn).toBeVisible();
+  await expect(backBtn).toContainText("Overview");
+});
+
+test("details view shows corpus title", async ({ mount, page }) => {
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      initialView="details"
+    />
+  );
+
+  // Title should be visible
+  const title = page.getByTestId("corpus-home-details-title");
+  await expect(title).toBeVisible();
+  await expect(title).toContainText(dummyCorpus.title);
+});
+
+test("clicking back button in details view returns to landing", async ({
+  mount,
+  page,
+}) => {
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      initialView="details"
+    />
+  );
+
+  // Initially in details view
+  await expect(page.getByTestId("corpus-home-details")).toBeVisible({
+    timeout: 10000,
+  });
+
+  // Click back button
+  const backBtn = page.getByTestId("corpus-home-details-back-btn");
+  await backBtn.click();
+
+  // Wait for URL change to propagate to reactive var and re-render
+  // Should now show landing view
+  await expect(page.getByTestId("corpus-home-landing")).toBeVisible({
+    timeout: 10000,
+  });
+  await expect(page.getByTestId("corpus-home-details")).toBeHidden();
+});
+
+test("details view shows two-column layout on desktop", async ({
+  mount,
+  page,
+}) => {
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      initialView="details"
+    />
+  );
+
+  // Both Documents and About sections should be visible (minimalist labels)
+  // Use specific selector to avoid matching metadata and mobile tabs
   await expect(
-    descriptionCard.locator(
-      "text=Dummy corpus for component-testing CorpusHome."
-    )
+    page.locator("span").filter({ hasText: /^Documents$/ })
   ).toBeVisible();
-
-  /* ------------------------------------------------------------------
-   * Action buttons (Version History + Edit Description)
-   * ------------------------------------------------------------------ */
   await expect(
-    page.getByRole("button", { name: "Version History" })
+    page.locator("span").filter({ hasText: /^About$/ })
   ).toBeVisible();
+});
 
-  // Either "Edit Description" or "Add Description" should be available depending on permissions
-  await expect(
-    page.getByRole("button", { name: /(?:Edit|Add)/i })
-  ).toBeVisible();
+/* --------------------------------------------------------------------------
+ * Tests for Breadcrumbs
+ * -------------------------------------------------------------------------- */
+
+test("landing view has centered breadcrumbs", async ({ mount, page }) => {
+  await mountCorpusHome(mount);
+
+  // Breadcrumbs should be visible
+  const breadcrumbs = page.getByTestId("corpus-home-landing-breadcrumbs");
+  await expect(breadcrumbs).toBeVisible();
+
+  // Should have Corpuses link
+  await expect(breadcrumbs.locator("text=Corpuses")).toBeVisible();
+
+  // Should have current corpus name
+  await expect(breadcrumbs.locator(".current")).toContainText(
+    dummyCorpus.title
+  );
 });

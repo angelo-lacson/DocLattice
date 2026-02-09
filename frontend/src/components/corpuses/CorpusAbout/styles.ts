@@ -9,12 +9,14 @@ import {
   mediaQuery,
 } from "../styles/corpusDesignTokens";
 
-export const AboutCard = styled(motion.div)`
-  background: ${CORPUS_COLORS.white};
-  border-radius: ${CORPUS_RADII.lg};
-  box-shadow: ${CORPUS_SHADOWS.card};
+export const AboutCard = styled(motion.div)<{ $minimal?: boolean }>`
+  background: ${(props) =>
+    props.$minimal ? "transparent" : CORPUS_COLORS.white};
+  border-radius: ${(props) => (props.$minimal ? "0" : CORPUS_RADII.lg)};
+  box-shadow: ${(props) => (props.$minimal ? "none" : CORPUS_SHADOWS.card)};
   overflow: hidden;
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border: ${(props) =>
+    props.$minimal ? "none" : `1px solid ${CORPUS_COLORS.slate[200]}`};
   display: flex;
   flex-direction: column;
   position: relative;
@@ -128,22 +130,22 @@ export const EditButton = styled.button`
   }
 `;
 
-export const AboutContent = styled.div`
-  padding: 2rem;
-  padding-bottom: 4rem;
+export const AboutContent = styled.div<{ $minimal?: boolean }>`
+  padding: ${(props) => (props.$minimal ? "0" : "2rem")};
+  padding-bottom: ${(props) => (props.$minimal ? "0" : "4rem")};
   color: ${CORPUS_COLORS.slate[600]};
   line-height: 1.8;
   font-size: 1.0625rem;
   flex: 1;
-  overflow-y: auto;
+  overflow-y: ${(props) => (props.$minimal ? "visible" : "auto")};
   overflow-x: hidden;
   position: relative;
   min-height: 0;
   max-height: 100%;
 
   ${mediaQuery.tablet} {
-    padding: 1.25rem;
-    padding-bottom: 3rem;
+    padding: ${(props) => (props.$minimal ? "0" : "1.25rem")};
+    padding-bottom: ${(props) => (props.$minimal ? "0" : "3rem")};
     font-size: 0.9375rem;
     line-height: 1.65;
   }

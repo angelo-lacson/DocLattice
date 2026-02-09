@@ -4,10 +4,14 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { Database, FileText, Tag, User } from "lucide-react";
+import { Bot, Database, FileText, Tag, User } from "lucide-react";
 import { color } from "../../theme/colors";
 import { MentionedResourceType } from "../../types/graphql-api";
 import { sanitizeForTooltip } from "../../utils/textSanitization";
+import {
+  MENTION_TYPES,
+  MentionType,
+} from "../../assets/configurations/constants";
 
 const MarkdownContainer = styled.div`
   p {
@@ -51,19 +55,20 @@ const MarkdownContainer = styled.div`
   }
 `;
 
-const MentionLink = styled.a<{ $type: string }>`
+const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 2px 8px 2px 6px;
   border-radius: 4px;
   font-weight: 500;
-  cursor: pointer;
+  cursor: ${({ $navigable = true }) => ($navigable ? "pointer" : "default")};
   transition: all 0.15s ease;
   text-decoration: none;
   vertical-align: middle;
   margin: 0 2px;
   font-size: 0.9em;
+  opacity: ${({ $navigable = true }) => ($navigable ? 1 : 0.85)};
 
   background: ${(props) => {
     if (props.$type === "user")
@@ -74,6 +79,8 @@ const MentionLink = styled.a<{ $type: string }>`
       return "linear-gradient(135deg, #f093fb15 0%, #f5576c15 100%)";
     if (props.$type === "annotation")
       return "linear-gradient(135deg, #43e97b15 0%, #38f9d715 100%)";
+    if (props.$type === "agent")
+      return "linear-gradient(135deg, #8b5cf615 0%, #6366f115 100%)";
     return "linear-gradient(135deg, #e0e0e015 0%, #c0c0c015 100%)";
   }};
 
@@ -83,6 +90,7 @@ const MentionLink = styled.a<{ $type: string }>`
       if (props.$type === "corpus") return color.P4;
       if (props.$type === "document") return "#f5576c40";
       if (props.$type === "annotation") return "#38f9d780";
+      if (props.$type === "agent") return "#8b5cf660";
       return color.N4;
     }};
 
@@ -91,32 +99,43 @@ const MentionLink = styled.a<{ $type: string }>`
     if (props.$type === "corpus") return color.P8;
     if (props.$type === "document") return "#c41e3a";
     if (props.$type === "annotation") return "#0d9488";
+    if (props.$type === "agent") return "#7c3aed";
     return color.N8;
   }};
 
   &:hover {
-    background: ${(props) => {
-      if (props.$type === "user")
-        return "linear-gradient(135deg, #06b6d425 0%, #10b98125 100%)";
-      if (props.$type === "corpus")
-        return "linear-gradient(135deg, #667eea25 0%, #764ba225 100%)";
-      if (props.$type === "document")
-        return "linear-gradient(135deg, #f093fb25 0%, #f5576c25 100%)";
-      if (props.$type === "annotation")
-        return "linear-gradient(135deg, #43e97b25 0%, #38f9d725 100%)";
-      return "linear-gradient(135deg, #e0e0e025 0%, #c0c0c025 100%)";
-    }};
-
-    border-color: ${(props) => {
-      if (props.$type === "user") return "#10b981";
-      if (props.$type === "corpus") return color.P6;
-      if (props.$type === "document") return "#f5576c80";
-      if (props.$type === "annotation") return "#38f9d7";
-      return color.N6;
-    }};
-
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    ${(props) =>
+      props.$navigable !== false &&
+      `
+      background: ${
+        props.$type === "user"
+          ? "linear-gradient(135deg, #06b6d425 0%, #10b98125 100%)"
+          : props.$type === "corpus"
+          ? "linear-gradient(135deg, #667eea25 0%, #764ba225 100%)"
+          : props.$type === "document"
+          ? "linear-gradient(135deg, #f093fb25 0%, #f5576c25 100%)"
+          : props.$type === "annotation"
+          ? "linear-gradient(135deg, #43e97b25 0%, #38f9d725 100%)"
+          : props.$type === "agent"
+          ? "linear-gradient(135deg, #8b5cf625 0%, #6366f125 100%)"
+          : "linear-gradient(135deg, #e0e0e025 0%, #c0c0c025 100%)"
+      };
+      border-color: ${
+        props.$type === "user"
+          ? "#10b981"
+          : props.$type === "corpus"
+          ? color.P6
+          : props.$type === "document"
+          ? "#f5576c80"
+          : props.$type === "annotation"
+          ? "#38f9d7"
+          : props.$type === "agent"
+          ? "#8b5cf6"
+          : color.N6
+      };
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    `}
   }
 
   &:active {
@@ -178,6 +197,13 @@ export function MarkdownMessageRenderer({
     // User: /users/{slug}
     if (href.startsWith("/users/")) return "user";
 
+    // Global Agent: /agents/{slug}
+    if (href.startsWith("/agents/")) return "agent";
+
+    // Corpus-scoped Agent: /c/{creator}/{corpus}/agents/{agent-slug}
+    // Must check before corpus since it also starts with /c/
+    if (href.startsWith("/c/") && href.includes("/agents/")) return "agent";
+
     // Corpus: /c/{creator}/{slug}
     if (href.startsWith("/c/")) return "corpus";
 
@@ -206,6 +232,8 @@ export function MarkdownMessageRenderer({
         return <FileText size={14} />;
       case "annotation":
         return <Tag size={14} />;
+      case "agent":
+        return <Bot size={14} />;
       default:
         return null;
     }
@@ -246,16 +274,27 @@ export function MarkdownMessageRenderer({
       return parts.join("\n");
     }
 
+    // Check if this mention type is navigable
+    const mentionConfig = MENTION_TYPES[type as MentionType];
+    const isNavigable = mentionConfig?.navigable ?? true;
+    const suffix = isNavigable ? "" : "\n(Detail page coming soon)";
+
     // Fallback to simple tooltips for other types (sanitize all user content)
     switch (type) {
       case "user":
-        return `User: ${sanitizeForTooltip(text)}`;
+        return `User: ${sanitizeForTooltip(text)}${suffix}`;
       case "corpus":
-        return `Corpus: ${sanitizeForTooltip(resource?.title || text)}`;
+        return `Corpus: ${sanitizeForTooltip(
+          resource?.title || text
+        )}${suffix}`;
       case "document":
-        return `Document: ${sanitizeForTooltip(resource?.title || text)}`;
+        return `Document: ${sanitizeForTooltip(
+          resource?.title || text
+        )}${suffix}`;
       case "annotation":
-        return `Annotation: ${sanitizeForTooltip(text)}`;
+        return `Annotation: ${sanitizeForTooltip(text)}${suffix}`;
+      case "agent":
+        return `AI Agent: ${sanitizeForTooltip(text)}${suffix}`;
       default:
         return sanitizeForTooltip(text);
     }
@@ -283,15 +322,20 @@ export function MarkdownMessageRenderer({
               // Look up rich metadata from mentionedResources (Issue #689)
               const resource = href ? resourceByUrl.get(href) : undefined;
 
+              // Check if this mention type has an active route
+              const mentionConfig = MENTION_TYPES[mentionType as MentionType];
+              const isNavigable = mentionConfig?.navigable ?? true;
+
               // This is a mention link - style it specially with icon (Issue #689)
               return (
                 <MentionLink
-                  href={href}
+                  href={isNavigable ? href : undefined}
                   $type={mentionType}
+                  $navigable={isNavigable}
                   title={getMentionTooltip(mentionType, textContent, resource)}
                   onClick={(e) => {
                     e.preventDefault();
-                    if (href) {
+                    if (isNavigable && href) {
                       navigate(href);
                     }
                   }}

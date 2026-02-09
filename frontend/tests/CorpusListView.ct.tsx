@@ -96,6 +96,9 @@ const createMockCorpus = (
     totalCount: options.documentCount ?? 0,
     __typename: "DocumentTypeConnection",
   },
+  // Direct count fields used by CorpusListView
+  documentCount: options.documentCount ?? 0,
+  annotationCount: options.annotationCount ?? 0,
   __typename: "CorpusType",
 });
 
@@ -167,9 +170,10 @@ test.describe("CorpusListView", () => {
         .filter({ hasText: "Public Corpus" })
     ).toBeVisible();
 
-    // Check that stats are shown
+    // Check that stats are shown (docs count and labelset info, not annotations)
     await expect(component.getByText("5 docs")).toBeVisible();
-    await expect(component.getByText("100 annotations")).toBeVisible();
+    // Labelset shows: "Test Labels (6 labels)" based on mock data
+    await expect(component.getByText(/Test Labels/)).toBeVisible();
   });
 
   test("shows correct stats summary", async ({ mount }) => {

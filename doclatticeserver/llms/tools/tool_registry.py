@@ -19,17 +19,25 @@ class ToolCategory(str, Enum):
     ANNOTATIONS = "annotations"
     COORDINATION = "coordination"
     MODERATION = "moderation"
+    IMAGE = "image"
 
 
 @dataclass(frozen=True)
 class ToolDefinition:
-    """Definition of an available tool for agents."""
+    """Definition of an available tool for agents.
+
+    Flags:
+        requires_corpus: Tool needs a corpus_id to function
+        requires_approval: Tool requires user confirmation before execution
+        requires_write_permission: Tool performs write operations (filtered for read-only users)
+    """
 
     name: str
     description: str
     category: ToolCategory
     requires_corpus: bool = False
     requires_approval: bool = False
+    requires_write_permission: bool = False
     parameters: tuple[tuple[str, str, bool], ...] = ()  # (name, description, required)
 
     def to_dict(self) -> dict:
@@ -44,6 +52,7 @@ class ToolDefinition:
             "category": self.category.value,
             "requiresCorpus": self.requires_corpus,
             "requiresApproval": self.requires_approval,
+            "requiresWritePermission": self.requires_write_permission,
             "parameters": [
                 {"name": p[0], "description": p[1], "required": p[2]}
                 for p in self.parameters
@@ -63,12 +72,19 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         name="similarity_search",
         description=(
             "Search for semantically similar content using vector embeddings. "
-            "Returns relevant passages from annotations with similarity scores."
+            "With multimodal embedder (CLIP), searches across both text and image "
+            "content in a unified vector space. Use modalities filter to restrict results "
+            "to specific content types."
         ),
         category=ToolCategory.SEARCH,
         parameters=(
             ("query", "The search query text", True),
             ("k", "Number of results to return (default 5)", False),
+            (
+                "modalities",
+                "Filter by content type: ['TEXT'], ['IMAGE'], or ['TEXT', 'IMAGE']",
+                False,
+            ),
         ),
     ),
     ToolDefinition(
@@ -165,6 +181,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.DOCUMENT,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(("new_description", "The new description content", True),),
     ),
     # -------------------------------------------------------------------------
@@ -214,6 +231,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.DOCUMENT,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(("new_content", "The new summary content", True),),
     ),
     # -------------------------------------------------------------------------
@@ -245,6 +263,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Create a new note attached to a document.",
         category=ToolCategory.NOTES,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("title", "Note title", True),
             ("content", "Note content", True),
@@ -258,6 +277,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.NOTES,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("note_id", "ID of the note to update", True),
             (
@@ -293,6 +313,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.CORPUS,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(("new_content", "Full markdown content", True),),
     ),
     # -------------------------------------------------------------------------
@@ -336,6 +357,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.ANNOTATIONS,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("annotation_ids", "List of annotation IDs to duplicate", True),
             ("new_label_text", "Text of the label to apply to duplicates", True),
@@ -351,12 +373,55 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.ANNOTATIONS,
         requires_corpus=True,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             (
                 "items",
                 "List of (label_text, exact_string, document_id, corpus_id) tuples",
                 True,
             ),
+        ),
+    ),
+    ToolDefinition(
+        name="get_annotation_images",
+        description=(
+            "Get all images contained within an annotation's bounding box. "
+            "Returns image metadata and base64-encoded data for each image. "
+            "Use this to inspect visual content within annotated regions."
+        ),
+        category=ToolCategory.ANNOTATIONS,
+        parameters=(("annotation_id", "ID of the annotation", True),),
+    ),
+    # -------------------------------------------------------------------------
+    # IMAGE TOOLS (for multimodal document processing)
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="list_document_images",
+        description=(
+            "List all images in a document with metadata (page number, position, "
+            "dimensions, format). Use this to discover images before retrieving them. "
+            "For PDFs, images are extracted during parsing with docling."
+        ),
+        category=ToolCategory.IMAGE,
+        parameters=(
+            (
+                "page_index",
+                "Optional 0-based page filter to list images from specific page",
+                False,
+            ),
+        ),
+    ),
+    ToolDefinition(
+        name="get_document_image",
+        description=(
+            "Get base64-encoded image data for a specific image token. "
+            "Use list_document_images first to find page_index and token_index. "
+            "Returns the image in its original format (PNG, JPEG, etc.)."
+        ),
+        category=ToolCategory.IMAGE,
+        parameters=(
+            ("page_index", "0-based page index where the image is located", True),
+            ("token_index", "0-based token index of the image on the page", True),
         ),
     ),
     # -------------------------------------------------------------------------
@@ -398,6 +463,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("message_id", "ID of the message to delete", True),
             ("reason", "Reason for deletion (for audit log)", True),
@@ -411,6 +477,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to lock", True),
             ("reason", "Reason for locking (for audit log)", True),
@@ -421,6 +488,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Unlock a previously locked thread to allow new messages.",
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to unlock", True),
             ("reason", "Reason for unlocking (for audit log)", True),
@@ -434,6 +502,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         ),
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to post to", True),
             ("content", "Message content (markdown supported)", True),
@@ -444,6 +513,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Pin a thread to appear at the top of the thread list.",
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to pin", True),
             ("reason", "Reason for pinning (for audit log)", True),
@@ -454,6 +524,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         description="Unpin a previously pinned thread.",
         category=ToolCategory.MODERATION,
         requires_approval=True,
+        requires_write_permission=True,
         parameters=(
             ("thread_id", "ID of the thread to unpin", True),
             ("reason", "Reason for unpinning (for audit log)", True),

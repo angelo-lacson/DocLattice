@@ -2,7 +2,14 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import { Pin, Lock, Trash2, RotateCcw } from "lucide-react";
 import { useMutation } from "@apollo/client";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
 import {
   PIN_THREAD,
   UNPIN_THREAD,
@@ -28,11 +35,11 @@ import { GET_CONVERSATIONS, GET_THREAD_DETAIL } from "../../graphql/queries";
 const Container = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: ${({ theme }) => color.N2};
-  border: 1px solid ${({ theme }) => color.N4};
-  border-radius: 6px;
+  gap: 0.5rem;
+  padding: 0.875rem;
+  background: ${CORPUS_COLORS.slate[50]};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.lg};
 `;
 
 const ModerationButton = styled.button<{
@@ -40,45 +47,46 @@ const ModerationButton = styled.button<{
 }>`
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
   border: 1px solid;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
-  ${({ $variant, theme }) => {
+  ${({ $variant }) => {
     switch ($variant) {
       case "danger":
         return `
-          background: ${color.R7}10;
-          border-color: ${color.R7}40;
-          color: ${color.R7};
+          background: #fee2e2;
+          border-color: #fca5a5;
+          color: #dc2626;
           &:hover:not(:disabled) {
-            background: ${color.R7}20;
-            border-color: ${color.R7};
+            background: #fecaca;
+            border-color: #f87171;
           }
         `;
       case "warning":
         return `
-          background: ${color.Y6}10;
-          border-color: ${color.Y6}40;
-          color: ${color.Y6};
+          background: #fef3c7;
+          border-color: #fcd34d;
+          color: #92400e;
           &:hover:not(:disabled) {
-            background: ${color.Y6}20;
-            border-color: ${color.Y6};
+            background: #fde68a;
+            border-color: #fbbf24;
           }
         `;
       default:
         return `
-          background: ${color.B5}10;
-          border-color: ${color.B5}40;
-          color: ${color.B5};
+          background: ${CORPUS_COLORS.teal[50]};
+          border-color: ${CORPUS_COLORS.teal[200]};
+          color: ${CORPUS_COLORS.teal[700]};
           &:hover:not(:disabled) {
-            background: ${color.B5}20;
-            border-color: ${color.B5};
+            background: ${CORPUS_COLORS.teal[100]};
+            border-color: ${CORPUS_COLORS.teal[300]};
           }
         `;
     }
@@ -90,8 +98,8 @@ const ModerationButton = styled.button<{
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
   }
 `;
 
@@ -106,61 +114,65 @@ const ConfirmDialog = styled.div`
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 16px;
+  padding: 1rem;
 `;
 
 const ConfirmBox = styled.div`
-  background: ${({ theme }) => color.N1};
-  border-radius: 8px;
-  padding: 24px;
-  max-width: 400px;
+  background: ${CORPUS_COLORS.white};
+  border-radius: ${CORPUS_RADII.lg};
+  padding: 1.5rem;
+  max-width: 25rem;
   width: 100%;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: ${CORPUS_SHADOWS.xl};
 `;
 
 const ConfirmTitle = styled.h3`
-  margin: 0 0 12px 0;
-  font-size: 18px;
+  margin: 0 0 0.75rem 0;
+  font-family: ${CORPUS_FONTS.serif};
+  font-size: 1.125rem;
   font-weight: 600;
-  color: ${({ theme }) => color.N10};
+  color: ${CORPUS_COLORS.slate[800]};
 `;
 
 const ConfirmMessage = styled.p`
-  margin: 0 0 20px 0;
-  font-size: 14px;
-  color: ${({ theme }) => color.N7};
+  margin: 0 0 1.25rem 0;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.875rem;
+  color: ${CORPUS_COLORS.slate[600]};
   line-height: 1.5;
 `;
 
 const ConfirmActions = styled.div`
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   justify-content: flex-end;
 `;
 
 const ConfirmButton = styled.button<{ $primary?: boolean }>`
-  padding: 8px 16px;
+  padding: 0.5rem 1rem;
   border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: ${CORPUS_RADII.md};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
-  ${({ $primary, theme }) =>
+  ${({ $primary }) =>
     $primary
       ? `
-    background: ${color.R7};
+    background: #dc2626;
     color: white;
     &:hover:not(:disabled) {
-      opacity: 0.9;
+      background: #b91c1c;
     }
   `
       : `
-    background: ${color.N3};
-    color: ${color.N10};
+    background: ${CORPUS_COLORS.white};
+    border: 1px solid ${CORPUS_COLORS.slate[200]};
+    color: ${CORPUS_COLORS.slate[700]};
     &:hover:not(:disabled) {
-      background: ${color.N2};
+      background: ${CORPUS_COLORS.slate[50]};
     }
   `}
 
@@ -171,12 +183,13 @@ const ConfirmButton = styled.button<{ $primary?: boolean }>`
 `;
 
 const ErrorMessage = styled.div`
-  padding: 8px 12px;
-  background: ${({ theme }) => color.R7}15;
-  color: ${({ theme }) => color.R7};
-  font-size: 13px;
-  border-radius: 4px;
-  margin-top: 8px;
+  padding: 0.5rem 0.75rem;
+  background: #fee2e2;
+  color: #dc2626;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  border-radius: ${CORPUS_RADII.sm};
+  margin-top: 0.5rem;
 `;
 
 export interface ModerationControlsProps {

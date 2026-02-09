@@ -69,12 +69,8 @@ export interface GetTrendingCorpusesOutput {
           username: string;
           slug: string;
         };
-        documents: {
-          totalCount: number;
-        };
-        annotations: {
-          totalCount: number;
-        };
+        documentCount?: number;
+        annotationCount?: number;
         categories?: Array<{
           id: string;
           name: string;
@@ -110,12 +106,8 @@ export const GET_TRENDING_CORPUSES = gql`
             username
             slug
           }
-          documents {
-            totalCount
-          }
-          annotations {
-            totalCount
-          }
+          documentCount
+          annotationCount
           categories {
             id
             name
@@ -155,9 +147,6 @@ export interface GetRecentDiscussionsOutput {
           id: string;
           username: string;
         };
-        chatMessages: {
-          totalCount: number;
-        };
         chatWithCorpus?: {
           id: string;
           title: string;
@@ -194,9 +183,6 @@ export const GET_RECENT_DISCUSSIONS = gql`
           creator {
             id
             username
-          }
-          chatMessages {
-            totalCount
           }
           chatWithCorpus {
             id
@@ -309,9 +295,6 @@ export interface LeaderboardEntry {
   username: string;
   slug?: string;
   reputationGlobal?: number;
-  totalMessages?: number;
-  totalThreadsCreated?: number;
-  totalAnnotationsCreated?: number;
   badges?: {
     edges: Array<{
       node: {
@@ -337,9 +320,6 @@ export const GET_GLOBAL_LEADERBOARD = gql`
       username
       slug
       reputationGlobal
-      totalMessages
-      totalThreadsCreated
-      totalAnnotationsCreated
       badges(first: 3) {
         edges {
           node {
@@ -388,12 +368,8 @@ export const GET_DISCOVERY_DATA = gql`
             username
             slug
           }
-          documents {
-            totalCount
-          }
-          annotations {
-            totalCount
-          }
+          documentCount
+          annotationCount
           categories {
             id
             name
@@ -427,9 +403,6 @@ export const GET_DISCOVERY_DATA = gql`
             id
             username
           }
-          chatMessages {
-            totalCount
-          }
           chatWithCorpus {
             id
             title
@@ -459,9 +432,6 @@ export const GET_DISCOVERY_DATA = gql`
       username
       slug
       reputationGlobal
-      totalMessages
-      totalThreadsCreated
-      totalAnnotationsCreated
       badges(first: 3) {
         edges {
           node {

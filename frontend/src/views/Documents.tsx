@@ -43,7 +43,6 @@ import {
   GET_DOCUMENTS,
 } from "../graphql/queries";
 import {
-  authToken,
   documentSearchTerm,
   editingDocument,
   filterToCorpus,
@@ -875,7 +874,6 @@ function getDocumentType(doc: DocumentType): string {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const Documents = () => {
-  const auth_token = useReactiveVar(authToken);
   const current_user = useReactiveVar(userObj);
   const backend_user = useReactiveVar(backendUserObj);
   const document_to_edit = useReactiveVar(editingDocument);
@@ -998,10 +996,10 @@ export const Documents = () => {
 
   // Refetch effects
   useEffect(() => {
-    if (auth_token) {
+    if (current_user) {
       refetchDocuments();
     }
-  }, [auth_token]);
+  }, [current_user]);
 
   useEffect(() => {
     refetchDocuments();
@@ -1431,8 +1429,7 @@ export const Documents = () => {
                 </ViewToggleButton>
               </ViewToggle>
 
-              {auth_token &&
-                current_user &&
+              {current_user &&
                 (selected_document_ids.length > 0 ? (
                   <ActionButtons>
                     <Button
@@ -1759,7 +1756,7 @@ export const Documents = () => {
                 action={
                   activeStatusFilter === STATUS_FILTERS.ALL &&
                   !hasAdvancedFilters &&
-                  auth_token ? (
+                  current_user ? (
                     <Button
                       variant="primary"
                       leftIcon={<Plus size={16} />}
@@ -1805,7 +1802,7 @@ export const Documents = () => {
                 handleCloseContextMenu();
               }}
             />
-            {auth_token && (
+            {current_user && (
               <>
                 <Menu.Item
                   icon="folder open"

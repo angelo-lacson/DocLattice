@@ -310,7 +310,14 @@ class GraphQLConversationTestCase(TestCase):
 class AnonymousUserConversationTestCase(TestCase):
     """
     TestCase for testing anonymous user access to conversations.
-    Anonymous users should only be able to see public conversations.
+
+    Per the permission model (see consolidated_permissioning_guide.md):
+    - Anonymous users can see THREADs on public resources (corpus/document)
+    - Context inheritance: if corpus is public, ALL threads on it are visible
+    - The thread's own is_public flag provides DIRECT visibility, but
+      context inheritance works independently
+    - Anonymous users CANNOT see threads on private corpuses
+    - Anonymous users CANNOT see CHATs (only THREADs)
     """
 
     def setUp(self) -> None:
@@ -328,12 +335,17 @@ class AnonymousUserConversationTestCase(TestCase):
         # Create GraphQL client with anonymous user context
         self.anon_client = Client(schema, context_value=TestContext(AnonymousUser()))
 
-        # Create a corpus for testing
+        # Create a PUBLIC corpus for testing
         self.corpus = Corpus.objects.create(
             title="Public Test Corpus", creator=self.user, is_public=True
         )
 
-        # Create a PUBLIC conversation (thread type)
+        # Create a PRIVATE corpus for testing
+        self.private_corpus = Corpus.objects.create(
+            title="Private Test Corpus", creator=self.user, is_public=False
+        )
+
+        # Create a PUBLIC thread on public corpus (is_public=True)
         self.public_conversation = Conversation.objects.create(
             title="Public Discussion Thread",
             conversation_type="thread",
@@ -349,9 +361,10 @@ class AnonymousUserConversationTestCase(TestCase):
             content="This is a public discussion message.",
         )
 
-        # Create a PRIVATE conversation (not public)
-        self.private_conversation = Conversation.objects.create(
-            title="Private Discussion Thread",
+        # Create a thread with is_public=False on PUBLIC corpus
+        # This SHOULD be visible to anonymous via context inheritance
+        self.inherited_visibility_thread = Conversation.objects.create(
+            title="Inherited Visibility Thread",
             conversation_type="thread",
             chat_with_corpus=self.corpus,
             creator=self.user,
@@ -360,18 +373,18 @@ class AnonymousUserConversationTestCase(TestCase):
         # Grant permissions to the creator
         set_permissions_for_obj_to_user(
             user_val=self.user,
-            instance=self.private_conversation,
+            instance=self.inherited_visibility_thread,
             permissions=[PermissionTypes.ALL],
         )
-        # Add a message to the private conversation
+        # Add a message
         ChatMessage.objects.create(
             creator=self.user,
-            conversation=self.private_conversation,
+            conversation=self.inherited_visibility_thread,
             msg_type="HUMAN",
-            content="This is a private discussion message.",
+            content="This thread inherits visibility from public corpus.",
         )
 
-        # Create another PUBLIC conversation for variety
+        # Create another PUBLIC thread for variety
         self.public_conversation_2 = Conversation.objects.create(
             title="Another Public Thread",
             conversation_type="thread",
@@ -380,9 +393,22 @@ class AnonymousUserConversationTestCase(TestCase):
             is_public=True,
         )
 
-    def test_anonymous_user_can_see_public_conversations(self):
+        # Create a thread on PRIVATE corpus - should NOT be visible to anonymous
+        self.private_corpus_thread = Conversation.objects.create(
+            title="Thread on Private Corpus",
+            conversation_type="thread",
+            chat_with_corpus=self.private_corpus,
+            creator=self.user,
+            is_public=False,
+        )
+
+    def test_anonymous_user_can_see_threads_on_public_corpus(self):
         """
-        Test that anonymous users can see public conversations (threads).
+        Test that anonymous users can see ALL threads on public corpuses.
+
+        Per the permission model, context inheritance means if the corpus is
+        public, all threads on it are visible to anonymous users - regardless
+        of the thread's own is_public flag.
         """
         query = """
         query GetConversations($conversationType: ConversationTypeEnum) {
@@ -413,25 +439,29 @@ class AnonymousUserConversationTestCase(TestCase):
         data = response.get("data", {})
         edges = data.get("conversations", {}).get("edges", [])
 
-        # Should see 2 public conversations
+        # Should see 3 threads on public corpus (2 with is_public=True,
+        # 1 with is_public=False but inherits from public corpus)
+        # Should NOT see thread on private corpus
         self.assertEqual(
-            len(edges), 2, "Expected anonymous user to see 2 public conversations."
+            len(edges),
+            3,
+            "Expected anonymous user to see 3 threads on public corpus.",
         )
 
         found_titles = {conv["node"]["title"] for conv in edges}
         self.assertIn("Public Discussion Thread", found_titles)
         self.assertIn("Another Public Thread", found_titles)
+        self.assertIn("Inherited Visibility Thread", found_titles)
 
-        # Verify all returned conversations are public
-        for edge in edges:
-            self.assertTrue(
-                edge["node"]["isPublic"],
-                f"Anonymous user received non-public conversation: {edge['node']['title']}",
-            )
+        # Thread on private corpus should NOT be visible
+        self.assertNotIn("Thread on Private Corpus", found_titles)
 
-    def test_anonymous_user_cannot_see_private_conversations(self):
+    def test_anonymous_user_cannot_see_threads_on_private_corpus(self):
         """
-        Test that anonymous users CANNOT see private conversations.
+        Test that anonymous users CANNOT see threads on private corpuses.
+
+        The MIN permission rule means if the corpus is private, anonymous
+        users cannot see any threads on it - even if thread has is_public=True.
         """
         query = """
         query GetAllConversations {
@@ -458,19 +488,17 @@ class AnonymousUserConversationTestCase(TestCase):
 
         found_titles = {conv["node"]["title"] for conv in edges}
 
-        # Private conversation should NOT be visible
+        # Thread on private corpus should NOT be visible
         self.assertNotIn(
-            "Private Discussion Thread",
+            "Thread on Private Corpus",
             found_titles,
-            "Anonymous user should not see private conversations!",
+            "Anonymous user should not see threads on private corpus!",
         )
 
-        # All visible conversations should be public
-        for edge in edges:
-            self.assertTrue(
-                edge["node"]["isPublic"],
-                f"Anonymous user received non-public conversation: {edge['node']['title']}",
-            )
+        # All threads on public corpus should be visible
+        self.assertIn("Public Discussion Thread", found_titles)
+        self.assertIn("Another Public Thread", found_titles)
+        self.assertIn("Inherited Visibility Thread", found_titles)
 
     def test_anonymous_user_can_query_single_public_conversation(self):
         """
@@ -520,9 +548,12 @@ class AnonymousUserConversationTestCase(TestCase):
             msg_edges[0]["node"]["content"], "This is a public discussion message."
         )
 
-    def test_anonymous_user_cannot_query_single_private_conversation(self):
+    def test_anonymous_user_cannot_query_thread_on_private_corpus(self):
         """
-        Test that anonymous users CANNOT query a single private conversation by ID.
+        Test that anonymous users CANNOT query a thread on a private corpus by ID.
+
+        Even though the thread might exist, anonymous users cannot access it
+        because the corpus is private.
         """
         query = """
         query GetConversation($id: ID!) {
@@ -534,8 +565,9 @@ class AnonymousUserConversationTestCase(TestCase):
         }
         """
 
+        # Query the thread on the private corpus
         conversation_global_id = to_global_id(
-            "ConversationType", self.private_conversation.id
+            "ConversationType", self.private_corpus_thread.id
         )
         variables = {"id": conversation_global_id}
 
@@ -548,18 +580,23 @@ class AnonymousUserConversationTestCase(TestCase):
         # The conversation should not be returned (will raise DoesNotExist or return None)
         # Depending on implementation, either errors or null result is acceptable
         if response.get("errors"):
-            # Expected: error when trying to access private conversation
-            self.assertTrue(True, "Correctly received error for private conversation")
+            # Expected: error when trying to access thread on private corpus
+            self.assertTrue(
+                True, "Correctly received error for thread on private corpus"
+            )
         else:
             # Alternative: null result
             self.assertIsNone(
                 conversation,
-                "Private conversation should not be accessible to anonymous users",
+                "Thread on private corpus should not be accessible to anonymous users",
             )
 
     def test_anonymous_user_filtered_by_corpus(self):
         """
-        Test that anonymous users can filter conversations by corpus and only see public ones.
+        Test that anonymous users can filter conversations by corpus.
+
+        When filtering by a public corpus, anonymous users see ALL threads
+        on that corpus via context inheritance.
         """
         query = """
         query GetConversations($corpusId: String) {
@@ -587,10 +624,10 @@ class AnonymousUserConversationTestCase(TestCase):
         data = response.get("data", {})
         edges = data.get("conversations", {}).get("edges", [])
 
-        # Should see 2 public conversations for this corpus
-        self.assertEqual(len(edges), 2)
+        # Should see all 3 threads on the public corpus
+        self.assertEqual(len(edges), 3)
 
         found_titles = {conv["node"]["title"] for conv in edges}
         self.assertIn("Public Discussion Thread", found_titles)
         self.assertIn("Another Public Thread", found_titles)
-        self.assertNotIn("Private Discussion Thread", found_titles)
+        self.assertIn("Inherited Visibility Thread", found_titles)

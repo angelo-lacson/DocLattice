@@ -88,7 +88,8 @@ export class ServerSpanAnnotation {
     public readonly approved: boolean,
     public readonly rejected: boolean,
     public readonly canComment: boolean = false,
-    id: string | undefined = undefined
+    id: string | undefined = undefined,
+    public readonly contentModalities?: string[]
   ) {
     this.id = id || uuidv4();
   }
@@ -108,7 +109,8 @@ export class ServerSpanAnnotation {
       delta.approved ?? this.approved,
       delta.rejected ?? this.rejected,
       delta.canComment ?? this.canComment,
-      this.id
+      this.id,
+      delta.contentModalities ?? this.contentModalities
     );
   }
 
@@ -123,7 +125,8 @@ export class ServerSpanAnnotation {
       obj.approved,
       obj.rejected,
       obj.canComment,
-      obj.id
+      obj.id,
+      obj.contentModalities
     );
   }
 }
@@ -141,7 +144,8 @@ export class ServerTokenAnnotation {
     public readonly approved: boolean,
     public readonly rejected: boolean,
     public readonly canComment: boolean = false,
-    id: string | undefined = undefined
+    id: string | undefined = undefined,
+    public readonly contentModalities?: string[]
   ) {
     this.id = id || uuidv4();
   }
@@ -165,7 +169,8 @@ export class ServerTokenAnnotation {
       delta.approved ?? this.approved,
       delta.rejected ?? this.rejected,
       delta.canComment ?? this.canComment,
-      this.id
+      this.id,
+      delta.contentModalities ?? this.contentModalities
     );
   }
 
@@ -180,7 +185,8 @@ export class ServerTokenAnnotation {
       obj.approved,
       obj.rejected,
       obj.canComment,
-      obj.id
+      obj.id,
+      obj.contentModalities
     );
   }
 }
