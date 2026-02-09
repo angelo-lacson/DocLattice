@@ -21,10 +21,10 @@ import zipfile
 
 from celery import shared_task
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import DocumentPath
+from opencontractserver.tasks.export_tasks import finalize_export
 from opencontractserver.types.dicts import OpenContractsExportDataJsonV2Type
 from opencontractserver.types.enums import AnnotationFilterMode
 from opencontractserver.users.models import UserExport
@@ -230,14 +230,12 @@ def package_corpus_export_v2(
         zip_file.close()
 
         # Save ZIP to export
-        output_bytes.seek(io.SEEK_SET)
-        export.file.save(
-            f"{only_alphanumeric_chars(corpus.title)}_EXPORT_V2.zip", output_bytes
+        finalize_export(
+            export_id,
+            f"{only_alphanumeric_chars(corpus.title)}_EXPORT_V2.zip",
+            output_bytes,
+            corpus.title,
         )
-        export.finished = timezone.now()
-        export.backend_lock = False
-        export.save()
-
         logger.info(f"V2 export {export_id} completed successfully")
 
     except Exception as e:
