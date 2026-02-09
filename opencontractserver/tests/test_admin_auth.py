@@ -983,8 +983,11 @@ class TestAdminLoginRateLimit(TestCase):
         # Clear the rate-limit cache before each test to ensure isolation
         cache.clear()
 
-    def test_post_rate_limit_returns_429(self):
+    @patch("django_ratelimit.core.time")
+    def test_post_rate_limit_returns_429(self, mock_time):
         """Login POST should return 429 after exceeding the rate limit."""
+        # Pin time so all requests land in the same rate-limit window.
+        mock_time.time.return_value = 12345.0
         # Default rate is 5/m. Send 5 requests to exhaust the limit.
         for _ in range(5):
             self.client.post(
@@ -1003,8 +1006,10 @@ class TestAdminLoginRateLimit(TestCase):
         self.assertIn("error", data)
         self.assertIn("Too many login attempts", data["error"])
 
-    def test_post_rate_limit_json_content_type(self):
+    @patch("django_ratelimit.core.time")
+    def test_post_rate_limit_json_content_type(self, mock_time):
         """Rate-limited POST should return application/json."""
+        mock_time.time.return_value = 12345.0
         for _ in range(5):
             self.client.post(
                 "/admin/login/",
@@ -1030,8 +1035,10 @@ class TestAdminLoginRateLimit(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.wsgi_request.user.is_authenticated)
 
-    def test_get_rate_limit_returns_429(self):
+    @patch("django_ratelimit.core.time")
+    def test_get_rate_limit_returns_429(self, mock_time):
         """Login page GET should return 429 after exceeding the rate limit."""
+        mock_time.time.return_value = 12345.0
         # Default GET rate is 20/m. Send 20 requests to exhaust.
         for _ in range(20):
             self.client.get("/admin/login/")
@@ -1044,8 +1051,10 @@ class TestAdminLoginRateLimit(TestCase):
             response.content.decode(),
         )
 
-    def test_get_rate_limit_plain_text(self):
+    @patch("django_ratelimit.core.time")
+    def test_get_rate_limit_plain_text(self, mock_time):
         """Rate-limited GET should return text/plain."""
+        mock_time.time.return_value = 12345.0
         for _ in range(20):
             self.client.get("/admin/login/")
 
