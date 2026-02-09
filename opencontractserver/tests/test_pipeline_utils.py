@@ -583,19 +583,11 @@ class TestPostProcessor(BasePostProcessor):
         embedder = get_default_embedder_for_filetype("application/json")
         self.assertIsNone(embedder)
 
-    @override_settings(
-        PREFERRED_EMBEDDERS={
-            "application/pdf": "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder384",
-            "text/plain": "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder768",
-        },
-        DEFAULT_EMBEDDER="opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder",
-    )
     def test_find_embedder_for_filetype(self) -> None:
         """
         Test find_embedder_for_filetype function with different input types and scenarios.
 
-        Note: We clear PipelineSettings DB values to ensure Django settings fallback is used,
-        since the functions now check DB first before Django settings.
+        Sets embedder values directly on PipelineSettings (database is single source of truth).
         """
         from opencontractserver.documents.models import PipelineSettings
         from opencontractserver.pipeline.base.file_types import FileTypeEnum
@@ -604,12 +596,20 @@ class TestPostProcessor(BasePostProcessor):
             get_default_embedder,
         )
 
-        # Clear PipelineSettings DB values so Django settings fallback is used
+        # Set values directly on PipelineSettings (database is single source of truth)
         pipeline_settings = PipelineSettings.get_instance(use_cache=False)
-        pipeline_settings.preferred_embedders = {}
-        pipeline_settings.default_embedder = ""
+        pipeline_settings.preferred_embedders = {
+            "application/pdf": "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder384",
+            "text/plain": "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder768",
+        }
+        pipeline_settings.default_embedder = (
+            "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder"
+        )
         pipeline_settings.save()
         PipelineSettings._invalidate_cache()
+        # Ensure cache is cleared after TestCase rolls back the transaction,
+        # so stale values don't leak to other tests on the same xdist worker.
+        self.addCleanup(PipelineSettings._invalidate_cache)
 
         # Get the default embedder for comparison
         default_embedder = get_default_embedder()
@@ -642,27 +642,24 @@ class TestPostProcessor(BasePostProcessor):
             embedder
         )  # None because no preferred embedder for this mimetype
 
-    @override_settings(
-        PREFERRED_EMBEDDERS={
-            "application/pdf": "non.existent.EmbedderClass",
-        },
-        DEFAULT_EMBEDDER="opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder",
-    )
     def test_find_embedder_for_filetype_error_handling(self) -> None:
         """
         Test find_embedder_for_filetype error handling when embedder path can't be loaded.
-
-        Note: We clear PipelineSettings DB values to ensure Django settings fallback is used.
         """
         from opencontractserver.documents.models import PipelineSettings
         from opencontractserver.pipeline.utils import find_embedder_for_filetype
 
-        # Clear PipelineSettings DB values so Django settings fallback is used
+        # Set a non-existent embedder path directly on PipelineSettings
         pipeline_settings = PipelineSettings.get_instance(use_cache=False)
-        pipeline_settings.preferred_embedders = {}
-        pipeline_settings.default_embedder = ""
+        pipeline_settings.preferred_embedders = {
+            "application/pdf": "non.existent.EmbedderClass",
+        }
+        pipeline_settings.default_embedder = (
+            "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder"
+        )
         pipeline_settings.save()
         PipelineSettings._invalidate_cache()
+        self.addCleanup(PipelineSettings._invalidate_cache)
 
         # When a preferred embedder can't be loaded, the function should return None
         embedder = find_embedder_for_filetype("application/pdf")

@@ -68,6 +68,32 @@ def _create_export_notification(export: UserExport, corpus_title: str) -> None:
         logger.warning(f"Failed to create export notification: {e}")
 
 
+def finalize_export(
+    export_id: int,
+    filename: str,
+    output_bytes: io.BytesIO,
+    corpus_title: str,
+) -> None:
+    """
+    Save the export ZIP file and mark the export as complete.
+
+    Shared finalization logic for all export formats (V1, V2, FUNSD).
+
+    Args:
+        export_id: The UserExport PK.
+        filename: The filename for the saved ZIP.
+        output_bytes: The BytesIO buffer containing the ZIP data.
+        corpus_title: The corpus title (used for the notification).
+    """
+    output_bytes.seek(io.SEEK_SET)
+    export = UserExport.objects.get(pk=export_id)
+    export.file.save(filename, output_bytes)
+    export.finished = timezone.now()
+    export.backend_lock = False
+    export.save()
+    _create_export_notification(export, corpus_title)
+
+
 User = get_user_model()
 
 
@@ -107,13 +133,12 @@ def on_demand_post_processors(
 
             # Create new zip file with modified data
             output_buffer = io.BytesIO(modified_zip_bytes)
-            export.file.save(f"{corpus.title} EXPORT.zip", output_buffer)
-            export.finished = timezone.now()
-            export.backend_lock = False
-            export.save()
-
-            # Send export completion notification (Issue #624)
-            _create_export_notification(export, corpus.title)
+            finalize_export(
+                export_id,
+                f"{corpus.title} EXPORT.zip",
+                output_buffer,
+                corpus.title,
+            )
 
     except Exception as e:
         logger.error(f"Error running post-processors for export {export_id}: {str(e)}")
@@ -216,17 +241,7 @@ def package_annotated_docs(
     zip_file.writestr("data.json", json_bytes)
     zip_file.close()
 
-    output_bytes.seek(io.SEEK_SET)
-
-    export = UserExport.objects.get(pk=export_id)
-    export.file.save(f"{corpus.title} EXPORT.zip", output_bytes)
-    export.finished = timezone.now()
-    export.backend_lock = False
-    export.save()
-
-    # Send export completion notification (Issue #624)
-    _create_export_notification(export, corpus.title)
-
+    finalize_export(export_id, f"{corpus.title} EXPORT.zip", output_bytes, corpus.title)
     logger.info(f"Export {export_id} is completed.")
 
 
@@ -309,15 +324,10 @@ def package_funsd_exports(
             )
 
     zip_file.close()
-    output_bytes.seek(io.SEEK_SET)
 
-    export = UserExport.objects.get(pk=export_id)
-    export.file.save(
-        f"{only_alphanumeric_chars(corpus.title)} FUNSD EXPORT.zip", output_bytes
+    finalize_export(
+        export_id,
+        f"{only_alphanumeric_chars(corpus.title)} FUNSD EXPORT.zip",
+        output_bytes,
+        corpus.title,
     )
-    export.finished = timezone.now()
-    export.backend_lock = False
-    export.save()
-
-    # Send export completion notification (Issue #624)
-    _create_export_notification(export, corpus.title)

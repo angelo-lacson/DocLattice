@@ -138,10 +138,6 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
-from opencontractserver.constants.document_processing import (
-    DEFAULT_DOCUMENT_PATH_PREFIX,
-    MAX_FILENAME_LENGTH,
-)
 from opencontractserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from opencontractserver.corpuses.models import (
     Corpus,
@@ -175,6 +171,7 @@ from opencontractserver.tasks.export_tasks import (
     on_demand_post_processors,
     package_funsd_exports,
 )
+from opencontractserver.tasks.export_tasks_v2 import package_corpus_export_v2
 from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
 from opencontractserver.tasks.permissioning_tasks import (
     make_analysis_public_task,
@@ -1485,6 +1482,16 @@ class StartCorpusExport(graphene.Mutation):
                 ok = True
                 message = "SUCCESS"
 
+            elif export_format == ExportType.OPEN_CONTRACTS_V2.value:
+                package_corpus_export_v2.delay(
+                    export_id=export.id,
+                    corpus_pk=int(corpus_pk),
+                    analysis_pk_list=analysis_pk_list if analysis_pk_list else None,
+                    annotation_filter_mode=annotation_filter_mode,
+                )
+                ok = True
+                message = "SUCCESS"
+
             elif export_format == ExportType.FUNSD:
                 chain(
                     chord(
@@ -1743,188 +1750,80 @@ class UploadDocument(graphene.Mutation):
 
             user = info.context.user
 
-            # If uploading directly to a corpus, use import_content() for deduplication
-            if add_to_corpus_id is not None and kind in [
-                "application/pdf",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ]:
+            # Determine target corpus and folder
+            if add_to_corpus_id is not None:
                 try:
                     corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
+                except Corpus.DoesNotExist:
+                    return UploadDocument(
+                        message="Corpus not found",
+                        ok=False,
+                        document=None,
+                    )
 
-                    # Check if user has permission to add documents to this corpus
-                    if not user_has_permission_for_obj(
-                        user, corpus, PermissionTypes.EDIT
-                    ):
+                if not user_has_permission_for_obj(user, corpus, PermissionTypes.EDIT):
+                    return UploadDocument(
+                        message="You don't have permission to add documents to this corpus",
+                        ok=False,
+                        document=None,
+                    )
+
+                folder = None
+                if add_to_folder_id is not None:
+                    try:
+                        folder_pk = from_global_id(add_to_folder_id)[1]
+                        folder = CorpusFolder.objects.get(pk=folder_pk, corpus=corpus)
+                    except CorpusFolder.DoesNotExist:
                         return UploadDocument(
-                            message="You don't have permission to add documents to this corpus",
+                            message="Folder not found in the specified corpus",
                             ok=False,
                             document=None,
                         )
-
-                    # Resolve folder if provided
-                    folder = None
-                    if add_to_folder_id is not None:
-                        folder_pk = from_global_id(add_to_folder_id)[1]
-                        folder = CorpusFolder.objects.get(pk=folder_pk, corpus=corpus)
-
-                    # Generate path from filename
-                    safe_filename = "".join(
-                        c if c.isalnum() or c in "-_." else "_"
-                        for c in filename[:MAX_FILENAME_LENGTH]
-                    )
-                    doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
-
-                    # Use import_content for content-based deduplication
-                    document, status, path_record = corpus.import_content(
-                        content=file_bytes,
-                        path=doc_path,
-                        user=user,
-                        folder=folder,
-                        title=title,
-                        description=description,
-                        file_type=kind,
-                        custom_meta=custom_meta,
-                        backend_lock=True,
-                        is_public=make_public,
-                        slug=slug,
-                    )
-
-                    # Set permissions on the document (may be new or reused)
-                    set_permissions_for_obj_to_user(
-                        user, document, [PermissionTypes.CRUD]
-                    )
-
-                    if status == "created":
-                        logger.info(
-                            f"[UPLOAD] Created new document {document.id} in corpus {corpus.id}"
-                        )
-                    elif status == "updated":
-                        logger.info(
-                            f"[UPLOAD] Updated document at path {doc_path} in corpus {corpus.id}"
-                        )
-                    else:
-                        logger.info(
-                            f"[UPLOAD] Document {document.id} status: {status} in corpus {corpus.id}"
-                        )
-
-                    # Note: folder assignment is already handled by corpus.import_content()
-                    # which passes folder to import_document() -> DocumentPath creation
-
-                except Exception as e:
-                    logger.error(f"[UPLOAD] Error importing to corpus: {e}")
-                    message = f"Importing to corpus failed due to error: {e}"
-                    return UploadDocument(message=message, ok=False, document=None)
             else:
-                # No corpus specified - upload to user's personal corpus
-                # This ensures all documents belong to a corpus
-                if kind in [
-                    "application/pdf",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                ]:
-                    try:
-                        # Get or create user's personal corpus
-                        personal_corpus = Corpus.get_or_create_personal_corpus(user)
-                        logger.info(
-                            f"[UPLOAD] Using personal corpus {personal_corpus.id} "
-                            f"for user {user.id}"
-                        )
+                corpus = Corpus.get_or_create_personal_corpus(user)
+                folder = None
 
-                        # Generate path from filename
-                        safe_filename = "".join(
-                            c if c.isalnum() or c in "-_." else "_"
-                            for c in filename[:MAX_FILENAME_LENGTH]
-                        )
-                        doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
+            # Import document - import_content handles path generation
+            # from filename and routes based on file_type
+            try:
+                document, status, path_record = corpus.import_content(
+                    content=file_bytes,
+                    user=user,
+                    filename=filename,
+                    folder=folder,
+                    file_type=kind,
+                    title=title,
+                    description=description,
+                    custom_meta=custom_meta,
+                    backend_lock=True,
+                    is_public=make_public,
+                    slug=slug,
+                )
 
-                        # Use import_content for consistency with corpus uploads
-                        document, status, path_record = personal_corpus.import_content(
-                            content=file_bytes,
-                            path=doc_path,
-                            user=user,
-                            folder=None,  # No folder in personal corpus by default
-                            title=title,
-                            description=description,
-                            file_type=kind,
-                            custom_meta=custom_meta,
-                            backend_lock=True,
-                            is_public=make_public,
-                            slug=slug,
-                        )
+                set_permissions_for_obj_to_user(user, document, [PermissionTypes.CRUD])
 
-                        # Set permissions on the document
-                        set_permissions_for_obj_to_user(
-                            user, document, [PermissionTypes.CRUD]
-                        )
+                logger.info(
+                    f"[UPLOAD] Document {document.id} ({status}) "
+                    f"uploaded to corpus {corpus.id}"
+                )
 
-                        logger.info(
-                            f"[UPLOAD] Document {document.id} ({status}) "
-                            f"uploaded to personal corpus {personal_corpus.id}"
-                        )
+            except Exception as e:
+                logger.error(f"[UPLOAD] Error importing document: {e}")
+                message = f"Upload failed due to error: {e}"
+                return UploadDocument(message=message, ok=False, document=None)
 
-                    except Exception as e:
-                        logger.error(
-                            f"[UPLOAD] Error uploading to personal corpus: {e}"
-                        )
-                        message = f"Upload failed due to error: {e}"
-                        return UploadDocument(message=message, ok=False, document=None)
-
-                elif kind in ["text/plain", "application/txt"]:
-                    try:
-                        # Get or create user's personal corpus for text files too
-                        personal_corpus = Corpus.get_or_create_personal_corpus(user)
-                        logger.info(
-                            f"[UPLOAD] Using personal corpus {personal_corpus.id} "
-                            f"for text file upload by user {user.id}"
-                        )
-
-                        # Use import_content() which routes based on file_type
-                        document, status, doc_path = personal_corpus.import_content(
-                            content=file_bytes,
-                            user=user,
-                            filename=filename,
-                            file_type=kind,
-                            title=title,
-                            description=description,
-                            custom_meta=custom_meta,
-                            backend_lock=True,
-                            is_public=make_public,
-                            slug=slug,
-                        )
-
-                        set_permissions_for_obj_to_user(
-                            user, document, [PermissionTypes.CRUD]
-                        )
-
-                        logger.info(
-                            f"[UPLOAD] Text document {document.id} uploaded "
-                            f"to personal corpus {personal_corpus.id}"
-                        )
-
-                    except Exception as e:
-                        logger.error(
-                            f"[UPLOAD] Error uploading text to personal corpus: {e}"
-                        )
-                        message = f"Upload failed due to error: {e}"
-                        return UploadDocument(message=message, ok=False, document=None)
-
-                # Handle linking to extract (corpus case already handled above)
-                if add_to_extract_id is not None:
-                    try:
-                        extract = Extract.objects.get(
-                            Q(pk=from_global_id(add_to_extract_id)[1])
-                            & (Q(creator=user) | Q(is_public=True))
-                        )
-                        if extract.finished is not None:
-                            raise ValueError(
-                                "Cannot add document to a finished extract"
-                            )
-                        transaction.on_commit(lambda: extract.documents.add(document))
-                    except Exception as e:
-                        message = f"Adding to extract failed due to error: {e}"
+            # Handle linking to extract (mutually exclusive with corpus)
+            if add_to_extract_id is not None:
+                try:
+                    extract = Extract.objects.get(
+                        Q(pk=from_global_id(add_to_extract_id)[1])
+                        & (Q(creator=user) | Q(is_public=True))
+                    )
+                    if extract.finished is not None:
+                        raise ValueError("Cannot add document to a finished extract")
+                    transaction.on_commit(lambda: extract.documents.add(document))
+                except Exception as e:
+                    message = f"Adding to extract failed due to error: {e}"
 
             ok = True
 
@@ -3838,6 +3737,21 @@ class DeleteCorpusMutation(DRFDeletion):
     class Arguments:
         id = graphene.String(required=True)
 
+    @classmethod
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
+    def mutate(cls, root, info, *args, **kwargs):
+        id = from_global_id(kwargs.get(cls.IOSettings.lookup_field, None))[1]
+        obj = cls.IOSettings.model.objects.get(pk=id)
+
+        if obj.is_personal:
+            raise GraphQLError(
+                "Cannot delete your personal 'My Documents' corpus. "
+                "This corpus is automatically managed and stores your uploaded documents."
+            )
+
+        return super().mutate(root, info, *args, **kwargs)
+
 
 class CreateLabelMutation(DRFMutation):
     class IOSettings:
@@ -4112,7 +4026,14 @@ class StartDocumentExtract(graphene.Mutation):
         corpus = None
         if corpus_id:
             corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            try:
+                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                    pk=corpus_pk
+                )
+            except Corpus.DoesNotExist:
+                return StartDocumentExtract(
+                    ok=False, message="Resource not found", obj=None
+                )
 
         extract = Extract.objects.create(
             name=f"Extract {uuid.uuid4()} for {document.title}",
@@ -4147,14 +4068,15 @@ class DeleteAnalysisMutation(graphene.Mutation):
         # message = "Could not complete"
 
         analysis_pk = from_global_id(id)[1]
-        analysis = Analysis.objects.get(id=analysis_pk)
+        analysis = Analysis.objects.visible_to_user(info.context.user).get(
+            id=analysis_pk
+        )
 
         # Check the object isn't locked by another user
         if analysis.user_lock is not None:
-            if info.context.user.id == analysis.user_lock_id:
+            if info.context.user.id != analysis.user_lock_id:
                 raise PermissionError(
-                    f"Specified object is locked by {info.context.user.username}. Cannot be "
-                    f"updated / edited by another user."
+                    "Specified object is locked by another user. Cannot be " "deleted."
                 )
 
         # We ARE OK with deleting something that's been locked by the backend, however, as sh@t happens, and we want
@@ -4333,7 +4255,9 @@ class CreateColumn(graphene.Mutation):
         if {query, match_text} == {None}:
             raise ValueError("One of `query` or `match_text` must be provided.")
 
-        fieldset = Fieldset.objects.get(pk=from_global_id(fieldset_id)[1])
+        fieldset = Fieldset.objects.visible_to_user(info.context.user).get(
+            pk=from_global_id(fieldset_id)[1]
+        )
         column = Column(
             name=name,
             fieldset=fieldset,
@@ -4433,8 +4357,11 @@ class CreateExtract(graphene.Mutation):
         corpus = None
         if corpus_id is not None:
             corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
-            if not (corpus.creator == info.context.user or corpus.is_public):
+            try:
+                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                    pk=corpus_pk
+                )
+            except Corpus.DoesNotExist:
                 return CreateExtract(
                     ok=False,
                     msg="You don't have permission to create an extract for this corpus.",
@@ -4442,7 +4369,9 @@ class CreateExtract(graphene.Mutation):
                 )
 
         if fieldset_id is not None:
-            fieldset = Fieldset.objects.get(pk=from_global_id(fieldset_id)[1])
+            fieldset = Fieldset.objects.visible_to_user(info.context.user).get(
+                pk=from_global_id(fieldset_id)[1]
+            )
         else:
             if fieldset_name is None:
                 fieldset_name = f"{name} Fieldset"
@@ -4819,8 +4748,8 @@ class CreateCorpusAction(graphene.Mutation):
             user = info.context.user
             corpus_pk = from_global_id(corpus_id)[1]
 
-            # Get corpus and check permissions
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Get corpus with visibility filter to prevent IDOR
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Check if user has update permission on the corpus
             if corpus.creator.id != user.id:
@@ -4930,15 +4859,17 @@ class CreateCorpusAction(graphene.Mutation):
 
             if fieldset_id:
                 fieldset_pk = from_global_id(fieldset_id)[1]
-                fieldset = Fieldset.objects.get(pk=fieldset_pk)
+                fieldset = Fieldset.objects.visible_to_user(user).get(pk=fieldset_pk)
 
             if analyzer_id:
                 analyzer_pk = from_global_id(analyzer_id)[1]
-                analyzer = Analyzer.objects.get(pk=analyzer_pk)
+                analyzer = Analyzer.objects.visible_to_user(user).get(pk=analyzer_pk)
 
             if agent_config_id:
                 agent_config_pk = from_global_id(agent_config_id)[1]
-                agent_config = AgentConfiguration.objects.get(pk=agent_config_pk)
+                agent_config = AgentConfiguration.objects.visible_to_user(user).get(
+                    pk=agent_config_pk
+                )
                 # Verify agent config is active
                 if not agent_config.is_active:
                     return CreateCorpusAction(
@@ -5102,8 +5033,8 @@ class UpdateCorpusAction(graphene.Mutation):
             user = info.context.user
             action_pk = from_global_id(id)[1]
 
-            # Get the corpus action
-            corpus_action = CorpusAction.objects.get(pk=action_pk)
+            # Get the corpus action with visibility filter
+            corpus_action = CorpusAction.objects.visible_to_user(user).get(pk=action_pk)
 
             # Check if user is the creator
             if corpus_action.creator.id != user.id:
@@ -5130,7 +5061,7 @@ class UpdateCorpusAction(graphene.Mutation):
             # If any of these are provided, clear the others and set the new one
             if fieldset_id is not None:
                 fieldset_pk = from_global_id(fieldset_id)[1]
-                fieldset = Fieldset.objects.get(pk=fieldset_pk)
+                fieldset = Fieldset.objects.visible_to_user(user).get(pk=fieldset_pk)
                 corpus_action.fieldset = fieldset
                 corpus_action.analyzer = None
                 corpus_action.agent_config = None
@@ -5139,7 +5070,7 @@ class UpdateCorpusAction(graphene.Mutation):
 
             elif analyzer_id is not None:
                 analyzer_pk = from_global_id(analyzer_id)[1]
-                analyzer = Analyzer.objects.get(pk=analyzer_pk)
+                analyzer = Analyzer.objects.visible_to_user(user).get(pk=analyzer_pk)
                 corpus_action.analyzer = analyzer
                 corpus_action.fieldset = None
                 corpus_action.agent_config = None
@@ -5148,7 +5079,9 @@ class UpdateCorpusAction(graphene.Mutation):
 
             elif agent_config_id is not None:
                 agent_config_pk = from_global_id(agent_config_id)[1]
-                agent_config = AgentConfiguration.objects.get(pk=agent_config_pk)
+                agent_config = AgentConfiguration.objects.visible_to_user(user).get(
+                    pk=agent_config_pk
+                )
                 if not agent_config.is_active:
                     return UpdateCorpusAction(
                         ok=False,
@@ -5351,16 +5284,8 @@ class CreateNote(graphene.Mutation):
             user = info.context.user
             document_pk = from_global_id(document_id)[1]
 
-            # Get the document
-            document = Document.objects.get(pk=document_pk)
-
-            # Check if user has permission to add notes to this document
-            if not (document.is_public or document.creator == user):
-                return CreateNote(
-                    ok=False,
-                    message="You don't have permission to add notes to this document.",
-                    obj=None,
-                )
+            # Get the document with visibility filter to prevent IDOR
+            document = Document.objects.visible_to_user(user).get(pk=document_pk)
 
             # Prepare note data
             note_data = {
@@ -5370,16 +5295,16 @@ class CreateNote(graphene.Mutation):
                 "creator": user,
             }
 
-            # Handle optional corpus
+            # Handle optional corpus with visibility filter
             if corpus_id:
                 corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
                 note_data["corpus"] = corpus
 
-            # Handle optional parent note
+            # Handle optional parent note with visibility filter
             if parent_id:
                 parent_pk = from_global_id(parent_id)[1]
-                parent_note = Note.objects.get(pk=parent_pk)
+                parent_note = Note.objects.visible_to_user(user).get(pk=parent_pk)
                 note_data["parent"] = parent_note
 
             # Create the note

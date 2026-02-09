@@ -1134,18 +1134,34 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_summary_revisions(self, info, corpus_id):
         """Returns all revisions for this document's summary in a specific corpus, ordered by version."""
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
 
         _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning summary data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return DocumentSummaryRevision.objects.none()
         return DocumentSummaryRevision.objects.filter(
             document_id=self.pk, corpus_id=corpus_pk
         ).order_by("version")
 
     def resolve_current_summary_version(self, info, corpus_id):
         """Returns the current summary version number for a specific corpus."""
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
 
         _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning version data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return 0
         latest_revision = (
             DocumentSummaryRevision.objects.filter(
                 document_id=self.pk, corpus_id=corpus_pk
@@ -1162,7 +1178,8 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         _, corpus_pk = from_global_id(corpus_id)
         try:
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Use visible_to_user() to prevent cross-corpus data leakage
+            corpus = Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
             return self.get_summary_for_corpus(corpus)
         except Corpus.DoesNotExist:
             return ""
@@ -2855,6 +2872,43 @@ class FileTypeEnum(graphene.Enum):
     # HTML has been removed as we don't support it
 
 
+class ComponentSettingSchemaType(graphene.ObjectType):
+    """
+    Schema for a single pipeline component setting.
+
+    Describes a configuration option that can be set in PipelineSettings
+    for a specific component.
+    """
+
+    name = graphene.String(
+        required=True,
+        description="Setting name (used as key in component_settings dict).",
+    )
+    setting_type = graphene.String(
+        required=True, description="Type: 'required', 'optional', or 'secret'."
+    )
+    python_type = graphene.String(
+        description="Python type hint (e.g., 'str', 'int', 'bool')."
+    )
+    required = graphene.Boolean(
+        required=True,
+        description="Whether this setting must have a value for the component to work.",
+    )
+    description = graphene.String(
+        description="Human-readable description of the setting."
+    )
+    default = GenericScalar(description="Default value if not configured.")
+    env_var = graphene.String(
+        description="Environment variable name used during migration seeding."
+    )
+    has_value = graphene.Boolean(
+        description="Whether this setting currently has a value configured."
+    )
+    current_value = GenericScalar(
+        description="Current value (always null for secrets to avoid exposure)."
+    )
+
+
 class PipelineComponentType(graphene.ObjectType):
     """Graphene type for pipeline components."""
 
@@ -2876,6 +2930,10 @@ class PipelineComponentType(graphene.ObjectType):
     )
     input_schema = GenericScalar(
         description="JSONSchema schema for inputs supported from user (experimental - not fully implemented)."
+    )
+    settings_schema = graphene.List(
+        ComponentSettingSchemaType,
+        description="Schema for component configuration settings stored in PipelineSettings.",
     )
     # Multimodal support flags (for embedders)
     is_multimodal = graphene.Boolean(

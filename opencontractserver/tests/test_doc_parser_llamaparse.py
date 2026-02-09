@@ -6,11 +6,15 @@ Tests cover:
 - Bounding box parsing and conversion
 - Structural annotation creation with token-level data
 - Error handling (missing API key, API errors, etc.)
-- Configuration via environment variables
+- Configuration via Settings dataclass (from PipelineSettings DB)
 
 Note: LlamaParse provides element-level bounding boxes, and the parser uses
 pdfplumber to extract word-level tokens from the PDF. These tokens are then
 mapped to annotations using spatial intersection (shapely STRtree).
+
+Note: These tests mock the Settings dataclass since the actual Settings are
+populated from PipelineSettings DB at runtime. Use `create_mock_llamaparse_settings()`
+to create mock Settings for testing.
 """
 
 import sys
@@ -20,7 +24,7 @@ import numpy as np
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.parsers.llamaparse_parser import LlamaParseParser
@@ -32,6 +36,57 @@ User = get_user_model()
 mock_llama_parse = MagicMock()
 mock_llama_parse.LlamaParse = MagicMock()
 sys.modules["llama_parse"] = mock_llama_parse
+
+
+def create_mock_llamaparse_settings(
+    api_key: str = "test-api-key-123",
+    result_type: str = "json",
+    extract_layout: bool = True,
+    num_workers: int = 4,
+    language: str = "en",
+    verbose: bool = False,
+    extract_images: bool = True,
+    image_format: str = "jpeg",
+    image_quality: int = 85,
+    image_dpi: int = 150,
+    min_image_width: int = 50,
+    min_image_height: int = 50,
+):
+    """Create a mock Settings object for LlamaParseParser."""
+    mock_settings = MagicMock()
+    mock_settings.api_key = api_key
+    mock_settings.result_type = result_type
+    mock_settings.extract_layout = extract_layout
+    mock_settings.num_workers = num_workers
+    mock_settings.language = language
+    mock_settings.verbose = verbose
+    mock_settings.extract_images = extract_images
+    mock_settings.image_format = image_format
+    mock_settings.image_quality = image_quality
+    mock_settings.image_dpi = image_dpi
+    mock_settings.min_image_width = min_image_width
+    mock_settings.min_image_height = min_image_height
+    return mock_settings
+
+
+def patch_parser_settings(parser, **settings_overrides):
+    """Patch a LlamaParseParser instance with mock settings."""
+    mock_settings = create_mock_llamaparse_settings(**settings_overrides)
+    parser._settings = mock_settings
+    # Update instance attributes from the mocked settings
+    parser.api_key = mock_settings.api_key
+    parser.result_type = mock_settings.result_type
+    parser.extract_layout = mock_settings.extract_layout
+    parser.num_workers = mock_settings.num_workers
+    parser.language = mock_settings.language
+    parser.verbose = mock_settings.verbose
+    parser.extract_images = mock_settings.extract_images
+    parser.image_format = mock_settings.image_format
+    parser.image_quality = mock_settings.image_quality
+    parser.image_dpi = mock_settings.image_dpi
+    parser.min_image_width = mock_settings.min_image_width
+    parser.min_image_height = mock_settings.min_image_height
+    return parser
 
 
 def create_mock_token_extraction_result(page_count=1, tokens_per_page=5):
@@ -193,7 +248,6 @@ class TestLlamaParseParser(TestCase):
             }
         ]
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
@@ -225,8 +279,8 @@ class TestLlamaParseParser(TestCase):
             {"pageIndex": 0, "tokenIndex": 1},
         ]
 
-        # Create parser and parse document
-        parser = LlamaParseParser()
+        # Create parser with mocked settings and parse document
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
         # Verify result structure
@@ -262,7 +316,6 @@ class TestLlamaParseParser(TestCase):
         self.assertEqual(len(page_anno["tokensJsons"]), 2)
         self.assertEqual(page_anno["tokensJsons"][0], {"pageIndex": 0, "tokenIndex": 0})
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_markdown_mode(self, mock_open, mock_llama_parse_class):
@@ -280,8 +333,8 @@ class TestLlamaParseParser(TestCase):
         ]
         mock_llama_parse_class.return_value = mock_parser
 
-        # Create parser and parse document with markdown mode
-        parser = LlamaParseParser()
+        # Create parser with mocked settings and parse document with markdown mode
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,
@@ -303,15 +356,14 @@ class TestLlamaParseParser(TestCase):
 
     def test_parse_document_no_api_key(self):
         """Test that parsing fails gracefully without API key."""
-        with override_settings(LLAMAPARSE_API_KEY=""):
-            parser = LlamaParseParser()
-            parser.api_key = ""  # Ensure no API key
+        # Create parser with mocked Settings (simulating PipelineSettings DB)
+        # that has empty API key
+        parser = patch_parser_settings(LlamaParseParser(), api_key="")
 
-            result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
+        result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
-            self.assertIsNone(result)
+        self.assertIsNone(result)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_api_error(self, mock_open, mock_llama_parse_class):
@@ -326,14 +378,13 @@ class TestLlamaParseParser(TestCase):
         mock_parser.get_json_result.side_effect = Exception("API rate limit exceeded")
         mock_llama_parse_class.return_value = mock_parser
 
-        # Create parser and attempt to parse
-        parser = LlamaParseParser()
+        # Create parser with mocked settings and attempt to parse
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
         # Should return None on error
         self.assertIsNone(result)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_parse_document_empty_result(self, mock_open, mock_llama_parse_class):
@@ -348,20 +399,18 @@ class TestLlamaParseParser(TestCase):
         mock_parser.get_json_result.return_value = []
         mock_llama_parse_class.return_value = mock_parser
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
         self.assertIsNone(result)
 
     def test_parse_document_nonexistent(self):
         """Test parsing a document that doesn't exist."""
-        with override_settings(LLAMAPARSE_API_KEY="test-api-key-123"):
-            parser = LlamaParseParser()
-            result = parser.parse_document(user_id=self.user.id, doc_id=999999)
+        parser = patch_parser_settings(LlamaParseParser())
+        result = parser.parse_document(user_id=self.user.id, doc_id=999999)
 
-            self.assertIsNone(result)
+        self.assertIsNone(result)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     def test_parse_document_no_pdf_file(self):
         """Test parsing a document without a PDF file."""
         # Create a document without a PDF file
@@ -372,7 +421,7 @@ class TestLlamaParseParser(TestCase):
             creator=self.user,
         )
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(user_id=self.user.id, doc_id=doc_without_pdf.id)
 
         self.assertIsNone(result)
@@ -633,46 +682,48 @@ class TestLlamaParseParserConfiguration(TestCase):
     """Tests for parser configuration."""
 
     def test_default_configuration(self):
-        """Test default configuration values."""
-        with override_settings(
-            LLAMAPARSE_API_KEY="test-key",
-            LLAMAPARSE_RESULT_TYPE="json",
-            LLAMAPARSE_EXTRACT_LAYOUT=True,
-            LLAMAPARSE_NUM_WORKERS=4,
-            LLAMAPARSE_LANGUAGE="en",
-            LLAMAPARSE_VERBOSE=False,
-        ):
-            parser = LlamaParseParser()
+        """Test default configuration values from mocked Settings dataclass."""
+        # Create parser with explicit mock Settings (simulating PipelineSettings DB)
+        # This tests that the parser correctly reads from Settings dataclass
+        parser = patch_parser_settings(
+            LlamaParseParser(),
+            api_key="test-key",
+            result_type="json",
+            extract_layout=True,
+            num_workers=4,
+            language="en",
+            verbose=False,
+        )
 
-            self.assertEqual(parser.result_type, "json")
-            self.assertEqual(parser.extract_layout, True)
-            self.assertEqual(parser.num_workers, 4)
-            self.assertEqual(parser.language, "en")
-            self.assertEqual(parser.verbose, False)
+        self.assertEqual(parser.result_type, "json")
+        self.assertEqual(parser.extract_layout, True)
+        self.assertEqual(parser.num_workers, 4)
+        self.assertEqual(parser.language, "en")
+        self.assertEqual(parser.verbose, False)
 
     def test_custom_configuration(self):
-        """Test custom configuration via settings."""
-        with override_settings(
-            LLAMAPARSE_API_KEY="custom-key",
-            LLAMAPARSE_RESULT_TYPE="markdown",
-            LLAMAPARSE_EXTRACT_LAYOUT=False,
-            LLAMAPARSE_NUM_WORKERS=8,
-            LLAMAPARSE_LANGUAGE="de",
-            LLAMAPARSE_VERBOSE=True,
-        ):
-            parser = LlamaParseParser()
+        """Test custom configuration via Settings dataclass (PipelineSettings DB)."""
+        # Create parser with custom mocked settings (simulating PipelineSettings DB)
+        parser = patch_parser_settings(
+            LlamaParseParser(),
+            api_key="custom-key",
+            result_type="markdown",
+            extract_layout=False,
+            num_workers=8,
+            language="de",
+            verbose=True,
+        )
 
-            self.assertEqual(parser.result_type, "markdown")
-            self.assertEqual(parser.extract_layout, False)
-            self.assertEqual(parser.num_workers, 8)
-            self.assertEqual(parser.language, "de")
-            self.assertEqual(parser.verbose, True)
+        self.assertEqual(parser.result_type, "markdown")
+        self.assertEqual(parser.extract_layout, False)
+        self.assertEqual(parser.num_workers, 8)
+        self.assertEqual(parser.language, "de")
+        self.assertEqual(parser.verbose, True)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-key")
     @patch("llama_parse.LlamaParse")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.default_storage.open")
     def test_kwargs_override_settings(self, mock_open, mock_llama_parse_class):
-        """Test that kwargs override settings."""
+        """Test that kwargs override Settings dataclass values."""
         with transaction.atomic():
             user = User.objects.create_user(
                 username="configtestuser", password="pass123"
@@ -693,7 +744,9 @@ class TestLlamaParseParserConfiguration(TestCase):
         mock_parser.get_json_result.return_value = [{"pages": []}]
         mock_llama_parse_class.return_value = mock_parser
 
-        parser = LlamaParseParser()
+        # Create parser with default settings
+        parser = patch_parser_settings(LlamaParseParser())
+        # Parse with kwarg overrides
         parser.parse_document(
             user_id=user.id,
             doc_id=doc.id,
@@ -785,7 +838,6 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
             }
         ]
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
@@ -813,7 +865,7 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         )
         mock_find_tokens.return_value = [{"pageIndex": 0, "tokenIndex": 0}]
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
         # Verify result structure
@@ -840,7 +892,6 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         self.assertIn("Paragraph", labels)
         self.assertIn("Figure", labels)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
@@ -903,7 +954,7 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         )
         mock_find_tokens.return_value = []
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
         # Both figure and image should be processed
@@ -914,7 +965,6 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         for anno in result["labelled_text"]:
             self.assertIn(anno["rawText"], ["[image]", "[figure]"])
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.find_tokens_in_bbox")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_pawls_tokens_from_pdf"
@@ -994,7 +1044,7 @@ class TestLlamaParseParserLayoutOnlyProcessing(TestCase):
         )
         mock_find_tokens.return_value = []
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
         # Only 2 annotations should be created (title and section_header)
@@ -1170,7 +1220,6 @@ class TestLlamaParseParserImageExtraction(TestCase):
         # Should not have content_modalities when neither flag is set
         self.assertNotIn("content_modalities", annotation)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
@@ -1241,7 +1290,7 @@ class TestLlamaParseParserImageExtraction(TestCase):
             ]
         }
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,
@@ -1262,7 +1311,6 @@ class TestLlamaParseParserImageExtraction(TestCase):
         )
         self.assertIsNotNone(figure_anno)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
@@ -1334,7 +1382,7 @@ class TestLlamaParseParserImageExtraction(TestCase):
             "image_type": "cropped",
         }
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,
@@ -1355,7 +1403,6 @@ class TestLlamaParseParserImageExtraction(TestCase):
         self.assertIn("content_modalities", figure_annos[0])
         self.assertIn("IMAGE", figure_annos[0]["content_modalities"])
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
     )
@@ -1409,7 +1456,7 @@ class TestLlamaParseParserImageExtraction(TestCase):
         # Image extraction raises an exception
         mock_extract_images.side_effect = Exception("Image extraction failed")
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,
@@ -1441,9 +1488,8 @@ class TestLlamaParseParserPageLevelImages(TestCase):
         pdf_content = b"%PDF-1.7\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n2 0 obj\n<</Type/Pages/Count 1/Kids[3 0 R]>>\nendobj\n3 0 obj\n<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>\nendobj\nxref\n0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer\n<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF\n"  # noqa: E501
         self.doc.pdf_file.save("test_page_images.pdf", ContentFile(pdf_content))
 
-        self.parser = LlamaParseParser()
+        self.parser = patch_parser_settings(LlamaParseParser())
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
@@ -1539,7 +1585,7 @@ class TestLlamaParseParserPageLevelImages(TestCase):
             "image_type": "cropped",
         }
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,
@@ -1562,7 +1608,6 @@ class TestLlamaParseParserPageLevelImages(TestCase):
         self.assertIn("STATE OF NEW YORK", image_annos[0]["rawText"])
         self.assertIn("Division of Corporations", image_annos[0]["rawText"])
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
@@ -1633,7 +1678,7 @@ class TestLlamaParseParserPageLevelImages(TestCase):
             ]
         }
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,
@@ -1651,7 +1696,6 @@ class TestLlamaParseParserPageLevelImages(TestCase):
         ]
         self.assertEqual(len(image_annos), 1)
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
@@ -1709,7 +1753,7 @@ class TestLlamaParseParserPageLevelImages(TestCase):
         mock_find_tokens.return_value = []
         mock_extract_images.return_value = {}
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,
@@ -1727,7 +1771,6 @@ class TestLlamaParseParserPageLevelImages(TestCase):
         # crop_image should not be called for small images
         mock_crop_image.assert_not_called()
 
-    @override_settings(LLAMAPARSE_API_KEY="test-api-key-123")
     @patch("opencontractserver.pipeline.parsers.llamaparse_parser.crop_image_from_pdf")
     @patch(
         "opencontractserver.pipeline.parsers.llamaparse_parser.extract_images_from_pdf"
@@ -1794,7 +1837,7 @@ class TestLlamaParseParserPageLevelImages(TestCase):
             "image_path": "documents/1/images/page_0_img_0.jpg",
         }
 
-        parser = LlamaParseParser()
+        parser = patch_parser_settings(LlamaParseParser())
         result = parser.parse_document(
             user_id=self.user.id,
             doc_id=self.doc.id,

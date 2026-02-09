@@ -134,6 +134,12 @@ docker compose -f production.yml up
    - Multiple backends: Docling (ML-based), NLM-Ingest, Text
    - All convert to unified PAWLs format for frontend
 
+6. **Agent Tool Architecture** (see `docs/architecture/llms/README.md`):
+   - `CoreTool` (framework-agnostic) → `PydanticAIToolWrapper` (pydantic-ai specific)
+   - **All production tools MUST be async** (`a`-prefixed in `core_tools.py`). The wrapper supports sync functions for lightweight helpers/tests but does NOT wrap them in a thread pool — sync ORM calls will raise `SynchronousOnlyOperation`.
+   - Tool fault tolerance (issue #820): operational exceptions are caught and returned as error strings to the LLM; security exceptions (`PermissionError`, `ToolConfirmationRequired`) propagate.
+   - Pre-execution checks run on every call (not cached): permission validation, resource ID validation, approval gates.
+
 ### Frontend Architecture
 
 **Stack**: React 18 + TypeScript + Apollo Client + Jotai (atoms) + PDF.js + Vite
@@ -389,7 +395,8 @@ Run manually: `pre-commit run --all-files`
 10. **Empty lists on direct navigation**: AuthGate pattern solves this (don't check auth status, it's always ready)
 11. **URL desynchronization**: Use CentralRouteManager, don't bypass routing system
 12. **Jotai state not updating**: Ensure atoms are properly imported and used with useAtom hook
-13. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
+13. **Writing sync agent tools**: All agent tools must be async. The `PydanticAIToolWrapper` accepts sync functions but calls them directly (no thread pool) — sync Django ORM calls will raise `SynchronousOnlyOperation`. Use the `a`-prefixed async versions in `core_tools.py`.
+14. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
     ```bash
     sudo systemctl stop docker && sudo systemctl stop docker.socket && sudo ip link delete docker0 2>/dev/null || true && sudo iptables -t nat -F && sudo iptables -t nat -X && sudo iptables -t filter -F && sudo iptables -t filter -X 2>/dev/null || true && sudo iptables -t mangle -F && sudo iptables -t mangle -X && sudo iptables -t filter -N INPUT 2>/dev/null || true && sudo iptables -t filter -N FORWARD 2>/dev/null || true && sudo iptables -t filter -N OUTPUT 2>/dev/null || true && sudo iptables -P INPUT ACCEPT && sudo iptables -P FORWARD ACCEPT && sudo iptables -P OUTPUT ACCEPT && sudo systemctl start docker
     ```
