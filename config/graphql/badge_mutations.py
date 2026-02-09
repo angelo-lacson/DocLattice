@@ -397,9 +397,9 @@ class AwardBadgeMutation(graphene.Mutation):
 
         try:
             badge_pk = from_global_id(badge_id)[1]
-            # IDOR FIX: Get badge, but don't reveal existence vs. permission difference
+            # Use visible_to_user() to prevent IDOR enumeration
             try:
-                badge = Badge.objects.get(pk=badge_pk)
+                badge = Badge.objects.visible_to_user(awarder).get(pk=badge_pk)
             except Badge.DoesNotExist:
                 return AwardBadgeMutation(
                     ok=False,

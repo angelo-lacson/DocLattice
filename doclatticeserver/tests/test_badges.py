@@ -568,7 +568,8 @@ class TestBadgeGraphQLMutations(TransactionTestCase):
 
     def test_award_badge_idor_prevention(self):
         """Test that AwardBadgeMutation prevents corpus enumeration (IDOR fix)."""
-        # Create a corpus badge
+        # Create a corpus badge (must be public so normal_user can see it
+        # via visible_to_user — the test exercises IDOR on the corpus_id param)
         corpus_badge = Badge.objects.create(
             name="Corpus Expert",
             description="Expert in this corpus",
@@ -576,6 +577,7 @@ class TestBadgeGraphQLMutations(TransactionTestCase):
             badge_type="CORPUS",
             corpus=self.corpus,
             creator=self.corpus_owner,
+            is_public=True,
         )
         badge_global_id = to_global_id("BadgeType", corpus_badge.id)
         user_global_id = to_global_id("UserType", self.normal_user.id)

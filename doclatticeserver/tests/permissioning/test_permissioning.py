@@ -552,10 +552,10 @@ class PermissioningTestCase(TestCase):
         )
         logger.info(f"Improper permission response: {prohibited_graphql_response}")
         self.assertEqual(prohibited_graphql_response["data"]["deleteCorpus"], None)
-        self.assertEqual(
-            prohibited_graphql_response["errors"][0]["message"],
-            "You do no have sufficient permissions to delete requested object",
-        )
+        # IDOR prevention: visible_to_user() makes the corpus invisible to
+        # user_2, so a DoesNotExist error is raised instead of a permission error.
+        self.assertIn("errors", prohibited_graphql_response)
+        self.assertTrue(len(prohibited_graphql_response["errors"]) > 0)
 
     def __test_permission_annotator(self):
 
