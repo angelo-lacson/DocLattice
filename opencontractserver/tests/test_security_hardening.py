@@ -10,8 +10,6 @@ Covers:
 - Conversation/voting/badge mutation IDOR fixes
 """
 
-import uuid
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from graphene.test import Client
@@ -179,13 +177,13 @@ class TestHomeRedirectSecurity(TestCase):
         self.assertEqual(response.url, "http://example.com:3000")
 
     @override_settings(ALLOWED_HOSTS=["example.com"])
-    def test_invalid_host_redirects_to_root(self):
-        """Invalid host NOT in ALLOWED_HOSTS redirects to '/' (no open redirect)."""
-        response = self.client.get(
-            "/", HTTP_HOST="evil.com", SERVER_NAME="evil.com"
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/")
+    def test_invalid_host_rejected(self):
+        """Invalid host NOT in ALLOWED_HOSTS is rejected by Django middleware (400)."""
+        # Django's CommonMiddleware validates the Host header BEFORE our view
+        # runs, returning a 400 DisallowedHost response. This is the first
+        # line of defense; our view adds a second layer for edge cases.
+        response = self.client.get("/", HTTP_HOST="evil.com", SERVER_NAME="evil.com")
+        self.assertEqual(response.status_code, 400)
 
     @override_settings(ALLOWED_HOSTS=["*"])
     def test_wildcard_allows_any_host(self):
@@ -210,12 +208,10 @@ class TestHomeRedirectSecurity(TestCase):
 
     @override_settings(ALLOWED_HOSTS=[".example.com"])
     def test_suffix_match_rejects_non_matching_domain(self):
-        """Dot-prefix pattern '.example.com' rejects non-matching domains."""
-        response = self.client.get(
-            "/", HTTP_HOST="evil.com", SERVER_NAME="evil.com"
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/")
+        """Dot-prefix pattern '.example.com' rejects non-matching domains (400)."""
+        # Django's CommonMiddleware rejects before our view runs.
+        response = self.client.get("/", HTTP_HOST="evil.com", SERVER_NAME="evil.com")
+        self.assertEqual(response.status_code, 400)
 
 
 # ===========================================================================
@@ -239,9 +235,7 @@ class TestMutationIDORPrevention(TestCase):
         self.corpus = Corpus.objects.create(
             title="Private Corpus", creator=self.owner, is_public=False
         )
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         # Create a document owned by 'owner'
         self.document = Document.objects.create(
@@ -370,9 +364,7 @@ class TestConversationMutationIDOR(TestCase):
         self.corpus = Corpus.objects.create(
             title="Conv Corpus", creator=self.owner, is_public=False
         )
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         self.document = Document.objects.create(
             title="Conv Doc", creator=self.owner, is_public=False
@@ -484,9 +476,7 @@ class TestVotingMutationIDOR(TestCase):
         self.corpus = Corpus.objects.create(
             title="Vote Corpus", creator=self.owner, is_public=False
         )
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         self.conversation = Conversation.objects.create(
             title="Vote Thread",
@@ -573,9 +563,7 @@ class TestCorpusFolderMutationIDOR(TestCase):
         self.corpus = Corpus.objects.create(
             title="Folder Corpus", creator=self.owner, is_public=False
         )
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         self.folder = CorpusFolder.objects.create(
             name="Test Folder", corpus=self.corpus, creator=self.owner
@@ -674,9 +662,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
     """Tests that document summary resolvers check corpus visibility."""
 
     def setUp(self):
-        self.owner = User.objects.create_user(
-            username="summary_owner", password="test"
-        )
+        self.owner = User.objects.create_user(username="summary_owner", password="test")
         self.outsider = User.objects.create_user(
             username="summary_outsider", password="test"
         )
@@ -685,9 +671,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
         self.corpus = Corpus.objects.create(
             title="Summary Corpus", creator=self.owner, is_public=False
         )
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         # Public document (outsider can see it, but not the corpus)
         self.document = Document.objects.create(
@@ -702,7 +686,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
     def test_outsider_cannot_read_summary_version_for_inaccessible_corpus(self):
         """Outsider gets version=0 for a corpus they cannot see."""
         query = """
-            query DocSummaryVersion($id: ID!, $corpusId: ID!) {
+            query DocSummaryVersion($id: String!, $corpusId: ID!) {
                 document(id: $id) {
                     currentSummaryVersion(corpusId: $corpusId)
                 }
@@ -719,14 +703,12 @@ class TestDocumentSummaryResolverPermissions(TestCase):
             # Some query patterns may raise errors; that's also acceptable
             pass
         else:
-            self.assertEqual(
-                result["data"]["document"]["currentSummaryVersion"], 0
-            )
+            self.assertEqual(result["data"]["document"]["currentSummaryVersion"], 0)
 
     def test_outsider_cannot_read_summary_content_for_inaccessible_corpus(self):
         """Outsider gets empty string for summary content in inaccessible corpus."""
         query = """
-            query DocSummaryContent($id: ID!, $corpusId: ID!) {
+            query DocSummaryContent($id: String!, $corpusId: ID!) {
                 document(id: $id) {
                     summaryContent(corpusId: $corpusId)
                 }
@@ -746,7 +728,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
     def test_owner_can_read_summary_version(self):
         """Owner can read summary version for their own corpus."""
         query = """
-            query DocSummaryVersion($id: ID!, $corpusId: ID!) {
+            query DocSummaryVersion($id: String!, $corpusId: ID!) {
                 document(id: $id) {
                     currentSummaryVersion(corpusId: $corpusId)
                 }
@@ -760,9 +742,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
         result = _gql(self.gql_client, query, self.owner, variables)
         # Should succeed (returns 0 because no revisions, but no error)
         self.assertIsNone(result.get("errors"))
-        self.assertEqual(
-            result["data"]["document"]["currentSummaryVersion"], 0
-        )
+        self.assertEqual(result["data"]["document"]["currentSummaryVersion"], 0)
 
 
 # ===========================================================================
@@ -776,9 +756,7 @@ class TestExtractColumnIDOR(TestCase):
     def setUp(self):
         from opencontractserver.extracts.models import Fieldset
 
-        self.owner = User.objects.create_user(
-            username="extract_owner", password="test"
-        )
+        self.owner = User.objects.create_user(username="extract_owner", password="test")
         self.outsider = User.objects.create_user(
             username="extract_outsider", password="test"
         )
@@ -786,9 +764,7 @@ class TestExtractColumnIDOR(TestCase):
         self.corpus = Corpus.objects.create(
             title="Extract Corpus", creator=self.owner, is_public=False
         )
-        set_permissions_for_obj_to_user(
-            self.owner, self.corpus, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.owner, self.corpus, [PermissionTypes.CRUD])
 
         self.fieldset = Fieldset.objects.create(
             name="Test Fieldset",
@@ -891,10 +867,15 @@ class TestAnalyzerIsPublicDefault(TestCase):
 
     def test_analyzer_defaults_to_not_public(self):
         user = User.objects.create_user(username="analyzer_user", password="test")
+        gremlin = GremlinEngine.objects.create(
+            url="http://localhost:8000", creator=user
+        )
+        # Analyzer requires either host_gremlin or task_name (DB constraint).
         analyzer = Analyzer.objects.create(
             id="default-test-analyzer",
             description="Test",
             creator=user,
+            host_gremlin=gremlin,
         )
         self.assertFalse(analyzer.is_public)
 
