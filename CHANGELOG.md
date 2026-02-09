@@ -36,6 +36,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
 - **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
+### Fixed
+
+#### Security Hardening: Authentication & Permissioning Audit Remediation
+
+- **Analysis callback DoS prevention** (`opencontractserver/analyzer/views.py`): Invalid callback tokens no longer mark analyses as FAILED; uses `hmac.compare_digest()` for timing-safe token comparison; unified error messages prevent analysis ID enumeration
+- **User lock logic inversion** (`config/graphql/base.py`): Fixed `==` to `!=` in DRFDeletion and DRFMutation user lock checks — previously blocked the lock holder and allowed everyone else
+- **IDOR prevention in base mutations** (`config/graphql/base.py`): DRFDeletion and DRFMutation now use `visible_to_user()` filtering before `.get()` to prevent object existence leakage
+- **Open redirect prevention** (`config/urls.py`): `home_redirect` now validates the Host header against `ALLOWED_HOSTS` before constructing the redirect URL
+- **Cross-corpus data leakage** (`config/graphql/graphene_types.py`): Document summary resolvers (`resolve_summary_revisions`, `resolve_current_summary_version`, `resolve_summary_content`) now verify corpus visibility before returning data
+- **CSRF trusted origins** (`config/settings/production.py`): Fixed missing comma causing implicit string concatenation in `CSRF_TRUSTED_ORIGINS`
+- **HSTS enforcement** (`config/settings/production.py`): Increased `SECURE_HSTS_SECONDS` from 60 to 518400 (6 days)
+- **Analyzer visibility default** (`opencontractserver/analyzer/models.py`): Changed `Analyzer` and `GremlinEngine` `is_public` default from `True` to `False` to prevent accidental data exposure
+- **IDOR prevention in GraphQL mutations** (`config/graphql/mutations.py`): Added `visible_to_user()` filtering to 11 previously unprotected `.objects.get()` calls in `StartDocumentExtract`, `DeleteAnalysisMutation`, `CreateColumn`, `CreateExtract`, `CreateCorpusAction`, `UpdateCorpusAction`, and `CreateNote`
+- **IDOR prevention in conversation mutations** (`config/graphql/conversation_mutations.py`): `CreateThreadMutation` and `CreateThreadMessageMutation` now use `visible_to_user()` instead of fetch-then-check pattern
+- **IDOR prevention in folder mutations** (`config/graphql/corpus_folder_mutations.py`): All folder mutations now verify corpus visibility before operating on folders; folder lookups scoped to validated corpus
+- **IDOR prevention in voting mutations** (`config/graphql/voting_mutations.py`): `VoteMessageMutation` and `RemoveVoteMutation` now use `ChatMessage.objects.visible_to_user()` instead of fetch-then-check
+- **IDOR prevention in badge mutations** (`config/graphql/badge_mutations.py`): `AwardBadgeMutation` now uses `Badge.objects.visible_to_user()` for badge lookup
 
 ## [3.0.0.b4] - 2026-02-08
 
@@ -314,6 +331,26 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/graphql/queries.ts:752`
 
 ### Changed
+
+#### BREAKING: Removed Corpus.documents M2M Relationship (PR #840)
+- **Removed `Corpus.documents` ManyToManyField**: DocumentPath is now the sole source of truth for corpus-document relationships
+  - Migration `0039_remove_corpus_documents_m2m` validates no orphaned M2M entries before removal
+  - All code paths now use `corpus.add_document()`, `corpus.remove_document()`, `corpus.get_documents()`, `corpus.document_count()`
+  - GraphQL `CorpusType.documents` field now resolves via explicit DocumentPath-based resolver
+  - Frontend queries updated to use `documentCount` field instead of `documents { totalCount }`
+  - Files: `opencontractserver/corpuses/models.py`, `config/graphql/graphene_types.py`, `config/graphql/queries.py`
+- **Removed deprecated Corpus methods**: `_create_text_document_internal()` and `create_text_document()` removed (use `import_content()` instead)
+  - Removed deprecated `content` parameter from `add_document()` (use `import_content()` for content-based imports)
+  - Files: `opencontractserver/corpuses/models.py`
+- **Removed `sync_m2m_to_documentpath` management command**: No longer needed after M2M removal
+  - Files: `opencontractserver/documents/management/commands/sync_m2m_to_documentpath.py` (deleted)
+- **Added request-level caching to DocumentPathType**: Visible corpus IDs now cached per-request to prevent N+1 queries
+  - Follows same pattern as `ConversationQueryOptimizer` and `DocumentRelationshipQueryOptimizer`
+  - Files: `config/graphql/graphene_types.py:620-636`
+- **Fixed stale frontend GraphQL queries**: Two queries still referenced removed `documents { totalCount }` connection field
+  - `GET_EDITABLE_CORPUSES` in `AddToCorpusModal.tsx` now uses `documentCount`
+  - `GET_MY_CORPUSES` in `queries.ts` now uses `documentCount`
+  - Files: `frontend/src/components/modals/AddToCorpusModal.tsx`, `frontend/src/graphql/queries.ts`
 
 #### Pipeline Configuration UI Redesign
 - **Replaced JSON-based configuration with visual pipeline flow**: System Settings page redesigned for intuitive configuration
