@@ -13,6 +13,7 @@ import _ from "lodash";
 import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@apollo/client";
+import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
 
 import {
@@ -517,7 +518,24 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
   const [retryProcessing, { loading: retryLoading }] = useMutation<
     RetryDocumentProcessingOutputType,
     RetryDocumentProcessingInputType
-  >(RETRY_DOCUMENT_PROCESSING);
+  >(RETRY_DOCUMENT_PROCESSING, {
+    update: (cache, { data }) => {
+      if (data?.retryDocumentProcessing?.ok) {
+        const doc = data.retryDocumentProcessing.document;
+        if (doc) {
+          cache.modify({
+            id: cache.identify({ __typename: "DocumentType", id: doc.id }),
+            fields: {
+              backendLock: () => doc.backendLock,
+              processingStatus: () => doc.processingStatus,
+              processingError: () => doc.processingError,
+              canRetry: () => doc.canRetry,
+            },
+          });
+        }
+      }
+    },
+  });
 
   const {
     id,
@@ -539,11 +557,27 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
 
   const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
   const isProcessing =
-    backendLock && processingStatus !== DocumentProcessingStatus.FAILED;
+    backendLock &&
+    processingStatus !== DocumentProcessingStatus.FAILED &&
+    processingStatus != null;
 
-  const handleRetry = (e: React.MouseEvent) => {
+  const handleRetry = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    retryProcessing({ variables: { documentId: id } });
+    try {
+      const result = await retryProcessing({
+        variables: { documentId: id },
+      });
+      if (result.data?.retryDocumentProcessing?.ok) {
+        toast.success("Document reprocessing has been queued");
+      } else {
+        toast.error(
+          result.data?.retryDocumentProcessing?.message ||
+            "Failed to retry processing"
+        );
+      }
+    } catch {
+      toast.error("Failed to retry document processing");
+    }
   };
 
   const cardClickHandler = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -644,8 +678,8 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         </Dimmer>
       )}
       {isFailed && (
-        <FailureDimmer>
-          <FailureIconWrapper>
+        <FailureDimmer role="alert">
+          <FailureIconWrapper aria-hidden="true">
             <Icon name="warning sign" style={{ margin: 0 }} />
           </FailureIconWrapper>
           <FailureLabel>Processing Failed</FailureLabel>
@@ -653,8 +687,12 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             <FailureMessage>{processingError}</FailureMessage>
           )}
           {canRetry && (
-            <ClassicRetryButton onClick={handleRetry} disabled={retryLoading}>
-              <Icon name="redo" style={{ margin: 0 }} />
+            <ClassicRetryButton
+              onClick={handleRetry}
+              disabled={retryLoading}
+              aria-label="Retry processing this document"
+            >
+              <Icon name="redo" style={{ margin: 0 }} aria-hidden="true" />
               {retryLoading ? "Retrying..." : "Retry Processing"}
             </ClassicRetryButton>
           )}

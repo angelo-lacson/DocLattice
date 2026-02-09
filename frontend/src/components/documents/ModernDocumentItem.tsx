@@ -6,6 +6,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Link2, ArrowRight, FileText, RotateCcw } from "lucide-react";
 import { useMutation } from "@apollo/client";
+import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 
@@ -676,19 +677,6 @@ const RetryButton = styled.button`
   }
 `;
 
-const FailureBadge = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
-  border-radius: 4px;
-  font-size: 0.6875rem;
-  font-weight: 600;
-`;
-
 // ===============================================
 // SHARED COMPONENTS
 // ===============================================
@@ -775,7 +763,24 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const [retryProcessing, { loading: retryLoading }] = useMutation<
     RetryDocumentProcessingOutputType,
     RetryDocumentProcessingInputType
-  >(RETRY_DOCUMENT_PROCESSING);
+  >(RETRY_DOCUMENT_PROCESSING, {
+    update: (cache, { data }) => {
+      if (data?.retryDocumentProcessing?.ok) {
+        const doc = data.retryDocumentProcessing.document;
+        if (doc) {
+          cache.modify({
+            id: cache.identify({ __typename: "DocumentType", id: doc.id }),
+            fields: {
+              backendLock: () => doc.backendLock,
+              processingStatus: () => doc.processingStatus,
+              processingError: () => doc.processingError,
+              canRetry: () => doc.canRetry,
+            },
+          });
+        }
+      }
+    },
+  });
 
   // Draggable setup (documents can be dragged to folders)
   const {
@@ -856,11 +861,27 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
 
   const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
   const isProcessing =
-    backendLock && processingStatus !== DocumentProcessingStatus.FAILED;
+    backendLock &&
+    processingStatus !== DocumentProcessingStatus.FAILED &&
+    processingStatus != null;
 
-  const handleRetry = (e: React.MouseEvent) => {
+  const handleRetry = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    retryProcessing({ variables: { documentId: id } });
+    try {
+      const result = await retryProcessing({
+        variables: { documentId: id },
+      });
+      if (result.data?.retryDocumentProcessing?.ok) {
+        toast.success("Document reprocessing has been queued");
+      } else {
+        toast.error(
+          result.data?.retryDocumentProcessing?.message ||
+            "Failed to retry processing"
+        );
+      }
+    } catch {
+      toast.error("Failed to retry document processing");
+    }
   };
 
   const handleClick = (event: React.MouseEvent) => {
@@ -1194,8 +1215,8 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             />
           )}
           {isFailed && (
-            <FailureOverlay>
-              <FailureIcon>
+            <FailureOverlay role="alert">
+              <FailureIcon aria-hidden="true">
                 <Icon name="warning sign" style={{ margin: 0 }} />
               </FailureIcon>
               <FailureText>Processing Failed</FailureText>
@@ -1203,8 +1224,12 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                 <FailureErrorMessage>{processingError}</FailureErrorMessage>
               )}
               {canRetry && (
-                <RetryButton onClick={handleRetry} disabled={retryLoading}>
-                  <RotateCcw />
+                <RetryButton
+                  onClick={handleRetry}
+                  disabled={retryLoading}
+                  aria-label="Retry processing this document"
+                >
+                  <RotateCcw aria-hidden="true" />
                   {retryLoading ? "Retrying..." : "Retry"}
                 </RetryButton>
               )}
@@ -1376,8 +1401,8 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           />
         )}
         {isFailed && (
-          <FailureOverlay>
-            <FailureIcon>
+          <FailureOverlay role="alert">
+            <FailureIcon aria-hidden="true">
               <Icon name="warning sign" style={{ margin: 0 }} />
             </FailureIcon>
             <FailureText>Processing Failed</FailureText>
@@ -1385,8 +1410,12 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
               <FailureErrorMessage>{processingError}</FailureErrorMessage>
             )}
             {canRetry && (
-              <RetryButton onClick={handleRetry} disabled={retryLoading}>
-                <RotateCcw />
+              <RetryButton
+                onClick={handleRetry}
+                disabled={retryLoading}
+                aria-label="Retry processing this document"
+              >
+                <RotateCcw aria-hidden="true" />
                 {retryLoading ? "Retrying..." : "Retry"}
               </RetryButton>
             )}
