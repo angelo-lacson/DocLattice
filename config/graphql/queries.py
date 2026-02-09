@@ -2293,6 +2293,25 @@ class Query(graphene.ObjectType):
         # If document_id or corpus_id provided, use the instance-based search
         # which respects corpus-specific embedders
         if document_pk or corpus_pk:
+            # Issue #437: Use corpus.preferred_embedder for corpus-scoped search
+            # instead of the global DEFAULT_EMBEDDER. Each corpus has a frozen
+            # embedder binding set at creation, and all annotations in the corpus
+            # have embeddings for that embedder. This ensures consistent search
+            # even if DEFAULT_EMBEDDER changes after the corpus was created.
+            # When no corpus_id is provided (document-only search), fall back to
+            # DEFAULT_EMBEDDER for backward compatibility.
+            scoped_embedder_path = settings.DEFAULT_EMBEDDER
+            if corpus_pk:
+                # Fetch the corpus's frozen embedder directly to avoid a
+                # redundant DB lookup inside CoreAnnotationVectorStore.
+                corpus_embedder = (
+                    Corpus.objects.filter(pk=corpus_pk)
+                    .values_list("preferred_embedder", flat=True)
+                    .first()
+                )
+                if corpus_embedder:
+                    scoped_embedder_path = corpus_embedder
+
             # Use instance-based CoreAnnotationVectorStore for scoped search
             # Permission already verified above
             vector_store = CoreAnnotationVectorStore(
@@ -2301,8 +2320,7 @@ class Query(graphene.ObjectType):
                 document_id=document_pk,
                 modalities=modalities,
                 must_have_text=raw_text_contains,  # Additional text filter
-                # Use DEFAULT_EMBEDDER for consistent global search
-                embedder_path=settings.DEFAULT_EMBEDDER,
+                embedder_path=scoped_embedder_path,
             )
 
             from opencontractserver.llms.vector_stores.core_vector_stores import (

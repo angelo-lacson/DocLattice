@@ -58,6 +58,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Important Migration Notes
 
+**Migration 0040 (`corpus_created_with_embedder`) backfills existing corpuses**
+
+This release includes a data migration that:
+- Adds a `created_with_embedder` audit field to all corpuses
+- Backfills `preferred_embedder` on existing corpuses that don't have one set (uses current `DEFAULT_EMBEDDER`)
+- Backfills `created_with_embedder` from `preferred_embedder`
+
+This migration is safe and non-destructive. Existing corpuses with explicit `preferred_embedder` values are unchanged.
+
 **Migration 0038 (`create_personal_corpuses`) is IRREVERSIBLE**
 
 This release includes a data migration that creates personal "My Documents" corpuses for all users and moves standalone documents into them. This migration **cannot be rolled back** via `python manage.py migrate`. Attempting to reverse will raise `NotImplementedError`.
@@ -70,6 +79,22 @@ This release includes a data migration that creates personal "My Documents" corp
 If rollback is required after deployment, you must write a custom migration to handle your specific data preservation needs.
 
 ### Added
+
+#### Embedder Consistency Management (Issue #437)
+- **Frozen embedder binding at corpus creation**: `preferred_embedder` is now auto-populated from `DEFAULT_EMBEDDER` when a corpus is created without an explicit embedder. This decouples existing corpuses from future changes to the global setting.
+  - Files: `opencontractserver/corpuses/models.py` (save method)
+- **Audit trail field `created_with_embedder`**: Records which embedder was active at corpus creation. Never changes, even after re-embedding.
+  - Files: `opencontractserver/corpuses/models.py`, migration `0040_corpus_created_with_embedder.py`
+- **Immutability guard on `preferred_embedder`**: `UpdateCorpusMutation` rejects changes to `preferred_embedder` after documents have been added to a corpus, preventing inconsistent embeddings.
+  - Files: `config/graphql/mutations.py` (UpdateCorpusMutation.mutate)
+- **`reEmbedCorpus` mutation**: Controlled migration path for changing a corpus's embedder. Locks the corpus, queues background re-embedding for all annotations, and unlocks when complete.
+  - Files: `config/graphql/mutations.py` (ReEmbedCorpus), `opencontractserver/tasks/corpus_tasks.py` (reembed_corpus)
+- **Fork with embedder override**: `forkCorpus` mutation now accepts optional `preferredEmbedder` argument to create the fork with a different embedder.
+  - Files: `config/graphql/mutations.py` (StartCorpusFork)
+- **Corpus-scoped search uses corpus embedder**: `resolve_semantic_search` now uses `corpus.preferred_embedder` for corpus-scoped queries instead of the global `DEFAULT_EMBEDDER`, ensuring consistent results.
+  - Files: `config/graphql/queries.py` (resolve_semantic_search)
+- **Startup system check**: Django system check warns at startup if `DEFAULT_EMBEDDER` has changed since existing corpuses were created, preventing silent search inconsistencies.
+  - Files: `opencontractserver/corpuses/checks.py`, `opencontractserver/corpuses/apps.py`
 
 #### Auth0 Authentication for Django Admin
 - **Auth0 admin login support**: Django admin now supports Auth0 authentication when `USE_AUTH0=True`

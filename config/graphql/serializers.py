@@ -48,13 +48,15 @@ class CorpusSerializer(serializers.ModelSerializer):
             "creator",
             "creator_id",
             "preferred_embedder",
+            "created_with_embedder",
             "corpus_agent_instructions",
             "document_agent_instructions",
             "categories",
         ]
         # NOTE: is_public is read-only - use SetCorpusVisibility mutation to change it
-        # This prevents bypassing permission checks via serializer updates
-        read_only_fields = ["id", "is_public"]
+        # This prevents bypassing permission checks via serializer updates.
+        # created_with_embedder is set automatically at creation and never changes.
+        read_only_fields = ["id", "is_public", "created_with_embedder"]
 
 
 class ExtractSerializer(serializers.ModelSerializer):

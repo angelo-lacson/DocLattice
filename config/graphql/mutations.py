@@ -1153,13 +1153,22 @@ class StartCorpusFork(graphene.Mutation):
             required=True,
             description="Graphene id of the corpus you want to package for export",
         )
+        preferred_embedder = graphene.String(
+            required=False,
+            description=(
+                "Override the embedder for the forked corpus. If provided and "
+                "different from the source corpus, the fork will generate new "
+                "embeddings using this embedder. If not provided, inherits "
+                "the source corpus's preferred_embedder."
+            ),
+        )
 
     ok = graphene.Boolean()
     message = graphene.String()
     new_corpus = graphene.Field(CorpusType)
 
     @login_required
-    def mutate(root, info, corpus_id):
+    def mutate(root, info, corpus_id, preferred_embedder=None):
 
         ok = False
         message = ""
@@ -1249,6 +1258,12 @@ class StartCorpusFork(graphene.Mutation):
             # Adjust the title to indicate it's a fork
             corpus.title = f"[FORK] {corpus.title}"
 
+            # Issue #437: Allow specifying a different embedder for the forked corpus.
+            # If provided, the fork's ensure_embeddings_for_corpus will automatically
+            # generate new embeddings using the target embedder when documents are added.
+            if preferred_embedder:
+                corpus.preferred_embedder = preferred_embedder
+
             # lock the corpus which will tell frontend to show this as loading and disable selection
             corpus.backend_lock = True
             corpus.creator = info.context.user  # switch the creator to the current user
@@ -1308,6 +1323,113 @@ class StartCorpusFork(graphene.Mutation):
         )
 
         return StartCorpusFork(ok=ok, message=message, new_corpus=new_corpus)
+
+
+class ReEmbedCorpus(graphene.Mutation):
+    """
+    Re-embed all annotations in a corpus with a different embedder (Issue #437).
+
+    This is the controlled migration path for changing a corpus's embedder
+    after documents have been added. It:
+    1. Validates the new embedder exists in the registry
+    2. Locks the corpus (backend_lock=True)
+    3. Queues a background task that updates preferred_embedder and
+       generates new embeddings for all annotations
+    4. The corpus unlocks automatically when re-embedding completes
+
+    Only the corpus creator can trigger re-embedding.
+    """
+
+    class Arguments:
+        corpus_id = graphene.String(
+            required=True,
+            description="Global ID of the corpus to re-embed",
+        )
+        new_embedder = graphene.String(
+            required=True,
+            description=(
+                "Fully qualified Python path to the new embedder class "
+                "(e.g., 'opencontractserver.pipeline.embedders."
+                "sent_transformer_microservice.MicroserviceEmbedder')"
+            ),
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(root, info, corpus_id, new_embedder):
+        from opencontractserver.pipeline.base.embedder import BaseEmbedder
+        from opencontractserver.pipeline.utils import get_component_by_name
+        from opencontractserver.tasks.corpus_tasks import reembed_corpus
+
+        user = info.context.user
+
+        try:
+            corpus_pk = from_global_id(corpus_id)[1]
+        except Exception:
+            return ReEmbedCorpus(ok=False, message="Invalid corpus ID")
+
+        try:
+            corpus = Corpus.objects.get(pk=corpus_pk)
+        except Corpus.DoesNotExist:
+            return ReEmbedCorpus(ok=False, message="Corpus not found")
+
+        # Only creator can re-embed
+        if corpus.creator != user:
+            return ReEmbedCorpus(ok=False, message="Corpus not found")
+
+        # Validate the new embedder exists in the registry and is an embedder
+        try:
+            embedder_class = get_component_by_name(new_embedder)
+            if embedder_class is None:
+                return ReEmbedCorpus(
+                    ok=False,
+                    message=f"Embedder '{new_embedder}' not found in the registry.",
+                )
+            if not issubclass(embedder_class, BaseEmbedder):
+                return ReEmbedCorpus(
+                    ok=False,
+                    message=f"'{new_embedder}' is not an embedder component.",
+                )
+        except Exception as e:
+            return ReEmbedCorpus(
+                ok=False,
+                message=f"Invalid embedder path: {e}",
+            )
+
+        # No-op if the embedder is already the same
+        if corpus.preferred_embedder == new_embedder:
+            return ReEmbedCorpus(
+                ok=True,
+                message="Corpus already uses this embedder. No re-embedding needed.",
+            )
+
+        # Atomically lock the corpus to prevent concurrent re-embed operations.
+        # Uses UPDATE ... WHERE to avoid TOCTOU race conditions.
+        locked = Corpus.objects.filter(pk=corpus.pk, backend_lock=False).update(
+            backend_lock=True, modified=timezone.now()
+        )
+
+        if locked == 0:
+            return ReEmbedCorpus(
+                ok=False,
+                message="Corpus is currently locked by another operation. "
+                "Please wait for it to complete.",
+            )
+
+        transaction.on_commit(
+            lambda: reembed_corpus.delay(
+                corpus_id=corpus.pk,
+                new_embedder_path=new_embedder,
+            )
+        )
+
+        return ReEmbedCorpus(
+            ok=True,
+            message=f"Re-embedding started. The corpus will use "
+            f"'{new_embedder}' once complete.",
+        )
 
 
 class StartCorpusExport(graphene.Mutation):
@@ -3625,6 +3747,35 @@ class UpdateCorpusMutation(DRFMutation):
             description="Category IDs to assign (replaces existing)",
         )
 
+    @classmethod
+    def mutate(cls, root, info, *args, **kwargs):
+        # Issue #437: Prevent changing preferred_embedder after documents exist.
+        # This avoids creating inconsistent embeddings within a corpus.
+        # Use the ReEmbedCorpus mutation instead for controlled embedder migration.
+        if "preferred_embedder" in kwargs:
+            corpus_global_id = kwargs.get("id")
+            if corpus_global_id:
+                corpus_pk = from_global_id(corpus_global_id)[1]
+                try:
+                    corpus = Corpus.objects.get(pk=corpus_pk)
+                    if corpus.has_documents():
+                        new_embedder = kwargs["preferred_embedder"]
+                        if new_embedder != corpus.preferred_embedder:
+                            return cls(
+                                ok=False,
+                                message=(
+                                    "Cannot change preferred_embedder after documents "
+                                    "have been added to this corpus. Changing the "
+                                    "embedder would create inconsistent embeddings. "
+                                    "Use the reEmbedCorpus mutation to migrate to a "
+                                    "different embedder."
+                                ),
+                            )
+                except Corpus.DoesNotExist:
+                    pass  # Let the parent class handle not-found
+
+        return super().mutate(root, info, *args, **kwargs)
+
 
 class UpdateMe(graphene.Mutation):
     """Update basic profile fields for the current user, including slug."""
@@ -5782,6 +5933,7 @@ class Mutation(graphene.ObjectType):
 
     # CORPUS MUTATIONS #########################################################
     fork_corpus = StartCorpusFork.Field()
+    re_embed_corpus = ReEmbedCorpus.Field()
     set_corpus_visibility = SetCorpusVisibility.Field()
     create_corpus = CreateCorpusMutation.Field()
     update_corpus = UpdateCorpusMutation.Field()
