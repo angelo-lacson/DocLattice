@@ -115,8 +115,8 @@ The central model representing an uploaded document (typically PDF).
 | `is_current` | True for the newest version |
 
 **Key relationships:**
-- Many-to-many with `Corpus` via `DocumentPath` (source of truth for corpus membership)
-- Legacy M2M field `Corpus.documents` exists for backward compatibility but should not be used directly
+- Many-to-many with `Corpus` via `DocumentPath` (sole source of truth for corpus membership)
+- The legacy M2M field `Corpus.documents` has been removed (Issue #835)
 - One-to-many with `Annotation`
 - One-to-many with `DocumentPath` (version history and corpus membership)
 - Self-referential via `DocumentRelationship`

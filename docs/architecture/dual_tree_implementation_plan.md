@@ -145,8 +145,6 @@ The `get_filesystem_at_time(corpus, timestamp)` function reconstructs the filesy
 > - [`opencontractserver/documents/migrations/`](../../opencontractserver/documents/migrations/) - DocumentPath model creation
 > - [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) - `Corpus.add_document()` and `Corpus.get_documents()` methods
 
-<!-- TODO: Investigate current architecture and ensure this section aligns with the actual latest code -->
-
 **Current Architecture**:
 - `DocumentPath` records are created via `Corpus.add_document(document, user)`
 - Document queries use `Corpus.get_documents()` which queries via `DocumentPath`

@@ -92,7 +92,7 @@ After cloning this repo to your production server, you'll need to:
      - [`with.auth0.env`](../sample_env_files/frontend/production/with.auth0.env) - for Auth0 authentication
 2. **Configure your domain** - This needs to be done in a few places:
 
-First, in `opencontractserver/contrib/migrations`, you'll fine a file called `0003_set_site_domain_and_name.py`. BEFORE  running any of your migrations, you should modify the `domain` and `name` defaults you'll fine in `update_site_forward`:
+First, in `opencontractserver/contrib/sites/migrations`, you'll find a file called `0003_set_site_domain_and_name.py`. BEFORE  running any of your migrations, you should modify the `domain` and `name` defaults you'll fine in `update_site_forward`:
 
 ```
 def update_site_forward(apps, schema_editor):

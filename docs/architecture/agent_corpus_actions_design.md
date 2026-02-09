@@ -333,8 +333,8 @@ source of truth for corpus membership (not the M2M relationship):
 ### Why DocumentPath Instead of M2M?
 
 The document versioning architecture (Issue #654) introduced `DocumentPath` as the source
-of truth for corpus-document relationships. The M2M relationship (`Corpus.documents`) is
-maintained for backwards compatibility but is not authoritative.
+of truth for corpus-document relationships. The M2M relationship (`Corpus.documents`) has
+been **completely removed** (Issue #835, migration `0039_remove_corpus_documents_m2m`).
 
 Using DocumentPath ensures:
 - `import_document()` works correctly (it creates DocumentPath but not M2M)
@@ -345,7 +345,7 @@ Using DocumentPath ensures:
 
 #### Direct Trigger: add_document()
 
-**Source**: [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) (lines 382-567)
+**Source**: [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) (lines 443-624)
 
 The `Corpus.add_document()` method triggers corpus actions directly if the document is ready (`backend_lock=False`). If the document is still processing, actions are deferred to `set_doc_lock_state()`.
 

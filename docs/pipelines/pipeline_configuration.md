@@ -98,7 +98,7 @@ Set these in your `.env` file or docker-compose environment before first migrati
 
 ```bash
 # Parser selection (optional - defaults to docling)
-PDF_PARSER=docling  # Options: docling, nlm_ingest, llamaparse
+PDF_PARSER=docling  # Options: docling, llamaparse
 
 # LlamaParse (if using llamaparse parser)
 LLAMAPARSE_API_KEY=your-api-key-here

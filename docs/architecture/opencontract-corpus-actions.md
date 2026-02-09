@@ -18,12 +18,12 @@ Users have three options for registering actions to run automatically on documen
 
 **Important**: Corpus actions only run after documents are fully processed (parsed, thumbnailed, embedded). This is achieved through an event-driven architecture:
 
-1. When a document is **added to a corpus** (M2M signal):
+1. When a document is **added to a corpus** (via `Corpus.add_document()` or `import_document()`):
    - If document is **ready** (`backend_lock=False`): trigger actions immediately
    - If document is **processing** (`backend_lock=True`): skip it (handled later)
 
-2. When document **processing completes** (`document_processing_complete` signal):
-   - Check all corpuses the document belongs to
+2. When document **processing completes** (`set_doc_lock_state(locked=False)`):
+   - Query `DocumentPath` for all corpuses the document belongs to
    - Trigger ADD_DOCUMENT actions for each corpus
 
 This ensures agent tools like `load_document_text` have access to fully parsed content.
@@ -34,16 +34,14 @@ The following flowchart illustrates the complete CorpusAction system:
 
 ```mermaid
 graph TD
-    A[Document Added to Corpus] -->|Triggers| B[M2M Signal]
-    B --> C{Check backend_lock}
-    C -->|locked=True| D[Skip - Document Processing]
-    C -->|locked=False| E[Process Corpus Action]
+    A[Document Added to Corpus] -->|Via add_document / import_document| B{Check backend_lock}
+    B -->|locked=True| D[Skip - Document Processing]
+    B -->|locked=False| E[Process Corpus Action]
 
     D --> F[Parsing Pipeline]
     F --> G[set_doc_lock_state]
-    G -->|locked=False| H[document_processing_complete Signal]
-    H --> I[Check Corpus Membership]
-    I --> E
+    G -->|locked=False| H[Query DocumentPath for Corpuses]
+    H --> E
 
     E --> J{Check CorpusAction Type}
     J -->|Fieldset| K[Run Extract]
@@ -67,63 +65,55 @@ graph TD
    - `ADD_DOCUMENT` - Fires when documents are added
    - `EDIT_DOCUMENT` - Fires when documents are edited
 
-3. **Signal Handlers** (`opencontractserver/corpuses/signals.py`):
-   - `handle_document_added_to_corpus` - M2M signal, filters locked documents
-   - `handle_document_processing_complete` - Triggers deferred actions
-
-4. **Custom Signal** (`opencontractserver/documents/signals.py`):
-   - `document_processing_complete` - Fired when document parsing finishes
+3. **Direct Trigger Points** (no M2M signals — invoked directly in code):
+   - `Corpus.add_document()` — triggers actions if document is ready (`backend_lock=False`)
+   - `import_document()` — same pattern as `add_document()`
+   - `set_doc_lock_state()` — triggers deferred actions when document processing completes, queries `DocumentPath` for corpus membership
 
 5. **Celery Tasks**: Perform the actual processing asynchronously
 
 ## Process Flow
 
-### 1. Document Addition with Deferred Actions
+### 1. Document Addition with Direct Triggering
 
-When a document is added to a corpus, the M2M signal fires:
+When a document is added to a corpus via `Corpus.add_document()`, actions are triggered directly if the document is ready:
 
 ```python
-@receiver(m2m_changed, sender=Corpus.documents.through)
-def handle_document_added_to_corpus(sender, instance, action, pk_set, **kwargs):
-    if action != "post_add" or not pk_set:
-        return
-
-    # Filter to only documents that are ready (not still processing)
-    ready_doc_ids = list(
-        Document.objects.filter(
-            id__in=pk_set,
-            backend_lock=False,  # Only ready documents
-        ).values_list("id", flat=True)
-    )
-
-    # Only trigger actions for ready documents
-    # Locked documents will be handled by document_processing_complete signal
-    if ready_doc_ids:
-        process_corpus_action.si(
-            corpus_id=instance.id,
-            document_ids=ready_doc_ids,
-            user_id=instance.creator.id,
-            trigger=CorpusActionTrigger.ADD_DOCUMENT,
-        ).apply_async()
+# In Corpus.add_document() (opencontractserver/corpuses/models.py)
+# After creating the DocumentPath record:
+if not document.backend_lock:
+    # Document is ready — trigger actions immediately
+    process_corpus_action.si(
+        corpus_id=self.id,
+        document_ids=[document.id],
+        user_id=user.id,
+        trigger=CorpusActionTrigger.ADD_DOCUMENT,
+    ).apply_async()
+# If document is locked, actions are deferred to set_doc_lock_state()
 ```
 
-### 2. Processing Complete Signal
+### 2. Processing Complete (Deferred Actions)
 
-When document parsing finishes, deferred actions are triggered:
+When document parsing finishes, `set_doc_lock_state()` triggers deferred actions using `DocumentPath` as the source of truth:
 
 ```python
-@receiver(document_processing_complete)
-def handle_document_processing_complete(sender, document, user_id, **kwargs):
-    # Get all corpuses this document belongs to
-    corpuses = Corpus.objects.filter(documents=document)
+# In set_doc_lock_state() (opencontractserver/tasks/doc_tasks.py)
+# After unlocking the document:
+corpus_ids = list(
+    DocumentPath.objects.filter(
+        document=document,
+        is_deleted=False,
+        is_current=True,
+    ).values_list("corpus_id", flat=True).distinct()
+)
 
-    for corpus in corpuses:
-        process_corpus_action.si(
-            corpus_id=corpus.id,
-            document_ids=[document.id],
-            user_id=corpus.creator.id,
-            trigger=CorpusActionTrigger.ADD_DOCUMENT,
-        ).apply_async()
+for corpus_id in corpus_ids:
+    process_corpus_action.si(
+        corpus_id=corpus_id,
+        document_ids=[document.id],
+        user_id=document.creator_id,
+        trigger=CorpusActionTrigger.ADD_DOCUMENT,
+    ).apply_async()
 ```
 
 ### 3. Action Processing
@@ -179,11 +169,11 @@ def process_corpus_action(
 
 ## Behavior Matrix
 
-| Scenario | M2M Signal | Processing Complete Signal |
-|----------|------------|---------------------------|
-| New doc uploaded to corpus | Skipped (locked) | Triggers actions |
+| Scenario | add_document/import_document | set_doc_lock_state |
+|----------|------------------------------|-------------------|
+| New doc uploaded to corpus | Skipped (locked) | Triggers actions via DocumentPath |
 | Existing processed doc added | Triggers immediately | N/A (already unlocked) |
-| Doc in multiple corpuses | N/A | Triggers for ALL corpuses |
+| Doc in multiple corpuses | N/A | Triggers for ALL corpuses via DocumentPath |
 | Doc not in any corpus | N/A | No action |
 
 ## Creating Corpus Actions

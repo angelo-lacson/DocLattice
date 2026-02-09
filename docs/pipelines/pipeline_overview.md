@@ -153,6 +153,7 @@ The OpenContracts database supports the following embedding dimensions via dedic
 - **768 dimensions** (`vector_768`): Used by MultimodalMicroserviceEmbedder (CLIP ViT-L-14)
 - **1024 dimensions** (`vector_1024`): Available for future embedders
 - **1536 dimensions** (`vector_1536`): Used by OpenAI text-embedding-3-small and similar models
+- **2048 dimensions** (`vector_2048`): Available for mid-range high-dimensional embedders
 - **3072 dimensions** (`vector_3072`): Used by OpenAI text-embedding-3-large and large models
 - **4096 dimensions** (`vector_4096`): Available for high-dimensional embedders
 

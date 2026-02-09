@@ -67,8 +67,8 @@ This strategy is implemented in the embedding tasks (`opencontractserver/tasks/e
 
 The embedding system uses a dedicated `Embedding` model that supports multiple vector dimensions:
 
-- **Supported Dimensions**: 384, 768, 1536, 3072
-- **Vector Fields**: `vector_384`, `vector_768`, `vector_1536`, `vector_3072` (other dimensions could easily be added)
+- **Supported Dimensions**: 384, 768, 1024, 1536, 2048, 3072, 4096
+- **Vector Fields**: `vector_384`, `vector_768`, `vector_1024`, `vector_1536`, `vector_2048`, `vector_3072`, `vector_4096`
 - **Reference Fields**: `document_id`, `annotation_id`, `note_id` (depending on the model type)
 - **Embedder Tracking**: `embedder_path` field stores the identifier of the embedding model used
 
@@ -84,9 +84,13 @@ Embedder settings are configured in [`config/settings/base.py`](../../config/set
 
 Available embedder implementations in [`opencontractserver/pipeline/embedders/`](../../opencontractserver/pipeline/embedders/):
 
-- **`MicroserviceEmbedder`**: Calls external embedding microservice (default)
-- **`ModernBERTEmbedder`**: Uses ModernBERT sentence transformer model (768-dimensional)
-- **`MinnModernBERTEmbedder768`**: Minnesota case law-specific ModernBERT embedder
+**Text-only:**
+- **`MicroserviceEmbedder`**: Calls external sentence-transformer microservice (384-dim, default)
+
+**Multimodal (text + images):**
+- **`CLIPMicroserviceEmbedder`**: CLIP-based multimodal embedder via microservice (768-dim)
+- **`QwenMicroserviceEmbedder`**: Qwen-based multimodal embedder via microservice
+- **`MultimodalMicroserviceEmbedder`**: Alias for `CLIPMicroserviceEmbedder` (backwards compatibility)
 
 ### Searching Embeddings
 

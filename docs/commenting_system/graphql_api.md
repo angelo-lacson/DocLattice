@@ -6,180 +6,24 @@ The collaboration system exposes a comprehensive GraphQL API for creating and ma
 
 ## GraphQL Type Definitions
 
+All type definitions are in [`config/graphql/graphene_types.py`](../../config/graphql/graphene_types.py). Key types:
+
 ### Enums
 
-**Location**: `config/graphql/graphene_types.py`
-
-#### ConversationTypeEnum
-
-```graphql
-enum ConversationTypeEnum {
-  CHAT        # Agent-based conversation
-  THREAD      # Discussion thread
-}
-```
-
-#### AgentTypeEnum
-
-```graphql
-enum AgentTypeEnum {
-  DOCUMENT_AGENT  # Document analysis agent
-  CORPUS_AGENT    # Corpus-wide analysis agent
-}
-```
-
-#### MessageStateChoices
-
-```graphql
-enum MessageStateChoices {
-  IN_PROGRESS        # Message being generated
-  COMPLETED          # Message complete
-  CANCELLED          # Generation cancelled
-  ERROR              # Error occurred
-  AWAITING_APPROVAL  # Requires user approval
-}
-```
-
-#### VoteType
-
-```graphql
-enum VoteType {
-  UPVOTE    # Positive vote
-  DOWNVOTE  # Negative vote
-}
-```
-
-#### ModerationActionType
-
-```graphql
-enum ModerationActionType {
-  LOCK_THREAD
-  UNLOCK_THREAD
-  PIN_THREAD
-  UNPIN_THREAD
-  DELETE_MESSAGE
-  DELETE_THREAD
-  RESTORE_MESSAGE
-  RESTORE_THREAD
-}
-```
+- **ConversationTypeEnum**: `CHAT` (agent-based), `THREAD` (discussion)
+- **AgentTypeEnum**: `DOCUMENT_AGENT`, `CORPUS_AGENT`
+- **MessageStateChoices**: `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `ERROR`, `AWAITING_APPROVAL`
+- **VoteType**: `UPVOTE`, `DOWNVOTE`
+- **ModerationActionType**: `LOCK_THREAD`, `UNLOCK_THREAD`, `PIN_THREAD`, `UNPIN_THREAD`, `DELETE_MESSAGE`, `DELETE_THREAD`, `RESTORE_MESSAGE`, `RESTORE_THREAD`
 
 ### Object Types
 
-#### ConversationType
-
-**Location**: `config/graphql/graphene_types.py:1415-1444`
-
-```graphql
-type ConversationType {
-  id: ID!
-  conversationType: ConversationTypeEnum!
-  title: String
-  description: String
-  creator: UserType!
-  chatWithCorpus: CorpusType
-  chatWithDocument: DocumentType
-
-  # Moderation
-  isLocked: Boolean!
-  lockedBy: UserType
-  lockedAt: DateTime
-  isPinned: Boolean!
-  pinnedBy: UserType
-  pinnedAt: DateTime
-
-  # Messages
-  allMessages: [MessageType!]!
-
-  # Timestamps
-  created: DateTime!
-  modified: DateTime!
-  deletedAt: DateTime
-}
-```
-
-#### MessageType
-
-**Location**: `config/graphql/graphene_types.py:1396-1412`
-
-```graphql
-type MessageType {
-  id: ID!
-  conversation: ConversationType!
-  msgType: String!
-  agentType: AgentTypeEnum
-  content: String!
-  data: JSONScalar
-  state: MessageStateChoices!
-
-  # Threading
-  parentMessage: MessageType
-  replies: [MessageType!]!
-
-  # Voting
-  upvoteCount: Int!
-  downvoteCount: Int!
-
-  # Metadata
-  creator: UserType!
-  created: DateTime!
-  modified: DateTime!
-  deletedAt: DateTime
-}
-```
-
-#### MessageVoteType
-
-```graphql
-type MessageVoteType {
-  id: ID!
-  message: MessageType!
-  voteType: VoteType!
-  creator: UserType!
-  created: DateTime!
-}
-```
-
-#### UserReputationType
-
-```graphql
-type UserReputationType {
-  id: ID!
-  user: UserType!
-  corpus: CorpusType
-  reputationScore: Int!
-  totalUpvotesReceived: Int!
-  totalDownvotesReceived: Int!
-  lastCalculatedAt: DateTime!
-}
-```
-
-#### CorpusModeratorType
-
-```graphql
-type CorpusModeratorType {
-  id: ID!
-  corpus: CorpusType!
-  user: UserType!
-  permissions: [String!]!
-  assignedBy: UserType!
-  created: DateTime!
-}
-```
-
-#### ModerationActionType
-
-```graphql
-type ModerationActionType {
-  id: ID!
-  conversation: ConversationType
-  message: MessageType
-  actionType: ModerationActionType!
-  moderator: UserType!
-  reason: String
-  createdAt: DateTime!
-}
-```
+- **ConversationType** — Thread or chat with context FK (`chatWithCorpus` or `chatWithDocument`), moderation fields (`isLocked`, `isPinned` + who/when), messages, and soft-delete timestamp
+- **MessageType** — Message with `msgType`, `state`, threading (`parentMessage`/`replies`), denormalized vote counts, and `mentionedAgents`
+- **MessageVoteType** — Vote linking user to message with `voteType`
+- **UserReputationType** — Per-user reputation (global or per-corpus) with `reputationScore` and vote totals
+- **CorpusModeratorType** — Moderator assignment with `permissions` array
+- **ModerationActionType** — Audit record with `actionType`, `moderator`, and `reason`
 
 ## Queries
 
@@ -830,18 +674,7 @@ mutation UpdateModeratorPermissions(
 
 ### Rate Limit Configuration
 
-The system uses the `@graphql_ratelimit` decorator with predefined rate limits:
-
-```python
-class RateLimits:
-    READ_LIGHT = "100/m"       # Light read operations
-    WRITE_LIGHT = "30/m"       # Light write operations
-    WRITE_MEDIUM = "10/m"      # Medium write operations
-    MODERATE_ACTION = "20/m"   # Moderation actions
-    VOTE = "60/m"              # Voting actions
-    THREAD_CREATE = "10/h"     # Thread creation
-    MESSAGE_CREATE = "30/m"    # Message creation
-```
+See [`config/graphql/ratelimits.py`](../../config/graphql/ratelimits.py) for the `RateLimits` class and `@graphql_ratelimit` decorator. Key limits: `THREAD_CREATE` (10/h), `MESSAGE_CREATE` (30/m), `VOTE` (60/m), `MODERATE_ACTION` (20/m).
 
 ### Applied Rate Limits
 
@@ -862,35 +695,9 @@ class RateLimits:
 | removeModerator | 20/minute | Prevent permission abuse |
 | updateModeratorPermissions | 20/minute | Prevent permission abuse |
 
-### Rate Limit Implementation
-
-```python
-from config.graphql.ratelimits import graphql_ratelimit, RateLimits
-
-class CreateThreadMutation(graphene.Mutation):
-    @staticmethod
-    @graphql_ratelimit(rate=RateLimits.THREAD_CREATE)
-    def mutate(root, info, **kwargs):
-        # Mutation logic
-        pass
-```
-
 ### Rate Limit Errors
 
-When rate limit is exceeded:
-
-```json
-{
-  "errors": [
-    {
-      "message": "Rate limit exceeded. Please try again later.",
-      "extensions": {
-        "code": "RATE_LIMIT_EXCEEDED"
-      }
-    }
-  ]
-}
-```
+When rate limit is exceeded, the mutation returns an error with code `RATE_LIMIT_EXCEEDED`.
 
 ## Error Handling
 
@@ -934,32 +741,7 @@ When rate limit is exceeded:
 
 ## Schema Integration
 
-**Location**: `config/graphql/mutations.py:3860-3877`
-
-All collaboration mutations are registered in the main schema:
-
-```python
-class Mutation(graphene.ObjectType):
-    # Thread mutations
-    create_thread = CreateThreadMutation.Field()
-    create_thread_message = CreateThreadMessageMutation.Field()
-    reply_to_message = ReplyToMessageMutation.Field()
-    delete_conversation = DeleteConversationMutation.Field()
-    delete_message = DeleteMessageMutation.Field()
-
-    # Voting mutations
-    vote_message = VoteMessageMutation.Field()
-    remove_vote = RemoveVoteMutation.Field()
-
-    # Moderation mutations
-    lock_thread = LockThreadMutation.Field()
-    unlock_thread = UnlockThreadMutation.Field()
-    pin_thread = PinThreadMutation.Field()
-    unpin_thread = UnpinThreadMutation.Field()
-    add_moderator = AddModeratorMutation.Field()
-    remove_moderator = RemoveModeratorMutation.Field()
-    update_moderator_permissions = UpdateModeratorPermissionsMutation.Field()
-```
+All collaboration mutations are registered in [`config/graphql/mutations.py`](../../config/graphql/mutations.py). Thread mutations (`createThread`, `createThreadMessage`, `replyToMessage`, `deleteConversation`, `deleteMessage`), voting mutations (`voteMessage`, `removeVote`), and moderation mutations (`lockThread`, `unlockThread`, `pinThread`, `unpinThread`, `addModerator`, `removeModerator`, `updateModeratorPermissions`).
 
 ## Complete Example Workflow
 
@@ -1296,37 +1078,8 @@ type AgentConfigurationType {
 
 ### Database Schema
 
-The `ChatMessage` model includes:
-
-```python
-class ChatMessage(models.Model):
-    # ... existing fields ...
-
-    # ManyToMany field for mentioned agents
-    mentioned_agents = models.ManyToManyField(
-        'agents.AgentConfiguration',
-        blank=True,
-        related_name='mentioned_in_messages',
-        help_text='Agents mentioned via @agent syntax'
-    )
-```
-
-The `AgentConfiguration` model includes:
-
-```python
-class AgentConfiguration(models.Model):
-    # ... existing fields ...
-
-    # Slug field for URL-friendly mentions
-    slug = models.SlugField(
-        max_length=128,
-        unique=True,
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="URL-friendly identifier for mentions (e.g., 'research-assistant')"
-    )
-```
+- **ChatMessage.mentioned_agents** — M2M to `AgentConfiguration` (see [`conversations/models.py`](../../opencontractserver/conversations/models.py))
+- **AgentConfiguration.slug** — Unique `SlugField` for URL-friendly mentions (see [`agents/models.py`](../../opencontractserver/agents/models.py))
 
 ### Default Agents
 
