@@ -290,7 +290,10 @@ export function useAnnotationControls() {
   const relationLabelInitialized = useRef(false);
 
   // Initialize default values - use separate refs per label type to avoid
-  // early cutoff when one label type loads before another
+  // early cutoff when one label type loads before another.
+  // Deps intentionally exclude activeSpanLabel/activeRelationLabel: the refs
+  // already gate initialization, so the effect only needs to re-run when the
+  // data sources (labels, document) change, not when the values it sets change.
   useEffect(() => {
     if (!selectedDocument) return;
 
@@ -298,29 +301,26 @@ export function useAnnotationControls() {
     const isPdfFile = isPdfFileType(selectedDocument.fileType);
 
     if (!spanLabelInitialized.current) {
-      if (isTextFile && humanSpanLabelChoices.length > 0 && !activeSpanLabel) {
+      if (isTextFile && humanSpanLabelChoices.length > 0) {
         setActiveSpanLabel(humanSpanLabelChoices[0]);
         spanLabelInitialized.current = true;
-      } else if (isPdfFile && humanTokenLabels.length > 0 && !activeSpanLabel) {
+      } else if (isPdfFile && humanTokenLabels.length > 0) {
         setActiveSpanLabel(humanTokenLabels[0]);
         spanLabelInitialized.current = true;
       }
     }
 
     if (!relationLabelInitialized.current) {
-      if (relationLabels.length > 0 && !activeRelationLabel) {
+      if (relationLabels.length > 0) {
         setActiveRelationLabel(relationLabels[0]);
         relationLabelInitialized.current = true;
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     humanSpanLabelChoices,
     humanTokenLabels,
     relationLabels,
-    activeSpanLabel,
-    activeRelationLabel,
-    setActiveSpanLabel,
-    setActiveRelationLabel,
     selectedDocument,
   ]);
 
