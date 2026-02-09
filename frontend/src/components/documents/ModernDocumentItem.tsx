@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Icon } from "semantic-ui-react";
 import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +9,7 @@ import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { FAILURE_COLORS } from "../../assets/configurations/constants";
 
 import {
   editingDocument,
@@ -75,7 +76,7 @@ const CardContainer = styled.div<{ isLongPressing?: boolean }>`
   }
 
   &.failed {
-    border-color: #fca5a5;
+    border-color: ${FAILURE_COLORS.BORDER_LIGHT};
   }
 
   &.long-pressing {
@@ -488,12 +489,12 @@ const ListContainer = styled.div<{ isLongPressing?: boolean }>`
   }
 
   &.failed {
-    border-left: 3px solid #ef4444;
-    background: #fef2f2;
+    border-left: 3px solid ${FAILURE_COLORS.BORDER};
+    background: ${FAILURE_COLORS.BG};
 
     &:hover {
-      border-left: 3px solid #ef4444;
-      background: #fef2f2;
+      border-left: 3px solid ${FAILURE_COLORS.BORDER};
+      background: ${FAILURE_COLORS.BG};
     }
   }
 
@@ -619,7 +620,7 @@ const ThumbnailFailureOverlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(254, 226, 226, 0.8);
+  background: ${FAILURE_COLORS.BG_OVERLAY};
   z-index: 5;
   border-radius: inherit;
 `;
@@ -628,12 +629,12 @@ const FailureIconCircle = styled.div<{ $size?: "small" | "large" }>`
   width: ${(props) => (props.$size === "small" ? "28px" : "40px")};
   height: ${(props) => (props.$size === "small" ? "28px" : "40px")};
   border-radius: 50%;
-  background: #dc2626;
+  background: ${FAILURE_COLORS.ICON_BG};
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+  box-shadow: 0 2px 8px ${FAILURE_COLORS.SHADOW};
 
   .icon {
     margin: 0 !important;
@@ -646,9 +647,9 @@ const FailureBadge = styled.div`
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: ${FAILURE_COLORS.BG};
+  color: ${FAILURE_COLORS.TEXT};
+  border: 1px solid ${FAILURE_COLORS.BORDER_LIGHTER};
   border-radius: 4px;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -657,7 +658,7 @@ const FailureBadge = styled.div`
 
 const FailureDescription = styled.div`
   font-size: 0.75rem;
-  color: #b91c1c;
+  color: ${FAILURE_COLORS.TEXT_DARK};
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -669,10 +670,10 @@ const RetryButton = styled.button`
   align-items: center;
   gap: 6px;
   padding: 6px 16px;
-  border: 1px solid #ef4444;
+  border: 1px solid ${FAILURE_COLORS.BORDER};
   border-radius: 6px;
   background: white;
-  color: #dc2626;
+  color: ${FAILURE_COLORS.TEXT};
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -685,7 +686,7 @@ const RetryButton = styled.button`
   }
 
   &:hover {
-    background: #ef4444;
+    background: ${FAILURE_COLORS.BORDER};
     color: white;
   }
 
@@ -878,28 +879,32 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
 
   const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
   const isProcessing =
-    backendLock &&
+    processingStatus != null &&
     processingStatus !== DocumentProcessingStatus.FAILED &&
-    processingStatus != null;
+    backendLock;
 
-  const handleRetry = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const result = await retryProcessing({
-        variables: { documentId: id },
-      });
-      if (result.data?.retryDocumentProcessing?.ok) {
-        toast.success("Document reprocessing has been queued");
-      } else {
-        toast.error(
-          result.data?.retryDocumentProcessing?.message ||
-            "Failed to retry processing"
-        );
+  const handleRetry = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        const result = await retryProcessing({
+          variables: { documentId: id },
+        });
+        if (result.data?.retryDocumentProcessing?.ok) {
+          toast.success("Document reprocessing has been queued");
+        } else {
+          toast.error(
+            result.data?.retryDocumentProcessing?.message ||
+              "Failed to retry processing"
+          );
+        }
+      } catch (err) {
+        console.error("Failed to retry document processing:", err);
+        toast.error("Failed to retry document processing");
       }
-    } catch {
-      toast.error("Failed to retry document processing");
-    }
-  };
+    },
+    [id, retryProcessing]
+  );
 
   const handleClick = (event: React.MouseEvent) => {
     if (
@@ -1030,7 +1035,8 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const my_permissions = getPermissions(myPermissions ?? []);
   const canEdit = my_permissions.includes(PermissionTypes.CAN_UPDATE);
 
-  // Build context menu items
+  // Build context menu items. Order: primary action (Open) → view/download/edit
+  // → linking/versioning → retry (failed only) → destructive (remove) → select.
   const contextMenuItems: ContextMenuItem[] = [
     {
       label: "Open Document",

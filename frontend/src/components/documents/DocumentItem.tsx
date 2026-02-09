@@ -38,6 +38,7 @@ import { downloadFile } from "../../utils/files";
 import fallback_doc_icon from "../../assets/images/defaults/default_doc_icon.jpg";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
+import { FAILURE_COLORS } from "../../assets/configurations/constants";
 
 // Animations
 const shimmer = keyframes`
@@ -125,7 +126,7 @@ const StyledCard = styled.div`
   }
 
   &.failed {
-    border-color: #fca5a5;
+    border-color: ${FAILURE_COLORS.BORDER_LIGHT};
   }
 `;
 
@@ -422,7 +423,7 @@ const ThumbnailFailureOverlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(254, 226, 226, 0.8);
+  background: ${FAILURE_COLORS.BG_OVERLAY};
   z-index: 5;
   border-radius: inherit;
 `;
@@ -431,12 +432,12 @@ const FailureIconCircle = styled.div`
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #dc2626;
+  background: ${FAILURE_COLORS.ICON_BG};
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+  box-shadow: 0 2px 8px ${FAILURE_COLORS.SHADOW};
 
   .icon {
     margin: 0 !important;
@@ -449,9 +450,9 @@ const FailureBadge = styled.div`
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: ${FAILURE_COLORS.BG};
+  color: ${FAILURE_COLORS.TEXT};
+  border: 1px solid ${FAILURE_COLORS.BORDER_LIGHTER};
   border-radius: 4px;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -460,7 +461,7 @@ const FailureBadge = styled.div`
 
 const FailureDescription = styled.div`
   font-size: 0.75rem;
-  color: #b91c1c;
+  color: ${FAILURE_COLORS.TEXT_DARK};
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -474,17 +475,17 @@ const ClassicRetryButton = styled.button`
   align-items: center;
   gap: 6px;
   padding: 6px 16px;
-  border: 1px solid #ef4444;
+  border: 1px solid ${FAILURE_COLORS.BORDER};
   border-radius: 6px;
   background: white;
-  color: #dc2626;
+  color: ${FAILURE_COLORS.TEXT};
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #ef4444;
+    background: ${FAILURE_COLORS.BORDER};
     color: white;
   }
 
@@ -564,9 +565,9 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
 
   const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
   const isProcessing =
-    backendLock &&
+    processingStatus != null &&
     processingStatus !== DocumentProcessingStatus.FAILED &&
-    processingStatus != null;
+    backendLock;
 
   const handleRetry = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -582,7 +583,8 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             "Failed to retry processing"
         );
       }
-    } catch {
+    } catch (err) {
+      console.error("Failed to retry document processing:", err);
       toast.error("Failed to retry document processing");
     }
   };
