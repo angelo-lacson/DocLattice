@@ -44,5 +44,8 @@ class DocumentsConfig(AppConfig):
             # - corpus.document_count() instead of corpus.documents.count()
             # This ensures DocumentPath is the single source of truth for corpus-document relationships.
 
+            # Register system checks
+            from doclatticeserver.documents import checks  # noqa F401
+
         except ImportError:
             pass
