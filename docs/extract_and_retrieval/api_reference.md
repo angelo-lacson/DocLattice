@@ -333,52 +333,46 @@ class CoreAnnotationVectorStore:
 
 ## WebSocket Consumers
 
-### `CorpusQueryConsumer`
+### `UnifiedAgentConsumer`
 
-Handles real-time corpus queries over WebSocket.
+Handles all agent conversation contexts (corpus, document, standalone) over WebSocket.
 
 ```python
-class CorpusQueryConsumer(AsyncWebsocketConsumer):
+class UnifiedAgentConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        """Authenticate and initialize corpus agent."""
+        """Authenticate, parse query params, and initialize context."""
 
     async def receive(self, text_data):
-        """Process incoming queries."""
+        """Process incoming queries and approval decisions."""
 
     async def disconnect(self, close_code):
         """Clean up on disconnection."""
 ```
 
-**WebSocket URL:** `/ws/corpus/<corpus_id>/`
+**WebSocket URL:** `/ws/agent-chat/?corpus_id=X&document_id=X`
+
+**Query Parameters:** `corpus_id`, `document_id`, `conversation_id`, `agent_id`
 
 **Message Types:**
 
 Client → Server:
 ```json
 {
-    "query": "string",           // User question
-    "tools": ["list"],          // Optional tools
-    "approve_tool": "string"    // Tool approval
+    "query": "string",                    // User question
+    "approval_decision": true,            // Tool approval
+    "llm_message_id": "string"            // For approval context
 }
 ```
 
 Server → Client:
 ```json
 {
-    "type": "ASYNC_START|ASYNC_CONTENT|ASYNC_SOURCES|...",
+    "type": "ASYNC_START|ASYNC_CONTENT|ASYNC_SOURCES|ASYNC_FINISH|...",
     "data": {}  // Type-specific payload
 }
 ```
 
-### `DocumentQueryConsumer`
-
-Handles document-specific queries.
-
-```python
-class DocumentQueryConsumer(AsyncWebsocketConsumer):
-    # Similar interface to CorpusQueryConsumer
-    # URL: /ws/document/<document_id>/
-```
+See [WebSocket Backend Documentation](../architecture/websocket/backend.md) for full details on all consumers (`UnifiedAgentConsumer`, `ThreadUpdatesConsumer`, `NotificationUpdatesConsumer`).
 
 ## GraphQL API
 

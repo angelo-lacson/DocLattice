@@ -32,7 +32,7 @@ All documentation issues have been addressed:
 | `docs/frontend/corpus-and-document-selection.md` | Referenced deleted components | Complete rewrite with CentralRouteManager architecture |
 | `docs/architecture/PDF-data-layer.md` | Wrong parser paths | Fixed to `docling_parser_rest.py`, added LlamaParse |
 | `docs/architecture/embeddings_creation_and_retrieval.md` | Wrong settings, LlamaIndex refs | Fixed setting names, removed LlamaIndex details |
-| `docs/embedders/modernbert_embedder.md` | Wrong class name `768` suffix | Fixed to `ModernBERTEmbedder` |
+| `docs/embedders/modernbert_embedder.md` | ModernBERT embedders removed from codebase | File deleted |
 | `docs/embedders/minn_modernbert_embedder.md` | Wrong class name | File deleted per user request |
 | `docs/deployment/docker-gpu-setup.md` | Non-existent file refs | Fixed to reference actual compose files |
 
@@ -98,7 +98,7 @@ All documentation issues have been addressed:
 
 ### Source of Truth
 - **`DocumentPath`** is the single source of truth for corpus-document relationships
-- Legacy M2M field `Corpus.documents` exists for backward compatibility but should NOT be used directly
+- Legacy M2M field `Corpus.documents` has been **removed** (Issue #835, migration `0039`)
 
 ### Correct Methods
 ```python
