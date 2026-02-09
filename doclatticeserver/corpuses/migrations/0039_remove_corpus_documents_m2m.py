@@ -18,7 +18,7 @@ def validate_no_orphaned_m2m(apps, schema_editor):
     orphaned_count = 0
     orphaned_corpuses = []
 
-    for corpus in Corpus.objects.prefetch_related("documents").iterator():
+    for corpus in Corpus.objects.prefetch_related("documents").iterator(chunk_size=1000):
         m2m_doc_ids = set(corpus.documents.values_list("id", flat=True))
         if not m2m_doc_ids:
             continue
