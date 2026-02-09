@@ -29,6 +29,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
 - **Migration `0025_alter_userexport_format_add_v2`**: Adds `OPEN_CONTRACTS_V2` to UserExport format choices
 
+### Fixed
+
+#### Security Hardening: Authentication & Permissioning Audit Remediation
+
+- **Analysis callback DoS prevention** (`opencontractserver/analyzer/views.py`): Invalid callback tokens no longer mark analyses as FAILED; uses `hmac.compare_digest()` for timing-safe token comparison; unified error messages prevent analysis ID enumeration
+- **User lock logic inversion** (`config/graphql/base.py`): Fixed `==` to `!=` in DRFDeletion and DRFMutation user lock checks — previously blocked the lock holder and allowed everyone else
+- **IDOR prevention in base mutations** (`config/graphql/base.py`): DRFDeletion and DRFMutation now use `visible_to_user()` filtering before `.get()` to prevent object existence leakage
+- **Open redirect prevention** (`config/urls.py`): `home_redirect` now validates the Host header against `ALLOWED_HOSTS` before constructing the redirect URL
+- **Cross-corpus data leakage** (`config/graphql/graphene_types.py`): Document summary resolvers (`resolve_summary_revisions`, `resolve_current_summary_version`, `resolve_summary_content`) now verify corpus visibility before returning data
+- **CSRF trusted origins** (`config/settings/production.py`): Fixed missing comma causing implicit string concatenation in `CSRF_TRUSTED_ORIGINS`
+- **HSTS enforcement** (`config/settings/production.py`): Increased `SECURE_HSTS_SECONDS` from 60 to 518400 (6 days)
+- **Analyzer visibility default** (`opencontractserver/analyzer/models.py`): Changed `Analyzer` and `GremlinEngine` `is_public` default from `True` to `False` to prevent accidental data exposure
+- **IDOR prevention in GraphQL mutations** (`config/graphql/mutations.py`): Added `visible_to_user()` filtering to 11 previously unprotected `.objects.get()` calls in `StartDocumentExtract`, `DeleteAnalysisMutation`, `CreateColumn`, `CreateExtract`, `CreateCorpusAction`, `UpdateCorpusAction`, and `CreateNote`
+- **IDOR prevention in conversation mutations** (`config/graphql/conversation_mutations.py`): `CreateThreadMutation` and `CreateThreadMessageMutation` now use `visible_to_user()` instead of fetch-then-check pattern
+- **IDOR prevention in folder mutations** (`config/graphql/corpus_folder_mutations.py`): All folder mutations now verify corpus visibility before operating on folders; folder lookups scoped to validated corpus
+- **IDOR prevention in voting mutations** (`config/graphql/voting_mutations.py`): `VoteMessageMutation` and `RemoveVoteMutation` now use `ChatMessage.objects.visible_to_user()` instead of fetch-then-check
+- **IDOR prevention in badge mutations** (`config/graphql/badge_mutations.py`): `AwardBadgeMutation` now uses `Badge.objects.visible_to_user()` for badge lookup
+
 ## [3.0.0.b4] - 2026-02-08
 
 ### ⚠️ Important Migration Notes

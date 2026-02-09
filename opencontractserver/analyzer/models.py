@@ -57,7 +57,7 @@ class GremlinEngine(BaseOCModel):
     install_completed = django.db.models.DateTimeField(
         "Install Completed", blank=True, null=True
     )
-    is_public = django.db.models.BooleanField(default=True)
+    is_public = django.db.models.BooleanField(default=False)
 
 
 class GremlinEngineUserObjectPermission(UserObjectPermissionBase):
@@ -122,7 +122,7 @@ class Analyzer(BaseOCModel):
     manifest = NullableJSONField(default=jsonfield_default_value, null=True, blank=True)
     description = django.db.models.TextField(null=False, blank=True, default="")
     disabled = django.db.models.BooleanField(default=False)
-    is_public = django.db.models.BooleanField(default=True)
+    is_public = django.db.models.BooleanField(default=False)
     icon = django.db.models.FileField(
         blank=True, upload_to=calculate_analyzer_icon_path
     )

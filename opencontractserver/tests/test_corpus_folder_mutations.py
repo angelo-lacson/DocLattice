@@ -161,7 +161,10 @@ class TestCreateCorpusFolderMutation(TestCase):
         result = client.execute(self.MUTATION, variable_values=variables)
 
         assert result["data"]["createCorpusFolder"]["ok"] is False
-        assert "permission" in result["data"]["createCorpusFolder"]["message"].lower()
+        # The user can't see the corpus via visible_to_user(), so they get
+        # a generic "not found" rather than a permission error (IDOR-safe).
+        msg = result["data"]["createCorpusFolder"]["message"].lower()
+        assert "not found" in msg or "permission" in msg
 
     def test_create_duplicate_folder_name(self):
         """Test that duplicate folder names under same parent fail."""
@@ -283,7 +286,10 @@ class TestUpdateCorpusFolderMutation(TestCase):
         result = client.execute(self.MUTATION, variable_values=variables)
 
         assert result["data"]["updateCorpusFolder"]["ok"] is False
-        assert "permission" in result["data"]["updateCorpusFolder"]["message"].lower()
+        # The user can't see the corpus via visible_to_user(), so they get
+        # a generic "not found" rather than a permission error (IDOR-safe).
+        msg = result["data"]["updateCorpusFolder"]["message"].lower()
+        assert "not found" in msg or "permission" in msg
 
 
 class TestMoveCorpusFolderMutation(TestCase):
