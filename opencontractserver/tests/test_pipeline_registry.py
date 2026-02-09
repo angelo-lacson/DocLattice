@@ -5,11 +5,14 @@ Tests the cached registry pattern that provides efficient access to
 pipeline components (parsers, embedders, thumbnailers, post-processors).
 """
 
+from unittest.mock import patch
+
 from django.test import TestCase
 
 from opencontractserver.pipeline.registry import (
     ComponentType,
     PipelineComponentDefinition,
+    PipelineComponentRegistry,
     get_all_components_cached,
     get_all_embedders_cached,
     get_all_parsers_cached,
@@ -304,3 +307,78 @@ class TestRegistryPerformance(TestCase):
             first_access * 0.1,  # At least 10x faster
             "Subsequent access should be much faster than first access",
         )
+
+
+class TestDefinitionSettingsSchema(TestCase):
+    """Tests for settings_schema in PipelineComponentDefinition."""
+
+    def test_to_dict_includes_settings_schema(self):
+        """to_dict() includes settings_schema in output."""
+        defn = PipelineComponentDefinition(
+            name="TestParser",
+            class_name="test.module.TestParser",
+            component_type=ComponentType.PARSER,
+            title="Test Parser",
+            module_name="test_module",
+            description="A test parser",
+            author="Test Author",
+            dependencies=(),
+            supported_file_types=(),
+            settings_schema=({"name": "api_key", "type": "secret", "required": True},),
+        )
+        result = defn.to_dict()
+        self.assertEqual(
+            result["settings_schema"],
+            [{"name": "api_key", "type": "secret", "required": True}],
+        )
+
+    def test_to_dict_empty_settings_schema(self):
+        """to_dict() includes empty settings_schema by default."""
+        defn = PipelineComponentDefinition(
+            name="TestParser",
+            class_name="test.module.TestParser",
+            component_type=ComponentType.PARSER,
+            title="Test Parser",
+            module_name="test_module",
+            description="A test parser",
+            author="Test Author",
+            dependencies=(),
+            supported_file_types=(),
+        )
+        result = defn.to_dict()
+        self.assertEqual(result["settings_schema"], [])
+
+
+class TestCreateDefinitionSettingsSchemaError(TestCase):
+    """Tests for the exception path in _create_definition settings_schema extraction."""
+
+    def setUp(self):
+        reset_registry()
+
+    def tearDown(self):
+        reset_registry()
+
+    def test_create_definition_handles_settings_schema_exception(self):
+        """_create_definition gracefully handles errors extracting settings_schema."""
+        registry = PipelineComponentRegistry.__new__(PipelineComponentRegistry)
+        # Initialize minimal state to call _create_definition
+        registry._by_name = {}
+        registry._by_class_name = {}
+
+        # Create a dummy class with a broken Settings that causes get_settings_schema
+        # to raise
+        class BrokenSettingsComponent:
+            __module__ = "test.module"
+            supported_file_types = []
+            supported_modalities = set()
+
+        with patch(
+            "opencontractserver.pipeline.base.settings_schema.get_settings_schema",
+            side_effect=Exception("Schema extraction failed"),
+        ):
+            defn = registry._create_definition(
+                BrokenSettingsComponent, ComponentType.PARSER
+            )
+            # Should still return a definition with empty settings_schema
+            self.assertEqual(defn.settings_schema, ())
+            self.assertEqual(defn.name, "BrokenSettingsComponent")

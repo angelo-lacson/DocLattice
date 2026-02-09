@@ -605,6 +605,7 @@ export const GET_CORPUSES = gql`
           }
           description
           isPublic
+          isPersonal
           is_selected @client
           is_open @client
           myPermissions
@@ -3616,6 +3617,7 @@ export const GET_ME = gql`
       firstName
       lastName
       phone
+      isSuperuser
       isUsageCapped # Crucially, fetch this field
       isProfilePublic # Issue #611
     }

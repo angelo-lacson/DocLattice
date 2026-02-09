@@ -4,7 +4,12 @@ import { InMemoryCache } from "@apollo/client";
 import { MemoryRouter } from "react-router-dom";
 import { Provider as JotaiProvider } from "jotai";
 import { Auth0Provider } from "@auth0/auth0-react";
-import { userObj, authToken, showExportModal } from "../src/graphql/cache";
+import {
+  backendUserObj,
+  userObj,
+  authToken,
+  showExportModal,
+} from "../src/graphql/cache";
 import { NavMenu } from "../src/components/layout/NavMenu";
 
 // Mock users for testing - exported for test file type references
@@ -41,6 +46,7 @@ export const NavMenuTestWrapper: React.FC<NavMenuTestWrapperProps> = ({
   // Set up Apollo cache state before first render
   useEffect(() => {
     userObj(mockUser);
+    backendUserObj(mockUser);
     authToken(mockUser ? "mock-token" : "");
     showExportModal(false);
     // Small delay to ensure reactive vars propagate
