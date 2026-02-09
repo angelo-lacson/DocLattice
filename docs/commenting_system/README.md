@@ -35,9 +35,12 @@ The backend implementation is fully functional with:
 - Real-time notification system for all user interactions
 - Extensive test coverage (8 test files, 100,000+ characters of tests)
 
-### Frontend: ⚠️ Not Yet Implemented
+### Frontend: ✅ Partial Implementation
 
-The frontend UI components have not been built yet. The backend API is ready to support the UI implementation.
+The frontend has partial implementation:
+- Agent mentions with TipTap editor extension (autocomplete UI)
+- Chat interface components for agent conversations
+- Backend API is ready to support full UI implementation for discussion threads
 
 ## Core Features
 
@@ -185,6 +188,9 @@ All contributions to this feature set followed these requirements:
 
 The following epics remain to be implemented:
 
-- **#565**: Epic: Corpus Engagement Metrics & Analytics
 - **#569**: Epic: Thread Search & Discovery
-- **#572**: Epic: Frontend UI Implementation (All backend features complete, ready for UI development)
+- **#572**: Epic: Frontend UI Implementation (Discussion threads UI - agent chat UI partially complete)
+
+---
+
+*Last Updated: 2026-01-09*

@@ -1,38 +1,22 @@
 # PDF Search Flow Documentation
 
+**Last Updated**: 2026-01-09
+
 ## Overview
-The search functionality in the document knowledge base allows users to search text within PDF documents and highlights matching results. Here's how the search flow works:
+The search functionality in the document knowledge base allows users to search text within PDF documents and highlights matching results. Here's how the search flow works.
 
 ## Component Flow
 
 ### 1. User Input Entry
 - Search can be initiated through multiple entry points:
-  - The search tab in the right panel when `activeTab === "search"`
-  - The `SearchSidebarWidget` component
-  - The unified `FloatingDocumentInput` component
-- User input is managed through controlled input with debouncing:
-```typescript
-const handleDocSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
-  const value = e.target.value;
-  isUserInitiatedRef.current = true;
-  setLocalSearchText(value); // Update local state immediately
-  debouncedFnRef.current?.(value); // Debounce actual search
-};
-```
+  - The [`SearchSidebarWidget`](../../../../../frontend/src/components/annotator/search_widget/SearchSidebarWidget.tsx) component
+  - The unified [`FloatingDocumentInput`](../../../../../frontend/src/components/knowledge_base/document/FloatingDocumentInput.tsx) component
+- User input is managed through controlled input with debouncing
 
 ### 2. State Management
-- Search text is stored in Jotai atoms defined in `DocumentAtom.tsx`:
-```typescript
-export const textSearchStateAtom = atom<{
-  matches: (TextSearchTokenResult | TextSearchSpanResult)[];
-  selectedIndex: number;
-}>({
-  matches: [],
-  selectedIndex: 0,
-});
-
-export const searchTextAtom = atom<string>("");
-```
+- Search text is stored in Jotai atoms defined in [`DocumentAtom.tsx`](../../../../../frontend/src/components/annotator/context/DocumentAtom.tsx):
+  - `textSearchStateAtom` - stores matches and selected index
+  - `searchTextAtom` - stores the current search text
 
 ### 3. Search Processing
 - The search text is processed to find matching tokens in the PDF document
@@ -46,72 +30,18 @@ export const searchTextAtom = atom<string>("");
 ### 4. Result Rendering
 Results are rendered through a chain of components:
 
-1. `SearchResult` Component:
-```typescript
-export const SearchResult = ({
-  total_results,
-  showBoundingBox,
-  hidden,
-  pageInfo,
-  match,
-  showInfo = true,
-  scrollIntoView = false,
-}) => {
-  // Renders both the highlight boundary and tokens
-  return (
-    <>
-      <ResultBoundary {...props}>
-        <SearchSelectionTokens {...tokenProps} />
-      </ResultBoundary>
-    </>
-  );
-};
-```
+1. [`SearchResult`](../../../../../frontend/src/components/annotator/display/components/SearchResult.tsx) - Renders both the highlight boundary and tokens
 
-2. `ResultBoundary` Component:
-- Creates the yellow highlight box around matched text
-```typescript
-export const ResultBoundary = ({
-  id,
-  hidden,
-  showBoundingBox,
-  scrollIntoView,
-  color,
-  bounds,
-  children,
-}) => {
-  // Renders a boundary box with specified dimensions and styling
-};
-```
+2. [`ResultBoundary`](../../../../../frontend/src/components/annotator/display/components/ResultBoundary.tsx) - Creates the yellow highlight box around matched text
 
-3. `SearchSelectionTokens` Component:
-- Renders individual token highlights
-```typescript
-export const SearchSelectionTokens = ({
-  color,
-  hidden,
-  pageInfo,
-  tokens,
-}) => {
-  // Renders highlighted spans for each matching token
-};
-```
+3. [`SearchSelectionTokens`](../../../../../frontend/src/components/annotator/display/components/SelectionTokens.tsx) - Renders individual token highlights
 
 ### 5. Visual Styling
-- Matched text is highlighted using styled components:
-```typescript
-export const TokenSpan = styled.span.attrs<TokenSpanProps>((props) => ({
-  style: {
-    background: props.color,
-    opacity: props.hidden ? 0.0 : props.highOpacity ? 0.4 : 0.2,
-    position: 'absolute',
-    // ... positioning styles
-  }
-}));
-```
+- Matched text is highlighted using styled components
+- See [`TokenSpan`](../../../../../frontend/src/components/annotator/display/components/Tokens.tsx) for the styling implementation
 
 ### 6. Integration with Unified Feed
-- Search results can also be displayed in the `UnifiedContentFeed` when in feed mode
+- Search results can also be displayed in the [`UnifiedContentFeed`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx) when in feed mode
 - The feed shows search results alongside annotations, notes, and relationships
 - Clicking a search result in the feed navigates to that location in the document
 

@@ -217,7 +217,7 @@ Add a new section on **Agent/LLM Permission Model** covering:
 1. **WebSocket Consumer Layer:**
    - `UnifiedAgentConsumer` validates user has READ permission on corpus/document
    - Anonymous users only allowed for public resources
-   - Legacy consumers (DocumentQueryConsumer, CorpusQueryConsumer) deprecated
+   - Legacy consumers (DocumentQueryConsumer, CorpusQueryConsumer) have been removed
 
 2. **Tool-Level Permission Enforcement:**
    - Tools flagged with `requires_write_permission` filtered for read-only users
