@@ -446,7 +446,6 @@ class Corpus(TreeNode):
         path: str = None,
         user=None,
         folder=None,
-        content: bytes = None,
         **doc_kwargs,
     ):
         """
@@ -465,7 +464,6 @@ class Corpus(TreeNode):
             path: The filesystem path within the corpus (auto-generated if not provided)
             user: The user performing the operation (required)
             folder: Optional CorpusFolder to place the document in
-            content: DEPRECATED - use import_content() for content-based imports
             **doc_kwargs: Override properties for the corpus copy
 
         Returns:
@@ -486,13 +484,6 @@ class Corpus(TreeNode):
         if not document:
             raise ValueError(
                 "Document is required. For content-based imports, use import_content()"
-            )
-
-        # Handle deprecated content parameter
-        if content is not None:
-            logger.warning(
-                "content parameter is deprecated in add_document(). "
-                "Use import_content() for content-based imports."
             )
 
         from opencontractserver.documents.models import Document, DocumentPath
@@ -714,46 +705,6 @@ class Corpus(TreeNode):
         )
 
         return doc, status, doc_path
-
-    def _create_text_document_internal(
-        self,
-        content: bytes,
-        filename: str,
-        user,
-        path: str = None,
-        folder=None,
-        file_type: str = "text/plain",
-        **doc_kwargs,
-    ) -> tuple:
-        """
-        DEPRECATED: Use import_content() instead.
-
-        This method is kept for backwards compatibility but no longer supports
-        versioning. New code should use import_content() which routes all file
-        types through the unified versioning pipeline.
-        """
-        logger.warning(
-            "_create_text_document_internal is deprecated. "
-            "Use import_content() for full versioning support."
-        )
-        return self.import_content(
-            content=content,
-            user=user,
-            path=path,
-            folder=folder,
-            filename=filename,
-            file_type=file_type,
-            **doc_kwargs,
-        )
-
-    # Backwards compatibility alias
-    def create_text_document(self, *args, **kwargs):
-        """DEPRECATED: Use import_content() instead."""
-        logger.warning(
-            "create_text_document is deprecated. "
-            "Use import_content() for full versioning support."
-        )
-        return self.import_content(*args, **kwargs)
 
     def remove_document(self, document=None, path: str = None, user=None):
         """
