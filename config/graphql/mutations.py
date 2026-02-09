@@ -138,10 +138,6 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
-from opencontractserver.constants.document_processing import (
-    DEFAULT_DOCUMENT_PATH_PREFIX,
-    MAX_FILENAME_LENGTH,
-)
 from opencontractserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from opencontractserver.corpuses.models import (
     Corpus,
@@ -1743,188 +1739,80 @@ class UploadDocument(graphene.Mutation):
 
             user = info.context.user
 
-            # If uploading directly to a corpus, use import_content() for deduplication
-            if add_to_corpus_id is not None and kind in [
-                "application/pdf",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ]:
+            # Determine target corpus and folder
+            if add_to_corpus_id is not None:
                 try:
                     corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
+                except Corpus.DoesNotExist:
+                    return UploadDocument(
+                        message="Corpus not found",
+                        ok=False,
+                        document=None,
+                    )
 
-                    # Check if user has permission to add documents to this corpus
-                    if not user_has_permission_for_obj(
-                        user, corpus, PermissionTypes.EDIT
-                    ):
+                if not user_has_permission_for_obj(user, corpus, PermissionTypes.EDIT):
+                    return UploadDocument(
+                        message="You don't have permission to add documents to this corpus",
+                        ok=False,
+                        document=None,
+                    )
+
+                folder = None
+                if add_to_folder_id is not None:
+                    try:
+                        folder_pk = from_global_id(add_to_folder_id)[1]
+                        folder = CorpusFolder.objects.get(pk=folder_pk, corpus=corpus)
+                    except CorpusFolder.DoesNotExist:
                         return UploadDocument(
-                            message="You don't have permission to add documents to this corpus",
+                            message="Folder not found in the specified corpus",
                             ok=False,
                             document=None,
                         )
-
-                    # Resolve folder if provided
-                    folder = None
-                    if add_to_folder_id is not None:
-                        folder_pk = from_global_id(add_to_folder_id)[1]
-                        folder = CorpusFolder.objects.get(pk=folder_pk, corpus=corpus)
-
-                    # Generate path from filename
-                    safe_filename = "".join(
-                        c if c.isalnum() or c in "-_." else "_"
-                        for c in filename[:MAX_FILENAME_LENGTH]
-                    )
-                    doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
-
-                    # Use import_content for content-based deduplication
-                    document, status, path_record = corpus.import_content(
-                        content=file_bytes,
-                        path=doc_path,
-                        user=user,
-                        folder=folder,
-                        title=title,
-                        description=description,
-                        file_type=kind,
-                        custom_meta=custom_meta,
-                        backend_lock=True,
-                        is_public=make_public,
-                        slug=slug,
-                    )
-
-                    # Set permissions on the document (may be new or reused)
-                    set_permissions_for_obj_to_user(
-                        user, document, [PermissionTypes.CRUD]
-                    )
-
-                    if status == "created":
-                        logger.info(
-                            f"[UPLOAD] Created new document {document.id} in corpus {corpus.id}"
-                        )
-                    elif status == "updated":
-                        logger.info(
-                            f"[UPLOAD] Updated document at path {doc_path} in corpus {corpus.id}"
-                        )
-                    else:
-                        logger.info(
-                            f"[UPLOAD] Document {document.id} status: {status} in corpus {corpus.id}"
-                        )
-
-                    # Note: folder assignment is already handled by corpus.import_content()
-                    # which passes folder to import_document() -> DocumentPath creation
-
-                except Exception as e:
-                    logger.error(f"[UPLOAD] Error importing to corpus: {e}")
-                    message = f"Importing to corpus failed due to error: {e}"
-                    return UploadDocument(message=message, ok=False, document=None)
             else:
-                # No corpus specified - upload to user's personal corpus
-                # This ensures all documents belong to a corpus
-                if kind in [
-                    "application/pdf",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                ]:
-                    try:
-                        # Get or create user's personal corpus
-                        personal_corpus = Corpus.get_or_create_personal_corpus(user)
-                        logger.info(
-                            f"[UPLOAD] Using personal corpus {personal_corpus.id} "
-                            f"for user {user.id}"
-                        )
+                corpus = Corpus.get_or_create_personal_corpus(user)
+                folder = None
 
-                        # Generate path from filename
-                        safe_filename = "".join(
-                            c if c.isalnum() or c in "-_." else "_"
-                            for c in filename[:MAX_FILENAME_LENGTH]
-                        )
-                        doc_path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/{safe_filename}"
+            # Import document - import_content handles path generation
+            # from filename and routes based on file_type
+            try:
+                document, status, path_record = corpus.import_content(
+                    content=file_bytes,
+                    user=user,
+                    filename=filename,
+                    folder=folder,
+                    file_type=kind,
+                    title=title,
+                    description=description,
+                    custom_meta=custom_meta,
+                    backend_lock=True,
+                    is_public=make_public,
+                    slug=slug,
+                )
 
-                        # Use import_content for consistency with corpus uploads
-                        document, status, path_record = personal_corpus.import_content(
-                            content=file_bytes,
-                            path=doc_path,
-                            user=user,
-                            folder=None,  # No folder in personal corpus by default
-                            title=title,
-                            description=description,
-                            file_type=kind,
-                            custom_meta=custom_meta,
-                            backend_lock=True,
-                            is_public=make_public,
-                            slug=slug,
-                        )
+                set_permissions_for_obj_to_user(user, document, [PermissionTypes.CRUD])
 
-                        # Set permissions on the document
-                        set_permissions_for_obj_to_user(
-                            user, document, [PermissionTypes.CRUD]
-                        )
+                logger.info(
+                    f"[UPLOAD] Document {document.id} ({status}) "
+                    f"uploaded to corpus {corpus.id}"
+                )
 
-                        logger.info(
-                            f"[UPLOAD] Document {document.id} ({status}) "
-                            f"uploaded to personal corpus {personal_corpus.id}"
-                        )
+            except Exception as e:
+                logger.error(f"[UPLOAD] Error importing document: {e}")
+                message = f"Upload failed due to error: {e}"
+                return UploadDocument(message=message, ok=False, document=None)
 
-                    except Exception as e:
-                        logger.error(
-                            f"[UPLOAD] Error uploading to personal corpus: {e}"
-                        )
-                        message = f"Upload failed due to error: {e}"
-                        return UploadDocument(message=message, ok=False, document=None)
-
-                elif kind in ["text/plain", "application/txt"]:
-                    try:
-                        # Get or create user's personal corpus for text files too
-                        personal_corpus = Corpus.get_or_create_personal_corpus(user)
-                        logger.info(
-                            f"[UPLOAD] Using personal corpus {personal_corpus.id} "
-                            f"for text file upload by user {user.id}"
-                        )
-
-                        # Use import_content() which routes based on file_type
-                        document, status, doc_path = personal_corpus.import_content(
-                            content=file_bytes,
-                            user=user,
-                            filename=filename,
-                            file_type=kind,
-                            title=title,
-                            description=description,
-                            custom_meta=custom_meta,
-                            backend_lock=True,
-                            is_public=make_public,
-                            slug=slug,
-                        )
-
-                        set_permissions_for_obj_to_user(
-                            user, document, [PermissionTypes.CRUD]
-                        )
-
-                        logger.info(
-                            f"[UPLOAD] Text document {document.id} uploaded "
-                            f"to personal corpus {personal_corpus.id}"
-                        )
-
-                    except Exception as e:
-                        logger.error(
-                            f"[UPLOAD] Error uploading text to personal corpus: {e}"
-                        )
-                        message = f"Upload failed due to error: {e}"
-                        return UploadDocument(message=message, ok=False, document=None)
-
-                # Handle linking to extract (corpus case already handled above)
-                if add_to_extract_id is not None:
-                    try:
-                        extract = Extract.objects.get(
-                            Q(pk=from_global_id(add_to_extract_id)[1])
-                            & (Q(creator=user) | Q(is_public=True))
-                        )
-                        if extract.finished is not None:
-                            raise ValueError(
-                                "Cannot add document to a finished extract"
-                            )
-                        transaction.on_commit(lambda: extract.documents.add(document))
-                    except Exception as e:
-                        message = f"Adding to extract failed due to error: {e}"
+            # Handle linking to extract (mutually exclusive with corpus)
+            if add_to_extract_id is not None:
+                try:
+                    extract = Extract.objects.get(
+                        Q(pk=from_global_id(add_to_extract_id)[1])
+                        & (Q(creator=user) | Q(is_public=True))
+                    )
+                    if extract.finished is not None:
+                        raise ValueError("Cannot add document to a finished extract")
+                    transaction.on_commit(lambda: extract.documents.add(document))
+                except Exception as e:
+                    message = f"Adding to extract failed due to error: {e}"
 
             ok = True
 
