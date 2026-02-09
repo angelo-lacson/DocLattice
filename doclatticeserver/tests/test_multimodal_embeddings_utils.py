@@ -242,7 +242,7 @@ class TestGetAnnotationImageTokens(TestCase):
                 json.dumps(pawls_data).encode(), name="test.pawls"
             ),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document=document, user=self.user)
         return document
 
     def test_no_document_returns_empty(self):
@@ -358,7 +358,7 @@ class TestGetAnnotationImageTokens(TestCase):
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document=document, user=self.user)
         annotation = Annotation.objects.create(
             document=document,
             corpus=self.corpus,
@@ -514,7 +514,7 @@ class TestGenerateMultimodalEmbedding(TestCase):
                 json.dumps(pawls_data).encode(), name="test.pawls"
             ),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document=document, user=self.user)
         return document
 
     def test_text_only_modality_uses_text_embedding(self):
@@ -524,7 +524,7 @@ class TestGenerateMultimodalEmbedding(TestCase):
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document=document, user=self.user)
 
         annotation = Annotation.objects.create(
             document=document,
@@ -634,7 +634,7 @@ class TestGenerateMultimodalEmbedding(TestCase):
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document=document, user=self.user)
 
         annotation = Annotation.objects.create(
             document=document,
@@ -746,7 +746,7 @@ class TestGenerateMultimodalEmbedding(TestCase):
             creator=self.user,
             pdf_file=ContentFile(b"fake pdf content", name="test.pdf"),
         )
-        self.corpus.documents.add(document)
+        self.corpus.add_document(document=document, user=self.user)
 
         annotation = Annotation.objects.create(
             document=document,

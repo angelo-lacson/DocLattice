@@ -28,8 +28,8 @@ graph TD
         C --> C2[TextThumbnailGenerator]
 
         D --> D1[MicroserviceEmbedder]
-        D --> D2[ModernBERTEmbedder]
-        D --> D3[MinnModernBERTEmbedder]
+        D --> D2[CLIPMicroserviceEmbedder]
+        D --> D3[QwenMicroserviceEmbedder]
         D --> D4[MultimodalMicroserviceEmbedder]
 
         PP --> PP1[PDFRedactor]
@@ -168,12 +168,11 @@ Current implementations:
 
 **Text-only Embedders:**
 - **MicroserviceEmbedder**: Generates 384-dim embeddings using a sentence-transformer microservice
-- **ModernBERTEmbedder**: Local ModernBERT embeddings generation
-- **MinnModernBERTEmbedder**: Minnesota Case Law specialized ModernBERT embedder
-- **CloudMinnModernBERTEmbedder**: Cloud-based Minnesota ModernBERT embedder
 
 **Multimodal Embedders:**
 - **[MultimodalMicroserviceEmbedder](multimodal_embedder.md)**: Microservice-based embedder supporting both text and images. Works with any embedding service implementing the standard API. Configurable host, port, and vector dimensions.
+- **CLIPMicroserviceEmbedder**: CLIP-based multimodal embedder via microservice
+- **QwenMicroserviceEmbedder**: Qwen-based multimodal embedder via microservice
 
 #### Supported Embedding Dimensions
 

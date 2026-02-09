@@ -47,12 +47,14 @@ class TestAnnotationAdmin(TestCase):
         # Create a corpus
         cls.corpus = Corpus.objects.create(title="Test Corpus", creator=cls.superuser)
 
-        # Create a document
-        cls.document = Document.objects.create(
-            corpus=cls.corpus,
+        # Create a document and add to corpus - add_document returns corpus-isolated copy
+        original_doc = Document.objects.create(
             title="Test Document",
             creator=cls.superuser,
             is_public=True,
+        )
+        cls.document, _, _ = cls.corpus.add_document(
+            document=original_doc, user=cls.superuser
         )
 
         # Create an annotation label

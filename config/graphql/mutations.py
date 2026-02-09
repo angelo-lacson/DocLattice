@@ -1263,8 +1263,7 @@ class StartCorpusFork(graphene.Mutation):
             )
 
             # Now remove references to related objects on our new object, as these point to original docs and labels
-            # Note: New corpus has no DocumentPath records yet, so this is safe
-            corpus.documents.clear()
+            # Note: New forked corpus has no DocumentPath records yet, so no document cleanup needed
             corpus.label_set = None
 
             # Copy docs, annotations, folders, relationships, and metadata using async task
@@ -1444,10 +1443,10 @@ class StartCorpusExport(graphene.Mutation):
                     except Exception:  # If invalid, just skip for safety
                         pass
 
-            # Collect doc_ids in the corpus for the tasks
-            doc_ids = Document.objects.filter(corpus=corpus_pk).values_list(
-                "id", flat=True
-            )
+            # Collect doc_ids in the corpus via DocumentPath
+            doc_ids = DocumentPath.objects.filter(
+                corpus_id=corpus_pk, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
             logger.info(f"Doc ids: {list(doc_ids)}")
 
             # Build the Celery chain: label lookups → burn doc annotations → package → optional post-proc
@@ -3415,12 +3414,16 @@ class UpdateDocumentRelationship(graphene.Mutation):
                         )
 
                     # Validate both documents are in the new corpus
-                    docs_in_corpus = corpus.documents.filter(
-                        id__in=[
-                            doc_relationship.source_document_id,
-                            doc_relationship.target_document_id,
-                        ]
-                    ).count()
+                    docs_in_corpus = (
+                        corpus.get_documents()
+                        .filter(
+                            id__in=[
+                                doc_relationship.source_document_id,
+                                doc_relationship.target_document_id,
+                            ]
+                        )
+                        .count()
+                    )
                     if docs_in_corpus != 2:
                         return UpdateDocumentRelationship(
                             ok=False,

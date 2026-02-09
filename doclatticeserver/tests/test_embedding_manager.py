@@ -49,7 +49,7 @@ class EmbeddingManagerStoreEmbeddingTest(TestCase):
             ),
             backend_lock=False,
         )
-        self.corpus.documents.add(self.document)
+        self.corpus.add_document(document=self.document, user=self.user)
 
     def tearDown(self):
         Embedding.objects.filter(embedder_path__startswith="test.").delete()
@@ -169,7 +169,7 @@ class EmbeddingManagerConcurrentTest(TransactionTestCase):
             ),
             backend_lock=False,
         )
-        self.corpus.documents.add(self.document)
+        self.corpus.add_document(document=self.document, user=self.user)
 
     def tearDown(self):
         Embedding.objects.filter(embedder_path__startswith="test.concurrent").delete()
@@ -290,7 +290,7 @@ class EmbeddingManager2048DimensionTest(TestCase):
             ),
             backend_lock=False,
         )
-        self.corpus.documents.add(self.document)
+        self.corpus.add_document(document=self.document, user=self.user)
 
     def tearDown(self):
         Embedding.objects.filter(embedder_path__startswith="test.2048").delete()
@@ -415,7 +415,7 @@ class HasEmbeddingMixinDimensionTest(TestCase):
             ),
             backend_lock=False,
         )
-        self.corpus.documents.add(self.document)
+        self.corpus.add_document(document=self.document, user=self.user)
 
     def tearDown(self):
         Embedding.objects.filter(embedder_path__startswith="test.mixin").delete()

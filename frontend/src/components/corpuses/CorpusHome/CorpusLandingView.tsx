@@ -126,8 +126,8 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
     ? formatDistanceToNow(new Date(fullCorpus.created), { addSuffix: true })
     : "recently";
 
-  // Get document count from original corpus prop (which has documents field)
-  const docCount = corpus.documents?.totalCount;
+  // Get document count from corpus prop
+  const docCount = corpus.documentCount;
 
   // Get plain text description - prefer markdown content, fallback to plain description
   // For hero subtitle, we use plain text only (no markdown rendering)

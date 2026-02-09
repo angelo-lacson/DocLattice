@@ -116,7 +116,7 @@ export const cache = new InMemoryCache({
         // Without these, Apollo creates new object references on every query,
         // triggering cache updates and infinite re-renders
         assignmentSet: relayStylePagination(),
-        corpusSet: relayStylePagination(),
+        pathRecords: relayStylePagination(),
         annotationSet: relayStylePagination(),
         docLabelAnnotations: relayStylePagination(),
         metadataAnnotations: relayStylePagination(),
