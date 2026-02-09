@@ -123,6 +123,10 @@ const StyledCard = styled.div`
     opacity: 0.6;
     background: #f9fafb;
   }
+
+  &.failed {
+    border-color: #fca5a5;
+  }
 `;
 
 // Clean card header
@@ -412,48 +416,52 @@ const Tag = styled.span`
 // ===============================================
 // PROCESSING FAILURE COMPONENTS
 // ===============================================
-const FailureDimmer = styled.div`
+const ThumbnailFailureOverlay = styled.div`
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(4px);
-  z-index: 10;
-  gap: 8px;
-  padding: 16px;
-  border-radius: 12px;
+  background: rgba(254, 226, 226, 0.8);
+  z-index: 5;
+  border-radius: inherit;
 `;
 
-const FailureIconWrapper = styled.div`
-  width: 40px;
-  height: 40px;
+const FailureIconCircle = styled.div`
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: #fef2f2;
-  border: 2px solid #fecaca;
+  background: #dc2626;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #dc2626;
+  color: white;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+
+  .icon {
+    margin: 0 !important;
+    font-size: 20px;
+  }
 `;
 
-const FailureLabel = styled.div`
-  font-size: 0.8125rem;
-  font-weight: 600;
+const FailureBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #fef2f2;
   color: #dc2626;
-  text-align: center;
-`;
-
-const FailureMessage = styled.div`
+  border: 1px solid #fecaca;
+  border-radius: 4px;
   font-size: 0.6875rem;
-  color: #94a3b8;
-  text-align: center;
-  max-width: 200px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+`;
+
+const FailureDescription = styled.div`
+  font-size: 0.75rem;
+  color: #b91c1c;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -466,7 +474,7 @@ const ClassicRetryButton = styled.button`
   align-items: center;
   gap: 6px;
   padding: 6px 16px;
-  border: 1px solid #dc2626;
+  border: 1px solid #ef4444;
   border-radius: 6px;
   background: white;
   color: #dc2626;
@@ -476,7 +484,7 @@ const ClassicRetryButton = styled.button`
   transition: all 0.15s ease;
 
   &:hover {
-    background: #dc2626;
+    background: #ef4444;
     color: white;
   }
 
@@ -521,18 +529,17 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
   >(RETRY_DOCUMENT_PROCESSING, {
     update: (cache, { data }) => {
       if (data?.retryDocumentProcessing?.ok) {
-        const doc = data.retryDocumentProcessing.document;
-        if (doc) {
-          cache.modify({
-            id: cache.identify({ __typename: "DocumentType", id: doc.id }),
-            fields: {
-              backendLock: () => doc.backendLock,
-              processingStatus: () => doc.processingStatus,
-              processingError: () => doc.processingError,
-              canRetry: () => doc.canRetry,
-            },
-          });
-        }
+        // Optimistically set processing state — the Celery task updates the DB
+        // asynchronously, so the mutation response still has the old values.
+        cache.modify({
+          id: cache.identify({ __typename: "DocumentType", id }),
+          fields: {
+            backendLock: () => true,
+            processingStatus: () => "PENDING",
+            processingError: () => null,
+            canRetry: () => false,
+          },
+        });
       }
     },
   });
@@ -585,6 +592,10 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
       (event.target as HTMLElement).closest(".action-button") ||
       (event.target as HTMLElement).closest(".selection-control")
     ) {
+      return;
+    }
+
+    if (isFailed) {
       return;
     }
 
@@ -667,7 +678,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
     <StyledCard
       className={`noselect ${is_open ? "is-open" : ""} ${
         is_selected ? "is-selected" : ""
-      } ${isProcessing ? "backend-locked" : ""}`}
+      } ${isProcessing ? "backend-locked" : ""} ${isFailed ? "failed" : ""}`}
       onClick={isProcessing ? undefined : cardClickHandler}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -676,27 +687,6 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         <Dimmer active inverted style={{ borderRadius: "12px" }}>
           <Loader size="small">Processing...</Loader>
         </Dimmer>
-      )}
-      {isFailed && (
-        <FailureDimmer role="alert">
-          <FailureIconWrapper aria-hidden="true">
-            <Icon name="warning sign" style={{ margin: 0 }} />
-          </FailureIconWrapper>
-          <FailureLabel>Processing Failed</FailureLabel>
-          {processingError && (
-            <FailureMessage>{processingError}</FailureMessage>
-          )}
-          {canRetry && (
-            <ClassicRetryButton
-              onClick={handleRetry}
-              disabled={retryLoading}
-              aria-label="Retry processing this document"
-            >
-              <Icon name="redo" style={{ margin: 0 }} aria-hidden="true" />
-              {retryLoading ? "Retrying..." : "Retry Processing"}
-            </ClassicRetryButton>
-          )}
-        </FailureDimmer>
       )}
 
       <SelectionControl
@@ -721,15 +711,29 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             />
           </>
         )}
-        {fileType && <FileTypeBadge>{fileType}</FileTypeBadge>}
+        {isFailed && (
+          <ThumbnailFailureOverlay role="alert" aria-label="Processing failed">
+            <FailureIconCircle aria-hidden="true">
+              <Icon name="warning sign" />
+            </FailureIconCircle>
+          </ThumbnailFailureOverlay>
+        )}
+        {fileType && !isFailed && <FileTypeBadge>{fileType}</FileTypeBadge>}
       </CardHeader>
 
       <ContentSection>
         <Title>{title || "Untitled Document"}</Title>
 
-        <Description>{description || "No description available"}</Description>
+        {isFailed ? (
+          <FailureDescription>
+            {processingError || "Document processing failed"}
+          </FailureDescription>
+        ) : (
+          <Description>{description || "No description available"}</Description>
+        )}
 
         <MetadataSection>
+          {isFailed && <FailureBadge>Processing Failed</FailureBadge>}
           {pageCount && (
             <MetaPill>
               <Icon name="file outline" />
@@ -817,6 +821,17 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             >
               <Icon name="remove circle" />
             </ActionButton>
+          )}
+
+          {isFailed && canRetry && (
+            <ClassicRetryButton
+              onClick={handleRetry}
+              disabled={retryLoading}
+              aria-label="Retry processing this document"
+            >
+              <Icon name="redo" style={{ margin: 0 }} aria-hidden="true" />
+              {retryLoading ? "Retrying..." : "Retry"}
+            </ClassicRetryButton>
           )}
         </ActionBar>
       </ContentSection>
