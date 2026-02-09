@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
 - **Migration `0025_alter_userexport_format_add_v2`**: Adds `OPEN_CONTRACTS_V2` to UserExport format choices
 
+#### Edge Case Tests for Personal Corpus (Issue #839)
+- **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
+- **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
+- **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
 ### Fixed
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
