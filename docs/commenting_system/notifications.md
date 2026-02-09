@@ -341,17 +341,61 @@ When a user posts in a thread:
 
 Moderation methods (`lock()`, `soft_delete_message()`, etc.) automatically create `ModerationAction` records, which trigger notifications via signals. Tests should NOT manually create duplicate `ModerationAction` records.
 
+## Real-Time WebSocket Notifications
+
+Notifications are delivered instantly via WebSocket, eliminating polling delays.
+
+**Full Documentation**: See [Real-Time Notification System](../frontend/real-time-notifications.md)
+
+### Key Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| Backend Consumer | `config/websocket/consumers/notification_updates.py` | WebSocket connection handler |
+| Frontend Hook | `frontend/src/hooks/useNotificationWebSocket.ts` | React hook for WebSocket management |
+| Broadcasting | `opencontractserver/notifications/signals.py` | `broadcast_notification_via_websocket()` |
+| ASGI Routing | `config/asgi.py` | WebSocket URL routing |
+
+### WebSocket Endpoint
+
+```
+wss://host/ws/notification-updates/?token={auth_token}
+```
+
+### Message Types (Server to Client)
+
+- `CONNECTED` - Connection established with session ID
+- `NOTIFICATION_CREATED` - New notification (badge, reply, mention, etc.)
+- `NOTIFICATION_UPDATED` - Read status changed
+- `NOTIFICATION_DELETED` - Notification removed
+- `pong` / `heartbeat_ack` - Connection health responses
+
+### Features
+
+- **Instant delivery**: Zero latency vs 30-second polling
+- **Auto-reconnection**: Exponential backoff (3s, 6s, 12s, 24s)
+- **Heartbeat**: 30-second ping/pong for connection health
+- **User isolation**: User-specific channel groups prevent IDOR
+- **Mobile support**: Reconnects on page visibility change
+
+### Tests
+
+**Location**: `opencontractserver/tests/test_notification_websocket.py`
+
+```bash
+docker compose -f test.yml run django pytest opencontractserver/tests/test_notification_websocket.py -v
+```
+
 ## Future Enhancements
 
-Potential improvements (not currently implemented):
+Potential improvements:
 
-1. **Real-time Delivery**: WebSocket/GraphQL subscriptions for instant notifications
-2. **Email Notifications**: Configurable email digests
-3. **Push Notifications**: Mobile/browser push notifications
-4. **Notification Preferences**: User-configurable notification settings
-5. **Notification Grouping**: Batch similar notifications (e.g., "5 new votes")
-6. **Notification History**: Archive/search old notifications
-7. **Notification Templates**: Customizable notification messages
+1. **Email Notifications**: Configurable email digests
+2. **Push Notifications**: Mobile/browser push notifications
+3. **Notification Preferences**: User-configurable notification settings
+4. **Notification Grouping**: Batch similar notifications (e.g., "5 new votes")
+5. **Notification History**: Archive/search old notifications
+6. **Notification Templates**: Customizable notification messages
 
 ## Related Documentation
 
@@ -364,3 +408,8 @@ Potential improvements (not currently implemented):
 
 For complete API documentation including all fields and filters, see:
 - [GraphQL API Documentation](./graphql_api.md#notification-system)
+- [Real-Time WebSocket Protocol](../frontend/real-time-notifications.md)
+
+---
+
+*Last Updated: 2026-01-09*

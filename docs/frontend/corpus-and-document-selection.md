@@ -1,106 +1,248 @@
-## Frontend: Selected Corpus and Document State (with deep links)
+# Frontend: Corpus and Document Selection
 
-This document explains how URL deep linking and selection state work for corpuses and documents. It covers the router routes, the global URL→state synchronizer, where we push navigation, and how components fetch and hydrate data.
+**Last Updated:** 2026-01-09
 
-### Terminology
-- **Selected corpus**: The corpus the user is viewing or interacting with (e.g., its dashboard, documents, annotations, analyses, extracts, or settings).
-- **Selected document**: A single document the user has opened for viewing or actions.
-- **Reactive vars**: Apollo client-side reactive variables defined in `frontend/src/graphql/cache` (e.g., `openedCorpus`, `openedDocument`, and filter/search vars).
+This document explains how corpus and document selection works in the frontend, including URL routing, state synchronization, and how components consume selection state.
 
----
-
-## Selected Corpus (Router-based in `Corpuses.tsx`)
-
-The selected corpus is synchronized with the URL and reactive vars. The URL is the source of truth, and deep-links are supported.
-
-- **Route param**: `:corpusId` (via `useParams`) indicates the intended selected corpus.
-- **Two-way sync**:
-  - Route → reactive var: When `corpusId` changes, the app sets `openedCorpus(...)` to match (from the list if present, or via a lazy fetch).
-  - Reactive var → route: When `openedCorpus` changes, the app updates the URL to `/corpuses/:corpusId` (or `/corpuses` if cleared), guarding against flicker during initial loading.
-- **Deep-link hydration**: If the selected corpus is not in the current paginated list, the app lazily fetches the corpus metadata by id and then hydrates `openedCorpus`.
-- **Dependent data refresh**:
-  - When `openedCorpus` updates, the app refreshes: corpus metadata via `GET_CORPUS_METADATA` and corpus stats via `GET_CORPUS_STATS` (polling every 5 seconds).
-  - Search/query view state remains local UI state and is not reflected in the URL.
-- **Auth guard**: On login/logout, the app refetches corpuses, refreshes metadata if authenticated, and clears selection and navigates to `/corpuses` on logout.
-
-Key flows in `frontend/src/views/Corpuses.tsx`:
-
-- Route `corpusId` → match in fetched list → `openedCorpus(match)`; otherwise trigger lazy fetch by id.
-- On lazy fetch completion → `openedCorpus(corpusByIdData.corpus)`.
-- On `opened_corpus` change → update URL and refresh metadata/stats; clear route if selection is removed after loading.
-
-Result: The selected corpus is fully deep-linkable and shareable via URL, and switching corpuses drives the rest of the UI and data fetching.
+For the complete routing system architecture, see [routing_system.md](routing_system.md).
 
 ---
 
-## Selected Document (Router-based KB + reactive filters in lists)
+## Overview
 
-We support deep links that open the Knowledge Base for a document with or without a corpus context. The global documents list and filters remain driven by reactive vars.
+OpenContracts uses a **centralized routing architecture** where `CentralRouteManager` is the single source of truth for all URL-to-state synchronization. Components are "dumb consumers" that read reactive variables and never manipulate routing state directly.
 
-- Routes
-  - `/corpus/:corpusId/document/:documentId` → opens KB with corpus context.
-  - `/documents/:documentId` → opens KB in corpus-less mode.
-  - Both support `?ann=id1,id2` to pre-select annotations.
-- Lists and filters
-  - The global list (`views/Documents.tsx`) uses reactive vars for filtering: `filterToCorpus`, `filterToLabelId`, `filterToLabelsetId`, `documentSearchTerm`.
-  - Clicking a document navigates to the appropriate KB route (see State → URL navigation below).
+### Key Principles
 
----
-
-## Routing overview
-
-- `/corpuses` → Corpus list and dashboard navigation (`views/Corpuses.tsx`).
-- `/corpuses/:corpusId` or `/corpus/:corpusId` → Selected corpus views (same component).
-- `/corpus/:corpusId/document/:documentId` → KB with corpus (`components/routes/DocumentKBRoute.tsx`).
-- `/documents` → Global documents list (`views/Documents.tsx`).
-- `/documents/:documentId` → KB without corpus (`components/routes/DocumentKBDocRoute.tsx`).
-- Optional query `?ann=id1,id2,...` on both document routes seeds selected annotation ids.
-
-## URL → state synchronization
-
-- Implemented centrally in `hooks/RouteStateSync.ts` and installed in `App.tsx`.
-- On route changes, it updates reactive vars:
-  - `/corpuses/:corpusId` or `/corpus/:corpusId` → `openedCorpus({ id })`.
-  - `/corpus/:corpusId/document/:documentId` → `openedCorpus({ id })`, `openedDocument({ id })`.
-  - `/documents/:documentId` → `openedDocument({ id })`.
-  - `?ann=` → `selectedAnnotationIds([...])`.
-- Navigating away clears selections where appropriate.
-
-Note: This hook is one-way (URL → state) to avoid feedback loops. Components push navigation explicitly.
-
-## State → URL navigation
-
-- Corpuses (`views/Corpuses.tsx`)
-  - Ensures URL reflects `opened_corpus`; fetches metadata by id on deep link (`GET_CORPUS_METADATA`) and polls stats (`GET_CORPUS_STATS`).
-- Documents
-  - `CorpusDocumentCards.tsx` handles click navigation:
-    - If a corpus is active → `/corpus/:corpusId/document/:documentId`.
-    - Otherwise → `/documents/:documentId`.
-  - The `DocumentItem` context menu “Open Knowledge Base” follows the same rules.
-
-## Deep-link hydration and data fetching
-
-- KB with corpus: `DocumentKBRoute` renders `DocumentKnowledgeBase` with `documentId` and `corpusId`, which queries `GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS` and hydrates document, annotations, relationships, and corpus labels.
-- KB without corpus: `DocumentKBDocRoute` renders `DocumentKnowledgeBase` with just `documentId`, which queries `GET_DOCUMENT_ONLY` and loads the viewer with editing disabled and an “Add to Corpus” ribbon.
-- Both pass `onClose={() => navigate(-1)}` so closing returns to the previous route, and `DocumentKnowledgeBase` clears `openedDocument(null)` on unmount.
-
-## Documents list and filters
-
-- `views/Documents.tsx` builds `GET_DOCUMENTS` variables from reactive vars (`filterToCorpus`, `filterToLabelsetId`, `filterToLabelId`, `documentSearchTerm`) and refetches on changes.
-- While any document has `backendLock`, a timer refetches periodically to surface progress.
-
-## Quick reference
-
-- Routes: `/corpuses`, `/corpuses/:corpusId` (or `/corpus/:corpusId`), `/corpus/:corpusId/document/:documentId`, `/documents`, `/documents/:documentId`, optional `?ann=...`.
-- URL → state: `useRouteStateSync` updates `openedCorpus`, `openedDocument`, `selectedAnnotationIds`.
-- State → URL: components navigate explicitly (corpus selection; document clicks/context menu).
-- Deep-link hydration: corpuses `GET_CORPUS_METADATA`; documents with corpus `GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS`; documents without corpus `GET_DOCUMENT_ONLY` (uses `corpusSet`).
+1. **URL is the source of truth** - All selection state is encoded in the URL
+2. **CentralRouteManager owns all routing state** - Only this component sets entity reactive vars
+3. **Components read, never write** - Use `useReactiveVar()` to read, URL utilities to update
+4. **Slug-based URLs** - SEO-friendly paths with automatic ID-to-slug redirection
 
 ---
 
-## Quick reference
+## URL Patterns
 
-- Selected corpus: URL param `:corpusId` ↔ `openedCorpus` with lazy hydration; dependent metadata/stats refreshed and polled.
-- Selected document: Full deep-linking support via routes `/corpus/:corpusId/document/:documentId` and `/documents/:documentId` with optional `?ann=id1,id2` annotation selection.
-- Document filters: `filterToCorpus`, `filterToLabelId`, `filterToLabelsetId`, and `documentSearchTerm` feed `GET_DOCUMENTS` variables.
+### Entity Routes
 
+| Pattern | Example | Purpose |
+|---------|---------|---------|
+| `/c/:userIdent/:corpusIdent` | `/c/john/my-corpus` | Open corpus |
+| `/d/:userIdent/:docIdent` | `/d/john/my-document` | Open standalone document |
+| `/d/:userIdent/:corpusIdent/:docIdent` | `/d/john/my-corpus/doc` | Open document within corpus context |
+| `/e/:userIdent/:extractIdent` | `/e/john/extract-123` | Open extract |
+| `/c/:userIdent/:corpusIdent/discussions/:threadId` | `/c/john/corpus/discussions/thread-1` | Open thread in corpus |
+
+### Query Parameters
+
+Selection and visualization state is encoded in query parameters:
+
+| Parameter | Purpose | Example |
+|-----------|---------|---------|
+| `?ann=` | Selected annotation IDs | `?ann=123,456` |
+| `?analysis=` | Selected analysis IDs | `?analysis=789` |
+| `?extract=` | Selected extract IDs | `?extract=101` |
+| `?folder=` | Filter by folder in corpus | `?folder=folder-123` |
+| `?tab=` | Active tab | `?tab=discussions` |
+| `?thread=` | Sidebar thread selection | `?thread=thread-456` |
+| `?message=` | Highlight specific message | `?message=msg-789` |
+| `?homeView=` | Corpus home view (about/toc) | `?homeView=toc` |
+| `?structural=` | Show structural annotations | `?structural=true` |
+| `?selectedOnly=` | Show only selected annotation | `?selectedOnly=true` |
+| `?boundingBoxes=` | Show bounding boxes | `?boundingBoxes=true` |
+| `?labels=` | Label display mode | `?labels=ALWAYS` |
+
+---
+
+## State Flow Architecture
+
+The routing system operates in four phases, all handled by CentralRouteManager:
+
+```
+URL Change → Phase 1: Parse Path → Phase 2: Parse Query Params
+                ↓                          ↓
+          Entity Resolution          Reactive Var Updates
+                ↓                          ↓
+          openedCorpus()            selectedAnnotationIds()
+          openedDocument()          showStructuralAnnotations()
+          openedExtract()           etc.
+          openedThread()
+                ↓
+          Phase 3: Canonical Redirect (if needed)
+                ↓
+          Phase 4: Sync Reactive Vars → URL (bidirectional)
+```
+
+### Reactive Variables
+
+**Entity State** (set by Phase 1):
+- `openedCorpus` - Currently opened corpus object
+- `openedDocument` - Currently opened document object
+- `openedExtract` - Currently opened extract object
+- `openedThread` - Currently opened thread object
+
+**Selection State** (set by Phase 2, synced by Phase 4):
+- `selectedAnnotationIds` - Selected annotation IDs
+- `selectedAnalysesIds` - Selected analysis IDs
+- `selectedExtractIds` - Selected extract IDs
+- `selectedFolderId` - Selected folder within corpus
+- `selectedTab` - Active tab
+- `selectedThreadId` - Thread selected in sidebar
+- `selectedMessageId` - Message to highlight
+
+**Visualization State** (set by Phase 2, synced by Phase 4):
+- `showStructuralAnnotations` - Show structural annotations
+- `showSelectedAnnotationOnly` - Show only selected annotation
+- `showAnnotationBoundingBoxes` - Show bounding boxes
+- `showAnnotationLabels` - Label display behavior
+
+See [CentralRouteManager.tsx](../../frontend/src/routing/CentralRouteManager.tsx) for implementation details.
+
+---
+
+## Corpus Selection
+
+When a user navigates to a corpus URL (e.g., `/c/john/my-corpus`):
+
+1. **CentralRouteManager Phase 1** parses the URL and resolves the corpus via GraphQL
+2. Sets `openedCorpus(corpusData)` reactive variable
+3. Route component (`CorpusLandingRoute`) reads `openedCorpus` and renders the corpus view
+
+### Deep Linking
+
+Direct navigation to corpus URLs is fully supported:
+- Slug-based URLs are resolved via `RESOLVE_CORPUS_BY_SLUGS_FULL` query
+- ID-based URLs are automatically redirected to canonical slug URLs
+- Query parameters (tab, folder, etc.) are preserved through redirects
+
+### Key Files
+
+- Routing logic: [CentralRouteManager.tsx](../../frontend/src/routing/CentralRouteManager.tsx)
+- Reactive vars: [cache.ts](../../frontend/src/graphql/cache.ts) (`openedCorpus`, `selectedFolderId`, etc.)
+- Navigation utilities: [navigationUtils.ts](../../frontend/src/utils/navigationUtils.ts)
+
+---
+
+## Document Selection
+
+When a user navigates to a document URL:
+
+### Standalone Document (`/d/:user/:doc`)
+
+1. **CentralRouteManager Phase 1** resolves document via `RESOLVE_DOCUMENT_BY_SLUGS_FULL`
+2. Sets `openedDocument(docData)` and `openedCorpus(null)`
+3. `DocumentLandingRoute` renders `DocumentKnowledgeBase` in standalone mode
+
+### Document in Corpus (`/d/:user/:corpus/:doc`)
+
+1. **CentralRouteManager Phase 1** resolves both corpus and document via `RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL`
+2. Sets both `openedCorpus(corpusData)` and `openedDocument(docData)`
+3. `DocumentLandingRoute` renders `DocumentKnowledgeBase` with corpus context
+
+### Annotation Selection
+
+Query parameters allow deep linking to specific annotations:
+
+```
+/d/john/corpus/doc?ann=123,456&structural=true&labels=ALWAYS
+```
+
+This will:
+- Open the document
+- Select annotations 123 and 456
+- Enable structural annotation display
+- Set labels to always visible
+
+### Key Files
+
+- Route component: [DocumentLandingRoute.tsx](../../frontend/src/components/routes/DocumentLandingRoute.tsx)
+- Knowledge base: [DocumentKnowledgeBase.tsx](../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx)
+
+---
+
+## Folder Navigation
+
+Folders provide hierarchical organization within a corpus. The folder system uses a combination of URL query parameters and Jotai atoms.
+
+### URL-Driven Folder Selection
+
+The `?folder=` query parameter controls which folder is being viewed:
+
+```
+/c/john/my-corpus?tab=documents&folder=folder-123
+```
+
+- CentralRouteManager Phase 2 parses `?folder=` and sets `selectedFolderId` reactive var
+- Folder state atoms in [folderAtoms.ts](../../frontend/src/atoms/folderAtoms.ts) manage tree expansion and UI state
+
+### Folder State Architecture
+
+The folder system uses Jotai atoms for local UI state:
+
+- `selectedFolderIdAtom` - Currently selected folder
+- `folderListAtom` - Flat folder list from server
+- `folderTreeAtom` - Derived tree structure
+- `expandedFolderIdsAtom` - Persisted expansion state
+
+---
+
+## How Components Consume Selection State
+
+Components follow a strict read-only pattern:
+
+```typescript
+// Read entity state
+const corpus = useReactiveVar(openedCorpus);
+const document = useReactiveVar(openedDocument);
+
+// Read selection state
+const selectedAnns = useReactiveVar(selectedAnnotationIds);
+const folderId = useReactiveVar(selectedFolderId);
+
+// NEVER do this:
+// openedCorpus(someCorpus);  // WRONG - only CentralRouteManager sets this
+```
+
+### Updating Selection State
+
+Components must update state by modifying the URL, which triggers CentralRouteManager to update reactive vars:
+
+```typescript
+import { updateAnnotationSelectionParams } from "../utils/navigationUtils";
+
+// Update annotation selection
+const handleSelectAnnotation = (id: string) => {
+  updateAnnotationSelectionParams(location, navigate, {
+    annotationIds: [id],
+  });
+};
+```
+
+### Navigation
+
+Use navigation utilities to generate URLs and navigate:
+
+```typescript
+import { getDocumentUrl, navigateToDocument } from "../utils/navigationUtils";
+
+// Generate URL
+const url = getDocumentUrl(document, corpus, { annotationIds: ["123"] });
+
+// Navigate (smart - checks if already there)
+navigateToDocument(document, corpus, navigate, location.pathname);
+```
+
+---
+
+## Summary
+
+| Concept | Implementation |
+|---------|---------------|
+| Corpus/Document selection | CentralRouteManager resolves from URL, sets reactive vars |
+| URL sync | Bidirectional: URL drives state, state updates URL |
+| Component access | Read-only via `useReactiveVar()` |
+| State updates | Via URL utilities (`updateAnnotationSelectionParams`, etc.) |
+| Deep linking | Full support with annotation/visualization params |
+| Folder navigation | URL `?folder=` param + Jotai atoms for UI state |
+
+For complete architecture details, see [routing_system.md](routing_system.md).

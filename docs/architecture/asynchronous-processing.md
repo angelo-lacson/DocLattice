@@ -75,25 +75,17 @@ if not locked:
 
 **Location**: `opencontractserver/corpuses/signals.py`
 
-#### `m2m_changed` on Corpus.documents
+#### Direct Invocation (No M2M Signals)
 
-Triggers when documents are added to a corpus:
+> **Note**: The `Corpus.documents` M2M field has been removed (Issue #835). Corpus action
+> triggering is now handled directly in `Corpus.add_document()`, `import_document()`, and
+> `set_doc_lock_state()` — not via signals.
 
-```python
-@receiver(m2m_changed, sender=Corpus.documents.through)
-def handle_document_added_to_corpus(sender, instance, action, pk_set, **kwargs):
-    if action == "post_add":
-        # Filter to only ready documents (backend_lock=False)
-        ready_doc_ids = Document.objects.filter(
-            id__in=pk_set,
-            backend_lock=False,
-        ).values_list("id", flat=True)
+When a document is added to a corpus via `Corpus.add_document()`, actions are triggered
+directly if the document is ready (`backend_lock=False`). Locked documents are handled
+by `set_doc_lock_state()` when processing completes.
 
-        if ready_doc_ids:
-            process_corpus_action.si(...).apply_async()
-```
-
-#### `document_processing_complete` Handler
+#### `set_doc_lock_state()` — Deferred Action Handler
 
 Triggers deferred corpus actions when document processing completes:
 

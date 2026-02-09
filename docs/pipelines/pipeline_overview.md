@@ -1,5 +1,7 @@
 # OpenContracts Pipeline Architecture
 
+*Last Updated: 2026-01-09*
+
 The OpenContracts pipeline system is a modular and extensible architecture for processing documents through various stages: parsing, thumbnail generation, and embedding. This document provides an overview of the system architecture and guides you through creating new pipeline components.
 
 ## Architecture Overview
@@ -71,22 +73,7 @@ PREFERRED_EMBEDDERS = {
 
 ### Parsers
 
-Parsers inherit from `BaseParser` and implement the `parse_document` method:
-
-```python
-class BaseParser(ABC):
-    title: str = ""
-    description: str = ""
-    author: str = ""
-    dependencies: list[str] = []
-    supported_file_types: list[FileTypeEnum] = []
-
-    @abstractmethod
-    def parse_document(
-        self, user_id: int, doc_id: int, **kwargs
-    ) -> Optional[OpenContractDocExport]:
-        pass
-```
+Parsers inherit from [`BaseParser`](../../opencontractserver/pipeline/base/parser.py) and implement the `parse_document` method. See the base class for the full interface.
 
 Current implementations:
 - **DoclingParser**: Advanced PDF parser using machine learning (REST microservice)
@@ -95,30 +82,14 @@ Current implementations:
 
 ### Thumbnailers
 
-Thumbnailers inherit from `BaseThumbnailGenerator` and implement the `_generate_thumbnail` method:
-
-```python
-class BaseThumbnailGenerator(ABC):
-    title: str = ""
-    description: str = ""
-    author: str = ""
-    dependencies: list[str] = []
-    supported_file_types: list[FileTypeEnum] = []
-
-    @abstractmethod
-    def _generate_thumbnail(
-        self,
-        txt_content: Optional[str],
-        pdf_bytes: Optional[bytes],
-        height: int = 300,
-        width: int = 300,
-    ) -> Optional[tuple[bytes, str]]:
-        pass
-```
+Thumbnailers inherit from [`BaseThumbnailGenerator`](../../opencontractserver/pipeline/base/thumbnailer.py) and implement the `_generate_thumbnail` method. See the base class for the full interface.
 
 Current implementations:
-- **PdfThumbnailGenerator**: Generates thumbnails from PDF first pages
-- **TextThumbnailGenerator**: Creates text-based preview images
+
+| Class | Description | Source |
+|-------|-------------|--------|
+| **PdfThumbnailGenerator** | Generates thumbnails from PDF first pages | [`pdf_thumbnailer.py`](../../opencontractserver/pipeline/thumbnailers/pdf_thumbnailer.py) |
+| **TextThumbnailGenerator** | Creates text-based preview images | [`text_thumbnailer.py`](../../opencontractserver/pipeline/thumbnailers/text_thumbnailer.py) |
 
 ### Embedders
 
@@ -182,6 +153,7 @@ The OpenContracts database supports the following embedding dimensions via dedic
 - **768 dimensions** (`vector_768`): Used by MultimodalMicroserviceEmbedder (CLIP ViT-L-14)
 - **1024 dimensions** (`vector_1024`): Available for future embedders
 - **1536 dimensions** (`vector_1536`): Used by OpenAI text-embedding-3-small and similar models
+- **2048 dimensions** (`vector_2048`): Available for mid-range high-dimensional embedders
 - **3072 dimensions** (`vector_3072`): Used by OpenAI text-embedding-3-large and large models
 - **4096 dimensions** (`vector_4096`): Available for high-dimensional embedders
 

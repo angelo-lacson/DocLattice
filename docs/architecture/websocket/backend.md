@@ -1,308 +1,227 @@
 # Backend WebSocket Implementation
 
+**Last Updated:** 2026-02-09
+
 ## Overview
 
-The backend WebSocket implementation consists of two Django Channels consumers that handle real-time chat functionality. Both consumers follow similar patterns but serve different contexts:
+The backend WebSocket implementation consists of Django Channels consumers that handle real-time chat functionality, thread updates, and notifications. Three consumers serve distinct purposes:
 
-- **DocumentQueryConsumer**: Handles document-specific conversations
-- **CorpusQueryConsumer**: Handles corpus-wide conversations
+| Consumer | Purpose | URL Pattern | Source |
+|----------|---------|-------------|--------|
+| **UnifiedAgentConsumer** | All agent chat contexts (corpus, document, standalone) | `ws/agent-chat/?corpus_id=X&document_id=X` | [`unified_agent_conversation.py`](../../../config/websocket/consumers/unified_agent_conversation.py) |
+| **ThreadUpdatesConsumer** | Real-time thread/conversation updates (read-only) | `ws/thread-updates/?conversation_id=X` | [`thread_updates.py`](../../../config/websocket/consumers/thread_updates.py) |
+| **NotificationUpdatesConsumer** | Real-time user notifications (read-only) | `ws/notification-updates/` | [`notification_updates.py`](../../../config/websocket/consumers/notification_updates.py) |
+
+> **Migration Note:** The legacy `DocumentQueryConsumer`, `CorpusQueryConsumer`, and `StandaloneDocumentQueryConsumer` have been removed. All agent chat functionality is now handled by `UnifiedAgentConsumer`. See [`config/asgi.py:83`](../../../config/asgi.py) for details.
 
 ## Architecture
 
 ### Consumer Base Pattern
 
-Both consumers inherit from `AsyncWebsocketConsumer` and implement:
+All consumers inherit from `AsyncWebsocketConsumer` and implement:
 
 1. **Connection lifecycle management**
 2. **Authentication and authorization**
-3. **Agent lifecycle management**
-4. **Message processing and streaming**
-5. **Error handling and logging**
+3. **Message processing and streaming**
+4. **Error handling and logging**
 
 ### Agent Integration
 
-Consumers use the unified LLM agent API (`opencontractserver.llms.agents`) which provides:
+`UnifiedAgentConsumer` uses the unified LLM agent API (`opencontractserver.llms.agents`) which provides:
 
-- Framework-agnostic agent creation
+- Framework-agnostic agent creation via `agents.for_document()` / `agents.for_corpus()`
 - Conversation persistence
-- Streaming response handling
+- Streaming response handling via async generators
 - Tool approval workflows
 
-## DocumentQueryConsumer
+## UnifiedAgentConsumer
 
-**Location:** `config/websocket/consumers/document_conversation.py`
+**Source:** [`config/websocket/consumers/unified_agent_conversation.py`](../../../config/websocket/consumers/unified_agent_conversation.py)
+
+A single WebSocket consumer that handles all agent conversation contexts. This DRY refactoring consolidated ~1500 lines of duplicated code from three legacy consumers into a single, maintainable consumer with dynamic agent selection.
+
+### Query Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `corpus_id` | One of corpus_id or document_id | GraphQL ID for corpus context |
+| `document_id` | One of corpus_id or document_id | GraphQL ID for document context |
+| `conversation_id` | No | GraphQL ID for existing conversation (resumes session) |
+| `agent_id` | No | GraphQL ID for specific agent (uses default if omitted) |
+
+### Agent Selection Logic
+
+1. If `agent_id` provided: Use that specific `AgentConfiguration` (must be `is_active=True`)
+2. If `document_id` provided: Use `default-document-agent` (GLOBAL)
+3. If `corpus_id` provided: Use `default-corpus-agent` (GLOBAL)
+4. Otherwise: Reject connection (no context)
 
 ### Connection Flow
 
-```python
-async def connect(self) -> None:
-    # 1. Generate unique session ID
-    self.session_id = str(uuid.uuid4())
+See [`connect()`](../../../config/websocket/consumers/unified_agent_conversation.py) in the source. The flow is:
 
-    # 2. Authenticate user
-    if not self.scope["user"].is_authenticated:
-        await self.close(code=4000)
-        return
+1. Generate unique session ID
+2. Parse query parameters (`corpus_id`, `document_id`, `agent_id`, `conversation_id`)
+3. Validate at least one context provided (else close with `WS_CLOSE_UNAUTHENTICATED`)
+4. Check authentication (allows anonymous for public resources)
+5. Load and validate corpus/document — authenticated users need read permission, anonymous users require `is_public`
+6. Resolve agent configuration (priority: explicit `agent_id` > document default > corpus default)
+7. Accept connection
 
-    # 3. Extract and validate corpus/document IDs
-    graphql_corpus_id = extract_websocket_path_id(self.scope["path"], "corpus")
-    graphql_doc_id = extract_websocket_path_id(self.scope["path"], "document")
+### Agent Initialization
 
-    # 4. Load database records
-    self.corpus = await Corpus.objects.aget(id=self.corpus_id)
-    self.document = await Document.objects.aget(id=self.document_id)
-
-    # 5. Accept connection
-    await self.accept()
-```
-
-### Agent Creation
-
-Agents are created lazily on first query:
-
-```python
-# Parse optional conversation ID from query string
-query_params = urllib.parse.parse_qs(query_string)
-conversation_id = query_params.get("load_from_conversation_id", [None])[0]
-
-# Create agent with context
-agent_kwargs = {
-    "document": self.document,
-    "corpus": self.corpus,
-    "user_id": self.scope["user"].id,
-}
-
-if conversation_id:
-    agent_kwargs["conversation_id"] = int(from_global_id(conversation_id)[1])
-
-self.agent = await agents.for_document(
-    **agent_kwargs,
-    framework=settings.LLMS_DEFAULT_AGENT_FRAMEWORK
-)
-```
+See [`_initialize_agent()`](../../../config/websocket/consumers/unified_agent_conversation.py) — agents are created **lazily** on first query. The method builds `agent_kwargs` from the connection context and calls either `agents.for_document()` or `agents.for_corpus()` depending on what was provided. For standalone documents (no corpus), it auto-discovers an embedder from existing structural annotations.
 
 ### Message Processing
 
-The `receive()` method handles incoming messages:
-
-```python
-async def receive(self, text_data: str) -> None:
-    # 1. Parse JSON payload
-    text_data_json = json.loads(text_data)
-
-    # 2. Handle approval decisions
-    if "approval_decision" in text_data_json:
-        await self._handle_approval_decision(text_data_json)
-        return
-
-    # 3. Extract user query
-    user_query = text_data_json.get("query", "").strip()
-
-    # 4. Create agent if needed
-    if self.agent is None:
-        # Agent creation logic...
-
-    # 5. Stream response
-    async for event in self.agent.stream(user_query):
-        # Event processing logic...
-```
+See [`receive()`](../../../config/websocket/consumers/unified_agent_conversation.py) — handles two message types: approval decisions (`approval_decision` key) and user queries (`query` key). On first query, the agent is lazily initialized and a background task generates a conversation title.
 
 ### Event Processing
 
 The consumer maps agent events to WebSocket messages:
 
-```python
-# Content streaming
-if isinstance(event, ContentEvent):
-    await self.send_standard_message(
-        msg_type="ASYNC_CONTENT",
-        content=event.content,
-        data={"message_id": event.llm_message_id},
-    )
+| Agent Event | WebSocket Message Type | Description |
+|-------------|----------------------|-------------|
+| `ContentEvent` | `ASYNC_CONTENT` | Streaming content chunk |
+| `ThoughtEvent` | `ASYNC_THOUGHT` | Agent reasoning/thought |
+| `SourceEvent` | `ASYNC_SOURCES` | Source citations |
+| `ApprovalNeededEvent` | `ASYNC_APPROVAL_NEEDED` | Tool requires user approval |
+| `ApprovalResultEvent` | `ASYNC_APPROVAL_RESULT` | Approval decision echoed back |
+| `ResumeEvent` | `ASYNC_RESUME` | Agent resuming after approval |
+| `ErrorEvent` | `ASYNC_ERROR` | Error during generation |
+| `FinalEvent` | `ASYNC_FINISH` | Complete response with sources and timeline |
 
-# Source citations
-elif isinstance(event, SourceEvent):
-    await self.send_standard_message(
-        msg_type="ASYNC_SOURCES",
-        content="",
-        data={
-            "message_id": event.llm_message_id,
-            "sources": [s.to_dict() for s in event.sources],
-        },
-    )
-
-# Tool approval requests
-elif isinstance(event, ApprovalNeededEvent):
-    await self.send_standard_message(
-        msg_type="ASYNC_APPROVAL_NEEDED",
-        content="",
-        data={
-            "message_id": event.llm_message_id,
-            "pending_tool_call": event.pending_tool_call,
-        },
-    )
-```
+All events include `message_id` for frontend correlation. An `ASYNC_START` message is sent once message IDs are available.
 
 ### Approval Workflow
 
-The approval system allows users to authorize tool execution:
+See [`_handle_approval_decision()`](../../../config/websocket/consumers/unified_agent_conversation.py) — extracts `approval_decision` (bool) and `llm_message_id` from the payload, then calls `agent.resume_with_approval()` which streams the continued response through the same event processing pipeline.
 
-```python
-async def _handle_approval_decision(self, payload: dict[str, Any]) -> None:
-    approved = bool(payload.get("approval_decision"))
-    llm_msg_id = payload.get("llm_message_id")
+### Standalone Document Support
 
-    # Resume agent with approval decision
-    async for event in self.agent.resume_with_approval(
-        llm_msg_id, approved, stream=True
-    ):
-        # Process resumed events...
-```
+When no corpus is provided, the consumer:
+1. Supports both authenticated and anonymous users (for public documents)
+2. Automatically discovers an existing embedder from the document's structural annotations
+3. Falls back to `settings.DEFAULT_EMBEDDER` if no embedder found
 
-## CorpusQueryConsumer
+---
 
-**Location:** `config/websocket/consumers/corpus_conversation.py`
+## ThreadUpdatesConsumer
 
-### Key Differences from Document Consumer
+**Source:** [`config/websocket/consumers/thread_updates.py`](../../../config/websocket/consumers/thread_updates.py)
 
-1. **Simpler path structure**: Only requires corpus ID
-2. **Corpus-level agent**: Uses `agents.for_corpus()` factory
-3. **No approval workflow**: Corpus queries typically don't require tool approval
-4. **Embedder configuration**: Respects corpus `preferred_embedder` setting
+WebSocket consumer for real-time thread/conversation updates. Clients subscribe to receive:
 
-### Connection Flow
+- Agent response streaming tokens
+- Tool call notifications
+- Response completion events
+- Error notifications
 
-```python
-async def connect(self) -> None:
-    # 1. Authenticate user
-    if not self.scope["user"].is_authenticated:
-        await self.close(code=4000)
-        return
+**This consumer is read-only** - it only broadcasts updates from Celery tasks. The actual agent responses are generated by the `generate_agent_response` task.
 
-    # 2. Extract and validate corpus ID
-    graphql_corpus_id = extract_websocket_path_id(self.scope["path"], "corpus")
-    self.corpus_id = int(from_global_id(graphql_corpus_id)[1])
-    self.corpus = await Corpus.objects.aget(id=self.corpus_id)
+### Query Parameters
 
-    # 3. Accept connection
-    await self.accept()
-```
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `conversation_id` | Yes | GraphQL ID for the conversation to watch |
 
-### Agent Creation
+### Channel Layer Events
 
-```python
-agent_kwargs = {
-    "corpus": self.corpus_id,
-    "user_id": self.scope["user"].id,
-}
+The consumer handles these channel layer messages from Celery tasks:
 
-if conversation_id:
-    agent_kwargs["conversation_id"] = conversation_id
+| Event | Handler Method | Description |
+|-------|----------------|-------------|
+| `agent_stream_start` | `agent_stream_start()` | Agent starting to generate response |
+| `agent_stream_token` | `agent_stream_token()` | Streaming token from agent |
+| `agent_tool_call` | `agent_tool_call()` | Agent calling a tool |
+| `agent_stream_complete` | `agent_stream_complete()` | Agent finished response |
+| `agent_stream_error` | `agent_stream_error()` | Error during generation |
 
-if getattr(self.corpus, "preferred_embedder", None):
-    agent_kwargs["embedder"] = self.corpus.preferred_embedder
+### Message Types (Server to Client)
 
-self.agent = await agents.for_corpus(
-    **agent_kwargs,
-    framework=settings.LLMS_DEFAULT_AGENT_FRAMEWORK
-)
-```
+- `CONNECTED` - Connection established with conversation_id and session_id
+- `AGENT_STREAM_START` - Agent started generating (includes agent metadata)
+- `AGENT_STREAM_TOKEN` - Individual token from streaming response
+- `AGENT_TOOL_CALL` - Agent invoked a tool
+- `AGENT_STREAM_COMPLETE` - Full response with content, sources, timeline
+- `AGENT_STREAM_ERROR` - Error occurred during generation
 
-## Common Utilities
+### Client Messages
 
-### Path ID Extraction
+- `ping` - Returns `pong` for connection health check
+- `heartbeat` - Returns `heartbeat_ack` with session_id
 
-Both consumers use `extract_websocket_path_id()` to parse GraphQL IDs from URLs:
+### Permission Model
 
-```python
-from config.websocket.utils.extract_ids import extract_websocket_path_id
+For conversations with BOTH `chat_with_corpus` AND `chat_with_document` set (doc-in-corpus threads), user must have access to BOTH the corpus AND the document (AND logic).
 
-# Extract from path like "/ws/corpus/Q29ycHVzOjE=/document/RG9jdW1lbnQ6MQ==/"
-corpus_id = extract_websocket_path_id(path, "corpus")
-doc_id = extract_websocket_path_id(path, "document")
-```
+---
+
+## NotificationUpdatesConsumer
+
+**Source:** [`config/websocket/consumers/notification_updates.py`](../../../config/websocket/consumers/notification_updates.py)
+
+WebSocket consumer for real-time notification updates. Clients subscribe to receive instant notifications about:
+
+- Badge awards (BADGE)
+- Message replies (REPLY, THREAD_REPLY)
+- Mentions (MENTION)
+- Accepted answers (ACCEPTED)
+- Moderation actions (THREAD_LOCKED, MESSAGE_DELETED, etc.)
+
+**This consumer is read-only** - it only broadcasts updates when notifications are created or updated via signals.
+
+Related to **Issue #637**: Migrate badge notifications from polling to WebSocket/SSE.
+
+### Connection
+
+No query parameters required - uses authenticated user from WebSocket auth middleware.
+
+**URL:** `ws://localhost:8000/ws/notification-updates/`
+
+### Security
+
+- **User-specific channel groups**: `notification_user_{user_id}`
+- **IDOR prevention**: Only shows notifications for authenticated user
+- **Token validation**: Via WebSocket auth middleware
+- Rejects unauthenticated connections (code 4001)
+
+### Channel Layer Events
+
+| Event | Handler Method | Description |
+|-------|----------------|-------------|
+| `notification_created` | `notification_created()` | New notification created |
+| `notification_updated` | `notification_updated()` | Notification read status changed |
+| `notification_deleted` | `notification_deleted()` | Notification deleted |
+
+### Message Types (Server to Client)
+
+- `CONNECTED` - Connection established with user_id and session_id
+- `NOTIFICATION_CREATED` - New notification with full details
+- `NOTIFICATION_UPDATED` - Read status change
+- `NOTIFICATION_DELETED` - Notification removed
+
+### Client Messages
+
+- `ping` - Returns `pong` for connection health check
+- `heartbeat` - Returns `heartbeat_ack` with session_id
+
+---
+
+## Common Patterns
 
 ### Standard Message Format
 
-Both consumers use `send_standard_message()` for consistent output:
+All consumers use `send_standard_message()` (see [source](../../../config/websocket/consumers/unified_agent_conversation.py)) which sends a JSON object with `type`, `content`, and `data` keys.
 
-```python
-async def send_standard_message(
-    self,
-    msg_type: MessageType,
-    content: str = "",
-    data: dict[str, Any] | None = None,
-) -> None:
-    await self.send(
-        json.dumps({
-            "type": msg_type,
-            "content": content,
-            "data": data or {},
-        })
-    )
-```
+### Error Handling
 
-## Error Handling
+- **Connection errors** (invalid IDs, missing resources): Accept, send error via `SYNC_CONTENT`, then close with appropriate code
+- **Processing errors**: Log with `exc_info=True`, send error message, keep connection open
 
-### Connection Errors
+### Logging Strategy
 
-```python
-try:
-    # Connection logic...
-except (ValueError, Corpus.DoesNotExist):
-    await self.accept()
-    await self.send_standard_message(
-        msg_type="SYNC_CONTENT",
-        content="",
-        data={"error": "Invalid or missing corpus_id"},
-    )
-    await self.close(code=4000)
-```
-
-### Processing Errors
-
-```python
-try:
-    # Message processing...
-except Exception as e:
-    logger.error(f"[Session {self.session_id}] Error: {e}", exc_info=True)
-    await self.send_standard_message(
-        msg_type="SYNC_CONTENT",
-        content="",
-        data={"error": f"Error during processing: {e}"},
-    )
-```
-
-## Logging Strategy
-
-### Session-Based Logging
-
-All log messages include session IDs for traceability:
-
-```python
-logger.debug(f"[Session {self.session_id}] Agent created for doc {self.document_id}")
-logger.error(f"[Session {self.session_id}] Error during API call: {str(e)}", exc_info=True)
-```
-
-### Log Levels
-
-- **DEBUG**: Connection events, agent creation, message flow
-- **INFO**: Successful operations, conversation lifecycle
-- **WARNING**: Unexpected but handled conditions
-- **ERROR**: Failures requiring investigation
-
-### Consumer Lifecycle Logging
-
-```python
-def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    self.consumer_id = uuid.uuid4()
-    logger.debug(f"[Consumer {self.consumer_id}] __init__ called.")
-
-async def disconnect(self, close_code: int) -> None:
-    logger.debug(f"[Consumer {self.consumer_id} | Session {self.session_id}] disconnect() called.")
-    self.agent = None  # Clean up for GC
-```
+All log messages include session IDs (`[Session {self.session_id}]`) for traceability. Log levels: DEBUG (connection events, message flow), INFO (successful operations), WARNING (handled conditions), ERROR (failures requiring investigation).
 
 ## Performance Considerations
 
@@ -326,10 +245,7 @@ async def disconnect(self, close_code: int) -> None:
 
 ```python
 # Agent framework selection
-LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"  # or another defined framework enum
-
-# OpenAI API configuration
-OPENAI_API_KEY = "sk-..."
+LLMS_DEFAULT_AGENT_FRAMEWORK = "pydantic_ai"
 
 # Channels configuration
 CHANNEL_LAYERS = {
@@ -342,17 +258,23 @@ CHANNEL_LAYERS = {
 
 ### URL Routing
 
-WebSocket consumers are registered in Django Channels routing:
+WebSocket consumers are registered in `config/asgi.py`:
 
 ```python
-# config/routing.py
-from django.urls import path
-from config.websocket.consumers import DocumentQueryConsumer, CorpusQueryConsumer
+from config.websocket.consumers.unified_agent_conversation import UnifiedAgentConsumer
+from config.websocket.consumers.thread_updates import ThreadUpdatesConsumer
+from config.websocket.consumers.notification_updates import NotificationUpdatesConsumer
 
 websocket_urlpatterns = [
-    path("ws/corpus/<str:corpus_id>/document/<str:document_id>/", DocumentQueryConsumer.as_asgi()),
-    path("ws/corpus/<str:corpus_id>/", CorpusQueryConsumer.as_asgi()),
+    re_path(r"ws/agent-chat/$", UnifiedAgentConsumer.as_asgi()),
+    re_path(r"ws/thread-updates/$", ThreadUpdatesConsumer.as_asgi()),
+    re_path(r"ws/notification-updates/$", NotificationUpdatesConsumer.as_asgi()),
 ]
+
+application = ProtocolTypeRouter({
+    "http": http_application,
+    "websocket": JWTAuthMiddleware(URLRouter(websocket_urlpatterns)),
+})
 ```
 
 ## Testing Considerations
@@ -363,10 +285,13 @@ Consumers can be tested using Django Channels testing utilities:
 
 ```python
 from channels.testing import WebsocketCommunicator
-from myapp.consumers import DocumentQueryConsumer
+from config.websocket.consumers.unified_agent_conversation import UnifiedAgentConsumer
 
-async def test_document_consumer():
-    communicator = WebsocketCommunicator(DocumentQueryConsumer.as_asgi(), "/ws/test/")
+async def test_unified_consumer():
+    communicator = WebsocketCommunicator(
+        UnifiedAgentConsumer.as_asgi(),
+        "/ws/agent-chat/?corpus_id=Q29ycHVzVHlwZTox"
+    )
     connected, subprotocol = await communicator.connect()
     assert connected
 
@@ -390,9 +315,12 @@ End-to-end tests should verify:
 4. Agent state persistence
 5. Database record creation
 
+---
+
 ## Related Files
 
-- `opencontractserver/llms/agents/`: Agent implementations
-- `opencontractserver/conversations/models.py`: Database models
-- `config/websocket/utils/`: Utility functions
-- `config/routing.py`: WebSocket URL configuration
+- [`config/asgi.py`](../../../config/asgi.py): WebSocket URL routing configuration
+- [`opencontractserver/llms/agents/`](../../../opencontractserver/llms/agents/): Agent implementations
+- [`opencontractserver/conversations/models.py`](../../../opencontractserver/conversations/models.py): Database models
+- [`config/websocket/utils/`](../../../config/websocket/utils/): Utility functions (auth helpers, ID extraction)
+- [`config/websocket/middleware.py`](../../../config/websocket/middleware.py): WebSocket authentication middleware

@@ -1,6 +1,6 @@
 # Extracting Structured Data from Documents
 
-> **Status: Current implementation as of JSv4/frontend-cleanup branch**
+> **Last Updated: 2026-01-09**
 
 ## Overview
 
@@ -17,23 +17,11 @@ Everything is orchestrated by two Celery tasks:
 
 ## Data Models
 
+All models are defined in [`opencontractserver/extracts/models.py`](../../opencontractserver/extracts/models.py).
+
 ### Fieldset
 
 Groups related columns together. Each Fieldset represents a specific configuration of data fields to extract.
-
-```python
-class Fieldset(BaseOCModel):
-    name = models.CharField(max_length=256)
-    description = models.TextField()
-
-    # Optional: Link to corpus for metadata schemas
-    corpus = models.OneToOneField(
-        "corpuses.Corpus",
-        related_name="metadata_schema",
-        null=True,
-        blank=True
-    )
-```
 
 **Key features:**
 - Defines the schema for extraction
@@ -42,60 +30,27 @@ class Fieldset(BaseOCModel):
 
 ### Column
 
-Defines individual data fields to extract. Each column specifies what to extract, criteria, and output format.
+Defines individual data fields to extract. Each column can be configured for either LLM-based extraction or manual entry.
 
-```python
-class Column(BaseOCModel):
-    name = models.CharField(max_length=256)
-    fieldset = models.ForeignKey('Fieldset', related_name='columns')
-
-    # Extraction configuration
-    query = models.TextField(null=True)           # The extraction prompt
-    match_text = models.TextField(null=True)       # Alternative to query
-    must_contain_text = models.TextField(null=True)  # Constraint
-    limit_to_label = models.CharField(max_length=512, null=True)
-
-    # Output configuration
-    output_type = models.TextField()               # Python type as string
-    extract_is_list = models.BooleanField(default=False)
-
-    # Task selection
-    task_name = models.CharField(
-        default="opencontractserver.tasks.data_extract_tasks.doc_extract_query_task"
-    )
-
-    # Metadata fields for manual entry
-    data_type = models.CharField(choices=METADATA_DATA_TYPES, null=True)
-    validation_config = NullableJSONField(null=True)
-```
-
-**Column configuration:**
-- **`query`** or **`match_text`**: The extraction prompt (one required)
+**Extraction configuration:**
+- **`query`** or **`match_text`**: The extraction prompt (one required for extraction columns)
 - **`output_type`**: Python type as string (e.g., "str", "int", "list[str]")
 - **`extract_is_list`**: Wraps the type in `List[]`
 - **`must_contain_text`**: Only extract from sections containing this text
 - **`limit_to_label`**: Only extract from annotations with this label
 - **`instructions`**: Additional context for extraction
-- **`data_type`**: For manual entry fields (STRING, INTEGER, DATE, etc.)
-- **`validation_config`**: JSON configuration for field validation
+
+**Manual entry configuration:**
+- **`is_manual_entry`**: When `True`, column is for manual metadata entry (no LLM extraction)
+- **`data_type`**: Structured data type (STRING, INTEGER, DATE, BOOLEAN, CHOICE, etc.)
+- **`validation_config`**: JSON configuration for field validation rules
+- **`default_value`**: Default value for manual entry fields
+- **`help_text`**: Help text displayed to users
+- **`display_order`**: Order in which to display manual entry fields
 
 ### Extract
 
 Represents an extraction job, containing metadata about the process.
-
-```python
-class Extract(BaseOCModel):
-    corpus = models.ForeignKey('Corpus', null=True)
-    documents = models.ManyToManyField('Document')
-    name = models.CharField(max_length=512)
-    fieldset = models.ForeignKey('Fieldset')
-
-    # Timestamps
-    created = models.DateTimeField(auto_now_add=True)
-    started = models.DateTimeField(null=True)
-    finished = models.DateTimeField(null=True)
-    error = models.TextField(null=True)
-```
 
 **Usage:**
 - Groups documents to process with the fieldset defining what to extract
@@ -106,28 +61,12 @@ class Extract(BaseOCModel):
 
 Stores the result of extracting a specific column from a specific document.
 
-```python
-class Datacell(BaseOCModel):
-    extract = models.ForeignKey('Extract', related_name='extracted_datacells')
-    column = models.ForeignKey('Column', related_name='extracted_datacells')
-    document = models.ForeignKey('Document', related_name='extracted_datacells')
-
-    # Results
-    data = NullableJSONField(null=True)
-    data_definition = models.TextField()
-    sources = models.ManyToManyField('Annotation')
-
-    # Status tracking
-    started = models.DateTimeField(null=True)
-    completed = models.DateTimeField(null=True)
-    failed = models.DateTimeField(null=True)
-    stacktrace = models.TextField(null=True)
-```
-
 **Features:**
 - Stores extracted data in JSON format
 - Links to source annotations (when available)
 - Tracks processing status and errors
+- Supports approval workflow for human review
+- Captures LLM call history for debugging
 
 ## Extraction Pipeline
 
@@ -276,6 +215,53 @@ The extraction pipeline includes comprehensive error tracking:
 2. **Extract-level errors**: Stored in `Extract.error`
 3. **Automatic retry**: Failed cells can be retried
 4. **Partial completion**: Successful cells are saved even if others fail
+
+## Manual Metadata Entry
+
+Columns can be configured for manual entry instead of LLM-based extraction by setting `is_manual_entry=True`. This enables users to enter structured metadata directly.
+
+### Supported Data Types
+
+The `data_type` field supports: STRING, TEXT, BOOLEAN, INTEGER, FLOAT, DATE, DATETIME, URL, EMAIL, CHOICE, MULTI_CHOICE, and JSON. See `METADATA_DATA_TYPES` in the [models file](../../opencontractserver/extracts/models.py).
+
+### Validation
+
+Manual entry fields support validation via `validation_config`:
+
+- **Numeric fields**: `min_value`, `max_value`
+- **String fields**: `min_length`, `max_length`, `regex_pattern`
+- **Choice fields**: `choices` (list of valid options)
+- **Required fields**: `required: true`
+
+Validation is enforced in `Datacell._validate_manual_entry()`.
+
+### Constraints
+
+Manual metadata has a unique constraint ensuring one datacell per document-column combination when `extract` is null.
+
+## Datacell Approval Workflow
+
+Datacells support a human review workflow for validating extracted or manually entered data.
+
+### Approval Fields
+
+- **`approved_by`**: User who approved the datacell value
+- **`rejected_by`**: User who rejected the datacell value
+- **`corrected_data`**: Stores user-corrected data when the original extraction was incorrect
+
+### Workflow States
+
+1. **Pending review**: Both `approved_by` and `rejected_by` are null
+2. **Approved**: `approved_by` is set, value accepted as-is
+3. **Rejected with correction**: `rejected_by` is set, `corrected_data` contains the fix
+
+## LLM Call Logging
+
+For debugging extraction issues, datacells capture the LLM conversation history.
+
+- **`llm_call_log`**: Text field storing the complete message history from the extraction agent
+- Useful for diagnosing unexpected extraction results
+- Captured during `doc_extract_query_task` execution
 
 ## Performance Optimization
 

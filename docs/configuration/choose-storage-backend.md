@@ -1,30 +1,88 @@
 ## Select and Setup Storage Backend
 
-You can use Amazon S3 as a file storage backend (if you set the env flag `USE_AWS=True`, more on that below), or you
-can use the local storage of the host machine via a Docker volume.
+*Last Updated: 2026-01-09*
 
-## AWS Storage Backend
-If you want to use AWS S3 to store files (primarily pdfs, but also exports, tokens and txt files), you will need an
-Amazon AWS account to setup S3. This README does not cover the AWS side of configuration, but there  are a number of
-[tutorials](https://simpleisbetterthancomplex.com/tutorial/2017/08/01/how-to-setup-amazon-s3-in-a-django-project.html)
-and [guides](https://testdriven.io/blog/storing-django-static-and-media-files-on-amazon-s3/) to getting AWS configured
-to be used with a django project.
+OpenContracts supports three storage backends: **Local filesystem**, **Amazon S3 (AWS)**, and **Google Cloud Storage (GCP)**. You select the backend using the `STORAGE_BACKEND` environment variable.
 
-Once you have an S3 bucket configured, you'll need to set the following env variables in your .env file (the `.django`
-file in `.envs/.production` or `.envs/.local`, depending on your target environment). Our sample .envs only show these
-fields in the .production samples, but you could use them in the .local env file too.
+**Reference**: See [config/settings/base.py](../../config/settings/base.py) (lines 32-446) for the complete storage backend configuration.
 
-**Here the variables you need to set to enable AWS S3 storage:**
+## Storage Backend Selection
 
-1. `USE_AWS` - set to `true` since you're using AWS, otherwise the backend will use a docker volume for storage.
-2. `AWS_ACCESS_KEY_ID` - the access key ID created by AWS when you set up your IAM user (see tutorials above).
-3. `AWS_SECRET_ACCESS_KEY` - the secret access key created by AWS when you set up your IAM user
-   (see tutorials above)
-4. `AWS_STORAGE_BUCKET_NAME` - the name of the AWS bucket you created to hold the files.
-5. `AWS_S3_REGION_NAME` - the region of the AWS bucket you configured.
+Set the `STORAGE_BACKEND` environment variable in your `.django` env file:
 
-## Django Storage Backend
+| Value | Description |
+|-------|-------------|
+| `LOCAL` | Uses local filesystem via Docker volume (default) |
+| `AWS` | Uses Amazon S3 for file storage |
+| `GCP` | Uses Google Cloud Storage for file storage |
 
-Setting `USE_AWS=false` will use the disk space in the django container. When using the local docker compose stack,
-the celery workers and django containers share the same disk, so this works fine. Our production configuration would not
-work properly with `USE_AWS=false`, however, as each container has its own disk.
+**Note**: The legacy `USE_AWS` environment variable is deprecated. If set, a deprecation warning will be shown and `USE_AWS=true` will be treated as `STORAGE_BACKEND=AWS`.
+
+## Local Storage Backend
+
+Setting `STORAGE_BACKEND=LOCAL` (or omitting the variable entirely) uses the disk space in the Django container. When using the local Docker Compose stack, the Celery workers and Django containers share the same disk, so this works fine.
+
+**Important**: The production configuration would not work properly with `STORAGE_BACKEND=LOCAL`, as each container has its own disk.
+
+## AWS S3 Storage Backend
+
+If you want to use AWS S3 to store files (primarily PDFs, but also exports, tokens, and text files), you will need an Amazon AWS account to set up S3. There are a number of [tutorials](https://simpleisbetterthancomplex.com/tutorial/2017/08/01/how-to-setup-amazon-s3-in-a-django-project.html) and [guides](https://testdriven.io/blog/storing-django-static-and-media-files-on-amazon-s3/) for configuring AWS with a Django project.
+
+Once you have an S3 bucket configured, set the following environment variables in your `.django` file (in `.envs/.production` or `.envs/.local`, depending on your target environment):
+
+### Required AWS Variables
+
+| Variable | Description |
+|----------|-------------|
+| `STORAGE_BACKEND` | Set to `AWS` |
+| `AWS_ACCESS_KEY_ID` | Access key ID from your IAM user |
+| `AWS_SECRET_ACCESS_KEY` | Secret access key from your IAM user |
+| `AWS_STORAGE_BUCKET_NAME` | Name of your S3 bucket |
+| `AWS_S3_REGION_NAME` | AWS region of your bucket (e.g., `us-east-1`) |
+
+### Optional AWS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWS_S3_CUSTOM_DOMAIN` | None | Custom domain for S3 (e.g., CloudFront) |
+| `AWS_S3_CONNECTION_POOL_SIZE` | `10` | Connection pool size for better performance |
+| `S3_PREFIX` | `documents` | Prefix path for documents in the bucket |
+| `S3_DOCUMENT_PATH` | `open_contracts` | Path for document storage |
+
+## GCP Cloud Storage Backend
+
+If you want to use Google Cloud Storage, you will need a Google Cloud account with a storage bucket configured.
+
+Set the following environment variables in your `.django` file:
+
+### Required GCP Variables
+
+| Variable | Description |
+|----------|-------------|
+| `STORAGE_BACKEND` | Set to `GCP` |
+| `GS_BUCKET_NAME` | Name of your GCS bucket |
+
+### Optional GCP Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GS_PROJECT_ID` | None | Your Google Cloud project ID |
+| `GS_CREDENTIALS` | None | Path to service account JSON or uses default credentials |
+| `GS_DEFAULT_ACL` | None | ACL for new files |
+| `GS_QUERYSTRING_AUTH` | `true` | Use signed URLs for security |
+| `GS_EXPIRATION_SECONDS` | `86400` | Signed URL expiration (24 hours) |
+| `GS_FILE_OVERWRITE` | `false` | Whether to overwrite existing files |
+| `GS_MAX_MEMORY_SIZE` | `0` | Max memory before disk rollover |
+| `GS_BLOB_CHUNK_SIZE` | `2621440` | Chunk size for resumable uploads (2.5MB) |
+| `GS_CUSTOM_ENDPOINT` | None | Custom endpoint URL |
+| `GS_LOCATION` | `` | Subdirectory prefix for files |
+| `GS_IS_GZIPPED` | `false` | Enable GZIP compression |
+| `GS_IAM_SIGN_BLOB` | `false` | Use IAM Sign Blob API for signed URLs |
+| `GS_SA_EMAIL` | None | Service account email for signing |
+| `GCS_DOCUMENT_PATH` | `open_contracts` | Path for document storage |
+
+### GCP Authentication Options
+
+1. **Service Account Key File**: Set `GS_CREDENTIALS` to the path of your service account JSON file
+2. **Workload Identity**: For GKE deployments, attach a service account to your compute instance (recommended for production)
+3. **Default Credentials**: If running on GCP infrastructure, application default credentials are used automatically

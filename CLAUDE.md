@@ -131,7 +131,7 @@ docker compose -f production.yml up
 5. **Pluggable Parser Pipeline**:
    - Base classes in `opencontractserver/pipeline/base/`
    - Parsers, embedders, thumbnailers auto-discovered and registered
-   - Multiple backends: Docling (ML-based), NLM-Ingest, Text
+   - Multiple backends: Docling (ML-based), LlamaParse, Text
    - All convert to unified PAWLs format for frontend
 
 6. **Agent Tool Architecture** (see `docs/architecture/llms/README.md`):
@@ -193,7 +193,7 @@ docker compose -f production.yml up
 ### Data Flow Architecture
 
 **Document Processing**:
-1. Upload → Parser Selection (Docling/NLM-Ingest/Text)
+1. Upload → Parser Selection (Docling/LlamaParse/Text)
 2. Parser generates PAWLs JSON (tokens with bounding boxes)
 3. Text layer extracted from PAWLs
 4. Annotations created for structure (headers, sections, etc.)

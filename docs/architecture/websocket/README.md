@@ -21,8 +21,9 @@ OpenContracts uses WebSocket technology to provide real-time, streaming conversa
 ### 🖥️ [Backend Implementation](./backend.md)
 **Deep dive into the Django Channels WebSocket consumers**
 
-- `DocumentQueryConsumer`: Document-specific conversations
-- `CorpusQueryConsumer`: Corpus-wide conversations  
+- `UnifiedAgentConsumer`: All agent chat contexts (corpus, document, standalone)
+- `ThreadUpdatesConsumer`: Real-time thread/conversation updates
+- `NotificationUpdatesConsumer`: Real-time user notifications
 - Agent integration and lifecycle management
 - Event processing and streaming
 - Approval workflow implementation
@@ -47,8 +48,9 @@ OpenContracts uses WebSocket technology to provide real-time, streaming conversa
 1. Read the [Protocol Overview](./protocol.md) to understand message flow
 2. Study the [Backend Implementation](./backend.md) for consumer details
 3. Key files to examine:
-   - `config/websocket/consumers/document_conversation.py`
-   - `config/websocket/consumers/corpus_conversation.py`
+   - `config/websocket/consumers/unified_agent_conversation.py`
+   - `config/websocket/consumers/thread_updates.py`
+   - `config/websocket/consumers/notification_updates.py`
    - `opencontractserver/llms/agents/`
 
 ### For Frontend Developers
@@ -83,8 +85,9 @@ graph TB
     end
     
     subgraph "Backend (Django Channels)"
-        DQC[DocumentQueryConsumer]
-        CQC[CorpusQueryConsumer]
+        UAC[UnifiedAgentConsumer]
+        TUC[ThreadUpdatesConsumer]
+        NUC[NotificationUpdatesConsumer]
         AGENT[LLM Agents]
     end
     
@@ -97,10 +100,10 @@ graph TB
     CT --> WS
     CC --> WS
     WS --> MSG
-    MSG --> DQC
-    MSG --> CQC
-    DQC --> AGENT
-    CQC --> AGENT
+    MSG --> UAC
+    MSG --> TUC
+    MSG --> NUC
+    UAC --> AGENT
     AGENT --> DB
     DB --> CONV
     DB --> MSGS
