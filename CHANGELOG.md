@@ -5,7 +5,18 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-08
+## [Unreleased] - 2026-02-10
+
+### Added
+
+#### Expose Tool Usage in Chat UI
+- **Tool Usage Badge**: Assistant messages that use tools now display a prominent wrench icon badge ("X tools used") in the message header, visible in both document and corpus chat views
+  - File: `frontend/src/components/widgets/chat/ChatMessage.tsx` (`ToolUsageIndicator` component)
+- **Tool Call Popover**: Hovering over the tool usage badge shows a rich popover with each tool call's name, input arguments, and output result
+  - File: `frontend/src/components/widgets/chat/ChatMessage.tsx` (`ToolCallPopover`, `ToolCallCard` styled components)
+- **Tool result content in timeline**: Backend now captures tool result/output content in the timeline `tool_result` entries (previously only stored tool name)
+  - Files: `opencontractserver/llms/agents/timeline_schema.py` (added `result` field), `opencontractserver/llms/agents/timeline_utils.py` (captures result from metadata), `opencontractserver/llms/agents/pydantic_ai_agents.py` (passes result content through ThoughtEvent metadata)
+- **Tool result entries for search tools**: `similarity_search` and `search_exact_text` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"), enabling the frontend to display complete tool call input/output pairs
 
 ### Changed
 

@@ -612,6 +612,24 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 )
                                                 yield src_ev
 
+                                            # Emit tool_result entry for timeline
+                                            result_summary = (
+                                                f"Found {len(raw_sources)} matching annotations"
+                                                if isinstance(raw_sources, list)
+                                                else "No results found"
+                                            )
+                                            tool_ev = ThoughtEvent(
+                                                thought=f"Tool `{tool_name}` returned a result.",
+                                                user_message_id=user_msg_id,
+                                                llm_message_id=llm_msg_id,
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": result_summary,
+                                                },
+                                            )
+                                            builder.add(tool_ev)
+                                            yield tool_ev
+
                                         # Capture exact text search results (similar to similarity_search)
                                         elif tool_name == "search_exact_text":
                                             raw_sources = event.result.content  # type: ignore[attr-defined]
@@ -637,6 +655,25 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                     "[search_exact_text] No sources to emit - "
                                                     f"raw_sources is {type(raw_sources)} with value: {raw_sources!r}"
                                                 )
+
+                                            # Emit tool_result entry for timeline
+                                            result_summary = (
+                                                f"Found {len(raw_sources)} exact text matches"
+                                                if isinstance(raw_sources, list)
+                                                and raw_sources
+                                                else "No results found"
+                                            )
+                                            tool_ev = ThoughtEvent(
+                                                thought=f"Tool `{tool_name}` returned a result.",
+                                                user_message_id=user_msg_id,
+                                                llm_message_id=llm_msg_id,
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": result_summary,
+                                                },
+                                            )
+                                            builder.add(tool_ev)
+                                            yield tool_ev
 
                                         # Special handling for nested document-agent responses
                                         elif tool_name == "ask_document":
@@ -735,22 +772,47 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 )
 
                                             # Always log completion of ask_document regardless of success
+                                            ask_result_summary = ""
+                                            try:
+                                                rp = event.result.content  # type: ignore[attr-defined]
+                                                if isinstance(rp, dict):
+                                                    ask_result_summary = rp.get(
+                                                        "answer", ""
+                                                    )
+                                                elif isinstance(rp, str):
+                                                    ask_result_summary = rp
+                                            except Exception:
+                                                pass
                                             tool_ev = ThoughtEvent(
                                                 thought=f"Tool `{tool_name}` returned a result.",
                                                 user_message_id=user_msg_id,
                                                 llm_message_id=llm_msg_id,
-                                                metadata={"tool_name": tool_name},
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": ask_result_summary
+                                                    or "Completed",
+                                                },
                                             )
                                             builder.add(tool_ev)
                                             yield tool_ev
 
                                         else:
                                             # Let TimelineBuilder infer tool_result from metadata
+                                            generic_result = ""
+                                            try:
+                                                rc = event.result.content  # type: ignore[attr-defined]
+                                                generic_result = str(rc) if rc else ""
+                                            except Exception:
+                                                pass
                                             tool_ev = ThoughtEvent(
                                                 thought=f"Tool `{tool_name}` returned a result.",
                                                 user_message_id=user_msg_id,
                                                 llm_message_id=llm_msg_id,
-                                                metadata={"tool_name": tool_name},
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": generic_result
+                                                    or "Completed",
+                                                },
                                             )
                                             builder.add(tool_ev)
                                             yield tool_ev
