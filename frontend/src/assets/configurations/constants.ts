@@ -217,6 +217,19 @@ export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
   SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
 );
 
+// Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
+export const FAILURE_COLORS = {
+  ICON_BG: "#dc2626",
+  BORDER: "#ef4444",
+  BORDER_LIGHT: "#fca5a5",
+  BORDER_LIGHTER: "#fecaca",
+  BG: "#fef2f2",
+  BG_OVERLAY: "rgba(254, 226, 226, 0.8)",
+  TEXT: "#dc2626",
+  TEXT_DARK: "#b91c1c",
+  SHADOW: "rgba(220, 38, 38, 0.3)",
+} as const;
+
 /**
  * Known acronyms that should be preserved in display names.
  * Used by getComponentDisplayName to properly capitalize technology names.

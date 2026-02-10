@@ -71,6 +71,9 @@ export const GET_DOCUMENTS = gql`
           title
           description
           backendLock
+          processingStatus
+          processingError
+          canRetry
           pdfFile
           txtExtractFile
           fileType
