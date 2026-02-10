@@ -4,6 +4,7 @@ import atexit
 import logging
 from datetime import datetime, timezone
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from posthog import Posthog
 
@@ -95,10 +96,13 @@ def _get_installation_id() -> str | None:
 
 def record_event(event_type: str, properties: dict | None = None) -> bool:
     """
-    Record a telemetry event.
+    Record a telemetry event (synchronous version).
 
     Uses a singleton PostHog client for efficient event batching.
     Events are queued and sent asynchronously by a background thread.
+
+    For async contexts (e.g., ASGI handlers), use ``arecord_event`` instead
+    to avoid ``SynchronousOnlyOperation`` errors from the ORM lookup.
 
     Args:
         event_type: Type of event (e.g., "installation", "error", "usage")
@@ -139,3 +143,23 @@ def record_event(event_type: str, properties: dict | None = None) -> bool:
     except Exception as e:
         logger.warning(f"Failed to send telemetry: {e}")
         return False
+
+
+async def arecord_event(event_type: str, properties: dict | None = None) -> bool:
+    """
+    Record a telemetry event (async version).
+
+    Wraps ``record_event`` via ``sync_to_async`` so the Django ORM lookup
+    in ``_get_installation_id`` runs in a thread pool instead of blocking
+    the async event loop.
+
+    Use this from ASGI handlers, MCP endpoints, or any other async context.
+
+    Args:
+        event_type: Type of event (e.g., "installation", "error", "usage")
+        properties: Optional additional properties to include
+
+    Returns:
+        bool: Whether the event was successfully queued
+    """
+    return await sync_to_async(record_event)(event_type, properties)
