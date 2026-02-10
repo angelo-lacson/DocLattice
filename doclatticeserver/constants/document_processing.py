@@ -10,6 +10,12 @@ DEFAULT_DOCUMENT_PATH_PREFIX = "/documents"
 # Controls how many annotations are processed per Celery task to prevent queue flooding
 EMBEDDING_BATCH_SIZE = 100
 
+# Maximum number of embedding batch tasks to queue in a single reembed_corpus run.
+# For very large corpuses (millions of annotations), this prevents flooding the
+# Celery queue. Remaining annotations will be logged but not queued; re-running
+# the re-embed will pick up where it left off (idempotent via existing-embedding check).
+MAX_REEMBED_TASKS_PER_RUN = 500
+
 # Maximum length for filename/title truncation when generating document paths
 MAX_FILENAME_LENGTH = 100
 
