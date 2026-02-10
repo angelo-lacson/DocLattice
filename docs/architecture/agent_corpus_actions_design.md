@@ -5,6 +5,7 @@
 This document describes the third type of corpus action: agent-based actions that invoke an AI agent with a prompt and pre-authorized tools. This extends the existing corpus action system (which supports fieldsets and analyzers) to enable intelligent, automated document processing.
 
 **Status**: Implemented in v3.0.0
+**Last Updated**: 2026-01-09
 
 ## Use Cases
 
@@ -34,314 +35,66 @@ This document describes the third type of corpus action: agent-based actions tha
 
 ---
 
-## Model Changes
+## Model Implementation
 
 ### 1. CorpusAction Model Extension
 
-**File**: `opencontractserver/corpuses/models.py`
+The `CorpusAction` model has been extended to support agent-based actions.
 
-```python
-class CorpusAction(BaseOCModel):
-    # Existing fields
-    name = models.CharField(max_length=256, default="Corpus Action")
-    corpus = models.ForeignKey("Corpus", on_delete=models.CASCADE, related_name="actions")
-    fieldset = models.ForeignKey("extracts.Fieldset", on_delete=models.SET_NULL, null=True, blank=True)
-    analyzer = models.ForeignKey("analyzer.Analyzer", on_delete=models.SET_NULL, null=True, blank=True)
-    trigger = models.CharField(max_length=128, choices=CorpusActionTrigger.choices)
-    disabled = models.BooleanField(default=False)
-    run_on_all_corpuses = models.BooleanField(default=False)
+**Source**: [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) (lines 830-942)
 
-    # NEW: Agent-based action fields
-    agent_config = models.ForeignKey(
-        "agents.AgentConfiguration",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="corpus_actions",
-        help_text="Agent configuration to use for this action"
-    )
-    agent_prompt = models.TextField(
-        blank=True,
-        default="",
-        help_text="Task-specific prompt for the agent (e.g., 'Summarize this document')"
-    )
-    pre_authorized_tools = NullableJSONField(
-        default=list,
-        blank=True,
-        help_text="Tools pre-authorized to run without approval. If empty, uses agent_config.available_tools"
-    )
+Key fields added:
+- `agent_config` - ForeignKey to `AgentConfiguration`
+- `agent_prompt` - Task-specific prompt for the agent
+- `pre_authorized_tools` - JSON list of tools pre-authorized to run without approval
 
-    class Meta:
-        constraints = [
-            # Exactly ONE of fieldset, analyzer, or agent_config must be set
-            models.CheckConstraint(
-                check=(
-                    (Q(fieldset__isnull=False) & Q(analyzer__isnull=True) & Q(agent_config__isnull=True)) |
-                    (Q(fieldset__isnull=True) & Q(analyzer__isnull=False) & Q(agent_config__isnull=True)) |
-                    (Q(fieldset__isnull=True) & Q(analyzer__isnull=True) & Q(agent_config__isnull=False))
-                ),
-                name="corpus_action_exactly_one_action_type"
-            )
-        ]
-```
+Database constraint ensures exactly ONE of `fieldset`, `analyzer`, or `agent_config` is set.
 
 ### 2. AgentActionResult Model
 
-**File**: `opencontractserver/agents/models.py`
+Stores results from agent-based corpus actions.
 
-```python
-class AgentActionResult(BaseOCModel):
-    """
-    Stores results from agent-based corpus actions.
-    One record per (corpus_action, document) execution.
-    """
+**Source**: [`opencontractserver/agents/models.py`](../../opencontractserver/agents/models.py) (lines 223-379)
 
-    class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        RUNNING = "running", "Running"
-        COMPLETED = "completed", "Completed"
-        FAILED = "failed", "Failed"
-
-    corpus_action = models.ForeignKey(
-        "corpuses.CorpusAction",
-        on_delete=models.CASCADE,
-        related_name="agent_results",
-        help_text="The corpus action that triggered this execution"
-    )
-    document = models.ForeignKey(
-        "documents.Document",
-        on_delete=models.CASCADE,
-        related_name="agent_action_results",
-        help_text="The document this action was run on"
-    )
-    conversation = models.ForeignKey(
-        "conversations.Conversation",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="corpus_action_results",
-        help_text="Conversation record containing the full agent interaction"
-    )
-
-    # Execution tracking
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.PENDING,
-        db_index=True
-    )
-    started_at = models.DateTimeField(null=True, blank=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-
-    # Results
-    agent_response = models.TextField(
-        blank=True,
-        help_text="Final response content from the agent"
-    )
-    tools_executed = NullableJSONField(
-        default=list,
-        blank=True,
-        help_text="List of tools executed: [{name, args, result, timestamp}]"
-    )
-    error_message = models.TextField(
-        blank=True,
-        help_text="Error message if status is FAILED"
-    )
-
-    # Audit trail
-    execution_metadata = NullableJSONField(
-        default=dict,
-        blank=True,
-        help_text="Additional execution metadata (model used, token counts, etc.)"
-    )
-
-    class Meta:
-        ordering = ["-started_at"]
-        indexes = [
-            models.Index(fields=["corpus_action", "document"]),
-            models.Index(fields=["status"]),
-            models.Index(fields=["started_at"]),
-        ]
-
-    def __str__(self):
-        return f"AgentActionResult({self.corpus_action.name} on doc {self.document_id}: {self.status})"
-```
+Key fields:
+- `corpus_action` - ForeignKey to the triggering CorpusAction
+- `document` - ForeignKey to the processed document (nullable for thread-based actions)
+- `triggering_conversation` / `triggering_message` - For thread/message triggers
+- `status` - Execution status (PENDING, RUNNING, COMPLETED, FAILED)
+- `agent_response` - Final response content from the agent
+- `execution_metadata` - JSON with model used, token counts, etc.
 
 ---
 
 ## Task Implementation
 
-### Celery Task: run_agent_corpus_action
+### Celery Tasks
 
-**File**: `opencontractserver/tasks/agent_tasks.py` (new file)
+**Source**: [`opencontractserver/tasks/agent_tasks.py`](../../opencontractserver/tasks/agent_tasks.py)
 
-```python
-import asyncio
-import logging
-from celery import shared_task
-from django.utils import timezone
+#### Document-based Actions: `run_agent_corpus_action`
 
-logger = logging.getLogger(__name__)
+- Celery task that executes agent-based corpus actions on documents
+- Uses `asyncio.run()` to invoke async agent API
+- Creates/updates `AgentActionResult` records for tracking
+- Implements idempotency (skips already-completed or running tasks)
+- Handles race conditions with `select_for_update()`
+- Links to `CorpusActionExecution` for unified tracking
 
+#### Thread-based Actions: `run_agent_thread_action`
 
-@shared_task(bind=True, max_retries=3)
-def run_agent_corpus_action(
-    self,
-    corpus_action_id: int,
-    document_id: int,
-    user_id: int,
-) -> dict:
-    """
-    Execute an agent-based corpus action on a single document.
-
-    This task runs synchronously but internally uses asyncio to call
-    the async agent API.
-    """
-    try:
-        return asyncio.run(
-            _run_agent_corpus_action_async(
-                corpus_action_id=corpus_action_id,
-                document_id=document_id,
-                user_id=user_id,
-            )
-        )
-    except Exception as exc:
-        logger.error(
-            f"Agent corpus action failed: action={corpus_action_id}, "
-            f"doc={document_id}, error={exc}",
-            exc_info=True
-        )
-        raise self.retry(exc=exc, countdown=60)
-
-
-async def _run_agent_corpus_action_async(
-    corpus_action_id: int,
-    document_id: int,
-    user_id: int,
-) -> dict:
-    """Async implementation of agent corpus action execution."""
-    from opencontractserver.agents.models import AgentActionResult
-    from opencontractserver.corpuses.models import CorpusAction
-    from opencontractserver.documents.models import Document
-    from opencontractserver.llms import agents
-
-    # Load the action and document
-    action = await CorpusAction.objects.select_related(
-        'agent_config', 'corpus'
-    ).aget(id=corpus_action_id)
-
-    document = await Document.objects.aget(id=document_id)
-
-    # Create or get result record
-    result, created = await AgentActionResult.objects.aget_or_create(
-        corpus_action=action,
-        document=document,
-        defaults={
-            'creator_id': user_id,
-            'status': AgentActionResult.Status.RUNNING,
-            'started_at': timezone.now(),
-        }
-    )
-
-    if not created and result.status == AgentActionResult.Status.COMPLETED:
-        logger.info(f"Agent action already completed for doc {document_id}")
-        return {"status": "already_completed", "result_id": result.id}
-
-    # Update status to running
-    result.status = AgentActionResult.Status.RUNNING
-    result.started_at = timezone.now()
-    await result.asave(update_fields=['status', 'started_at'])
-
-    try:
-        # Determine which tools to use
-        tools = action.pre_authorized_tools or []
-        if not tools and action.agent_config:
-            tools = action.agent_config.available_tools or []
-
-        # Build system prompt
-        system_prompt = None
-        if action.agent_config and action.agent_config.system_instructions:
-            system_prompt = action.agent_config.system_instructions
-
-        # Create agent with pre-authorization
-        agent = await agents.for_document(
-            document=document,
-            corpus=action.corpus,
-            user_id=user_id,
-            system_prompt=system_prompt,
-            tools=tools,
-            streaming=False,
-            # Pre-authorize all tools for automated execution
-            skip_approval_gate=True,
-        )
-
-        # Execute the task prompt
-        response = await agent.chat(action.agent_prompt)
-
-        # Update result with success
-        result.status = AgentActionResult.Status.COMPLETED
-        result.agent_response = response.content
-        result.conversation_id = agent.get_conversation_id()
-        result.completed_at = timezone.now()
-        result.execution_metadata = {
-            "model": action.agent_config.model_name if action.agent_config else "default",
-            "tools_available": tools,
-            "sources_count": len(response.sources) if response.sources else 0,
-        }
-        await result.asave()
-
-        logger.info(
-            f"Agent corpus action completed: action={corpus_action_id}, "
-            f"doc={document_id}, result={result.id}"
-        )
-
-        return {
-            "status": "completed",
-            "result_id": result.id,
-            "response_length": len(response.content),
-        }
-
-    except Exception as e:
-        # Update result with failure
-        result.status = AgentActionResult.Status.FAILED
-        result.error_message = str(e)
-        result.completed_at = timezone.now()
-        await result.asave()
-
-        logger.error(
-            f"Agent corpus action failed: action={corpus_action_id}, "
-            f"doc={document_id}, error={e}",
-            exc_info=True
-        )
-        raise
-```
+- Handles `NEW_THREAD` and `NEW_MESSAGE` triggers
+- Builds context from thread/message content
+- Automatically includes moderation tools
 
 ### Integration with process_corpus_action
 
-**File**: `opencontractserver/tasks/corpus_tasks.py` (modify existing)
+**Source**: [`opencontractserver/tasks/corpus_tasks.py`](../../opencontractserver/tasks/corpus_tasks.py) (lines 146-354)
 
-```python
-# Add to imports
-from opencontractserver.tasks.agent_tasks import run_agent_corpus_action
-
-# In process_corpus_action function, add after existing fieldset/analyzer handling:
-
-for action in actions:
-    if action.fieldset:
-        # Existing fieldset logic...
-        pass
-    elif action.analyzer:
-        # Existing analyzer logic...
-        pass
-    elif action.agent_config:
-        # NEW: Agent-based action
-        for doc_id in document_ids:
-            run_agent_corpus_action.delay(
-                corpus_action_id=action.id,
-                document_id=doc_id,
-                user_id=user_id,
-            )
-```
+The `process_corpus_action` task dispatches to the appropriate handler:
+- `action.fieldset` → Fieldset extraction tasks
+- `action.analyzer` → Analyzer tasks
+- `action.agent_config` → `run_agent_corpus_action` or `run_agent_thread_action`
 
 ---
 
@@ -349,178 +102,62 @@ for action in actions:
 
 ### Skip Approval Gate Support
 
-**File**: `opencontractserver/llms/api.py`
+The agent factory (`opencontractserver/llms/api.py`) supports `skip_approval_gate` parameter for automated corpus actions. When enabled, all tools run without requiring user approval.
 
-Add `skip_approval_gate` parameter to `for_document` and `for_corpus`:
+**Key Integration Points**:
+- `agents.for_document()` - Pass `skip_approval_gate=True` for automated execution
+- `agents.for_corpus()` - Same parameter for corpus-level agents
 
-```python
-@staticmethod
-async def for_document(
-    document: DocumentType,
-    corpus: Optional[CorpusType] = None,
-    *,
-    # ... existing parameters ...
-    skip_approval_gate: bool = False,  # NEW
-    **kwargs,
-) -> CoreAgent:
-    """
-    Create an agent for document analysis.
-
-    Parameters
-    ----------
-    skip_approval_gate : bool
-        If True, all tools run without requiring approval.
-        Use for automated corpus actions where tools are pre-authorized.
-    """
-    # Pass to agent config
-    config = AgentConfig(
-        # ... existing config ...
-        skip_approval_gate=skip_approval_gate,
-    )
-```
-
-### AgentConfig Extension
-
-**File**: `opencontractserver/llms/agents/core_agents.py`
-
-```python
-@dataclass
-class AgentConfig:
-    # ... existing fields ...
-
-    # NEW: For automated execution without approval prompts
-    skip_approval_gate: bool = False
-```
-
-### PydanticAIDependencies Extension
-
-**File**: `opencontractserver/llms/tools/pydantic_ai_tools.py`
-
-```python
-class PydanticAIDependencies(BaseModel):
-    # ... existing fields ...
-
-    # NEW: Skip approval for automated execution
-    skip_approval_gate: bool = Field(
-        default=False,
-        description="If True, bypass approval checks for all tools"
-    )
-```
-
-### Tool Wrapper Modification
-
-**File**: `opencontractserver/llms/tools/pydantic_ai_tools.py`
-
-In `PydanticAIToolWrapper._maybe_raise()`:
-
-```python
-def _maybe_raise(self, ctx: RunContext[PydanticAIDependencies]):
-    """Raise ToolConfirmationRequired if approval is needed."""
-    # Skip approval gate entirely if configured
-    if ctx.deps.skip_approval_gate:
-        return
-
-    # Existing approval logic...
-    if self.core_tool.requires_approval:
-        raise ToolConfirmationRequired(...)
-```
+The agent task implementation sets `skip_approval_gate=True` when invoking agents for corpus actions to enable fully automated execution.
 
 ---
 
 ## GraphQL API
 
-### Mutation: CreateCorpusAction (Extended)
+### Mutations
 
-**File**: `config/graphql/mutations.py`
+**Source**: [`config/graphql/mutations.py`](../../config/graphql/mutations.py)
 
-```python
-class CreateCorpusAction(graphene.Mutation):
-    class Arguments:
-        corpus_id = graphene.ID(required=True)
-        trigger = graphene.String(required=True)
-        name = graphene.String()
-        disabled = graphene.Boolean()
-        run_on_all_corpuses = graphene.Boolean()
-        # Existing
-        fieldset_id = graphene.ID()
-        analyzer_id = graphene.ID()
-        # NEW
-        agent_config_id = graphene.ID()
-        agent_prompt = graphene.String()
-        pre_authorized_tools = graphene.List(graphene.String)
+#### CreateCorpusAction
 
-    ok = graphene.Boolean()
-    message = graphene.String()
-    obj = graphene.Field(CorpusActionType)
+Extended to support agent-based actions:
+- `agent_config_id` - ID of the agent configuration to use
+- `agent_prompt` - Task prompt for the agent
+- `pre_authorized_tools` - List of tool names pre-authorized for execution
+- `create_agent_inline` - Create a new corpus-scoped agent inline (for thread/message triggers)
 
-    @staticmethod
-    def mutate(root, info, corpus_id, trigger, **kwargs):
-        # Validate exactly one action type
-        action_types = [
-            kwargs.get('fieldset_id'),
-            kwargs.get('analyzer_id'),
-            kwargs.get('agent_config_id'),
-        ]
-        set_count = sum(1 for a in action_types if a is not None)
+#### UpdateCorpusAction
 
-        if set_count != 1:
-            return CreateCorpusAction(
-                ok=False,
-                message="Exactly one of fieldset_id, analyzer_id, or agent_config_id must be provided",
-                obj=None
-            )
+Supports updating all agent-specific fields including trigger type, agent config, and prompt.
 
-        # ... rest of creation logic ...
-```
+### Types
 
-### Type: CorpusActionType (Extended)
+**Source**: [`config/graphql/graphene_types.py`](../../config/graphql/graphene_types.py)
 
-**File**: `config/graphql/graphene_types.py`
+#### CorpusActionType (lines 1958-1979)
 
-```python
-class CorpusActionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    class Meta:
-        model = CorpusAction
-        interfaces = (relay.Node,)
-        fields = "__all__"
+Exposes agent-related fields:
+- `agent_config` - The linked AgentConfiguration
+- `agent_prompt` - Task prompt
+- `pre_authorized_tools` - List of pre-authorized tool names
 
-    # NEW fields
-    agent_config = graphene.Field(AgentConfigurationType)
-    agent_prompt = graphene.String()
-    pre_authorized_tools = graphene.List(graphene.String)
-```
+#### AgentActionResultType (lines 1982-2015)
 
-### Type: AgentActionResultType (New)
+Exposes execution results:
+- `tools_executed` - List of tools executed with results
+- `execution_metadata` - Model, tokens, timing info
+- `duration_seconds` - Computed execution duration
 
-```python
-class AgentActionResultType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    class Meta:
-        model = AgentActionResult
-        interfaces = (relay.Node,)
-        fields = "__all__"
+### Queries
 
-    corpus_action = graphene.Field(CorpusActionType)
-    document = graphene.Field(DocumentType)
-    conversation = graphene.Field(ConversationType)
-```
+**Source**: [`config/graphql/queries.py`](../../config/graphql/queries.py) (lines 2477-2523)
 
-### Query: agent_action_results
+`agent_action_results` - Query agent action results with filters:
+- `corpus_action_id` - Filter by corpus action
+- `document_id` - Filter by document
+- `status` - Filter by execution status
 
-```python
-class Query(graphene.ObjectType):
-    agent_action_results = DjangoFilterConnectionField(
-        AgentActionResultType,
-        corpus_action_id=graphene.ID(),
-        document_id=graphene.ID(),
-        status=graphene.String(),
-    )
-
-    def resolve_agent_action_results(self, info, **kwargs):
-        user = info.context.user
-        qs = AgentActionResult.objects.visible_to_user(user)
-        # Apply filters...
-        return qs
-```
+Uses `AgentActionResult.objects.visible_to_user()` for permission filtering.
 
 ---
 
@@ -593,25 +230,35 @@ query GetActionResults($corpusActionId: ID!) {
 | 1 | Database migrations | ✅ Complete |
 | 2 | `skip_approval_gate` in agent factory | ✅ Complete |
 | 2 | `run_agent_corpus_action` task | ✅ Complete |
+| 2 | `run_agent_thread_action` task | ✅ Complete |
 | 2 | Integration with `process_corpus_action` | ✅ Complete |
 | 2 | Deferred action architecture | ✅ Complete |
 | 3 | CreateCorpusAction mutation extended | ✅ Complete |
+| 3 | UpdateCorpusAction mutation | ✅ Complete |
 | 3 | AgentActionResultType | ✅ Complete |
 | 3 | GraphQL queries for results | ✅ Complete |
 | 4 | CorpusSettings UI for agent actions | ✅ Complete |
-| 4 | Agent action result viewer | 🔄 In Progress |
+| 4 | Corpus agent management UI | ✅ Complete |
 | 4 | Pre-authorized tools selector | ✅ Complete |
 | 5 | Unit tests for models | ✅ Complete |
 | 5 | Integration tests for task execution | ✅ Complete |
-| 5 | E2E tests | 🔄 In Progress |
+| 5 | Corpus document action tests | ✅ Complete |
 
-### Key Files
+### Key Source Files
 
-- **Models**: `opencontractserver/corpuses/models.py`, `opencontractserver/agents/models.py`
-- **Tasks**: `opencontractserver/tasks/agent_tasks.py`, `opencontractserver/tasks/corpus_tasks.py`, `opencontractserver/tasks/doc_tasks.py`
-- **Versioning**: `opencontractserver/documents/versioning.py` (import_document triggers actions)
-- **GraphQL**: `config/graphql/graphene_types.py`, `config/graphql/mutations.py`
-- **Frontend**: `frontend/src/components/corpuses/CorpusAgentManagement.tsx`
+| Category | File |
+|----------|------|
+| **Models** | [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) - CorpusAction, CorpusActionExecution |
+| **Models** | [`opencontractserver/agents/models.py`](../../opencontractserver/agents/models.py) - AgentActionResult |
+| **Tasks** | [`opencontractserver/tasks/agent_tasks.py`](../../opencontractserver/tasks/agent_tasks.py) - Agent execution tasks |
+| **Tasks** | [`opencontractserver/tasks/corpus_tasks.py`](../../opencontractserver/tasks/corpus_tasks.py) - Action dispatch |
+| **Tasks** | [`opencontractserver/tasks/doc_tasks.py`](../../opencontractserver/tasks/doc_tasks.py) - Document unlock triggers |
+| **GraphQL** | [`config/graphql/graphene_types.py`](../../config/graphql/graphene_types.py) - CorpusActionType, AgentActionResultType |
+| **GraphQL** | [`config/graphql/mutations.py`](../../config/graphql/mutations.py) - CreateCorpusAction, UpdateCorpusAction |
+| **GraphQL** | [`config/graphql/queries.py`](../../config/graphql/queries.py) - agent_action_results query |
+| **Frontend** | [`frontend/src/components/corpuses/CorpusAgentManagement.tsx`](../../frontend/src/components/corpuses/CorpusAgentManagement.tsx) |
+| **Tests** | [`opencontractserver/tests/test_agent_corpus_action_task.py`](../../opencontractserver/tests/test_agent_corpus_action_task.py) |
+| **Tests** | [`opencontractserver/tests/test_corpus_document_actions.py`](../../opencontractserver/tests/test_corpus_document_actions.py) |
 
 ---
 
@@ -686,8 +333,8 @@ source of truth for corpus membership (not the M2M relationship):
 ### Why DocumentPath Instead of M2M?
 
 The document versioning architecture (Issue #654) introduced `DocumentPath` as the source
-of truth for corpus-document relationships. The M2M relationship (`Corpus.documents`) is
-maintained for backwards compatibility but is not authoritative.
+of truth for corpus-document relationships. The M2M relationship (`Corpus.documents`) has
+been **completely removed** (Issue #835, migration `0039_remove_corpus_documents_m2m`).
 
 Using DocumentPath ensures:
 - `import_document()` works correctly (it creates DocumentPath but not M2M)
@@ -698,80 +345,25 @@ Using DocumentPath ensures:
 
 #### Direct Trigger: add_document()
 
-**File**: `opencontractserver/corpuses/models.py`
+**Source**: [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) (lines 443-624)
 
-```python
-def add_document(self, document, path, user, folder=None, ...):
-    # ... create corpus copy and DocumentPath ...
-
-    # Trigger corpus actions if document is ready (not still processing)
-    # If backend_lock=True, actions will be triggered by
-    # set_doc_lock_state in doc_tasks.py when processing completes.
-    if not corpus_copy.backend_lock:
-        from opencontractserver.tasks.corpus_tasks import process_corpus_action
-
-        transaction.on_commit(
-            lambda: process_corpus_action.delay(
-                corpus_id=self.pk,
-                document_ids=[corpus_copy.pk],
-                user_id=user.pk,
-                trigger=CorpusActionTrigger.ADD_DOCUMENT,
-            )
-        )
-
-    return corpus_copy, "added", new_path
-```
+The `Corpus.add_document()` method triggers corpus actions directly if the document is ready (`backend_lock=False`). If the document is still processing, actions are deferred to `set_doc_lock_state()`.
 
 #### Direct Trigger: import_document()
 
-**File**: `opencontractserver/documents/versioning.py`
+**Source**: [`opencontractserver/documents/versioning.py`](../../opencontractserver/documents/versioning.py)
 
 Same pattern as `add_document()` - triggers actions directly if document is ready.
 
 #### Direct Trigger: set_doc_lock_state()
 
-**File**: `opencontractserver/tasks/doc_tasks.py`
+**Source**: [`opencontractserver/tasks/doc_tasks.py`](../../opencontractserver/tasks/doc_tasks.py) (lines 60-118)
 
-```python
-@celery_app.task()
-def set_doc_lock_state(*args, locked: bool, doc_id: int):
-    """
-    Set the backend lock state for a document.
-
-    When unlocking (locked=False), triggers corpus actions for all corpuses
-    the document belongs to. Uses DocumentPath as the source of truth.
-    """
-    from opencontractserver.corpuses.models import CorpusActionTrigger
-    from opencontractserver.documents.models import DocumentPath
-    from opencontractserver.tasks.corpus_tasks import process_corpus_action
-
-    document = Document.objects.get(pk=doc_id)
-    document.backend_lock = locked
-    document.processing_finished = timezone.now()
-    document.save()
-
-    # Trigger corpus actions when unlocking (document is now ready)
-    # Query DocumentPath as the source of truth for corpus membership
-    if not locked:
-        corpus_data = (
-            DocumentPath.objects.filter(
-                document=document,
-                is_current=True,
-                is_deleted=False,
-            )
-            .select_related("corpus__creator")
-            .values("corpus_id", "corpus__creator_id")
-            .distinct()
-        )
-
-        for data in corpus_data:
-            process_corpus_action.delay(
-                corpus_id=data["corpus_id"],
-                document_ids=[doc_id],
-                user_id=data["corpus__creator_id"],
-                trigger=CorpusActionTrigger.ADD_DOCUMENT,
-            )
-```
+When a document is unlocked (`locked=False`), this task:
+1. Updates the document's `backend_lock` and `processing_finished` fields
+2. Queries `DocumentPath` to find all corpuses the document belongs to
+3. Triggers `process_corpus_action` for each corpus
+4. Creates `DOCUMENT_PROCESSED` notifications for the document creator and corpus owners
 
 ### Behavior Matrix
 
@@ -807,14 +399,30 @@ If stricter duplicate prevention is needed, actions can check for existing resul
 
 ### Testing
 
-See `opencontractserver/tests/test_corpus_document_actions.py` for tests covering:
+#### Corpus Document Actions
 
+**Source**: [`opencontractserver/tests/test_corpus_document_actions.py`](../../opencontractserver/tests/test_corpus_document_actions.py)
+
+Tests covering the deferred action architecture:
 - `test_add_document_triggers_actions_for_ready_doc` - Ready docs trigger immediately
 - `test_add_document_skips_actions_for_locked_doc` - Locked docs deferred to set_doc_lock_state
 - `test_set_doc_lock_state_triggers_actions_via_document_path` - DocumentPath used as source of truth
 - `test_set_doc_lock_state_no_corpus_no_action` - Orphan docs ignored
 - `test_set_doc_lock_state_triggers_for_multiple_corpuses` - Multi-corpus support
 - `test_set_doc_lock_state_ignores_deleted_paths` - Soft-deleted paths excluded
+
+#### Agent Corpus Action Task
+
+**Source**: [`opencontractserver/tests/test_agent_corpus_action_task.py`](../../opencontractserver/tests/test_agent_corpus_action_task.py)
+
+Tests covering agent task execution:
+- `test_successful_execution_creates_result` - Result creation on success
+- `test_skip_already_completed_result` - Idempotency for completed results
+- `test_skip_already_running_result` - Race condition prevention
+- `test_retry_failed_result` - Failed results can be retried
+- `test_agent_failure_marks_result_failed` - Error handling
+- `test_long_error_message_truncated` - Error message truncation
+- `test_execution_tracking_on_success` - CorpusActionExecution integration
 
 ---
 

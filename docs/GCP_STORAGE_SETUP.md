@@ -1,6 +1,10 @@
 # Google Cloud Storage Setup for OpenContracts
 
+*Last Updated: 2026-01-09*
+
 This document provides instructions for configuring Google Cloud Storage (GCS) as the storage backend for OpenContracts.
+
+> **Note**: For the authoritative list of GCS environment variables and their defaults, see [`config/settings/base.py`](../config/settings/base.py) (search for `STORAGE_BACKEND == "GCP"`).
 
 ## Overview
 
@@ -79,11 +83,13 @@ export GOOGLE_APPLICATION_CREDENTIALS=~/opencontracts-gcs-key.json
 Update your `.env` file with the following settings:
 
 ```bash
-# Set storage backend to GCP
+# Required: Set storage backend to GCP
 STORAGE_BACKEND=GCP
 
-# Required GCS Settings
+# Required: GCS bucket name
 GS_BUCKET_NAME=your-bucket-name
+
+# Optional: Google Cloud project ID
 GS_PROJECT_ID=your-project-id
 
 # Authentication (choose one method):
@@ -97,19 +103,25 @@ GS_CREDENTIALS=/path/to/service-account-key.json
 # GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 
 # Security Settings
-GS_QUERYSTRING_AUTH=true  # Generate signed URLs for private files
-GS_EXPIRATION_SECONDS=86400  # URL expiration (1 day)
-GS_FILE_OVERWRITE=false  # Prevent file overwrites
-GS_DEFAULT_ACL=  # Leave empty for private files
+GS_QUERYSTRING_AUTH=true        # Generate signed URLs for private files (default: true)
+GS_EXPIRATION_SECONDS=86400     # URL expiration in seconds (default: 86400 = 1 day)
+GS_FILE_OVERWRITE=false         # Prevent file overwrites (default: false)
+GS_DEFAULT_ACL=                 # Leave empty for private files (default: None)
 
 # Performance Settings
-GS_BLOB_CHUNK_SIZE=2621440  # 2.5MB chunks for large files
-GS_MAX_MEMORY_SIZE=0  # No memory limit
-GS_IS_GZIPPED=false  # Enable for static file compression
+GS_BLOB_CHUNK_SIZE=2621440      # Chunk size for uploads in bytes (default: 2621440 = 2.5MB)
+GS_MAX_MEMORY_SIZE=0            # Max memory before disk rollover, 0 = no limit (default: 0)
+GS_IS_GZIPPED=false             # Enable GZIP compression for static files (default: false)
 
-# Optional: Use IAM Sign Blob API (when not using key file)
-GS_IAM_SIGN_BLOB=true
-GS_SA_EMAIL=opencontracts-storage@YOUR-PROJECT-ID.iam.gserviceaccount.com
+# Optional: Custom endpoint (for emulators or alternative endpoints)
+GS_CUSTOM_ENDPOINT=             # Custom GCS endpoint URL (default: None)
+
+# Optional: File location prefix within bucket
+GS_LOCATION=                    # Subdirectory prefix for files (default: "")
+
+# Optional: IAM Sign Blob API (required when not using service account key file)
+GS_IAM_SIGN_BLOB=false          # Use IAM Sign Blob API for signed URLs (default: false)
+GS_SA_EMAIL=opencontracts-storage@YOUR-PROJECT-ID.iam.gserviceaccount.com  # Service account email for signing
 ```
 
 ## Security Best Practices

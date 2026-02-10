@@ -115,10 +115,15 @@ The central model representing an uploaded document (typically PDF).
 | `is_current` | True for the newest version |
 
 **Key relationships:**
-- Many-to-many with `Corpus` (via `CorpusDocumentLink`)
+- Many-to-many with `Corpus` via `DocumentPath` (sole source of truth for corpus membership)
+- The legacy M2M field `Corpus.documents` has been removed (Issue #835)
 - One-to-many with `Annotation`
-- One-to-many with `DocumentPath` (version history)
+- One-to-many with `DocumentPath` (version history and corpus membership)
 - Self-referential via `DocumentRelationship`
+
+**Adding documents to corpuses:**
+Use `corpus.add_document(document=doc, user=user)` or `DocumentFolderService.add_document_to_corpus()`.
+Never use `corpus.documents.add()` directly as it bypasses versioning and creates inconsistent state.
 
 ---
 

@@ -198,17 +198,9 @@ This feature enables users to mention configured agents in thread conversations 
 
 ### Code Duplication Problem (DRY Opportunity)
 
-**Backend - Three Nearly Identical Consumers:**
-- `corpus_conversation.py` - Corpus-level agent chat
-- `document_conversation.py` - Document-level agent chat (with corpus context)
-- `standalone_document_conversation.py` - Document-level agent chat (no corpus)
-
-All three do the same things:
-- Auth validation
-- Context extraction from URL
-- Agent creation via factory
-- Stream event handling (ASYNC_START, ASYNC_CONTENT, ASYNC_FINISH, etc.)
-- Error handling
+**Backend - Unified Consumer (DRY refactoring completed):**
+- `unified_agent_conversation.py` - Handles all agent chat contexts (corpus, document, standalone)
+- Legacy consumers (`corpus_conversation.py`, `document_conversation.py`, `standalone_document_conversation.py`) have been removed
 
 **Frontend - Two Nearly Identical Components (~4000 lines):**
 - `CorpusChat.tsx` (2064 lines) - Corpus-level chat UI
@@ -419,18 +411,14 @@ Replace three near-identical WebSocket consumers with a single unified consumer.
 
 #### 1.1 Create Unified Agent Consumer
 
-**File:** `config/websocket/consumers/unified_agent_conversation.py` (NEW)
+**File:** `config/websocket/consumers/unified_agent_conversation.py` (IMPLEMENTED)
 
 ```python
 """
 Unified WebSocket consumer for all agent conversations.
 
-Replaces:
-- corpus_conversation.py
-- document_conversation.py
-- standalone_document_conversation.py
-
-All three did the same things with minor context differences.
+Replaced the legacy corpus_conversation.py, document_conversation.py,
+and standalone_document_conversation.py (all removed).
 """
 import json
 import logging
@@ -706,20 +694,10 @@ websocket_urlpatterns = [
 ]
 ```
 
-#### 1.3 Deprecate Old Consumers
+#### 1.3 Old Consumers Removed
 
-Mark old consumers as deprecated with clear migration path:
-
-```python
-# corpus_conversation.py
-"""
-DEPRECATED: Use unified_agent_conversation.py instead.
-
-Migration:
-- Update frontend to use /ws/agent-chat/?corpus_id=X
-- Remove this file after frontend migration complete
-"""
-```
+> **Status**: COMPLETED. The legacy consumers have been deleted. All agent chat
+> now uses `UnifiedAgentConsumer` at `ws/agent-chat/`.
 
 ---
 

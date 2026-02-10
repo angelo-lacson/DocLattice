@@ -142,9 +142,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
               email
             }
             description
-            documents {
-              totalCount
-            }
+            documentCount
             labelSet {
               id
               title

@@ -1,5 +1,7 @@
 # PDF Annotation System Overview
 
+**Last Updated**: 2026-01-09
+
 ## Table of Contents
 
 1. [Key Questions](#key-questions)
@@ -115,7 +117,7 @@ DocumentKnowledgeBase
 
 ### 1. Unified Feed System
 
-**Components**: `UnifiedContentFeed`, `SidebarControlBar` (references in `4:1940-1973` and `4:1988-2042`)
+**Components**: [`UnifiedContentFeed`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx), [`SidebarControlBar`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/SidebarControlBar.tsx)
 
 The unified feed combines multiple content types into a single, filterable view:
 - Notes
@@ -131,7 +133,7 @@ Features:
 
 ### 2. Summary Version History
 
-**Hook**: `useSummaryVersions` (referenced in `4:1704-1713`)
+**Hook**: `useSummaryVersions` (used in [`DocumentKnowledgeBase.tsx`](../../../../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx))
 
 Git-like version control for document summaries:
 - View all previous versions
@@ -142,7 +144,7 @@ Git-like version control for document summaries:
 
 ### 3. Floating Summary Preview
 
-**Component**: `FloatingSummaryPreview` (referenced in `4:2099-2124`)
+**Component**: [`FloatingSummaryPreview`](../../../../../frontend/src/components/knowledge_base/document/floating_summary_preview/FloatingSummaryPreview.tsx)
 
 Picture-in-picture style preview that:
 - Shows current summary while in document layer
@@ -152,7 +154,7 @@ Picture-in-picture style preview that:
 
 ### 4. Chat Panel Width Management
 
-**Hook**: `useChatPanelWidth` (referenced in `4:280-291`)
+**Hook**: `useChatPanelWidth` (defined in [`UISettingsAtom.tsx`](../../../../../frontend/src/components/annotator/context/UISettingsAtom.tsx))
 
 Sophisticated resizable panel system:
 - Preset sizes: quarter (25%), half (50%), full (90%)
@@ -163,17 +165,24 @@ Sophisticated resizable panel system:
 
 ### 5. Tab-based Navigation
 
-**Array**: `allTabs` (defined in `4:1223-1272`)
+**Type**: `SidebarViewMode` (defined in [`frontend/src/components/knowledge_base/document/unified_feed/types.ts`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/types.ts))
 
-Organized sidebar navigation with:
-- Icons and labels for each feature
-- Layer-aware tabs (some only in document layer)
-- Visual indicators for active tab
+The sidebar uses a mode-based navigation system with the following modes:
+- `chat` - AI chat interface
+- `feed` - Unified content feed with notes, annotations, relationships
+- `extract` - Extract results view (when an extract is selected)
+- `analysis` - Analysis results view (when an analysis is selected)
+- `discussions` - Document discussions/threads
+
+Features:
+- Icons and labels for each mode
+- Visual indicators for active mode
 - Collapsible sidebar on hover
+- Mode automatically switches based on user actions (e.g., selecting an extract)
 
 ### 6. Note Management System
 
-**Components**: `NoteModal`, `NotesGrid`, `PostItNote` (imported in `4:147`)
+**Components**: [`NoteModal`](../../../../../frontend/src/components/knowledge_base/document/StickyNotes.tsx), [`NoteEditor`](../../../../../frontend/src/components/knowledge_base/document/NoteEditor.tsx), [`NewNoteModal`](../../../../../frontend/src/components/knowledge_base/document/NewNoteModal.tsx)
 
 Rich note-taking features:
 - Sticky note visual style
@@ -184,7 +193,7 @@ Rich note-taking features:
 
 ### 7. Extract and Analysis Management
 
-**Components**: `ExtractTraySelector`, `AnalysisTraySelector` (imported in `4:139-140`)
+**Components**: [`FloatingExtractsPanel`](../../../../../frontend/src/components/knowledge_base/document/FloatingExtractsPanel.tsx), [`FloatingAnalysesPanel`](../../../../../frontend/src/components/knowledge_base/document/FloatingAnalysesPanel.tsx)
 
 Document analysis features:
 - Run custom analyzers on documents
@@ -194,7 +203,7 @@ Document analysis features:
 
 ### 8. Floating Controls
 
-**Components**: `FloatingDocumentControls`, `FloatingDocumentInput`, `ZoomControls`
+**Components**: [`FloatingDocumentControls`](../../../../../frontend/src/components/knowledge_base/document/FloatingDocumentControls.tsx), [`FloatingDocumentInput`](../../../../../frontend/src/components/knowledge_base/document/FloatingDocumentInput.tsx), [`ZoomControls`](../../../../../frontend/src/components/knowledge_base/document/ZoomControls.tsx)
 
 Modern floating UI elements:
 - Zoom in/out controls
@@ -279,22 +288,26 @@ The system uses Jotai atoms for reactive state management:
 
 ### DocumentKnowledgeBase.tsx
 
+**Source**: [`frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`](../../../../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx)
+
 The main container component that:
 - Manages the overall layout with resizable panels
 - Handles data fetching via GraphQL
 - Coordinates between knowledge base view and document annotation view
 - Manages chat conversations, notes, and document relationships
-- Controls layer switching and tab navigation
+- Controls layer switching and sidebar mode navigation
 - Handles initial annotation selection from props or URL
 
 Key responsibilities:
-- Data loading and transformation (referenced in `4:419-590`)
-- Panel resize management (referenced in `4:1356-1403`)
-- Tab click handling (referenced in `4:1899-1924`)
+- Data loading and transformation
+- Panel resize management
+- Sidebar mode switching (chat, feed, extract, analysis, discussions)
 - Layer switching logic
 - URL parameter synchronization
 
 ### PDF.tsx
+
+**Source**: [`frontend/src/components/annotator/renderers/pdf/PDF.tsx`](../../../../../frontend/src/components/annotator/renderers/pdf/PDF.tsx)
 
 The virtualization engine that:
 - Calculates which pages should be visible based on scroll position
@@ -304,6 +317,8 @@ The virtualization engine that:
 
 ### PDFPage.tsx
 
+**Source**: [`frontend/src/components/annotator/renderers/pdf/PDFPage.tsx`](../../../../../frontend/src/components/annotator/renderers/pdf/PDFPage.tsx)
+
 Renders individual PDF pages when visible:
 - Manages its own canvas and PDF rendering
 - Displays all annotations for the page
@@ -312,13 +327,17 @@ Renders individual PDF pages when visible:
 
 ### UnifiedContentFeed
 
-New component that provides a unified view of all document content:
+**Source**: [`frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx)
+
+Component that provides a unified view of all document content:
 - Combines notes, annotations, relationships, and search results
 - Sortable by page order or chronologically
 - Filterable by content type
 - Provides consistent interaction patterns
 
 ### FloatingSummaryPreview
+
+**Source**: [`frontend/src/components/knowledge_base/document/floating_summary_preview/FloatingSummaryPreview.tsx`](../../../../../frontend/src/components/knowledge_base/document/floating_summary_preview/FloatingSummaryPreview.tsx)
 
 Picture-in-picture style component that:
 - Shows document summary while in document layer

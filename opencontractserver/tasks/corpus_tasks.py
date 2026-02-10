@@ -871,3 +871,188 @@ def ensure_embeddings_for_corpus(
         logger.error(f"ensure_embeddings_for_corpus() failed: {e}")
         result["errors"].append(str(e))
         return result
+
+
+# --------------------------------------------------------------------------- #
+# Re-Embed Corpus Task (Issue #437)
+# --------------------------------------------------------------------------- #
+
+
+@shared_task
+def reembed_corpus(
+    corpus_id: int | str,
+    new_embedder_path: str,
+) -> dict:
+    """
+    Re-embed all annotations in a corpus with a new embedder.
+
+    This is the controlled migration path for changing a corpus's embedder
+    after documents have been added. It:
+    1. Updates corpus.preferred_embedder to the new embedder
+    2. Finds all annotations in the corpus (via DocumentPath + StructuralAnnotationSets)
+    3. Queues batch embedding tasks for all annotations missing the new embedder
+    4. Unlocks the corpus when complete
+
+    The corpus should be locked (backend_lock=True) before calling this task.
+
+    Args:
+        corpus_id: ID of the corpus to re-embed
+        new_embedder_path: Fully qualified path to the new embedder class
+
+    Returns:
+        dict: Summary of re-embedding tasks queued
+    """
+    from opencontractserver.annotations.models import Annotation, Embedding
+    from opencontractserver.constants.document_processing import (
+        EMBEDDING_BATCH_SIZE,
+        MAX_REEMBED_TASKS_PER_RUN,
+    )
+    from opencontractserver.documents.models import DocumentPath
+    from opencontractserver.tasks.embeddings_task import (
+        calculate_embeddings_for_annotation_batch,
+    )
+
+    logger.info(
+        f"reembed_corpus() - corpus={corpus_id}, new_embedder={new_embedder_path}"
+    )
+
+    result = {
+        "corpus_id": corpus_id,
+        "new_embedder_path": new_embedder_path,
+        "total_annotations": 0,
+        "already_embedded": 0,
+        "tasks_queued": 0,
+        "capped": False,
+        "errors": [],
+    }
+
+    corpus = None
+    try:
+        try:
+            corpus = Corpus.objects.get(pk=corpus_id)
+        except Corpus.DoesNotExist:
+            result["errors"].append("Corpus not found")
+            return result
+
+        # Update the corpus's preferred_embedder
+        old_embedder = corpus.preferred_embedder
+        corpus.preferred_embedder = new_embedder_path
+        # Use update_fields to avoid triggering the full save() logic
+        corpus.save(update_fields=["preferred_embedder", "modified"])
+        logger.info(
+            f"Updated corpus {corpus_id} preferred_embedder: "
+            f"{old_embedder} -> {new_embedder_path}"
+        )
+
+        # Get all document IDs in this corpus
+        doc_ids = list(
+            DocumentPath.objects.filter(
+                corpus=corpus, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+        )
+
+        if not doc_ids:
+            logger.info(f"Corpus {corpus_id} has no documents, nothing to re-embed")
+            return result
+
+        # Get all annotation IDs for documents in this corpus
+        # Include both corpus-scoped annotations and structural annotations
+        annotation_ids = list(
+            Annotation.objects.filter(
+                Q(document_id__in=doc_ids)
+                | Q(structural=True, structural_set__documents__in=doc_ids)
+            )
+            .distinct()
+            .values_list("id", flat=True)
+        )
+
+        result["total_annotations"] = len(annotation_ids)
+
+        if not annotation_ids:
+            logger.info(f"No annotations found for corpus {corpus_id}")
+            return result
+
+        # Find which annotations already have embeddings for the new embedder
+        existing_ids = set(
+            Embedding.objects.filter(
+                annotation_id__in=annotation_ids,
+                embedder_path=new_embedder_path,
+            ).values_list("annotation_id", flat=True)
+        )
+        result["already_embedded"] = len(existing_ids)
+
+        # Queue tasks only for annotations missing the new embedder's embeddings
+        missing_ids = [aid for aid in annotation_ids if aid not in existing_ids]
+
+        if not missing_ids:
+            logger.info(
+                f"All {len(annotation_ids)} annotations already have embeddings "
+                f"for {new_embedder_path}"
+            )
+            return result
+
+        total_batches = (
+            len(missing_ids) + EMBEDDING_BATCH_SIZE - 1
+        ) // EMBEDDING_BATCH_SIZE
+        logger.info(
+            f"Queueing re-embedding for {len(missing_ids)} annotations "
+            f"(of {len(annotation_ids)} total) in up to {total_batches} batches "
+            f"using {new_embedder_path}"
+        )
+
+        # Queue in batches, capped to prevent flooding the Celery queue.
+        # The task is idempotent: re-running it will skip already-embedded
+        # annotations, so capping here is safe for very large corpuses.
+        for i in range(0, len(missing_ids), EMBEDDING_BATCH_SIZE):
+            if result["tasks_queued"] >= MAX_REEMBED_TASKS_PER_RUN:
+                remaining = total_batches - result["tasks_queued"]
+                logger.warning(
+                    f"Reached task queue cap ({MAX_REEMBED_TASKS_PER_RUN}). "
+                    f"{remaining} batches deferred. Re-run to continue."
+                )
+                result["capped"] = True
+                break
+
+            batch = missing_ids[i : i + EMBEDDING_BATCH_SIZE]
+            calculate_embeddings_for_annotation_batch.delay(
+                annotation_ids=batch,
+                corpus_id=corpus_id,
+                embedder_path=new_embedder_path,
+            )
+            result["tasks_queued"] += 1
+
+            # Progress logging every 50 batches
+            if result["tasks_queued"] % 50 == 0:
+                logger.info(
+                    f"reembed_corpus() progress: {result['tasks_queued']}/{total_batches} "
+                    f"batches queued for corpus {corpus_id}"
+                )
+
+        logger.info(
+            f"reembed_corpus() complete - queued {result['tasks_queued']} tasks "
+            f"for {len(missing_ids)} annotations"
+        )
+
+    except Exception as e:
+        logger.error(f"reembed_corpus() failed: {e}")
+        result["errors"].append(str(e))
+        # Mark corpus as errored so the UI can display the failure
+        if corpus:
+            try:
+                corpus.error = True
+                corpus.save(update_fields=["error", "modified"])
+            except Exception:
+                pass
+
+    finally:
+        # Always unlock the corpus, whether we succeeded, failed, or returned early.
+        # This prevents permanently locked corpuses from any code path.
+        if corpus:
+            try:
+                Corpus.objects.filter(pk=corpus.pk).update(backend_lock=False)
+            except Exception:
+                logger.error(
+                    f"CRITICAL: Failed to unlock corpus {corpus_id} after re-embed"
+                )
+
+    return result

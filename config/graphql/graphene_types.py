@@ -617,14 +617,30 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
+    _VISIBLE_CORPUS_IDS_CACHE_KEY = "_docpath_visible_corpus_ids"
+
+    @classmethod
+    def _get_visible_corpus_ids(cls, info):
+        """Get visible corpus IDs with request-level caching to prevent N+1 queries."""
+        from opencontractserver.corpuses.models import Corpus
+
+        user = info.context.user
+        user_id = getattr(user, "id", "anonymous")
+        cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user_id}"
+
+        if hasattr(info.context, cache_key):
+            return getattr(info.context, cache_key)
+
+        visible_ids = set(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+        setattr(info.context, cache_key, visible_ids)
+        return visible_ids
+
     @classmethod
     def get_queryset(cls, queryset, info):
         """Filter paths to current, non-deleted paths in visible corpuses."""
-        from opencontractserver.corpuses.models import Corpus
-
-        visible_corpus_ids = Corpus.objects.visible_to_user(
-            info.context.user
-        ).values_list("id", flat=True)
+        visible_corpus_ids = cls._get_visible_corpus_ids(info)
 
         if issubclass(type(queryset), QuerySet):
             return queryset.filter(
@@ -1931,19 +1947,19 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_documents(self, info):
         """
         Custom resolver for documents field that uses DocumentPath.
-        Returns documents with active paths in this corpus.
+        Returns documents with active paths in this corpus, filtered by
+        document-level visibility.
+
+        Document visibility is independent of corpus visibility:
+        Effective Permission = MIN(document_permission, corpus_permission).
+        A private document in a public corpus is still hidden from
+        users without document-level access.
         """
-        user = getattr(info.context, "user", None)
-        # Use the Corpus method that queries via DocumentPath
-        documents = self.get_documents()
-        # Apply visibility filtering
         from opencontractserver.documents.models import Document
 
-        if hasattr(Document.objects, "visible_to_user"):
-            return Document.objects.filter(
-                id__in=documents.values_list("id", flat=True)
-            ).visible_to_user(user)
-        return documents
+        user = getattr(info.context, "user", None)
+        corpus_doc_ids = self.get_documents().values_list("id", flat=True)
+        return Document.objects.filter(id__in=corpus_doc_ids).visible_to_user(user)
 
     def resolve_annotations(self, info):
         """

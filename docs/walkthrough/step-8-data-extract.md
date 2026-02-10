@@ -4,6 +4,9 @@ You can easily use OpenContracts to create an "Extract" - a collection of querie
 points, represented as columns in a grid, that will be asked of every document in the extract (represented as rows).
 You can define complex extract schemas, including python primitives, Pydantic models (no nesting - yet) and lists.
 
+Under the hood, the extraction system uses an agent-based pipeline powered by PydanticAI that intelligently retrieves
+and processes document content. For technical details, see the [LLM Framework documentation](../../architecture/llms/README.md).
+
 ## Building a Datagrid
 
 To create a data grid, you can start by adding documents or adding data fields. Your choice. If you selected a corpus

@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
 - **Migration `0025_alter_userexport_format_add_v2`**: Adds `OPEN_CONTRACTS_V2` to UserExport format choices
 
+#### Edge Case Tests for Personal Corpus (Issue #839)
+- **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
+- **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
+- **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
 ### Fixed
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
@@ -51,6 +58,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Important Migration Notes
 
+**Migration 0040 (`corpus_created_with_embedder`) backfills existing corpuses**
+
+This release includes a data migration that:
+- Adds a `created_with_embedder` audit field to all corpuses
+- Backfills `preferred_embedder` on existing corpuses that don't have one set (uses current `DEFAULT_EMBEDDER`)
+- Backfills `created_with_embedder` from `preferred_embedder`
+
+This migration is safe and non-destructive. Existing corpuses with explicit `preferred_embedder` values are unchanged.
+
 **Migration 0038 (`create_personal_corpuses`) is IRREVERSIBLE**
 
 This release includes a data migration that creates personal "My Documents" corpuses for all users and moves standalone documents into them. This migration **cannot be rolled back** via `python manage.py migrate`. Attempting to reverse will raise `NotImplementedError`.
@@ -71,6 +87,22 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Permission-aware**: Retry controls only appear when the user has permission to retry (`canRetry` field from backend)
 - **Error messages**: Processing error messages from the backend are displayed on the failure overlay (truncated for readability)
 - Files: `frontend/src/components/documents/ModernDocumentItem.tsx`, `frontend/src/components/documents/DocumentItem.tsx`, `frontend/src/graphql/queries.ts`, `frontend/src/graphql/mutations.ts`, `frontend/src/types/graphql-api.ts`
+
+#### Embedder Consistency Management (Issue #437)
+- **Frozen embedder binding at corpus creation**: `preferred_embedder` is now auto-populated from `DEFAULT_EMBEDDER` when a corpus is created without an explicit embedder. This decouples existing corpuses from future changes to the global setting.
+  - Files: `opencontractserver/corpuses/models.py` (save method)
+- **Audit trail field `created_with_embedder`**: Records which embedder was active at corpus creation. Never changes, even after re-embedding.
+  - Files: `opencontractserver/corpuses/models.py`, migration `0040_corpus_created_with_embedder.py`
+- **Immutability guard on `preferred_embedder`**: `UpdateCorpusMutation` rejects changes to `preferred_embedder` after documents have been added to a corpus, preventing inconsistent embeddings.
+  - Files: `config/graphql/mutations.py` (UpdateCorpusMutation.mutate)
+- **`reEmbedCorpus` mutation**: Controlled migration path for changing a corpus's embedder. Locks the corpus, queues background re-embedding for all annotations, and unlocks when complete.
+  - Files: `config/graphql/mutations.py` (ReEmbedCorpus), `opencontractserver/tasks/corpus_tasks.py` (reembed_corpus)
+- **Fork with embedder override**: `forkCorpus` mutation now accepts optional `preferredEmbedder` argument to create the fork with a different embedder.
+  - Files: `config/graphql/mutations.py` (StartCorpusFork)
+- **Corpus-scoped search uses corpus embedder**: `resolve_semantic_search` now uses `corpus.preferred_embedder` for corpus-scoped queries instead of the global `DEFAULT_EMBEDDER`, ensuring consistent results.
+  - Files: `config/graphql/queries.py` (resolve_semantic_search)
+- **Startup system check**: Django system check warns at startup if `DEFAULT_EMBEDDER` has changed since existing corpuses were created, preventing silent search inconsistencies.
+  - Files: `opencontractserver/corpuses/checks.py`, `opencontractserver/corpuses/apps.py`
 
 #### Auth0 Authentication for Django Admin
 - **Auth0 admin login support**: Django admin now supports Auth0 authentication when `USE_AUTH0=True`
@@ -332,6 +364,26 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/graphql/queries.ts:752`
 
 ### Changed
+
+#### BREAKING: Removed Corpus.documents M2M Relationship (PR #840)
+- **Removed `Corpus.documents` ManyToManyField**: DocumentPath is now the sole source of truth for corpus-document relationships
+  - Migration `0039_remove_corpus_documents_m2m` validates no orphaned M2M entries before removal
+  - All code paths now use `corpus.add_document()`, `corpus.remove_document()`, `corpus.get_documents()`, `corpus.document_count()`
+  - GraphQL `CorpusType.documents` field now resolves via explicit DocumentPath-based resolver
+  - Frontend queries updated to use `documentCount` field instead of `documents { totalCount }`
+  - Files: `opencontractserver/corpuses/models.py`, `config/graphql/graphene_types.py`, `config/graphql/queries.py`
+- **Removed deprecated Corpus methods**: `_create_text_document_internal()` and `create_text_document()` removed (use `import_content()` instead)
+  - Removed deprecated `content` parameter from `add_document()` (use `import_content()` for content-based imports)
+  - Files: `opencontractserver/corpuses/models.py`
+- **Removed `sync_m2m_to_documentpath` management command**: No longer needed after M2M removal
+  - Files: `opencontractserver/documents/management/commands/sync_m2m_to_documentpath.py` (deleted)
+- **Added request-level caching to DocumentPathType**: Visible corpus IDs now cached per-request to prevent N+1 queries
+  - Follows same pattern as `ConversationQueryOptimizer` and `DocumentRelationshipQueryOptimizer`
+  - Files: `config/graphql/graphene_types.py:620-636`
+- **Fixed stale frontend GraphQL queries**: Two queries still referenced removed `documents { totalCount }` connection field
+  - `GET_EDITABLE_CORPUSES` in `AddToCorpusModal.tsx` now uses `documentCount`
+  - `GET_MY_CORPUSES` in `queries.ts` now uses `documentCount`
+  - Files: `frontend/src/components/modals/AddToCorpusModal.tsx`, `frontend/src/graphql/queries.ts`
 
 #### Pipeline Configuration UI Redesign
 - **Replaced JSON-based configuration with visual pipeline flow**: System Settings page redesigned for intuitive configuration

@@ -1,178 +1,120 @@
 # Frontend Configuration
 
-## Why?
+*Last Updated: 2026-01-09*
 
-The frontend configuration variables should not be secrets as there is no way to keep them secure on the frontend. That
-said, being able to specify certain configurations via environment variables makes configuration and deployment much
-easier.
+## Overview
 
-## What Can be Configured?
+The frontend configuration variables should not be secrets as there is no way to keep them secure on the frontend. That said, being able to specify certain configurations via environment variables makes configuration and deployment much easier.
 
-Our frontend config file should look like this (The `OPEN_CONTRACTS_` prefixes are necessary to get the env variables
-injected into the frontend container. The env variable that shows up on `window._env_` in the React frontend will omit
-the prefix, however - e.g. `OPEN_CONTRACTS_REACT_APP_APPLICATION_DOMAIN` will show up as `REACT_APP_APPLICATION_DOMAIN`):
+**Reference**: See sample env files in [docs/sample_env_files/frontend/](../sample_env_files/frontend/) for complete examples.
 
-```
-OPEN_CONTRACTS_REACT_APP_APPLICATION_DOMAIN=
-OPEN_CONTRACTS_REACT_APP_APPLICATION_CLIENT_ID=
-OPEN_CONTRACTS_REACT_APP_AUDIENCE=http://localhost:3000
-OPEN_CONTRACTS_REACT_APP_API_ROOT_URL=https://opencontracts.opensource.legal
+## Environment Variable Naming by Context
 
-# Uncomment to use Auth0 (you must then set the DOMAIN and CLIENT_ID envs above
-# OPEN_CONTRACTS_REACT_APP_USE_AUTH0=true
+The frontend uses different environment variable prefixes depending on the deployment context:
 
-# Uncomment to enable access to analyzers via the frontend
-# OPEN_CONTRACTS_REACT_APP_USE_ANALYZERS=true
+| Context | Prefix | Example |
+|---------|--------|---------|
+| Local development (Vite) | `VITE_` | `VITE_USE_AUTH0=true` |
+| Production (Docker/K8s) | `OPEN_CONTRACTS_` | `OPEN_CONTRACTS_REACT_APP_USE_AUTH0=true` |
 
-# Uncomment to enable access to import functionality via the frontend
-# OPEN_CONTRACTS_REACT_APP_ALLOW_IMPORTS=true
-```
+**How it works**: In production, the container entrypoint converts `OPEN_CONTRACTS_REACT_APP_*` environment variables to `REACT_APP_*` on `window._env_`. For example, `OPEN_CONTRACTS_REACT_APP_USE_AUTH0` becomes available as `REACT_APP_USE_AUTH0` in the frontend code.
 
-### Local development (Vite)
+## Available Configuration Options
 
-Use a file at `/.envs/.local/.frontend` with `VITE_*` keys, for example:
+| Setting | Local (VITE_) | Production (OPEN_CONTRACTS_REACT_APP_) | Description |
+|---------|---------------|----------------------------------------|-------------|
+| Auth0 toggle | `VITE_USE_AUTH0` | `OPEN_CONTRACTS_REACT_APP_USE_AUTH0` | Enable Auth0 authentication (default: false) |
+| Auth0 domain | `VITE_APPLICATION_DOMAIN` | `OPEN_CONTRACTS_REACT_APP_APPLICATION_DOMAIN` | Auth0 domain (required if Auth0 enabled) |
+| Auth0 client ID | `VITE_APPLICATION_CLIENT_ID` | `OPEN_CONTRACTS_REACT_APP_APPLICATION_CLIENT_ID` | Auth0 client ID (required if Auth0 enabled) |
+| Auth0 audience | `VITE_AUDIENCE` | `OPEN_CONTRACTS_REACT_APP_AUDIENCE` | Auth0 API audience |
+| API root URL | `VITE_API_ROOT_URL` | `OPEN_CONTRACTS_REACT_APP_API_ROOT_URL` | Backend API URL |
+| Analyzers | `VITE_USE_ANALYZERS` | `OPEN_CONTRACTS_REACT_APP_USE_ANALYZERS` | Enable analyzer functionality |
+| Imports | `VITE_ALLOW_IMPORTS` | `OPEN_CONTRACTS_REACT_APP_ALLOW_IMPORTS` | Enable corpus import from ZIP files |
+| WebSocket URL | `VITE_WS_URL` | N/A (auto-proxied in dev) | WebSocket connection URL |
 
-```
-VITE_APPLICATION_DOMAIN=dev-your.auth0.com
-VITE_APPLICATION_CLIENT_ID=your-client-id
-VITE_AUDIENCE=https://yourdomain.com/contracts
-VITE_API_ROOT_URL=http://localhost:8000
-VITE_USE_AUTH0=true
-VITE_USE_ANALYZERS=true
-VITE_ALLOW_IMPORTS=true
-```
+## Local Development (Vite)
 
-In production (Kubernetes/Docker), prefer `OPEN_CONTRACTS_*` keys in the environment which the container entrypoint converts to the runtime `REACT_APP_*` config. See k8s production README and `02-configmaps.yaml` for examples.
+For local development, create a file at `.envs/.local/.frontend` with `VITE_*` prefixed variables:
 
-ATM, there are three key configurations:
-1. **OPEN_CONTRACTS_REACT_APP_USE_AUTH0** - uncomment this / set it to true to switch the frontend login components and
-   auth flow from django password auth to Auth0 oauth2. IF this is true, you also need to provide valid configurations
-   for `OPEN_CONTRACTS_REACT_APP_APPLICATION_DOMAIN`, `OPEN_CONTRACTS_REACT_APP_APPLICATION_CLIENT_ID`, and
-   `OPEN_CONTRACTS_REACT_APP_AUDIENCE`. These are configured
-   on the Auth0 platform. We don't have a walkthrough for that ATM.
-2. **OPEN_CONTRACTS_REACT_APP_USE_ANALYZERS** - allow users to see and use analyzers. False on the demo deployment.
-3. **OPEN_CONTRACTS_REACT_APP_ALLOW_IMPORTS** - do not let people upload zip files and attempt to import them. Not
-   recommended on truly public installations as security will be challenging. Internal to an org should be OK, but
-   still use caution.
+**Reference**: See [docs/sample_env_files/frontend/local/django.auth.env](../sample_env_files/frontend/local/django.auth.env) for Django auth or [docs/sample_env_files/frontend/local/with.auth0.env](../sample_env_files/frontend/local/with.auth0.env) for Auth0.
 
-## How to Configure
+The Vite dev server runs on port **5173** and automatically proxies `/graphql`, `/api`, and `/ws` to the Django backend on port 8000.
+
+## Production Deployment (Docker/Kubernetes)
+
+For production, use `OPEN_CONTRACTS_*` prefixed variables. The container entrypoint converts these to runtime `REACT_APP_*` config.
+
+**Reference**: See [docs/sample_env_files/frontend/production/frontend.env](../sample_env_files/frontend/production/frontend.env) for a complete example.
+
+## Key Configuration Details
+
+### 1. Authentication Mode (`USE_AUTH0`)
+
+Set to `true` to switch from Django password auth to Auth0 OAuth2. When enabled, you must also provide:
+- `APPLICATION_DOMAIN` - Your Auth0 domain
+- `APPLICATION_CLIENT_ID` - Your Auth0 application client ID
+- `AUDIENCE` - Your Auth0 API audience
+
+### 2. Analyzer Access (`USE_ANALYZERS`)
+
+Controls whether users can see and use document analyzers. Set to `false` on demo deployments where analyzer access should be restricted.
+
+### 3. Import Functionality (`ALLOW_IMPORTS`)
+
+Controls whether users can upload ZIP files for corpus imports. Not recommended for public installations due to security considerations. Internal organizational deployments should still use caution.
+
+## Configuration Methods for Docker Compose
 
 ### Method 1: Using an `.env` File
 
-This method involves using a `.env` file that Docker Compose automatically picks up.
+Docker Compose automatically picks up a `.env` file in the same directory as your `docker-compose.yml`.
 
-#### Steps:
-1. Create a file named `.env` in the same directory as your `docker-compose.yml` file.
-2. Copy the contents of your environment variable file into this `.env` file.
-3. In your `docker-compose.yml`, you don't need to explicitly specify the env file.
-
-#### Example `docker-compose.yml`:
-```yaml
-version: '3'
-services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    # No need to specify env_file here
-```
-
-#### Pros:
-- Simple setup
-- Docker Compose automatically uses the `.env` file
-- Easy to version control (if desired)
-
-#### Cons:
-- All services defined in the Docker Compose file will have access to these variables
-- May not be suitable if you need different env files for different services
+**Pros**: Simple setup, easy to version control
+**Cons**: All services share the same variables
 
 ### Method 2: Using `env_file` in Docker Compose
 
-This method allows you to specify a custom named env file for each service.
+Specify a custom env file for each service:
 
-#### Steps:
-1. Keep your existing `.env` file (or rename it if desired).
-2. In your `docker-compose.yml`, specify the env file using the `env_file` key.
-
-#### Example `docker-compose.yml`:
 ```yaml
-version: '3'
 services:
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
     env_file:
-      - ./.env  # or your custom named file
+      - ./.envs/.local/.frontend
 ```
 
-#### Pros:
-- Allows using different env files for different services
-- More explicit than relying on the default `.env` file
+**Pros**: Different env files per service, explicit configuration
+**Cons**: Requires specifying in compose file
 
-#### Cons:
-- Requires specifying the env file in the Docker Compose file
+### Method 3: Direct Environment Variables
 
-### Method 3: Defining Environment Variables Directly in Docker Compose
+Define variables directly in `docker-compose.yml`:
 
-This method involves defining the environment variables directly in the `docker-compose.yml` file.
-
-#### Steps:
-1. In your `docker-compose.yml`, use the `environment` key to define variables.
-
-#### Example `docker-compose.yml`:
 ```yaml
-version: '3'
 services:
   frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
     environment:
-      - OPEN_CONTRACTS_REACT_APP_APPLICATION_DOMAIN=yourdomain.com
-      - OPEN_CONTRACTS_REACT_APP_APPLICATION_CLIENT_ID=your_client_id
-      - OPEN_CONTRACTS_REACT_APP_AUDIENCE=http://localhost:3000
-      - OPEN_CONTRACTS_REACT_APP_API_ROOT_URL=https://opencontracts.opensource.legal
-      - OPEN_CONTRACTS_REACT_APP_USE_AUTH0=true
+      - OPEN_CONTRACTS_REACT_APP_USE_AUTH0=false
       - OPEN_CONTRACTS_REACT_APP_USE_ANALYZERS=true
-      - OPEN_CONTRACTS_REACT_APP_ALLOW_IMPORTS=true
 ```
 
-#### Pros:
-- All configuration is in one file
-- Easy to see all environment variables at a glance
+**Pros**: All configuration visible in one file
+**Cons**: Can make compose file long, sensitive info exposed
 
-#### Cons:
-- Can make the `docker-compose.yml` file long and harder to manage
-- Sensitive information in the Docker Compose file may be a security risk
+### Method 4: Combined Approach
 
-### Method 4: Combining `env_file` and `environment`
+Use `env_file` for most variables and `environment` for overrides:
 
-This method allows you to use an env file for most variables and override or add specific ones in the Docker Compose file.
-
-#### Steps:
-1. Keep your `.env` file with most variables.
-2. In `docker-compose.yml`, use both `env_file` and `environment`.
-
-#### Example `docker-compose.yml`:
 ```yaml
-version: '3'
 services:
   frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
     env_file:
-      - ./.env
+      - ./.envs/.local/.frontend
     environment:
-      - REACT_APP_USE_AUTH0=true
-      - REACT_APP_USE_ANALYZERS=true
-      - REACT_APP_ALLOW_IMPORTS=true
+      - OPEN_CONTRACTS_REACT_APP_USE_ANALYZERS=true
 ```
 
-#### Pros:
-- Flexibility to use env files and override when needed
-- Can keep sensitive info in env file and non-sensitive in Docker Compose
-
-#### Cons:
-- Need to be careful about precedence (Docker Compose values override env file)
+**Note**: Docker Compose `environment` values override `env_file` values.

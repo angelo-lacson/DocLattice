@@ -154,7 +154,17 @@ class Corpus(TreeNode):
         max_length=1024,
         null=True,
         blank=True,
-        help_text="Fully qualified Python path to the embedder class to use for this corpus",
+        help_text="Fully qualified Python path to the embedder class to use for this corpus. "
+        "Auto-populated from DEFAULT_EMBEDDER at creation if not set. "
+        "Immutable after documents are added (use re-embed to change).",
+    )
+    created_with_embedder = django.db.models.CharField(
+        max_length=1024,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="The embedder that was active when this corpus was created. "
+        "Set automatically and never changes (audit trail).",
     )
 
     # Agent instructions
@@ -338,7 +348,9 @@ class Corpus(TreeNode):
 
     # Override save to update modified on save
     def save(self, *args, **kwargs):
-        """On save, update timestamps"""
+        """On save, update timestamps and freeze embedder on creation."""
+        from django.conf import settings
+
         # Ensure slug exists and is unique within creator scope
         if not self.slug or not isinstance(self.slug, str) or not self.slug.strip():
             base_value = self.title or "corpus"
@@ -357,9 +369,31 @@ class Corpus(TreeNode):
 
         if not self.pk:
             self.created = timezone.now()
+
+            # Freeze embedder at creation time (Issue #437):
+            # If no preferred_embedder was explicitly provided, default to the
+            # current DEFAULT_EMBEDDER so the corpus has a stable, immutable
+            # binding that won't change if the global setting is later updated.
+            default_embedder = getattr(settings, "DEFAULT_EMBEDDER", None)
+            if not self.preferred_embedder and default_embedder:
+                self.preferred_embedder = default_embedder
+
+            # Record which embedder was active at creation (audit trail).
+            # This never changes, even if preferred_embedder is later updated
+            # through a re-embed operation.
+            self.created_with_embedder = self.preferred_embedder or default_embedder
+
         self.modified = timezone.now()
 
         return super().save(*args, **kwargs)
+
+    def has_documents(self) -> bool:
+        """Check whether this corpus has any active documents (via DocumentPath)."""
+        from opencontractserver.documents.models import DocumentPath
+
+        return DocumentPath.objects.filter(
+            corpus=self, is_current=True, is_deleted=False
+        ).exists()
 
     def clean(self):
         """Validate the model before saving."""
@@ -446,7 +480,6 @@ class Corpus(TreeNode):
         path: str = None,
         user=None,
         folder=None,
-        content: bytes = None,
         **doc_kwargs,
     ):
         """
@@ -465,7 +498,6 @@ class Corpus(TreeNode):
             path: The filesystem path within the corpus (auto-generated if not provided)
             user: The user performing the operation (required)
             folder: Optional CorpusFolder to place the document in
-            content: DEPRECATED - use import_content() for content-based imports
             **doc_kwargs: Override properties for the corpus copy
 
         Returns:
@@ -486,13 +518,6 @@ class Corpus(TreeNode):
         if not document:
             raise ValueError(
                 "Document is required. For content-based imports, use import_content()"
-            )
-
-        # Handle deprecated content parameter
-        if content is not None:
-            logger.warning(
-                "content parameter is deprecated in add_document(). "
-                "Use import_content() for content-based imports."
             )
 
         from opencontractserver.documents.models import Document, DocumentPath
@@ -714,46 +739,6 @@ class Corpus(TreeNode):
         )
 
         return doc, status, doc_path
-
-    def _create_text_document_internal(
-        self,
-        content: bytes,
-        filename: str,
-        user,
-        path: str = None,
-        folder=None,
-        file_type: str = "text/plain",
-        **doc_kwargs,
-    ) -> tuple:
-        """
-        DEPRECATED: Use import_content() instead.
-
-        This method is kept for backwards compatibility but no longer supports
-        versioning. New code should use import_content() which routes all file
-        types through the unified versioning pipeline.
-        """
-        logger.warning(
-            "_create_text_document_internal is deprecated. "
-            "Use import_content() for full versioning support."
-        )
-        return self.import_content(
-            content=content,
-            user=user,
-            path=path,
-            folder=folder,
-            filename=filename,
-            file_type=file_type,
-            **doc_kwargs,
-        )
-
-    # Backwards compatibility alias
-    def create_text_document(self, *args, **kwargs):
-        """DEPRECATED: Use import_content() instead."""
-        logger.warning(
-            "create_text_document is deprecated. "
-            "Use import_content() for full versioning support."
-        )
-        return self.import_content(*args, **kwargs)
 
     def remove_document(self, document=None, path: str = None, user=None):
         """
