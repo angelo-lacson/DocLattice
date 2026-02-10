@@ -111,6 +111,9 @@ export const EXTRACT_STATUS_COLORS = {
   [EXTRACT_STATUS.NOT_STARTED]: "default",
 } as const;
 
+// Tool usage UI constants (used by chat ToolUsageIndicator)
+export const TOOL_UNKNOWN_LABEL = "Unknown Tool";
+
 // Conversation type constants (matches backend ConversationTypeChoices)
 export const CONVERSATION_TYPE = {
   CHAT: "CHAT",
@@ -214,7 +217,7 @@ export const SUPPORTED_MIME_TYPES = [
  * Used for matching component supportedFileTypes which use short forms.
  */
 export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
-  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel]),
 );
 
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
