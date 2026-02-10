@@ -74,11 +74,9 @@ export const editingMessageIdAtom = atom<string | null>(null);
 // INLINE THREAD VIEW STATE
 // ============================================================================
 
-/**
- * Currently selected thread ID when viewing inline (in Discussions tab)
- * When set, CorpusDiscussionsView shows ThreadDetailWithContext instead of ThreadList
- */
-export const inlineSelectedThreadIdAtom = atom<string | null>(null);
+// Note: Inline thread selection in CorpusDiscussionsView is now URL-driven
+// via the ?thread= query param, synced through CentralRouteManager to the
+// selectedThreadId reactive var in graphql/cache.ts.
 
 /**
  * Corpus context sidebar expanded state (persisted to localStorage)

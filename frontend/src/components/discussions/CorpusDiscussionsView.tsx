@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useReactiveVar, useQuery } from "@apollo/client";
 import { useAtom } from "jotai";
+import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import {
   MessageSquare,
@@ -11,8 +12,13 @@ import {
   Lightbulb,
   AlertCircle,
 } from "lucide-react";
-import { authToken, openedCorpus } from "../../graphql/cache";
+import {
+  authToken,
+  openedCorpus,
+  selectedThreadId as selectedThreadIdVar,
+} from "../../graphql/cache";
 import { getPermissions } from "../../utils/transform";
+import { updateThreadParam } from "../../utils/navigationUtils";
 import { PermissionTypes } from "../types";
 import { ThreadList } from "../threads/ThreadList";
 import { CreateThreadForm } from "../threads/CreateThreadForm";
@@ -27,11 +33,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "../threads/styles/discussionStyles";
-import {
-  threadSortAtom,
-  ThreadSortOption,
-  inlineSelectedThreadIdAtom,
-} from "../../atoms/threadAtoms";
+import { threadSortAtom, ThreadSortOption } from "../../atoms/threadAtoms";
 import {
   GET_CONVERSATIONS,
   GetConversationsInputs,
@@ -376,6 +378,8 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const corpus = useReactiveVar(openedCorpus);
   const token = useReactiveVar(authToken);
   const isAuthenticated = Boolean(token);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"list" | "search" | "moderation">(
     "list"
@@ -384,24 +388,15 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useAtom(threadSortAtom);
 
-  // Track selected thread for inline viewing
-  const [selectedThreadId, setSelectedThreadId] = useAtom(
-    inlineSelectedThreadIdAtom
-  );
-  const inThreadView = selectedThreadId !== null;
+  // Track selected thread from URL-driven reactive var (?thread= param)
+  // CentralRouteManager Phase 2 reads ?thread= and sets selectedThreadIdVar
+  const currentThreadId = useReactiveVar(selectedThreadIdVar);
+  const inThreadView = currentThreadId !== null;
 
-  // Notify parent when view mode changes
+  // Notify parent when view mode changes (derived from URL state)
   useEffect(() => {
     onViewModeChange?.(inThreadView);
   }, [inThreadView, onViewModeChange]);
-
-  // Reset inline selection when unmounting to prevent stale state
-  // when navigating back to the Discussions tab
-  useEffect(() => {
-    return () => {
-      setSelectedThreadId(null);
-    };
-  }, [setSelectedThreadId]);
 
   // Fetch all threads for stats calculation
   const { data: threadsData } = useQuery<
@@ -458,18 +453,20 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     return hasUpdate || hasPermission;
   }, [corpus]);
 
-  // Handle thread click - show inline instead of navigating away
+  // Handle thread click - update URL to show thread inline
+  // CentralRouteManager will sync ?thread= to selectedThreadIdVar
   const handleThreadClick = useCallback(
     (threadId: string) => {
-      setSelectedThreadId(threadId);
+      updateThreadParam(location, navigate, threadId);
     },
-    [setSelectedThreadId]
+    [location, navigate]
   );
 
-  // Handle back from thread detail - return to list view
+  // Handle back from thread detail - navigate back in history
+  // This pops the history entry pushed by handleThreadClick
   const handleBackToList = useCallback(() => {
-    setSelectedThreadId(null);
-  }, [setSelectedThreadId]);
+    navigate(-1);
+  }, [navigate]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -499,12 +496,12 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     );
   }
 
-  // If a thread is selected, show it inline with context sidebar
-  if (inThreadView && selectedThreadId) {
+  // If a thread is selected (via URL ?thread= param), show it inline with context sidebar
+  if (inThreadView && currentThreadId) {
     return (
       <Container>
         <ThreadDetailWithContext
-          conversationId={selectedThreadId}
+          conversationId={currentThreadId}
           corpusId={corpusId}
           onBack={handleBackToList}
         />
