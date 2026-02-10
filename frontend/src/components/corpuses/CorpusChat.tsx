@@ -110,6 +110,8 @@ interface MessageData {
     | "ASYNC_THOUGHT"
     | "ASYNC_SOURCES"
     | "ASYNC_APPROVAL_NEEDED"
+    | "ASYNC_APPROVAL_RESULT"
+    | "ASYNC_RESUME"
     | "ASYNC_ERROR";
   content: string;
   data?: {
@@ -858,7 +860,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         conversationType: CONVERSATION_TYPE.CHAT,
       },
       fetchPolicy: "network-only",
-    }
+    },
   );
 
   // Lazy query for loading messages of a specific conversation
@@ -866,7 +868,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     fetchChatMessages,
     { data: msgData, loading: loadingMessages, fetchMore: fetchMoreMessages },
   ] = useLazyQuery<GetChatMessagesOutputs, GetChatMessagesInputs>(
-    GET_CHAT_MESSAGES
+    GET_CHAT_MESSAGES,
   );
 
   // messages container ref for scrolling
@@ -889,7 +891,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
           sArr,
           srvMsg.id,
           srvMsg.createdAt,
-          tArr
+          tArr,
         );
       }
     });
@@ -980,7 +982,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     const wsUrl = getCorpusQueryWebSocket(
       corpusId,
       auth_token,
-      isNewChat ? undefined : selectedConversationId
+      isNewChat ? undefined : selectedConversationId,
     );
     const newSocket = new WebSocket(wsUrl);
 
@@ -989,7 +991,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
       setWsError(null);
       console.log(
         "WebSocket connected for corpus conversation:",
-        selectedConversationId
+        selectedConversationId,
       );
     };
 
@@ -1027,19 +1029,78 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             break;
           case "ASYNC_APPROVAL_NEEDED":
             if (data?.pending_tool_call && data?.message_id) {
+              // For sub-agent approvals (ask_document), show the inner
+              // tool name/args so the user understands what is being approved.
+              const toolCall = { ...data.pending_tool_call };
+              if (toolCall.name === "ask_document") {
+                const subName = toolCall.arguments?._sub_tool_name;
+                if (typeof subName === "string" && subName.length > 0) {
+                  toolCall.name = subName;
+                  const subArgs = toolCall.arguments?._sub_tool_arguments;
+                  toolCall.arguments =
+                    subArgs && typeof subArgs === "object" ? subArgs : {};
+                }
+              }
               setPendingApproval({
                 messageId: data.message_id,
-                toolCall: data.pending_tool_call,
+                toolCall,
               });
               setShowApprovalModal(true);
+
+              // Mark the message as awaiting approval
+              setChat((prev) =>
+                prev.map((msg) =>
+                  msg.messageId === data.message_id
+                    ? { ...msg, approvalStatus: "awaiting" as const }
+                    : msg,
+                ),
+              );
+              setServerMessages((prev) =>
+                prev.map((msg) =>
+                  msg.messageId === data.message_id
+                    ? { ...msg, approvalStatus: "awaiting" as const }
+                    : msg,
+                ),
+              );
             }
+            break;
+          case "ASYNC_APPROVAL_RESULT":
+            // Informational – the backend echoes the decision back.
+            if (
+              pendingApproval &&
+              data?.message_id === pendingApproval.messageId
+            ) {
+              setPendingApproval(null);
+              setShowApprovalModal(false);
+              if (data?.decision) {
+                const status = data.decision as "approved" | "rejected";
+                setChat((prev) =>
+                  prev.map((msg) =>
+                    msg.messageId === data.message_id
+                      ? { ...msg, approvalStatus: status, isComplete: true }
+                      : msg,
+                  ),
+                );
+                setServerMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.messageId === data.message_id
+                      ? { ...msg, approvalStatus: status, isComplete: true }
+                      : msg,
+                  ),
+                );
+              }
+            }
+            break;
+          case "ASYNC_RESUME":
+            // Agent is resuming after approval – keep processing indicator.
+            setIsProcessing(true);
             break;
           case "ASYNC_FINISH":
             finalizeStreamingResponse(
               content,
               data?.sources,
               data?.message_id,
-              data?.timeline
+              data?.timeline,
             );
             setIsProcessing(false);
             if (
@@ -1054,7 +1115,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             finalizeStreamingResponse(
               data?.error || "Error",
               [],
-              data?.message_id
+              data?.message_id,
             );
             setIsProcessing(false);
             break;
@@ -1072,7 +1133,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               sourcesToPass,
               data?.message_id,
               undefined,
-              timelineToPass
+              timelineToPass,
             );
             break;
           }
@@ -1237,7 +1298,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
 
   function appendStreamingTokenToChat(
     token: string,
-    overrideMessageId?: string
+    overrideMessageId?: string,
   ): string {
     if (!token) return "";
     let messageId = "";
@@ -1280,7 +1341,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     content: string,
     sourcesData?: WebSocketSources[],
     overrideId?: string,
-    timelineData?: TimelineEntry[]
+    timelineData?: TimelineEntry[],
   ) => {
     // First, update the local chat list **without** triggering any other state updates.
     let lastMsgId: string | undefined;
@@ -1317,7 +1378,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         sourcesData,
         lastMsgId,
         overrideId,
-        timelineData
+        timelineData,
       );
     }
   };
@@ -1330,11 +1391,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     sourcesData?: Array<WebSocketSources>,
     overrideId?: string,
     overrideCreatedAt?: string,
-    timelineData?: TimelineEntry[]
+    timelineData?: TimelineEntry[],
   ): void => {
     if (!overrideId) {
       console.warn(
-        "handleCompleteMessage called without an overrideId - sources may not display correctly"
+        "handleCompleteMessage called without an overrideId - sources may not display correctly",
       );
     }
     const messageId = overrideId ?? `msg_${Date.now()}`;
@@ -1344,12 +1405,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
 
     const mappedSources = mapWebSocketSourcesToChatMessageSources(
       sourcesData,
-      messageId
+      messageId,
     );
 
     setChatSourceState((prev) => {
       const existingIndex = prev.messages.findIndex(
-        (m) => m.messageId === messageId
+        (m) => m.messageId === messageId,
       );
       if (existingIndex !== -1) {
         const existingMsg = prev.messages[existingIndex];
@@ -1388,7 +1449,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    */
   const appendThoughtToMessage = (
     thoughtText: string,
-    data: MessageData["data"] | undefined
+    data: MessageData["data"] | undefined,
   ): void => {
     const messageId = data?.message_id;
     if (!messageId || !thoughtText) return;
@@ -1434,13 +1495,13 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    */
   const mergeSourcesIntoMessage = (
     sourcesData: WebSocketSources[] | undefined,
-    overrideId?: string
+    overrideId?: string,
   ): void => {
     if (!sourcesData?.length || !overrideId) return;
 
     const mappedSources = mapWebSocketSourcesToChatMessageSources(
       sourcesData,
-      overrideId
+      overrideId,
     );
 
     setChatSourceState((prev) => {
@@ -1467,8 +1528,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         ...mappedSources.filter(
           (ms) =>
             !existing.sources.some(
-              (es) => es.annotation_id === ms.annotation_id
-            )
+              (es) => es.annotation_id === ms.annotation_id,
+            ),
         ),
       ];
 
@@ -1518,7 +1579,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         console.log(
           `[CorpusChat] Sending approval decision: ${
             approved ? "APPROVED" : "REJECTED"
-          } for message ${pendingApproval.messageId}`
+          } for message ${pendingApproval.messageId}`,
         );
 
         socketRef.current.send(JSON.stringify(messageData));
@@ -1535,7 +1596,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         setShowApprovalModal(true);
       }
     },
-    [pendingApproval, wsReady]
+    [pendingApproval, wsReady],
   );
 
   // If the GraphQL query fails entirely:
@@ -1623,7 +1684,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               >
                 {combinedMessages.map((msg, idx) => {
                   const sourcedMessage = sourcedMessages.find(
-                    (m) => m.messageId === msg.messageId
+                    (m) => m.messageId === msg.messageId,
                   );
 
                   const sources =
@@ -2072,7 +2133,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                           {JSON.stringify(
                             pendingApproval.toolCall.arguments,
                             null,
-                            2
+                            2,
                           )}
                         </pre>
                       </div>

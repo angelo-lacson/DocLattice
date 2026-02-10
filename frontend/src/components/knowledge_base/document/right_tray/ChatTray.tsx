@@ -115,6 +115,8 @@ export interface MessageData {
     | "ASYNC_THOUGHT"
     | "ASYNC_SOURCES"
     | "ASYNC_APPROVAL_NEEDED"
+    | "ASYNC_APPROVAL_RESULT"
+    | "ASYNC_RESUME"
     | "ASYNC_ERROR";
   content: string;
   data?: {
@@ -252,7 +254,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       error: messagesError,
     },
   ] = useLazyQuery<GetChatMessagesOutputs, GetChatMessagesInputs>(
-    GET_CHAT_MESSAGES
+    GET_CHAT_MESSAGES,
   );
 
   const { chatTrayState, setChatTrayState } = useUISettings();
@@ -280,7 +282,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
             return { ...msg, approvalStatus: status, isComplete: true };
           }
           return msg;
-        })
+        }),
       );
 
       // Update chat messages
@@ -290,10 +292,10 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
             return { ...msg, approvalStatus: status, isComplete: true };
           }
           return msg;
-        })
+        }),
       );
     },
-    []
+    [],
   );
 
   // Flag so we only run initial scroll restore once
@@ -359,7 +361,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
           srvMsgData.sources,
           srvMsg.id,
           srvMsg.createdAt,
-          srvMsgData.timeline
+          srvMsgData.timeline,
         );
       }
     });
@@ -622,7 +624,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
 
   function appendStreamingTokenToChat(
     token: string,
-    overrideMessageId?: string
+    overrideMessageId?: string,
   ): string {
     // Return the messageId
     if (!token) return "";
@@ -676,7 +678,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               top: container.scrollHeight,
               behavior: "smooth",
             }),
-          0
+          0,
         );
       }
     }
@@ -690,7 +692,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
    */
   const appendThoughtToMessage = (
     thoughtText: string,
-    data: MessageData["data"] | undefined
+    data: MessageData["data"] | undefined,
   ): void => {
     const messageId = data?.message_id;
     if (!messageId || !thoughtText) return;
@@ -752,7 +754,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     content: string,
     sourcesData?: WebSocketSources[],
     overrideId?: string,
-    timelineData?: TimelineEntry[]
+    timelineData?: TimelineEntry[],
   ): void => {
     console.log("finalizeStreamingResponse", {
       content,
@@ -796,7 +798,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
         sourcesData,
         lastMsgId,
         undefined,
-        timelineData
+        timelineData,
       );
 
       return updatedMessages;
@@ -838,7 +840,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       documentId,
       auth_token || undefined,
       selectedConversationId,
-      corpusId
+      corpusId,
     );
     const newSocket = new WebSocket(wsUrl);
 
@@ -847,7 +849,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       setWsError(null);
       console.log(
         "WebSocket connected for conversation:",
-        selectedConversationId
+        selectedConversationId,
       );
     };
 
@@ -879,7 +881,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
         if (data?.approval_decision && data?.message_id) {
           updateMessageApprovalStatus(
             data.message_id,
-            data.approval_decision as "approved" | "rejected"
+            data.approval_decision as "approved" | "rejected",
           );
         }
 
@@ -898,7 +900,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               // Update the approval status of the message
               updateMessageApprovalStatus(
                 pendingApproval.messageId,
-                "approved"
+                "approved",
               );
             }
             break;
@@ -921,24 +923,46 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                 prev.map((msg) =>
                   msg.messageId === data.message_id
                     ? { ...msg, approvalStatus: "awaiting" as const }
-                    : msg
-                )
+                    : msg,
+                ),
               );
               setServerMessages((prev) =>
                 prev.map((msg) =>
                   msg.messageId === data.message_id
                     ? { ...msg, approvalStatus: "awaiting" as const }
-                    : msg
-                )
+                    : msg,
+                ),
               );
             }
+            break;
+          case "ASYNC_APPROVAL_RESULT":
+            // Informational – backend echoes the user's decision.
+            if (
+              pendingApproval &&
+              data?.message_id === pendingApproval.messageId
+            ) {
+              setPendingApproval(null);
+              setShowApprovalModal(false);
+              if (data?.decision) {
+                updateMessageApprovalStatus(
+                  pendingApproval.messageId,
+                  data.decision as "approved" | "rejected",
+                );
+              }
+            }
+            break;
+          case "ASYNC_RESUME":
+            // Agent is resuming after approval.  Unlike CorpusChat (which has
+            // an explicit isProcessing state), ChatTray derives its processing
+            // indicator from message state (isAssistantResponding), so no
+            // additional state update is needed here.
             break;
           case "ASYNC_FINISH":
             finalizeStreamingResponse(
               content,
               data?.sources,
               data?.message_id,
-              data?.timeline
+              data?.timeline,
             );
             // Clear pending approval when streaming finishes (covers both approval and rejection cases)
             if (
@@ -950,7 +974,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               if (data?.approval_decision) {
                 updateMessageApprovalStatus(
                   pendingApproval.messageId,
-                  data.approval_decision as "approved" | "rejected"
+                  data.approval_decision as "approved" | "rejected",
                 );
               }
             }
@@ -962,7 +986,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
             finalizeStreamingResponse(
               data?.error || "An unknown error occurred.",
               [],
-              data?.message_id
+              data?.message_id,
             );
             break;
           case "SYNC_CONTENT": {
@@ -992,14 +1016,14 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               "[ChatTray WebSocket] SYNC_CONTENT sources:",
               sourcesToPass,
               "timeline:",
-              timelineToPass
+              timelineToPass,
             );
             handleCompleteMessage(
               content,
               sourcesToPass,
               data?.message_id,
               undefined,
-              timelineToPass
+              timelineToPass,
             );
             break;
           }
@@ -1178,7 +1202,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
         // Update the message status immediately (optimistic update)
         updateMessageApprovalStatus(
           pendingApproval.messageId,
-          approved ? "approved" : "rejected"
+          approved ? "approved" : "rejected",
         );
 
         // Clear pendingApproval immediately since we've processed the decision
@@ -1191,7 +1215,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
         setShowApprovalModal(true);
       }
     },
-    [pendingApproval, wsReady, updateMessageApprovalStatus]
+    [pendingApproval, wsReady, updateMessageApprovalStatus],
   );
 
   // Render error if GraphQL query fails
@@ -1207,7 +1231,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
   // Add these utility functions at the top of the file
   const calculateMessageStats = (conversations: any[]) => {
     const counts = conversations.map(
-      (conv) => conv?.chatMessages?.totalCount || 0
+      (conv) => conv?.chatMessages?.totalCount || 0,
     );
     const max = Math.max(...counts);
     const min = Math.min(...counts);
@@ -1224,7 +1248,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
 
   const getMessageCountColor = (
     count: number,
-    stats: { max: number; min: number; mean: number; stdDev: number }
+    stats: { max: number; min: number; mean: number; stdDev: number },
   ) => {
     if (count === 0) {
       return {
@@ -1255,11 +1279,11 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     sourcesData?: Array<WebSocketSources>,
     overrideId?: string,
     overrideCreatedAt?: string,
-    timelineData?: TimelineEntry[]
+    timelineData?: TimelineEntry[],
   ): void => {
     if (!overrideId) {
       console.warn(
-        "handleCompleteMessage called without an overrideId - sources may not display correctly"
+        "handleCompleteMessage called without an overrideId - sources may not display correctly",
       );
     }
     const messageId = overrideId ?? `msg_${Date.now()}`; // Only fallback if really needed
@@ -1270,12 +1294,12 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
 
     const mappedSources = mapWebSocketSourcesToChatMessageSources(
       sourcesData,
-      messageId
+      messageId,
     );
 
     setChatSourceState((prev) => {
       const existingIndex = prev.messages.findIndex(
-        (m) => m.messageId === messageId
+        (m) => m.messageId === messageId,
       );
 
       if (existingIndex !== -1) {
@@ -1319,14 +1343,14 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
    */
   const mergeSourcesIntoMessage = (
     sourcesData: WebSocketSources[] | undefined,
-    overrideId?: string
+    overrideId?: string,
   ): void => {
     if (!sourcesData?.length || !overrideId) return;
 
     // First convert incoming sources → ChatMessageSource objects.
     const mappedSources = mapWebSocketSourcesToChatMessageSources(
       sourcesData,
-      overrideId
+      overrideId,
     );
 
     // Update ChatSourceAtom – merge or append sources for the message.
@@ -1356,8 +1380,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
         ...mappedSources.filter(
           (ms) =>
             !existing.sources.some(
-              (es) => es.annotation_id === ms.annotation_id
-            )
+              (es) => es.annotation_id === ms.annotation_id,
+            ),
         ),
       ];
 
@@ -1477,7 +1501,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                     {JSON.stringify(
                       pendingApproval.toolCall.arguments,
                       null,
-                      2
+                      2,
                     )}
                   </pre>
                 </div>
@@ -1532,7 +1556,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     const messageStillAwaiting = combinedMessages.some(
       (msg) =>
         msg.messageId === pendingApproval.messageId &&
-        msg.approvalStatus === "awaiting"
+        msg.approvalStatus === "awaiting",
     );
 
     if (!messageStillAwaiting) {
@@ -1611,7 +1635,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
         }, 300);
       }
     },
-    [wsReady, user_obj?.email]
+    [wsReady, user_obj?.email],
   );
 
   // Once the socket is ready, flush the pending initial message (if any)
@@ -1700,7 +1724,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                 {combinedMessages.map((msg, idx) => {
                   // Find if this message has sources in our sourced messages state
                   const sourcedMessage = sourcedMessages.find(
-                    (m) => m.messageId === msg.messageId
+                    (m) => m.messageId === msg.messageId,
                   );
 
                   // Map sources to include onClick handlers and text content
@@ -1810,12 +1834,12 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                       !wsReady
                         ? "Waiting for connection..."
                         : isAssistantResponding
-                        ? "Assistant is responding..."
-                        : "Type your message..."
+                          ? "Assistant is responding..."
+                          : "Type your message..."
                     }
                     disabled={!wsReady || isAssistantResponding}
                     onKeyDown={(
-                      e: React.KeyboardEvent<HTMLTextAreaElement>
+                      e: React.KeyboardEvent<HTMLTextAreaElement>,
                     ) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -1977,7 +2001,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                         }}
                         $colorStyle={getMessageCountColor(
                           conv.chatMessages?.totalCount || 0,
-                          calculateMessageStats(conversations)
+                          calculateMessageStats(conversations),
                         )}
                       >
                         {conv.chatMessages?.totalCount || 0}
