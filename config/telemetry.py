@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import logging
 from datetime import datetime, timezone
+from typing import cast
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -13,6 +14,10 @@ logger = logging.getLogger(__name__)
 # Singleton PostHog client - lazily initialized
 _posthog_client: Posthog | None = None
 _atexit_registered: bool = False
+
+# Cached installation ID - looked up once, never changes for the life of the process
+_UNSET = object()
+_cached_installation_id: str | None | object = _UNSET
 
 
 def _get_posthog_client() -> Posthog | None:
@@ -65,30 +70,48 @@ def _shutdown_posthog_client() -> None:
 
 def _reset_posthog_client() -> None:
     """
-    Reset the singleton client. Used for testing purposes only.
+    Reset the singleton client and cached state. Used for testing purposes only.
 
-    This shuts down the existing client (if any) and clears the singleton,
-    allowing a fresh client to be created on the next call.
+    This shuts down the existing client (if any) and clears all cached
+    singletons (PostHog client + installation ID), allowing fresh lookups
+    on the next call.
 
     Note: The atexit handler remains registered for the lifetime of the
     process - this is intentional as atexit handlers cannot be unregistered.
     """
-    global _posthog_client
+    global _posthog_client, _cached_installation_id
     if _posthog_client is not None:
         try:
             _posthog_client.shutdown()
         except Exception:
             pass
         _posthog_client = None
+    _cached_installation_id = _UNSET
 
 
 def _get_installation_id() -> str | None:
-    """Get the installation ID from the Installation model."""
+    """
+    Get the installation ID from the Installation model.
+
+    The result is cached after the first successful lookup because the
+    installation UUID is a singleton that never changes for the lifetime
+    of the process. This avoids a database hit on every telemetry call.
+
+    Note: Multiple concurrent first calls may race to populate the cache,
+    but this is harmless -- the Installation singleton ensures the same
+    value is cached regardless of which call wins.
+    """
+    global _cached_installation_id
+
+    if _cached_installation_id is not _UNSET:
+        return cast("str | None", _cached_installation_id)
+
     from doclatticeserver.users.models import Installation
 
     try:
         installation = Installation.objects.get()
-        return str(installation.id)
+        _cached_installation_id = str(installation.id)
+        return _cached_installation_id
     except Exception as e:
         logger.warning(f"Failed to get installation ID: {e}")
         return None
