@@ -480,7 +480,7 @@ def package_action_trail(
                     if action.agent_config_id is not None
                     else None
                 ),
-                "agent_prompt": action.agent_prompt or "",
+                "task_instructions": action.task_instructions or "",
                 "pre_authorized_tools": action.pre_authorized_tools or [],
             }
         )

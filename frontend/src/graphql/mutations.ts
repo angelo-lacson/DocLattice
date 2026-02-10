@@ -2178,7 +2178,7 @@ export const CREATE_CORPUS_ACTION = gql`
     $fieldsetId: ID
     $analyzerId: ID
     $agentConfigId: ID
-    $agentPrompt: String
+    $taskInstructions: String
     $preAuthorizedTools: [String]
     $createAgentInline: Boolean
     $inlineAgentName: String
@@ -2195,7 +2195,7 @@ export const CREATE_CORPUS_ACTION = gql`
       fieldsetId: $fieldsetId
       analyzerId: $analyzerId
       agentConfigId: $agentConfigId
-      agentPrompt: $agentPrompt
+      taskInstructions: $taskInstructions
       preAuthorizedTools: $preAuthorizedTools
       createAgentInline: $createAgentInline
       inlineAgentName: $inlineAgentName
@@ -2226,7 +2226,7 @@ export const CREATE_CORPUS_ACTION = gql`
           name
           description
         }
-        agentPrompt
+        taskInstructions
         preAuthorizedTools
       }
     }
@@ -2240,7 +2240,7 @@ export interface CreateCorpusActionInput {
   fieldsetId?: string;
   analyzerId?: string;
   agentConfigId?: string;
-  agentPrompt?: string;
+  taskInstructions?: string;
   preAuthorizedTools?: string[];
   // Inline agent creation parameters
   createAgentInline?: boolean;
@@ -2288,7 +2288,7 @@ export const UPDATE_CORPUS_ACTION = gql`
     $fieldsetId: ID
     $analyzerId: ID
     $agentConfigId: ID
-    $agentPrompt: String
+    $taskInstructions: String
     $preAuthorizedTools: [String]
     $disabled: Boolean
     $runOnAllCorpuses: Boolean
@@ -2300,7 +2300,7 @@ export const UPDATE_CORPUS_ACTION = gql`
       fieldsetId: $fieldsetId
       analyzerId: $analyzerId
       agentConfigId: $agentConfigId
-      agentPrompt: $agentPrompt
+      taskInstructions: $taskInstructions
       preAuthorizedTools: $preAuthorizedTools
       disabled: $disabled
       runOnAllCorpuses: $runOnAllCorpuses
@@ -2326,7 +2326,7 @@ export const UPDATE_CORPUS_ACTION = gql`
           name
           description
         }
-        agentPrompt
+        taskInstructions
         preAuthorizedTools
       }
     }
@@ -2340,7 +2340,7 @@ export interface UpdateCorpusActionInput {
   fieldsetId?: string;
   analyzerId?: string;
   agentConfigId?: string;
-  agentPrompt?: string;
+  taskInstructions?: string;
   preAuthorizedTools?: string[];
   disabled?: boolean;
   runOnAllCorpuses?: boolean;

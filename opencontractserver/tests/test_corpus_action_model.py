@@ -148,14 +148,14 @@ class CorpusActionModelTestCase(TestCase):
         corpus_action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
         self.assertIsNotNone(corpus_action.id)
         self.assertEqual(corpus_action.corpus, self.corpus)
         self.assertEqual(corpus_action.agent_config, self.agent_config)
-        self.assertEqual(corpus_action.agent_prompt, "Summarize this document")
+        self.assertEqual(corpus_action.task_instructions, "Summarize this document")
         self.assertIsNone(corpus_action.fieldset)
         self.assertIsNone(corpus_action.analyzer)
         self.assertEqual(corpus_action.trigger, CorpusActionTrigger.ADD_DOCUMENT)
@@ -165,7 +165,7 @@ class CorpusActionModelTestCase(TestCase):
         corpus_action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Analyze the document and update its description",
+            task_instructions="Analyze the document and update its description",
             pre_authorized_tools=["update_document_description", "search_annotations"],
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
@@ -185,7 +185,7 @@ class CorpusActionModelTestCase(TestCase):
                 trigger=CorpusActionTrigger.ADD_DOCUMENT,
                 creator=self.user,
             )
-        self.assertIn("agent_prompt", str(context.exception))
+        self.assertIn("task_instructions", str(context.exception))
 
     def test_create_corpus_action_with_agent_and_analyzer_fails(self):
         """Test that providing both agent_config and analyzer fails validation."""
@@ -193,7 +193,7 @@ class CorpusActionModelTestCase(TestCase):
             CorpusAction.objects.create(
                 corpus=self.corpus,
                 agent_config=self.agent_config,
-                agent_prompt="Test prompt",
+                task_instructions="Test prompt",
                 analyzer=self.analyzer,
                 trigger=CorpusActionTrigger.ADD_DOCUMENT,
                 creator=self.user,
@@ -205,7 +205,7 @@ class CorpusActionModelTestCase(TestCase):
             CorpusAction.objects.create(
                 corpus=self.corpus,
                 agent_config=self.agent_config,
-                agent_prompt="Test prompt",
+                task_instructions="Test prompt",
                 fieldset=self.fieldset,
                 trigger=CorpusActionTrigger.ADD_DOCUMENT,
                 creator=self.user,
@@ -216,7 +216,7 @@ class CorpusActionModelTestCase(TestCase):
         corpus_action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )

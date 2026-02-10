@@ -74,7 +74,7 @@ export interface CorpusActionData {
   fieldset?: { id: string; name: string } | null;
   analyzer?: { id: string; name: string } | null;
   agentConfig?: { id: string; name: string; description: string } | null;
-  agentPrompt?: string;
+  taskInstructions?: string;
   preAuthorizedTools?: string[];
 }
 
@@ -111,7 +111,7 @@ export const CreateCorpusActionModal: React.FC<
   const [selectedAgentConfigId, setSelectedAgentConfigId] = React.useState<
     string | null
   >(null);
-  const [agentPrompt, setAgentPrompt] = React.useState("");
+  const [taskInstructions, setTaskInstructions] = React.useState("");
   const [preAuthorizedTools, setPreAuthorizedTools] = React.useState<string[]>(
     []
   );
@@ -140,7 +140,7 @@ export const CreateCorpusActionModal: React.FC<
     setSelectedFieldsetId(null);
     setSelectedAnalyzerId(null);
     setSelectedAgentConfigId(null);
-    setAgentPrompt("");
+    setTaskInstructions("");
     setPreAuthorizedTools([]);
     // Reset inline agent creation state
     setUseInlineAgent(true);
@@ -184,7 +184,7 @@ export const CreateCorpusActionModal: React.FC<
       if (actionToEdit.agentConfig) {
         setActionType("agent");
         setSelectedAgentConfigId(actionToEdit.agentConfig.id);
-        setAgentPrompt(actionToEdit.agentPrompt || "");
+        setTaskInstructions(actionToEdit.taskInstructions || "");
         setPreAuthorizedTools(actionToEdit.preAuthorizedTools || []);
         setSelectedFieldsetId(null);
         setSelectedAnalyzerId(null);
@@ -351,8 +351,8 @@ export const CreateCorpusActionModal: React.FC<
           toast.error("Please enter system instructions for the agent");
           return;
         }
-        if (!agentPrompt.trim()) {
-          toast.error("Please enter a task prompt for the agent");
+        if (!taskInstructions.trim()) {
+          toast.error("Please enter task instructions for the agent");
           return;
         }
         if (selectedModerationTools.length === 0) {
@@ -365,8 +365,8 @@ export const CreateCorpusActionModal: React.FC<
           toast.error("Please select an agent configuration");
           return;
         }
-        if (!agentPrompt.trim()) {
-          toast.error("Please enter a prompt for the agent");
+        if (!taskInstructions.trim()) {
+          toast.error("Please enter task instructions for the agent");
           return;
         }
       }
@@ -394,7 +394,7 @@ export const CreateCorpusActionModal: React.FC<
               actionType === "agent"
                 ? selectedAgentConfigId || undefined
                 : undefined,
-            agentPrompt: actionType === "agent" ? agentPrompt : undefined,
+            taskInstructions: actionType === "agent" ? taskInstructions : undefined,
             preAuthorizedTools:
               actionType === "agent" && preAuthorizedTools.length > 0
                 ? preAuthorizedTools
@@ -426,7 +426,7 @@ export const CreateCorpusActionModal: React.FC<
               actionType === "agent" && !isInlineAgentCreation
                 ? selectedAgentConfigId || undefined
                 : undefined,
-            agentPrompt: actionType === "agent" ? agentPrompt : undefined,
+            taskInstructions: actionType === "agent" ? taskInstructions : undefined,
             // For existing agents, use preAuthorizedTools; for inline, use selectedModerationTools
             preAuthorizedTools:
               actionType === "agent"
@@ -605,7 +605,7 @@ export const CreateCorpusActionModal: React.FC<
                 setSelectedFieldsetId(null);
                 setSelectedAnalyzerId(null);
                 setSelectedAgentConfigId(null);
-                setAgentPrompt("");
+                setTaskInstructions("");
                 setPreAuthorizedTools([]);
               }}
             />
@@ -767,11 +767,11 @@ export const CreateCorpusActionModal: React.FC<
                       </Form.Field>
 
                       <Form.Field required>
-                        <label>Agent Task Prompt</label>
+                        <label>Task Instructions</label>
                         <TextArea
-                          value={agentPrompt}
+                          value={taskInstructions}
                           onChange={(e, data) =>
-                            setAgentPrompt(data.value as string)
+                            setTaskInstructions(data.value as string)
                           }
                           placeholder="e.g., 'Review this thread/message for policy compliance and take appropriate action'"
                           rows={3}
@@ -916,11 +916,11 @@ export const CreateCorpusActionModal: React.FC<
                           </Message>
 
                           <Form.Field required>
-                            <label>Agent Prompt</label>
+                            <label>Task Instructions</label>
                             <TextArea
-                              value={agentPrompt}
+                              value={taskInstructions}
                               onChange={(e, data) =>
-                                setAgentPrompt(data.value as string)
+                                setTaskInstructions(data.value as string)
                               }
                               placeholder="Enter the task prompt for the agent"
                               rows={4}
@@ -1001,11 +1001,11 @@ export const CreateCorpusActionModal: React.FC<
                       </Message>
 
                       <Form.Field required>
-                        <label>Agent Prompt</label>
+                        <label>Task Instructions</label>
                         <TextArea
-                          value={agentPrompt}
+                          value={taskInstructions}
                           onChange={(e, data) =>
-                            setAgentPrompt(data.value as string)
+                            setTaskInstructions(data.value as string)
                           }
                           placeholder="Enter the task prompt for the agent (e.g., 'Summarize this document and update its description')"
                           rows={4}

@@ -3431,7 +3431,7 @@ export const GET_CORPUS_ACTIONS = gql`
             name
             description
           }
-          agentPrompt
+          taskInstructions
           preAuthorizedTools
           created
           modified
@@ -3471,7 +3471,7 @@ export interface GetCorpusActionsOutput {
           name: string;
           description: string;
         };
-        agentPrompt?: string;
+        taskInstructions?: string;
         preAuthorizedTools?: string[];
         created: string;
         modified: string;

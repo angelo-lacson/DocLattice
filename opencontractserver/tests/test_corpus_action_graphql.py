@@ -309,7 +309,7 @@ class CorpusActionMutationTestCase(TestCase):
                 $name: String,
                 $trigger: String!,
                 $agentConfigId: ID,
-                $agentPrompt: String,
+                $taskInstructions: String,
                 $preAuthorizedTools: [String],
                 $disabled: Boolean
             ) {
@@ -318,7 +318,7 @@ class CorpusActionMutationTestCase(TestCase):
                     name: $name,
                     trigger: $trigger,
                     agentConfigId: $agentConfigId,
-                    agentPrompt: $agentPrompt,
+                    taskInstructions: $taskInstructions,
                     preAuthorizedTools: $preAuthorizedTools,
                     disabled: $disabled
                 ) {
@@ -329,7 +329,7 @@ class CorpusActionMutationTestCase(TestCase):
                         name
                         trigger
                         disabled
-                        agentPrompt
+                        taskInstructions
                         preAuthorizedTools
                     }
                 }
@@ -343,7 +343,7 @@ class CorpusActionMutationTestCase(TestCase):
             "agentConfigId": to_global_id(
                 "AgentConfigurationType", self.agent_config.id
             ),
-            "agentPrompt": "Summarize this document and update its description",
+            "taskInstructions": "Summarize this document and update its description",
             "preAuthorizedTools": ["update_document_description", "search_annotations"],
             "disabled": False,
         }
@@ -363,7 +363,7 @@ class CorpusActionMutationTestCase(TestCase):
             result["data"]["createCorpusAction"]["obj"]["trigger"], "ADD_DOCUMENT"
         )
         self.assertEqual(
-            result["data"]["createCorpusAction"]["obj"]["agentPrompt"],
+            result["data"]["createCorpusAction"]["obj"]["taskInstructions"],
             "Summarize this document and update its description",
         )
         self.assertEqual(
@@ -404,7 +404,7 @@ class CorpusActionMutationTestCase(TestCase):
         self.assertFalse(result["data"]["createCorpusAction"]["ok"])
         self.assertEqual(
             result["data"]["createCorpusAction"]["message"],
-            "agent_prompt is required when agent_config_id is provided",
+            "task_instructions is required for agent actions",
         )
 
     def test_create_corpus_action_with_agent_and_fieldset_fails(self):
@@ -414,14 +414,14 @@ class CorpusActionMutationTestCase(TestCase):
                 $corpusId: ID!,
                 $trigger: String!,
                 $agentConfigId: ID,
-                $agentPrompt: String,
+                $taskInstructions: String,
                 $fieldsetId: ID
             ) {
                 createCorpusAction(
                     corpusId: $corpusId,
                     trigger: $trigger,
                     agentConfigId: $agentConfigId,
-                    agentPrompt: $agentPrompt,
+                    taskInstructions: $taskInstructions,
                     fieldsetId: $fieldsetId
                 ) {
                     ok
@@ -436,7 +436,7 @@ class CorpusActionMutationTestCase(TestCase):
             "agentConfigId": to_global_id(
                 "AgentConfigurationType", self.agent_config.id
             ),
-            "agentPrompt": "Test prompt",
+            "taskInstructions": "Test prompt",
             "fieldsetId": to_global_id("FieldsetType", self.fieldset.id),
         }
 

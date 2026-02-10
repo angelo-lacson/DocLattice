@@ -1344,7 +1344,7 @@ const mockActions = [
     fieldset: { id: "fs-1", name: "Contract Fieldset" },
     analyzer: null,
     agentConfig: null,
-    agentPrompt: null,
+    taskInstructions: null,
     preAuthorizedTools: [],
     created: "2025-01-01T00:00:00Z",
     modified: "2025-01-01T00:00:00Z",
