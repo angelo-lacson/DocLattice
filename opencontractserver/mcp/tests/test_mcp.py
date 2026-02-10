@@ -2324,7 +2324,7 @@ class MCPTelemetryIntegrationTest(TestCase):
 
             try:
                 with patch(
-                    "opencontractserver.mcp.server.record_mcp_tool_call"
+                    "opencontractserver.mcp.server.arecord_mcp_tool_call"
                 ) as mock_record:
                     mock_record.return_value = True
 
@@ -2364,7 +2364,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.6", transport="sse")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_tool_call"
+                "opencontractserver.mcp.server.arecord_mcp_tool_call"
             ) as mock_record:
                 mock_record.return_value = True
 
@@ -2398,7 +2398,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.7", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_corpus_resource"
             ) as mock_get_corpus:
@@ -2434,7 +2434,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.8", transport="sse")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record:
                 mock_record.return_value = True
 
@@ -2468,7 +2468,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.9", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_document_resource"
             ) as mock_get_doc:
@@ -2505,7 +2505,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.10", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_annotation_resource"
             ) as mock_get_ann:
@@ -2544,7 +2544,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.11", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_thread_resource"
             ) as mock_get_thread:
