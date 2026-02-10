@@ -59,7 +59,7 @@ graph TD
    - Reference to the associated corpus
    - Trigger type (ADD_DOCUMENT, EDIT_DOCUMENT)
    - Reference to ONE of: Fieldset, Analyzer, or AgentConfiguration
-   - Optional: `agent_prompt` and `pre_authorized_tools` for agent actions
+   - Optional: `task_instructions` and `pre_authorized_tools` for agent actions
 
 2. **CorpusActionTrigger Enum**: Defines trigger events
    - `ADD_DOCUMENT` - Fires when documents are added
@@ -214,11 +214,11 @@ mutation {
     trigger: "add_document"
     name: "Auto-Generate Summary"
     agentConfigId: "QWdlbnRDb25maWd1cmF0aW9uVHlwZTox"
-    agentPrompt: "Analyze this document and create a summary using update_document_summary tool."
+    taskInstructions: "Analyze this document and create a summary using update_document_summary tool."
     preAuthorizedTools: ["load_document_text", "update_document_summary"]
   ) {
     ok
-    obj { id name agentPrompt }
+    obj { id name taskInstructions }
   }
 }
 ```

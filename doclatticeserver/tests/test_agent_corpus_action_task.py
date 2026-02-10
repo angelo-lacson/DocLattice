@@ -61,7 +61,7 @@ class TestRunAgentCorpusActionAsync(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -258,7 +258,7 @@ class TestRunAgentCorpusActionTask(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -356,7 +356,7 @@ class TestAgentCorpusActionEdgeCases(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -392,7 +392,7 @@ class TestAgentCorpusActionEdgeCases(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -446,7 +446,7 @@ class TestCorpusActionExecutionTracking(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )

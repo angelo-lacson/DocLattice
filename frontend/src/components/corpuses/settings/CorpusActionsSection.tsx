@@ -39,7 +39,7 @@ interface CorpusAction {
   analyzer?: { id: string; name: string } | null;
   fieldset?: { id: string; name: string } | null;
   agentConfig?: { id: string; name: string; description?: string } | null;
-  agentPrompt?: string | null;
+  taskInstructions?: string | null;
   preAuthorizedTools?: string[] | null;
   creator: { username: string };
   created: string;
@@ -183,14 +183,14 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       </div>
                     </div>
 
-                    {action.agentConfig && action.agentPrompt && (
+                    {action.agentConfig && action.taskInstructions && (
                       <AgentPromptBox>
-                        <div className="prompt-label">Agent Prompt:</div>
+                        <div className="prompt-label">Task Instructions:</div>
                         <div className="prompt-text">
                           "
-                          {action.agentPrompt.length > 100
-                            ? `${action.agentPrompt.substring(0, 100)}...`
-                            : action.agentPrompt}
+                          {action.taskInstructions.length > 100
+                            ? `${action.taskInstructions.substring(0, 100)}...`
+                            : action.taskInstructions}
                           "
                         </div>
                         {action.preAuthorizedTools &&

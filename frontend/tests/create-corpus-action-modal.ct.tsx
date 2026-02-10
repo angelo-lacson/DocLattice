@@ -502,7 +502,7 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     await page.waitForTimeout(300);
 
     // Agent prompt field should be visible
-    await expect(page.locator("text=Agent Prompt")).toBeVisible();
+    await expect(page.locator("text=Task Instructions")).toBeVisible();
     await expect(
       page.locator('textarea[placeholder*="Enter the task prompt"]')
     ).toBeVisible();
@@ -601,7 +601,7 @@ test.describe("CreateCorpusActionModal - Form Submission", () => {
           fieldsetId: undefined,
           analyzerId: undefined,
           agentConfigId: "QWdlbnRDb25maWdUeXBlOjE=",
-          agentPrompt: "Moderate new threads for inappropriate content",
+          taskInstructions: "Moderate new threads for inappropriate content",
           preAuthorizedTools: undefined,
           disabled: false,
           runOnAllCorpuses: false,
