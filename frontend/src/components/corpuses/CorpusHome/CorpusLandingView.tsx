@@ -9,6 +9,7 @@ import {
   FileText,
   ArrowRight,
   Plus,
+  MoreVertical,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -40,6 +41,7 @@ import {
   AccessBadge,
   ChatSection,
   ViewDetailsButton,
+  MobileMenuButton,
 } from "./styles";
 
 export interface CorpusLandingViewProps {
@@ -56,6 +58,8 @@ export interface CorpusLandingViewProps {
   onChatQueryChange?: (value: string) => void;
   onChatSubmit?: (query: string) => void;
   onViewChatHistory?: () => void;
+  /** Callback to open mobile navigation menu */
+  onOpenMobileMenu?: () => void;
   /** Test ID for the component */
   testId?: string;
 }
@@ -81,6 +85,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onChatQueryChange,
   onChatSubmit,
   onViewChatHistory,
+  onOpenMobileMenu,
   testId = "corpus-landing",
 }) => {
   const [mdContent, setMdContent] = React.useState<string | null>(null);
@@ -141,7 +146,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
     <LandingContainer data-testid={testId}>
       <LandingContent>
         <LandingHero>
-          {/* Centered breadcrumbs */}
+          {/* Centered breadcrumbs with mobile menu button */}
           <CenteredBreadcrumbs
             aria-label="Breadcrumb navigation"
             data-testid={`${testId}-breadcrumbs`}
@@ -159,6 +164,15 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
             <span className="current">
               {fullCorpus.title || "Untitled Corpus"}
             </span>
+            {onOpenMobileMenu && (
+              <MobileMenuButton
+                onClick={onOpenMobileMenu}
+                aria-label="Open navigation menu"
+                data-testid={`${testId}-mobile-menu`}
+              >
+                <MoreVertical />
+              </MobileMenuButton>
+            )}
           </CenteredBreadcrumbs>
 
           {/* Corpus badge */}

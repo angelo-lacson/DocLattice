@@ -14,6 +14,7 @@ import {
   ChevronsDownUp,
   Edit,
   Activity,
+  MoreVertical,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -60,6 +61,7 @@ import {
   MobileTabList,
   MobileTab,
   MobileTabContent,
+  MobileMenuButton,
 } from "./styles";
 
 type MobileTabType = "toc" | "about";
@@ -71,6 +73,8 @@ export interface CorpusDetailsViewProps {
   onBack: () => void;
   /** Callback when edit description is clicked */
   onEditDescription: () => void;
+  /** Callback to open mobile navigation menu */
+  onOpenMobileMenu?: () => void;
   /** Test ID for the component */
   testId?: string;
 }
@@ -89,6 +93,7 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
   corpus,
   onBack,
   onEditDescription,
+  onOpenMobileMenu,
   testId = "corpus-details",
 }) => {
   const location = useLocation();
@@ -156,15 +161,33 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
       <DetailsPage>
         {/* Header section - clean, minimal */}
         <DetailsHeader>
-          <BackButton
-            onClick={onBack}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            data-testid={`${testId}-back-btn`}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+            }}
           >
-            <ArrowLeft />
-            Overview
-          </BackButton>
+            <BackButton
+              onClick={onBack}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              data-testid={`${testId}-back-btn`}
+            >
+              <ArrowLeft />
+              Overview
+            </BackButton>
+            {onOpenMobileMenu && (
+              <MobileMenuButton
+                onClick={onOpenMobileMenu}
+                aria-label="Open navigation menu"
+                data-testid={`${testId}-mobile-menu`}
+              >
+                <MoreVertical />
+              </MobileMenuButton>
+            )}
+          </div>
 
           <DetailsTitleRow>
             <DetailsTitleSection>
