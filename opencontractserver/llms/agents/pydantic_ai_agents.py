@@ -764,6 +764,11 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                     f"[DIAGNOSTIC] Exited tool_stream loop normally - "
                                     f"processed {tool_event_count} events total"
                                 )
+                        except ToolConfirmationRequired:
+                            # Sub-agent approval gates must propagate so the
+                            # outer ToolConfirmationRequired handler can pause
+                            # the conversation and surface it to the user.
+                            raise
                         except Exception as tool_exc:
                             # Already handled by outer error handler – stop processing this node
                             logger.error(
@@ -1104,6 +1109,12 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         else:
             logger.error(f"Unexpected tool_args type: {type(tool_args_raw)}")
             tool_args = {}
+
+        # Strip internal metadata keys (prefixed with _) that are not part
+        # of the tool's actual function signature.  These are injected by
+        # sub-agent approval propagation (e.g. _sub_tool_name) and are
+        # only needed for UI display, not for execution.
+        tool_args = {k: v for k, v in tool_args.items() if not k.startswith("_")}
 
         # Emit ApprovalResultEvent immediately so consumers are aware of decision
         yield ApprovalResultEvent(
@@ -2245,7 +2256,11 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 for doc in context.documents
             ]
 
-        async def ask_document_tool(document_id: int, question: str) -> dict[str, Any]:
+        async def ask_document_tool(
+            document_id: int,
+            question: str,
+            skip_approval: bool = False,
+        ) -> dict[str, Any]:
             """Ask a question to a **document-specific** agent inside this corpus.
 
             The call transparently streams the document agent so we can capture
@@ -2255,6 +2270,8 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             Args:
                 document_id: ID of the target document (must belong to this corpus).
                 question:   The natural-language question to forward.
+                skip_approval: If True, sub-agent tools skip approval gates (used
+                    when resuming after user already approved the operation).
 
             Returns:
                 An object with keys:
@@ -2303,6 +2320,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 store_user_messages=False,
                 store_llm_messages=False,
                 framework=_AgentFramework.PYDANTIC_AI,
+                skip_approval_gate=skip_approval,
             )
 
             # Side-channel observer from AgentConfig (set by WebSocket layer)
@@ -2316,6 +2334,33 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 # Capture content
                 if getattr(ev, "type", "") == "content":
                     accumulated_answer += getattr(ev, "content", "")
+
+                # ----------------------------------------------------------
+                # Sub-agent approval gate: if the document agent's tool
+                # requires approval, surface it to the corpus agent level so
+                # the user is prompted.  We raise ToolConfirmationRequired
+                # which the corpus agent's outer handler converts into an
+                # ApprovalNeededEvent for the frontend.
+                # ----------------------------------------------------------
+                if getattr(ev, "type", "") == "approval_needed":
+                    sub_tool = getattr(ev, "pending_tool_call", {})
+                    logger.info(
+                        "[ask_document] Sub-agent requested approval for tool '%s' "
+                        "– propagating to corpus agent level.",
+                        sub_tool.get("name"),
+                    )
+                    raise ToolConfirmationRequired(
+                        tool_name="ask_document",
+                        tool_args={
+                            "document_id": document_id,
+                            "question": question,
+                            "skip_approval": True,
+                            # Preserve sub-agent tool details for the UI
+                            "_sub_tool_name": sub_tool.get("name"),
+                            "_sub_tool_arguments": sub_tool.get("arguments"),
+                        },
+                        tool_call_id=sub_tool.get("tool_call_id"),
+                    )
 
                 # Forward raw event upstream (side-channel)
                 if callable(observer_cb):
@@ -2366,6 +2411,10 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             parameter_descriptions={
                 "document_id": "ID of the document to query (must be in this corpus)",
                 "question": "The natural-language question to ask the document agent",
+                "skip_approval": (
+                    "Internal flag – always use the default (False). "
+                    "Only set to True by the system when resuming after user approval."
+                ),
             },
             requires_corpus=True,
         )

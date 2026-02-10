@@ -110,6 +110,8 @@ interface MessageData {
     | "ASYNC_THOUGHT"
     | "ASYNC_SOURCES"
     | "ASYNC_APPROVAL_NEEDED"
+    | "ASYNC_APPROVAL_RESULT"
+    | "ASYNC_RESUME"
     | "ASYNC_ERROR";
   content: string;
   data?: {
@@ -1027,12 +1029,38 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             break;
           case "ASYNC_APPROVAL_NEEDED":
             if (data?.pending_tool_call && data?.message_id) {
+              // For sub-agent approvals (ask_document), show the inner
+              // tool name/args so the user understands what is being approved.
+              const toolCall = { ...data.pending_tool_call };
+              if (
+                toolCall.name === "ask_document" &&
+                toolCall.arguments?._sub_tool_name
+              ) {
+                toolCall.name = toolCall.arguments._sub_tool_name;
+                toolCall.arguments =
+                  toolCall.arguments._sub_tool_arguments ?? {};
+              }
               setPendingApproval({
                 messageId: data.message_id,
-                toolCall: data.pending_tool_call,
+                toolCall,
               });
               setShowApprovalModal(true);
             }
+            break;
+          case "ASYNC_APPROVAL_RESULT":
+            // Informational – the backend echoes the decision back.
+            // Clear the pending state so the modal doesn't linger.
+            if (
+              pendingApproval &&
+              data?.message_id === pendingApproval.messageId
+            ) {
+              setPendingApproval(null);
+              setShowApprovalModal(false);
+            }
+            break;
+          case "ASYNC_RESUME":
+            // Agent is resuming after approval – keep processing indicator.
+            setIsProcessing(true);
             break;
           case "ASYNC_FINISH":
             finalizeStreamingResponse(
