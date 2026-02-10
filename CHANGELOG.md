@@ -80,6 +80,14 @@ If rollback is required after deployment, you must write a custom migration to h
 
 ### Added
 
+#### Document Processing Failure Indicators and Retry Controls (Issue #825)
+- **Processing status display**: Document cards and list items now show distinct states for processing (spinner) vs. failed (error overlay with message) instead of a generic "Processing..." overlay for all locked documents
+- **Retry button**: Failed documents display a retry button that triggers the `RetryDocumentProcessing` GraphQL mutation, allowing users to re-process documents without backend access
+- **Context menu retry**: "Retry Processing" option added to the document context menu for failed documents
+- **Permission-aware**: Retry controls only appear when the user has permission to retry (`canRetry` field from backend)
+- **Error messages**: Processing error messages from the backend are displayed on the failure overlay (truncated for readability)
+- Files: `frontend/src/components/documents/ModernDocumentItem.tsx`, `frontend/src/components/documents/DocumentItem.tsx`, `frontend/src/graphql/queries.ts`, `frontend/src/graphql/mutations.ts`, `frontend/src/types/graphql-api.ts`
+
 #### Embedder Consistency Management (Issue #437)
 - **Frozen embedder binding at corpus creation**: `preferred_embedder` is now auto-populated from `DEFAULT_EMBEDDER` when a corpus is created without an explicit embedder. This decouples existing corpuses from future changes to the global setting.
   - Files: `opencontractserver/corpuses/models.py` (save method)
