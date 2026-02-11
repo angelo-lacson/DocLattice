@@ -5,7 +5,37 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-08
+## [Unreleased] - 2026-02-11
+
+### Added
+
+#### Nested Approval Gates for Corpus Agent Sub-Agents
+- **Sub-agent approval propagation**: When a corpus agent delegates a question to a document sub-agent via `ask_document`, and the sub-agent encounters a tool requiring approval, the approval request now propagates up to the corpus agent level and is surfaced to the user via WebSocket (`ASYNC_APPROVAL_NEEDED`)
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py` (ask_document_tool closure)
+- **Frontend sub-tool unwrapping**: CorpusChat's approval modal now displays the actual sub-tool name/arguments instead of the generic `ask_document` wrapper, with validation for malformed metadata
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx` (ASYNC_APPROVAL_NEEDED handler)
+- **Comprehensive nested approval test suite**: 10 async tests covering approval propagation, metadata stripping, bypass flag lifecycle, malformed event handling, and schema safety
+  - File: `opencontractserver/tests/test_nested_approval_gates.py`
+- **Architecture documentation**: Added "Nested Approval Gates" section to LLM framework docs with flow diagrams and security notes
+  - File: `docs/architecture/llms/README.md`
+
+### Fixed
+
+#### Security: LLM Prompt Injection Protection for Approval Bypass
+- **Replaced `skip_approval` function parameter with `config._approval_bypass_allowed` flag**: The previous design exposed a `skip_approval` parameter in `ask_document_tool`'s function signature that a malicious LLM could set to `True` to bypass approval gates. Now uses a runtime flag on `AgentConfig` that only `resume_with_approval()` can set, wrapped in a `try/finally` block to guarantee reset
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py`
+
+#### Inconsistent Approval Status Handling in CorpusChat
+- **Added `updateMessageApprovalStatus` to CorpusChat**: Previously, `ASYNC_APPROVAL_RESULT` handler in CorpusChat only cleared pending state without updating message `approvalStatus`, unlike ChatTray and useAgentChat which both call `updateMessageApprovalStatus`. Now consistent across all components
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx`
+- **Added message `approvalStatus: "awaiting"` on ASYNC_APPROVAL_NEEDED**: CorpusChat now marks messages as awaiting approval in both `chat` and `serverMessages` state arrays, matching ChatTray/useAgentChat behavior
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx`
+
+#### Defensive Handling of Malformed Approval Events
+- **Backend**: `ask_document_tool` now validates `pending_tool_call` is a dict with a non-empty `name` key before raising `ToolConfirmationRequired`; malformed events are logged and skipped
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py`
+- **Frontend**: `_sub_tool_name` validation checks type is string and non-empty; `_sub_tool_arguments` validates type is object before use
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx`
 
 ### Changed
 

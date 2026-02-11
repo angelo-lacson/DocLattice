@@ -1156,72 +1156,86 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     else call_result
                 )
 
+            # Signal post-approval context so closures (e.g. ask_document_tool)
+            # can bypass sub-agent approval gates without exposing a parameter
+            # that the LLM could abuse.
+            self.config._approval_bypass_allowed = True  # type: ignore[attr-defined]
+
             # Try to execute the tool
             tool_executed = False
 
-            if wrapper_fn is not None:
-                # Found in config.tools - these should be callable functions
-                logger.info(
-                    f"Executing tool '{tool_name}' from config.tools with args: {tool_args}"
-                )
-                try:
-                    result = await _maybe_await(wrapper_fn(_EmptyCtx(), **tool_args))
-                    tool_executed = True
-                except TypeError as e:
-                    logger.error(f"TypeError calling tool from config: {e}")
-                    # Don't retry here, fall through to registry lookup
+            try:
+                if wrapper_fn is not None:
+                    # Found in config.tools - these should be callable functions
+                    logger.info(
+                        f"Executing tool '{tool_name}' from config.tools with args: {tool_args}"
+                    )
+                    try:
+                        result = await _maybe_await(
+                            wrapper_fn(_EmptyCtx(), **tool_args)
+                        )
+                        tool_executed = True
+                    except TypeError as e:
+                        logger.error(f"TypeError calling tool from config: {e}")
+                        # Don't retry here, fall through to registry lookup
 
-            if not tool_executed:
-                # Resort to pydantic-ai registry – may return Tool object.
-                tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
-                if tool_obj is None:
-                    raise ValueError(f"Tool '{tool_name}' not found for execution")
+                if not tool_executed:
+                    # Resort to pydantic-ai registry – may return Tool object.
+                    tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
+                    if tool_obj is None:
+                        raise ValueError(f"Tool '{tool_name}' not found for execution")
 
-                # Try common attributes to reach the underlying callable.
-                candidate = None
-                for attr in ("function", "_wrapped_function", "callable_function"):
-                    candidate = getattr(tool_obj, attr, None)
-                    if callable(candidate):
-                        break
+                    # Try common attributes to reach the underlying callable.
+                    candidate = None
+                    for attr in (
+                        "function",
+                        "_wrapped_function",
+                        "callable_function",
+                    ):
+                        candidate = getattr(tool_obj, attr, None)
+                        if callable(candidate):
+                            break
 
-                if candidate is None or not callable(candidate):
-                    raise TypeError(
-                        "Tool object is not callable and no inner function found"
+                    if candidate is None or not callable(candidate):
+                        raise TypeError(
+                            "Tool object is not callable and no inner function found"
+                        )
+
+                    logger.info(
+                        f"Executing tool '{tool_name}' via registry with args: {tool_args}"
                     )
 
-                logger.info(
-                    f"Executing tool '{tool_name}' via registry with args: {tool_args}"
-                )
-
-                # Final check to ensure tool_args is a dict
-                if not isinstance(tool_args, dict):
-                    logger.error(
-                        f"tool_args is not a dict at execution time! "
-                        f"Type: {type(tool_args)}, Value: {tool_args!r}"
-                    )
-                    # Try to recover
-                    if isinstance(tool_args, str):
-                        # For known tools, use the correct parameter name
-                        if tool_name == "update_document_summary":
-                            tool_args = {"new_content": tool_args}
-                        elif tool_name == "update_document_description":
-                            tool_args = {"new_description": tool_args}
+                    # Final check to ensure tool_args is a dict
+                    if not isinstance(tool_args, dict):
+                        logger.error(
+                            f"tool_args is not a dict at execution time! "
+                            f"Type: {type(tool_args)}, Value: {tool_args!r}"
+                        )
+                        # Try to recover
+                        if isinstance(tool_args, str):
+                            # For known tools, use the correct parameter name
+                            if tool_name == "update_document_summary":
+                                tool_args = {"new_content": tool_args}
+                            elif tool_name == "update_document_description":
+                                tool_args = {"new_description": tool_args}
+                            else:
+                                tool_args = {"arg": tool_args}
                         else:
-                            tool_args = {"arg": tool_args}
-                    else:
-                        tool_args = {}
+                            tool_args = {}
 
-                try:
-                    result = await _maybe_await(candidate(_EmptyCtx(), **tool_args))
-                except TypeError as e:
-                    # Log full details for debugging
-                    logger.error(
-                        f"TypeError calling tool {tool_name}: {e}\n"
-                        f"Args: {tool_args}\n"
-                        f"Candidate: {candidate}\n"
-                        f"Tool obj: {tool_obj}"
-                    )
-                    raise
+                    try:
+                        result = await _maybe_await(candidate(_EmptyCtx(), **tool_args))
+                    except TypeError as e:
+                        # Log full details for debugging
+                        logger.error(
+                            f"TypeError calling tool {tool_name}: {e}\n"
+                            f"Args: {tool_args}\n"
+                            f"Candidate: {candidate}\n"
+                            f"Tool obj: {tool_obj}"
+                        )
+                        raise
+            finally:
+                self.config._approval_bypass_allowed = False  # type: ignore[attr-defined]
 
             tool_result = {"result": result}
             status_str = "approved"
@@ -2259,7 +2273,6 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         async def ask_document_tool(
             document_id: int,
             question: str,
-            skip_approval: bool = False,
         ) -> dict[str, Any]:
             """Ask a question to a **document-specific** agent inside this corpus.
 
@@ -2270,8 +2283,6 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             Args:
                 document_id: ID of the target document (must belong to this corpus).
                 question:   The natural-language question to forward.
-                skip_approval: If True, sub-agent tools skip approval gates (used
-                    when resuming after user already approved the operation).
 
             Returns:
                 An object with keys:
@@ -2313,6 +2324,11 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                     timeline=[],
                 ).model_dump()
 
+            # The _approval_bypass_allowed flag is set by resume_with_approval()
+            # when the user has already approved the sub-agent tool.  It is NOT
+            # exposed as a function parameter to prevent LLM prompt injection.
+            bypass = getattr(config, "_approval_bypass_allowed", False)
+
             doc_agent = await _agents_api.for_document(
                 document=document_id,
                 corpus=context.corpus.id,
@@ -2320,7 +2336,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 store_user_messages=False,
                 store_llm_messages=False,
                 framework=_AgentFramework.PYDANTIC_AI,
-                skip_approval_gate=skip_approval,
+                skip_approval_gate=bypass,
             )
 
             # Side-channel observer from AgentConfig (set by WebSocket layer)
@@ -2344,19 +2360,30 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 # ----------------------------------------------------------
                 if getattr(ev, "type", "") == "approval_needed":
                     sub_tool = getattr(ev, "pending_tool_call", {})
+                    sub_name = (
+                        sub_tool.get("name") if isinstance(sub_tool, dict) else None
+                    )
+                    if not sub_name:
+                        logger.warning(
+                            "[ask_document] Received approval_needed event with "
+                            "missing or malformed pending_tool_call: %r",
+                            sub_tool,
+                        )
+                        continue
                     logger.info(
                         "[ask_document] Sub-agent requested approval for tool '%s' "
                         "– propagating to corpus agent level.",
-                        sub_tool.get("name"),
+                        sub_name,
                     )
                     raise ToolConfirmationRequired(
                         tool_name="ask_document",
                         tool_args={
                             "document_id": document_id,
                             "question": question,
-                            "skip_approval": True,
-                            # Preserve sub-agent tool details for the UI
-                            "_sub_tool_name": sub_tool.get("name"),
+                            # Preserve sub-agent tool details for the UI.
+                            # Prefixed with _ so resume_with_approval strips
+                            # them before calling the function.
+                            "_sub_tool_name": sub_name,
                             "_sub_tool_arguments": sub_tool.get("arguments"),
                         },
                         tool_call_id=sub_tool.get("tool_call_id"),
@@ -2411,10 +2438,6 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             parameter_descriptions={
                 "document_id": "ID of the document to query (must be in this corpus)",
                 "question": "The natural-language question to ask the document agent",
-                "skip_approval": (
-                    "Internal flag – always use the default (False). "
-                    "Only set to True by the system when resuming after user approval."
-                ),
             },
             requires_corpus=True,
         )
