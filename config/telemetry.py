@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import logging
 from datetime import datetime, timezone
+from typing import cast
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -95,11 +96,15 @@ def _get_installation_id() -> str | None:
     The result is cached after the first successful lookup because the
     installation UUID is a singleton that never changes for the lifetime
     of the process. This avoids a database hit on every telemetry call.
+
+    Note: Multiple concurrent first calls may race to populate the cache,
+    but this is harmless -- the Installation singleton ensures the same
+    value is cached regardless of which call wins.
     """
     global _cached_installation_id
 
     if _cached_installation_id is not _UNSET:
-        return _cached_installation_id  # type: ignore[return-value]
+        return cast("str | None", _cached_installation_id)
 
     from opencontractserver.users.models import Installation
 

@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
 ### Fixed
 
+#### MCP Telemetry in Async Context
+- **`SynchronousOnlyOperation` in MCP server** (`config/telemetry.py`, `opencontractserver/mcp/telemetry.py`, `opencontractserver/mcp/server.py`): Added async telemetry functions (`arecord_event`, `arecord_mcp_tool_call`, `arecord_mcp_resource_read`, `arecord_mcp_request`) that use `sync_to_async` to safely run Django ORM lookups in a thread pool. Prevents "You cannot call this from an async context" errors on every MCP request.
+- **Installation ID caching** (`config/telemetry.py:91-113`): Added process-lifetime cache for installation UUID to eliminate redundant database queries on every telemetry call, particularly beneficial for high-frequency MCP requests.
+
 #### Security Hardening: Authentication & Permissioning Audit Remediation
 
 - **Analysis callback DoS prevention** (`opencontractserver/analyzer/views.py`): Invalid callback tokens no longer mark analyses as FAILED; uses `hmac.compare_digest()` for timing-safe token comparison; unified error messages prevent analysis ID enumeration

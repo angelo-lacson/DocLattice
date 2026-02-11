@@ -1,9 +1,16 @@
+import asyncio
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 
-from config.telemetry import _reset_posthog_client, record_event
+from config.telemetry import (
+    _UNSET,
+    _get_installation_id,
+    _reset_posthog_client,
+    arecord_event,
+    record_event,
+)
 from opencontractserver.tasks.telemetry_tasks import send_usage_heartbeat
 from opencontractserver.users.models import Installation, User
 
@@ -258,3 +265,121 @@ class TelemetryMigrationTestCase(TestCase):
         self.assertFalse(
             PeriodicTask.objects.filter(name="usage-heartbeat-daily").exists()
         )
+
+
+class AsyncTelemetryTestCase(TestCase):
+    """Tests for async telemetry functions."""
+
+    def setUp(self):
+        _reset_posthog_client()
+        self.mock_installation = Installation.get()
+        self.installation_id = self.mock_installation.id
+
+        self.posthog_patcher = patch("config.telemetry.Posthog")
+        self.mock_posthog_class = self.posthog_patcher.start()
+        self.mock_posthog = MagicMock()
+        self.mock_posthog_class.return_value = self.mock_posthog
+
+    def tearDown(self):
+        self.posthog_patcher.stop()
+        _reset_posthog_client()
+
+    def test_arecord_event_success(self):
+        """Test async event recording delegates to sync version."""
+        with override_settings(
+            MODE="DEV",
+            TELEMETRY_ENABLED=True,
+            POSTHOG_API_KEY="test-key",
+            POSTHOG_HOST="https://test.host",
+        ):
+            result = asyncio.run(arecord_event("test_event", {"test": "value"}))
+
+        self.assertTrue(result)
+        self.mock_posthog.capture.assert_called_once()
+
+        call_args = self.mock_posthog.capture.call_args[1]
+        self.assertEqual(call_args["distinct_id"], str(self.installation_id))
+        self.assertEqual(call_args["event"], "opencontracts.test_event")
+        self.assertEqual(call_args["properties"]["test"], "value")
+
+    def test_arecord_event_telemetry_disabled(self):
+        """Test async version respects telemetry disabled setting."""
+        with override_settings(TELEMETRY_ENABLED=False):
+            result = asyncio.run(arecord_event("test_event"))
+
+        self.assertFalse(result)
+        self.mock_posthog.capture.assert_not_called()
+
+    def test_arecord_event_without_properties(self):
+        """Test async event recording without additional properties."""
+        with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
+            result = asyncio.run(arecord_event("test_event"))
+
+        self.assertTrue(result)
+        self.mock_posthog.capture.assert_called_once()
+
+        properties = self.mock_posthog.capture.call_args[1]["properties"]
+        self.assertEqual(
+            set(properties.keys()), {"package", "timestamp", "installation_id"}
+        )
+
+
+class InstallationIdCacheTestCase(TestCase):
+    """Tests for the installation ID caching mechanism."""
+
+    def setUp(self):
+        _reset_posthog_client()
+        self.installation = Installation.get()
+
+    def tearDown(self):
+        _reset_posthog_client()
+
+    def test_cache_returns_correct_id(self):
+        """Test that _get_installation_id returns the correct UUID."""
+        result = _get_installation_id()
+        self.assertEqual(result, str(self.installation.id))
+
+    def test_cache_avoids_repeated_db_hits(self):
+        """Test that after first lookup, subsequent calls skip the database."""
+        with patch(
+            "config.telemetry.Installation.objects.get",
+            wraps=Installation.objects.get,
+        ) as mock_get:
+            # First call should hit the DB
+            first = _get_installation_id()
+            self.assertEqual(mock_get.call_count, 1)
+
+            # Second call should use the cache
+            second = _get_installation_id()
+            self.assertEqual(mock_get.call_count, 1)  # No additional DB call
+
+            self.assertEqual(first, second)
+
+    def test_reset_clears_cache(self):
+        """Test that _reset_posthog_client clears the installation ID cache."""
+        import config.telemetry as telemetry_module
+
+        # Populate the cache
+        _get_installation_id()
+        self.assertIsNot(telemetry_module._cached_installation_id, _UNSET)
+
+        # Reset should clear it
+        _reset_posthog_client()
+        self.assertIs(telemetry_module._cached_installation_id, _UNSET)
+
+    def test_cache_works_across_async_calls(self):
+        """Test that the cache works correctly when called via arecord_event."""
+        with patch(
+            "config.telemetry.Installation.objects.get",
+            wraps=Installation.objects.get,
+        ) as mock_get, patch("config.telemetry.Posthog") as mock_posthog_class:
+            mock_posthog = MagicMock()
+            mock_posthog_class.return_value = mock_posthog
+
+            with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
+                asyncio.run(arecord_event("event1"))
+                db_calls_after_first = mock_get.call_count
+
+                asyncio.run(arecord_event("event2"))
+                # No additional DB call for second event
+                self.assertEqual(mock_get.call_count, db_calls_after_first)
