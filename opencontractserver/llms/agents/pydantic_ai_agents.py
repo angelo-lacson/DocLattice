@@ -119,6 +119,31 @@ def _to_source_node(raw: Any) -> SourceNode:
     )
 
 
+def _extract_tool_result_summary(event: Any, tool_name: str) -> str:
+    """Safely extract a human-readable summary from a tool result event.
+
+    Returns a non-empty string suitable for inclusion in the timeline
+    ``tool_result`` metadata.  Falls back to ``"Completed"`` if extraction
+    fails or produces an empty value.
+    """
+    try:
+        result_content = event.result.content  # type: ignore[attr-defined]
+        if isinstance(result_content, dict):
+            # ask_document returns {"answer": ..., "sources": ..., "timeline": ...}
+            summary = result_content.get("answer", "")
+            if summary:
+                return str(summary)
+        elif isinstance(result_content, str) and result_content:
+            return result_content
+        elif result_content is not None:
+            return str(result_content)
+    except Exception:
+        logger.debug(
+            "Could not extract tool result summary for %s", tool_name, exc_info=True
+        )
+    return "Completed"
+
+
 # ---------------------------------------------------------------------------
 # Pydantic‐AI base – now inherits TimelineStreamMixin for unified timeline.
 # ---------------------------------------------------------------------------
@@ -613,7 +638,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 yield src_ev
 
                                             # Emit tool_result entry for timeline
-                                            result_summary = (
+                                            tool_result_summary = (
                                                 f"Found {len(raw_sources)} matching annotations"
                                                 if isinstance(raw_sources, list)
                                                 else "No results found"
@@ -624,7 +649,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 llm_message_id=llm_msg_id,
                                                 metadata={
                                                     "tool_name": tool_name,
-                                                    "tool_result": result_summary,
+                                                    "tool_result": tool_result_summary,
                                                 },
                                             )
                                             builder.add(tool_ev)
@@ -657,7 +682,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 )
 
                                             # Emit tool_result entry for timeline
-                                            result_summary = (
+                                            tool_result_summary = (
                                                 f"Found {len(raw_sources)} exact text matches"
                                                 if isinstance(raw_sources, list)
                                                 and raw_sources
@@ -669,7 +694,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 llm_message_id=llm_msg_id,
                                                 metadata={
                                                     "tool_name": tool_name,
-                                                    "tool_result": result_summary,
+                                                    "tool_result": tool_result_summary,
                                                 },
                                             )
                                             builder.add(tool_ev)
@@ -772,25 +797,15 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 )
 
                                             # Always log completion of ask_document regardless of success
-                                            ask_result_summary = ""
-                                            try:
-                                                rp = event.result.content  # type: ignore[attr-defined]
-                                                if isinstance(rp, dict):
-                                                    ask_result_summary = rp.get(
-                                                        "answer", ""
-                                                    )
-                                                elif isinstance(rp, str):
-                                                    ask_result_summary = rp
-                                            except Exception:
-                                                pass
                                             tool_ev = ThoughtEvent(
                                                 thought=f"Tool `{tool_name}` returned a result.",
                                                 user_message_id=user_msg_id,
                                                 llm_message_id=llm_msg_id,
                                                 metadata={
                                                     "tool_name": tool_name,
-                                                    "tool_result": ask_result_summary
-                                                    or "Completed",
+                                                    "tool_result": _extract_tool_result_summary(
+                                                        event, tool_name
+                                                    ),
                                                 },
                                             )
                                             builder.add(tool_ev)
@@ -798,20 +813,15 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
                                         else:
                                             # Let TimelineBuilder infer tool_result from metadata
-                                            generic_result = ""
-                                            try:
-                                                rc = event.result.content  # type: ignore[attr-defined]
-                                                generic_result = str(rc) if rc else ""
-                                            except Exception:
-                                                pass
                                             tool_ev = ThoughtEvent(
                                                 thought=f"Tool `{tool_name}` returned a result.",
                                                 user_message_id=user_msg_id,
                                                 llm_message_id=llm_msg_id,
                                                 metadata={
                                                     "tool_name": tool_name,
-                                                    "tool_result": generic_result
-                                                    or "Completed",
+                                                    "tool_result": _extract_tool_result_summary(
+                                                        event, tool_name
+                                                    ),
                                                 },
                                             )
                                             builder.add(tool_ev)

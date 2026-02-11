@@ -36,6 +36,7 @@ import {
   SpanAnnotationJson,
 } from "../../types";
 import { AnnotationLabelType } from "../../../types/graphql-api";
+import { TOOL_UNKNOWN_LABEL } from "../../../assets/configurations/constants";
 
 // Timeline entry type based on the schema
 export interface TimelineEntry {
@@ -57,8 +58,10 @@ export interface TimelineEntry {
 
 // Paired tool call info extracted from timeline for the tool usage popover
 interface ToolCallInfo {
+  /** Stable identifier for React keys (tool name + ordinal index) */
+  id: string;
   tool: string;
-  args?: any;
+  args?: Record<string, unknown>;
   result?: string;
 }
 
@@ -837,6 +840,9 @@ const ToolCallCodeBlock = styled.pre`
   overflow-y: auto;
 `;
 
+// XSS safety note: Tool result and argument content is rendered as React text
+// nodes (not via dangerouslySetInnerHTML), so HTML entities are auto-escaped.
+// Content originates from backend agent tool execution, not user input.
 const ToolCallResultBlock = styled.div`
   margin: 0;
   padding: 0.375rem 0.5rem;
@@ -1115,47 +1121,74 @@ const getTimelineTitle = (entry: TimelineEntry) => {
   }
 };
 
-// Extract paired tool call info from timeline entries
-const extractToolCalls = (timeline: TimelineEntry[]): ToolCallInfo[] => {
+/**
+ * Extract paired tool call/result info from timeline entries.
+ *
+ * Uses a consumed-set approach: each tool_result is matched to the first
+ * unconsumed tool_call with the same tool name, preventing incorrect pairing
+ * when the same tool is called multiple times.
+ */
+export const extractToolCalls = (timeline: TimelineEntry[]): ToolCallInfo[] => {
   const calls: ToolCallInfo[] = [];
+  // Track which tool_result indices have been consumed
+  const consumedResults = new Set<number>();
+
   for (let i = 0; i < timeline.length; i++) {
     const entry = timeline[i];
-    if (entry.type === "tool_call") {
-      const call: ToolCallInfo = {
-        tool: entry.tool || "Unknown Tool",
-        args: entry.args,
-      };
-      // Find the matching tool_result (next one with same tool name)
-      for (let j = i + 1; j < timeline.length; j++) {
-        if (
-          timeline[j].type === "tool_result" &&
-          timeline[j].tool === entry.tool
-        ) {
-          call.result = timeline[j].result;
-          break;
-        }
+    if (entry.type !== "tool_call") continue;
+
+    const call: ToolCallInfo = {
+      id: `${entry.tool ?? TOOL_UNKNOWN_LABEL}-${calls.length}`,
+      tool: entry.tool || TOOL_UNKNOWN_LABEL,
+      args: entry.args,
+    };
+
+    // Find the first unconsumed tool_result with the same tool name
+    for (let j = i + 1; j < timeline.length; j++) {
+      if (
+        !consumedResults.has(j) &&
+        timeline[j].type === "tool_result" &&
+        timeline[j].tool === entry.tool
+      ) {
+        call.result = timeline[j].result;
+        consumedResults.add(j);
+        break;
       }
-      calls.push(call);
     }
+    calls.push(call);
   }
   return calls;
 };
 
-// Formats a tool name for display (snake_case -> Title Case)
-const formatToolName = (name: string): string => {
+/**
+ * Formats a snake_case tool name for display (e.g. "similarity_search" -> "Similarity Search").
+ */
+export const formatToolName = (name: string): string => {
   return name
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 };
 
-// Tool Usage Badge with hover popover
+/**
+ * Displays a tool usage badge next to assistant messages. On hover, opens a
+ * popover listing each tool call with its input arguments and output result.
+ */
 const ToolUsageIndicator: React.FC<{
   timeline: TimelineEntry[];
 }> = ({ timeline }) => {
   const toolCalls = useMemo(() => extractToolCalls(timeline), [timeline]);
   const [isOpen, setIsOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeout on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (toolCalls.length === 0) return null;
 
@@ -1171,19 +1204,41 @@ const ToolUsageIndicator: React.FC<{
     closeTimeoutRef.current = setTimeout(() => setIsOpen(false), 200);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setIsOpen((prev) => !prev);
+    } else if (e.key === "Escape" && isOpen) {
+      setIsOpen(false);
+    }
+  };
+
+  const popoverId = `tool-popover-${toolCalls.length}`;
+
   return (
     <ToolBadgeWrapper
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={(e: React.MouseEvent) => e.stopPropagation()}
     >
-      <ToolBadge $isSelected={isOpen}>
+      <ToolBadge
+        $isSelected={isOpen}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        aria-describedby={isOpen ? popoverId : undefined}
+        onKeyDown={handleKeyDown}
+      >
         <Wrench size={14} />
         {toolCalls.length} {toolCalls.length === 1 ? "tool" : "tools"} used
       </ToolBadge>
       <AnimatePresence>
         {isOpen && (
           <ToolPopover
+            id={popoverId}
+            role="dialog"
+            aria-label={`Tool usage details: ${toolCalls.length} ${toolCalls.length === 1 ? "call" : "calls"}`}
             initial={{ opacity: 0, y: -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
@@ -1195,13 +1250,13 @@ const ToolUsageIndicator: React.FC<{
               {toolCalls.length === 1 ? "call" : "calls"})
             </ToolPopoverHeader>
             <ToolPopoverBody>
-              {toolCalls.map((call, idx) => (
-                <ToolCallCard key={idx}>
+              {toolCalls.map((call) => (
+                <ToolCallCard key={call.id}>
                   <ToolCallName>
                     <Wrench />
                     {formatToolName(call.tool)}
                   </ToolCallName>
-                  {call.args && (
+                  {call.args !== undefined && (
                     <ToolCallSection>
                       <ToolCallSectionLabel>Input</ToolCallSectionLabel>
                       <ToolCallCodeBlock>
