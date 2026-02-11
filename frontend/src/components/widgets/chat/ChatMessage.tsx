@@ -99,8 +99,8 @@ const MessageContainer = styled(motion.div)<{
     props.$isSelected
       ? "rgba(92,124,157,0.05)"
       : props.$isAssistant
-      ? "rgba(247, 249, 252, 0.3)"
-      : "rgba(247, 248, 249, 0.15)"};
+        ? "rgba(247, 249, 252, 0.3)"
+        : "rgba(247, 248, 249, 0.15)"};
 
   ${(props) =>
     props.$isSelected &&
@@ -113,8 +113,8 @@ const MessageContainer = styled(motion.div)<{
       props.$isSelected
         ? "rgba(92,124,157,0.08)"
         : props.$isAssistant
-        ? "rgba(247, 249, 252, 0.4)"
-        : "rgba(247, 248, 249, 0.25)"};
+          ? "rgba(247, 249, 252, 0.4)"
+          : "rgba(247, 248, 249, 0.25)"};
   }
 
   /* Add responsive padding */
@@ -743,7 +743,8 @@ const ToolPopover = styled(motion.div)`
   backdrop-filter: blur(16px);
   border: 1px solid rgba(59, 130, 246, 0.15);
   border-radius: 0.75rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.12),
     0 2px 8px rgba(59, 130, 246, 0.08);
   overflow: hidden;
 
@@ -896,7 +897,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
 
   const handleLabelSelect = (label: any) => {
     const msg = chatStateValue.messages.find(
-      (m: any) => m.messageId === messageId
+      (m: any) => m.messageId === messageId,
     );
     if (!msg) return setLabelMenuOpen(false);
     const sourceData = msg.sources[index];
@@ -922,7 +923,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
           [],
           false,
           false,
-          false
+          false,
         );
         createAnnotation(newAnnot);
       } else {
@@ -945,7 +946,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
           [],
           false,
           false,
-          false
+          false,
         );
         createAnnotation(newAnnot);
       }
@@ -1364,11 +1365,11 @@ const TimelinePreview: React.FC<TimelinePreviewProps> = ({
   /* Expansion state per entry ----------------------------------------- */
   const buildInitialExpandedStates = () =>
     timeline.map((_, idx) =>
-      expandLatestOnly ? idx === timeline.length - 1 : true
+      expandLatestOnly ? idx === timeline.length - 1 : true,
     );
 
   const [expandedStates, setExpandedStates] = useState<boolean[]>(
-    buildInitialExpandedStates()
+    buildInitialExpandedStates(),
   );
 
   // Calculate responsive threshold
@@ -1860,7 +1861,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // Check if any tools were actually used in the timeline
   const hasToolUsage = useMemo(
     () => timeline.some((e) => e.type === "tool_call"),
-    [timeline]
+    [timeline],
   );
 
   const showTimelineOnly =
@@ -1878,7 +1879,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   // Local collapse state for timeline when message is COMPLETE.
   // For short timelines (<=2 steps) we default to expanded even after completion
   const [tlCollapsed, setTlCollapsed] = useState<boolean>(
-    isComplete && timeline.length > 2
+    isComplete && timeline.length > 2,
   );
 
   // When message transitions to complete, collapse timeline automatically only if long
