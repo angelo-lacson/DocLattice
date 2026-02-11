@@ -1368,7 +1368,10 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_documents(self, info, **kwargs):
-        return Document.objects.visible_to_user(info.context.user)
+        # Use lightweight mode to skip heavy prefetches (doc_annotations,
+        # rows, relationships, notes) that are unnecessary for list/TOC
+        # queries requesting only basic document fields.
+        return Document.objects.visible_to_user(info.context.user, lightweight=True)
 
     document = graphene.Field(DocumentType, id=graphene.String())
 
@@ -2643,6 +2646,7 @@ class Query(graphene.ObjectType):
         doc_pk = int(from_global_id(document_id)[1]) if document_id else None
 
         # Use optimizer for visibility and eager loading
+        # Pass context for request-level caching of visible IDs
         if doc_pk:
             # Get relationships for specific document
             queryset = (
@@ -2650,6 +2654,7 @@ class Query(graphene.ObjectType):
                     user=user,
                     document_id=doc_pk,
                     corpus_id=corpus_pk,
+                    context=info.context,
                 )
             )
         else:
@@ -2657,6 +2662,7 @@ class Query(graphene.ObjectType):
             queryset = DocumentRelationshipQueryOptimizer.get_visible_relationships(
                 user=user,
                 corpus_id=corpus_pk,
+                context=info.context,
             )
 
         return queryset.distinct().order_by("-created")
