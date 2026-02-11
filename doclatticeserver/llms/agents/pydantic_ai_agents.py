@@ -1526,6 +1526,25 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         )
         # Ensure the agent's config has the potentially newly created/loaded conversation
         config.conversation = conversation_manager.conversation
+        # Resolve embedder_path asynchronously if not already set
+        if config.embedder_path is None:
+            corpus_id_for_embedder = (
+                context.corpus.id if context.corpus is not None else None
+            )
+            if corpus_id_for_embedder:
+                try:
+                    _, resolved_embedder_path = await aget_embedder(
+                        corpus_id=corpus_id_for_embedder
+                    )
+                    if resolved_embedder_path:
+                        config.embedder_path = resolved_embedder_path
+                        logger.debug(f"Derived embedder_path: {config.embedder_path}")
+                except Exception as e:
+                    logger.warning(
+                        f"Error deriving embedder_path for corpus "
+                        f"{corpus_id_for_embedder}: {e}"
+                    )
+
         model_settings = _prepare_pydantic_ai_model_settings(config)
 
         # ------------------------------------------------------------------
