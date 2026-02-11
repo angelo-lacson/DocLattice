@@ -556,7 +556,10 @@ def _build_document_action_system_prompt(
 
     # Inject current document metadata so the agent doesn't waste tool calls
     if document.description:
-        parts.append(f"- Current description: {document.description[:500]}")
+        desc = document.description[:500]
+        if len(document.description) > 500:
+            desc += "..."
+        parts.append(f"- Current description: {desc}")
 
     parts.extend(
         [

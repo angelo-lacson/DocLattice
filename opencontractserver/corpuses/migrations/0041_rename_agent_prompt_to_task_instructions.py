@@ -5,6 +5,12 @@ This migration supports the streamlined agent corpus action configuration:
 - Renames agent_prompt -> task_instructions (single required prompt field)
 - Updates the DB constraint to allow lightweight agent actions
   (task_instructions without agent_config)
+
+Safety note: The new constraint allows task_instructions-only rows (all FKs null,
+task_instructions non-empty). The previous constraint
+(``exactly_one_of_fieldset_analyzer_or_agent``) required at least one FK to be set,
+so no existing rows can have all FKs null with an empty agent_prompt. Therefore,
+the constraint swap is safe for existing data.
 """
 
 from django.db import migrations, models

@@ -4,8 +4,10 @@ Constants for corpus action configuration.
 Provides default tool sets and prompt templates for agent-based corpus actions.
 """
 
+from opencontractserver.corpuses.models import CorpusActionTrigger
+
 # ---------------------------------------------------------------------------
-# Default tool sets by trigger type (Suggestion 5)
+# Default tool sets by trigger type
 # ---------------------------------------------------------------------------
 # When a user creates an agent corpus action without specifying tools,
 # the system uses these defaults based on the trigger type.
@@ -32,21 +34,22 @@ DEFAULT_THREAD_ACTION_TOOLS: list[str] = [
     "unpin_thread",
 ]
 
-# Map trigger types to their default tool sets
+# Map trigger types to their default tool sets.
+# Keys use CorpusActionTrigger enum values to prevent typos.
 DEFAULT_TOOLS_BY_TRIGGER: dict[str, list[str]] = {
-    "add_document": DEFAULT_DOCUMENT_ACTION_TOOLS,
-    "edit_document": DEFAULT_DOCUMENT_ACTION_TOOLS,
-    "new_thread": DEFAULT_THREAD_ACTION_TOOLS,
-    "new_message": DEFAULT_THREAD_ACTION_TOOLS,
+    CorpusActionTrigger.ADD_DOCUMENT: DEFAULT_DOCUMENT_ACTION_TOOLS,
+    CorpusActionTrigger.EDIT_DOCUMENT: DEFAULT_DOCUMENT_ACTION_TOOLS,
+    CorpusActionTrigger.NEW_THREAD: DEFAULT_THREAD_ACTION_TOOLS,
+    CorpusActionTrigger.NEW_MESSAGE: DEFAULT_THREAD_ACTION_TOOLS,
 }
 
 # ---------------------------------------------------------------------------
-# Trigger descriptions for system prompt context injection (Suggestion 4)
+# Trigger descriptions for system prompt context injection
 # ---------------------------------------------------------------------------
 
 TRIGGER_DESCRIPTIONS: dict[str, str] = {
-    "add_document": "was just added to",
-    "edit_document": "was just edited in",
-    "new_thread": "triggered by new thread in",
-    "new_message": "triggered by new message in",
+    CorpusActionTrigger.ADD_DOCUMENT: "was just added to",
+    CorpusActionTrigger.EDIT_DOCUMENT: "was just edited in",
+    CorpusActionTrigger.NEW_THREAD: "triggered by new thread in",
+    CorpusActionTrigger.NEW_MESSAGE: "triggered by new message in",
 }

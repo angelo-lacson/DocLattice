@@ -222,3 +222,44 @@ class CorpusActionModelTestCase(TestCase):
         )
         expected_str = f"CorpusAction for {self.corpus} - Agent - Add Document"
         self.assertEqual(str(corpus_action), expected_str)
+
+    def test_is_agent_action_with_agent_config(self):
+        """is_agent_action returns True when agent_config is set."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Summarize",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertTrue(action.is_agent_action)
+
+    def test_is_agent_action_with_task_instructions_only(self):
+        """is_agent_action returns True for lightweight agent (task_instructions only)."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Summarize this document",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertTrue(action.is_agent_action)
+
+    def test_is_agent_action_false_for_fieldset(self):
+        """is_agent_action returns False for fieldset-only actions."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertFalse(action.is_agent_action)
+
+    def test_is_agent_action_false_for_analyzer(self):
+        """is_agent_action returns False for analyzer-only actions."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            analyzer=self.analyzer,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertFalse(action.is_agent_action)

@@ -1038,8 +1038,17 @@ class CorpusAction(BaseOCModel):
 
     @property
     def is_agent_action(self) -> bool:
-        """Whether this action is an agent-based action (with or without config)."""
-        return bool(self.agent_config_id or self.task_instructions)
+        """Whether this action is an agent-based action (with or without config).
+
+        An action is agent-based if it has an agent_config, or if it has
+        task_instructions without a fieldset or analyzer (lightweight agent).
+        This mirrors the validation in clean() and the DB constraint.
+        """
+        if self.agent_config_id:
+            return True
+        if self.task_instructions and not self.fieldset_id and not self.analyzer_id:
+            return True
+        return False
 
     def clean(self):
         has_fieldset = self.fieldset is not None
