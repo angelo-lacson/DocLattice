@@ -223,12 +223,14 @@ class CorpusActionModelTestCase(TestCase):
         expected_str = f"CorpusAction for {self.corpus} - Agent - Add Document"
         self.assertEqual(str(corpus_action), expected_str)
 
+    # ---- is_agent_action property edge cases ----
+
     def test_is_agent_action_with_agent_config(self):
         """is_agent_action returns True when agent_config is set."""
         action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            task_instructions="Summarize",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -263,3 +265,39 @@ class CorpusActionModelTestCase(TestCase):
             creator=self.user,
         )
         self.assertFalse(action.is_agent_action)
+
+    def test_task_instructions_on_fieldset_action_rejected(self):
+        """Setting task_instructions on a fieldset action should fail validation."""
+        with self.assertRaises(ValidationError):
+            CorpusAction.objects.create(
+                corpus=self.corpus,
+                fieldset=self.fieldset,
+                task_instructions="Should not be allowed",
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                creator=self.user,
+            )
+
+    def test_task_instructions_on_analyzer_action_rejected(self):
+        """Setting task_instructions on an analyzer action should fail validation."""
+        with self.assertRaises(ValidationError):
+            CorpusAction.objects.create(
+                corpus=self.corpus,
+                analyzer=self.analyzer,
+                task_instructions="Should not be allowed",
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                creator=self.user,
+            )
+
+    # ---- Constants alignment with CorpusActionTrigger ----
+
+    def test_constants_keys_match_trigger_enum(self):
+        """Verify DEFAULT_TOOLS_BY_TRIGGER and TRIGGER_DESCRIPTIONS keys
+        match CorpusActionTrigger enum values (guards against typos)."""
+        from opencontractserver.constants.corpus_actions import (
+            DEFAULT_TOOLS_BY_TRIGGER,
+            TRIGGER_DESCRIPTIONS,
+        )
+
+        trigger_values = {choice.value for choice in CorpusActionTrigger}
+        self.assertEqual(set(DEFAULT_TOOLS_BY_TRIGGER.keys()), trigger_values)
+        self.assertEqual(set(TRIGGER_DESCRIPTIONS.keys()), trigger_values)

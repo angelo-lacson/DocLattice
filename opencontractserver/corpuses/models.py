@@ -1077,6 +1077,12 @@ class CorpusAction(BaseOCModel):
                 "task_instructions cannot be set on fieldset or analyzer actions."
             )
 
+        # Agent actions (with config) require task_instructions
+        if has_agent_config and not has_task_instructions:
+            raise ValidationError(
+                "task_instructions is required for agent-based actions."
+            )
+
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)

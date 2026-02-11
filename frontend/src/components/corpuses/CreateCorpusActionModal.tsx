@@ -394,7 +394,8 @@ export const CreateCorpusActionModal: React.FC<
               actionType === "agent"
                 ? selectedAgentConfigId || undefined
                 : undefined,
-            taskInstructions: actionType === "agent" ? taskInstructions : undefined,
+            taskInstructions:
+              actionType === "agent" ? taskInstructions : undefined,
             preAuthorizedTools:
               actionType === "agent" && preAuthorizedTools.length > 0
                 ? preAuthorizedTools
@@ -426,7 +427,8 @@ export const CreateCorpusActionModal: React.FC<
               actionType === "agent" && !isInlineAgentCreation
                 ? selectedAgentConfigId || undefined
                 : undefined,
-            taskInstructions: actionType === "agent" ? taskInstructions : undefined,
+            taskInstructions:
+              actionType === "agent" ? taskInstructions : undefined,
             // For existing agents, use preAuthorizedTools; for inline, use selectedModerationTools
             preAuthorizedTools:
               actionType === "agent"

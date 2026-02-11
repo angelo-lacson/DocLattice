@@ -2,9 +2,13 @@
 Constants for corpus action configuration.
 
 Provides default tool sets and prompt templates for agent-based corpus actions.
-"""
 
-from opencontractserver.corpuses.models import CorpusActionTrigger
+Note: Keys in the dicts below use the *string values* of
+``CorpusActionTrigger`` (e.g. ``"add_document"``). We cannot import the
+enum here because ``corpuses.models`` imports from this constants package,
+which would create a circular import. Alignment with the enum is verified
+in ``test_corpus_action_model.py``.
+"""
 
 # ---------------------------------------------------------------------------
 # Default tool sets by trigger type
@@ -35,21 +39,22 @@ DEFAULT_THREAD_ACTION_TOOLS: list[str] = [
 ]
 
 # Map trigger types to their default tool sets.
-# Keys use CorpusActionTrigger enum values to prevent typos.
+# Keys correspond to CorpusActionTrigger enum values (see note above).
 DEFAULT_TOOLS_BY_TRIGGER: dict[str, list[str]] = {
-    CorpusActionTrigger.ADD_DOCUMENT: DEFAULT_DOCUMENT_ACTION_TOOLS,
-    CorpusActionTrigger.EDIT_DOCUMENT: DEFAULT_DOCUMENT_ACTION_TOOLS,
-    CorpusActionTrigger.NEW_THREAD: DEFAULT_THREAD_ACTION_TOOLS,
-    CorpusActionTrigger.NEW_MESSAGE: DEFAULT_THREAD_ACTION_TOOLS,
+    "add_document": DEFAULT_DOCUMENT_ACTION_TOOLS,
+    "edit_document": DEFAULT_DOCUMENT_ACTION_TOOLS,
+    "new_thread": DEFAULT_THREAD_ACTION_TOOLS,
+    "new_message": DEFAULT_THREAD_ACTION_TOOLS,
 }
 
 # ---------------------------------------------------------------------------
 # Trigger descriptions for system prompt context injection
 # ---------------------------------------------------------------------------
+# Keys correspond to CorpusActionTrigger enum values (see note above).
 
 TRIGGER_DESCRIPTIONS: dict[str, str] = {
-    CorpusActionTrigger.ADD_DOCUMENT: "was just added to",
-    CorpusActionTrigger.EDIT_DOCUMENT: "was just edited in",
-    CorpusActionTrigger.NEW_THREAD: "triggered by new thread in",
-    CorpusActionTrigger.NEW_MESSAGE: "triggered by new message in",
+    "add_document": "was just added to",
+    "edit_document": "was just edited in",
+    "new_thread": "triggered by new thread in",
+    "new_message": "triggered by new message in",
 }

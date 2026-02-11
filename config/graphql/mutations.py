@@ -5263,19 +5263,18 @@ class UpdateCorpusAction(graphene.Mutation):
                 corpus_action.fieldset = None
                 corpus_action.analyzer = None
 
-            # Reject task_instructions on fieldset/analyzer actions early,
+            # Reject task_instructions on non-agent actions early,
             # before setting fields that model validation would later reject.
-            if task_instructions and (
-                corpus_action.fieldset_id or corpus_action.analyzer_id
-            ):
+            will_be_agent = corpus_action.is_agent_action or agent_config_id is not None
+            if not will_be_agent and task_instructions:
                 return UpdateCorpusAction(
                     ok=False,
-                    message="task_instructions cannot be set on fieldset or analyzer actions",
+                    message="task_instructions can only be set on agent-based actions",
                     obj=None,
                 )
 
             # Update agent-specific fields if this is (or is becoming) an agent action
-            if corpus_action.is_agent_action or task_instructions is not None:
+            if will_be_agent or task_instructions is not None:
                 if task_instructions is not None:
                     corpus_action.task_instructions = task_instructions
                 if pre_authorized_tools is not None:
