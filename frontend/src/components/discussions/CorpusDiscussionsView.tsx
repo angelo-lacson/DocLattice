@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useReactiveVar, useQuery } from "@apollo/client";
 import { useAtom } from "jotai";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -353,11 +353,6 @@ interface CorpusDiscussionsViewProps {
   corpusId: string;
   /** When true, hides the built-in header (for embedding in corpus tabs) */
   hideHeader?: boolean;
-  /**
-   * Callback fired when the component transitions between list view and thread detail view.
-   * Parent components can use this to adjust their navigation headers.
-   */
-  onViewModeChange?: (inThreadView: boolean) => void;
 }
 
 /**
@@ -373,7 +368,6 @@ interface CorpusDiscussionsViewProps {
 export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   corpusId,
   hideHeader = false,
-  onViewModeChange,
 }) => {
   const corpus = useReactiveVar(openedCorpus);
   const token = useReactiveVar(authToken);
@@ -392,11 +386,6 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
   // CentralRouteManager Phase 2 reads ?thread= and sets selectedThreadIdVar
   const currentThreadId = useReactiveVar(selectedThreadIdVar);
   const inThreadView = currentThreadId !== null;
-
-  // Notify parent when view mode changes (derived from URL state)
-  useEffect(() => {
-    onViewModeChange?.(inThreadView);
-  }, [inThreadView, onViewModeChange]);
 
   // Fetch all threads for stats calculation
   const { data: threadsData } = useQuery<

@@ -11,6 +11,7 @@ import {
   buildCanonicalPath,
   QueryParams,
   updateTabParam,
+  updateThreadParam,
   updateMessageParam,
   navigateToThreadWithMessage,
   clearThreadSelection,
@@ -681,19 +682,19 @@ describe("buildQueryParams() with tab and message", () => {
 });
 
 describe("updateTabParam()", () => {
-  it("should set tab parameter", () => {
+  it("should set tab parameter and push (not replace) history", () => {
     const mockNavigate = vi.fn();
     const location = { search: "" };
 
     updateTabParam(location, mockNavigate, "discussions");
 
-    expect(mockNavigate).toHaveBeenCalledWith(
-      { search: "tab=discussions" },
-      { replace: true }
-    );
+    // Should push, not replace, for proper browser back/forward
+    expect(mockNavigate).toHaveBeenCalledWith({ search: "tab=discussions" });
+    // Verify no second argument (no { replace: true })
+    expect(mockNavigate.mock.calls[0]).toHaveLength(1);
   });
 
-  it("should preserve existing parameters when adding tab", () => {
+  it("should preserve non-tab-specific parameters when adding tab", () => {
     const mockNavigate = vi.fn();
     const location = { search: "ann=123&analysis=456" };
 
@@ -722,10 +723,109 @@ describe("updateTabParam()", () => {
 
     updateTabParam(location, mockNavigate, "documents");
 
-    expect(mockNavigate).toHaveBeenCalledWith(
-      { search: "tab=documents" },
-      { replace: true }
-    );
+    expect(mockNavigate).toHaveBeenCalledWith({ search: "tab=documents" });
+  });
+
+  it("should clear thread param when switching tabs", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "tab=discussions&thread=thread-123" };
+
+    updateTabParam(location, mockNavigate, "documents");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("tab=documents");
+    expect(calledWith).not.toContain("thread");
+  });
+
+  it("should clear message param when switching tabs", () => {
+    const mockNavigate = vi.fn();
+    const location = {
+      search: "tab=discussions&thread=t-1&message=msg-1",
+    };
+
+    updateTabParam(location, mockNavigate, "documents");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("tab=documents");
+    expect(calledWith).not.toContain("thread");
+    expect(calledWith).not.toContain("message");
+  });
+
+  it("should clear thread and message even when going to home (null)", () => {
+    const mockNavigate = vi.fn();
+    const location = {
+      search: "tab=discussions&thread=t-1&message=msg-1&ann=123",
+    };
+
+    updateTabParam(location, mockNavigate, null);
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("ann=123");
+    expect(calledWith).not.toContain("tab");
+    expect(calledWith).not.toContain("thread");
+    expect(calledWith).not.toContain("message");
+  });
+});
+
+describe("updateThreadParam()", () => {
+  it("should set thread parameter when threadId provided", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "tab=discussions" };
+
+    updateThreadParam(location, mockNavigate, "thread-123");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("tab=discussions");
+    expect(calledWith).toContain("thread=thread-123");
+  });
+
+  it("should push history entry (not replace)", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "" };
+
+    updateThreadParam(location, mockNavigate, "thread-1");
+
+    // Should push, not replace
+    expect(mockNavigate).toHaveBeenCalledWith({ search: "thread=thread-1" });
+    expect(mockNavigate.mock.calls[0]).toHaveLength(1);
+  });
+
+  it("should clear thread and message params when threadId is null", () => {
+    const mockNavigate = vi.fn();
+    const location = {
+      search: "tab=discussions&thread=thread-1&message=msg-1",
+    };
+
+    updateThreadParam(location, mockNavigate, null);
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("tab=discussions");
+    expect(calledWith).not.toContain("thread");
+    expect(calledWith).not.toContain("message");
+  });
+
+  it("should preserve unrelated params", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "tab=discussions&ann=123&analysis=456" };
+
+    updateThreadParam(location, mockNavigate, "thread-789");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("tab=discussions");
+    expect(calledWith).toContain("ann=123");
+    expect(calledWith).toContain("analysis=456");
+    expect(calledWith).toContain("thread=thread-789");
+  });
+
+  it("should update existing thread parameter", () => {
+    const mockNavigate = vi.fn();
+    const location = { search: "thread=old-thread" };
+
+    updateThreadParam(location, mockNavigate, "new-thread");
+
+    const calledWith = mockNavigate.mock.calls[0][0].search;
+    expect(calledWith).toContain("thread=new-thread");
+    expect(calledWith).not.toContain("old-thread");
   });
 });
 
