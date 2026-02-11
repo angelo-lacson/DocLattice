@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Callable, Optional, TypeVar, Union
 from uuid import uuid4
 
+from asgiref.sync import sync_to_async
 from pydantic_ai.agent import Agent as PydanticAIAgent
 from pydantic_ai.agent import (
     CallToolsNode,
@@ -1551,12 +1552,21 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         # Ensure a vector search tool is always available so that the agent
         # can reference the primary document and emit `sources`.
         # ------------------------------------------------------------------
-        vector_store = PydanticAIAnnotationVectorStore(
+        _vs_kwargs = dict(
             user_id=config.user_id,
             corpus_id=context.corpus.id if context.corpus is not None else None,
             document_id=context.document.id,
             embedder_path=config.embedder_path,
         )
+        if config.embedder_path:
+            # embedder_path is resolved — constructor won't hit the ORM.
+            vector_store = PydanticAIAnnotationVectorStore(**_vs_kwargs)
+        else:
+            # Fallback: run the sync constructor (which may do ORM calls)
+            # in a thread so we don't raise SynchronousOnlyOperation.
+            vector_store = await sync_to_async(PydanticAIAnnotationVectorStore)(
+                **_vs_kwargs
+            )
 
         # Default vector search tool: bound method on the store. Pydantic-AI
         # will inspect the signature (query: str, k: int) and build the
@@ -2181,11 +2191,20 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         # Ensure a vector search tool is always available so that the agent
         # can reference the primary document and emit `sources`.
         # ------------------------------------------------------------------
-        vector_store = PydanticAIAnnotationVectorStore(
+        _vs_kwargs = dict(
             user_id=config.user_id,
             corpus_id=context.corpus.id,
             embedder_path=config.embedder_path,
         )
+        if config.embedder_path:
+            # embedder_path is resolved — constructor won't hit the ORM.
+            vector_store = PydanticAIAnnotationVectorStore(**_vs_kwargs)
+        else:
+            # Fallback: run the sync constructor (which may do ORM calls)
+            # in a thread so we don't raise SynchronousOnlyOperation.
+            vector_store = await sync_to_async(PydanticAIAnnotationVectorStore)(
+                **_vs_kwargs
+            )
 
         # Default vector search tool: bound method on the store. Pydantic-AI
         # will inspect the signature (query: str, k: int) and build the
