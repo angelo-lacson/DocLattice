@@ -10,6 +10,7 @@ import { CallToAction } from "../src/components/landing/CallToAction";
 import { DiscoveryLanding } from "../src/views/DiscoveryLanding";
 import { LandingTestWrapper } from "./LandingTestWrapper";
 import { GET_DISCOVERY_DATA } from "../src/graphql/landing-queries";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // Mock data
 const mockCommunityStats = {
@@ -198,6 +199,9 @@ test.describe("HeroSection Component", () => {
     await expect(page.locator("text=Browse Collections")).toBeVisible();
     await expect(page.locator("text=All Discussions")).toBeVisible();
 
+    // Doc screenshot: landing page hero section for anonymous visitors
+    await docScreenshot(page, "landing--hero-section--anonymous");
+
     await component.unmount();
   });
 
@@ -236,6 +240,9 @@ test.describe("StatsBar Component", () => {
     await expect(page.locator("text=Users")).toBeVisible();
     await expect(page.locator("text=Discussions")).toBeVisible();
     await expect(page.locator("text=Annotations")).toBeVisible();
+
+    // Doc screenshot: stats bar with community metrics
+    await docScreenshot(page, "landing--stats-bar--with-data");
 
     await component.unmount();
   });
@@ -278,6 +285,9 @@ test.describe("TrendingCorpuses Component", () => {
 
     // Check View All button
     await expect(page.locator("text=View All")).toBeVisible();
+
+    // Doc screenshot: trending corpuses section with cards
+    await docScreenshot(page, "landing--trending-corpuses--with-data");
 
     await component.unmount();
   });
@@ -437,6 +447,9 @@ test.describe("CallToAction Component", () => {
     await expect(page.locator("text=Open Source & Free")).toBeVisible();
     await expect(page.locator("text=AI-Powered Analysis")).toBeVisible();
 
+    // Doc screenshot: call-to-action section for anonymous users
+    await docScreenshot(page, "landing--call-to-action--anonymous");
+
     await component.unmount();
   });
 
@@ -485,6 +498,11 @@ test.describe("DiscoveryLanding Page", () => {
     // Check hero section - updated text after redesign
     await expect(page.locator("text=The open platform for")).toBeVisible({
       timeout: 15000,
+    });
+
+    // Doc screenshot: full discovery landing page integration
+    await docScreenshot(page, "landing--discovery-page--anonymous", {
+      fullPage: true,
     });
 
     await component.unmount();
