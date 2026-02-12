@@ -860,7 +860,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         conversationType: CONVERSATION_TYPE.CHAT,
       },
       fetchPolicy: "network-only",
-    },
+    }
   );
 
   // Lazy query for loading messages of a specific conversation
@@ -868,7 +868,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     fetchChatMessages,
     { data: msgData, loading: loadingMessages, fetchMore: fetchMoreMessages },
   ] = useLazyQuery<GetChatMessagesOutputs, GetChatMessagesInputs>(
-    GET_CHAT_MESSAGES,
+    GET_CHAT_MESSAGES
   );
 
   // messages container ref for scrolling
@@ -891,7 +891,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
           sArr,
           srvMsg.id,
           srvMsg.createdAt,
-          tArr,
+          tArr
         );
       }
     });
@@ -982,7 +982,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     const wsUrl = getCorpusQueryWebSocket(
       corpusId,
       auth_token,
-      isNewChat ? undefined : selectedConversationId,
+      isNewChat ? undefined : selectedConversationId
     );
     const newSocket = new WebSocket(wsUrl);
 
@@ -991,7 +991,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
       setWsError(null);
       console.log(
         "WebSocket connected for corpus conversation:",
-        selectedConversationId,
+        selectedConversationId
       );
     };
 
@@ -1052,15 +1052,15 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 prev.map((msg) =>
                   msg.messageId === data.message_id
                     ? { ...msg, approvalStatus: "awaiting" as const }
-                    : msg,
-                ),
+                    : msg
+                )
               );
               setServerMessages((prev) =>
                 prev.map((msg) =>
                   msg.messageId === data.message_id
                     ? { ...msg, approvalStatus: "awaiting" as const }
-                    : msg,
-                ),
+                    : msg
+                )
               );
             }
             break;
@@ -1078,15 +1078,15 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   prev.map((msg) =>
                     msg.messageId === data.message_id
                       ? { ...msg, approvalStatus: status, isComplete: true }
-                      : msg,
-                  ),
+                      : msg
+                  )
                 );
                 setServerMessages((prev) =>
                   prev.map((msg) =>
                     msg.messageId === data.message_id
                       ? { ...msg, approvalStatus: status, isComplete: true }
-                      : msg,
-                  ),
+                      : msg
+                  )
                 );
               }
             }
@@ -1100,7 +1100,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               content,
               data?.sources,
               data?.message_id,
-              data?.timeline,
+              data?.timeline
             );
             setIsProcessing(false);
             if (
@@ -1115,7 +1115,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             finalizeStreamingResponse(
               data?.error || "Error",
               [],
-              data?.message_id,
+              data?.message_id
             );
             setIsProcessing(false);
             break;
@@ -1133,7 +1133,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               sourcesToPass,
               data?.message_id,
               undefined,
-              timelineToPass,
+              timelineToPass
             );
             break;
           }
@@ -1298,7 +1298,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
 
   function appendStreamingTokenToChat(
     token: string,
-    overrideMessageId?: string,
+    overrideMessageId?: string
   ): string {
     if (!token) return "";
     let messageId = "";
@@ -1341,7 +1341,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     content: string,
     sourcesData?: WebSocketSources[],
     overrideId?: string,
-    timelineData?: TimelineEntry[],
+    timelineData?: TimelineEntry[]
   ) => {
     // First, update the local chat list **without** triggering any other state updates.
     let lastMsgId: string | undefined;
@@ -1378,7 +1378,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         sourcesData,
         lastMsgId,
         overrideId,
-        timelineData,
+        timelineData
       );
     }
   };
@@ -1391,11 +1391,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     sourcesData?: Array<WebSocketSources>,
     overrideId?: string,
     overrideCreatedAt?: string,
-    timelineData?: TimelineEntry[],
+    timelineData?: TimelineEntry[]
   ): void => {
     if (!overrideId) {
       console.warn(
-        "handleCompleteMessage called without an overrideId - sources may not display correctly",
+        "handleCompleteMessage called without an overrideId - sources may not display correctly"
       );
     }
     const messageId = overrideId ?? `msg_${Date.now()}`;
@@ -1405,12 +1405,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
 
     const mappedSources = mapWebSocketSourcesToChatMessageSources(
       sourcesData,
-      messageId,
+      messageId
     );
 
     setChatSourceState((prev) => {
       const existingIndex = prev.messages.findIndex(
-        (m) => m.messageId === messageId,
+        (m) => m.messageId === messageId
       );
       if (existingIndex !== -1) {
         const existingMsg = prev.messages[existingIndex];
@@ -1449,7 +1449,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    */
   const appendThoughtToMessage = (
     thoughtText: string,
-    data: MessageData["data"] | undefined,
+    data: MessageData["data"] | undefined
   ): void => {
     const messageId = data?.message_id;
     if (!messageId || !thoughtText) return;
@@ -1495,13 +1495,13 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    */
   const mergeSourcesIntoMessage = (
     sourcesData: WebSocketSources[] | undefined,
-    overrideId?: string,
+    overrideId?: string
   ): void => {
     if (!sourcesData?.length || !overrideId) return;
 
     const mappedSources = mapWebSocketSourcesToChatMessageSources(
       sourcesData,
-      overrideId,
+      overrideId
     );
 
     setChatSourceState((prev) => {
@@ -1528,8 +1528,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         ...mappedSources.filter(
           (ms) =>
             !existing.sources.some(
-              (es) => es.annotation_id === ms.annotation_id,
-            ),
+              (es) => es.annotation_id === ms.annotation_id
+            )
         ),
       ];
 
@@ -1579,7 +1579,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         console.log(
           `[CorpusChat] Sending approval decision: ${
             approved ? "APPROVED" : "REJECTED"
-          } for message ${pendingApproval.messageId}`,
+          } for message ${pendingApproval.messageId}`
         );
 
         socketRef.current.send(JSON.stringify(messageData));
@@ -1596,7 +1596,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         setShowApprovalModal(true);
       }
     },
-    [pendingApproval, wsReady],
+    [pendingApproval, wsReady]
   );
 
   // If the GraphQL query fails entirely:
@@ -1684,7 +1684,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               >
                 {combinedMessages.map((msg, idx) => {
                   const sourcedMessage = sourcedMessages.find(
-                    (m) => m.messageId === msg.messageId,
+                    (m) => m.messageId === msg.messageId
                   );
 
                   const sources =
@@ -2133,7 +2133,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                           {JSON.stringify(
                             pendingApproval.toolCall.arguments,
                             null,
-                            2,
+                            2
                           )}
                         </pre>
                       </div>
