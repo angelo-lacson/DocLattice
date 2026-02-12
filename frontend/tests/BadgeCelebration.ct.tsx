@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { BadgeCelebrationModal } from "../src/components/badges/BadgeCelebrationModal";
 import { BadgeToast } from "../src/components/badges/BadgeToast";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("BadgeCelebrationModal", () => {
   test("renders with badge information", async ({ mount, page }) => {
@@ -12,21 +13,24 @@ test.describe("BadgeCelebrationModal", () => {
         badgeColor="#05313d"
         isAutoAwarded={true}
         onClose={() => {}}
-      />
+      />,
     );
 
     // Wait for animations to settle
     await page.waitForTimeout(500);
 
     await expect(
-      component.getByRole("heading", { name: "First Post" })
+      component.getByRole("heading", { name: "First Post" }),
     ).toBeVisible({ timeout: 20000 });
     await expect(
-      component.getByText("Made your first post in the community")
+      component.getByText("Made your first post in the community"),
     ).toBeVisible({ timeout: 20000 });
     await expect(
-      component.getByText("Congratulations on your achievement!")
+      component.getByText("Congratulations on your achievement!"),
     ).toBeVisible({ timeout: 20000 });
+
+    // Doc screenshot: badge celebration modal with auto-awarded badge
+    await docScreenshot(page, "badges--celebration-modal--auto-award");
   });
 
   test("shows awarded by message for manual awards", async ({
@@ -42,13 +46,16 @@ test.describe("BadgeCelebrationModal", () => {
         isAutoAwarded={false}
         awardedBy={{ username: "adminuser" }}
         onClose={() => {}}
-      />
+      />,
     );
 
     await page.waitForTimeout(500);
     await expect(component.getByText(/Awarded by adminuser/)).toBeVisible({
       timeout: 20000,
     });
+
+    // Doc screenshot: badge celebration modal with manual award
+    await docScreenshot(page, "badges--celebration-modal--manual-award");
   });
 
   test("calls onClose when close button clicked", async ({ mount, page }) => {
@@ -64,7 +71,7 @@ test.describe("BadgeCelebrationModal", () => {
         onClose={() => {
           closeCalled = true;
         }}
-      />
+      />,
     );
 
     await page.waitForTimeout(500);
@@ -86,7 +93,7 @@ test.describe("BadgeCelebrationModal", () => {
         onViewBadges={() => {
           viewBadgesCalled = true;
         }}
-      />
+      />,
     );
 
     await page.waitForTimeout(500);
@@ -103,13 +110,13 @@ test.describe("BadgeCelebrationModal", () => {
         badgeColor="#f1c40f"
         isAutoAwarded={true}
         onClose={() => {}}
-      />
+      />,
     );
 
     await page.waitForTimeout(500);
     // Check that the badge name heading is visible
     await expect(
-      component.getByRole("heading", { name: "Star Badge" })
+      component.getByRole("heading", { name: "Star Badge" }),
     ).toBeVisible({ timeout: 20000 });
     // Check that SVG icon is present
     await expect(component.locator("svg").first()).toBeVisible({
@@ -130,7 +137,7 @@ test.describe("BadgeCelebrationModal", () => {
         onClose={() => {
           closeCalled = true;
         }}
-      />
+      />,
     );
 
     await page.waitForTimeout(500);
@@ -148,7 +155,7 @@ test.describe("BadgeToast", () => {
         badgeIcon="Trophy"
         badgeColor="#05313d"
         isAutoAwarded={true}
-      />
+      />,
     );
 
     await page.waitForTimeout(200);
@@ -156,8 +163,11 @@ test.describe("BadgeToast", () => {
       timeout: 20000,
     });
     await expect(
-      component.getByText(/You earned the "First Post" badge!/)
+      component.getByText(/You earned the "First Post" badge!/),
     ).toBeVisible({ timeout: 20000 });
+
+    // Doc screenshot: badge earned toast notification
+    await docScreenshot(page, "badges--toast--earned");
   });
 
   test("shows awarded by message for manual awards", async ({
@@ -171,12 +181,12 @@ test.describe("BadgeToast", () => {
         badgeColor="#e67e22"
         isAutoAwarded={false}
         awardedBy={{ username: "adminuser" }}
-      />
+      />,
     );
 
     await page.waitForTimeout(200);
     await expect(
-      component.getByText(/adminuser awarded you the "Helpful" badge!/)
+      component.getByText(/adminuser awarded you the "Helpful" badge!/),
     ).toBeVisible({ timeout: 20000 });
   });
 
@@ -187,7 +197,7 @@ test.describe("BadgeToast", () => {
         badgeIcon="Star"
         badgeColor="#3498db"
         isAutoAwarded={true}
-      />
+      />,
     );
 
     await page.waitForTimeout(200);
@@ -208,7 +218,7 @@ test.describe("BadgeToast", () => {
         badgeIcon="NonExistentIcon123"
         badgeColor="#9b59b6"
         isAutoAwarded={true}
-      />
+      />,
     );
 
     await page.waitForTimeout(200);

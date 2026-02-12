@@ -10,6 +10,7 @@ import { CallToAction } from "../src/components/landing/CallToAction";
 import { DiscoveryLanding } from "../src/views/DiscoveryLanding";
 import { LandingTestWrapper } from "./LandingTestWrapper";
 import { GET_DISCOVERY_DATA } from "../src/graphql/landing-queries";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // Mock data
 const mockCommunityStats = {
@@ -183,7 +184,7 @@ test.describe("HeroSection Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <HeroSection isAuthenticated={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check main title is visible
@@ -198,6 +199,9 @@ test.describe("HeroSection Component", () => {
     await expect(page.locator("text=Browse Collections")).toBeVisible();
     await expect(page.locator("text=All Discussions")).toBeVisible();
 
+    // Doc screenshot: landing page hero section for anonymous visitors
+    await docScreenshot(page, "landing--hero-section--anonymous");
+
     await component.unmount();
   });
 
@@ -208,7 +212,7 @@ test.describe("HeroSection Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <HeroSection isAuthenticated={true} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check for authenticated user subtitle
@@ -228,7 +232,7 @@ test.describe("StatsBar Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <StatsBar stats={mockCommunityStats} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check that stats values are rendered (formatted numbers)
@@ -237,6 +241,9 @@ test.describe("StatsBar Component", () => {
     await expect(page.locator("text=Discussions")).toBeVisible();
     await expect(page.locator("text=Annotations")).toBeVisible();
 
+    // Doc screenshot: stats bar with community metrics
+    await docScreenshot(page, "landing--stats-bar--with-data");
+
     await component.unmount();
   });
 
@@ -244,7 +251,7 @@ test.describe("StatsBar Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <StatsBar stats={null} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Should show dash for missing values (there are 6 stat cards, all showing dash)
@@ -264,7 +271,7 @@ test.describe("TrendingCorpuses Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <TrendingCorpuses corpuses={mockCorpuses} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check section header
@@ -279,6 +286,9 @@ test.describe("TrendingCorpuses Component", () => {
     // Check View All button
     await expect(page.locator("text=View All")).toBeVisible();
 
+    // Doc screenshot: trending corpuses section with cards
+    await docScreenshot(page, "landing--trending-corpuses--with-data");
+
     await component.unmount();
   });
 
@@ -286,7 +296,7 @@ test.describe("TrendingCorpuses Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <TrendingCorpuses corpuses={mockCorpuses} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check stats are shown
@@ -309,7 +319,7 @@ test.describe("RecentDiscussions Component", () => {
           loading={false}
           totalCount={2}
         />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check section header
@@ -319,10 +329,10 @@ test.describe("RecentDiscussions Component", () => {
 
     // Check discussion titles
     await expect(
-      page.locator("text=Discussion about contract clauses")
+      page.locator("text=Discussion about contract clauses"),
     ).toBeVisible();
     await expect(
-      page.locator("text=Research methodology questions")
+      page.locator("text=Research methodology questions"),
     ).toBeVisible();
 
     await component.unmount();
@@ -335,7 +345,7 @@ test.describe("RecentDiscussions Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <RecentDiscussions discussions={mockDiscussions} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // First discussion is pinned
@@ -351,7 +361,7 @@ test.describe("RecentDiscussions Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <RecentDiscussions discussions={mockDiscussions} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Component displays "View thread" action for each discussion
@@ -375,7 +385,7 @@ test.describe("CompactLeaderboard Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check contributor names are displayed
@@ -391,7 +401,7 @@ test.describe("CompactLeaderboard Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check reputation values
@@ -405,7 +415,7 @@ test.describe("CompactLeaderboard Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     await expect(page.locator("text=View Full Leaderboard")).toBeVisible({
@@ -424,7 +434,7 @@ test.describe("CallToAction Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CallToAction isAuthenticated={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check CTA content
@@ -437,6 +447,9 @@ test.describe("CallToAction Component", () => {
     await expect(page.locator("text=Open Source & Free")).toBeVisible();
     await expect(page.locator("text=AI-Powered Analysis")).toBeVisible();
 
+    // Doc screenshot: call-to-action section for anonymous users
+    await docScreenshot(page, "landing--call-to-action--anonymous");
+
     await component.unmount();
   });
 
@@ -444,7 +457,7 @@ test.describe("CallToAction Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CallToAction isAuthenticated={true} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // CTA should not be visible for authenticated users
@@ -479,12 +492,17 @@ test.describe("DiscoveryLanding Page", () => {
     const component = await mount(
       <LandingTestWrapper mocks={[discoveryDataMock]}>
         <DiscoveryLanding isAuthenticatedOverride={false} />
-      </LandingTestWrapper>
+      </LandingTestWrapper>,
     );
 
     // Check hero section - updated text after redesign
     await expect(page.locator("text=The open platform for")).toBeVisible({
       timeout: 15000,
+    });
+
+    // Doc screenshot: full discovery landing page integration
+    await docScreenshot(page, "landing--discovery-page--anonymous", {
+      fullPage: true,
     });
 
     await component.unmount();
