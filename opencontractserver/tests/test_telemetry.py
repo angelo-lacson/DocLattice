@@ -268,60 +268,46 @@ class TelemetryMigrationTestCase(TestCase):
 
 
 class AsyncTelemetryTestCase(TestCase):
-    """Tests for async telemetry functions."""
+    """Tests for async telemetry functions.
+
+    Uses mock on ``record_event`` rather than Posthog directly because
+    ``arecord_event`` runs ``record_event`` in a different thread via
+    ``sync_to_async``.  Django ``TestCase`` wraps each test in an
+    uncommitted transaction that is invisible to other DB connections,
+    so the Installation record created in setUp would not be found.
+    Mocking ``record_event`` avoids the cross-thread DB visibility issue
+    while still verifying the async wrapper delegates correctly.
+    """
 
     def setUp(self):
         _reset_posthog_client()
-        self.mock_installation = Installation.get()
-        self.installation_id = self.mock_installation.id
-
-        self.posthog_patcher = patch("config.telemetry.Posthog")
-        self.mock_posthog_class = self.posthog_patcher.start()
-        self.mock_posthog = MagicMock()
-        self.mock_posthog_class.return_value = self.mock_posthog
 
     def tearDown(self):
-        self.posthog_patcher.stop()
         _reset_posthog_client()
 
     def test_arecord_event_success(self):
         """Test async event recording delegates to sync version."""
-        with override_settings(
-            MODE="DEV",
-            TELEMETRY_ENABLED=True,
-            POSTHOG_API_KEY="test-key",
-            POSTHOG_HOST="https://test.host",
-        ):
+        with patch("config.telemetry.record_event", return_value=True) as mock_record:
             result = asyncio.run(arecord_event("test_event", {"test": "value"}))
 
         self.assertTrue(result)
-        self.mock_posthog.capture.assert_called_once()
+        mock_record.assert_called_once_with("test_event", {"test": "value"})
 
-        call_args = self.mock_posthog.capture.call_args[1]
-        self.assertEqual(call_args["distinct_id"], str(self.installation_id))
-        self.assertEqual(call_args["event"], "opencontracts.test_event")
-        self.assertEqual(call_args["properties"]["test"], "value")
-
-    def test_arecord_event_telemetry_disabled(self):
-        """Test async version respects telemetry disabled setting."""
-        with override_settings(TELEMETRY_ENABLED=False):
+    def test_arecord_event_returns_false(self):
+        """Test async version propagates False from sync version."""
+        with patch("config.telemetry.record_event", return_value=False) as mock_record:
             result = asyncio.run(arecord_event("test_event"))
 
         self.assertFalse(result)
-        self.mock_posthog.capture.assert_not_called()
+        mock_record.assert_called_once_with("test_event", None)
 
     def test_arecord_event_without_properties(self):
         """Test async event recording without additional properties."""
-        with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
+        with patch("config.telemetry.record_event", return_value=True) as mock_record:
             result = asyncio.run(arecord_event("test_event"))
 
         self.assertTrue(result)
-        self.mock_posthog.capture.assert_called_once()
-
-        properties = self.mock_posthog.capture.call_args[1]["properties"]
-        self.assertEqual(
-            set(properties.keys()), {"package", "timestamp", "installation_id"}
-        )
+        mock_record.assert_called_once_with("test_event", None)
 
 
 class InstallationIdCacheTestCase(TestCase):
@@ -341,9 +327,10 @@ class InstallationIdCacheTestCase(TestCase):
 
     def test_cache_avoids_repeated_db_hits(self):
         """Test that after first lookup, subsequent calls skip the database."""
-        with patch(
-            "config.telemetry.Installation.objects.get",
-            wraps=Installation.objects.get,
+        # patch.object on the manager instance works regardless of how
+        # Installation is imported (it's a lazy import inside the function).
+        with patch.object(
+            Installation.objects, "get", wraps=Installation.objects.get
         ) as mock_get:
             # First call should hit the DB
             first = _get_installation_id()
@@ -368,18 +355,25 @@ class InstallationIdCacheTestCase(TestCase):
         self.assertIs(telemetry_module._cached_installation_id, _UNSET)
 
     def test_cache_works_across_async_calls(self):
-        """Test that the cache works correctly when called via arecord_event."""
-        with patch(
-            "config.telemetry.Installation.objects.get",
-            wraps=Installation.objects.get,
-        ) as mock_get, patch("config.telemetry.Posthog") as mock_posthog_class:
+        """Test that async calls use the cached ID, not the database.
+
+        We populate the cache synchronously first (same thread / same DB
+        connection as the test transaction), then verify that the async
+        path through ``arecord_event`` → ``sync_to_async(record_event)``
+        never triggers a fresh DB lookup.
+        """
+        # Populate cache synchronously (visible in this thread's transaction)
+        _get_installation_id()
+
+        with patch.object(Installation.objects, "get") as mock_get, patch(
+            "config.telemetry.Posthog"
+        ) as mock_posthog_class:
             mock_posthog = MagicMock()
             mock_posthog_class.return_value = mock_posthog
 
             with override_settings(MODE="DEV", TELEMETRY_ENABLED=True):
                 asyncio.run(arecord_event("event1"))
-                db_calls_after_first = mock_get.call_count
-
                 asyncio.run(arecord_event("event2"))
-                # No additional DB call for second event
-                self.assertEqual(mock_get.call_count, db_calls_after_first)
+
+            # Cache was already warm so the ORM should never have been called
+            mock_get.assert_not_called()
