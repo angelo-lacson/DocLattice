@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Files: `opencontractserver/llms/agents/timeline_schema.py` (added `result` field), `opencontractserver/llms/agents/timeline_utils.py` (captures result from metadata), `opencontractserver/llms/agents/pydantic_ai_agents.py` (passes result content through ThoughtEvent metadata)
 - **Tool result entries for search tools**: `similarity_search` and `search_exact_text` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"), enabling the frontend to display complete tool call input/output pairs
 
+### Fixed
+
+#### Corpus Agent Action Failure: griffe/pydantic-ai Incompatibility
+- **Pin `griffe>=1.3.2,<2`** (`requirements/base.txt`): griffe 2.0.0 (released 2026-02-09) removed the `**options` catch-all from all docstring parsers. pydantic-ai 0.2.x unconditionally passes `returns_named_value` and `returns_multiple_items` as parser options to all parsers (including numpy), causing `TypeError: parse_numpy() got an unexpected keyword argument 'returns_named_value'`. This broke all `run_agent_corpus_action` tasks during agent creation. Pinning griffe below 2.0 restores the `**options` parameter that absorbs these Google-specific options harmlessly.
+
+#### SynchronousOnlyOperation in Vector Store Construction from Async Context
+- **Wrap vector store construction in `sync_to_async`** (`opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py:392`): `create_vector_search_tool()` now wraps `PydanticAIAnnotationVectorStore(...)` in `sync_to_async` so the sync ORM calls inside `CoreAnnotationVectorStore.__init__` (embedder resolution via `get_embedder()`) run in a thread pool instead of triggering Django's `SynchronousOnlyOperation`.
+- **Pre-resolve embedder_path in `PydanticAIDocumentAgent.create()`** (`opencontractserver/llms/agents/pydantic_ai_agents.py:1529`): Added async embedder pre-resolution using `aget_embedder()` before constructing the vector store, matching the existing pattern in `PydanticAICorpusAgent.create()`. This prevents the sync `get_embedder()` fallback from hitting the ORM in an async context.
+- **Defensive `sync_to_async` fallback in both agent `create()` methods** (`pydantic_ai_agents.py`): If `aget_embedder()` fails and `embedder_path` remains `None`, the `PydanticAIAnnotationVectorStore(...)` constructor is wrapped in `sync_to_async` so the ORM calls inside `get_embedder()` run in a thread pool. Applied to both `PydanticAIDocumentAgent.create()` and `PydanticAICorpusAgent.create()`.
+- **Fix async test** (`opencontractserver/tests/test_pydantic_ai_agents.py:412`): Wrapped `PydanticAIAnnotationVectorStore(...)` construction in `sync_to_async` in `test_pydantic_ai_vector_store_search`.
+
 ### Changed
 
 #### Import/Export Pipeline Consolidation
