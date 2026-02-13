@@ -184,7 +184,7 @@ test.describe("HeroSection Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <HeroSection isAuthenticated={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check main title is visible
@@ -212,7 +212,7 @@ test.describe("HeroSection Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <HeroSection isAuthenticated={true} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check for authenticated user subtitle
@@ -232,7 +232,7 @@ test.describe("StatsBar Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <StatsBar stats={mockCommunityStats} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check that stats values are rendered (formatted numbers)
@@ -251,7 +251,7 @@ test.describe("StatsBar Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <StatsBar stats={null} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Should show dash for missing values (there are 6 stat cards, all showing dash)
@@ -271,7 +271,7 @@ test.describe("TrendingCorpuses Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <TrendingCorpuses corpuses={mockCorpuses} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check section header
@@ -296,7 +296,7 @@ test.describe("TrendingCorpuses Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <TrendingCorpuses corpuses={mockCorpuses} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check stats are shown
@@ -319,7 +319,7 @@ test.describe("RecentDiscussions Component", () => {
           loading={false}
           totalCount={2}
         />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check section header
@@ -329,10 +329,10 @@ test.describe("RecentDiscussions Component", () => {
 
     // Check discussion titles
     await expect(
-      page.locator("text=Discussion about contract clauses"),
+      page.locator("text=Discussion about contract clauses")
     ).toBeVisible();
     await expect(
-      page.locator("text=Research methodology questions"),
+      page.locator("text=Research methodology questions")
     ).toBeVisible();
 
     await component.unmount();
@@ -345,7 +345,7 @@ test.describe("RecentDiscussions Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <RecentDiscussions discussions={mockDiscussions} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // First discussion is pinned
@@ -361,7 +361,7 @@ test.describe("RecentDiscussions Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <RecentDiscussions discussions={mockDiscussions} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Component displays "View thread" action for each discussion
@@ -385,7 +385,7 @@ test.describe("CompactLeaderboard Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check contributor names are displayed
@@ -401,7 +401,7 @@ test.describe("CompactLeaderboard Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check reputation values
@@ -415,7 +415,7 @@ test.describe("CompactLeaderboard Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CompactLeaderboard contributors={mockLeaderboard} loading={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     await expect(page.locator("text=View Full Leaderboard")).toBeVisible({
@@ -434,7 +434,7 @@ test.describe("CallToAction Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CallToAction isAuthenticated={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check CTA content
@@ -457,7 +457,7 @@ test.describe("CallToAction Component", () => {
     const component = await mount(
       <LandingTestWrapper>
         <CallToAction isAuthenticated={true} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // CTA should not be visible for authenticated users
@@ -492,7 +492,7 @@ test.describe("DiscoveryLanding Page", () => {
     const component = await mount(
       <LandingTestWrapper mocks={[discoveryDataMock]}>
         <DiscoveryLanding isAuthenticatedOverride={false} />
-      </LandingTestWrapper>,
+      </LandingTestWrapper>
     );
 
     // Check hero section - updated text after redesign

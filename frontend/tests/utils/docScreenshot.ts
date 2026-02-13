@@ -8,7 +8,7 @@ import { join, resolve } from "path";
  */
 const SCREENSHOTS_DIR = resolve(
   __dirname,
-  "../../../docs/assets/images/screenshots/auto",
+  "../../../docs/assets/images/screenshots/auto"
 );
 
 // Ensure output directory exists on module load.
@@ -54,14 +54,14 @@ export async function docScreenshot(
     clip?: { x: number; y: number; width: number; height: number };
     /** Capture the full scrollable page instead of the viewport. */
     fullPage?: boolean;
-  },
+  }
 ): Promise<void> {
   const segments = name.split("--");
   if (segments.length < 2) {
     throw new Error(
       `docScreenshot name "${name}" must use convention: ` +
         `{area}--{component}--{state} (at least 2 segments separated by --). ` +
-        `Got ${segments.length} segment(s).`,
+        `Got ${segments.length} segment(s).`
     );
   }
 
@@ -71,7 +71,7 @@ export async function docScreenshot(
       throw new Error(
         `docScreenshot segment "${seg}" in "${name}" is invalid. ` +
           `Segments must be lowercase alphanumeric with single-hyphen separators ` +
-          `(e.g. "hero-section", "with-data").`,
+          `(e.g. "hero-section", "with-data").`
       );
     }
   }
