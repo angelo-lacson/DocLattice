@@ -8,8 +8,11 @@ When a user @mentions an agent in a chat message, these tasks handle:
 4. Updating the message with final content
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from asgiref.sync import async_to_sync
 from celery import shared_task
@@ -19,6 +22,10 @@ from opencontractserver.conversations.models import (
     MessageStateChoices,
     MessageTypeChoices,
 )
+
+if TYPE_CHECKING:
+    from opencontractserver.corpuses.models import CorpusAction
+    from opencontractserver.documents.models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -506,7 +513,7 @@ def run_agent_corpus_action(
         raise self.retry(exc=exc)
 
 
-def _resolve_action_tools(action, trigger: str) -> list[str]:
+def _resolve_action_tools(action: CorpusAction, trigger: str) -> list[str]:
     """Resolve the tool list for an agent corpus action.
 
     Priority order:
@@ -525,8 +532,8 @@ def _resolve_action_tools(action, trigger: str) -> list[str]:
 
 
 def _build_document_action_system_prompt(
-    action,
-    document,
+    action: CorpusAction,
+    document: Document,
     tools: list[str],
 ) -> str:
     """Build a goal-oriented system prompt for automated document corpus actions.
@@ -556,8 +563,12 @@ def _build_document_action_system_prompt(
 
     # Inject current document metadata so the agent doesn't waste tool calls
     if document.description:
-        desc = document.description[:500]
-        if len(document.description) > 500:
+        from opencontractserver.constants.corpus_actions import (
+            MAX_DESCRIPTION_PREVIEW_LENGTH,
+        )
+
+        desc = document.description[:MAX_DESCRIPTION_PREVIEW_LENGTH]
+        if len(document.description) > MAX_DESCRIPTION_PREVIEW_LENGTH:
             desc += "..."
         parts.append(f"- Current description: {desc}")
 
@@ -594,7 +605,7 @@ def _build_document_action_system_prompt(
 
 
 def _build_thread_action_system_prompt(
-    action,
+    action: CorpusAction,
     thread_context: dict,
     recent_messages: list[dict],
     tools: list[str],
@@ -643,12 +654,16 @@ def _build_thread_action_system_prompt(
 
     # Inject recent thread messages for context
     if recent_messages:
+        from opencontractserver.constants.corpus_actions import (
+            MAX_MESSAGE_PREVIEW_LENGTH,
+        )
+
         parts.append("")
         parts.append("## Recent Thread Messages (most recent first)")
         for msg in recent_messages[:5]:
             content_preview = (
-                msg["content"][:200] + "..."
-                if len(msg["content"]) > 200
+                msg["content"][:MAX_MESSAGE_PREVIEW_LENGTH] + "..."
+                if len(msg["content"]) > MAX_MESSAGE_PREVIEW_LENGTH
                 else msg["content"]
             )
             parts.append(
