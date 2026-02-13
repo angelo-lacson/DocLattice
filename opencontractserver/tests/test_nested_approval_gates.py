@@ -17,6 +17,7 @@ calls require fresh database connections that do not work well with
 TestCase's transaction-based isolation.
 """
 
+import inspect
 import types
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -33,9 +34,15 @@ from opencontractserver.llms.agents.core_agents import (
     UnifiedStreamEvent,
 )
 from opencontractserver.llms.exceptions import ToolConfirmationRequired
-from opencontractserver.llms.tools.tool_factory import CoreTool
 
 User = get_user_model()
+
+# The closure inside PydanticAICorpusAgent.create() imports _agents_api as:
+#     from opencontractserver.llms import agents as _agents_api
+# This resolves to the AgentAPI singleton at opencontractserver.llms.api.agents.
+# To intercept ask_document_tool's calls to _agents_api.for_document(), we
+# must patch AgentAPI.for_document on that instance — NOT a module-level name.
+_AGENTS_API_FOR_DOC_PATCH = "opencontractserver.llms.api.AgentAPI.for_document"
 
 
 # ---------------------------------------------------------------------------
@@ -66,50 +73,22 @@ class _FakeFinalEvent:
     metadata: dict = field(default_factory=dict)
 
 
-class _RunRes:
-    """Stub returned by the agent's iter context manager after approval."""
-
-    def __init__(self, text: str = "ok") -> None:
-        self.output = text
-
-    def usage(self):
-        return None
-
-    @property
-    def result(self):
-        return types.SimpleNamespace(output=self.output, usage=self.usage)
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        raise StopAsyncIteration
-
-
 class _IterCtx:
     """Async context manager mimicking a successful agent.iter() call."""
 
     async def __aenter__(self):
-        return _RunRes()
+        return types.SimpleNamespace(
+            output="ok",
+            usage=lambda: None,
+            result=types.SimpleNamespace(output="ok", usage=lambda: None),
+        )
 
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
 
-def _make_gate_tool(name: str) -> CoreTool:
-    """Return a CoreTool whose execution is veto-gated by default."""
-
-    def _inner(x: int) -> int:
-        return x * 2
-
-    return CoreTool.from_function(_inner, name=name, requires_approval=True)
-
-
-GATE_TOOL = _make_gate_tool("approved_tool")
-
-
 # ---------------------------------------------------------------------------
-# Mock sub-agent that yields an approval_needed event
+# Mock sub-agent that yields configurable stream events
 # ---------------------------------------------------------------------------
 
 
@@ -122,6 +101,14 @@ class _MockSubAgent:
     async def stream(self, question: str):
         for ev in self._events:
             yield ev
+
+
+def _extract_tool(tools_list, name: str):
+    """Find a tool callable by __name__ from a list of tool callables."""
+    for t in tools_list or []:
+        if getattr(t, "__name__", None) == name:
+            return t
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +149,13 @@ class TestNestedApprovalGates(TransactionTestCase):
     # ------------------------------------------------------------------
 
     async def _create_corpus_agent(self, sub_agent_events=None):
-        """Create a corpus agent with mocked PydanticAIAgent and sub-agent factory."""
+        """Create a corpus agent with mocked PydanticAIAgent.
+
+        The PydanticAIAgent constructor is mocked so no real LLM is needed.
+        The mock captures ``tools=`` passed to the constructor, which lets
+        tests retrieve corpus-specific closures (ask_document, etc.) that
+        are NOT stored on ``config.tools``.
+        """
         from opencontractserver.llms.agents.agent_factory import (
             UnifiedAgentFactory,
         )
@@ -180,31 +173,19 @@ class TestNestedApprovalGates(TransactionTestCase):
                 ),
             ]
 
-        # Patch sub-agent factory to return our mock
         mock_sub_agent = _MockSubAgent(sub_agent_events)
 
-        # We need to patch the agents API used inside ask_document_tool
         with patch(
             "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
         ) as mock_agent_cls:
-            # Set up the mocked PydanticAI agent instance
             inst = MagicMock()
             inst.iter = MagicMock(return_value=_IterCtx())
             inst._function_tools = {}
-
-            # Make agent.run raise ToolConfirmationRequired to simulate
-            # the approval flow being triggered
-            async def _run_side_effect(*_a, **_kw):
-                raise ToolConfirmationRequired(
-                    tool_name="ask_document",
-                    tool_args={
-                        "document_id": self.document.id,
-                        "question": "test question",
-                    },
-                    tool_call_id="tc-corpus-1",
+            inst.run = AsyncMock(
+                return_value=types.SimpleNamespace(
+                    data="ok", sources=[], usage=lambda: None
                 )
-
-            inst.run = AsyncMock(side_effect=_run_side_effect)
+            )
             mock_agent_cls.return_value = inst
 
             agent = await UnifiedAgentFactory.create_corpus_agent(
@@ -213,7 +194,16 @@ class TestNestedApprovalGates(TransactionTestCase):
                 user_id=self.user.id,
             )
 
-        # Store refs for test access
+            # Capture the tools that were passed to PydanticAIAgent(tools=...)
+            # These are the corpus-specific closures built inside create().
+            call_kwargs = mock_agent_cls.call_args
+            effective_tools = (
+                call_kwargs.kwargs.get("tools")
+                or (call_kwargs.args[1] if len(call_kwargs.args) > 1 else [])
+                or []
+            )
+
+        agent._effective_tools = effective_tools
         agent._mock_sub_agent = mock_sub_agent
         return agent
 
@@ -223,6 +213,12 @@ class TestNestedApprovalGates(TransactionTestCase):
             items.append(ev)
         return items
 
+    def _get_ask_doc(self, agent):
+        """Retrieve the ask_document tool callable from the agent."""
+        fn = _extract_tool(agent._effective_tools, "ask_document")
+        self.assertIsNotNone(fn, "ask_document tool not found in effective_tools")
+        return fn
+
     # ------------------------------------------------------------------
     # Tests: ask_document_tool approval propagation
     # ------------------------------------------------------------------
@@ -231,23 +227,14 @@ class TestNestedApprovalGates(TransactionTestCase):
         """ask_document_tool should raise ToolConfirmationRequired when
         a sub-agent emits an approval_needed event."""
         agent = await self._create_corpus_agent()
+        ask_doc_fn = self._get_ask_doc(agent)
 
-        # Get the ask_document tool from the agent's tools list
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
-
-        self.assertIsNotNone(ask_doc_fn, "ask_document tool not found in config.tools")
-
-        # Mock the _agents_api.for_document to return our mock sub-agent
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents._agents_api"
-        ) as mock_api:
-            mock_api.for_document = AsyncMock(return_value=agent._mock_sub_agent)
+            _AGENTS_API_FOR_DOC_PATCH,
+            new_callable=AsyncMock,
+            return_value=agent._mock_sub_agent,
+        ):
 
-            # Create a minimal context to call the tool
             class _Ctx:
                 tool_call_id = "test-call"
                 deps = types.SimpleNamespace(
@@ -280,26 +267,16 @@ class TestNestedApprovalGates(TransactionTestCase):
         return normally."""
         normal_events = [
             _FakeContentEvent(content="The document is about testing."),
-            _FakeFinalEvent(
-                content="Done.",
-                sources=[],
-                metadata={},
-            ),
+            _FakeFinalEvent(content="Done.", sources=[], metadata={}),
         ]
         agent = await self._create_corpus_agent(sub_agent_events=normal_events)
-
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
-
-        self.assertIsNotNone(ask_doc_fn)
+        ask_doc_fn = self._get_ask_doc(agent)
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents._agents_api"
-        ) as mock_api:
-            mock_api.for_document = AsyncMock(return_value=agent._mock_sub_agent)
+            _AGENTS_API_FOR_DOC_PATCH,
+            new_callable=AsyncMock,
+            return_value=agent._mock_sub_agent,
+        ):
 
             class _Ctx:
                 tool_call_id = "test-call"
@@ -329,7 +306,6 @@ class TestNestedApprovalGates(TransactionTestCase):
         events = [
             _FakeApprovalEvent(
                 pending_tool_call={
-                    # Missing "name" key
                     "arguments": {"x": 1},
                     "tool_call_id": "tc-bad",
                 },
@@ -338,19 +314,13 @@ class TestNestedApprovalGates(TransactionTestCase):
             _FakeFinalEvent(content="Done.", sources=[], metadata={}),
         ]
         agent = await self._create_corpus_agent(sub_agent_events=events)
-
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
-
-        self.assertIsNotNone(ask_doc_fn)
+        ask_doc_fn = self._get_ask_doc(agent)
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents._agents_api"
-        ) as mock_api:
-            mock_api.for_document = AsyncMock(return_value=agent._mock_sub_agent)
+            _AGENTS_API_FOR_DOC_PATCH,
+            new_callable=AsyncMock,
+            return_value=agent._mock_sub_agent,
+        ):
 
             class _Ctx:
                 tool_call_id = "test-call"
@@ -361,8 +331,6 @@ class TestNestedApprovalGates(TransactionTestCase):
                     corpus_id=self.corpus.id,
                 )
 
-            # Should not raise ToolConfirmationRequired – the bad event
-            # is skipped and the tool runs to completion.
             result = await ask_doc_fn(
                 _Ctx(),
                 document_id=self.document.id,
@@ -385,17 +353,13 @@ class TestNestedApprovalGates(TransactionTestCase):
             _FakeFinalEvent(content="Done.", sources=[], metadata={}),
         ]
         agent = await self._create_corpus_agent(sub_agent_events=events)
-
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
+        ask_doc_fn = self._get_ask_doc(agent)
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents._agents_api"
-        ) as mock_api:
-            mock_api.for_document = AsyncMock(return_value=agent._mock_sub_agent)
+            _AGENTS_API_FOR_DOC_PATCH,
+            new_callable=AsyncMock,
+            return_value=agent._mock_sub_agent,
+        ):
 
             class _Ctx:
                 tool_call_id = "test-call"
@@ -421,17 +385,13 @@ class TestNestedApprovalGates(TransactionTestCase):
             _FakeFinalEvent(content="Done.", sources=[], metadata={}),
         ]
         agent = await self._create_corpus_agent(sub_agent_events=events)
-
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
+        ask_doc_fn = self._get_ask_doc(agent)
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents._agents_api"
-        ) as mock_api:
-            mock_api.for_document = AsyncMock(return_value=agent._mock_sub_agent)
+            _AGENTS_API_FOR_DOC_PATCH,
+            new_callable=AsyncMock,
+            return_value=agent._mock_sub_agent,
+        ):
 
             class _Ctx:
                 tool_call_id = "test-call"
@@ -456,32 +416,31 @@ class TestNestedApprovalGates(TransactionTestCase):
     async def test_metadata_keys_stripped_before_tool_execution(self):
         """_-prefixed keys in tool_args should be stripped before the tool
         function is called in resume_with_approval."""
-        from opencontractserver.conversations.models import Conversation
+        from opencontractserver.conversations.models import ChatMessage, Conversation
         from opencontractserver.llms.agents.agent_factory import (
             UnifiedAgentFactory,
         )
         from opencontractserver.llms.types import AgentFramework
 
+        # Capture the args that the tool receives
+        captured_args = {}
+
+        async def _spy_tool(ctx, **kwargs):
+            captured_args.update(kwargs)
+            return {"result": "success"}
+
         with patch(
             "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
         ) as mock_agent_cls:
             inst = MagicMock()
-
-            # Never raise – just return a result
             inst.run = AsyncMock(
                 return_value=types.SimpleNamespace(
                     data="ok", sources=[], usage=lambda: None
                 )
             )
             inst.iter = MagicMock(return_value=_IterCtx())
-
-            # Capture the args that the tool receives
-            captured_args = {}
-
-            async def _spy_tool(ctx, **kwargs):
-                captured_args.update(kwargs)
-                return {"result": "success"}
-
+            # resume_with_approval uses pydantic_ai_agent._function_tools
+            # as fallback to find the tool callable.
             inst._function_tools = {
                 "ask_document": types.SimpleNamespace(function=_spy_tool),
             }
@@ -492,9 +451,6 @@ class TestNestedApprovalGates(TransactionTestCase):
                 framework=AgentFramework.PYDANTIC_AI,
                 user_id=self.user.id,
             )
-
-        # Create a paused message with _-prefixed metadata
-        from opencontractserver.conversations.models import ChatMessage
 
         conversation = await Conversation.objects.acreate(
             creator=self.user,
@@ -559,11 +515,13 @@ class TestNestedApprovalGates(TransactionTestCase):
             )
             inst.iter = MagicMock(return_value=_IterCtx())
 
+            # We need agent ref inside the tool closure, but agent is created
+            # inside the patch context.  Use a mutable container.
+            agent_ref = [None]
+
             async def _capture_bypass_tool(ctx, **kwargs):
-                # Capture the bypass flag value AT EXECUTION TIME
-                # by reading it from the agent's config via the closure
                 bypass_values_during_execution.append(
-                    getattr(agent.config, "_approval_bypass_allowed", "MISSING")
+                    getattr(agent_ref[0].config, "_approval_bypass_allowed", "MISSING")
                 )
                 return {"result": "done"}
 
@@ -577,6 +535,7 @@ class TestNestedApprovalGates(TransactionTestCase):
                 framework=AgentFramework.PYDANTIC_AI,
                 user_id=self.user.id,
             )
+            agent_ref[0] = agent
 
         conversation = await Conversation.objects.acreate(
             creator=self.user,
@@ -682,45 +641,15 @@ class TestNestedApprovalGates(TransactionTestCase):
     async def test_skip_approval_not_in_tool_parameters(self):
         """The ask_document tool should NOT expose skip_approval in its
         parameter schema visible to the LLM."""
-        import inspect
+        agent = await self._create_corpus_agent()
+        ask_doc_fn = self._get_ask_doc(agent)
 
-        from opencontractserver.llms.agents.agent_factory import (
-            UnifiedAgentFactory,
-        )
-        from opencontractserver.llms.types import AgentFramework
-
-        with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
-        ) as mock_agent_cls:
-            inst = MagicMock()
-            inst.run = AsyncMock()
-            inst.iter = MagicMock(return_value=_IterCtx())
-            inst._function_tools = {}
-            mock_agent_cls.return_value = inst
-
-            agent = await UnifiedAgentFactory.create_corpus_agent(
-                corpus=self.corpus.id,
-                framework=AgentFramework.PYDANTIC_AI,
-                user_id=self.user.id,
-            )
-
-        # Find the ask_document tool
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
-
-        self.assertIsNotNone(ask_doc_fn)
-
-        # Inspect the function signature – skip_approval should NOT be there
         sig = inspect.signature(ask_doc_fn)
         param_names = list(sig.parameters.keys())
 
         # The wrapper adds 'ctx' as first param; the rest should be
         # document_id and question only
         self.assertNotIn("skip_approval", param_names)
-        # Sanity check the expected params are present
         self.assertIn("document_id", param_names)
         self.assertIn("question", param_names)
 
@@ -731,28 +660,19 @@ class TestNestedApprovalGates(TransactionTestCase):
     async def test_bypass_flag_passes_to_sub_agent_factory(self):
         """When config._approval_bypass_allowed is True (during resume),
         the sub-agent should be created with skip_approval_gate=True."""
-        agent = await self._create_corpus_agent()
-
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
-
-        self.assertIsNotNone(ask_doc_fn)
-
-        # Normal events (no approval needed) so the tool completes
-        normal_sub = _MockSubAgent(
-            [
-                _FakeContentEvent(content="Answer."),
-                _FakeFinalEvent(content="Done.", sources=[], metadata={}),
-            ]
-        )
+        # Use normal events so ask_document completes without raising
+        normal_events = [
+            _FakeContentEvent(content="Answer."),
+            _FakeFinalEvent(content="Done.", sources=[], metadata={}),
+        ]
+        agent = await self._create_corpus_agent(sub_agent_events=normal_events)
+        ask_doc_fn = self._get_ask_doc(agent)
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents._agents_api"
-        ) as mock_api:
-            mock_api.for_document = AsyncMock(return_value=normal_sub)
+            _AGENTS_API_FOR_DOC_PATCH,
+            new_callable=AsyncMock,
+            return_value=_MockSubAgent(normal_events),
+        ) as mock_for_doc:
 
             class _Ctx:
                 tool_call_id = "test-call"
@@ -774,9 +694,8 @@ class TestNestedApprovalGates(TransactionTestCase):
             finally:
                 agent.config._approval_bypass_allowed = False
 
-            # Verify for_document was called with skip_approval_gate=True
-            mock_api.for_document.assert_called_once()
-            call_kwargs = mock_api.for_document.call_args
+            mock_for_doc.assert_called_once()
+            call_kwargs = mock_for_doc.call_args
             self.assertTrue(
                 call_kwargs.kwargs.get("skip_approval_gate", False),
                 "Sub-agent should be created with skip_approval_gate=True "
@@ -786,30 +705,18 @@ class TestNestedApprovalGates(TransactionTestCase):
     async def test_normal_call_does_not_bypass(self):
         """When config._approval_bypass_allowed is False (normal execution),
         the sub-agent should be created with skip_approval_gate=False."""
-        # Use events that don't trigger approval
-        normal_sub = _MockSubAgent(
-            [
-                _FakeContentEvent(content="Answer."),
-                _FakeFinalEvent(content="Done.", sources=[], metadata={}),
-            ]
-        )
-        agent = await self._create_corpus_agent(
-            sub_agent_events=[
-                _FakeContentEvent(content="Answer."),
-                _FakeFinalEvent(content="Done.", sources=[], metadata={}),
-            ]
-        )
-
-        ask_doc_fn = None
-        for tool in agent.config.tools or []:
-            if getattr(tool, "__name__", None) == "ask_document":
-                ask_doc_fn = tool
-                break
+        normal_events = [
+            _FakeContentEvent(content="Answer."),
+            _FakeFinalEvent(content="Done.", sources=[], metadata={}),
+        ]
+        agent = await self._create_corpus_agent(sub_agent_events=normal_events)
+        ask_doc_fn = self._get_ask_doc(agent)
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents._agents_api"
-        ) as mock_api:
-            mock_api.for_document = AsyncMock(return_value=normal_sub)
+            _AGENTS_API_FOR_DOC_PATCH,
+            new_callable=AsyncMock,
+            return_value=_MockSubAgent(normal_events),
+        ) as mock_for_doc:
 
             class _Ctx:
                 tool_call_id = "test-call"
@@ -820,7 +727,6 @@ class TestNestedApprovalGates(TransactionTestCase):
                     corpus_id=self.corpus.id,
                 )
 
-            # Ensure bypass is False (default)
             self.assertFalse(getattr(agent.config, "_approval_bypass_allowed", False))
 
             await ask_doc_fn(
@@ -829,9 +735,8 @@ class TestNestedApprovalGates(TransactionTestCase):
                 question="Test",
             )
 
-            # Verify for_document was called with skip_approval_gate=False
-            mock_api.for_document.assert_called_once()
-            call_kwargs = mock_api.for_document.call_args
+            mock_for_doc.assert_called_once()
+            call_kwargs = mock_for_doc.call_args
             self.assertFalse(
                 call_kwargs.kwargs.get("skip_approval_gate", True),
                 "Sub-agent should be created with skip_approval_gate=False "
