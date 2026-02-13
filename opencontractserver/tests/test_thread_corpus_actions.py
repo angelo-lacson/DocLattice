@@ -1559,15 +1559,15 @@ class TestRunAgentThreadActionAsync(TransactionTestCase):
                 user_id=self.user.id,
             )
 
-            # Verify the prompt included thread context
-            mock_agent.chat.assert_called_once()
-            prompt = mock_agent.chat.call_args[0][0]
+            # Verify the system prompt included thread context
+            mock_for_corpus.assert_called_once()
+            system_prompt = mock_for_corpus.call_args.kwargs["system_prompt"]
 
-            self.assertIn("Thread Information", prompt)
-            self.assertIn(str(self.thread.id), prompt)
-            self.assertIn("Test Discussion Thread", prompt)
-            self.assertIn("Recent Thread Messages", prompt)
-            self.assertIn("Review this thread for compliance", prompt)
+            self.assertIn("Thread Context", system_prompt)
+            self.assertIn(str(self.thread.id), system_prompt)
+            self.assertIn("Test Discussion Thread", system_prompt)
+            self.assertIn("Recent Thread Messages", system_prompt)
+            self.assertIn("Review this thread for compliance", system_prompt)
 
     async def test_async_thread_action_stores_execution_metadata(self):
         """Test that execution metadata is stored correctly."""

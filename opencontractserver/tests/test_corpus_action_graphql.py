@@ -201,8 +201,8 @@ class CorpusActionMutationTestCase(TestCase):
         self.assertFalse(result["data"]["createCorpusAction"]["ok"])
         self.assertEqual(
             result["data"]["createCorpusAction"]["message"],
-            "Exactly one of fieldset_id, analyzer_id, agent_config_id, or "
-            "create_agent_inline must be provided",
+            "Only one of fieldset_id, analyzer_id, "
+            "agent_config_id, or create_agent_inline can be provided",
         )
 
     def test_delete_corpus_action(self):
@@ -446,6 +446,6 @@ class CorpusActionMutationTestCase(TestCase):
         self.assertFalse(result["data"]["createCorpusAction"]["ok"])
         self.assertEqual(
             result["data"]["createCorpusAction"]["message"],
-            "Exactly one of fieldset_id, analyzer_id, agent_config_id, or "
-            "create_agent_inline must be provided",
+            "Only one of fieldset_id, analyzer_id, "
+            "agent_config_id, or create_agent_inline can be provided",
         )
