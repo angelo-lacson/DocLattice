@@ -454,7 +454,7 @@ class TestNestedApprovalGates(TransactionTestCase):
 
         conversation = await Conversation.objects.acreate(
             creator=self.user,
-            chat_type="CORPUS",
+            conversation_type="chat",
         )
         agent.conversation_manager.conversation = conversation
 
@@ -539,7 +539,7 @@ class TestNestedApprovalGates(TransactionTestCase):
 
         conversation = await Conversation.objects.acreate(
             creator=self.user,
-            chat_type="CORPUS",
+            conversation_type="chat",
         )
         agent.conversation_manager.conversation = conversation
 
@@ -608,7 +608,7 @@ class TestNestedApprovalGates(TransactionTestCase):
 
         conversation = await Conversation.objects.acreate(
             creator=self.user,
-            chat_type="CORPUS",
+            conversation_type="chat",
         )
         agent.conversation_manager.conversation = conversation
 
