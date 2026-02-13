@@ -1583,22 +1583,9 @@ export const Corpuses = () => {
   const currentSelectedThreadId = useReactiveVar(selectedThreadId);
   const discussionInThreadView = currentSelectedThreadId !== null;
 
-  // Debug: Log state changes
-  console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
-
-  // Wrapped setter with logging
-  const handleViewModeChange = useCallback(
-    (mode: ViewMode) => {
-      console.log(
-        "[Corpuses] handleViewModeChange called with:",
-        mode,
-        "from:",
-        documentsViewMode
-      );
-      setDocumentsViewMode(mode);
-    },
-    [documentsViewMode]
-  );
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setDocumentsViewMode(mode);
+  }, []);
 
   const opened_corpus_id = opened_corpus?.id ? opened_corpus.id : null;
   let raw_permissions = opened_corpus?.myPermissions;
