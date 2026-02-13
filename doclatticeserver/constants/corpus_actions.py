@@ -4,10 +4,10 @@ Constants for corpus action configuration.
 Provides default tool sets and prompt templates for agent-based corpus actions.
 
 Note: Keys in the dicts below use the *string values* of
-``CorpusActionTrigger`` (e.g. ``"add_document"``). We cannot import the
-enum here because ``corpuses.models`` imports from this constants package,
-which would create a circular import. Alignment with the enum is verified
-in ``test_corpus_action_model.py``.
+``CorpusActionTrigger`` (e.g. ``"add_document"``) rather than importing the
+enum directly. Constants modules should never import from model modules to
+avoid circular dependencies. Alignment with the enum is verified in
+``test_corpus_action_model.py``.
 """
 
 # ---------------------------------------------------------------------------
@@ -58,3 +58,12 @@ TRIGGER_DESCRIPTIONS: dict[str, str] = {
     "new_thread": "triggered by new thread in",
     "new_message": "triggered by new message in",
 }
+
+# ---------------------------------------------------------------------------
+# System prompt truncation limits
+# ---------------------------------------------------------------------------
+# Max characters of document description injected into the system prompt.
+MAX_DESCRIPTION_PREVIEW_LENGTH = 500
+
+# Max characters of a thread message preview in the system prompt.
+MAX_MESSAGE_PREVIEW_LENGTH = 200
