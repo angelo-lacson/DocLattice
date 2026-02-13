@@ -81,10 +81,11 @@ class TimelineBuilder:
                     tool_result_content = meta.get("tool_result")
                     if tool_result_content:
                         result_str = str(tool_result_content)
-                        if len(result_str) > MAX_TOOL_RESULT_LENGTH:
+                        original_len = len(result_str)
+                        if original_len > MAX_TOOL_RESULT_LENGTH:
                             result_str = (
                                 result_str[:MAX_TOOL_RESULT_LENGTH]
-                                + f"... (truncated from {len(str(tool_result_content))} chars)"
+                                + f"... (truncated from {original_len} chars)"
                             )
                         entry["result"] = result_str
                     self._timeline.append(entry)

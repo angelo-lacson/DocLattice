@@ -217,7 +217,7 @@ export const SUPPORTED_MIME_TYPES = [
  * Used for matching component supportedFileTypes which use short forms.
  */
 export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
-  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel]),
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
 );
 
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
