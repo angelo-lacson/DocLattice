@@ -109,10 +109,12 @@ Because CI commits auto-generated PNGs to every PR branch, merge conflicts on bi
 **`.gitattributes`** marks auto screenshots with `merge=ours`:
 
 ```
-docs/assets/images/screenshots/auto/** merge=ours binary
+docs/assets/images/screenshots/auto/** merge=ours -diff -text
 ```
 
 This tells Git: when a merge or rebase encounters a conflict on these files, silently keep the current branch's version. Since CI regenerates the correct screenshots on the next run, any "stale" version is temporary.
+
+Note: we use `-diff -text` (not `binary`) to suppress diffs without overriding the merge strategy. The `binary` macro expands to `-diff -merge -text`, and that `-merge` would override `merge=ours`.
 
 **CI workflow** registers the merge driver and rebases before pushing:
 
