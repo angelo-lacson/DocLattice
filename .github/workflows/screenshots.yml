@@ -45,7 +45,7 @@ jobs:
         run: yarn playwright install --with-deps
 
       - name: Run Component Tests (captures screenshots)
-        run: yarn run test:ct --reporter=list
+        run: yarn run test:ct
         # Screenshots are captured as a side-effect of running tests.
         # Test failures should not block screenshot commits - the regular
         # CI workflow already gates on test success.
