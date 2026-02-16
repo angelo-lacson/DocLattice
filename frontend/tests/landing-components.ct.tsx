@@ -200,7 +200,9 @@ test.describe("HeroSection Component", () => {
     await expect(page.locator("text=All Discussions")).toBeVisible();
 
     // Doc screenshot: landing page hero section for anonymous visitors
-    await docScreenshot(page, "landing--hero-section--anonymous");
+    await docScreenshot(page, "landing--hero-section--anonymous", {
+      element: component,
+    });
 
     await component.unmount();
   });
@@ -242,7 +244,9 @@ test.describe("StatsBar Component", () => {
     await expect(page.locator("text=Annotations")).toBeVisible();
 
     // Doc screenshot: stats bar with community metrics
-    await docScreenshot(page, "landing--stats-bar--with-data");
+    await docScreenshot(page, "landing--stats-bar--with-data", {
+      element: component,
+    });
 
     await component.unmount();
   });
@@ -287,7 +291,9 @@ test.describe("TrendingCorpuses Component", () => {
     await expect(page.locator("text=View All")).toBeVisible();
 
     // Doc screenshot: trending corpuses section with cards
-    await docScreenshot(page, "landing--trending-corpuses--with-data");
+    await docScreenshot(page, "landing--trending-corpuses--with-data", {
+      element: component,
+    });
 
     await component.unmount();
   });
@@ -448,7 +454,9 @@ test.describe("CallToAction Component", () => {
     await expect(page.locator("text=AI-Powered Analysis")).toBeVisible();
 
     // Doc screenshot: call-to-action section for anonymous users
-    await docScreenshot(page, "landing--call-to-action--anonymous");
+    await docScreenshot(page, "landing--call-to-action--anonymous", {
+      element: component,
+    });
 
     await component.unmount();
   });
