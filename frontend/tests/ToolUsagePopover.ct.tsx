@@ -363,36 +363,15 @@ test.describe("Tool Usage Popover", () => {
   });
 
   // --- Documentation Screenshots ---
+  //
+  // ChatMessage uses framer-motion entrance animation (opacity 0→1, 300ms)
+  // and has transparent backgrounds designed for the chat panel's #f8fafc bg.
+  // We provide that background and wait for the animation to settle.
 
   test("screenshot: single tool badge (collapsed)", async ({ mount, page }) => {
     const component = await mount(
       <ChatMessageTestWrapper>
-        <ChatMessage
-          {...baseAssistantMessage}
-          content="Based on the document analysis, the payment terms require net-30 settlement with standard penalty clauses."
-          isComplete={true}
-          timeline={singleToolTimeline}
-          hasTimeline={true}
-        />
-      </ChatMessageTestWrapper>
-    );
-
-    const badge = page.locator("role=button[name=/tool/i]");
-    await expect(badge).toBeVisible({ timeout: 5000 });
-
-    await docScreenshot(page, "chat--tool-badge--single", {
-      element: component,
-    });
-  });
-
-  test("screenshot: single tool popover open", async ({ mount, page }) => {
-    // Widen viewport and add left padding so the right-aligned popover
-    // (min-width 320px) doesn't extend past the left viewport edge.
-    await page.setViewportSize({ width: 1200, height: 600 });
-
-    await mount(
-      <ChatMessageTestWrapper>
-        <div style={{ paddingLeft: "360px" }}>
+        <div style={{ background: "#f8fafc", padding: "1rem" }}>
           <ChatMessage
             {...baseAssistantMessage}
             content="Based on the document analysis, the payment terms require net-30 settlement with standard penalty clauses."
@@ -406,6 +385,45 @@ test.describe("Tool Usage Popover", () => {
 
     const badge = page.locator("role=button[name=/tool/i]");
     await expect(badge).toBeVisible({ timeout: 5000 });
+
+    // Wait for framer-motion entrance animation to complete
+    await page.waitForTimeout(500);
+
+    await docScreenshot(page, "chat--tool-badge--single", {
+      element: component,
+    });
+  });
+
+  test("screenshot: single tool popover open", async ({ mount, page }) => {
+    // Widen viewport and add left padding so the right-aligned popover
+    // (min-width 320px) doesn't extend past the left viewport edge.
+    await page.setViewportSize({ width: 1200, height: 600 });
+
+    await mount(
+      <ChatMessageTestWrapper>
+        <div
+          style={{
+            background: "#f8fafc",
+            padding: "1rem",
+            paddingLeft: "360px",
+          }}
+        >
+          <ChatMessage
+            {...baseAssistantMessage}
+            content="Based on the document analysis, the payment terms require net-30 settlement with standard penalty clauses."
+            isComplete={true}
+            timeline={singleToolTimeline}
+            hasTimeline={true}
+          />
+        </div>
+      </ChatMessageTestWrapper>
+    );
+
+    const badge = page.locator("role=button[name=/tool/i]");
+    await expect(badge).toBeVisible({ timeout: 5000 });
+
+    // Wait for framer-motion entrance animation to complete
+    await page.waitForTimeout(500);
 
     // Open the popover
     await badge.hover();
@@ -425,7 +443,13 @@ test.describe("Tool Usage Popover", () => {
 
     await mount(
       <ChatMessageTestWrapper>
-        <div style={{ paddingLeft: "360px" }}>
+        <div
+          style={{
+            background: "#f8fafc",
+            padding: "1rem",
+            paddingLeft: "360px",
+          }}
+        >
           <ChatMessage
             {...baseAssistantMessage}
             content="Here is my analysis of the indemnification clauses in this agreement."
@@ -439,6 +463,9 @@ test.describe("Tool Usage Popover", () => {
 
     const badge = page.locator("role=button[name=/tool/i]");
     await expect(badge).toBeVisible({ timeout: 5000 });
+
+    // Wait for framer-motion entrance animation to complete
+    await page.waitForTimeout(500);
 
     // Open the popover
     await badge.hover();
