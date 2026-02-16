@@ -635,6 +635,152 @@ class TestNestedApprovalGates(TransactionTestCase):
         self.assertFalse(getattr(agent.config, "_approval_bypass_allowed", False))
 
     # ------------------------------------------------------------------
+    # Tests: resume_with_approval wrapper_fn (config.tools) path
+    # ------------------------------------------------------------------
+
+    async def test_resume_executes_tool_from_config_tools(self):
+        """resume_with_approval should find and execute a tool present in
+        config.tools (the wrapper_fn path) rather than falling back to
+        pydantic_ai_agent._function_tools."""
+        from opencontractserver.conversations.models import ChatMessage, Conversation
+        from opencontractserver.llms.agents.agent_factory import (
+            UnifiedAgentFactory,
+        )
+        from opencontractserver.llms.types import AgentFramework
+
+        captured_args = {}
+
+        async def _config_spy(ctx, **kwargs):
+            captured_args.update(kwargs)
+            return {"result": "from_config_tools"}
+
+        _config_spy.__name__ = "config_tool"
+
+        with patch(
+            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+        ) as mock_agent_cls:
+            inst = MagicMock()
+            inst.run = AsyncMock(
+                return_value=types.SimpleNamespace(
+                    data="ok", sources=[], usage=lambda: None
+                )
+            )
+            inst.iter = MagicMock(return_value=_IterCtx())
+            # Leave _function_tools empty so the only way to find the tool
+            # is via config.tools.
+            inst._function_tools = {}
+            mock_agent_cls.return_value = inst
+
+            agent = await UnifiedAgentFactory.create_corpus_agent(
+                corpus=self.corpus.id,
+                framework=AgentFramework.PYDANTIC_AI,
+                user_id=self.user.id,
+            )
+
+        # Inject the spy into config.tools
+        agent.config.tools = [_config_spy]
+
+        conversation = await Conversation.objects.acreate(
+            creator=self.user,
+            conversation_type="chat",
+        )
+        agent.conversation_manager.conversation = conversation
+
+        paused_msg = await ChatMessage.objects.acreate(
+            conversation=conversation,
+            content="Awaiting approval",
+            msg_type="LLM",
+            creator=self.user,
+            data={
+                "state": str(MessageState.AWAITING_APPROVAL),
+                "pending_tool_call": {
+                    "name": "config_tool",
+                    "arguments": {"x": 42},
+                    "tool_call_id": "call-config-1",
+                },
+            },
+        )
+
+        async for _ev in agent.resume_with_approval(paused_msg.id, approved=True):
+            pass
+
+        # The spy should have been called via the wrapper_fn path
+        self.assertEqual(captured_args, {"x": 42})
+
+    async def test_resume_config_tools_typeerror_falls_through(self):
+        """When a config.tools wrapper raises TypeError, resume_with_approval
+        should fall through to the _function_tools registry lookup."""
+        from opencontractserver.conversations.models import ChatMessage, Conversation
+        from opencontractserver.llms.agents.agent_factory import (
+            UnifiedAgentFactory,
+        )
+        from opencontractserver.llms.types import AgentFramework
+
+        fallback_called = []
+
+        async def _bad_config_tool(ctx, **kwargs):
+            # Simulate signature mismatch
+            raise TypeError("unexpected keyword argument")
+
+        _bad_config_tool.__name__ = "dual_tool"
+
+        async def _fallback_tool(ctx, **kwargs):
+            fallback_called.append(kwargs)
+            return {"result": "from_fallback"}
+
+        with patch(
+            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+        ) as mock_agent_cls:
+            inst = MagicMock()
+            inst.run = AsyncMock(
+                return_value=types.SimpleNamespace(
+                    data="ok", sources=[], usage=lambda: None
+                )
+            )
+            inst.iter = MagicMock(return_value=_IterCtx())
+            inst._function_tools = {
+                "dual_tool": types.SimpleNamespace(function=_fallback_tool),
+            }
+            mock_agent_cls.return_value = inst
+
+            agent = await UnifiedAgentFactory.create_corpus_agent(
+                corpus=self.corpus.id,
+                framework=AgentFramework.PYDANTIC_AI,
+                user_id=self.user.id,
+            )
+
+        agent.config.tools = [_bad_config_tool]
+
+        conversation = await Conversation.objects.acreate(
+            creator=self.user,
+            conversation_type="chat",
+        )
+        agent.conversation_manager.conversation = conversation
+
+        paused_msg = await ChatMessage.objects.acreate(
+            conversation=conversation,
+            content="Awaiting approval",
+            msg_type="LLM",
+            creator=self.user,
+            data={
+                "state": str(MessageState.AWAITING_APPROVAL),
+                "pending_tool_call": {
+                    "name": "dual_tool",
+                    "arguments": {"y": 7},
+                    "tool_call_id": "call-dual-1",
+                },
+            },
+        )
+
+        events = []
+        async for ev in agent.resume_with_approval(paused_msg.id, approved=True):
+            events.append(ev)
+
+        # The fallback tool should have been called after TypeError
+        self.assertEqual(len(fallback_called), 1)
+        self.assertEqual(fallback_called[0], {"y": 7})
+
+    # ------------------------------------------------------------------
     # Tests: skip_approval parameter removed from LLM-visible schema
     # ------------------------------------------------------------------
 
