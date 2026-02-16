@@ -17,9 +17,13 @@ The open source platform for building knowledge bases that humans and AI agents 
 
 Most knowledge lives in documents. Contracts, regulations, research papers, policies — the stuff that governs how organizations actually work. That knowledge is usually trapped: locked in PDFs, scattered across drives, understood fully by a handful of people who happened to read the right things at the right time.
 
-OpenContracts exists to fix that. It's a self-hosted platform where teams build structured, annotated, version-controlled knowledge bases from their documents — and where AI agents can work alongside humans to search, analyze, and reason over that knowledge.
+OpenContracts started in 2019 with a simple conviction: that knowledge needed to be carefully curated, and that machine learning systems were only as good as the data underneath them. It was built as a platform for human collaborators — lawyers, researchers, analysts — to annotate documents together and produce gold-standard training data.
 
-The result is something that didn't exist before: a place where careful human expertise and raw AI capability meet on equal footing, with everything versioned, permissioned, and owned by you.
+Those collaborators mostly never came. The platform was too early, the problem too niche, the value too invisible.
+
+Then large language models arrived, and the world suddenly needed exactly what OpenContracts had been building all along: structured, annotated, version-controlled knowledge bases that AI could actually reason over. The collaborators the platform was designed for finally showed up — they just turned out to be AI agents.
+
+Today, OpenContracts is a self-hosted platform where teams build knowledge bases from their documents and where AI agents work alongside humans to search, analyze, and extend that knowledge. The core conviction hasn't changed. The best AI systems still need carefully curated data. The difference is that now, the curation and the AI happen in the same place.
 
 ---
 
