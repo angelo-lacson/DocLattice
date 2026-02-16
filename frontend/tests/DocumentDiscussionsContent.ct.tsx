@@ -6,6 +6,7 @@ import { DocumentDiscussionsContent } from "../src/components/discussions/Docume
 import { GET_CONVERSATIONS } from "../src/graphql/queries";
 import { selectedThreadId } from "../src/graphql/cache";
 import { DocumentDiscussionsContentTestWrapper } from "./DocumentDiscussionsContentTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // Mock thread data
 const mockThreads = {
@@ -120,6 +121,8 @@ test.describe("DocumentDiscussionsContent", () => {
       name: /start new discussion/i,
     });
     await expect(createButton).toBeVisible();
+
+    await docScreenshot(page, "discussions--thread-list--with-threads");
   });
 
   // Note: Thread detail view tests are handled by actual integration in DocumentKnowledgeBase
