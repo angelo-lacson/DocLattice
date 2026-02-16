@@ -25,6 +25,55 @@ Then large language models arrived, and the world suddenly needed exactly what O
 
 Today, OpenContracts is a self-hosted platform where teams build knowledge bases from their documents and where AI agents work alongside humans to search, analyze, and extend that knowledge. The core conviction hasn't changed. The best AI systems still need carefully curated data. The difference is that now, the curation and the AI happen in the same place.
 
+<table>
+<tr>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/agents.svg" width="48" height="48" alt="AI Agents">
+<br>
+<h4>AI Agents</h4>
+<p>Configurable assistants that search, annotate, and reason over your knowledge base</p>
+</td>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/mcp.svg" width="48" height="48" alt="MCP Server">
+<br>
+<h4>MCP Server</h4>
+<p>Expose your corpus to Claude, Cursor, and any MCP-compatible AI tool</p>
+</td>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/search.svg" width="48" height="48" alt="Multimodal Search">
+<br>
+<h4>Multimodal Search</h4>
+<p>Vector embeddings and full-text search across documents and annotations</p>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/collaboration.svg" width="48" height="48" alt="Collaboration">
+<br>
+<h4>Collaboration</h4>
+<p>Threaded discussions, @mentions, voting, and moderation at every level</p>
+</td>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/extract.svg" width="48" height="48" alt="Data Extract">
+<br>
+<h4>Data Extract</h4>
+<p>Structured extraction across hundreds of documents with LLM-powered queries</p>
+</td>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/format.svg" width="48" height="48" alt="Format Preservation">
+<br>
+<h4>Format Preservation</h4>
+<p>PDF layout fidelity with precise text-to-coordinate mapping via PAWLS</p>
+</td>
+</tr>
+</table>
+
 ---
 
 ## What Makes This Different
