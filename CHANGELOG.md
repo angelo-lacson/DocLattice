@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Automated Documentation Screenshots
+- **Screenshot capture utility** (`frontend/tests/utils/docScreenshot.ts`): Captures screenshots during Playwright component tests using an enforced `{area}--{component}--{state}` naming convention
+- **CI workflow** (`.github/workflows/screenshots.yml`): Automatically runs component tests on PRs touching `frontend/` or `docs/`, then commits updated screenshots back to the PR branch
+- **Initial screenshot coverage**: Landing page components (hero, stats bar, trending corpuses, call-to-action) and badge components (celebration modal, toast)
+
 #### V2 Export Format
 - **`OPEN_CONTRACTS_V2` export format**: New export type available in `StartCorpusExport` mutation that includes structural annotation sets, folder hierarchy, relationships, agent config, markdown descriptions, and conversations
 - **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
