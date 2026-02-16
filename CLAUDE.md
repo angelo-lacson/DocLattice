@@ -314,6 +314,42 @@ const component = await mount(
 );
 ```
 
+### Automated Documentation Screenshots
+
+**Location**: `docs/assets/images/screenshots/auto/` (output) | `frontend/tests/utils/docScreenshot.ts` (utility)
+
+Screenshots for documentation are **automatically captured** during Playwright component tests and committed back to the PR branch by the `screenshots.yml` CI workflow.
+
+**How it works**:
+1. Import `docScreenshot` from `./utils/docScreenshot` in any `.ct.tsx` test file
+2. Call `await docScreenshot(page, "area--component--state")` after the component reaches the desired visual state
+3. Reference the image in markdown: `![Alt text](../assets/images/screenshots/auto/area--component--state.png)`
+4. CI runs tests on every PR, captures screenshots, and auto-commits any changes
+
+**Naming convention** (`--` separates segments, `-` within words):
+
+| Segment | Purpose | Examples |
+|---------|---------|----------|
+| `area` | Feature area | `landing`, `badges`, `corpus`, `versioning`, `annotations` |
+| `component` | Specific view or component | `hero-section`, `celebration-modal`, `list-view` |
+| `state` | Visual state captured | `anonymous`, `with-data`, `empty`, `auto-award` |
+
+At least 2 segments required, 3 recommended. All lowercase alphanumeric with single hyphens.
+
+**Example**:
+```typescript
+import { docScreenshot } from "./utils/docScreenshot";
+
+// After the component renders and assertions pass:
+await docScreenshot(page, "badges--celebration-modal--auto-award");
+```
+
+**Rules**:
+- Place `docScreenshot()` calls AFTER assertions that confirm the desired visual state
+- The filename IS the contract between tests and docs — keep names stable
+- Never manually edit files in `docs/assets/images/screenshots/auto/` — they are overwritten by CI
+- Manually curated screenshots stay in `docs/assets/images/screenshots/` (parent directory)
+
 ## Documentation Locations
 
 - **Permissioning**: `docs/permissioning/consolidated_permissioning_guide.md`

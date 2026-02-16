@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { BadgeCelebrationModal } from "../src/components/badges/BadgeCelebrationModal";
 import { BadgeToast } from "../src/components/badges/BadgeToast";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("BadgeCelebrationModal", () => {
   test("renders with badge information", async ({ mount, page }) => {
@@ -27,6 +28,9 @@ test.describe("BadgeCelebrationModal", () => {
     await expect(
       component.getByText("Congratulations on your achievement!")
     ).toBeVisible({ timeout: 20000 });
+
+    // Doc screenshot: badge celebration modal with auto-awarded badge
+    await docScreenshot(page, "badges--celebration-modal--auto-award");
   });
 
   test("shows awarded by message for manual awards", async ({
@@ -49,6 +53,9 @@ test.describe("BadgeCelebrationModal", () => {
     await expect(component.getByText(/Awarded by adminuser/)).toBeVisible({
       timeout: 20000,
     });
+
+    // Doc screenshot: badge celebration modal with manual award
+    await docScreenshot(page, "badges--celebration-modal--manual-award");
   });
 
   test("calls onClose when close button clicked", async ({ mount, page }) => {
@@ -158,6 +165,11 @@ test.describe("BadgeToast", () => {
     await expect(
       component.getByText(/You earned the "First Post" badge!/)
     ).toBeVisible({ timeout: 20000 });
+
+    // Doc screenshot: badge earned toast notification
+    await docScreenshot(page, "badges--toast--earned", {
+      element: component,
+    });
   });
 
   test("shows awarded by message for manual awards", async ({

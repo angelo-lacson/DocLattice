@@ -1,0 +1,75 @@
+name: Update Documentation Screenshots
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "docs/**"
+      - ".github/workflows/screenshots.yml"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: ./frontend
+
+jobs:
+  update-screenshots:
+    name: Capture & Commit Screenshots
+    runs-on: ubuntu-latest
+    # Only run on PRs from branches in the same repo (not forks) since we
+    # need write access to push commits back to the PR branch.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          # Use the default GITHUB_TOKEN - it has contents:write from the
+          # permissions block above.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install Yarn
+        run: npm install -g yarn
+
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install Playwright Browsers
+        run: yarn playwright install --with-deps
+
+      - name: Run Component Tests (captures screenshots)
+        run: yarn run test:ct
+        # Screenshots are captured as a side-effect of running tests.
+        # Test failures should not block screenshot commits - the regular
+        # CI workflow already gates on test success.
+        continue-on-error: true
+
+      - name: Check for screenshot changes
+        id: screenshot-check
+        working-directory: .
+        run: |
+          git add docs/assets/images/screenshots/auto/
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No screenshot changes detected."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Screenshot changes detected:"
+            git diff --cached --name-only
+          fi
+
+      - name: Commit and push updated screenshots
+        if: steps.screenshot-check.outputs.changed == 'true'
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update auto-generated documentation screenshots"
+          git push
