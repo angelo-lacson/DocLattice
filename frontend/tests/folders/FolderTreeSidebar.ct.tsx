@@ -6,7 +6,7 @@ import {
   createMockFolderHierarchy,
 } from "./utils/mockFolderData";
 import { GET_CORPUS_FOLDERS } from "../../src/graphql/queries/folders";
-import { docScreenshot } from "../utils/docScreenshot";
+import { docScreenshot, releaseScreenshot } from "../utils/docScreenshot";
 
 test.describe("FolderTreeSidebar", () => {
   test("renders with mocked folder data", async ({ mount }) => {
@@ -170,6 +170,9 @@ test.describe("FolderTreeSidebar", () => {
     });
 
     await docScreenshot(page, "folders--tree-sidebar--nested", {
+      element: component,
+    });
+    await releaseScreenshot(page, "v3.0.0.b3", "folder-tree", {
       element: component,
     });
   });

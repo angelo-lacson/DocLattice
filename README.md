@@ -6,86 +6,82 @@ Open source document intelligence. Self-hosted, AI-powered, and built for teams 
 
 [![Sponsor](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/JSv4)
 
----
-
 | | |
 |---|---|
 | Backend CI/CD | [![codecov](https://codecov.io/gh/Open-Source-Legal/OpenContracts/branch/main/graph/badge.svg?token=RdVsiuaTVz)](https://app.codecov.io/gh/open-source-legal/OpenContracts) |
 | Meta | [![code style - black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![types - Mypy](https://img.shields.io/badge/types-Mypy-blue.svg)](https://github.com/python/mypy) [![imports - isort](https://img.shields.io/badge/imports-isort-ef8336.svg)](https://github.com/pycqa/isort) [![License - AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://www.gnu.org/licenses/agpl-3.0) |
 
-## What is OpenContracts?
-
-OpenContracts is an AGPL-3.0 licensed platform for document analysis, annotation, and collaboration. It combines document management with AI-powered analysis tools, discussion threads, and structured data extraction.
-
-### Core Capabilities
-
-- **Document Processing** — Upload PDFs and text files, automatically extract structure with ML-based parsers
-- **Annotation & Analysis** — Highlight, label, and analyze documents with custom annotation schemas
-- **AI Agents** — Chat with documents using configurable AI assistants that can search and analyze content
-- **Collaboration** — Threaded discussions with @mentions, voting, and moderation at corpus and document levels
-- **Data Extraction** — Extract structured data from hundreds of documents using agent-powered queries
-- **Version Control** — Track document changes, restore previous versions, soft delete with recovery
-
 ---
 
-## Quick Look
+![Discovery Landing Page](docs/assets/images/screenshots/auto/landing--discovery-page--anonymous.png)
 
-### Document Annotation
-![PDF Processing](/docs/assets/images/gifs/PDF%20Annotation%20Flow.gif)
-
-### Text Format Support
-![Txt Processing](/docs/assets/images/gifs/Txt%20Annotation%20Flow.gif)
-
-### Structured Data Extraction
-![Data Grid](docs/assets/images/screenshots/data_grid_image.png)
-
-### Custom Analytics
-![Analyzer Annotations](docs/assets/images/screenshots/Analyzer_Annotations.png)
+OpenContracts is an AGPL-3.0 licensed platform for document analysis, annotation, and collaboration. It combines document management with AI-powered analysis tools, discussion threads, and structured data extraction.
 
 ---
 
 ## Features
 
-### Document Management
-- Organize documents into collections (Corpuses) with folder hierarchies
-- Fine-grained permissions with public/private visibility controls
-- Document versioning with full history and restore capability
-- Bulk upload and batch operations
+### Document Annotation
 
-### Parsing & Processing
-- Pluggable parser architecture supporting multiple backends:
-  - [Docling](docs/pipelines/docling_parser.md) — ML-based structure extraction (default)
-  - [LlamaParse](docs/pipelines/llamaparse_parser.md) — Cloud-based parsing with layout extraction
-  - Text/Markdown — Simple text extraction
-- Automatic vector embeddings for semantic search (powered by pgvector)
-- Structural annotation extraction (headers, paragraphs, tables)
+Annotate PDFs and text documents with custom label schemas. Multi-page selections, relationship mapping between annotations, and structural extraction powered by ML-based parsers.
 
-### Annotation Tools
-- Multi-page annotation support
-- Custom label schemas with validation
-- Relationship mapping between annotations
-- Import/export in standard formats
+![Document Annotator](docs/assets/images/screenshots/auto/readme--document-annotator--with-pdf.png)
 
-### AI & LLM Integration
-- Built on [PydanticAI](docs/architecture/llms/README.md) for structured LLM interactions
-- Configurable AI agents with tool access (search, document loading, annotation queries)
-- Real-time streaming responses via WebSocket
-- Conversation history with context management
+### Corpus Management
 
-### Collaboration (New in v3.0.0.b3)
-- Threaded discussions at global, corpus, and document levels
-- @mentions for documents, corpuses, and AI agents
-- Upvoting/downvoting with reputation tracking
-- Thread pinning, locking, and moderation controls
-- User profiles with activity feeds and statistics
-- Badges and achievements for community engagement
-- Leaderboards showing top contributors
+Organize documents into collections with folder hierarchies, fine-grained permissions, and an integrated chat bar for quick AI-powered queries across your entire corpus.
 
-### Data Extraction
-- Define extraction schemas with multiple question types
-- Run extractions across document collections
-- Review and validate extracted data in grid view
-- Export results in structured formats
+![Corpus Home](docs/assets/images/screenshots/auto/readme--corpus-home--with-chat.png)
+
+### AI Agents
+
+Chat with your documents using configurable AI assistants. Agents can search content, load full documents, and query annotations — all with real-time streaming responses.
+
+![AI Agent Response](docs/assets/images/screenshots/auto/threads--agent-message--response.png)
+
+### Discussions & Collaboration
+
+Forum-style threaded discussions at global, corpus, and document levels. @mention documents, corpuses, and AI agents. Upvote, pin, lock, and moderate threads.
+
+![Discussion Threads](docs/assets/images/screenshots/auto/discussions--thread-list--with-threads.png)
+
+### Analytics
+
+Track engagement across your corpus with real-time metrics — thread activity, message volume, contributor counts, and interactive visualizations.
+
+![Analytics Dashboard](docs/assets/images/screenshots/auto/corpus--analytics--dashboard.png)
+
+---
+
+## See it in Action
+
+### PDF Annotation Flow
+![PDF Annotation Flow](docs/assets/images/gifs/PDF%20Annotation%20Flow.gif)
+
+### Text Format Support
+![Text Annotation Flow](docs/assets/images/gifs/Txt%20Annotation%20Flow.gif)
+
+---
+
+## Quick Start
+
+### Development
+
+```bash
+git clone https://github.com/JSv4/OpenContracts.git
+cd OpenContracts
+docker compose -f local.yml up
+```
+
+### Production
+
+```bash
+# Apply database migrations first
+docker compose -f production.yml --profile migrate up migrate
+
+# Start services
+docker compose -f production.yml up -d
+```
 
 ---
 
@@ -106,7 +102,8 @@ Browse the full documentation at [jsv4.github.io/OpenContracts](https://jsv4.git
 
 ---
 
-## Architecture
+<details>
+<summary><strong>Architecture</strong></summary>
 
 ### Data Format
 
@@ -127,71 +124,33 @@ Each component inherits from a base class with a defined interface:
 
 See the [pipeline documentation](docs/pipelines/pipeline_overview.md) for details on creating custom components.
 
----
-
-## Deployment
-
-### Quick Start (Development)
-
-```bash
-git clone https://github.com/JSv4/OpenContracts.git
-cd OpenContracts
-docker compose -f local.yml up
-```
-
-### Production
-
-Run migrations before starting services:
-
-```bash
-# Apply database migrations
-docker compose -f production.yml --profile migrate up migrate
-
-# Start services
-docker compose -f production.yml up -d
-```
-
-The migration service runs once to avoid race conditions and ensures all tables are created before dependent services start.
+</details>
 
 ---
 
 ## Telemetry
 
-OpenContracts collects anonymous usage data to guide development priorities. We collect:
-- Installation events (unique installation ID)
-- Feature usage statistics (analyzer runs, extracts created)
-- Aggregate counts (documents, users, queries)
+OpenContracts collects anonymous usage data to guide development priorities: installation events, feature usage statistics, and aggregate counts. We do not collect document contents, extracted data, user identities, or query contents.
 
-We do not collect document contents, extracted data, user identities, or query contents.
-
-### Disabling Telemetry
-
-**Backend telemetry** (server-side events): Set `TELEMETRY_ENABLED=False` in your Django settings.
-
-**Frontend analytics** (browser-side tracking via PostHog): Leave `REACT_APP_POSTHOG_API_KEY` unset or empty in `frontend/public/env-config.js`. The frontend also respects the browser's Do Not Track setting and requires explicit user consent before any tracking occurs.
+**Disable backend telemetry**: Set `TELEMETRY_ENABLED=False` in your Django settings.
+**Disable frontend analytics**: Leave `REACT_APP_POSTHOG_API_KEY` unset in `frontend/public/env-config.js`.
 
 ---
 
 ## Supported Formats
 
-Currently supported:
 - PDF (full layout and annotation support)
 - Text-based formats (plaintext, Markdown)
 
-**Coming soon:** DOCX viewing and annotation powered by [Docxodus](https://github.com/JSv4/Docxodus), an open source in-browser Word document viewer. This will enable the same annotation and analysis workflows for Word documents that currently exist for PDFs.
+**Coming soon:** DOCX viewing and annotation powered by [Docxodus](https://github.com/JSv4/Docxodus).
 
 ---
 
 ## Acknowledgements
 
 This project builds on work from:
-
 - [AllenAI PAWLS](https://github.com/allenai/pawls) — PDF annotation data format and concepts
 - [NLMatics nlm-ingestor](https://github.com/nlmatics/nlm-ingestor) — Document parsing pipeline
-
-The data extraction grid UI draws inspiration from NLMatics' innovative approach to document querying:
-
-![NLMatics Grid](docs/assets/images/screenshots/nlmatics_datagrid.png)
 
 ---
 

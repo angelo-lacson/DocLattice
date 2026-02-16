@@ -36,7 +36,7 @@ import {
   GET_BADGES,
 } from "../src/graphql/queries";
 import { CorpusType } from "../src/types/graphql-api";
-import { docScreenshot } from "./utils/docScreenshot";
+import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
 
 /* -------------------------------------------------------------------------- */
 /* Mock Data Factories                                                         */
@@ -1349,5 +1349,6 @@ test.describe("Corpus Tabs - Analytics", () => {
     });
 
     await docScreenshot(page, "corpus--analytics--dashboard");
+    await releaseScreenshot(page, "v3.0.0.b3", "analytics");
   });
 });

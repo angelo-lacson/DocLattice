@@ -1,5 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
-import { mkdirSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { join, resolve } from "path";
 
 /**
@@ -9,6 +9,11 @@ import { join, resolve } from "path";
 const SCREENSHOTS_DIR = resolve(
   __dirname,
   "../../../docs/assets/images/screenshots/auto"
+);
+
+const RELEASES_DIR = resolve(
+  __dirname,
+  "../../../docs/assets/images/screenshots/releases"
 );
 
 // Ensure output directory exists on module load.
@@ -79,6 +84,77 @@ export async function docScreenshot(
   }
 
   const filePath = join(SCREENSHOTS_DIR, `${name}.png`);
+
+  if (options?.element) {
+    await options.element.screenshot({ path: filePath });
+  } else {
+    await page.screenshot({
+      path: filePath,
+      fullPage: options?.fullPage ?? false,
+      ...(options?.clip ? { clip: options.clip } : {}),
+    });
+  }
+}
+
+/**
+ * Capture a point-in-time screenshot for release documentation.
+ *
+ * Unlike `docScreenshot` (which CI overwrites on every PR), release screenshots
+ * are **write-once**: if the file already exists the call is a no-op. This keeps
+ * release notes "locked in amber" — they always show the UI as it was at that release.
+ *
+ * ## Output
+ *
+ * `docs/assets/images/screenshots/releases/{version}/{name}.png`
+ *
+ * ## Usage
+ *
+ * ```ts
+ * await releaseScreenshot(page, "v3.0.0.b3", "landing-page", { fullPage: true });
+ * ```
+ *
+ * ## Referencing in Markdown
+ *
+ * ```md
+ * ![Landing Page](../assets/images/screenshots/releases/v3.0.0.b3/landing-page.png)
+ * ```
+ */
+export async function releaseScreenshot(
+  page: Page,
+  version: string,
+  name: string,
+  options?: {
+    /** Clip a specific region of the page. */
+    clip?: { x: number; y: number; width: number; height: number };
+    /** Capture the full scrollable page instead of the viewport. */
+    fullPage?: boolean;
+    /** Capture only this element's bounding box instead of the full viewport. */
+    element?: Locator;
+  }
+): Promise<void> {
+  if (!/^v\d+\.\d+\.\d+/.test(version)) {
+    throw new Error(
+      `releaseScreenshot version "${version}" is invalid. ` +
+        `Must start with v{major}.{minor}.{patch} (e.g. "v3.0.0.b3").`
+    );
+  }
+
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)) {
+    throw new Error(
+      `releaseScreenshot name "${name}" is invalid. ` +
+        `Must be lowercase alphanumeric with single-hyphen separators.`
+    );
+  }
+
+  const versionDir = join(RELEASES_DIR, version);
+  const filePath = join(versionDir, `${name}.png`);
+
+  // Write-once guard: never overwrite existing release screenshots.
+  if (existsSync(filePath)) {
+    return;
+  }
+
+  mkdirSync(versionDir, { recursive: true });
 
   if (options?.element) {
     await options.element.screenshot({ path: filePath });
