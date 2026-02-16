@@ -167,7 +167,9 @@ test.describe("BadgeToast", () => {
     ).toBeVisible({ timeout: 20000 });
 
     // Doc screenshot: badge earned toast notification
-    await docScreenshot(page, "badges--toast--earned");
+    await docScreenshot(page, "badges--toast--earned", {
+      element: component,
+    });
   });
 
   test("shows awarded by message for manual awards", async ({

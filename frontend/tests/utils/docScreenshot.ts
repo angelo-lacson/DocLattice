@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { mkdirSync } from "fs";
 import { join, resolve } from "path";
 
@@ -54,6 +54,8 @@ export async function docScreenshot(
     clip?: { x: number; y: number; width: number; height: number };
     /** Capture the full scrollable page instead of the viewport. */
     fullPage?: boolean;
+    /** Capture only this element's bounding box instead of the full viewport. */
+    element?: Locator;
   }
 ): Promise<void> {
   const segments = name.split("--");
@@ -78,9 +80,13 @@ export async function docScreenshot(
 
   const filePath = join(SCREENSHOTS_DIR, `${name}.png`);
 
-  await page.screenshot({
-    path: filePath,
-    fullPage: options?.fullPage ?? false,
-    ...(options?.clip ? { clip: options.clip } : {}),
-  });
+  if (options?.element) {
+    await options.element.screenshot({ path: filePath });
+  } else {
+    await page.screenshot({
+      path: filePath,
+      fullPage: options?.fullPage ?? false,
+      ...(options?.clip ? { clip: options.clip } : {}),
+    });
+  }
 }
