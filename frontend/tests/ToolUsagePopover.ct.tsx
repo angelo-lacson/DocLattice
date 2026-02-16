@@ -369,6 +369,8 @@ test.describe("Tool Usage Popover", () => {
   // We provide that background and wait for the animation to settle.
 
   test("screenshot: single tool badge (collapsed)", async ({ mount, page }) => {
+    await page.setViewportSize({ width: 1536, height: 864 });
+
     const component = await mount(
       <ChatMessageTestWrapper>
         <div style={{ background: "#f8fafc", padding: "1rem" }}>
@@ -397,7 +399,7 @@ test.describe("Tool Usage Popover", () => {
   test("screenshot: single tool popover open", async ({ mount, page }) => {
     // Widen viewport and add left padding so the right-aligned popover
     // (min-width 320px) doesn't extend past the left viewport edge.
-    await page.setViewportSize({ width: 1200, height: 600 });
+    await page.setViewportSize({ width: 1440, height: 720 });
 
     await mount(
       <ChatMessageTestWrapper>
@@ -439,7 +441,7 @@ test.describe("Tool Usage Popover", () => {
   test("screenshot: multi-tool popover open", async ({ mount, page }) => {
     // Widen viewport and add left padding so the right-aligned popover
     // (min-width 320px) doesn't extend past the left viewport edge.
-    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.setViewportSize({ width: 1440, height: 960 });
 
     await mount(
       <ChatMessageTestWrapper>
