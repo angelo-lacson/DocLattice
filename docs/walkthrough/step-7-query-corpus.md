@@ -24,13 +24,5 @@ For complex queries, the agent may chain multiple tools together. The popover li
 
 ![Multi-Tool Popover](../assets/images/screenshots/auto/chat--tool-popover--multi-tool.png)
 
-### Available Agent Tools
-
-| Tool | What It Does |
-|------|-------------|
-| **Similarity Search** | Finds annotations semantically similar to your query using vector embeddings |
-| **Search Exact Text** | Locates exact string matches across document text |
-| **Ask Document** | Sends a focused question to a specific document's agent |
-| **Load Document Text** | Retrieves the full extracted text of a document |
-| **Update Document Summary** | Writes or updates a document's summary |
-| **Add Annotations** | Creates new annotations from exact text matches |
+The full set of tools available to agents is defined in
+[`opencontractserver/llms/tools/core_tools.py`](https://github.com/Open-Source-Legal/OpenContracts/blob/main/opencontractserver/llms/tools/core_tools.py).
