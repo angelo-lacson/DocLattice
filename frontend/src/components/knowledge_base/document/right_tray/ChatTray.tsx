@@ -707,6 +707,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       text: thoughtText,
       tool: data?.tool_name,
       args: data?.args,
+      result: data?.tool_result,
     };
 
     // Update chat UI timeline
