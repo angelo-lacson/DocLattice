@@ -383,6 +383,7 @@ await releaseScreenshot(page, "v3.0.0.b3", "landing-page", { fullPage: true });
 - **LLM Framework**: `docs/architecture/llms/README.md`
 - **Collaboration System**: `docs/commenting_system/README.md`
 - **Auth Pattern (detailed)**: `frontend/src/docs/AUTHENTICATION_PATTERN.md`
+- **Documentation Screenshots**: `docs/development/screenshots.md`
 
 ## Branch Strategy
 
