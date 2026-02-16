@@ -27,31 +27,49 @@ Today, OpenContracts is a self-hosted platform where teams build knowledge bases
 
 <table>
 <tr>
-<td align="center" width="33%"><br>
-<img src="https://img.shields.io/badge/-AI%20Agents-0f766e?style=flat-square" alt="AI Agents"><br><br>
-Configurable assistants that search,<br>annotate, and reason over your data<br><br>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/agents.svg" width="48" height="48" alt="AI Agents">
+<br>
+<h4>AI Agents</h4>
+<p>Configurable assistants that search, annotate, and reason over your knowledge base</p>
 </td>
-<td align="center" width="33%"><br>
-<img src="https://img.shields.io/badge/-MCP%20Server-0f766e?style=flat-square" alt="MCP Server"><br><br>
-Expose your corpus to Claude, Cursor,<br>and any MCP-compatible AI tool<br><br>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/mcp.svg" width="48" height="48" alt="MCP Server">
+<br>
+<h4>MCP Server</h4>
+<p>Expose your corpus to Claude, Cursor, and any MCP-compatible AI tool</p>
 </td>
-<td align="center" width="33%"><br>
-<img src="https://img.shields.io/badge/-Multimodal%20Search-0f766e?style=flat-square" alt="Multimodal Search"><br><br>
-Vector embeddings + full-text search<br>across documents and annotations<br><br>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/search.svg" width="48" height="48" alt="Multimodal Search">
+<br>
+<h4>Multimodal Search</h4>
+<p>Vector embeddings and full-text search across documents and annotations</p>
 </td>
 </tr>
 <tr>
-<td align="center" width="33%"><br>
-<img src="https://img.shields.io/badge/-Collaboration-0f766e?style=flat-square" alt="Collaboration"><br><br>
-Threaded discussions, @mentions,<br>voting, and moderation at every level<br><br>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/collaboration.svg" width="48" height="48" alt="Collaboration">
+<br>
+<h4>Collaboration</h4>
+<p>Threaded discussions, @mentions, voting, and moderation at every level</p>
 </td>
-<td align="center" width="33%"><br>
-<img src="https://img.shields.io/badge/-Data%20Extract-0f766e?style=flat-square" alt="Data Extract"><br><br>
-Structured extraction across hundreds<br>of documents with LLM-powered queries<br><br>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/extract.svg" width="48" height="48" alt="Data Extract">
+<br>
+<h4>Data Extract</h4>
+<p>Structured extraction across hundreds of documents with LLM-powered queries</p>
 </td>
-<td align="center" width="33%"><br>
-<img src="https://img.shields.io/badge/-Format%20Preservation-0f766e?style=flat-square" alt="Format Preservation"><br><br>
-PDF layout fidelity with precise<br>text-to-coordinate mapping via PAWLS<br><br>
+<td align="center" width="33%">
+<br>
+<img src="docs/assets/images/icons/format.svg" width="48" height="48" alt="Format Preservation">
+<br>
+<h4>Format Preservation</h4>
+<p>PDF layout fidelity with precise text-to-coordinate mapping via PAWLS</p>
 </td>
 </tr>
 </table>
