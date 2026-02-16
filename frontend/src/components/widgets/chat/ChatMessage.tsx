@@ -203,9 +203,8 @@ const MessageContent = styled.div<{ $isAssistant: boolean }>`
       props.$isAssistant
         ? "rgba(255, 255, 255, 0.5)"
         : "rgba(247, 248, 249, 0.3)"};
-  word-wrap: break-word;
   overflow-wrap: break-word;
-  word-break: break-all;
+  word-break: break-word;
 
   &::before {
     content: "";

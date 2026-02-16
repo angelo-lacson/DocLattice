@@ -10,13 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Expose Tool Usage in Chat UI
-- **Tool Usage Badge**: Assistant messages that use tools now display a prominent wrench icon badge ("X tools used") in the message header, visible in both document and corpus chat views
-  - File: `frontend/src/components/widgets/chat/ChatMessage.tsx` (`ToolUsageIndicator` component)
-- **Tool Call Popover**: Hovering over the tool usage badge shows a rich popover with each tool call's name, input arguments, and output result
-  - File: `frontend/src/components/widgets/chat/ChatMessage.tsx` (`ToolCallPopover`, `ToolCallCard` styled components)
-- **Tool result content in timeline**: Backend now captures tool result/output content in the timeline `tool_result` entries (previously only stored tool name)
-  - Files: `opencontractserver/llms/agents/timeline_schema.py` (added `result` field), `opencontractserver/llms/agents/timeline_utils.py` (captures result from metadata), `opencontractserver/llms/agents/pydantic_ai_agents.py` (passes result content through ThoughtEvent metadata)
-- **Tool result entries for search tools**: `similarity_search` and `search_exact_text` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"), enabling the frontend to display complete tool call input/output pairs
+- **Tool Usage Badge** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1180-1288`): Assistant messages that use tools now display a wrench icon badge ("X tools used") in the message header, visible in both document and corpus chat views. Users can quickly see AI tool usage without expanding the full timeline, improving agent transparency.
+- **Tool Call Popover** (`ChatMessage.tsx:1222-1286`): Hovering over the badge opens a popover listing each tool call's formatted name, JSON input arguments, and output result. Keyboard accessible (Enter/Space to toggle, Escape to close) with full ARIA attributes.
+- **Tool result content in timeline**: Backend now captures tool result/output content in timeline `tool_result` entries (previously only stored tool name)
+  - `opencontractserver/llms/agents/timeline_schema.py:52` — added `result` field
+  - `opencontractserver/llms/agents/timeline_utils.py:77-92` — captures result from metadata, truncated to 500 chars
+  - `opencontractserver/llms/agents/pydantic_ai_agents.py:123-155` — `_extract_tool_result_summary()` extracts and truncates at source
+- **Tool result entries for search tools** (`pydantic_ai_agents.py:642-657, 686-702, 807-813`): `similarity_search`, `search_exact_text`, and `ask_document` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"). Other tools use a generic extractor with "Completed" fallback.
 
 ### Fixed
 

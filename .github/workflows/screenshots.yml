@@ -47,7 +47,7 @@ jobs:
         run: yarn playwright install --with-deps
 
       - name: Run Component Tests (captures screenshots)
-        run: yarn run test:ct
+        run: yarn run test:ct --reporter=list
         # Screenshots are captured as a side-effect of running tests.
         # Test failures should not block screenshot commits - the regular
         # CI workflow already gates on test success.
@@ -74,22 +74,37 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Register the "ours" merge driver so .gitattributes merge=ours
-          # works during rebase (auto-resolve screenshot conflicts by keeping
-          # our just-generated versions).
-          git config merge.ours.driver true
+          # Save freshly generated screenshots before any rebase/merge.
+          # These are the authoritative versions — we always want them to win.
+          SCREENSHOT_DIR="docs/assets/images/screenshots/auto"
+          BACKUP_DIR=$(mktemp -d)
+          cp -a "$SCREENSHOT_DIR"/. "$BACKUP_DIR"/
 
           git commit -m "Update auto-generated documentation screenshots"
 
-          # Rebase onto latest PR branch head to pick up any commits pushed
-          # while tests were running. Auto-generated screenshots use
-          # merge=ours in .gitattributes, so conflicts on PNGs resolve by
-          # keeping our freshly captured version.
-          git pull --rebase origin ${{ github.head_ref }} || {
-            echo "Rebase conflict — resolving auto screenshots with ours"
-            git checkout --ours docs/assets/images/screenshots/auto/
-            git add docs/assets/images/screenshots/auto/
-            git rebase --continue
-          }
+          # Pull latest changes. If commits were pushed while tests ran,
+          # this may conflict on PNGs. We abort any failed rebase/merge
+          # and force our screenshots back in.
+          if ! git pull --rebase origin ${{ github.head_ref }}; then
+            echo "Rebase conflict detected — aborting and restoring screenshots"
+            git rebase --abort
 
+            # Merge instead (less likely to conflict, and if it does we fix it)
+            git pull --no-rebase origin ${{ github.head_ref }} || true
+
+            # Force our freshly generated screenshots regardless of conflict state
+            cp -a "$BACKUP_DIR"/. "$SCREENSHOT_DIR"/
+            git checkout -- . 2>/dev/null || true
+            cp -a "$BACKUP_DIR"/. "$SCREENSHOT_DIR"/
+            git add "$SCREENSHOT_DIR"
+
+            # If we were mid-merge, conclude it
+            if [ -f .git/MERGE_HEAD ]; then
+              git commit --no-edit
+            else
+              git commit -m "Update auto-generated documentation screenshots" --allow-empty
+            fi
+          fi
+
+          rm -rf "$BACKUP_DIR"
           git push

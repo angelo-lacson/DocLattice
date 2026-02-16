@@ -126,18 +126,27 @@ def _extract_tool_result_summary(event: Any, tool_name: str) -> str:
     Returns a non-empty string suitable for inclusion in the timeline
     ``tool_result`` metadata.  Falls back to ``"Completed"`` if extraction
     fails or produces an empty value.
+
+    Truncates at source using :data:`MAX_TOOL_RESULT_LENGTH` so large results
+    (e.g. full ``ask_document`` answers) don't bloat ThoughtEvent metadata.
     """
+    from .timeline_utils import MAX_TOOL_RESULT_LENGTH
+
     try:
         result_content = event.result.content  # type: ignore[attr-defined]
+        summary = ""
         if isinstance(result_content, dict):
             # ask_document returns {"answer": ..., "sources": ..., "timeline": ...}
-            summary = result_content.get("answer", "")
-            if summary:
-                return str(summary)
-        elif isinstance(result_content, str) and result_content:
-            return result_content
+            summary = str(result_content.get("answer", ""))
+        elif isinstance(result_content, str):
+            summary = result_content
         elif result_content is not None:
-            return str(result_content)
+            summary = str(result_content)
+
+        if summary:
+            if len(summary) > MAX_TOOL_RESULT_LENGTH:
+                summary = summary[:MAX_TOOL_RESULT_LENGTH] + "..."
+            return summary
     except Exception:
         logger.debug(
             "Could not extract tool result summary for %s", tool_name, exc_info=True
