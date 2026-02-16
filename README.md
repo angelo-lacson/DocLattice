@@ -2,7 +2,7 @@
 
 # OpenContracts ([Demo](https://contracts.opensource.legal))
 
-Open source document intelligence. Self-hosted, AI-powered, and built for teams who need to own their data.
+The open source platform for building knowledge bases that humans and AI agents can work with together.
 
 [![Sponsor](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/JSv4)
 
@@ -15,39 +15,49 @@ Open source document intelligence. Self-hosted, AI-powered, and built for teams 
 
 ![Discovery Landing Page](docs/assets/images/screenshots/auto/landing--discovery-page--anonymous.png)
 
-OpenContracts is an AGPL-3.0 licensed platform for document analysis, annotation, and collaboration. It combines document management with AI-powered analysis tools, discussion threads, and structured data extraction.
+Most knowledge lives in documents. Contracts, regulations, research papers, policies — the stuff that governs how organizations actually work. That knowledge is usually trapped: locked in PDFs, scattered across drives, understood fully by a handful of people who happened to read the right things at the right time.
+
+OpenContracts exists to fix that. It's a self-hosted platform where teams build structured, annotated, version-controlled knowledge bases from their documents — and where AI agents can work alongside humans to search, analyze, and reason over that knowledge.
+
+The result is something that didn't exist before: a place where careful human expertise and raw AI capability meet on equal footing, with everything versioned, permissioned, and owned by you.
 
 ---
 
-## Features
+## What Makes This Different
 
-### Document Annotation
+### Human Knowledge as the Foundation
 
-Annotate PDFs and text documents with custom label schemas. Multi-page selections, relationship mapping between annotations, and structural extraction powered by ML-based parsers.
+This is not another "chat with your PDFs" tool. OpenContracts treats human annotation as the ground truth. Teams define custom label schemas, annotate documents with precise selections (including multi-page spans), and map relationships between concepts. AI builds on top of that work — it doesn't replace it.
 
 ![Document Annotator](docs/assets/images/screenshots/auto/readme--document-annotator--with-pdf.png)
 
-### Corpus Management
+### Knowledge Bases, Not File Cabinets
 
-Organize documents into collections with folder hierarchies, fine-grained permissions, and an integrated chat bar for quick AI-powered queries across your entire corpus.
+Documents are organized into corpuses — version-controlled collections with folder hierarchies, fine-grained permissions, and full history. Fork a public corpus to build on someone else's annotations. Restore any previous version. Every change is tracked.
+
+This is `git` for knowledge: you can branch, build, share, and never lose work.
 
 ![Corpus Home](docs/assets/images/screenshots/auto/readme--corpus-home--with-chat.png)
 
-### AI Agents
+### AI Agents That Work With What You've Built
 
-Chat with your documents using configurable AI assistants. Agents can search content, load full documents, and query annotations — all with real-time streaming responses.
+Configurable AI agents can search your documents, query your annotations, and participate in discussions — all grounded in the structured knowledge your team has created. They don't hallucinate in a vacuum; they reason over real, curated data.
+
+@mention an agent in a discussion thread. Ask it to compare clauses across a hundred contracts. Let it surface patterns your team annotated last quarter. The agent's power comes from the quality of the knowledge base underneath it.
 
 ![AI Agent Response](docs/assets/images/screenshots/auto/threads--agent-message--response.png)
 
-### Discussions & Collaboration
+### Collaboration Where the Knowledge Lives
 
-Forum-style threaded discussions at global, corpus, and document levels. @mention documents, corpuses, and AI agents. Upvote, pin, lock, and moderate threads.
+Forum-style threaded discussions at every level — global, per-corpus, per-document. @mention documents, corpuses, and AI agents. Upvote the best analysis. Pin critical findings. The conversation happens next to the source material, not in a separate tool.
 
 ![Discussion Threads](docs/assets/images/screenshots/auto/discussions--thread-list--with-threads.png)
 
-### Analytics
+### Shared Knowledge Compounds
 
-Track engagement across your corpus with real-time metrics — thread activity, message volume, contributor counts, and interactive visualizations.
+Make a corpus public. Others fork it, refine the annotations, add documents, and share their improvements. Leaderboards and badges recognize contributors. Analytics show which knowledge bases are gaining traction and where the community is most active.
+
+This is the DRY principle applied to institutional knowledge: annotate once, build on it forever.
 
 ![Analytics Dashboard](docs/assets/images/screenshots/auto/corpus--analytics--dashboard.png)
 
