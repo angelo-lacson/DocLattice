@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { MessageItem } from "../../src/components/threads/MessageItem";
 import { ThreadTestWrapper } from "./utils/ThreadTestWrapper";
 import { createMockMessage } from "./utils/mockThreadData";
-import { docScreenshot } from "../utils/docScreenshot";
+import { docScreenshot, releaseScreenshot } from "../utils/docScreenshot";
 import type { MessageNode } from "../../src/components/threads/utils";
 import type { AgentConfigurationType } from "../../src/types/graphql-api";
 
@@ -79,6 +79,9 @@ test.describe("MessageItem - Agent Messages", () => {
     ).toBeVisible({ timeout: 5000 });
 
     await docScreenshot(page, "threads--agent-message--response", {
+      element: component,
+    });
+    await releaseScreenshot(page, "v3.0.0.b3", "agent-response", {
       element: component,
     });
   });

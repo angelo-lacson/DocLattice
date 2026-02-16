@@ -7,7 +7,7 @@ import { UserProfileRoute } from "../src/components/routes/UserProfileRoute";
 import { UserProfile } from "../src/views/UserProfile";
 import { UserLink } from "../src/components/widgets/UserLink";
 import { GET_USER, GET_USER_BADGES } from "../src/graphql/queries";
-import { docScreenshot } from "./utils/docScreenshot";
+import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
 
 // Mock user data
 const mockPublicUser = {
@@ -221,6 +221,7 @@ test.describe("UserProfile View - Rendered Profile", () => {
     await expect(page.locator("text=150")).toBeVisible(); // reputation
 
     await docScreenshot(page, "users--profile--public");
+    await releaseScreenshot(page, "v3.0.0.b3", "user-profile");
 
     await component.unmount();
   });

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { BadgeCelebrationModal } from "../src/components/badges/BadgeCelebrationModal";
 import { BadgeToast } from "../src/components/badges/BadgeToast";
-import { docScreenshot } from "./utils/docScreenshot";
+import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
 
 test.describe("BadgeCelebrationModal", () => {
   test("renders with badge information", async ({ mount, page }) => {
@@ -31,6 +31,7 @@ test.describe("BadgeCelebrationModal", () => {
 
     // Doc screenshot: badge celebration modal with auto-awarded badge
     await docScreenshot(page, "badges--celebration-modal--auto-award");
+    await releaseScreenshot(page, "v3.0.0.b3", "badge-celebration");
   });
 
   test("shows awarded by message for manual awards", async ({

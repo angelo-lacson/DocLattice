@@ -6,7 +6,7 @@ import { CallToAction } from "../src/components/landing/CallToAction";
 import { DiscoveryLanding } from "../src/views/DiscoveryLanding";
 import { LandingTestWrapper } from "./LandingTestWrapper";
 import { GET_DISCOVERY_DATA } from "../src/graphql/landing-queries";
-import { docScreenshot } from "./utils/docScreenshot";
+import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
 
 // Mock data
 const mockCommunityStats = {
@@ -192,6 +192,9 @@ test.describe("CompactLeaderboard Component", () => {
     await docScreenshot(page, "landing--leaderboard--with-data", {
       element: component,
     });
+    await releaseScreenshot(page, "v3.0.0.b3", "leaderboard", {
+      element: component,
+    });
 
     await component.unmount();
   });
@@ -306,6 +309,9 @@ test.describe("DiscoveryLanding Page", () => {
 
     // Doc screenshot: full discovery landing page integration
     await docScreenshot(page, "landing--discovery-page--anonymous", {
+      fullPage: true,
+    });
+    await releaseScreenshot(page, "v3.0.0.b3", "landing-page", {
       fullPage: true,
     });
 
