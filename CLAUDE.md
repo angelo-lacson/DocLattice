@@ -350,6 +350,29 @@ await docScreenshot(page, "badges--celebration-modal--auto-award");
 - Never manually edit files in `docs/assets/images/screenshots/auto/` — they are overwritten by CI
 - Manually curated screenshots stay in `docs/assets/images/screenshots/` (parent directory)
 
+#### Release Screenshots (Point-in-Time)
+
+For release notes, use `releaseScreenshot` to capture screenshots that are **locked in amber** — they show the UI at a specific release and never change.
+
+**Location**: `docs/assets/images/screenshots/releases/{version}/` (output)
+
+```typescript
+import { releaseScreenshot } from "./utils/docScreenshot";
+
+await releaseScreenshot(page, "v3.0.0.b3", "landing-page", { fullPage: true });
+```
+
+**Key differences from `docScreenshot`:**
+- Output: `docs/assets/images/screenshots/releases/{version}/{name}.png`
+- **Write-once**: If the file already exists, the function is a no-op (won't overwrite)
+- CI never touches the `releases/` directory
+- Name is a simple kebab-case string (no `--` segment convention)
+- Version must match `v{major}.{minor}.{patch}` format (with optional suffix)
+
+**When to use which:**
+- `docScreenshot` → README, quickstart, guides (always fresh)
+- `releaseScreenshot` → Release notes (frozen at release time)
+
 ## Documentation Locations
 
 - **Permissioning**: `docs/permissioning/consolidated_permissioning_guide.md`
@@ -360,6 +383,7 @@ await docScreenshot(page, "badges--celebration-modal--auto-award");
 - **LLM Framework**: `docs/architecture/llms/README.md`
 - **Collaboration System**: `docs/commenting_system/README.md`
 - **Auth Pattern (detailed)**: `frontend/src/docs/AUTHENTICATION_PATTERN.md`
+- **Documentation Screenshots**: `docs/development/screenshots.md`
 
 ## Branch Strategy
 
