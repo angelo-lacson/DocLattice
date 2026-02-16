@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { VersionHistoryPanelTestWrapper } from "./VersionHistoryPanelTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("VersionHistoryPanel", () => {
   test("renders modal when open", async ({ mount, page }) => {
@@ -83,6 +84,8 @@ test.describe("VersionHistoryPanel", () => {
     await expect(page.getByText("1.00 MB")).toBeVisible();
     await expect(page.getByText("500.0 KB")).toBeVisible();
     await expect(page.getByText("250.0 KB")).toBeVisible();
+
+    await docScreenshot(page, "versioning--history-panel--with-versions");
   });
 
   test("shows error message on fetch failure", async ({ mount, page }) => {

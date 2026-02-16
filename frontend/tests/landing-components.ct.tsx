@@ -189,6 +189,10 @@ test.describe("CompactLeaderboard Component", () => {
     });
     await expect(page.locator("text=activeuser")).toBeVisible();
 
+    await docScreenshot(page, "landing--leaderboard--with-data", {
+      element: component,
+    });
+
     await component.unmount();
   });
 

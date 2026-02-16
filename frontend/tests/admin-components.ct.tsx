@@ -8,6 +8,7 @@ import {
   CorpusAgentManagementWrapper,
   SystemSettingsWrapper,
 } from "./AdminComponentsTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // GraphQL queries/mutations used by GlobalAgentManagement
 const GET_GLOBAL_AGENTS = gql`
@@ -255,6 +256,8 @@ test.describe("GlobalAgentManagement Component", () => {
     await expect(
       page.locator("label:has-text('System Instructions')")
     ).toBeVisible();
+
+    await docScreenshot(page, "admin--agent-config--create-modal");
 
     await component.unmount();
   });
