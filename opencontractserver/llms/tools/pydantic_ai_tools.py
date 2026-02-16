@@ -44,7 +44,7 @@ async def _check_user_permissions(
     Raises:
         PermissionError: If user lacks READ permission on document or corpus
     """
-    from channels.db import database_sync_to_async
+    from asgiref.sync import sync_to_async
 
     deps = ctx.deps
     if deps is None:
@@ -98,7 +98,9 @@ async def _check_user_permissions(
         # Use visible_to_user() queryset which properly handles creator access,
         # public status, and guardian permissions — unlike user_has_permission_for_obj
         # which misses creator-based access (see its docstring warning).
-        has_perm = await database_sync_to_async(
+        # Use Django's native aexists() to avoid thread-hopping via
+        # database_sync_to_async, which breaks under TestCase transaction isolation.
+        has_perm = await sync_to_async(
             lambda: Document.objects.visible_to_user(user)
             .filter(pk=document_id)
             .exists()
@@ -112,7 +114,7 @@ async def _check_user_permissions(
             )
 
     if corpus_id:
-        has_perm = await database_sync_to_async(
+        has_perm = await sync_to_async(
             lambda: Corpus.objects.visible_to_user(user).filter(pk=corpus_id).exists()
         )()
         if not has_perm:
