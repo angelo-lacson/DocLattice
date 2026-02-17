@@ -377,8 +377,8 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     await page.waitForTimeout(500);
 
-    // Verify Quick Create mode is visible before switching
-    await expect(page.locator("text=Quick Create Moderator")).toBeVisible();
+    // Verify Quick Create inline form is visible before switching
+    await expect(page.locator("label:has-text('Agent Name')")).toBeVisible();
 
     // Switch to "Use Existing Agent" mode
     await page.locator("text=Use Existing Agent").click();
@@ -387,8 +387,10 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
     // Should show existing agent selection UI
     await expect(page.locator("text=Select agent configuration")).toBeVisible();
 
-    // Quick create mode should not be visible
-    await expect(page.locator("text=Quick Create Moderator")).not.toBeVisible();
+    // Inline agent form fields should no longer be visible
+    await expect(
+      page.locator("label:has-text('Agent Name')")
+    ).not.toBeVisible();
 
     await docScreenshot(
       page,
