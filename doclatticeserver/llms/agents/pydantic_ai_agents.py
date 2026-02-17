@@ -314,15 +314,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
     # care of collecting the reasoning timeline.
 
     async def _stream_core(
-        self, message: str, **kwargs
+        self,
+        message: str,
+        *,
+        force_llm_id: int | None = None,
+        force_user_msg_id: int | None = None,
+        initial_timeline: list[dict] | None = None,
+        **kwargs,
     ) -> AsyncGenerator[UnifiedStreamEvent, None]:
         """Internal streaming generator – TimelineStreamMixin adds timeline."""
 
         logger.info(f"[PydanticAI stream] Starting stream with message: {message!r}")
-
-        # Extract optional overrides (used by resume_with_approval)
-        force_llm_id: int | None = kwargs.pop("force_llm_id", None)
-        force_user_msg_id: int | None = kwargs.pop("force_user_msg_id", None)
 
         user_msg_id: int | None = force_user_msg_id
         llm_msg_id: int | None = force_llm_id
@@ -385,9 +387,6 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         # Allow callers (e.g. resume_with_approval) to inject pre-built
         # timeline entries so they appear in both the persisted DB record
         # and the FinalEvent sent to the frontend.
-        initial_timeline: list[dict] | None = stream_kwargs.pop(
-            "initial_timeline", None
-        )
         if initial_timeline:
             for entry in initial_timeline:
                 builder.add(entry)
@@ -1251,7 +1250,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             # Signal post-approval context so closures (e.g. ask_document_tool)
             # can bypass sub-agent approval gates without exposing a parameter
             # that the LLM could abuse.
-            self.config._approval_bypass_allowed = True  # type: ignore[attr-defined]
+            self.config._approval_bypass_allowed = True
 
             # Try to execute the tool
             tool_executed = False
@@ -1327,7 +1326,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         )
                         raise
             finally:
-                self.config._approval_bypass_allowed = False  # type: ignore[attr-defined]
+                self.config._approval_bypass_allowed = False
 
             tool_result = {"result": result}
             status_str = "approved"
@@ -1373,6 +1372,12 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         # so the LLM sees a proper tool-call / tool-return pair when it resumes.
         # Without this the LLM receives a text continuation prompt and often
         # re-invokes the same tool, creating an infinite approval loop.
+        #
+        # NOTE: These entries are injected as *historical context*, not live
+        # tool calls.  pydantic-ai's iter() treats message_history entries as
+        # past state and does NOT re-evaluate requires_approval for them.
+        # The actual tool execution has already completed above, so there is
+        # no risk of re-triggering the approval gate here.
         tool_call_id = pending.get("tool_call_id") or str(uuid4())
         if approved:
             resume_history = await self._get_message_history() or []

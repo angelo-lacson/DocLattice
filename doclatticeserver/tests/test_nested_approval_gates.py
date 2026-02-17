@@ -219,6 +219,20 @@ class TestNestedApprovalGates(TransactionTestCase):
         self.assertIsNotNone(fn, "ask_document tool not found in effective_tools")
         return fn
 
+    def _make_ctx(self, *, skip_approval_gate: bool = False):
+        """Build a lightweight tool-call context stub for ask_document tests."""
+
+        class _Ctx:
+            tool_call_id = "test-call"
+            deps = types.SimpleNamespace(
+                skip_approval_gate=skip_approval_gate,
+                user_id=self.user.id,
+                document_id=self.document.id,
+                corpus_id=self.corpus.id,
+            )
+
+        return _Ctx()
+
     # ------------------------------------------------------------------
     # Tests: ask_document_tool approval propagation
     # ------------------------------------------------------------------
@@ -234,19 +248,11 @@ class TestNestedApprovalGates(TransactionTestCase):
             new_callable=AsyncMock,
             return_value=agent._mock_sub_agent,
         ):
-
-            class _Ctx:
-                tool_call_id = "test-call"
-                deps = types.SimpleNamespace(
-                    skip_approval_gate=False,
-                    user_id=self.user.id,
-                    document_id=self.document.id,
-                    corpus_id=self.corpus.id,
-                )
+            ctx = self._make_ctx()
 
             with self.assertRaises(ToolConfirmationRequired) as cm:
                 await ask_doc_fn(
-                    _Ctx(),
+                    ctx,
                     document_id=self.document.id,
                     question="What is this document about?",
                 )
@@ -277,18 +283,10 @@ class TestNestedApprovalGates(TransactionTestCase):
             new_callable=AsyncMock,
             return_value=agent._mock_sub_agent,
         ):
-
-            class _Ctx:
-                tool_call_id = "test-call"
-                deps = types.SimpleNamespace(
-                    skip_approval_gate=False,
-                    user_id=self.user.id,
-                    document_id=self.document.id,
-                    corpus_id=self.corpus.id,
-                )
+            ctx = self._make_ctx()
 
             result = await ask_doc_fn(
-                _Ctx(),
+                ctx,
                 document_id=self.document.id,
                 question="What is this document about?",
             )
@@ -321,18 +319,10 @@ class TestNestedApprovalGates(TransactionTestCase):
             new_callable=AsyncMock,
             return_value=agent._mock_sub_agent,
         ):
-
-            class _Ctx:
-                tool_call_id = "test-call"
-                deps = types.SimpleNamespace(
-                    skip_approval_gate=False,
-                    user_id=self.user.id,
-                    document_id=self.document.id,
-                    corpus_id=self.corpus.id,
-                )
+            ctx = self._make_ctx()
 
             result = await ask_doc_fn(
-                _Ctx(),
+                ctx,
                 document_id=self.document.id,
                 question="Test",
             )
@@ -360,18 +350,10 @@ class TestNestedApprovalGates(TransactionTestCase):
             new_callable=AsyncMock,
             return_value=agent._mock_sub_agent,
         ):
-
-            class _Ctx:
-                tool_call_id = "test-call"
-                deps = types.SimpleNamespace(
-                    skip_approval_gate=False,
-                    user_id=self.user.id,
-                    document_id=self.document.id,
-                    corpus_id=self.corpus.id,
-                )
+            ctx = self._make_ctx()
 
             result = await ask_doc_fn(
-                _Ctx(),
+                ctx,
                 document_id=self.document.id,
                 question="Test",
             )
@@ -392,18 +374,10 @@ class TestNestedApprovalGates(TransactionTestCase):
             new_callable=AsyncMock,
             return_value=agent._mock_sub_agent,
         ):
-
-            class _Ctx:
-                tool_call_id = "test-call"
-                deps = types.SimpleNamespace(
-                    skip_approval_gate=False,
-                    user_id=self.user.id,
-                    document_id=self.document.id,
-                    corpus_id=self.corpus.id,
-                )
+            ctx = self._make_ctx()
 
             result = await ask_doc_fn(
-                _Ctx(),
+                ctx,
                 document_id=self.document.id,
                 question="Test",
             )
@@ -819,21 +793,13 @@ class TestNestedApprovalGates(TransactionTestCase):
             new_callable=AsyncMock,
             return_value=_MockSubAgent(normal_events),
         ) as mock_for_doc:
-
-            class _Ctx:
-                tool_call_id = "test-call"
-                deps = types.SimpleNamespace(
-                    skip_approval_gate=False,
-                    user_id=self.user.id,
-                    document_id=self.document.id,
-                    corpus_id=self.corpus.id,
-                )
+            ctx = self._make_ctx()
 
             # Simulate post-approval context
             agent.config._approval_bypass_allowed = True
             try:
                 await ask_doc_fn(
-                    _Ctx(),
+                    ctx,
                     document_id=self.document.id,
                     question="Test",
                 )
@@ -863,20 +829,12 @@ class TestNestedApprovalGates(TransactionTestCase):
             new_callable=AsyncMock,
             return_value=_MockSubAgent(normal_events),
         ) as mock_for_doc:
-
-            class _Ctx:
-                tool_call_id = "test-call"
-                deps = types.SimpleNamespace(
-                    skip_approval_gate=False,
-                    user_id=self.user.id,
-                    document_id=self.document.id,
-                    corpus_id=self.corpus.id,
-                )
+            ctx = self._make_ctx()
 
             self.assertFalse(getattr(agent.config, "_approval_bypass_allowed", False))
 
             await ask_doc_fn(
-                _Ctx(),
+                ctx,
                 document_id=self.document.id,
                 question="Test",
             )
@@ -1002,3 +960,24 @@ class TestNestedApprovalGates(TransactionTestCase):
         # Non-existent tool should return False
         result_missing = agent._check_tool_requires_approval("nonexistent_tool")
         self.assertFalse(result_missing)
+
+    async def test_update_corpus_description_requires_approval(self):
+        """update_corpus_description should be gated by requires_approval=True."""
+        agent = await self._create_corpus_agent()
+        tool_fn = _extract_tool(agent._effective_tools, "update_corpus_description")
+        self.assertIsNotNone(
+            tool_fn, "update_corpus_description tool not found in effective_tools"
+        )
+
+        # The tool callable should carry requires_approval via core_tool
+        core_tool = getattr(tool_fn, "core_tool", None)
+        if core_tool is not None:
+            self.assertTrue(
+                core_tool.requires_approval,
+                "update_corpus_description core_tool.requires_approval should be True",
+            )
+        # Also check the direct attribute set by the wrapper
+        self.assertTrue(
+            getattr(tool_fn, "requires_approval", False),
+            "update_corpus_description should have requires_approval=True",
+        )
