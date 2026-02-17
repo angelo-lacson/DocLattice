@@ -10,6 +10,7 @@ import {
   GET_AGENT_CONFIGURATIONS,
 } from "../src/graphql/queries";
 import { CREATE_CORPUS_ACTION } from "../src/graphql/mutations";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // Mock data
 const mockFieldset = {
@@ -183,6 +184,10 @@ test.describe("CreateCorpusActionModal - Trigger Options", () => {
     );
     await expect(triggerDropdown).toContainText("On Document Add");
 
+    await docScreenshot(page, "corpus-actions--create-modal--initial", {
+      fullPage: true,
+    });
+
     await component.unmount();
   });
 });
@@ -306,6 +311,12 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
       page.locator("text=Lock thread to prevent").first()
     ).toBeVisible();
 
+    await docScreenshot(
+      page,
+      "corpus-actions--create-modal--agent-thread-quick",
+      { fullPage: true }
+    );
+
     await component.unmount();
   });
 
@@ -338,6 +349,46 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
     await expect(
       page.locator("text=a new message is posted to a thread")
     ).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should show existing agent mode for thread triggers", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <MockedProvider mocks={createStandardMocks()} addTypename={false}>
+        <CreateCorpusActionModal
+          corpusId="Q29ycHVzVHlwZTox"
+          open={true}
+          onClose={() => {}}
+          onSuccess={() => {}}
+        />
+      </MockedProvider>
+    );
+
+    // Select "On New Thread" trigger
+    const triggerDropdown = page.locator(
+      '.field:has(label:text("Trigger")) div.ui.dropdown'
+    );
+    await triggerDropdown.click();
+    await page.locator('[role="option"]:has-text("On New Thread")').click();
+
+    await page.waitForTimeout(500);
+
+    // Switch to "Use Existing Agent" mode
+    await page.locator("text=Use Existing Agent").click();
+    await page.waitForTimeout(300);
+
+    // Should show existing agent selection UI
+    await expect(page.locator("text=Select agent configuration")).toBeVisible();
+
+    await docScreenshot(
+      page,
+      "corpus-actions--create-modal--agent-thread-existing",
+      { fullPage: true }
+    );
 
     await component.unmount();
   });
@@ -557,6 +608,10 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
       page.locator("small:has-text('Pre-authorized tools will execute')")
     ).toBeVisible();
 
+    await docScreenshot(page, "corpus-actions--create-modal--agent-document", {
+      fullPage: true,
+    });
+
     await component.unmount();
   });
 });
@@ -751,6 +806,10 @@ test.describe("CreateCorpusActionModal - Fieldset Configuration", () => {
       page.locator("text=Select a fieldset to automatically extract data")
     ).toBeVisible();
 
+    await docScreenshot(page, "corpus-actions--create-modal--fieldset-config", {
+      fullPage: true,
+    });
+
     await component.unmount();
   });
 });
@@ -788,6 +847,10 @@ test.describe("CreateCorpusActionModal - Analyzer Configuration", () => {
     await expect(
       page.locator("text=Select an analyzer to automatically run analysis")
     ).toBeVisible();
+
+    await docScreenshot(page, "corpus-actions--create-modal--analyzer-config", {
+      fullPage: true,
+    });
 
     await component.unmount();
   });
