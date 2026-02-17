@@ -278,6 +278,12 @@ class AgentConfig:
     # Tool configuration
     tools: list[Any] = field(default_factory=list)
 
+    # Transient flag set by resume_with_approval() so that sub-agent closures
+    # (e.g. ask_document_tool) can bypass nested approval gates after the user
+    # has already approved.  Safe to mutate: AgentConfig is instantiated
+    # per-request via UnifiedAgentFactory, never shared across sessions.
+    _approval_bypass_allowed: bool = False
+
 
 @dataclass
 class DocumentAgentContext:
