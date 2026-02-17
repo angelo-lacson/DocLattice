@@ -26,9 +26,37 @@ Corpus actions automatically wait for documents to be fully processed (parsed, t
 
 ## Via the GUI
 
-For Corpuses you *own*, you can go to the Corpus settings tab and view configured actions or configure new actions:
+For Corpuses you *own*, you can go to the Corpus settings tab and view configured actions or configure new actions.
 
-![Corpus Actions](../assets/images/screenshots/Corpus_Action_Settings.png)
+### Action List View
+
+The settings tab shows all configured actions with their type, trigger, status, and task instructions:
+
+![Corpus Actions List](../assets/images/screenshots/auto/corpus-actions--list-view--with-actions.png)
+
+### Creating a New Action
+
+Click **Add Action** to open the creation modal. The default view shows fieldset configuration:
+
+![Create Action - Fieldset](../assets/images/screenshots/auto/corpus-actions--create-modal--fieldset-config.png)
+
+Switch to **Analyzer** for classification actions:
+
+![Create Action - Analyzer](../assets/images/screenshots/auto/corpus-actions--create-modal--analyzer-config.png)
+
+Switch to **Agent** for AI-powered actions with pre-authorized tools:
+
+![Create Action - Agent](../assets/images/screenshots/auto/corpus-actions--create-modal--agent-document.png)
+
+### Thread Moderation Actions
+
+For thread/message triggers, a quick-create moderator mode is available with pre-selected moderation tools:
+
+![Create Action - Thread Moderator](../assets/images/screenshots/auto/corpus-actions--create-modal--agent-thread-quick.png)
+
+Or select an existing agent configuration:
+
+![Create Action - Existing Agent](../assets/images/screenshots/auto/corpus-actions--create-modal--agent-thread-existing.png)
 
 ## Via API
 
