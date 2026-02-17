@@ -382,6 +382,16 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         # Timeline builder – captures reasoning steps for persistence/UI
         builder = TimelineBuilder()
 
+        # Allow callers (e.g. resume_with_approval) to inject pre-built
+        # timeline entries so they appear in both the persisted DB record
+        # and the FinalEvent sent to the frontend.
+        initial_timeline: list[dict] | None = stream_kwargs.pop(
+            "initial_timeline", None
+        )
+        if initial_timeline:
+            for entry in initial_timeline:
+                builder.add(entry)
+
         try:
             logger.debug(
                 f"[DIAGNOSTIC] Entering pydantic_ai agent.iter() for message: {message!r}"
@@ -1458,6 +1468,53 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 llm_message_id=resumed_llm_id,
             )
 
+            # ----------------------------------------------------------
+            # Emit tool_call / tool_result ThoughtEvents so the frontend
+            # adds them to this message's timeline in real-time, and
+            # build initial_timeline entries for DB persistence.
+            # ----------------------------------------------------------
+            tool_args_str = json.dumps(pending.get("arguments", {}), default=str)
+            tool_result_str = json.dumps(tool_result, default=str)
+
+            # ThoughtEvent for tool_call
+            yield ThoughtEvent(
+                thought=f"Calling tool `{tool_name}` …",
+                llm_message_id=resumed_llm_id,
+                user_message_id=user_message_id,
+                metadata={
+                    "tool_name": tool_name,
+                    "args": tool_args_str,
+                    "message_id": str(resumed_llm_id),
+                },
+            )
+
+            # ThoughtEvent for tool_result
+            yield ThoughtEvent(
+                thought=f"Tool `{tool_name}` returned result",
+                llm_message_id=resumed_llm_id,
+                user_message_id=user_message_id,
+                metadata={
+                    "tool_name": tool_name,
+                    "result": tool_result_str[:500],
+                    "message_id": str(resumed_llm_id),
+                },
+            )
+
+            # Pre-built timeline entries for DB persistence (injected into
+            # _stream_core's TimelineBuilder via initial_timeline kwarg)
+            initial_timeline = [
+                {
+                    "type": "tool_call",
+                    "tool": tool_name,
+                    "args": tool_args_str,
+                },
+                {
+                    "type": "tool_result",
+                    "tool": tool_name,
+                    "result": tool_result_str[:500],
+                },
+            ]
+
             # ----------------------------------------------
             # Run streaming continuation via _stream_core with native
             # tool-call/tool-return history so the LLM sees a completed
@@ -1489,6 +1546,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 force_user_msg_id=user_message_id,
                 deps=self.agent_deps,
                 message_history=resume_history,
+                initial_timeline=initial_timeline,
             ):
                 if isinstance(ev, FinalEvent):
                     ev.metadata["approval_decision"] = status_str
