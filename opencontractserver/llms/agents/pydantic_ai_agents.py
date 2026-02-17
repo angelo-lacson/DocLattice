@@ -2363,6 +2363,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 "new_content": "Full markdown content",
             },
             requires_corpus=True,
+            requires_approval=True,
         )
 
         # -----------------------------

@@ -888,3 +888,117 @@ class TestNestedApprovalGates(TransactionTestCase):
                 "Sub-agent should be created with skip_approval_gate=False "
                 "when config._approval_bypass_allowed is not set",
             )
+
+    # ------------------------------------------------------------------
+    # Diagnostic: _check_tool_requires_approval with REAL pydantic-ai Agent
+    # ------------------------------------------------------------------
+
+    async def test_check_tool_requires_approval_with_real_pydantic_ai_agent(self):
+        """Verify _check_tool_requires_approval finds requires_approval=True
+        through pydantic-ai's Tool.function attribute chain.
+
+        This uses a REAL pydantic-ai Agent (not mocked) to confirm the
+        attribute lookup works with actual pydantic-ai internals.
+        """
+        from pydantic_ai.agent import Agent as RealPydanticAIAgent
+
+        from opencontractserver.llms.agents.core_agents import AgentConfig
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            PydanticAIDependencies,
+            PydanticAIToolFactory,
+        )
+
+        # Create a tool with requires_approval=True via the factory
+        async def my_approval_tool(new_content: str) -> dict:
+            """A tool that requires approval."""
+            return {"result": "done"}
+
+        wrapped = PydanticAIToolFactory.from_function(
+            my_approval_tool,
+            name="needs_approval_tool",
+            description="Tool that needs approval",
+            requires_approval=True,
+        )
+
+        # Also create a tool WITHOUT approval for contrast
+        async def my_free_tool(query: str) -> str:
+            """A tool that does not require approval."""
+            return "ok"
+
+        free_wrapped = PydanticAIToolFactory.from_function(
+            my_free_tool,
+            name="free_tool",
+            description="Tool that does not need approval",
+            requires_approval=False,
+        )
+
+        # Create a REAL pydantic-ai Agent with these tools
+        real_agent = RealPydanticAIAgent(
+            model="test",
+            system_prompt="test",
+            deps_type=PydanticAIDependencies,
+            tools=[wrapped, free_wrapped],
+        )
+
+        # Create a minimal PydanticAICoreAgent to access _check_tool_requires_approval
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        config = AgentConfig(user_id=self.user.id)
+        conv_mgr = MagicMock()
+        deps = PydanticAIDependencies(user_id=self.user.id)
+
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=real_agent,
+            agent_deps=deps,
+        )
+
+        # Diagnostic: inspect what pydantic-ai stored
+        tool_obj = real_agent._function_tools.get("needs_approval_tool")
+        self.assertIsNotNone(
+            tool_obj,
+            "pydantic-ai should store the tool in _function_tools",
+        )
+
+        # Check the function attribute chain
+        func = getattr(tool_obj, "function", None)
+        self.assertIsNotNone(func, "Tool should have a 'function' attribute")
+        self.assertTrue(
+            hasattr(func, "core_tool"),
+            f"function should have core_tool attr, has: {dir(func)}",
+        )
+        self.assertTrue(
+            func.core_tool.requires_approval,
+            "core_tool.requires_approval should be True",
+        )
+        self.assertTrue(
+            hasattr(func, "requires_approval"),
+            "function should have requires_approval attr directly",
+        )
+        self.assertTrue(
+            func.requires_approval,
+            "function.requires_approval should be True",
+        )
+
+        # NOW test _check_tool_requires_approval
+        result = agent._check_tool_requires_approval("needs_approval_tool")
+        self.assertTrue(
+            result,
+            "_check_tool_requires_approval should return True for a tool "
+            "with requires_approval=True registered in pydantic-ai Agent",
+        )
+
+        # And the free tool should return False
+        result_free = agent._check_tool_requires_approval("free_tool")
+        self.assertFalse(
+            result_free,
+            "_check_tool_requires_approval should return False for a tool "
+            "with requires_approval=False",
+        )
+
+        # Non-existent tool should return False
+        result_missing = agent._check_tool_requires_approval("nonexistent_tool")
+        self.assertFalse(result_missing)
