@@ -563,25 +563,43 @@ class TestPostProcessor(BasePostProcessor):
         with override_settings(DEFAULT_EMBEDDING_DIMENSION=768):
             self.assertEqual(get_dimension_from_embedder("non.existent.Embedder"), 768)
 
-    @override_settings(
-        DEFAULT_EMBEDDERS_BY_FILETYPE={
+    def test_get_default_embedder_for_filetype(self) -> None:
+        """get_default_embedder_for_filetype delegates to get_preferred_embedder
+        which reads from the PipelineSettings singleton."""
+        from unittest.mock import patch
+
+        mock_embedders = {
             "application/pdf": "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder384",
             "text/plain": "opencontractserver.pipeline.embedders.temp_embedder.TestEmbedder768",
         }
-    )
-    def test_get_default_embedder_for_filetype(self) -> None:
 
-        # Test getting embedder for PDF with dimension 384
-        embedder = get_default_embedder_for_filetype("application/pdf")
-        self.assertEqual(embedder.title, "Test Embedder 384")
+        with patch(
+            "opencontractserver.pipeline.utils.get_preferred_embedder"
+        ) as mock_get_pref:
+            # Simulate get_preferred_embedder returning classes via import
+            import importlib
 
-        # Test getting embedder for TXT with dimension 768
-        embedder = get_default_embedder_for_filetype("text/plain")
-        self.assertEqual(embedder.title, "Test Embedder 768")
+            def side_effect(mimetype):
+                path = mock_embedders.get(mimetype)
+                if not path:
+                    return None
+                module_path, class_name = path.rsplit(".", 1)
+                module = importlib.import_module(module_path)
+                return getattr(module, class_name)
 
-        # Test getting embedder for non-existent mimetype
-        embedder = get_default_embedder_for_filetype("application/json")
-        self.assertIsNone(embedder)
+            mock_get_pref.side_effect = side_effect
+
+            # Test getting embedder for PDF with dimension 384
+            embedder = get_default_embedder_for_filetype("application/pdf")
+            self.assertEqual(embedder.title, "Test Embedder 384")
+
+            # Test getting embedder for TXT with dimension 768
+            embedder = get_default_embedder_for_filetype("text/plain")
+            self.assertEqual(embedder.title, "Test Embedder 768")
+
+            # Test getting embedder for non-existent mimetype
+            embedder = get_default_embedder_for_filetype("application/json")
+            self.assertIsNone(embedder)
 
     def test_find_embedder_for_filetype(self) -> None:
         """

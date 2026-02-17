@@ -2294,13 +2294,15 @@ class Query(graphene.ObjectType):
         # which respects corpus-specific embedders
         if document_pk or corpus_pk:
             # Issue #437: Use corpus.preferred_embedder for corpus-scoped search
-            # instead of the global DEFAULT_EMBEDDER. Each corpus has a frozen
+            # instead of the global default embedder. Each corpus has a frozen
             # embedder binding set at creation, and all annotations in the corpus
             # have embeddings for that embedder. This ensures consistent search
-            # even if DEFAULT_EMBEDDER changes after the corpus was created.
+            # even if the default embedder changes after the corpus was created.
             # When no corpus_id is provided (document-only search), fall back to
-            # DEFAULT_EMBEDDER for backward compatibility.
-            scoped_embedder_path = settings.DEFAULT_EMBEDDER
+            # the PipelineSettings default embedder.
+            from opencontractserver.pipeline.utils import get_default_embedder_path
+
+            scoped_embedder_path = get_default_embedder_path()
             if corpus_pk:
                 # Fetch the corpus's frozen embedder directly to avoid a
                 # redundant DB lookup inside CoreAnnotationVectorStore.

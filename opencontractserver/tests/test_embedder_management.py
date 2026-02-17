@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, TestCase
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
@@ -54,11 +54,12 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
         self.assertEqual(corpus.preferred_embedder, custom_path)
         self.assertEqual(corpus.created_with_embedder, custom_path)
 
-    @override_settings(
-        DEFAULT_EMBEDDER="opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
+    @patch(
+        "opencontractserver.corpuses.models.get_default_embedder_path",
+        return_value="opencontractserver.pipeline.embedders.test_embedder.TestEmbedder",
     )
-    def test_auto_population_uses_current_default(self):
-        """Auto-population uses the DEFAULT_EMBEDDER active at creation time."""
+    def test_auto_population_uses_current_default(self, _mock_path):
+        """Auto-population uses the default embedder from PipelineSettings."""
         corpus = Corpus.objects.create(title="Current Default", creator=self.user)
         self.assertEqual(
             corpus.preferred_embedder,

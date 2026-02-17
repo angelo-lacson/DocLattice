@@ -480,10 +480,12 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             )
             return paths[0]
         else:
+            from opencontractserver.pipeline.utils import get_default_embedder_path
+
             logger.debug(
                 f"[Session {self.session_id}] No existing embedder found, using default"
             )
-            return settings.DEFAULT_EMBEDDER
+            return get_default_embedder_path()
 
     # -------------------------------------------------------------------------
     #  Conversation title generation

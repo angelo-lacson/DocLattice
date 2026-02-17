@@ -7,7 +7,6 @@ changes that could cause search inconsistencies.
 
 import logging
 
-from django.conf import settings
 from django.core.checks import Tags, Warning, register
 
 logger = logging.getLogger(__name__)
@@ -16,14 +15,15 @@ logger = logging.getLogger(__name__)
 @register(Tags.models)
 def check_default_embedder_consistency(app_configs, **kwargs):
     """
-    Warn if DEFAULT_EMBEDDER has changed since existing corpuses were created.
+    Warn if default embedder has changed since existing corpuses were created.
 
-    When DEFAULT_EMBEDDER changes, existing annotations retain embeddings from
-    the old embedder while new annotations get the new one. Global search
+    When the default embedder changes, existing annotations retain embeddings
+    from the old embedder while new annotations get the new one. Global search
     (which filters by embedder_path) will silently miss old content.
 
     This check queries the database for corpuses whose created_with_embedder
-    differs from the current DEFAULT_EMBEDDER and issues a warning if found.
+    differs from the current default embedder (from PipelineSettings) and
+    issues a warning if found.
     """
     errors = []
 
@@ -47,14 +47,23 @@ def check_default_embedder_consistency(app_configs, **kwargs):
         if "created_with_embedder" not in columns:
             return errors
 
-        from opencontractserver.corpuses.models import Corpus
+        # Also need PipelineSettings table to exist
+        if "documents_pipelinesettings" not in tables:
+            return errors
 
-        current_default = getattr(settings, "DEFAULT_EMBEDDER", None)
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.pipeline.utils import get_default_embedder_path
+
+        current_default = get_default_embedder_path()
         if not current_default:
             errors.append(
                 Warning(
-                    "DEFAULT_EMBEDDER is not configured.",
-                    hint="Set DEFAULT_EMBEDDER in your Django settings.",
+                    "Default embedder is not configured in PipelineSettings.",
+                    hint=(
+                        "Set a default embedder via the Pipeline Settings admin UI, "
+                        "the updatePipelineSettings GraphQL mutation, or run: "
+                        "python manage.py migrate_pipeline_settings --sync-preferences"
+                    ),
                     id="opencontracts.W001",
                 )
             )
@@ -71,7 +80,7 @@ def check_default_embedder_consistency(app_configs, **kwargs):
         if mismatched_count > 0:
             errors.append(
                 Warning(
-                    f"DEFAULT_EMBEDDER has changed. {mismatched_count} corpus(es) were "
+                    f"Default embedder has changed. {mismatched_count} corpus(es) were "
                     f"created with a different embedder than the current default "
                     f"({current_default}). Global search may return incomplete results "
                     f"for annotations in those corpuses.",
@@ -79,8 +88,8 @@ def check_default_embedder_consistency(app_configs, **kwargs):
                         "Corpus-scoped search uses each corpus's frozen "
                         "preferred_embedder and is unaffected. To fix global search, "
                         "consider re-embedding affected corpuses using the "
-                        "reEmbedCorpus mutation, or revert DEFAULT_EMBEDDER to its "
-                        "previous value."
+                        "reEmbedCorpus mutation, or update the default embedder in "
+                        "Pipeline Settings."
                     ),
                     id="opencontracts.W002",
                 )
