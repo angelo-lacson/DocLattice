@@ -1359,19 +1359,29 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 "Please inform the user and ask if they would like to try a different approach."
             )
 
-        # Append tool_return part to history only when *approved*; for rejected we
-        # simply finish the message lifecycle and emit a final event.
+        # Build native pydantic-ai history with ToolCallPart + ToolReturnPart
+        # so the LLM sees a proper tool-call / tool-return pair when it resumes.
+        # Without this the LLM receives a text continuation prompt and often
+        # re-invokes the same tool, creating an infinite approval loop.
+        tool_call_id = pending.get("tool_call_id") or str(uuid4())
         if approved:
-            tool_call_id = pending.get("tool_call_id") or str(uuid4())
+            resume_history = await self._get_message_history() or []
 
+            # 1) The LLM's original tool call (ModelResponse)
+            tool_call_part = ToolCallPart(
+                tool_name=tool_name,
+                args=json.dumps(pending.get("arguments", {}), default=str),
+                tool_call_id=tool_call_id,
+            )
+            resume_history.append(ModelResponse(parts=[tool_call_part]))
+
+            # 2) The tool return (ModelRequest)
             tool_return_part = ToolReturnPart(
                 tool_name=tool_name,
                 content=json.dumps(tool_result, default=str),
                 tool_call_id=tool_call_id,
             )
-
-            history = await self._get_message_history() or []
-            history.append(ModelRequest(parts=[tool_return_part]))
+            resume_history.append(ModelRequest(parts=[tool_return_part]))
 
         # ------------------------------------------------------------------
         # Mark the original paused message as completed/rejected BEFORE any
@@ -1449,35 +1459,36 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             )
 
             # ----------------------------------------------
-            # Run normal streaming continuation via _stream_core
+            # Run streaming continuation via _stream_core with native
+            # tool-call/tool-return history so the LLM sees a completed
+            # tool round-trip and can produce a natural follow-up.
             # ----------------------------------------------
 
             accumulated_content = ""
 
-            # Create a continuation prompt that includes the tool result and
-            # provides clear guidance if the tool failed
             if tool_succeeded:
                 continuation_prompt = (
-                    f"The tool '{tool_name}' was executed with user approval and returned: "
-                    f"{json.dumps(tool_result, indent=2)}. "
-                    f"Please continue with your original task based on this result."
+                    "The user approved the tool call. "
+                    "Please summarise what was done and continue."
                 )
             else:
                 continuation_prompt = (
-                    f"The tool '{tool_name}' was executed with user approval but did not succeed. "
-                    f"Result: {json.dumps(tool_result, indent=2)}. "
+                    f"The tool '{tool_name}' was approved but did not succeed. "
                     f"\n\n{failure_message}\n\n"
-                    f"IMPORTANT: Do NOT retry the same tool call. Instead, inform the user "
-                    f"about what happened and wait for their guidance."
+                    "IMPORTANT: Do NOT retry the same tool call. Instead, inform the user "
+                    "about what happened and wait for their guidance."
                 )
 
-            logger.info(f"Resuming with continuation prompt: {continuation_prompt}")
+            logger.info(
+                f"Resuming with native tool history and prompt: {continuation_prompt}"
+            )
 
             async for ev in self._stream_core(
                 continuation_prompt,
                 force_llm_id=resumed_llm_id,
                 force_user_msg_id=user_message_id,
                 deps=self.agent_deps,
+                message_history=resume_history,
             ):
                 if isinstance(ev, FinalEvent):
                     ev.metadata["approval_decision"] = status_str
