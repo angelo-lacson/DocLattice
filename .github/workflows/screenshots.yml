@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: write
+  checks: read
+  statuses: read
 
 defaults:
   run:
@@ -53,6 +55,76 @@ jobs:
         # CI workflow already gates on test success.
         continue-on-error: true
 
+      - name: Wait for CI workflows to pass
+        id: ci-gate
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          echo "Waiting for CI workflows on PR #${PR_NUMBER}..."
+
+          # Poll for up to 60 minutes (component tests take ~10min, backend ~60min)
+          MAX_ATTEMPTS=120
+          SLEEP_SECONDS=30
+          # Backend CI always runs on PRs to main; Frontend CI only when
+          # frontend/ changes.  We require backend checks unconditionally and
+          # frontend checks only when they appear.
+          BACKEND_CHECKS=("linter" "pytest")
+          FRONTEND_CHECKS=("Lint" "Unit Tests" "Component Tests")
+
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            ALL_PASSED=true
+            ANY_FAILED=false
+
+            CHECKS_OUTPUT=$(gh pr checks "$PR_NUMBER" 2>&1 || true)
+
+            for check in "${BACKEND_CHECKS[@]}"; do
+              STATUS=$(echo "$CHECKS_OUTPUT" | grep -F "$check" | head -1 | awk '{print $2}')
+              if [ "$STATUS" = "fail" ]; then
+                echo "FAILED: $check"
+                ANY_FAILED=true
+                break
+              elif [ "$STATUS" != "pass" ]; then
+                ALL_PASSED=false
+              fi
+            done
+
+            # Only gate on frontend checks if they exist in the output
+            if [ "$ANY_FAILED" = "false" ]; then
+              for check in "${FRONTEND_CHECKS[@]}"; do
+                STATUS=$(echo "$CHECKS_OUTPUT" | grep -F "$check" | head -1 | awk '{print $2}')
+                if [ -z "$STATUS" ]; then
+                  continue  # Check not present — frontend CI didn't trigger
+                elif [ "$STATUS" = "fail" ]; then
+                  echo "FAILED: $check"
+                  ANY_FAILED=true
+                  break
+                elif [ "$STATUS" != "pass" ]; then
+                  ALL_PASSED=false
+                fi
+              done
+            fi
+
+            if [ "$ANY_FAILED" = "true" ]; then
+              echo "ci_passed=false" >> "$GITHUB_OUTPUT"
+              echo "CI check failed — skipping screenshot commit."
+              exit 0
+            fi
+
+            if [ "$ALL_PASSED" = "true" ]; then
+              echo "ci_passed=true" >> "$GITHUB_OUTPUT"
+              echo "All CI checks passed."
+              exit 0
+            fi
+
+            echo "Attempt $attempt/$MAX_ATTEMPTS: CI checks still running, waiting ${SLEEP_SECONDS}s..."
+            sleep $SLEEP_SECONDS
+          done
+
+          echo "ci_passed=false" >> "$GITHUB_OUTPUT"
+          echo "Timed out waiting for CI checks."
+
       - name: Check for screenshot changes
         id: screenshot-check
         working-directory: .
@@ -68,7 +140,7 @@ jobs:
           fi
 
       - name: Commit and push updated screenshots
-        if: steps.screenshot-check.outputs.changed == 'true'
+        if: steps.screenshot-check.outputs.changed == 'true' && steps.ci-gate.outputs.ci_passed == 'true'
         working-directory: .
         run: |
           git config user.name "github-actions[bot]"
