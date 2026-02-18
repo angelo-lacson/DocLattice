@@ -96,6 +96,7 @@ import { useBadgeNotifications } from "./hooks/useBadgeNotifications";
 import { useBadgeCelebration } from "./hooks/useBadgeCelebration";
 import { BadgeCelebrationModal } from "./components/badges/BadgeCelebrationModal";
 import { useJobNotifications } from "./hooks/useJobNotifications";
+import { useRefetchOnAuthChange } from "./hooks/useRefetchOnAuthChange";
 
 export const App = () => {
   const { REACT_APP_USE_AUTH0, REACT_APP_AUDIENCE } = useEnv();
@@ -192,6 +193,10 @@ export const App = () => {
   // Job notification system (real-time via WebSocket) - Issue #624
   // Automatically shows toasts for document processing, extracts, analyses, exports
   useJobNotifications({ showToast: true });
+
+  // Refetch all active queries after any cache clear (login, logout, token refresh)
+  // so mounted components get data appropriate to the new auth context.
+  useRefetchOnAuthChange();
 
   // Set mobile-friendly display settings once when narrow viewport detected
   // CRITICAL: Don't include location/navigate in deps - causes infinite loop!

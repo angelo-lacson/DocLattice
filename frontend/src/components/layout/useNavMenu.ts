@@ -74,8 +74,9 @@ export const useNavMenu = () => {
     userObj(null);
     authStatusVar("ANONYMOUS");
 
-    // Fire-and-forget cache clear (don't block logout on this)
-    // No refetch needed since we're logging out
+    // Fire-and-forget cache clear (don't block logout on this).
+    // The useRefetchOnAuthChange hook skips refetch when authToken is empty,
+    // so no queries are re-issued during logout.
     resetOnAuthChange({ reason: "user_logout", refetchActive: false }).catch(
       (error) =>
         console.warn("[useNavMenu] Cache reset failed on logout:", {
