@@ -183,7 +183,7 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         """Joint text-image embedding for multimodal models."""
 ```
 
-The `MultimodalMicroserviceEmbedder` uses CLIP ViT-L-14 which produces 768d vectors in a **unified vector space** - both text and images share the same embedding space, enabling cross-modal similarity search.
+The `CLIPMicroserviceEmbedder` uses CLIP ViT-L-14 which produces 768d vectors in a **unified vector space** - both text and images share the same embedding space, enabling cross-modal similarity search.
 
 ### 7. Annotation Integration
 
