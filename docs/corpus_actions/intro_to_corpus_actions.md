@@ -46,7 +46,7 @@ Switch to **Analyzer** for classification actions:
 
 Switch to **Agent** for AI-powered actions with pre-authorized tools:
 
-![Create Action - Agent](../assets/images/screenshots/auto/corpus-actions--create-modal--agent-document.png)
+![Create Action - Agent](../assets/images/screenshots/auto/corpus-actions--create-modal--existing-agent-document.png)
 
 ### Thread Moderation Actions
 

@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
-import { Button, Dropdown, Modal } from "semantic-ui-react";
+import { Button, Dropdown, Message, Modal } from "semantic-ui-react";
 import { toast } from "react-toastify";
 
+import { CORPUS_DOCUMENTS_TOC_LIMIT } from "../../assets/configurations/constants";
 import {
   GET_CORPUS_DOCUMENTS_FOR_TOC,
   GetCorpusDocumentsForTocOutput,
@@ -30,11 +31,17 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
 }) => {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
 
-  const { data: docsData, loading: docsLoading } =
-    useQuery<GetCorpusDocumentsForTocOutput>(GET_CORPUS_DOCUMENTS_FOR_TOC, {
-      variables: { corpusId, first: 100 },
-      skip: !open,
-    });
+  const {
+    data: docsData,
+    loading: docsLoading,
+    error: docsError,
+  } = useQuery<GetCorpusDocumentsForTocOutput>(GET_CORPUS_DOCUMENTS_FOR_TOC, {
+    variables: { corpusId, first: CORPUS_DOCUMENTS_TOC_LIMIT },
+    skip: !open,
+  });
+
+  const totalCount = docsData?.documents?.totalCount ?? 0;
+  const isLimitExceeded = totalCount > CORPUS_DOCUMENTS_TOC_LIMIT;
 
   const [runAction, { loading: running }] = useMutation<
     RunCorpusActionOutput,
@@ -77,6 +84,12 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
       <Modal.Header>Run: {actionName}</Modal.Header>
       <Modal.Content>
         <p>Select a document to run this action against:</p>
+        {docsError && (
+          <Message negative>
+            <Message.Header>Failed to load documents</Message.Header>
+            <p>Please try again or check your permissions for this corpus.</p>
+          </Message>
+        )}
         <Dropdown
           placeholder="Select document..."
           fluid
@@ -87,6 +100,12 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
           value={selectedDocId ?? undefined}
           onChange={(_, { value }) => setSelectedDocId(value as string)}
         />
+        {isLimitExceeded && (
+          <Message info size="small">
+            Showing first {CORPUS_DOCUMENTS_TOC_LIMIT} of {totalCount}{" "}
+            documents. Use the search box above to filter.
+          </Message>
+        )}
       </Modal.Content>
       <Modal.Actions>
         <Button onClick={handleClose}>Cancel</Button>

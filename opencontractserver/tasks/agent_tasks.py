@@ -533,6 +533,22 @@ def _resolve_action_tools(action: CorpusAction, trigger: str) -> list[str]:
         tools = action.agent_config.available_tools or []
     if not tools:
         tools = list(DEFAULT_TOOLS_BY_TRIGGER.get(trigger, []))
+
+    # Warn when pre_authorized_tools references tools outside the resolved set.
+    # This catches stale configs from before the semantics change where
+    # pre_authorized_tools also controlled tool availability.
+    if action.pre_authorized_tools:
+        extra = set(action.pre_authorized_tools) - set(tools)
+        if extra:
+            logger.warning(
+                "CorpusAction %s (id=%s) has pre_authorized_tools %s that are "
+                "not in the resolved tool set. pre_authorized_tools now only "
+                "controls approval gates, not tool availability.",
+                action.name,
+                action.id,
+                sorted(extra),
+            )
+
     return tools
 
 
@@ -549,7 +565,10 @@ def _build_document_action_system_prompt(
     - The user's task_instructions
     - Optional supplementary guidance from agent_config.system_instructions
     """
-    from opencontractserver.constants.corpus_actions import TRIGGER_DESCRIPTIONS
+    from opencontractserver.constants.corpus_actions import (
+        MAX_DESCRIPTION_PREVIEW_LENGTH,
+        TRIGGER_DESCRIPTIONS,
+    )
 
     trigger_desc = TRIGGER_DESCRIPTIONS.get(action.trigger, "triggered action in")
     tool_list = ", ".join(tools) if tools else "none"
@@ -568,10 +587,6 @@ def _build_document_action_system_prompt(
 
     # Inject current document metadata so the agent doesn't waste tool calls
     if document.description:
-        from opencontractserver.constants.corpus_actions import (
-            MAX_DESCRIPTION_PREVIEW_LENGTH,
-        )
-
         desc = document.description[:MAX_DESCRIPTION_PREVIEW_LENGTH]
         if len(document.description) > MAX_DESCRIPTION_PREVIEW_LENGTH:
             desc += "..."
@@ -584,8 +599,7 @@ def _build_document_action_system_prompt(
             "1. You MUST use tools to accomplish your task. Describing what you "
             "would do is NOT sufficient — call the tools.",
             "2. Do NOT ask clarifying questions. Execute the task as described.",
-            "3. If the task requires reading the document, call "
-            "load_document_txt_extract.",
+            "3. If the task requires reading the document, call " "load_document_text.",
             "4. If the task requires updating something, call the appropriate "
             "update tool with the new value.",
             "5. After completing your task, respond with a brief summary of "

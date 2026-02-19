@@ -5416,8 +5416,6 @@ class RunCorpusAction(graphene.Mutation):
         # Dispatch Celery task after transaction commits (ATOMIC_REQUESTS
         # wraps the entire request — dispatching inside the transaction
         # causes Celery to look up the execution before it's visible).
-        from django.db import transaction
-
         transaction.on_commit(
             lambda: run_agent_corpus_action.delay(
                 corpus_action_id=action.id,
