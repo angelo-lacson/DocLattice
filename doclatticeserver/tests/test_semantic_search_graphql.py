@@ -12,7 +12,6 @@ This test suite covers:
 
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from graphene.test import Client
@@ -20,6 +19,7 @@ from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from doclatticeserver.annotations.models import Annotation
+from doclatticeserver.pipeline.utils import get_default_embedder_path
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.utils.permissioning import (
@@ -66,7 +66,7 @@ class SemanticSearchQueryTest(TestCase):
         self.corpus = Corpus.objects.create(
             title="Test Corpus",
             creator=self.user,
-            preferred_embedder=settings.DEFAULT_EMBEDDER,
+            preferred_embedder=get_default_embedder_path(),
         )
         set_permissions_for_obj_to_user(
             user_val=self.user,
