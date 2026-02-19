@@ -4,8 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from doclatticeserver.corpuses.models import Corpus
-from doclatticeserver.pipeline.utils import get_default_embedder_path
 from doclatticeserver.pipeline.base.embedder import BaseEmbedder
+from doclatticeserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 

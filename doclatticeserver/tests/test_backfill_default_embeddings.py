@@ -1,7 +1,7 @@
 """
 Tests for the backfill_default_embeddings management command.
 
-Tests the command that backfills DEFAULT_EMBEDDER embeddings for
+Tests the command that backfills default embedder embeddings for
 annotations that are missing them.
 """
 

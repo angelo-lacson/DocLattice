@@ -19,9 +19,9 @@ from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from doclatticeserver.annotations.models import Annotation
-from doclatticeserver.pipeline.utils import get_default_embedder_path
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
+from doclatticeserver.pipeline.utils import get_default_embedder_path
 from doclatticeserver.utils.permissioning import (
     PermissionTypes,
     set_permissions_for_obj_to_user,

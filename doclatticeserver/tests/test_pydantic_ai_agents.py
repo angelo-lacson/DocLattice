@@ -6,7 +6,6 @@ from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, override_settings
 from pydantic import BaseModel
@@ -15,7 +14,6 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import RunContext
 
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
-from doclatticeserver.pipeline.utils import get_default_embedder_path
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.llms.agents.agent_factory import UnifiedAgentFactory
@@ -34,6 +32,7 @@ from doclatticeserver.llms.vector_stores.pydantic_ai_vector_stores import (
 from doclatticeserver.llms.vector_stores.vector_store_factory import (
     UnifiedVectorStoreFactory,
 )
+from doclatticeserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 

@@ -2,7 +2,7 @@
 Tests for the dual embedding strategy.
 
 The dual embedding strategy ensures:
-1. Every annotation ALWAYS gets a DEFAULT_EMBEDDER embedding (for global search)
+1. Every annotation ALWAYS gets a default embedder embedding (for global search)
 2. If corpus has a different preferred_embedder, annotation ALSO gets corpus-specific embedding
 """
 
@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 
 from doclatticeserver.annotations.models import Annotation
-from doclatticeserver.pipeline.utils import get_default_embedder_path
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
+from doclatticeserver.pipeline.utils import get_default_embedder_path
 from doclatticeserver.tasks.embeddings_task import (
     _apply_dual_embedding_strategy,
     _create_text_embedding,
