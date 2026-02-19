@@ -17,7 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tool output truncation** (`context_guardrails.py`, `opencontractserver/llms/tools/pydantic_ai_tools.py`): String outputs from tools are automatically truncated to 50K characters with a notice directing the LLM to use range parameters. Applied at the PydanticAI tool wrapper level so all tools benefit transparently.
 - **Per-agent compaction configuration** (`CompactionConfig` dataclass): Added `compaction` field to `AgentConfig` allowing per-conversation overrides of threshold ratio, recent message counts, and tool output limits. Enabled by default.
 - **Automatic compaction in message history retrieval** (`opencontractserver/llms/agents/pydantic_ai_agents.py`): `_get_message_history()` now checks conversation size against model limits and injects a compaction summary as a system message when needed, transparent to the agent framework.
-- **Comprehensive test suite** (`opencontractserver/tests/test_context_guardrails.py`): 30+ unit tests covering token estimation, model lookup, truncation, compaction triggers, summary generation, message proxy conversion, and configuration defaults. Uses `SimpleTestCase` for fast parallel execution.
+- **Persisted compaction bookmarks** (`opencontractserver/conversations/models.py`): Added `compaction_summary` and `compacted_before_message_id` fields to the `Conversation` model. Compaction is computed once and persisted — subsequent reads skip old messages at the DB level via `id__gt` filter, making long conversations cheap to load.
+  - Migration: `opencontractserver/conversations/migrations/0015_add_compaction_fields.py`
+  - `CoreConversationManager.persist_compaction()` writes the bookmark atomically
+  - `CoreConversationManager.get_conversation_messages()` honours the cutoff automatically
+- **Comprehensive test suite** (`opencontractserver/tests/test_context_guardrails.py`): 30+ unit tests covering token estimation, model lookup, truncation, compaction triggers, summary generation, message proxy conversion, configuration defaults, and Conversation model field definitions. Uses `SimpleTestCase` for fast parallel execution.
 
 #### Nested Approval Gates for Corpus Agent Sub-Agents
 - **Sub-agent approval propagation**: When a corpus agent delegates a question to a document sub-agent via `ask_document`, and the sub-agent encounters a tool requiring approval, the approval request now propagates up to the corpus agent level and is surfaced to the user via WebSocket (`ASYNC_APPROVAL_NEEDED`)

@@ -431,3 +431,30 @@ class TestConstants(SimpleTestCase):
 
     def test_min_recent_messages_positive(self):
         self.assertGreater(MIN_RECENT_MESSAGES, 0)
+
+
+# ---------------------------------------------------------------------------
+# DB-layer integration tests for compaction bookmark persistence
+# ---------------------------------------------------------------------------
+
+
+class TestConversationCompactionFields(SimpleTestCase):
+    """Tests that the Conversation model has the expected compaction fields.
+
+    Uses SimpleTestCase — no actual DB rows, just checks the field definitions
+    exist on the model class.
+    """
+
+    def test_compaction_summary_field_exists(self):
+        from opencontractserver.conversations.models import Conversation
+
+        field = Conversation._meta.get_field("compaction_summary")
+        self.assertTrue(field.blank)
+        self.assertEqual(field.default, "")
+
+    def test_compacted_before_message_id_field_exists(self):
+        from opencontractserver.conversations.models import Conversation
+
+        field = Conversation._meta.get_field("compacted_before_message_id")
+        self.assertTrue(field.null)
+        self.assertTrue(field.blank)

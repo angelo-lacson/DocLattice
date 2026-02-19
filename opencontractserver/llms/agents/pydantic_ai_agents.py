@@ -235,38 +235,53 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
     async def _get_message_history(self) -> Optional[list[ModelMessage]]:
         """Convert OpenContracts ``ChatMessage`` history to Pydantic-AI format.
 
-        When context guardrails are enabled (the default) the method first
-        checks whether the conversation has grown large enough to warrant
-        compaction.  If so, older messages are replaced by a concise summary
-        and only recent turns are kept verbatim.  This prevents the message
-        payload from exceeding the model's context window on long-running
-        conversations or after large tool outputs.
+        Uses a **compact-once, read-cheaply** strategy:
+
+        1. ``get_conversation_messages()`` already honours the persisted
+           ``compacted_before_message_id`` bookmark — it only loads messages
+           *after* the cutoff.  If a bookmark exists, the stored
+           ``compaction_summary`` is prepended as a system message.
+
+        2. After loading the (potentially already-trimmed) message list the
+           method checks whether the *remaining* messages still exceed the
+           context window.  If so it runs a fresh compaction pass, persists
+           the new bookmark, and trims the list for *this* call.
+
+        This means a long conversation pays the compaction cost exactly
+        once per growth spurt, and every subsequent call is a cheap
+        filtered read.
         """
         from opencontractserver.llms.context_guardrails import (
-            CompactionResult,
             compact_message_history,
             estimate_token_count,
             messages_to_proxies,
         )
 
         raw_messages = await self.conversation_manager.get_conversation_messages()
-        if not raw_messages:
+
+        # Resolve the previously-persisted compaction summary (if any).
+        conv = self.conversation_manager.conversation
+        stored_summary = getattr(conv, "compaction_summary", "") or "" if conv else ""
+
+        if not raw_messages and not stored_summary:
             return None
 
         # -----------------------------------------------------------------
-        # Compaction pass
+        # Check whether a *new* compaction pass is needed on the messages
+        # that survived the DB-level cutoff.
         # -----------------------------------------------------------------
         compaction_cfg = self.config.compaction
-        compaction_result: Optional[CompactionResult] = None
 
         if (
             compaction_cfg.enabled
             and len(raw_messages) > compaction_cfg.min_recent_messages
         ):
             proxies = messages_to_proxies(raw_messages)
-            system_prompt_tokens = estimate_token_count(self.config.system_prompt or "")
+            system_prompt_tokens = estimate_token_count(
+                (self.config.system_prompt or "") + stored_summary
+            )
 
-            compaction_result = compact_message_history(
+            result = compact_message_history(
                 proxies,
                 self.config.model_name,
                 system_prompt_tokens=system_prompt_tokens,
@@ -275,34 +290,49 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 max_recent=compaction_cfg.max_recent_messages,
             )
 
-            if compaction_result.compacted:
+            if result.compacted:
+                # Determine the cutoff message id — the last message that
+                # will be folded into the summary.
+                cutoff_idx = len(raw_messages) - result.preserved_count
+                cutoff_msg = raw_messages[cutoff_idx - 1]
+
+                # Merge old stored summary with the new compaction summary.
+                if stored_summary:
+                    merged_summary = stored_summary.rstrip() + "\n\n" + result.summary
+                else:
+                    merged_summary = result.summary
+
+                # Persist the bookmark so future calls skip these messages.
+                try:
+                    await self.conversation_manager.persist_compaction(
+                        summary=merged_summary,
+                        cutoff_message_id=cutoff_msg.id,
+                    )
+                    stored_summary = merged_summary
+                except Exception:
+                    logger.exception("Failed to persist compaction bookmark")
+
                 logger.info(
-                    "Compacting conversation: removed %d messages, "
+                    "Compacted conversation: removed %d messages, "
                     "keeping %d recent (tokens %d → %d)",
-                    compaction_result.removed_count,
-                    compaction_result.preserved_count,
-                    compaction_result.estimated_tokens_before,
-                    compaction_result.estimated_tokens_after,
+                    result.removed_count,
+                    result.preserved_count,
+                    result.estimated_tokens_before,
+                    result.estimated_tokens_after,
                 )
-                # Replace raw_messages with only the recent tail
-                raw_messages = raw_messages[-compaction_result.preserved_count :]
+
+                # Trim the in-memory list for *this* call.
+                raw_messages = raw_messages[-result.preserved_count :]
 
         # -----------------------------------------------------------------
         # Build Pydantic-AI ModelMessage list
         # -----------------------------------------------------------------
         history: list[ModelMessage] = []
 
-        # Inject compaction summary as the first system message so the LLM
-        # has context from the compacted portion of the conversation.
-        if (
-            compaction_result
-            and compaction_result.compacted
-            and compaction_result.summary
-        ):
+        # Prepend the compaction summary (persisted or freshly generated).
+        if stored_summary:
             history.append(
-                ModelRequest(
-                    parts=[SystemPromptPart(content=compaction_result.summary)]
-                )
+                ModelRequest(parts=[SystemPromptPart(content=stored_summary)])
             )
 
         for msg in raw_messages:

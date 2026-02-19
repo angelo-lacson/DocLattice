@@ -1225,17 +1225,44 @@ class CoreConversationManager:
         return manager
 
     async def get_conversation_messages(self) -> list[ChatMessage]:
-        """Get all messages in the conversation."""
+        """Get messages in the conversation, honouring compaction cutoff.
+
+        If the conversation has a ``compacted_before_message_id`` set, only
+        messages *after* that ID are returned — the older portion is
+        represented by ``conversation.compaction_summary`` which callers
+        should prepend as a system message.
+        """
         # For anonymous conversations, return empty list since nothing is stored
         if not self.conversation:
             return []
 
-        return [
-            msg
-            async for msg in ChatMessage.objects.filter(
-                conversation=self.conversation
-            ).order_by("created")
-        ]
+        qs = ChatMessage.objects.filter(conversation=self.conversation)
+
+        # When a compaction bookmark exists, skip already-summarised messages.
+        cutoff = self.conversation.compacted_before_message_id
+        if cutoff is not None:
+            qs = qs.filter(id__gt=cutoff)
+
+        return [msg async for msg in qs.order_by("created")]
+
+    async def persist_compaction(
+        self,
+        summary: str,
+        cutoff_message_id: int,
+    ) -> None:
+        """Write the compaction bookmark to the Conversation row.
+
+        After this call, :meth:`get_conversation_messages` will only
+        return messages newer than *cutoff_message_id*.
+        """
+        if not self.conversation:
+            return
+
+        self.conversation.compaction_summary = summary
+        self.conversation.compacted_before_message_id = cutoff_message_id
+        await self.conversation.asave(
+            update_fields=["compaction_summary", "compacted_before_message_id"]
+        )
 
     async def create_placeholder_message(self, msg_type: str = "LLM") -> int:
         """Create a placeholder message with state tracking."""
