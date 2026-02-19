@@ -485,7 +485,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             logger.debug(
                 f"[Session {self.session_id}] No existing embedder found, using default"
             )
-            return get_default_embedder_path()
+            return await database_sync_to_async(get_default_embedder_path)()
 
     # -------------------------------------------------------------------------
     #  Conversation title generation

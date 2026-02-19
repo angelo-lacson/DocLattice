@@ -364,7 +364,7 @@ def get_default_embedder() -> Optional[type[BaseEmbedder]]:
             logger.error(f"Error loading default embedder '{embedder_path}': {e}")
             return None
     else:
-        logger.error("No default embedder specified in settings")
+        logger.error("No default embedder configured in PipelineSettings")
         return None
 
 

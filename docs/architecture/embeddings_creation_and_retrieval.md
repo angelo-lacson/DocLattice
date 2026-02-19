@@ -79,7 +79,6 @@ Embedder settings are configured in [`config/settings/base.py`](../../config/set
 - **`PREFERRED_EMBEDDERS`**: Map of MIME types to preferred embedder class paths
 - **`DEFAULT_EMBEDDER`**: Fallback embedder when no preferred embedder is found
 - **`DEFAULT_EMBEDDING_DIMENSION`**: Default dimension (768)
-- **`DEFAULT_EMBEDDERS_BY_FILETYPE`**: Map of MIME types to default embedders
 - **`PIPELINE_SETTINGS`**: Component-specific configuration overrides
 
 Available embedder implementations in [`opencontractserver/pipeline/embedders/`](../../opencontractserver/pipeline/embedders/):
