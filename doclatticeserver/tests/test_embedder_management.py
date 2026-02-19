@@ -55,7 +55,7 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
         self.assertEqual(corpus.created_with_embedder, custom_path)
 
     @patch(
-        "doclatticeserver.corpuses.models.get_default_embedder_path",
+        "doclatticeserver.pipeline.utils.get_default_embedder_path",
         return_value="doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder",
     )
     def test_auto_population_uses_current_default(self, _mock_path):
