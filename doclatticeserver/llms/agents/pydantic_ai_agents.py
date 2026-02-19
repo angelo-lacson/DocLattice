@@ -2115,10 +2115,11 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 effective_tools, tools, context="Caller"
             )
 
+        tool_names = [get_tool_name(t) for t in effective_tools]
         logger.info(
-            "Creating pydantic-ai agent: model=%s, tools=%d",
+            "Creating pydantic-ai agent: model=%s, tools=%s",
             config.model_name,
-            len(effective_tools),
+            tool_names,
         )
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(
