@@ -121,10 +121,10 @@ For batch endpoints, the array contains one vector per input item.
 
 ```python
 from opencontractserver.pipeline.embedders.multimodal_microservice import (
-    MultimodalMicroserviceEmbedder
+    CLIPMicroserviceEmbedder
 )
 
-embedder = MultimodalMicroserviceEmbedder()
+embedder = CLIPMicroserviceEmbedder()
 
 # Check configured vector size
 print(f"Vector size: {embedder.vector_size}")
