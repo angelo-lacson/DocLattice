@@ -1287,7 +1287,7 @@ class CoreConversationManager:
 
         data = message.data or {}
         data["completed_at"] = timezone.now().isoformat()
-        data["model_name"] = self.config.model_name
+        data.setdefault("model_name", self.config.model_name)
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
@@ -1386,6 +1386,7 @@ class CoreConversationManager:
 
         data = message.data or {}
         data["updated_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
@@ -1417,6 +1418,7 @@ class CoreConversationManager:
         data = message.data or {}
         data["error"] = error
         data["errored_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
         message.data = data
 
         await message.asave()

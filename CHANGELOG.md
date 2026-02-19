@@ -11,9 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Store Model Name in ChatMessage Metadata (#897)
 - **Automatic model name persistence**: The LLM model name from `AgentConfig` is now stored in the `data` JSON field of every `ChatMessage` produced by an agent, enabling debugging, auditing, and reproducibility
-  - `opencontractserver/llms/agents/core_agents.py` — `CoreConversationManager.complete_message()`, `store_llm_message()`, and `create_placeholder_message()` all write `data["model_name"]` from `self.config.model_name`
-- **Tests**: Four new async tests verifying model name storage across all message lifecycle paths
-  - `opencontractserver/tests/test_core_agents.py` — `test_complete_message_stores_model_name`, `test_complete_message_uses_default_model_name`, `test_store_llm_message_stores_model_name`, `test_placeholder_message_stores_model_name`
+  - `opencontractserver/llms/agents/core_agents.py` — all five `CoreConversationManager` message-writing methods now persist `data["model_name"]`:
+    - `create_placeholder_message()` and `store_llm_message()` — unconditional write at creation time
+    - `complete_message()`, `update_message()`, `mark_message_error()` — use `setdefault` to backfill without overwriting placeholder values
+- **Tests**: Seven new async tests verifying model name storage across all message lifecycle paths
+  - `opencontractserver/tests/test_core_agents.py` — covers explicit model name, default model name, all five methods, and `setdefault` preservation semantics
 
 ### Added
 
