@@ -329,7 +329,7 @@ class TestEnsureEmbeddingsForCorpus(TestCase):
         )
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
         return_value="default.embedder.path",
     )
     @patch(
@@ -387,7 +387,7 @@ class TestEnsureEmbeddingsForCorpus(TestCase):
         self.assertEqual(result["annotations_already_embedded"], 1)
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
         return_value="default.embedder.path",
     )
     @patch(
@@ -794,7 +794,7 @@ class TestEnsureEmbeddingsNoEmbedderConfigured(TestCase):
         )
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
         return_value="",
     )
     def test_no_embedders_configured_returns_error(self, _mock_path):
@@ -820,7 +820,7 @@ class TestEnsureEmbeddingsNoEmbedderConfigured(TestCase):
         self.assertIn("No embedders configured", result["errors"])
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
         return_value="default.embedder.path",
     )
     def test_empty_structural_set_returns_early(self, _mock_path):
@@ -1175,7 +1175,7 @@ class TestEmbeddingTaskQueueFailure(TestCase):
         )
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
         return_value="default.embedder.path",
     )
     @patch(
@@ -1248,7 +1248,7 @@ class TestEmbeddingTaskQueueFailure(TestCase):
         self.assertEqual(doc_path.corpus_id, self.corpus.pk)
 
     @patch(
-        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
         return_value="default.embedder.path",
     )
     @patch(
