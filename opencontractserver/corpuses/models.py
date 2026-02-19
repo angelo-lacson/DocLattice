@@ -374,7 +374,7 @@ class Corpus(TreeNode):
             # If no preferred_embedder was explicitly provided, default to the
             # current default embedder from PipelineSettings so the corpus has
             # a stable, immutable binding.
-            default_embedder = get_default_embedder_path() or None
+            default_embedder = get_default_embedder_path()
             if not self.preferred_embedder and default_embedder:
                 self.preferred_embedder = default_embedder
 
