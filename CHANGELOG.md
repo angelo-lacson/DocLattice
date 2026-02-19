@@ -5,7 +5,17 @@ All notable changes to DocLattice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-12
+## [Unreleased] - 2026-02-19
+
+### Added
+
+#### Store Model Name in ChatMessage Metadata (#897)
+- **Automatic model name persistence**: The LLM model name from `AgentConfig` is now stored in the `data` JSON field of every `ChatMessage` produced by an agent, enabling debugging, auditing, and reproducibility
+  - `doclatticeserver/llms/agents/core_agents.py` — all five `CoreConversationManager` message-writing methods now persist `data["model_name"]`:
+    - `create_placeholder_message()` and `store_llm_message()` — unconditional write at creation time
+    - `complete_message()`, `update_message()`, `mark_message_error()` — use `setdefault` to backfill without overwriting placeholder values
+- **Tests**: Seven new async tests verifying model name storage across all message lifecycle paths
+  - `doclatticeserver/tests/test_core_agents.py` — covers explicit model name, default model name, all five methods, and `setdefault` preservation semantics
 
 ### Added
 
