@@ -2,7 +2,7 @@
 Tests for the dual embedding strategy.
 
 The dual embedding strategy ensures:
-1. Every annotation ALWAYS gets a DEFAULT_EMBEDDER embedding (for global search)
+1. Every annotation ALWAYS gets a default embedder embedding (for global search)
 2. If corpus has a different preferred_embedder, annotation ALSO gets corpus-specific embedding
 """
 

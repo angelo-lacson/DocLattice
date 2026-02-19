@@ -2194,7 +2194,7 @@ class Query(graphene.ObjectType):
         ),
         description=(
             "Hybrid search combining vector similarity with text filters. "
-            "Uses DEFAULT_EMBEDDER for global cross-corpus search. "
+            "Uses the default embedder for global cross-corpus search. "
             "Results are first filtered by text criteria, then ranked by similarity."
         ),
     )
@@ -2216,7 +2216,7 @@ class Query(graphene.ObjectType):
         Hybrid search combining vector similarity with text filters.
 
         This query enables semantic (meaning-based) search across all annotations
-        the user has access to, using the DEFAULT_EMBEDDER embeddings that are
+        the user has access to, using the default embedder embeddings that are
         created for every annotation as part of the dual embedding strategy.
 
         HYBRID SEARCH:

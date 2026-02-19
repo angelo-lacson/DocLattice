@@ -2,12 +2,12 @@
 Tests for Issue #437: Embedder Consistency Management.
 
 Covers:
-- Corpus.preferred_embedder auto-population from DEFAULT_EMBEDDER on creation
+- Corpus.preferred_embedder auto-population from default embedder on creation
 - Corpus.created_with_embedder audit field
 - Immutability of preferred_embedder after documents are added
 - ReEmbedCorpus mutation
 - Fork with embedder override
-- Startup system check for DEFAULT_EMBEDDER changes
+- Startup system check for default embedder changes
 """
 
 from unittest.mock import patch
@@ -34,7 +34,7 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
         self.user = User.objects.create_user(username="embedtest", password="testpass")
 
     def test_preferred_embedder_auto_populated_from_default(self):
-        """Corpus without explicit embedder gets DEFAULT_EMBEDDER frozen."""
+        """Corpus without explicit embedder gets default embedder frozen."""
         corpus = Corpus.objects.create(title="Auto Embed", creator=self.user)
         self.assertEqual(corpus.preferred_embedder, get_default_embedder_path())
 
@@ -44,7 +44,7 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
         self.assertEqual(corpus.created_with_embedder, get_default_embedder_path())
 
     def test_explicit_embedder_preserved(self):
-        """Corpus with explicit embedder keeps it, not DEFAULT_EMBEDDER."""
+        """Corpus with explicit embedder keeps it, not the default."""
         custom_path = "my.custom.Embedder"
         corpus = Corpus.objects.create(
             title="Custom Embed",
@@ -719,13 +719,13 @@ class TestConcurrentReEmbedRejection(TestCase):
 
 
 class TestEmbedderConsistencyCheck(TestCase):
-    """Test the startup system check for DEFAULT_EMBEDDER changes."""
+    """Test the startup system check for default embedder changes."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="checktest", password="testpass")
 
     def test_no_warning_when_embedders_match(self):
-        """No warning when all corpuses match DEFAULT_EMBEDDER."""
+        """No warning when all corpuses match the default embedder."""
         from opencontractserver.corpuses.checks import (
             check_default_embedder_consistency,
         )
