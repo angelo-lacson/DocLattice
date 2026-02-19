@@ -1255,7 +1255,9 @@ class TestEmbeddingTaskQueueFailure(TestCase):
         "opencontractserver.tasks.embeddings_task"
         ".calculate_embeddings_for_annotation_batch"
     )
-    def test_partial_queue_failure_reports_queued_count(self, mock_batch_task, _mock_path):
+    def test_partial_queue_failure_reports_queued_count(
+        self, mock_batch_task, _mock_path
+    ):
         """
         If some batches queue successfully before a failure, the result
         should reflect the partial success.

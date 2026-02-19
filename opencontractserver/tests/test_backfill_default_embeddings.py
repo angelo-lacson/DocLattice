@@ -210,7 +210,9 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_handles_embedding_failures_gracefully(self, mock_calc_embedding, _mock_path):
+    def test_command_handles_embedding_failures_gracefully(
+        self, mock_calc_embedding, _mock_path
+    ):
         """Command should continue processing after individual failures."""
         # Make delay raise an exception
         mock_calc_embedding.delay = MagicMock(side_effect=Exception("Queue error"))
@@ -315,7 +317,9 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_skips_annotations_without_text(self, mock_calc_embedding, _mock_path):
+    def test_command_skips_annotations_without_text(
+        self, mock_calc_embedding, _mock_path
+    ):
         """Command should skip annotations with empty or null raw_text."""
         mock_calc_embedding.delay = MagicMock()
 
