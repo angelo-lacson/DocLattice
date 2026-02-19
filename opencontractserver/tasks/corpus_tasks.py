@@ -727,8 +727,8 @@ def ensure_embeddings_for_corpus(
     embedding generation only for missing ones.
 
     Required embedders:
-    - DEFAULT_EMBEDDER (from settings) - always required for global search
-    - corpus.preferred_embedder (if different from DEFAULT_EMBEDDER)
+    - Default embedder (from PipelineSettings) - always required for global search
+    - corpus.preferred_embedder (if different from the default)
 
     Args:
         structural_set_id: ID of the StructuralAnnotationSet to check
@@ -737,13 +737,12 @@ def ensure_embeddings_for_corpus(
     Returns:
         dict: Summary of embedding tasks queued
     """
-    from django.conf import settings
-
     from opencontractserver.annotations.models import (
         Embedding,
         StructuralAnnotationSet,
     )
     from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.pipeline.utils import get_default_embedder_path
 
     logger.info(
         f"ensure_embeddings_for_corpus() - structural_set={structural_set_id}, "
@@ -777,7 +776,7 @@ def ensure_embeddings_for_corpus(
             return result
 
         # Determine required embedders
-        default_embedder = getattr(settings, "DEFAULT_EMBEDDER", None)
+        default_embedder = get_default_embedder_path() or None
         corpus_embedder = corpus.preferred_embedder
 
         required_embedders = set()
@@ -789,7 +788,7 @@ def ensure_embeddings_for_corpus(
         if not required_embedders:
             logger.warning(
                 f"No embedders configured for corpus {corpus_id} "
-                "(DEFAULT_EMBEDDER not set)"
+                "(default embedder not set in PipelineSettings)"
             )
             result["errors"].append("No embedders configured")
             return result
