@@ -40,6 +40,10 @@ const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for this corp
 3. Respond helpfully to user questions when appropriate
 
 You have access to thread context, messages, and moderation tools. Use them judiciously.`;
+
+const DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS =
+  "You are a document processing agent for this corpus.";
+
 import {
   CREATE_CORPUS_ACTION,
   CreateCorpusActionInput,
@@ -53,6 +57,7 @@ import {
   GET_ANALYZERS,
   GET_AGENT_CONFIGURATIONS,
   GET_AVAILABLE_MODERATION_TOOLS,
+  GET_AVAILABLE_DOCUMENT_TOOLS,
   GetFieldsetsInputs,
   GetFieldsetsOutputs,
   GetAnalyzersInputs,
@@ -60,6 +65,8 @@ import {
   GetAgentConfigurationsInput,
   GetAgentConfigurationsOutput,
   GetAvailableModerationToolsOutput,
+  GetAvailableDocumentToolsOutput,
+  AvailableTool,
 } from "../../graphql/queries";
 
 /**
@@ -126,6 +133,9 @@ export const CreateCorpusActionModal: React.FC<
   const [selectedModerationTools, setSelectedModerationTools] = React.useState<
     string[]
   >(DEFAULT_MODERATION_TOOLS.map((t) => t.name));
+  const [selectedDocumentTools, setSelectedDocumentTools] = React.useState<
+    string[]
+  >([]);
 
   const [disabled, setDisabled] = React.useState(false);
   const [runOnAllCorpuses, setRunOnAllCorpuses] = React.useState(false);
@@ -148,6 +158,7 @@ export const CreateCorpusActionModal: React.FC<
     setInlineAgentDescription("");
     setInlineAgentInstructions(DEFAULT_MODERATOR_INSTRUCTIONS);
     setSelectedModerationTools(DEFAULT_MODERATION_TOOLS.map((t) => t.name));
+    setSelectedDocumentTools([]);
     setDisabled(false);
     setRunOnAllCorpuses(false);
     setAgentSearchQuery("");
@@ -295,6 +306,8 @@ export const CreateCorpusActionModal: React.FC<
   // Fetch moderation tools dynamically from backend
   // Only fetch when needed (thread/message triggers)
   const isThreadTrigger = trigger === "new_thread" || trigger === "new_message";
+  const isDocTrigger =
+    trigger === "add_document" || trigger === "edit_document";
   const { data: toolsData, loading: toolsLoading } =
     useQuery<GetAvailableModerationToolsOutput>(
       GET_AVAILABLE_MODERATION_TOOLS,
@@ -303,6 +316,26 @@ export const CreateCorpusActionModal: React.FC<
         fetchPolicy: "cache-first",
       }
     );
+
+  const { data: documentToolsData, loading: documentToolsLoading } =
+    useQuery<GetAvailableDocumentToolsOutput>(GET_AVAILABLE_DOCUMENT_TOOLS, {
+      skip: !isDocTrigger,
+      fetchPolicy: "cache-first",
+    });
+
+  const documentTools: AvailableTool[] =
+    documentToolsData?.availableTools ?? [];
+
+  // Auto-select all document tools when they load
+  React.useEffect(() => {
+    if (
+      documentTools.length > 0 &&
+      selectedDocumentTools.length === 0 &&
+      isDocTrigger
+    ) {
+      setSelectedDocumentTools(documentTools.map((t) => t.name));
+    }
+  }, [documentTools, isDocTrigger]);
 
   // Create a memoized tools list that uses API data or falls back to defaults
   const moderationTools = useMemo(() => {
@@ -341,10 +374,10 @@ export const CreateCorpusActionModal: React.FC<
 
     if (actionType === "agent") {
       // Validation depends on whether we're using inline agent creation or existing agent
-      if (isThreadTrigger && useInlineAgent) {
-        // Inline agent creation mode
+      if (useInlineAgent && !isEditMode) {
+        // Inline agent creation mode (thread or document triggers)
         if (!inlineAgentName.trim()) {
-          toast.error("Please enter a name for the moderator agent");
+          toast.error("Please enter a name for the agent");
           return;
         }
         if (!inlineAgentInstructions.trim()) {
@@ -355,8 +388,11 @@ export const CreateCorpusActionModal: React.FC<
           toast.error("Please enter task instructions for the agent");
           return;
         }
-        if (selectedModerationTools.length === 0) {
-          toast.error("Please select at least one moderation tool");
+        const selectedTools = isThreadTrigger
+          ? selectedModerationTools
+          : selectedDocumentTools;
+        if (selectedTools.length === 0) {
+          toast.error("Please select at least one tool");
           return;
         }
       } else {
@@ -407,7 +443,7 @@ export const CreateCorpusActionModal: React.FC<
       } else {
         // Create new action - handle inline agent creation if applicable
         const isInlineAgentCreation =
-          actionType === "agent" && isThreadTrigger && useInlineAgent;
+          actionType === "agent" && useInlineAgent && !isEditMode;
 
         await createCorpusAction({
           variables: {
@@ -429,11 +465,13 @@ export const CreateCorpusActionModal: React.FC<
                 : undefined,
             taskInstructions:
               actionType === "agent" ? taskInstructions : undefined,
-            // For existing agents, use preAuthorizedTools; for inline, use selectedModerationTools
+            // For existing agents, use preAuthorizedTools; for inline, use trigger-appropriate tools
             preAuthorizedTools:
               actionType === "agent"
                 ? isInlineAgentCreation
-                  ? selectedModerationTools
+                  ? isThreadTrigger
+                    ? selectedModerationTools
+                    : selectedDocumentTools
                   : preAuthorizedTools.length > 0
                   ? preAuthorizedTools
                   : undefined
@@ -450,7 +488,9 @@ export const CreateCorpusActionModal: React.FC<
               ? inlineAgentInstructions
               : undefined,
             inlineAgentTools: isInlineAgentCreation
-              ? selectedModerationTools
+              ? isThreadTrigger
+                ? selectedModerationTools
+                : selectedDocumentTools
               : undefined,
             disabled,
             runOnAllCorpuses,
@@ -587,8 +627,15 @@ export const CreateCorpusActionModal: React.FC<
                     DEFAULT_MODERATION_TOOLS.map((t) => t.name)
                   );
                 } else {
-                  // For document triggers, reset to existing agent mode
-                  setUseInlineAgent(false);
+                  // For document triggers, default to inline agent mode
+                  setUseInlineAgent(true);
+                  setInlineAgentName("");
+                  setInlineAgentInstructions(
+                    DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS
+                  );
+                  if (documentTools.length > 0) {
+                    setSelectedDocumentTools(documentTools.map((t) => t.name));
+                  }
                 }
               }}
             />
@@ -681,25 +728,37 @@ export const CreateCorpusActionModal: React.FC<
                 <Header.Content>Agent Configuration</Header.Content>
               </Header>
 
-              {/* Thread/Message trigger: Show mode toggle for inline vs existing agent */}
-              {isThreadTrigger && !isEditMode && (
+              {/* Create mode: Show mode toggle for inline vs existing agent */}
+              {!isEditMode && (
                 <>
                   <Message info size="small">
                     <p>
-                      <Icon name="comments" />
+                      <Icon name={isThreadTrigger ? "comments" : "file text"} />
                       Configure an AI agent for{" "}
-                      <strong>automated moderation</strong>. The agent will
-                      execute automatically when{" "}
+                      <strong>
+                        {isThreadTrigger
+                          ? "automated moderation"
+                          : "document processing"}
+                      </strong>
+                      . The agent will execute automatically when{" "}
                       {trigger === "new_thread"
                         ? "a new discussion thread is created"
-                        : "a new message is posted to a thread"}{" "}
-                      in this corpus.
+                        : trigger === "new_message"
+                        ? "a new message is posted to a thread"
+                        : trigger === "add_document"
+                        ? "a document is added to this corpus"
+                        : "a document is edited in this corpus"}
+                      .
                     </p>
                   </Message>
 
                   <Menu pointing secondary size="small">
                     <Menu.Item
-                      name="Quick Create Moderator"
+                      name={
+                        isThreadTrigger
+                          ? "Quick Create Moderator"
+                          : "Quick Create Agent"
+                      }
                       active={useInlineAgent}
                       onClick={() => setUseInlineAgent(true)}
                       icon="magic"
@@ -717,8 +776,10 @@ export const CreateCorpusActionModal: React.FC<
                     <>
                       <Message positive size="small">
                         <Icon name="lightning" />
-                        <strong>Quick Create:</strong> Creates a new moderator
-                        agent with all moderation tools enabled.
+                        <strong>Quick Create:</strong>{" "}
+                        {isThreadTrigger
+                          ? "Creates a new moderator agent with all moderation tools enabled."
+                          : "Creates a new agent with document processing tools enabled."}
                       </Message>
 
                       <Form.Field required>
@@ -726,7 +787,11 @@ export const CreateCorpusActionModal: React.FC<
                         <Form.Input
                           value={inlineAgentName}
                           onChange={(e) => setInlineAgentName(e.target.value)}
-                          placeholder="e.g., Discussion Moderator"
+                          placeholder={
+                            isThreadTrigger
+                              ? "e.g., Discussion Moderator"
+                              : "e.g., Document Summarizer"
+                          }
                         />
                       </Form.Field>
 
@@ -742,19 +807,31 @@ export const CreateCorpusActionModal: React.FC<
                           onChange={(e) =>
                             setInlineAgentDescription(e.target.value)
                           }
-                          placeholder="Brief description of this moderator's purpose"
+                          placeholder={
+                            isThreadTrigger
+                              ? "Brief description of this moderator's purpose"
+                              : "Brief description of what this agent does"
+                          }
                         />
                       </Form.Field>
 
                       <Form.Field required>
-                        <label>System Instructions</label>
+                        <label>
+                          {isThreadTrigger
+                            ? "System Instructions"
+                            : "Agent Role"}
+                        </label>
                         <TextArea
                           value={inlineAgentInstructions}
                           onChange={(e, data) =>
                             setInlineAgentInstructions(data.value as string)
                           }
-                          placeholder="Instructions that define the agent's behavior and policies"
-                          rows={4}
+                          placeholder={
+                            isThreadTrigger
+                              ? "Instructions that define the agent's behavior and policies"
+                              : "Brief role description (e.g., 'You are a document summarizer')"
+                          }
+                          rows={isThreadTrigger ? 4 : 2}
                         />
                         <small
                           style={{
@@ -763,8 +840,9 @@ export const CreateCorpusActionModal: React.FC<
                             display: "block",
                           }}
                         >
-                          These instructions define how the agent behaves and
-                          what moderation policies it follows.
+                          {isThreadTrigger
+                            ? "These instructions define how the agent behaves and what moderation policies it follows."
+                            : "Optional persona guidelines. The main instructions go in the Task Instructions field below."}
                         </small>
                       </Form.Field>
 
@@ -775,7 +853,11 @@ export const CreateCorpusActionModal: React.FC<
                           onChange={(e, data) =>
                             setTaskInstructions(data.value as string)
                           }
-                          placeholder="e.g., 'Review this thread/message for policy compliance and take appropriate action'"
+                          placeholder={
+                            isThreadTrigger
+                              ? "e.g., 'Review this thread/message for policy compliance and take appropriate action'"
+                              : "e.g., 'Summarize this document and update its description'"
+                          }
                           rows={3}
                         />
                         <small
@@ -792,11 +874,18 @@ export const CreateCorpusActionModal: React.FC<
 
                       <Form.Field required>
                         <label>
-                          Moderation Tools{" "}
+                          {isThreadTrigger
+                            ? "Moderation Tools"
+                            : "Document Tools"}{" "}
                           <Label size="tiny" color="green">
-                            {selectedModerationTools.length} selected
+                            {isThreadTrigger
+                              ? selectedModerationTools.length
+                              : selectedDocumentTools.length}{" "}
+                            selected
                           </Label>
-                          {toolsLoading && (
+                          {(isThreadTrigger
+                            ? toolsLoading
+                            : documentToolsLoading) && (
                             <Loader
                               active
                               inline
@@ -813,7 +902,10 @@ export const CreateCorpusActionModal: React.FC<
                             border: "1px solid #e9ecef",
                           }}
                         >
-                          {moderationTools.map((tool) => (
+                          {(isThreadTrigger
+                            ? moderationTools
+                            : documentTools
+                          ).map((tool) => (
                             <div
                               key={tool.name}
                               style={{
@@ -824,17 +916,18 @@ export const CreateCorpusActionModal: React.FC<
                               }}
                             >
                               <Checkbox
-                                checked={selectedModerationTools.includes(
-                                  tool.name
-                                )}
+                                checked={(isThreadTrigger
+                                  ? selectedModerationTools
+                                  : selectedDocumentTools
+                                ).includes(tool.name)}
                                 onChange={(_, data) => {
+                                  const setter = isThreadTrigger
+                                    ? setSelectedModerationTools
+                                    : setSelectedDocumentTools;
                                   if (data.checked) {
-                                    setSelectedModerationTools((prev) => [
-                                      ...prev,
-                                      tool.name,
-                                    ]);
+                                    setter((prev) => [...prev, tool.name]);
                                   } else {
-                                    setSelectedModerationTools((prev) =>
+                                    setter((prev) =>
                                       prev.filter((t) => t !== tool.name)
                                     );
                                   }
@@ -866,18 +959,27 @@ export const CreateCorpusActionModal: React.FC<
                           <Button
                             type="button"
                             size="tiny"
-                            onClick={() =>
-                              setSelectedModerationTools(
-                                moderationTools.map((t) => t.name)
-                              )
-                            }
+                            onClick={() => {
+                              const tools = isThreadTrigger
+                                ? moderationTools
+                                : documentTools;
+                              const setter = isThreadTrigger
+                                ? setSelectedModerationTools
+                                : setSelectedDocumentTools;
+                              setter(tools.map((t) => t.name));
+                            }}
                           >
                             Select All
                           </Button>
                           <Button
                             type="button"
                             size="tiny"
-                            onClick={() => setSelectedModerationTools([])}
+                            onClick={() => {
+                              const setter = isThreadTrigger
+                                ? setSelectedModerationTools
+                                : setSelectedDocumentTools;
+                              setter([]);
+                            }}
                           >
                             Clear All
                           </Button>
@@ -886,7 +988,7 @@ export const CreateCorpusActionModal: React.FC<
                     </>
                   )}
 
-                  {/* Existing Agent Mode for Thread Triggers */}
+                  {/* Existing Agent Mode */}
                   {!useInlineAgent && (
                     <>
                       <Form.Field required>
@@ -957,8 +1059,8 @@ export const CreateCorpusActionModal: React.FC<
                 </>
               )}
 
-              {/* Document triggers OR edit mode: Show existing agent selection only */}
-              {(!isThreadTrigger || isEditMode) && (
+              {/* Edit mode: Show existing agent selection only */}
+              {isEditMode && (
                 <>
                   <Message info size="small">
                     <p>

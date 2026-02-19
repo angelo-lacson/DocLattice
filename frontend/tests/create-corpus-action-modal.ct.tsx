@@ -8,6 +8,7 @@ import {
   GET_FIELDSETS,
   GET_ANALYZERS,
   GET_AGENT_CONFIGURATIONS,
+  GET_AVAILABLE_DOCUMENT_TOOLS,
 } from "../src/graphql/queries";
 import { CREATE_CORPUS_ACTION } from "../src/graphql/mutations";
 import { docScreenshot } from "./utils/docScreenshot";
@@ -114,11 +115,37 @@ const getAgentConfigsMock = {
   },
 };
 
+const getAvailableDocumentToolsMock = {
+  request: {
+    query: GET_AVAILABLE_DOCUMENT_TOOLS,
+    variables: {},
+  },
+  result: {
+    data: {
+      availableTools: [
+        {
+          name: "load_document_text",
+          description: "Load the document text",
+          category: "document",
+          requiresApproval: false,
+        },
+        {
+          name: "update_document_description",
+          description: "Update document description",
+          category: "document",
+          requiresApproval: true,
+        },
+      ],
+    },
+  },
+};
+
 // Helper to create all standard mocks
 const createStandardMocks = () => [
   getFieldsetsMock,
   getAnalyzersMock,
   getAgentConfigsMock,
+  getAvailableDocumentToolsMock,
 ];
 
 test.describe("CreateCorpusActionModal - Trigger Options", () => {
@@ -516,6 +543,11 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     await expect(
       page.locator("h4:has-text('Agent Configuration')")
     ).toBeVisible();
+
+    // Default mode is Quick Create — switch to Use Existing Agent
+    await page.locator('a:has-text("Use Existing Agent")').click();
+    await page.waitForTimeout(200);
+
     await expect(page.locator("text=Select agent configuration")).toBeVisible();
 
     await component.unmount();
@@ -547,6 +579,10 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
 
     // Wait for data to load
     await page.waitForTimeout(500);
+
+    // Switch to Use Existing Agent tab (Quick Create is default in create mode)
+    await page.locator('a:has-text("Use Existing Agent")').click();
+    await page.waitForTimeout(200);
 
     // Select the agent config
     const agentDropdown = page.locator(
@@ -596,6 +632,10 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     // Wait for data to load
     await page.waitForTimeout(500);
 
+    // Switch to Use Existing Agent tab (Quick Create is default in create mode)
+    await page.locator('a:has-text("Use Existing Agent")').click();
+    await page.waitForTimeout(200);
+
     // Select the agent config
     const agentDropdown = page.locator(
       '.field:has(label:text("Agent")) div.ui.dropdown'
@@ -612,13 +652,16 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     await expect(
       page.locator("label:has-text('Pre-authorized Tools')")
     ).toBeVisible();
+    // Verify the dropdown placeholder is present
     await expect(
-      page.locator("small:has-text('Pre-authorized tools will execute')")
+      page.locator("text=Select tools to pre-authorize (optional)")
     ).toBeVisible();
 
-    await docScreenshot(page, "corpus-actions--create-modal--agent-document", {
-      fullPage: true,
-    });
+    await docScreenshot(
+      page,
+      "corpus-actions--create-modal--existing-agent-document",
+      { fullPage: true }
+    );
 
     await component.unmount();
   });

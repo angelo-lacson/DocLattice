@@ -2354,6 +2354,51 @@ export interface UpdateCorpusActionOutput {
   };
 }
 
+export const RUN_CORPUS_ACTION = gql`
+  mutation RunCorpusAction($corpusActionId: ID!, $documentId: ID!) {
+    runCorpusAction(corpusActionId: $corpusActionId, documentId: $documentId) {
+      ok
+      message
+      obj {
+        id
+        status
+        actionType
+        trigger
+        queuedAt
+        corpusAction {
+          id
+          name
+        }
+        document {
+          id
+          title
+        }
+      }
+    }
+  }
+`;
+
+export interface RunCorpusActionInput {
+  corpusActionId: string;
+  documentId: string;
+}
+
+export interface RunCorpusActionOutput {
+  runCorpusAction: {
+    ok: boolean;
+    message: string;
+    obj: {
+      id: string;
+      status: string;
+      actionType: string;
+      trigger: string;
+      queuedAt: string;
+      corpusAction: { id: string; name: string };
+      document: { id: string; title: string };
+    } | null;
+  };
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// BADGE-RELATED MUTATIONS
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

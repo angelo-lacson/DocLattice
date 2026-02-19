@@ -1,5 +1,6 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
+import { MockedProvider } from "@apollo/client/testing";
 import { CorpusActionsSection } from "../src/components/corpuses/settings/CorpusActionsSection";
 import { docScreenshot } from "./utils/docScreenshot";
 
@@ -58,12 +59,14 @@ const mockActions = [
 test.describe("CorpusActionsSection - List View", () => {
   test("should display action cards with details", async ({ mount, page }) => {
     const component = await mount(
-      <CorpusActionsSection
-        actions={mockActions}
-        onAddAction={() => {}}
-        onEditAction={() => {}}
-        onDeleteAction={() => {}}
-      />
+      <MockedProvider mocks={[]} addTypename={false}>
+        <CorpusActionsSection
+          actions={mockActions}
+          onAddAction={() => {}}
+          onEditAction={() => {}}
+          onDeleteAction={() => {}}
+        />
+      </MockedProvider>
     );
 
     // Verify all actions are displayed

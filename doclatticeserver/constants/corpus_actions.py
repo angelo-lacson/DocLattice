@@ -17,13 +17,13 @@ avoid circular dependencies. Alignment with the enum is verified in
 # the system uses these defaults based on the trigger type.
 
 DEFAULT_DOCUMENT_ACTION_TOOLS: list[str] = [
-    "load_document_txt_extract",
+    "load_document_text",
     "get_document_description",
     "update_document_description",
     "get_document_summary",
     "update_document_summary",
     "add_document_note",
-    "search_exact_text_as_sources",
+    "search_exact_text",
 ]
 
 DEFAULT_THREAD_ACTION_TOOLS: list[str] = [
