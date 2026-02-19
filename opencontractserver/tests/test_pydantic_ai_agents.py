@@ -296,8 +296,8 @@ class TestPydanticAIAgents(TransactionTestCase):
         # Test basic functionality
         with test_agent.override(deps=self.test_deps):
             result = await test_agent.run("Hello, how are you?")
-            self.assertIsInstance(result.data, str)
-            self.assertTrue(len(result.data) > 0)
+            self.assertIsInstance(result.output, str)
+            self.assertTrue(len(result.output) > 0)
 
     def test_pydantic_ai_tool_wrapper_creation(self) -> None:
         """Test PydanticAIToolWrapper creation and factory behavior."""
@@ -389,9 +389,9 @@ class TestPydanticAIAgents(TransactionTestCase):
         with agent.override(deps=self.test_deps):
             result = await agent.run(f"Load summary for document {self.doc1.id}")
 
-            self.assertIsInstance(result.data, str)
+            self.assertIsInstance(result.output, str)
             # TestModel should call the tool
-            self.assertIn("Mock summary", result.data)
+            self.assertIn("Mock summary", result.output)
 
     def test_pydantic_ai_vector_store_creation(self) -> None:
         """Test creating PydanticAI vector store through factory."""
@@ -484,24 +484,24 @@ class TestPydanticAIAgents(TransactionTestCase):
         with agent.override(deps=self.test_deps):
             result = await agent.run("Search for documents about important topics")
 
-            self.assertIsInstance(result.data, str)
+            self.assertIsInstance(result.output, str)
             # Should contain search results
-            self.assertIn("Found", result.data)
+            self.assertIn("Found", result.output)
 
     async def test_pydantic_ai_structured_output(self) -> None:
         """Test PydanticAI agents with structured outputs."""
         # Create agent that returns structured data
         agent = Agent(
             model=TestModel(),
-            result_type=UserProfile,
-            system_prompt="Extract user profile information.",
+            output_type=UserProfile,
+            instructions="Extract user profile information.",
         )
 
         result = await agent.run("My name is John and I like reading and coding")
 
-        self.assertIsInstance(result.data, UserProfile)
-        self.assertIsInstance(result.data.name, str)
-        self.assertIsInstance(result.data.interests, list)
+        self.assertIsInstance(result.output, UserProfile)
+        self.assertIsInstance(result.output.name, str)
+        self.assertIsInstance(result.output.interests, list)
 
     @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
     async def test_pydantic_ai_error_handling(
@@ -671,11 +671,11 @@ class TestPydanticAIAgents(TransactionTestCase):
 
         with agent.override(deps=deps1):
             result1 = await agent.run("What document am I working with?")
-            self.assertIsInstance(result1.data, str)
+            self.assertIsInstance(result1.output, str)
 
         with agent.override(deps=deps2):
             result2 = await agent.run("What corpus am I working with?")
-            self.assertIsInstance(result2.data, str)
+            self.assertIsInstance(result2.output, str)
 
     def test_pydantic_ai_vector_search_request_validation(self) -> None:
         """Test PydanticAI vector search request validation."""
