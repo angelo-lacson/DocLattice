@@ -187,7 +187,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       </div>
                     </div>
 
-                    {action.agentConfig && action.taskInstructions && (
+                    {action.taskInstructions && (
                       <AgentPromptBox>
                         <div className="prompt-label">Task Instructions:</div>
                         <div className="prompt-text">

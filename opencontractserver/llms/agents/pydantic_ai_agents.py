@@ -1791,12 +1791,25 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 "get_document_summary_diff",
                 "update_document_summary",
                 "get_document_summary_versions",
-                "search_document_notes",
-                "get_document_notes",
             ],
             document_id=context.document.id,
             corpus_id=_corpus_id,
             user_id=config.user_id,
+        )
+
+        # Corpus-required passthrough tools (only available when corpus context exists)
+        corpus_passthrough_tools = (
+            _build_tools_from_registry(
+                [
+                    "search_document_notes",
+                    "get_document_notes",
+                ],
+                document_id=context.document.id,
+                corpus_id=_corpus_id,
+                user_id=config.user_id,
+            )
+            if context.corpus is not None
+            else []
         )
 
         # -----------------------------
@@ -2064,6 +2077,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
 
         if context.corpus is not None:
             # Only add corpus-dependent tools when corpus is available
+            effective_tools.extend(corpus_passthrough_tools)
             effective_tools.extend(
                 [
                     get_summary_content_wrapped,  # genuinely custom (fallback logic)

@@ -128,7 +128,9 @@ class TestRunCorpusAction(GraphQLTestCase):
         response = self.query(
             RUN_CORPUS_ACTION_MUTATION,
             variables={
-                "corpusActionId": to_global_id("CorpusActionType", self.fieldset_action.id),
+                "corpusActionId": to_global_id(
+                    "CorpusActionType", self.fieldset_action.id
+                ),
                 "documentId": to_global_id("DocumentType", self.document.id),
             },
         )
