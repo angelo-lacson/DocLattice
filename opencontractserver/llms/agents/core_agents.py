@@ -1429,7 +1429,8 @@ def get_default_config(**overrides) -> AgentConfig:
         "verbose": True,
         "temperature": 0.7,
     }
-    defaults.update(overrides)
+    # Filter out None values so callers can't accidentally clobber defaults
+    defaults.update({k: v for k, v in overrides.items() if v is not None})
     return AgentConfig(**defaults)
 
 
