@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import TestCase, TransactionTestCase
 from graphene.test import Client
 
 from config.graphql.schema import schema
@@ -328,11 +328,14 @@ class TestEnsureEmbeddingsForCorpus(TestCase):
             preferred_embedder="test.embedder.path",
         )
 
-    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
+    @patch(
+        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        return_value="default.embedder.path",
+    )
     @patch(
         "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch"
     )
-    def test_queues_tasks_for_missing_embeddings(self, mock_batch_task):
+    def test_queues_tasks_for_missing_embeddings(self, mock_batch_task, _mock_path):
         """Should queue batch embedding tasks for annotations missing embeddings."""
         from opencontractserver.annotations.models import StructuralAnnotationSet
         from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
@@ -383,11 +386,14 @@ class TestEnsureEmbeddingsForCorpus(TestCase):
         self.assertEqual(result["tasks_queued"], 2)
         self.assertEqual(result["annotations_already_embedded"], 1)
 
-    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
+    @patch(
+        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        return_value="default.embedder.path",
+    )
     @patch(
         "opencontractserver.tasks.embeddings_task.calculate_embeddings_for_annotation_batch"
     )
-    def test_skips_if_all_embeddings_exist(self, mock_batch_task):
+    def test_skips_if_all_embeddings_exist(self, mock_batch_task, _mock_path):
         """Should not queue any tasks if all embeddings already exist."""
         from opencontractserver.annotations.models import StructuralAnnotationSet
         from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
@@ -787,8 +793,11 @@ class TestEnsureEmbeddingsNoEmbedderConfigured(TestCase):
             password="testpass123",
         )
 
-    @override_settings(DEFAULT_EMBEDDER=None)
-    def test_no_embedders_configured_returns_error(self):
+    @patch(
+        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        return_value="",
+    )
+    def test_no_embedders_configured_returns_error(self, _mock_path):
         """Should return error when no embedders are configured."""
         from opencontractserver.annotations.models import StructuralAnnotationSet
         from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
@@ -810,8 +819,11 @@ class TestEnsureEmbeddingsNoEmbedderConfigured(TestCase):
 
         self.assertIn("No embedders configured", result["errors"])
 
-    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
-    def test_empty_structural_set_returns_early(self):
+    @patch(
+        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        return_value="default.embedder.path",
+    )
+    def test_empty_structural_set_returns_early(self, _mock_path):
         """Should return early when structural set has no annotations."""
         from opencontractserver.annotations.models import StructuralAnnotationSet
         from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
@@ -1162,12 +1174,15 @@ class TestEmbeddingTaskQueueFailure(TestCase):
             backend_lock=False,
         )
 
-    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
+    @patch(
+        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        return_value="default.embedder.path",
+    )
     @patch(
         "opencontractserver.tasks.embeddings_task"
         ".calculate_embeddings_for_annotation_batch"
     )
-    def test_queue_failure_returns_error_in_result(self, mock_batch_task):
+    def test_queue_failure_returns_error_in_result(self, mock_batch_task, _mock_path):
         """ensure_embeddings_for_corpus should catch and report queue failures."""
         from opencontractserver.annotations.models import StructuralAnnotationSet
         from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
@@ -1232,12 +1247,15 @@ class TestEmbeddingTaskQueueFailure(TestCase):
         self.assertIsNotNone(doc_path)
         self.assertEqual(doc_path.corpus_id, self.corpus.pk)
 
-    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
+    @patch(
+        "opencontractserver.tasks.corpus_tasks.get_default_embedder_path",
+        return_value="default.embedder.path",
+    )
     @patch(
         "opencontractserver.tasks.embeddings_task"
         ".calculate_embeddings_for_annotation_batch"
     )
-    def test_partial_queue_failure_reports_queued_count(self, mock_batch_task):
+    def test_partial_queue_failure_reports_queued_count(self, mock_batch_task, _mock_path):
         """
         If some batches queue successfully before a failure, the result
         should reflect the partial success.
