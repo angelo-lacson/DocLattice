@@ -251,7 +251,7 @@ class AgentConfig:
 
     # Basic configuration
     user_id: Optional[int] = None
-    model_name: str = "gpt-4.1"
+    model_name: str = "gpt-4o"
     api_key: Optional[str] = None
     embedder_path: Optional[str] = None
     similarity_top_k: int = 10

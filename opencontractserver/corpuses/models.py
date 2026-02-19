@@ -1007,11 +1007,15 @@ class CorpusAction(BaseOCModel):
                         analyzer__isnull=False,
                         agent_config__isnull=True,
                     )
-                    # Agent with config (no fieldset, no analyzer)
-                    | django.db.models.Q(
-                        fieldset__isnull=True,
-                        analyzer__isnull=True,
-                        agent_config__isnull=False,
+                    # Agent with config (no fieldset, no analyzer).
+                    # Requires non-empty task_instructions to match clean().
+                    | (
+                        django.db.models.Q(
+                            fieldset__isnull=True,
+                            analyzer__isnull=True,
+                            agent_config__isnull=False,
+                        )
+                        & ~django.db.models.Q(task_instructions="")
                     )
                     # Lightweight agent: task_instructions only
                     | (
@@ -1042,7 +1046,9 @@ class CorpusAction(BaseOCModel):
 
         An action is agent-based if it has an agent_config, or if it has
         task_instructions without a fieldset or analyzer (lightweight agent).
-        This mirrors the validation in clean() and the DB constraint.
+
+        Keep in sync with: clean() validation and Meta.constraints
+        (valid_action_type_configuration).
         """
         if self.agent_config_id:
             return True
@@ -1077,7 +1083,9 @@ class CorpusAction(BaseOCModel):
                 "task_instructions cannot be set on fieldset or analyzer actions."
             )
 
-        # Agent actions (with config) require task_instructions
+        # Agent actions (with config) require task_instructions.
+        # Keep in sync with: is_agent_action property and Meta.constraints
+        # (valid_action_type_configuration).
         if has_agent_config and not has_task_instructions:
             raise ValidationError(
                 "task_instructions is required for agent-based actions."

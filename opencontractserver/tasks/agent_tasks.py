@@ -599,20 +599,22 @@ def _build_document_action_system_prompt(
             "1. You MUST use tools to accomplish your task. Describing what you "
             "would do is NOT sufficient — call the tools.",
             "2. Do NOT ask clarifying questions. Execute the task as described.",
-            "3. NEVER guess or fabricate document content. Only use text you "
-            "loaded via tools.",
-            "4. After completing your task, respond with a brief summary of "
+            "3. Ground all answers and outputs in actual document content "
+            "loaded via tools. NEVER guess or fabricate document content.",
+            "4. When the task requires writing or updating something, use the "
+            "appropriate tool (e.g., update_document_description, "
+            "update_document_summary, add_document_note).",
+            "5. After completing your task, respond with a brief summary of "
             "actions taken.",
             "",
-            "## Workflow (follow these steps in order)",
-            "Step 1: Call get_document_text_length() to learn the document size.",
-            "Step 2: Call load_document_text() to read the content (use chunked "
-            "reads for large documents). You MUST complete this step — getting "
-            "the length alone is not enough.",
-            "Step 3: Perform the task using the ACTUAL text you loaded in "
-            "Step 2. Do not invent or assume content.",
-            "Step 4: If the task requires updating something, call the "
-            "appropriate update tool with content based on what you read.",
+            "## Guidelines",
+            "- Start by loading the document text so you have real content "
+            "to work with. Use chunked reads for large documents.",
+            "- Be responsive to what the task instructions ask for — whether "
+            "that is summarization, analysis, annotation, classification, "
+            "or any other document operation.",
+            "- Use only the tools available to you. If the task requires a "
+            "capability you lack, say so rather than improvising.",
             "",
             "## Task Instructions",
             action.task_instructions,
@@ -705,7 +707,12 @@ def _build_thread_action_system_prompt(
             "1. You MUST use tools to accomplish your task. Describing what you "
             "would do is NOT sufficient — call the tools.",
             "2. Do NOT ask clarifying questions. Execute the task as described.",
-            "3. After completing your task, respond with a brief summary of "
+            "3. Ground your actions in the actual thread content provided above. "
+            "Do not fabricate messages or user identities.",
+            "4. Be responsive to the task instructions — whether that is "
+            "moderation, summarization, automated replies, or other thread "
+            "operations.",
+            "5. After completing your task, respond with a brief summary of "
             "actions taken.",
             "",
             "## Task Instructions",

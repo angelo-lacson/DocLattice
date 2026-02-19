@@ -64,12 +64,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thread context injection refactored**: Thread-based agent actions now use the same structured prompt pattern as document actions, with thread context, recent messages, and triggering message content all included in the system prompt rather than the user message.
 - **`AgentConfiguration` is now optional for agent actions**: `CorpusAction` can be created with just `task_instructions` (no `agent_config` required). The DB constraint (`valid_action_type_configuration`) now allows lightweight agent actions. `AgentConfiguration` is still supported for custom persona/tool defaults.
 - **Default tool selection by trigger type** (`opencontractserver/constants/corpus_actions.py`): When no tools are specified on `agent_config.available_tools`, the system auto-selects trigger-appropriate defaults (document tools for add/edit triggers, moderation tools for thread/message triggers).
-- **`pre_authorized_tools` no longer determines tool availability** (`opencontractserver/tasks/agent_tasks.py`): Previously, `pre_authorized_tools` was used as both the tool set AND the approval gate — if set, it replaced `agent_config.available_tools` entirely. Now `pre_authorized_tools` only controls which tools skip approval gates. Tool availability is determined by `agent_config.available_tools` (if set) or trigger-appropriate defaults. **Breaking change**: Any existing action that relied on `pre_authorized_tools` to restrict tool access will now receive the full `agent_config.available_tools` set instead.
+- **`pre_authorized_tools` semantics changed** (`opencontractserver/tasks/agent_tasks.py`): `pre_authorized_tools` now only controls which tools skip approval gates. Tool availability is determined by `agent_config.available_tools` (if set) or trigger-appropriate defaults. See **Breaking Changes** below for migration guidance.
 - **GraphQL API updated**: `CreateCorpusAction` and `UpdateCorpusAction` mutations use `taskInstructions` instead of `agentPrompt`. The `taskInstructions` field alone (without `agentConfigId`) is now sufficient to create an agent action.
 - **Frontend updated**: `CreateCorpusActionModal` and `CorpusActionsSection` use "Task Instructions" labeling instead of "Agent Prompt".
 - **Unified Quick Create flow**: `CreateCorpusActionModal` now supports inline agent creation for document triggers (add_document, edit_document) in addition to thread triggers. The modal auto-selects trigger-appropriate tools and default instructions.
 - **Manual action trigger** (`config/graphql/mutations.py`): New `RunCorpusAction` mutation allows superusers to manually trigger agent actions on specific documents. Uses `transaction.on_commit()` to dispatch Celery tasks after the DB transaction commits, and `force=True` to bypass dedup checks for manual triggers.
 - **ToolFunctionRegistry** (`opencontractserver/llms/tools/tool_registry.py`): Centralized singleton registry mapping tool names to sync/async function implementations. Replaces 3 manually-curated dicts in `_resolve_tools()`. Adding a new tool now requires edits in 2 files instead of 4+.
+
+### Breaking Changes
+
+- **`pre_authorized_tools` no longer controls tool availability**: Previously, `pre_authorized_tools` was used as both the tool set AND the approval gate — if set, it replaced `agent_config.available_tools` entirely. Now it only controls which tools skip the approval gate. **Migration**: If you relied on `pre_authorized_tools` to restrict which tools an agent can access, move those tool names to `agent_config.available_tools` instead. `pre_authorized_tools` should only list tools that are safe to run without human approval.
+
+### Known Limitations
+
+- **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
 
 ### Added
 
