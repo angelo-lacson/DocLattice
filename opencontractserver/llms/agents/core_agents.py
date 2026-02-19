@@ -1250,6 +1250,7 @@ class CoreConversationManager:
             data={
                 "state": MessageState.IN_PROGRESS,
                 "created_at": timezone.now().isoformat(),
+                "model_name": self.config.model_name,
             },
             state=MessageState.IN_PROGRESS,
         )
@@ -1286,6 +1287,7 @@ class CoreConversationManager:
 
         data = message.data or {}
         data["completed_at"] = timezone.now().isoformat()
+        data["model_name"] = self.config.model_name
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
@@ -1348,6 +1350,7 @@ class CoreConversationManager:
         data = {
             "state": MessageState.COMPLETED,
             "created_at": timezone.now().isoformat(),
+            "model_name": self.config.model_name,
         }
 
         if sources:

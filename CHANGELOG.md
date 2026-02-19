@@ -5,7 +5,15 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-12
+## [Unreleased] - 2026-02-19
+
+### Added
+
+#### Store Model Name in ChatMessage Metadata (#897)
+- **Automatic model name persistence**: The LLM model name from `AgentConfig` is now stored in the `data` JSON field of every `ChatMessage` produced by an agent, enabling debugging, auditing, and reproducibility
+  - `opencontractserver/llms/agents/core_agents.py` — `CoreConversationManager.complete_message()`, `store_llm_message()`, and `create_placeholder_message()` all write `data["model_name"]` from `self.config.model_name`
+- **Tests**: Four new async tests verifying model name storage across all message lifecycle paths
+  - `opencontractserver/tests/test_core_agents.py` — `test_complete_message_stores_model_name`, `test_complete_message_uses_default_model_name`, `test_store_llm_message_stores_model_name`, `test_placeholder_message_stores_model_name`
 
 ### Added
 
