@@ -2036,7 +2036,11 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_description_revisions(self, info):
         # Returns all revisions, ordered by version asc by default from model ordering
-        return self.revisions.all() if hasattr(self, "revisions") else []
+        return (
+            self.revisions.select_related("author").all()
+            if hasattr(self, "revisions")
+            else []
+        )
 
     # Folder structure
     folders = graphene.List(

@@ -33,8 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Architecture documentation**: Added "Nested Approval Gates" section to LLM framework docs with flow diagrams and security notes
   - File: `docs/architecture/llms/README.md`
 
-### Added
-
 #### Expose Tool Usage in Chat UI
 - **Tool Usage Badge** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1180-1288`): Assistant messages that use tools now display a wrench icon badge ("X tools used") in the message header, visible in both document and corpus chat views. Users can quickly see AI tool usage without expanding the full timeline, improving agent transparency.
 - **Tool Call Popover** (`ChatMessage.tsx:1222-1286`): Hovering over the badge opens a popover listing each tool call's formatted name, JSON input arguments, and output result. Keyboard accessible (Enter/Space to toggle, Escape to close) with full ARIA attributes.
@@ -45,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tool result entries for search tools** (`pydantic_ai_agents.py:642-657, 686-702, 807-813`): `similarity_search`, `search_exact_text`, and `ask_document` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"). Other tools use a generic extractor with "Completed" fallback.
 
 ### Fixed
+
+#### Edit Description Modal Does Not Save on Update (Issue #899)
+- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
+  - File: `frontend/src/App.tsx` (lines 128-149, 398)
+- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
+- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
+  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
 
 #### Security: LLM Prompt Injection Protection for Approval Bypass
 - **Replaced `skip_approval` function parameter with `config._approval_bypass_allowed` flag**: The previous design exposed a `skip_approval` parameter in `ask_document_tool`'s function signature that a malicious LLM could set to `True` to bypass approval gates. Now uses a runtime flag on `AgentConfig` that only `resume_with_approval()` can set, wrapped in a `try/finally` block to guarantee reset
@@ -105,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
 - **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
+
 ### Fixed
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
