@@ -605,9 +605,13 @@ def _build_document_action_system_prompt(
             "actions taken.",
             "",
             "## Workflow (follow these steps in order)",
-            "Step 1: Call load_document_text() to read the document content.",
-            "Step 2: Perform the task using the text you loaded.",
-            "Step 3: If the task requires updating something, call the "
+            "Step 1: Call get_document_text_length() to learn the document size.",
+            "Step 2: Call load_document_text() to read the content (use chunked "
+            "reads for large documents). You MUST complete this step — getting "
+            "the length alone is not enough.",
+            "Step 3: Perform the task using the ACTUAL text you loaded in "
+            "Step 2. Do not invent or assume content.",
+            "Step 4: If the task requires updating something, call the "
             "appropriate update tool with content based on what you read.",
             "",
             "## Task Instructions",
