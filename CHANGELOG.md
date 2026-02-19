@@ -5,6 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-19
+
+### Fixed
+
+#### Edit Description Modal Does Not Save on Update (Issue #899)
+- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
+  - File: `frontend/src/App.tsx` (lines 128-149, 398)
+- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
+- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
+  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
+
 ## [Unreleased] - 2026-02-12
 
 ### Added
