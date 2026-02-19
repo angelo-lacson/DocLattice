@@ -294,6 +294,7 @@ export type RawCorpusType = Node & {
   is_selected?: boolean;
   is_opened?: boolean;
   description?: Scalars["String"];
+  mdDescription?: Maybe<Scalars["String"]>;
   icon?: Maybe<Scalars["String"]>;
   documents?: DocumentTypeConnection;
   documentCount?: Scalars["Int"];

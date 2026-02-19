@@ -5,7 +5,26 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-12
+## [Unreleased] - 2026-02-19
+
+### Fixed
+
+#### Frontend: Most views show legacy corpus.description instead of versioned mdDescription (Closes #892)
+- **Backend description sync**: `Corpus.update_description()` now keeps the plain-text `description` field in sync when `md_description` is updated via the versioned markdown system. A new `_markdown_to_plain_text()` static method strips markdown formatting for the plain-text field.
+  - File: `opencontractserver/corpuses/models.py` (lines 249-272, `update_description` method)
+- **New `useCorpusMdDescription` hook**: Reusable React hook that fetches markdown content from a corpus's `mdDescription` URL and returns the raw text for rendering with `SafeMarkdown`.
+  - File: `frontend/src/hooks/useCorpusMdDescription.ts`
+- **CorpusContextSidebar**: Now fetches and renders the versioned markdown description instead of the stale plain-text `description` field.
+  - File: `frontend/src/components/threads/CorpusContextSidebar.tsx`
+- **DocumentKnowledgeBase**: Corpus info display now fetches `mdDescription` content and renders it as markdown. Added `title`, `description`, and `mdDescription` fields to the `GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS` query's corpus selection.
+  - File: `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`
+  - File: `frontend/src/graphql/queries.ts` (line 3028)
+- **CorpusHeader (settings)**: Now fetches and renders the versioned markdown description via `useCorpusMdDescription` hook with `SafeMarkdown`. Added `mdDescription` to prop chain through `CorpusSettings` and `Corpuses.tsx`.
+  - File: `frontend/src/components/corpuses/settings/CorpusHeader.tsx`
+  - File: `frontend/src/components/corpuses/CorpusSettings.tsx`
+  - File: `frontend/src/views/Corpuses.tsx`
+- **TypeScript type update**: Added `mdDescription` optional field to `RawCorpusType`.
+  - File: `frontend/src/types/graphql-api.ts`
 
 ### Added
 

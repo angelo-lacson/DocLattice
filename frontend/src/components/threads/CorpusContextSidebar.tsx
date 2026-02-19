@@ -8,7 +8,7 @@
  * - Collapsible sections and responsive behavior
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { useAtom } from "jotai";
 import {
@@ -34,6 +34,7 @@ import { threadContextSidebarExpandedAtom } from "../../atoms/threadAtoms";
 import { DocumentTableOfContents } from "../corpuses/DocumentTableOfContents";
 import { SafeMarkdown } from "../knowledge_base/markdown/SafeMarkdown";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
+import { useCorpusMdDescription } from "../../hooks/useCorpusMdDescription";
 
 import {
   ContextSidebarContainer,
@@ -96,11 +97,11 @@ export const CorpusContextSidebar: React.FC<CorpusContextSidebarProps> =
 
     const stats: CorpusStats | null = statsData?.corpusStats ?? null;
 
-    // Get description from corpus
-    const description = useMemo(() => {
-      if (!corpus) return null;
-      return corpus.description || null;
-    }, [corpus]);
+    // Fetch markdown description from the file URL, falling back to plain text
+    const { content: mdContent } = useCorpusMdDescription(
+      corpus?.mdDescription
+    );
+    const description = mdContent || corpus?.description || null;
 
     // Don't render on small screens
     if (width < SIDEBAR_BREAKPOINT_HIDE) {
