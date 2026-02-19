@@ -61,6 +61,7 @@ interface CorpusSettingsProps {
     id: string;
     title: string;
     description: string;
+    mdDescription?: string | null;
     allowComments: boolean;
     preferredEmbedder?: string | null;
     slug?: string | null;

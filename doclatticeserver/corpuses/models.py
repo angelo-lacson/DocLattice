@@ -1,6 +1,7 @@
 import difflib
 import hashlib
 import logging
+import re
 import uuid
 from typing import Optional
 
@@ -246,8 +247,37 @@ class Corpus(TreeNode):
             finally:
                 self.md_description.close()
 
+    @staticmethod
+    def _markdown_to_plain_text(md: str) -> str:
+        """Convert markdown to plain text by stripping formatting syntax."""
+        text = md
+        # Remove headings markers
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+        # Remove bold/italic markers
+        text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text)
+        text = re.sub(r"_{1,3}(.+?)_{1,3}", r"\1", text)
+        # Convert links [text](url) → text
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        # Remove images ![alt](url)
+        text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+        # Remove inline code backticks
+        text = re.sub(r"`(.+?)`", r"\1", text)
+        # Remove blockquote markers
+        text = re.sub(r"^>\s+", "", text, flags=re.MULTILINE)
+        # Remove horizontal rules
+        text = re.sub(r"^[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)
+        # Remove list markers
+        text = re.sub(r"^[\s]*[-*+]\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^[\s]*\d+\.\s+", "", text, flags=re.MULTILINE)
+        # Collapse multiple blank lines
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
     def update_description(self, *, new_content: str, author):
         """Create a new revision and update md_description.
+
+        Also keeps the plain-text ``description`` field in sync so that
+        list views and card components always reflect the latest content.
 
         Args:
             new_content (str): Markdown content.
@@ -272,6 +302,8 @@ class Corpus(TreeNode):
             self.md_description.save(
                 filename, ContentFile(new_content.encode("utf-8")), save=False
             )
+            # Keep the plain-text description field in sync
+            self.description = self._markdown_to_plain_text(new_content)
             self.modified = timezone.now()
             self.save()
 
