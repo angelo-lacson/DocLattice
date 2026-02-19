@@ -970,15 +970,19 @@ class CoreDocumentAgentFactory:
         """
         from django.conf import settings
 
+        from opencontractserver.utils.prompt_sanitization import fence_user_content
+
         # Check for custom instructions on the corpus
         if corpus and corpus.document_agent_instructions:
             base_instructions = corpus.document_agent_instructions
         else:
             base_instructions = settings.DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS
 
-        # Prepend document context to the instructions
+        # Prepend document context to the instructions.
+        # Document title is user-supplied, so fence it.
+        fenced_title = fence_user_content(document.title, label="document title")
         return (
-            f"You are analyzing the document titled '{document.title}' (ID: {document.id}).\n\n"
+            f"You are analyzing the document titled {fenced_title} (ID: {document.id}).\n\n"
             f"{base_instructions}"
         )
 
@@ -1041,15 +1045,19 @@ class CoreCorpusAgentFactory:
         """
         from django.conf import settings
 
+        from opencontractserver.utils.prompt_sanitization import fence_user_content
+
         # Check for custom instructions on the corpus
         if corpus.corpus_agent_instructions:
             base_instructions = corpus.corpus_agent_instructions
         else:
             base_instructions = settings.DEFAULT_CORPUS_AGENT_INSTRUCTIONS
 
-        # Prepend corpus context to the instructions
+        # Prepend corpus context to the instructions.
+        # Corpus title is user-supplied, so fence it.
+        fenced_title = fence_user_content(corpus.title, label="corpus title")
         return (
-            f"You are analyzing the corpus titled '{corpus.title}' (ID: {corpus.id}).\n\n"
+            f"You are analyzing the corpus titled {fenced_title} (ID: {corpus.id}).\n\n"
             f"{base_instructions}"
         )
 

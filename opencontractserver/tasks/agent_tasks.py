@@ -805,12 +805,25 @@ async def _run_agent_thread_action_async(
     thread_context = await aget_thread_context(conversation_id)
     recent_messages = await aget_thread_messages(conversation_id, limit=10)
 
-    # Build the prompt with context
+    # ------------------------------------------------------------------
+    # Build the prompt with context.
+    #
+    # SECURITY: All user-generated content (message bodies, titles, etc.)
+    # is wrapped in <user_content> tags so the LLM can distinguish
+    # instructions from untrusted data.  See prompt_sanitization.py.
+    # ------------------------------------------------------------------
+    from opencontractserver.utils.prompt_sanitization import (
+        UNTRUSTED_CONTENT_NOTICE,
+        fence_user_content,
+        warn_if_content_large,
+    )
+
     context_parts = [
         "You are reviewing a discussion thread for moderation.",
+        f"\n{UNTRUSTED_CONTENT_NOTICE}",
         "\n## Thread Information:",
         f"- Thread ID: {conversation_id}",
-        f"- Title: {thread_context['title']}",
+        f"- Title: {fence_user_content(thread_context['title'], label='thread title')}",
         f"- Creator: {thread_context['creator_username']}",
         f"- Message count: {thread_context['message_count']}",
         f"- Is locked: {thread_context['is_locked']}",
@@ -822,24 +835,25 @@ async def _run_agent_thread_action_async(
 
     if message_id and message:
         message_content = await aget_message_content(message_id)
+        raw_content = message_content.get("content", "")
+        warn_if_content_large(raw_content, context="triggering message")
         context_parts.extend(
             [
                 f"\n## Triggering Message (ID: {message_id}):",
                 f"- Author: {message_content['creator_username']}",
-                f"- Content:\n{message_content['content']}",
+                f"- Content:\n{fence_user_content(raw_content, label='message body')}",
             ]
         )
 
     context_parts.append("\n## Recent Thread Messages (most recent first):")
 
     for msg in recent_messages[:5]:
-        content_preview = (
-            msg["content"][:200] + "..."
-            if len(msg["content"]) > 200
-            else msg["content"]
-        )
+        raw_preview = msg["content"]
+        if len(raw_preview) > 200:
+            raw_preview = raw_preview[:200] + "..."
         context_parts.append(
-            f"- [{msg['creator_username']}] (ID: {msg['id']}): {content_preview}"
+            f"- [{msg['creator_username']}] (ID: {msg['id']}): "
+            f"{fence_user_content(raw_preview, label='message')}"
         )
 
     context_parts.append("\n## Your Task:")
