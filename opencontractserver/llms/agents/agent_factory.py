@@ -145,7 +145,7 @@ class UnifiedAgentFactory:
 
         config = get_default_config(
             user_id=user_id,
-            model_name=model or kwargs.get("model_name", "gpt-4o-mini"),
+            model_name=model or kwargs.get("model_name"),
             system_prompt=system_prompt,
             temperature=temperature or kwargs.get("temperature", 0.7),
             max_tokens=max_tokens,
@@ -325,7 +325,7 @@ class UnifiedAgentFactory:
 
         config = get_default_config(
             user_id=user_id,
-            model_name=model or kwargs.get("model_name", "gpt-4o-mini"),
+            model_name=model or kwargs.get("model_name"),
             system_prompt=system_prompt,
             temperature=temperature or kwargs.get("temperature", 0.7),
             max_tokens=max_tokens,

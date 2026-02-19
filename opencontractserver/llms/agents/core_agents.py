@@ -1422,7 +1422,7 @@ class CoreConversationManager:
 def get_default_config(**overrides) -> AgentConfig:
     """Get default agent configuration with optional overrides."""
     defaults = {
-        "model_name": "gpt-4o-mini",
+        "model_name": getattr(settings, "OPENAI_MODEL", "gpt-4o"),
         "api_key": getattr(settings, "OPENAI_API_KEY", None),
         "similarity_top_k": 10,
         "streaming": True,
