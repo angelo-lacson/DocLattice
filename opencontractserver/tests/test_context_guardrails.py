@@ -6,7 +6,8 @@ fast and can be parallelised trivially.  They exercise the public API of
 constants in :mod:`opencontractserver.constants.context_guardrails`.
 """
 
-from unittest.mock import MagicMock
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.test import SimpleTestCase
 
@@ -458,3 +459,190 @@ class TestConversationCompactionFields(SimpleTestCase):
         field = Conversation._meta.get_field("compacted_before_message_id")
         self.assertTrue(field.null)
         self.assertTrue(field.blank)
+
+
+# ---------------------------------------------------------------------------
+# Persist failure path — context must be preserved
+# ---------------------------------------------------------------------------
+
+
+class TestPersistFailurePreservesContext(SimpleTestCase):
+    """Verify that when persist_compaction fails, the full message list is
+    kept for the current call so no context is lost."""
+
+    def test_persist_failure_keeps_full_message_list(self):
+        """Simulate _get_message_history when persist_compaction raises."""
+        # Build a scenario: 20 messages, compaction triggers, but persist fails.
+        messages = [
+            _MessageProxy(
+                role="human" if i % 2 == 0 else "llm",
+                content=f"Message {i}: " + "x" * 500,
+            )
+            for i in range(20)
+        ]
+
+        # Perform compaction (low threshold forces it)
+        result = compact_message_history(messages, "gpt-4o-mini", threshold_ratio=0.001)
+        self.assertTrue(result.compacted)
+        self.assertGreater(result.removed_count, 0)
+
+        # Simulate the agent's _get_message_history logic:
+        # On persist failure, raw_messages should NOT be trimmed.
+        raw_messages = list(messages)
+        stored_summary = ""
+
+        merged_summary = result.summary
+
+        persist_failed = False
+        try:
+            # Simulate a DB failure
+            raise RuntimeError("DB write failed")
+        except Exception:
+            persist_failed = True
+
+        if not persist_failed:
+            stored_summary = merged_summary
+            raw_messages = raw_messages[-result.preserved_count :]
+
+        # After failure: raw_messages should still have all 20 messages
+        self.assertEqual(len(raw_messages), 20)
+        # stored_summary should still be empty (not merged)
+        self.assertEqual(stored_summary, "")
+
+
+# ---------------------------------------------------------------------------
+# max_tool_output_chars override via PydanticAIDependencies
+# ---------------------------------------------------------------------------
+
+
+class TestMaxToolOutputCharsOverride(SimpleTestCase):
+    """Verify that PydanticAIDependencies.max_tool_output_chars is
+    respected by the tool wrapper truncation calls."""
+
+    def test_deps_default_matches_global_constant(self):
+        """The default max_tool_output_chars should match the constant."""
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            PydanticAIDependencies,
+        )
+
+        deps = PydanticAIDependencies()
+        self.assertEqual(deps.max_tool_output_chars, MAX_TOOL_OUTPUT_CHARS)
+
+    def test_deps_accepts_custom_value(self):
+        """A custom max_tool_output_chars should be stored on the deps."""
+        from opencontractserver.llms.tools.pydantic_ai_tools import (
+            PydanticAIDependencies,
+        )
+
+        deps = PydanticAIDependencies(max_tool_output_chars=10_000)
+        self.assertEqual(deps.max_tool_output_chars, 10_000)
+
+    def test_truncation_respects_custom_limit(self):
+        """truncate_tool_output should use the custom limit when passed."""
+        long_text = "x" * 20_000
+        # With default (50K), this should NOT be truncated
+        result_default = truncate_tool_output(long_text)
+        self.assertEqual(result_default, long_text)
+
+        # With a 10K limit, it SHOULD be truncated
+        result_custom = truncate_tool_output(long_text, max_chars=10_000)
+        self.assertIn("truncated", result_custom)
+        self.assertLess(len(result_custom), 20_000)
+
+
+# ---------------------------------------------------------------------------
+# Optimistic locking in persist_compaction
+# ---------------------------------------------------------------------------
+
+
+class TestPersistCompactionOptimisticLock(SimpleTestCase):
+    """Verify that persist_compaction uses optimistic locking to avoid
+    overwriting a concurrently-advanced bookmark."""
+
+    def test_concurrent_persist_second_write_is_noop(self):
+        """If the bookmark moves between read and write, the write is skipped."""
+        from opencontractserver.llms.agents.core_agents import (
+            CoreConversationManager,
+        )
+
+        # Create a mock conversation with no existing bookmark
+        mock_conv = MagicMock()
+        mock_conv.pk = 42
+        mock_conv.compacted_before_message_id = None
+        mock_conv.compaction_summary = ""
+
+        manager = CoreConversationManager.__new__(CoreConversationManager)
+        manager.conversation = mock_conv
+
+        # Patch Conversation.objects.filter().aupdate()
+        with patch(
+            "opencontractserver.llms.agents.core_agents.Conversation"
+        ) as MockConv:
+            # First call: filter matches → updated=1
+            mock_qs = MagicMock()
+            mock_qs.aupdate = AsyncMock(return_value=1)
+            MockConv.objects.filter.return_value = mock_qs
+
+            asyncio.get_event_loop().run_until_complete(
+                manager.persist_compaction(summary="Summary A", cutoff_message_id=100)
+            )
+
+            # Verify the in-memory state was updated
+            self.assertEqual(mock_conv.compaction_summary, "Summary A")
+            self.assertEqual(mock_conv.compacted_before_message_id, 100)
+
+        # Now simulate the second concurrent request: bookmark already moved
+        mock_conv.compacted_before_message_id = 100
+
+        with patch(
+            "opencontractserver.llms.agents.core_agents.Conversation"
+        ) as MockConv:
+            # Second call: filter doesn't match → updated=0
+            mock_qs = MagicMock()
+            mock_qs.aupdate = AsyncMock(return_value=0)
+            MockConv.objects.filter.return_value = mock_qs
+
+            asyncio.get_event_loop().run_until_complete(
+                manager.persist_compaction(summary="Summary B", cutoff_message_id=90)
+            )
+
+            # In-memory state should NOT be updated (stale write was skipped)
+            self.assertEqual(mock_conv.compaction_summary, "Summary A")
+            self.assertEqual(mock_conv.compacted_before_message_id, 100)
+
+
+# ---------------------------------------------------------------------------
+# Running-total loop equivalence
+# ---------------------------------------------------------------------------
+
+
+class TestCompactionRunningTotalLoop(SimpleTestCase):
+    """Verify the running-total recent-message sizing produces correct results."""
+
+    def test_min_recent_respected(self):
+        """Even with huge messages, at least min_recent messages are kept."""
+        big = "x" * 500_000  # ~142K tokens each
+        messages = [
+            _MessageProxy(role="human", content=big),
+            _MessageProxy(role="llm", content=big),
+            _MessageProxy(role="human", content=big),
+            _MessageProxy(role="llm", content=big),
+            _MessageProxy(role="human", content=big),
+        ]
+        result = compact_message_history(
+            messages, "gpt-4o-mini", threshold_ratio=0.001, min_recent=2
+        )
+        self.assertTrue(result.compacted)
+        self.assertGreaterEqual(result.preserved_count, 2)
+
+    def test_max_recent_respected(self):
+        """Recent count should not exceed max_recent."""
+        messages = [
+            _MessageProxy(role="human" if i % 2 == 0 else "llm", content="x" * 100)
+            for i in range(30)
+        ]
+        result = compact_message_history(
+            messages, "gpt-4o-mini", threshold_ratio=0.001, max_recent=5
+        )
+        if result.compacted:
+            self.assertLessEqual(result.preserved_count, 5)

@@ -280,7 +280,7 @@ class AgentConfig:
     tools: list[Any] = field(default_factory=list)
 
     # Context guardrails — controls conversation compaction and tool output
-    # truncation.  ``None`` uses sensible defaults from CompactionConfig.
+    # truncation.  Defaults are sourced from the constants module.
     compaction: CompactionConfig = field(default_factory=CompactionConfig)
 
 
@@ -1252,17 +1252,44 @@ class CoreConversationManager:
     ) -> None:
         """Write the compaction bookmark to the Conversation row.
 
-        After this call, :meth:`get_conversation_messages` will only
-        return messages newer than *cutoff_message_id*.
+        Uses an optimistic-lock pattern: the ``UPDATE`` only touches
+        rows whose ``compacted_before_message_id`` hasn't moved since
+        we read it.  If a concurrent request already advanced the
+        bookmark past *cutoff_message_id*, this call is a harmless
+        no-op (the other request's compaction wins).
+
+        After a successful call, :meth:`get_conversation_messages` will
+        only return messages newer than *cutoff_message_id*.
         """
         if not self.conversation:
             return
 
-        self.conversation.compaction_summary = summary
-        self.conversation.compacted_before_message_id = cutoff_message_id
-        await self.conversation.asave(
-            update_fields=["compaction_summary", "compacted_before_message_id"]
+        old_cutoff = self.conversation.compacted_before_message_id
+
+        # Build a filter that matches the row only when the bookmark
+        # hasn't been moved by a concurrent request.
+        filters: dict = {"pk": self.conversation.pk}
+        if old_cutoff is None:
+            filters["compacted_before_message_id__isnull"] = True
+        else:
+            filters["compacted_before_message_id"] = old_cutoff
+
+        updated = await Conversation.objects.filter(**filters).aupdate(
+            compaction_summary=summary,
+            compacted_before_message_id=cutoff_message_id,
         )
+
+        if updated:
+            # Keep the in-memory object consistent.
+            self.conversation.compaction_summary = summary
+            self.conversation.compacted_before_message_id = cutoff_message_id
+        else:
+            logger.info(
+                "Compaction bookmark already advanced (expected cutoff=%s, "
+                "target=%s) — skipping stale write",
+                old_cutoff,
+                cutoff_message_id,
+            )
 
     async def create_placeholder_message(self, msg_type: str = "LLM") -> int:
         """Create a placeholder message with state tracking."""

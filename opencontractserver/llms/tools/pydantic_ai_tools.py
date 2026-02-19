@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional, get_type_hints
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai.tools import RunContext
 
+from opencontractserver.constants.context_guardrails import MAX_TOOL_OUTPUT_CHARS
 from opencontractserver.llms.context_guardrails import truncate_tool_output
 from opencontractserver.llms.exceptions import ToolConfirmationRequired
 from opencontractserver.llms.tools.tool_factory import CoreTool
@@ -217,6 +218,13 @@ class PydanticAIDependencies(BaseModel):
         description="If True, skip approval prompts for all tools in this agent",
     )
 
+    # Per-agent tool output truncation limit.  Populated from
+    # CompactionConfig.max_tool_output_chars at agent construction time.
+    max_tool_output_chars: int = Field(
+        default=MAX_TOOL_OUTPUT_CHARS,
+        description="Maximum characters for tool output before truncation",
+    )
+
 
 class PydanticAIToolWrapper:
     """Modern Pydantic AI tool wrapper following latest patterns."""
@@ -364,7 +372,8 @@ class PydanticAIToolWrapper:
                     # Apply tool output truncation to prevent oversized
                     # returns from bloating the conversation context.
                     if isinstance(result, str):
-                        result = truncate_tool_output(result)
+                        max_chars = ctx.deps.max_tool_output_chars
+                        result = truncate_tool_output(result, max_chars=max_chars)
                     return result
                 except (PermissionError, ToolConfirmationRequired):
                     # Security and approval exceptions must propagate to the
@@ -417,7 +426,8 @@ class PydanticAIToolWrapper:
                 try:
                     result = original_func(*args, **kwargs)
                     if isinstance(result, str):
-                        result = truncate_tool_output(result)
+                        max_chars = ctx.deps.max_tool_output_chars
+                        result = truncate_tool_output(result, max_chars=max_chars)
                     return result
                 except (PermissionError, ToolConfirmationRequired):
                     raise

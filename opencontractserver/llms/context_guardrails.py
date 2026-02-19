@@ -40,6 +40,7 @@ __all__ = [
     "estimate_token_count",
     "get_context_window_for_model",
     "truncate_tool_output",
+    "CompactionConfig",
     "CompactionResult",
     "compact_message_history",
     "should_compact",
@@ -191,26 +192,6 @@ def should_compact(
     return total_tokens > threshold
 
 
-def _build_summary_prompt(messages: list[_MessageProxy]) -> str:
-    """Build the prompt sent to the LLM to generate a compaction summary.
-
-    The prompt asks for a concise, factual summary of the conversation
-    history that captures key decisions, facts, and user preferences.
-    """
-    conversation_text = "\n".join(f"[{m.role.upper()}]: {m.content}" for m in messages)
-    return (
-        "Summarise the following conversation history into a concise paragraph "
-        f"of approximately {COMPACTION_SUMMARY_TARGET_TOKENS} tokens. "
-        "Preserve:\n"
-        "- Key facts and data points mentioned\n"
-        "- Decisions made by the user\n"
-        "- Important tool results and findings\n"
-        "- Any pending questions or tasks\n\n"
-        "Do NOT include greetings, filler, or restate the instructions.\n\n"
-        f"--- CONVERSATION ---\n{conversation_text}\n--- END ---"
-    )
-
-
 def compact_message_history(
     messages: list[_MessageProxy],
     model_name: str,
@@ -263,11 +244,16 @@ def compact_message_history(
 
     # Determine how many recent messages to keep.
     # Start with min_recent and expand until we hit max_recent or the
-    # recent block alone would bust the threshold.
+    # recent block alone would bust the threshold.  Uses a running total
+    # to avoid re-summing on every iteration.
     recent_count = min(min_recent, len(messages))
-    for candidate in range(min_recent, min(max_recent, len(messages)) + 1):
-        recent_tokens = sum(m.token_estimate for m in messages[-candidate:])
-        if system_prompt_tokens + recent_tokens > threshold:
+    cumulative_tokens = 0
+    upper = min(max_recent, len(messages))
+    for candidate in range(1, upper + 1):
+        cumulative_tokens += messages[-candidate].token_estimate
+        if candidate < min_recent:
+            continue
+        if system_prompt_tokens + cumulative_tokens > threshold:
             break
         recent_count = candidate
 

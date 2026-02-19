@@ -303,26 +303,33 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     merged_summary = result.summary
 
                 # Persist the bookmark so future calls skip these messages.
+                # The in-memory trim MUST be inside the try block so that if
+                # persistence fails we fall back to the full message list
+                # (with the old stored_summary) rather than losing context.
                 try:
                     await self.conversation_manager.persist_compaction(
                         summary=merged_summary,
                         cutoff_message_id=cutoff_msg.id,
                     )
                     stored_summary = merged_summary
+
+                    # Trim the in-memory list for *this* call only on
+                    # successful persistence.
+                    raw_messages = raw_messages[-result.preserved_count :]
+
+                    logger.info(
+                        "Compacted conversation: removed %d messages, "
+                        "keeping %d recent (tokens %d → %d)",
+                        result.removed_count,
+                        result.preserved_count,
+                        result.estimated_tokens_before,
+                        result.estimated_tokens_after,
+                    )
                 except Exception:
-                    logger.exception("Failed to persist compaction bookmark")
-
-                logger.info(
-                    "Compacted conversation: removed %d messages, "
-                    "keeping %d recent (tokens %d → %d)",
-                    result.removed_count,
-                    result.preserved_count,
-                    result.estimated_tokens_before,
-                    result.estimated_tokens_after,
-                )
-
-                # Trim the in-memory list for *this* call.
-                raw_messages = raw_messages[-result.preserved_count :]
+                    logger.exception(
+                        "Failed to persist compaction bookmark — "
+                        "keeping full message list for this call"
+                    )
 
         # -----------------------------------------------------------------
         # Build Pydantic-AI ModelMessage list
@@ -2356,6 +2363,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             user_id=config.user_id,
             corpus_id=(context.corpus.id if context.corpus is not None else None),
             document_id=context.document.id,
+            max_tool_output_chars=config.compaction.max_tool_output_chars,
             **kwargs,
         )
 
@@ -2744,7 +2752,10 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         )
 
         agent_deps_instance = PydanticAIDependencies(
-            user_id=config.user_id, corpus_id=context.corpus.id, **kwargs
+            user_id=config.user_id,
+            corpus_id=context.corpus.id,
+            max_tool_output_chars=config.compaction.max_tool_output_chars,
+            **kwargs,
         )
 
         agent_deps_instance.vector_store = vector_store
