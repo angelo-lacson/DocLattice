@@ -525,10 +525,12 @@ class TestPydanticAIAgents(TransactionTestCase):
             CoreConversationManager,
             DocumentAgentContext,
         )
+        from opencontractserver.llms.context_guardrails import CompactionConfig
 
         cfg = MagicMock(spec=AgentConfig)
         cfg.store_user_messages = cfg.store_llm_messages = True
         cfg.user_id = self.user.id
+        cfg.compaction = CompactionConfig()
 
         ctx = MagicMock(spec=DocumentAgentContext)
         ctx.document = self.doc1
@@ -590,10 +592,14 @@ class TestPydanticAIAgents(TransactionTestCase):
             CoreConversationManager,
             DocumentAgentContext,
         )
+        from opencontractserver.llms.context_guardrails import CompactionConfig
 
         cfg = MagicMock(spec=AgentConfig)
         cfg.store_user_messages = cfg.store_llm_messages = False  # simplify
         cfg.user_id = self.user.id
+        # Provide a real CompactionConfig so _get_message_history doesn't
+        # try arithmetic with MagicMock values.
+        cfg.compaction = CompactionConfig()
 
         ctx = MagicMock(spec=DocumentAgentContext)
         ctx.document = self.doc1
@@ -602,6 +608,9 @@ class TestPydanticAIAgents(TransactionTestCase):
         conv_mgr = MagicMock(spec=CoreConversationManager)
         conv_mgr.conversation = None
         conv_mgr.config = cfg
+        # Stub async helpers that _get_message_history calls so the code
+        # path reaches the LLM call (which is what we're testing).
+        conv_mgr.get_conversation_messages = AsyncMock(return_value=[])
 
         agent = PydanticAIDocumentAgent(
             context=ctx,
