@@ -79,7 +79,7 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
-from opencontractserver.utils.tools import deduplicate_tools
+from opencontractserver.utils.tools import deduplicate_tools, get_tool_name
 
 from .timeline_schema import TimelineEntry
 from .timeline_utils import TimelineBuilder
@@ -2087,7 +2087,30 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                     add_exact_ann_tool_wrapped,  # near-passthrough (complex normalization)
                 ]
             )
-        if tools:
+        restrict_tool_names: set[str] | None = kwargs.pop("restrict_tool_names", None)
+        if restrict_tool_names is not None:
+            # Restrict mode: only keep tools whose names appear in the
+            # specified set.  This prevents tool overload when the caller
+            # (e.g. corpus actions) specifies an exact tool set.  The
+            # set uses original string names so runtime-context tools
+            # (e.g. get_document_text_length) that aren't in FUNCTION_MAP
+            # are still preserved.
+            allowed = set(restrict_tool_names)
+            before_count = len(effective_tools)
+            effective_tools = [
+                t for t in effective_tools if get_tool_name(t) in allowed
+            ]
+            # Now apply caller overrides (tools from registry) on top
+            if tools:
+                effective_tools = deduplicate_tools(
+                    effective_tools, tools, context="Caller"
+                )
+            logger.info(
+                "Restricted agent tools to %d (from %d defaults)",
+                len(effective_tools),
+                before_count,
+            )
+        elif tools:
             effective_tools = deduplicate_tools(
                 effective_tools, tools, context="Caller"
             )

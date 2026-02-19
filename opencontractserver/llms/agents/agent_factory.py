@@ -133,6 +133,16 @@ class UnifiedAgentFactory:
         if "skip_approval_gate" in kwargs:
             deps_kwargs["skip_approval_gate"] = kwargs.pop("skip_approval_gate")
 
+        # Extract create-specific kwargs that control tool selection mode.
+        # restrict_tool_names: when provided, the agent is restricted to ONLY
+        # these tool names (plus their runtime-context versions built by the
+        # factory).  This prevents tool overload for automated corpus actions.
+        create_kwargs: dict[str, any] = {}
+        if "restrict_tool_names" in kwargs:
+            create_kwargs["restrict_tool_names"] = kwargs.pop("restrict_tool_names")
+        # Back-compat: `restrict_tools=True` without names does nothing useful
+        kwargs.pop("restrict_tools", None)
+
         config = get_default_config(
             user_id=user_id,
             model_name=model or kwargs.get("model_name", "gpt-4o-mini"),
@@ -236,7 +246,12 @@ class UnifiedAgentFactory:
             )
 
             return await PydanticAIDocumentAgent.create(
-                document, corpus, config, framework_tools, **deps_kwargs
+                document,
+                corpus,
+                config,
+                framework_tools,
+                **deps_kwargs,
+                **create_kwargs,
             )
         else:
             raise ValueError(f"Unsupported framework: {framework}")

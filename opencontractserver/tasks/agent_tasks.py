@@ -806,7 +806,9 @@ async def _run_agent_corpus_action_async(
             f"instructions_length={len(action.task_instructions)}"
         )
 
-        # Create agent with pre-authorization (skip approval gate)
+        # Create agent with pre-authorization (skip approval gate).
+        # restrict_tool_names limits the agent to ONLY the resolved tool
+        # set, preventing tool overload from the ~17 default tools.
         agent = await agents.for_document(
             document=document,
             corpus=action.corpus,
@@ -814,8 +816,8 @@ async def _run_agent_corpus_action_async(
             system_prompt=system_prompt,
             tools=tools,
             streaming=False,
-            # Pre-authorize all tools for automated execution
             skip_approval_gate=True,
+            restrict_tool_names=tools,
         )
 
         # Execute — the system prompt already contains task_instructions,
