@@ -90,7 +90,7 @@ from opencontractserver.corpuses.models import Corpus
 corpus = Corpus.objects.get(id=corpus_id)
 corpus.preferred_embedder = (
     "opencontractserver.pipeline.embedders."
-    "multimodal_microservice.MultimodalMicroserviceEmbedder"
+    "multimodal_microservice.CLIPMicroserviceEmbedder"
 )
 corpus.save()
 ```

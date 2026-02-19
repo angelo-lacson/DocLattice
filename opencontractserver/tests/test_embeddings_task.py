@@ -1325,12 +1325,12 @@ class TestArrayFormatHandling(unittest.TestCase):
             self.assertIsInstance(result, list)
 
     def test_multimodal_embedder_handles_1d_array(self):
-        """Test that MultimodalMicroserviceEmbedder correctly handles 1D array responses."""
+        """Test that CLIPMicroserviceEmbedder correctly handles 1D array responses."""
         from opencontractserver.pipeline.embedders.multimodal_microservice import (
-            MultimodalMicroserviceEmbedder,
+            CLIPMicroserviceEmbedder,
         )
 
-        embedder = MultimodalMicroserviceEmbedder()
+        embedder = CLIPMicroserviceEmbedder()
 
         with patch("requests.post") as mock_post:
             mock_response = MagicMock()
@@ -1346,12 +1346,12 @@ class TestArrayFormatHandling(unittest.TestCase):
             self.assertEqual(result, [0.4, 0.5, 0.6])
 
     def test_multimodal_embedder_handles_2d_array(self):
-        """Test that MultimodalMicroserviceEmbedder correctly handles 2D array responses."""
+        """Test that CLIPMicroserviceEmbedder correctly handles 2D array responses."""
         from opencontractserver.pipeline.embedders.multimodal_microservice import (
-            MultimodalMicroserviceEmbedder,
+            CLIPMicroserviceEmbedder,
         )
 
-        embedder = MultimodalMicroserviceEmbedder()
+        embedder = CLIPMicroserviceEmbedder()
 
         with patch("requests.post") as mock_post:
             mock_response = MagicMock()
