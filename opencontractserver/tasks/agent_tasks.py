@@ -599,9 +599,11 @@ def _build_document_action_system_prompt(
             "1. You MUST use tools to accomplish your task. Describing what you "
             "would do is NOT sufficient — call the tools.",
             "2. Do NOT ask clarifying questions. Execute the task as described.",
-            "3. If the task requires reading the document, call " "load_document_text.",
+            "3. CRITICAL: You MUST call load_document_text to read the document "
+            "BEFORE writing or updating anything about it. NEVER guess or "
+            "fabricate document content — only use text you loaded via tools.",
             "4. If the task requires updating something, call the appropriate "
-            "update tool with the new value.",
+            "update tool with content derived from what you actually read.",
             "5. After completing your task, respond with a brief summary of "
             "actions taken.",
             "",
