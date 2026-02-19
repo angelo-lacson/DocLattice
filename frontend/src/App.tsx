@@ -16,7 +16,7 @@ import { Container } from "semantic-ui-react";
 
 import { toast, ToastContainer } from "react-toastify";
 
-import { useQuery, useReactiveVar } from "@apollo/client";
+import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 
 import {
   authToken,
@@ -38,6 +38,11 @@ import {
   selectedFolderId,
 } from "./graphql/cache";
 import { GET_ME, GetMeOutputs } from "./graphql/queries";
+import {
+  UPDATE_DOCUMENT,
+  UpdateDocumentInputs,
+  UpdateDocumentOutputs,
+} from "./graphql/mutations";
 
 import { NavMenu } from "./components/layout/NavMenu";
 import { Footer } from "./components/layout/Footer";
@@ -119,6 +124,29 @@ export const App = () => {
 
   // Auth0 hooks for conditional rendering only
   const { isLoading } = useAuth0();
+
+  const [tryUpdateDocument] = useMutation<
+    UpdateDocumentOutputs,
+    UpdateDocumentInputs
+  >(UPDATE_DOCUMENT, {
+    onCompleted: () => {
+      toast.success("Document updated successfully");
+      editingDocument(null);
+    },
+    onError: (error) => {
+      toast.error(`Failed to update document: ${error.message}`);
+    },
+    refetchQueries: "active",
+  });
+
+  const handleUpdateDocument = useCallback(
+    (document_obj: Record<string, unknown>) => {
+      tryUpdateDocument({
+        variables: document_obj as unknown as UpdateDocumentInputs,
+      });
+    },
+    [tryUpdateDocument]
+  );
 
   const handleKnowledgeBaseModalClose = useCallback(() => {
     showKnowledgeBaseModal({
@@ -367,9 +395,7 @@ export const App = () => {
                 modelName="document"
                 uiSchema={editDocForm_Ui_Schema}
                 dataSchema={editDocForm_Schema}
-                onSubmit={() => {
-                  editingDocument(null);
-                }}
+                onSubmit={handleUpdateDocument}
                 onClose={() => editingDocument(null)}
                 acceptedFileTypes="pdf"
                 hasFile={true}
