@@ -5,9 +5,19 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-12
+## [Unreleased] - 2026-02-19
 
 ### Added
+
+#### Context Guardrails & Conversation Compaction (Closes #898)
+- **Context guardrails constants** (`opencontractserver/constants/context_guardrails.py`): Centralized configuration for model context windows (OpenAI, Anthropic, Google), compaction thresholds, tool output limits, and token estimation parameters. Covers 20+ model variants with sensible defaults.
+- **Token estimation** (`opencontractserver/llms/context_guardrails.py`): Fast heuristic token counter (~3.5 chars/token) for estimating conversation size without importing heavyweight tokeniser libraries. Intentionally over-estimates to trigger compaction conservatively.
+- **Model context window lookup** (`context_guardrails.py`): Resolves model names to context window sizes via exact match then longest-prefix matching, with a 128K default fallback for unknown models.
+- **Conversation compaction** (`context_guardrails.py`): When conversation history approaches the context window limit (default 75%), older messages are replaced by a concise summary while preserving recent turns (4–20 messages) verbatim. Supports pluggable summary functions for LLM-based summarization.
+- **Tool output truncation** (`context_guardrails.py`, `opencontractserver/llms/tools/pydantic_ai_tools.py`): String outputs from tools are automatically truncated to 50K characters with a notice directing the LLM to use range parameters. Applied at the PydanticAI tool wrapper level so all tools benefit transparently.
+- **Per-agent compaction configuration** (`CompactionConfig` dataclass): Added `compaction` field to `AgentConfig` allowing per-conversation overrides of threshold ratio, recent message counts, and tool output limits. Enabled by default.
+- **Automatic compaction in message history retrieval** (`opencontractserver/llms/agents/pydantic_ai_agents.py`): `_get_message_history()` now checks conversation size against model limits and injects a compaction summary as a system message when needed, transparent to the agent framework.
+- **Comprehensive test suite** (`opencontractserver/tests/test_context_guardrails.py`): 30+ unit tests covering token estimation, model lookup, truncation, compaction triggers, summary generation, message proxy conversion, and configuration defaults. Uses `SimpleTestCase` for fast parallel execution.
 
 #### Nested Approval Gates for Corpus Agent Sub-Agents
 - **Sub-agent approval propagation**: When a corpus agent delegates a question to a document sub-agent via `ask_document`, and the sub-agent encounters a tool requiring approval, the approval request now propagates up to the corpus agent level and is surfaced to the user via WebSocket (`ASYNC_APPROVAL_NEEDED`)

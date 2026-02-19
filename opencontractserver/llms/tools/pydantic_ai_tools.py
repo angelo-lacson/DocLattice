@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional, get_type_hints
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai.tools import RunContext
 
+from opencontractserver.llms.context_guardrails import truncate_tool_output
 from opencontractserver.llms.exceptions import ToolConfirmationRequired
 from opencontractserver.llms.tools.tool_factory import CoreTool
 from opencontractserver.llms.vector_stores.core_vector_stores import (
@@ -359,7 +360,12 @@ class PydanticAIToolWrapper:
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
-                    return await original_func(*args, **kwargs)
+                    result = await original_func(*args, **kwargs)
+                    # Apply tool output truncation to prevent oversized
+                    # returns from bloating the conversation context.
+                    if isinstance(result, str):
+                        result = truncate_tool_output(result)
+                    return result
                 except (PermissionError, ToolConfirmationRequired):
                     # Security and approval exceptions must propagate to the
                     # agent loop so they can be handled at the framework level.
@@ -409,7 +415,10 @@ class PydanticAIToolWrapper:
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
-                    return original_func(*args, **kwargs)
+                    result = original_func(*args, **kwargs)
+                    if isinstance(result, str):
+                        result = truncate_tool_output(result)
+                    return result
                 except (PermissionError, ToolConfirmationRequired):
                     raise
                 except Exception as e:

@@ -27,6 +27,7 @@ from opencontractserver.conversations.models import (
 )
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
+from opencontractserver.llms.context_guardrails import CompactionConfig
 from opencontractserver.llms.tools.tool_factory import CoreTool
 from opencontractserver.llms.vector_stores.core_vector_stores import (
     CoreAnnotationVectorStore,
@@ -277,6 +278,10 @@ class AgentConfig:
 
     # Tool configuration
     tools: list[Any] = field(default_factory=list)
+
+    # Context guardrails — controls conversation compaction and tool output
+    # truncation.  ``None`` uses sensible defaults from CompactionConfig.
+    compaction: CompactionConfig = field(default_factory=CompactionConfig)
 
 
 @dataclass

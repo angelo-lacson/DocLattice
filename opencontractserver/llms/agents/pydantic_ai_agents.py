@@ -233,18 +233,78 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         )
 
     async def _get_message_history(self) -> Optional[list[ModelMessage]]:
-        """
-        Convert OpenContracts `ChatMessage` history to the Pydantic-AI
-        `ModelMessage` format.
+        """Convert OpenContracts ``ChatMessage`` history to Pydantic-AI format.
 
-        `UserPrompt` does **not** exist in Pydantic-AI's public API, so we map
-        both human and LLM messages to plain `ModelMessage` instances instead.
+        When context guardrails are enabled (the default) the method first
+        checks whether the conversation has grown large enough to warrant
+        compaction.  If so, older messages are replaced by a concise summary
+        and only recent turns are kept verbatim.  This prevents the message
+        payload from exceeding the model's context window on long-running
+        conversations or after large tool outputs.
         """
+        from opencontractserver.llms.context_guardrails import (
+            CompactionResult,
+            compact_message_history,
+            estimate_token_count,
+            messages_to_proxies,
+        )
+
         raw_messages = await self.conversation_manager.get_conversation_messages()
         if not raw_messages:
             return None
 
+        # -----------------------------------------------------------------
+        # Compaction pass
+        # -----------------------------------------------------------------
+        compaction_cfg = self.config.compaction
+        compaction_result: Optional[CompactionResult] = None
+
+        if (
+            compaction_cfg.enabled
+            and len(raw_messages) > compaction_cfg.min_recent_messages
+        ):
+            proxies = messages_to_proxies(raw_messages)
+            system_prompt_tokens = estimate_token_count(self.config.system_prompt or "")
+
+            compaction_result = compact_message_history(
+                proxies,
+                self.config.model_name,
+                system_prompt_tokens=system_prompt_tokens,
+                threshold_ratio=compaction_cfg.threshold_ratio,
+                min_recent=compaction_cfg.min_recent_messages,
+                max_recent=compaction_cfg.max_recent_messages,
+            )
+
+            if compaction_result.compacted:
+                logger.info(
+                    "Compacting conversation: removed %d messages, "
+                    "keeping %d recent (tokens %d → %d)",
+                    compaction_result.removed_count,
+                    compaction_result.preserved_count,
+                    compaction_result.estimated_tokens_before,
+                    compaction_result.estimated_tokens_after,
+                )
+                # Replace raw_messages with only the recent tail
+                raw_messages = raw_messages[-compaction_result.preserved_count :]
+
+        # -----------------------------------------------------------------
+        # Build Pydantic-AI ModelMessage list
+        # -----------------------------------------------------------------
         history: list[ModelMessage] = []
+
+        # Inject compaction summary as the first system message so the LLM
+        # has context from the compacted portion of the conversation.
+        if (
+            compaction_result
+            and compaction_result.compacted
+            and compaction_result.summary
+        ):
+            history.append(
+                ModelRequest(
+                    parts=[SystemPromptPart(content=compaction_result.summary)]
+                )
+            )
+
         for msg in raw_messages:
             msg_type_upper = msg.msg_type.upper()
             content = msg.content
@@ -258,9 +318,8 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             elif msg_type_upper == "LLM":
                 history.append(ModelResponse(parts=[TextPart(content=content)]))
             elif msg_type_upper == "SYSTEM":
-                # System messages are also part of a "request" to the model
                 history.append(ModelRequest(parts=[SystemPromptPart(content=content)]))
-            # else: We skip unknown types or those not directly mappable here
+            # else: skip unknown types
 
         return history or None
 
