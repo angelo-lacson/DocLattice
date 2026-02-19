@@ -1395,6 +1395,43 @@ result = await agent.structured_response(
 )
 ```
 
+#### PydanticAI Pitfalls
+
+**`instructions` vs `system_prompt` — Use `instructions` for Agent System Prompts**
+
+When creating a `PydanticAIAgent`, pydantic-ai offers two parameters for providing system-level context:
+
+| Parameter | Behavior |
+|-----------|----------|
+| `instructions` | Attached to every `ModelRequest` via the `.instructions` field. **Always sent to the model**, even when `message_history` is provided. |
+| `system_prompt` | Added as `SystemPromptPart` entries via `_sys_parts()`. **Only included when `message_history` is `None`** (i.e., the first turn of a brand-new conversation with no prior messages). |
+
+In OpenContracts, the `chat()` method persists a HUMAN message *before* calling the underlying pydantic-ai `run()`. This means `_get_message_history()` returns a non-empty list by the time pydantic-ai processes the request. Pydantic-ai then takes the `if message_history:` branch in `UserPromptNode._prepare_messages()` and **skips `_sys_parts()` entirely**, silently dropping any `system_prompt` content.
+
+**Result**: The model receives the user message and tool definitions but **no system prompt at all**, leading to confused responses like "Could you please clarify which specific instructions…"
+
+**Rule**: Always use `instructions=` (not `system_prompt=`) when constructing `PydanticAIAgent` instances:
+
+```python
+# CORRECT — instructions are always sent
+agent = PydanticAIAgent(
+    model="gpt-4.1",
+    instructions=my_system_prompt,   # ← Always attached to requests
+    tools=my_tools,
+)
+
+# WRONG — system_prompt is silently dropped when message_history exists
+agent = PydanticAIAgent(
+    model="gpt-4.1",
+    system_prompt=my_system_prompt,  # ← Lost if any message history is present
+    tools=my_tools,
+)
+```
+
+This applies to all three agent creation sites in `pydantic_ai_agents.py`: `PydanticAIDocumentAgent.create()`, `PydanticAICorpusAgent.create()`, and the structured extraction agent in `structured_response()`.
+
+> **Version note**: Verified against pydantic-ai 0.2.20. Future versions may unify these parameters.
+
 #### Framework Selection
 
 Choose your framework based on your needs:

@@ -1112,7 +1112,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             structured_agent = PydanticAIAgent(
                 model=model or self.config.model_name,
-                system_prompt=structured_system_prompt,
+                instructions=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
                 tools=final_tools,
@@ -2124,7 +2124,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,
@@ -2499,7 +2499,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
 
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,
