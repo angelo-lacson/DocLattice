@@ -117,6 +117,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Defensive `sync_to_async` fallback in both agent `create()` methods** (`pydantic_ai_agents.py`): If `aget_embedder()` fails and `embedder_path` remains `None`, the `PydanticAIAnnotationVectorStore(...)` constructor is wrapped in `sync_to_async` so the ORM calls inside `get_embedder()` run in a thread pool. Applied to both `PydanticAIDocumentAgent.create()` and `PydanticAICorpusAgent.create()`.
 - **Fix async test** (`opencontractserver/tests/test_pydantic_ai_agents.py:412`): Wrapped `PydanticAIAnnotationVectorStore(...)` construction in `sync_to_async` in `test_pydantic_ai_vector_store_search`.
 
+### Changed
+
+#### Streamlined Agentic Corpus Action Configuration
+- **Renamed `agent_prompt` to `task_instructions`** on `CorpusAction` model (`opencontractserver/corpuses/models.py`): Single, clearly-named field for describing what the agent should do. Migration `0041` handles the rename.
+- **Goal-oriented system prompt assembly** (`opencontractserver/tasks/agent_tasks.py`): Agent corpus actions now auto-generate a structured system prompt with automation guardrails ("you MUST use tools"), execution context (trigger type, document metadata, corpus info), and the user's task instructions. Agents no longer receive raw `system_instructions` as the system prompt — the system wraps everything in a goal-oriented format that prevents conversational responses.
+- **Document context injection**: Document-based agent actions now inject document title, ID, corpus title, and current description into the system prompt so agents don't waste tool calls loading basic metadata.
+- **Thread context injection refactored**: Thread-based agent actions now use the same structured prompt pattern as document actions, with thread context, recent messages, and triggering message content all included in the system prompt rather than the user message.
+- **`AgentConfiguration` is now optional for agent actions**: `CorpusAction` can be created with just `task_instructions` (no `agent_config` required). The DB constraint (`valid_action_type_configuration`) now allows lightweight agent actions. `AgentConfiguration` is still supported for custom persona/tool defaults.
+- **Default tool selection by trigger type** (`opencontractserver/constants/corpus_actions.py`): When no tools are specified on `agent_config.available_tools`, the system auto-selects trigger-appropriate defaults (document tools for add/edit triggers, moderation tools for thread/message triggers).
+- **`pre_authorized_tools` semantics changed** (`opencontractserver/tasks/agent_tasks.py`): `pre_authorized_tools` now only controls which tools skip approval gates. Tool availability is determined by `agent_config.available_tools` (if set) or trigger-appropriate defaults. See **Breaking Changes** below for migration guidance.
+- **GraphQL API updated**: `CreateCorpusAction` and `UpdateCorpusAction` mutations use `taskInstructions` instead of `agentPrompt`. The `taskInstructions` field alone (without `agentConfigId`) is now sufficient to create an agent action.
+- **Frontend updated**: `CreateCorpusActionModal` and `CorpusActionsSection` use "Task Instructions" labeling instead of "Agent Prompt".
+- **Unified Quick Create flow**: `CreateCorpusActionModal` now supports inline agent creation for document triggers (add_document, edit_document) in addition to thread triggers. The modal auto-selects trigger-appropriate tools and default instructions.
+- **Manual action trigger** (`config/graphql/mutations.py`): New `RunCorpusAction` mutation allows superusers to manually trigger agent actions on specific documents. Uses `transaction.on_commit()` to dispatch Celery tasks after the DB transaction commits, and `force=True` to bypass dedup checks for manual triggers.
+- **ToolFunctionRegistry** (`opencontractserver/llms/tools/tool_registry.py`): Centralized singleton registry mapping tool names to sync/async function implementations. Replaces 3 manually-curated dicts in `_resolve_tools()`. Adding a new tool now requires edits in 2 files instead of 4+.
+
+### Breaking Changes
+
+- **`pre_authorized_tools` no longer controls tool availability**: Previously, `pre_authorized_tools` was used as both the tool set AND the approval gate — if set, it replaced `agent_config.available_tools` entirely. Now it only controls which tools skip the approval gate. **Migration**: If you relied on `pre_authorized_tools` to restrict which tools an agent can access, move those tool names to `agent_config.available_tools` instead. `pre_authorized_tools` should only list tools that are safe to run without human approval.
+
+### Known Limitations
+
+- **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
+
+
 #### Security Hardening: Authentication & Permissioning Audit Remediation
 
 - **Analysis callback DoS prevention** (`opencontractserver/analyzer/views.py`): Invalid callback tokens no longer mark analyses as FAILED; uses `hmac.compare_digest()` for timing-safe token comparison; unified error messages prevent analysis ID enumeration

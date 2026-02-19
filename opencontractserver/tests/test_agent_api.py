@@ -323,7 +323,7 @@ class TestToolResolution(TestCase):
 
             # Should log warning for unknown tool
             mock_logger.warning.assert_called_once_with(
-                "Unknown built-in tool: unknown_tool"
+                "Unknown tool: %s", "unknown_tool"
             )
 
     def test_invalid_tool_type(self):
@@ -361,11 +361,10 @@ class TestToolResolution(TestCase):
         self.assertEqual(len(resolved), 9)
         self.assertTrue(all(isinstance(tool, CoreTool) for tool in resolved))
 
-        # Verify tool names match
+        # Verify tool names use canonical names from the registry
         resolved_names = {tool.name for tool in resolved}
         for tool_name in moderation_tools:
-            # Async versions are prefixed with 'a'
-            self.assertIn(f"a{tool_name}", resolved_names)
+            self.assertIn(tool_name, resolved_names)
 
     def test_moderation_tool_partial_resolution(self):
         """Test resolving a subset of moderation tools."""
@@ -384,7 +383,7 @@ class TestToolResolution(TestCase):
         core_tools = [
             "update_corpus_description",
             "get_corpus_description",
-            "load_document_txt_extract",
+            "load_document_txt_extract",  # alias -> load_document_text
             "get_document_description",
             "update_document_description",
             "get_document_summary",
@@ -392,7 +391,7 @@ class TestToolResolution(TestCase):
             "add_document_note",
             "update_document_note",
             "search_document_notes",
-            "search_exact_text_as_sources",
+            "search_exact_text_as_sources",  # alias -> search_exact_text
             "add_annotations_from_exact_strings",
             "get_page_image",
         ]
@@ -412,7 +411,9 @@ class TestToolResolution(TestCase):
 
         self.assertEqual(len(resolved), 1)
         self.assertIsInstance(resolved[0], CoreTool)
-        self.assertEqual(resolved[0].name, "load_document_txt_extract")
+        # Name uses the canonical alias key so deduplicate_tools can match
+        # against the default tool in the agent factory.
+        self.assertEqual(resolved[0].name, "load_document_text")
 
     def test_core_tool_partial_resolution(self):
         """Test resolving a subset of core tools."""
@@ -587,3 +588,139 @@ class TestAPIPerformance(TestCase):
         self.assertIs(embeddings_import, api.embeddings)
         self.assertIs(tools_import, api.tools)
         self.assertIs(vector_stores_import, api.vector_stores)
+
+
+class TestToolFunctionRegistry(TestCase):
+    """Test the ToolFunctionRegistry singleton."""
+
+    def setUp(self):
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        ToolFunctionRegistry.reset()
+
+    def tearDown(self):
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        ToolFunctionRegistry.reset()
+
+    def test_singleton_get(self):
+        """Registry returns the same instance on repeated calls."""
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        r1 = ToolFunctionRegistry.get()
+        r2 = ToolFunctionRegistry.get()
+        self.assertIs(r1, r2)
+
+    def test_reset_isolation(self):
+        """reset() produces a fresh registry."""
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        r1 = ToolFunctionRegistry.get()
+        ToolFunctionRegistry.reset()
+        r2 = ToolFunctionRegistry.get()
+        self.assertIsNot(r1, r2)
+
+    def test_async_func_preferred(self):
+        """to_core_tool prefers async_func over sync_func."""
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        registry = ToolFunctionRegistry.get()
+        # All tools with an async_func should resolve to an async function
+        import asyncio
+
+        for name, entry in registry._entries.items():
+            if entry.async_func is not None:
+                core = registry.to_core_tool(name)
+                self.assertIsNotNone(core, f"to_core_tool({name!r}) returned None")
+                self.assertTrue(
+                    asyncio.iscoroutinefunction(core.function),
+                    f"Tool '{name}' should resolve to async func but got {core.function}",
+                )
+
+    def test_alias_resolution(self):
+        """Aliases resolve to the correct canonical tool."""
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        registry = ToolFunctionRegistry.get()
+
+        # Entry-level aliases
+        entry = registry.resolve("load_document_txt_extract")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.definition.name, "load_document_text")
+
+        entry = registry.resolve("search_exact_text_as_sources")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.definition.name, "search_exact_text")
+
+        # Legacy aliases
+        entry = registry.resolve("summarize")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.definition.name, "load_document_summary")
+
+        entry = registry.resolve("notes")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.definition.name, "get_document_notes")
+
+    def test_unknown_name_returns_none(self):
+        """resolve() / to_core_tool() return None for unknown names."""
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        registry = ToolFunctionRegistry.get()
+        self.assertIsNone(registry.resolve("totally_fake_tool"))
+        self.assertIsNone(registry.to_core_tool("totally_fake_tool"))
+
+    def test_metadata_propagation(self):
+        """CoreTool from registry carries ToolDefinition metadata."""
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        registry = ToolFunctionRegistry.get()
+        core = registry.to_core_tool("update_document_summary")
+        self.assertIsNotNone(core)
+        self.assertTrue(core.requires_approval)
+        self.assertTrue(core.requires_corpus)
+        self.assertTrue(core.requires_write_permission)
+
+        core_read = registry.to_core_tool("get_document_description")
+        self.assertIsNotNone(core_read)
+        self.assertFalse(core_read.requires_approval)
+        self.assertFalse(core_read.requires_write_permission)
+
+
+class TestBuildToolsFromRegistry(TestCase):
+    """Test the _build_tools_from_registry helper."""
+
+    def setUp(self):
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        ToolFunctionRegistry.reset()
+
+    def tearDown(self):
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+        ToolFunctionRegistry.reset()
+
+    def test_returns_callable_tools(self):
+        """_build_tools_from_registry returns PydanticAI-wrapped callables."""
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            _build_tools_from_registry,
+        )
+
+        tools = _build_tools_from_registry(
+            ["get_document_description", "load_document_summary"],
+            document_id=1,
+        )
+        self.assertEqual(len(tools), 2)
+        self.assertTrue(all(callable(t) for t in tools))
+
+    def test_unknown_tool_skipped(self):
+        """Unknown tool names are skipped with a warning."""
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            _build_tools_from_registry,
+        )
+
+        tools = _build_tools_from_registry(
+            ["get_document_description", "nonexistent_tool"],
+            document_id=1,
+        )
+        # Only the valid tool should be returned
+        self.assertEqual(len(tools), 1)

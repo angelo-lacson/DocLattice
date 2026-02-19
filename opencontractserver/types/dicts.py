@@ -584,7 +584,7 @@ class CorpusActionExport(TypedDict):
     fieldset_id: Optional[str]
     analyzer_id: Optional[str]
     agent_config_id: Optional[str]
-    agent_prompt: str
+    task_instructions: str
     pre_authorized_tools: list[str]
 
 

@@ -60,32 +60,26 @@ from opencontractserver.llms.tools.core_tools import (
     aadd_annotations_from_exact_strings,
     aadd_document_note,
     aduplicate_annotations_with_label,
-    aget_corpus_description,
-    aget_document_description,
     aget_document_summary,
-    aget_document_summary_diff,
-    aget_document_summary_versions,
-    aget_md_summary_token_length,
-    aget_notes_for_document_corpus,
     aload_document_md_summary,
     aload_document_txt_extract,
-    asearch_document_notes,
     asearch_exact_text_as_sources,
     aupdate_corpus_description,
-    aupdate_document_description,
     aupdate_document_note,
-    aupdate_document_summary,
 )
 from opencontractserver.llms.tools.pydantic_ai_tools import (
     PydanticAIDependencies,
     PydanticAIToolFactory,
 )
-from opencontractserver.llms.tools.tool_factory import CoreTool
+from opencontractserver.llms.tools.tool_factory import (
+    CoreTool,
+    build_inject_params_for_context,
+)
 from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
-from opencontractserver.utils.tools import deduplicate_tools
+from opencontractserver.utils.tools import deduplicate_tools, get_tool_name
 
 from .timeline_schema import TimelineEntry
 from .timeline_utils import TimelineBuilder
@@ -94,6 +88,41 @@ logger = logging.getLogger(__name__)
 
 # Type variable for structured responses
 T = TypeVar("T")
+
+
+def _build_tools_from_registry(
+    tool_names: list[str],
+    *,
+    document_id: int | None = None,
+    corpus_id: int | None = None,
+    user_id: int | None = None,
+) -> list[Callable]:
+    """Auto-build PydanticAI tools from the registry with context injection.
+
+    For each tool name, resolves the async function and metadata from the
+    registry, computes inject_params via build_inject_params_for_context(),
+    and wraps with PydanticAIToolFactory.
+    """
+    from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+    registry = ToolFunctionRegistry.get()
+    tools: list[Callable] = []
+    for name in tool_names:
+        core_tool = registry.to_core_tool(name)
+        if core_tool is None:
+            logger.warning("Tool '%s' not found in registry, skipping auto-build", name)
+            continue
+        inject_params = build_inject_params_for_context(
+            core_tool,
+            document_id=document_id,
+            corpus_id=corpus_id,
+            user_id=user_id,
+        )
+        wrapped = PydanticAIToolFactory.create_tool(
+            core_tool, inject_params=inject_params
+        )
+        tools.append(wrapped)
+    return tools
 
 
 def _to_source_node(raw: Any) -> SourceNode:
@@ -1083,7 +1112,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             structured_agent = PydanticAIAgent(
                 model=model or self.config.model_name,
-                system_prompt=structured_system_prompt,
+                instructions=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
                 tools=final_tools,
@@ -1749,27 +1778,43 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         default_vs_tool: Callable = vector_store.similarity_search
 
         # -----------------------------
-        # Document-specific async tools
+        # Auto-build pure passthrough tools from registry
         # -----------------------------
-        async def load_document_summary_tool(
-            truncate_length: int | None = None,
-            from_start: bool = True,
-        ) -> str:
-            """Load the document's markdown summary (optionally truncated)."""
-            return await aload_document_md_summary(
-                context.document.id, truncate_length, from_start
+        _corpus_id = context.corpus.id if context.corpus else None
+        auto_built_tools = _build_tools_from_registry(
+            [
+                "load_document_summary",
+                "get_summary_token_length",
+                "load_document_text",
+                "get_document_description",
+                "update_document_description",
+                "get_document_summary_diff",
+                "update_document_summary",
+                "get_document_summary_versions",
+            ],
+            document_id=context.document.id,
+            corpus_id=_corpus_id,
+            user_id=config.user_id,
+        )
+
+        # Corpus-required passthrough tools (only available when corpus context exists)
+        corpus_passthrough_tools = (
+            _build_tools_from_registry(
+                [
+                    "search_document_notes",
+                    "get_document_notes",
+                ],
+                document_id=context.document.id,
+                corpus_id=_corpus_id,
+                user_id=config.user_id,
             )
+            if context.corpus is not None
+            else []
+        )
 
-        async def get_summary_token_length_tool() -> int:
-            """Return token length of the document's markdown summary."""
-            return await aget_md_summary_token_length(context.document.id)
-
-        async def get_document_notes_tool() -> list[dict[str, Any]]:
-            """Retrieve metadata & first 512-char preview of notes for this document."""
-            return await aget_notes_for_document_corpus(
-                context.document.id, context.corpus.id
-            )
-
+        # -----------------------------
+        # Custom tools (unique logic, not pure passthroughs)
+        # -----------------------------
         async def get_document_text_length_tool() -> int:
             """Get the total character length of the document's plain-text extract."""
             # Load just the first character to get the full text length from cache
@@ -1784,87 +1829,14 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             full_text = await aload_document_txt_extract(context.document.id)
             return len(full_text)
 
-        async def load_document_text_tool(
-            start: int | None = None,
-            end: int | None = None,
-            refresh: bool = False,
-        ) -> str:
-            """Return a slice of the document's plain-text extract.
-
-            IMPORTANT USAGE GUIDELINES:
-            - First use get_document_text_length to check the total document size
-            - Recommended chunk size: 5,000 to 50,000 characters per request
-            - DO NOT load chunks smaller than 1,000 characters (inefficient, wastes tool calls)
-            - DO NOT load chunks larger than 100,000 characters (may overflow context)
-            - Tool call limit is 50, so plan your chunking strategy accordingly
-            - For a 500K char document, use ~10-20 chunks of 25-50K chars each
-
-            🔴 CRITICAL - CITATION REQUIREMENT:
-            After reading text with this tool, you MUST:
-            1. Identify 3-5 most relevant exact quotes/passages (5-50 words each)
-            2. Call search_exact_text with those EXACT strings
-            3. This creates proper citations with page numbers
-
-            WHY: This tool returns raw text WITHOUT sources. Only search_exact_text
-            creates citations. Skip this and your answer will have NO SOURCES!
-
-            Example: For a 200,000 character document:
-            - Good: Load in 4-8 chunks of 25,000-50,000 chars each
-            - Bad: Load 100 chars at a time (would need 2000 tool calls!)
-            - Bad: Load all 200,000 chars at once (might overflow context)
-            """
-            return await aload_document_txt_extract(
-                context.document.id, start, end, refresh=refresh
-            )
-
-        # Wrap with PydanticAI factory
-        load_summary_tool = PydanticAIToolFactory.from_function(
-            load_document_summary_tool,
-            name="load_document_summary",
-            description="Load the markdown summary of the document. Optionally truncate by length and direction.",
-            parameter_descriptions={
-                "truncate_length": "Optional number of characters to truncate the summary to",
-                "from_start": "If True, truncate from start; if False, truncate from end",
-            },
-        )
-
-        get_summary_length_tool = PydanticAIToolFactory.from_function(
-            get_summary_token_length_tool,
-            name="get_summary_token_length",
-            description="Get the approximate token length of the document's markdown summary.",
-        )
-
-        get_notes_tool = PydanticAIToolFactory.from_function(
-            get_document_notes_tool,
-            name="get_document_notes",
-            description="Retrieve all notes attached to this document in the current corpus.",
-            requires_corpus=True,
-        )
-
         get_text_length_tool = PydanticAIToolFactory.from_function(
             get_document_text_length_tool,
             name="get_document_text_length",
             description="Get the total character length of the document's plain-text extract. Use this BEFORE loading text to plan your chunking strategy.",  # noqa: E501
         )
 
-        load_text_tool = PydanticAIToolFactory.from_function(
-            load_document_text_tool,
-            name="load_document_text",
-            description=(
-                "Load the document's plain-text extract. ALWAYS use get_document_text_length first! "
-                "Load in chunks of 5K-50K chars to avoid context overflow or tool call limits. "
-                "🔴 CRITICAL: After reading, you MUST call search_exact_text on 3-5 key passages (5-50 words each) "
-                "to create proper citations with page numbers. Without this step, your answer will have NO SOURCES."
-            ),
-            parameter_descriptions={
-                "start": "Inclusive start character index (default 0)",
-                "end": "Exclusive end character index (defaults to end of file)",
-                "refresh": "If true, refresh the cached content from disk",
-            },
-        )
-
         # -----------------------------
-        # Exact text search tool
+        # Near-passthrough tools (result transformation)
         # -----------------------------
         async def search_exact_text_tool(search_strings: list[str]) -> list[dict]:
             """Search for exact text matches and return source nodes with location information."""
@@ -1916,51 +1888,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         )
 
         # -----------------------------
-        # Document description tools (corpus-agnostic)
-        # -----------------------------
-        async def get_document_description_tool(
-            truncate_length: int | None = None,
-            from_start: bool = True,
-        ) -> str:
-            """Get the document's description field."""
-            return await aget_document_description(
-                document_id=context.document.id,
-                truncate_length=truncate_length,
-                from_start=from_start,
-            )
-
-        get_description_wrapped = PydanticAIToolFactory.from_function(
-            get_document_description_tool,
-            name="get_document_description",
-            description="Get the document's description field.",
-            parameter_descriptions={
-                "truncate_length": "Optionally truncate to this many characters",
-                "from_start": "If true, truncate from beginning; otherwise from end",
-            },
-        )
-
-        async def update_document_description_tool(new_description: str) -> dict:
-            """Update the document's description field."""
-            logger.info(
-                f"Updating document description with content: {new_description}"
-            )
-            return await aupdate_document_description(
-                document_id=context.document.id,
-                new_description=new_description,
-            )
-
-        update_description_wrapped = PydanticAIToolFactory.from_function(
-            update_document_description_tool,
-            name="update_document_description",
-            description="Update the document's description field (requires approval).",
-            parameter_descriptions={
-                "new_description": "The new description content for the document",
-            },
-            requires_approval=True,
-        )
-
-        # -----------------------------
-        # Document summary tools (new)
+        # Genuinely custom: get_document_summary has fallback logic
         # -----------------------------
         async def get_document_summary_tool(
             truncate_length: int | None = None,
@@ -1990,67 +1918,8 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             requires_corpus=True,
         )
 
-        async def get_document_summary_diff_tool(from_version: int, to_version: int):
-            """Return unified diff between two document summary versions."""
-            return await aget_document_summary_diff(
-                document_id=context.document.id,
-                corpus_id=context.corpus.id,
-                from_version=from_version,
-                to_version=to_version,
-            )
-
-        async def update_document_summary_tool(new_content: str):
-            """Update (or create) the document summary, returning version info."""
-            logger.info(f"Updating document summary with content: {new_content}")
-            return await aupdate_document_summary(
-                document_id=context.document.id,
-                corpus_id=context.corpus.id,
-                new_content=new_content,
-                author_id=config.user_id,
-            )
-
-        async def get_document_summary_versions_tool(limit: int | None = None):
-            """Return version history for the document summary."""
-            return await aget_document_summary_versions(
-                document_id=context.document.id,
-                corpus_id=context.corpus.id,
-                limit=limit,
-            )
-
-        get_summary_versions_wrapped = PydanticAIToolFactory.from_function(
-            get_document_summary_versions_tool,
-            name="get_document_summary_versions",
-            description="Get version history for the document summary.",
-            parameter_descriptions={
-                "limit": "Optional maximum number of versions to return (newest first)",
-            },
-            requires_corpus=True,
-        )
-
-        get_summary_diff_wrapped = PydanticAIToolFactory.from_function(
-            get_document_summary_diff_tool,
-            name="get_document_summary_diff",
-            description="Get unified diff between two summary versions.",
-            parameter_descriptions={
-                "from_version": "Starting version number",
-                "to_version": "Ending version number",
-            },
-            requires_corpus=True,
-        )
-
-        update_summary_wrapped = PydanticAIToolFactory.from_function(
-            update_document_summary_tool,
-            name="update_document_summary",
-            description="Create or update the document summary (requires approval).",
-            parameter_descriptions={
-                "new_content": "Full markdown content for the new summary version",
-            },
-            requires_approval=True,
-            requires_corpus=True,
-        )
-
         # -----------------------------
-        # New note manipulation tools
+        # Near-passthrough note manipulation tools (result transformation)
         # -----------------------------
 
         async def add_document_note_tool(title: str, content: str) -> dict[str, int]:
@@ -2076,17 +1945,6 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             version = rev.version if rev else None
             return {"version": version}
 
-        async def search_document_notes_tool(
-            search_term: str, limit: int | None = None
-        ):
-            """Search notes attached to this document for a keyword."""
-            return await asearch_document_notes(
-                document_id=context.document.id,
-                search_term=search_term,
-                corpus_id=context.corpus.id,
-                limit=limit,
-            )
-
         add_note_tool_wrapped = PydanticAIToolFactory.from_function(
             add_document_note_tool,
             name="add_document_note",
@@ -2108,17 +1966,6 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 "new_content": "New note content (markdown)",
             },
             requires_approval=True,
-        )
-
-        search_notes_tool_wrapped = PydanticAIToolFactory.from_function(
-            search_document_notes_tool,
-            name="search_document_notes",
-            description="Search notes for a keyword (title or content)",
-            parameter_descriptions={
-                "search_term": "Keyword or phrase to search for (case-insensitive)",
-                "limit": "Maximum number of results to return",
-            },
-            requires_corpus=True,
         )
 
         # -----------------------------
@@ -2218,46 +2065,66 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             requires_corpus=True,
         )
 
-        # Merge caller-supplied tools (if any) after the default one so callers
+        # Merge caller-supplied tools (if any) after the default ones so callers
         # can override behaviour/order if desired.
         # Build the list conditionally to avoid corpus-required tools in standalone mode.
         effective_tools: list[Callable] = [
-            default_vs_tool,
-            load_summary_tool,  # corpus-agnostic
-            get_summary_length_tool,  # corpus-agnostic
-            get_text_length_tool,  # corpus-agnostic
-            load_text_tool,  # corpus-agnostic
-            search_exact_text_wrapped,  # corpus-agnostic exact text search
-            get_description_wrapped,  # corpus-agnostic document description
-            update_description_wrapped,  # corpus-agnostic document description (requires approval)
+            default_vs_tool,  # genuinely custom (vector store bound method)
+            get_text_length_tool,  # genuinely custom (cache access)
+            *auto_built_tools,  # registry-driven passthrough tools
+            search_exact_text_wrapped,  # near-passthrough (result transform)
         ]
 
         if context.corpus is not None:
             # Only add corpus-dependent tools when corpus is available
+            effective_tools.extend(corpus_passthrough_tools)
             effective_tools.extend(
                 [
-                    get_notes_tool,
-                    search_notes_tool_wrapped,
-                    # Write operations below – all require approval
-                    add_note_tool_wrapped,
-                    update_note_tool_wrapped,
-                    duplicate_ann_tool_wrapped,
-                    add_exact_ann_tool_wrapped,
-                    get_summary_content_wrapped,
-                    get_summary_versions_wrapped,
-                    get_summary_diff_wrapped,
-                    update_summary_wrapped,
+                    get_summary_content_wrapped,  # genuinely custom (fallback logic)
+                    add_note_tool_wrapped,  # near-passthrough (result transform)
+                    update_note_tool_wrapped,  # near-passthrough (result transform)
+                    duplicate_ann_tool_wrapped,  # near-passthrough (result transform)
+                    add_exact_ann_tool_wrapped,  # near-passthrough (complex normalization)
                 ]
             )
-        if tools:
+        restrict_tool_names: set[str] | None = kwargs.pop("restrict_tool_names", None)
+        if restrict_tool_names is not None:
+            # Restrict mode: only keep tools whose names appear in the
+            # specified set.  This prevents tool overload when the caller
+            # (e.g. corpus actions) specifies an exact tool set.  The
+            # set uses original string names so runtime-context tools
+            # (e.g. get_document_text_length) that aren't in FUNCTION_MAP
+            # are still preserved.
+            allowed = set(restrict_tool_names)
+            before_count = len(effective_tools)
+            effective_tools = [
+                t for t in effective_tools if get_tool_name(t) in allowed
+            ]
+            # Now apply caller overrides (tools from registry) on top
+            if tools:
+                effective_tools = deduplicate_tools(
+                    effective_tools, tools, context="Caller"
+                )
+            logger.info(
+                "Restricted agent tools to %d (from %d defaults)",
+                len(effective_tools),
+                before_count,
+            )
+        elif tools:
             effective_tools = deduplicate_tools(
                 effective_tools, tools, context="Caller"
             )
 
+        tool_names = [get_tool_name(t) for t in effective_tools]
+        logger.info(
+            "Creating pydantic-ai agent: model=%s, tools=%s",
+            config.model_name,
+            tool_names,
+        )
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,
@@ -2387,20 +2254,15 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         default_vs_tool: Callable = vector_store.similarity_search
 
         # -----------------------------
-        # Corpus description tools
+        # Auto-build passthrough tools from registry
         # -----------------------------
+        corpus_auto_tools = _build_tools_from_registry(
+            ["get_corpus_description"],
+            corpus_id=context.corpus.id,
+            user_id=config.user_id,
+        )
 
-        async def get_corpus_description_tool(
-            truncate_length: int | None = None,
-            from_start: bool = True,
-        ) -> str:
-            """Return the current corpus markdown description (optionally truncated)."""
-            return await aget_corpus_description(
-                corpus_id=context.corpus.id,
-                truncate_length=truncate_length,
-                from_start=from_start,
-            )
-
+        # Near-passthrough: update_corpus_description has result transformation
         async def update_corpus_description_tool(
             new_content: str,
         ) -> dict[str, int | None]:
@@ -2412,17 +2274,6 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             )
             version = rev.version if rev else None
             return {"version": version}
-
-        get_corpus_desc_tool_wrapped = PydanticAIToolFactory.from_function(
-            get_corpus_description_tool,
-            name="get_corpus_description",
-            description="Retrieve the latest markdown description for this corpus.",
-            parameter_descriptions={
-                "truncate_length": "Optionally truncate the description to this many characters",
-                "from_start": "If true, truncate from beginning else from end",
-            },
-            requires_corpus=True,
-        )
 
         update_corpus_desc_tool_wrapped = PydanticAIToolFactory.from_function(
             update_corpus_description_tool,
@@ -2635,7 +2486,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         # override behaviour/order if desired.
         effective_tools: list[Callable] = [
             default_vs_tool,
-            get_corpus_desc_tool_wrapped,
+            *corpus_auto_tools,
             update_corpus_desc_tool_wrapped,
             list_docs_tool_wrapped,
             ask_doc_tool_wrapped,
@@ -2648,7 +2499,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
 
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,

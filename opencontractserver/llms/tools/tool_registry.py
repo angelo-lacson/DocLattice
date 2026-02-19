@@ -1,12 +1,23 @@
 """
 Central registry of all available tools for agent configurations.
 
-This module provides a structured listing of all tools that can be assigned
-to agents, including their metadata, descriptions, and categorization.
+This module provides:
+  1. ``ToolDefinition`` / ``AVAILABLE_TOOLS`` — static metadata (names,
+     descriptions, flags) exposed via the GraphQL API.
+  2. ``ToolFunctionRegistry`` — singleton that maps tool names to their
+     Python function implementations (sync + async).  This is the **single
+     source of truth** for resolving tool names to callable functions.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+import logging
+import threading
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 
 class ToolCategory(str, Enum):
@@ -604,3 +615,298 @@ def get_moderation_tool_names() -> list[str]:
 
 # Alias for backwards compatibility
 TOOL_REGISTRY = AVAILABLE_TOOLS
+
+
+# =============================================================================
+# TOOL FUNCTION REGISTRY — maps tool names to implementations
+# =============================================================================
+
+
+@dataclass
+class ToolRegistryEntry:
+    """Links a ToolDefinition to its function implementations."""
+
+    definition: ToolDefinition
+    sync_func: Callable | None = None
+    async_func: Callable | None = None
+    aliases: tuple[str, ...] = field(default_factory=tuple)
+
+
+class ToolFunctionRegistry:
+    """Singleton registry: tool name -> function refs + metadata.
+
+    Single source of truth for resolving tool names to implementations.
+    Always prefers async_func when available.
+    """
+
+    _instance: ToolFunctionRegistry | None = None
+    _lock = threading.Lock()
+
+    def __init__(self) -> None:
+        self._entries: dict[str, ToolRegistryEntry] = {}
+        self._aliases: dict[str, str] = {}
+
+    @classmethod
+    def get(cls) -> ToolFunctionRegistry:
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    inst = cls()
+                    inst._populate()
+                    cls._instance = inst
+        return cls._instance
+
+    def register(self, entry: ToolRegistryEntry) -> None:
+        self._entries[entry.definition.name] = entry
+        for alias in entry.aliases:
+            self._aliases[alias] = entry.definition.name
+
+    def resolve(self, name: str) -> ToolRegistryEntry | None:
+        canonical = self._aliases.get(name, name)
+        return self._entries.get(canonical)
+
+    def to_core_tool(self, name: str) -> CoreTool | None:  # noqa: F821
+        """Resolve *name* -> ``CoreTool``, preferring async, with metadata."""
+        from opencontractserver.llms.tools.tool_factory import CoreTool
+
+        entry = self.resolve(name)
+        if not entry:
+            return None
+        func = entry.async_func or entry.sync_func
+        if not func:
+            return None
+        return CoreTool.from_function(
+            func,
+            name=entry.definition.name,
+            description=entry.definition.description,
+            requires_approval=entry.definition.requires_approval,
+            requires_corpus=entry.definition.requires_corpus,
+            requires_write_permission=entry.definition.requires_write_permission,
+        )
+
+    @classmethod
+    def reset(cls) -> None:
+        """Reset for test isolation."""
+        cls._instance = None
+
+    # ------------------------------------------------------------------
+    # Internal: populate with all known tools on first access
+    # ------------------------------------------------------------------
+
+    def _populate(self) -> None:
+        """Lazily import and register all tool functions.
+
+        ``FUNCTION_MAP`` + ``AVAILABLE_TOOLS`` are the ONLY two places to
+        edit when adding a new tool.  ``_resolve_tools()`` and the agent
+        factories never need touching again.
+        """
+        # Lazy imports avoid circular dependencies
+        from opencontractserver.llms.tools.core_tools import (
+            aadd_annotations_from_exact_strings,
+            aadd_document_note,
+            acreate_markdown_link,
+            add_annotations_from_exact_strings,
+            add_document_note,
+            aduplicate_annotations_with_label,
+            aget_corpus_description,
+            aget_document_description,
+            aget_document_summary,
+            aget_document_summary_diff,
+            aget_document_summary_versions,
+            aget_md_summary_token_length,
+            aget_notes_for_document_corpus,
+            aget_page_image,
+            aload_document_md_summary,
+            aload_document_txt_extract,
+            asearch_document_notes,
+            asearch_exact_text_as_sources,
+            aupdate_corpus_description,
+            aupdate_document_description,
+            aupdate_document_note,
+            aupdate_document_summary,
+            create_markdown_link,
+            duplicate_annotations_with_label,
+            get_corpus_description,
+            get_document_description,
+            get_document_summary,
+            get_document_summary_diff,
+            get_document_summary_versions,
+            get_md_summary_token_length,
+            get_notes_for_document_corpus,
+            get_page_image,
+            load_document_md_summary,
+            load_document_txt_extract,
+            search_document_notes,
+            search_exact_text_as_sources,
+            update_corpus_description,
+            update_document_description,
+            update_document_note,
+            update_document_summary,
+        )
+        from opencontractserver.llms.tools.image_tools import (
+            aget_annotation_images,
+            aget_document_image,
+            alist_document_images,
+            get_annotation_images,
+            get_document_image,
+            list_document_images,
+        )
+        from opencontractserver.llms.tools.moderation_tools import (
+            aadd_thread_message,
+            add_thread_message,
+            adelete_message,
+            aget_message_content,
+            aget_thread_context,
+            aget_thread_messages,
+            alock_thread,
+            apin_thread,
+            aunlock_thread,
+            aunpin_thread,
+            delete_message,
+            get_message_content,
+            get_thread_context,
+            get_thread_messages,
+            lock_thread,
+            pin_thread,
+            unlock_thread,
+            unpin_thread,
+        )
+
+        # canonical_name -> (sync_func, async_func, aliases)
+        FUNCTION_MAP: dict[
+            str, tuple[Callable | None, Callable | None, tuple[str, ...]]
+        ] = {
+            # Core document tools
+            "load_document_summary": (
+                load_document_md_summary,
+                aload_document_md_summary,
+                ("load_md_summary", "load_document_md_summary"),
+            ),
+            "get_summary_token_length": (
+                get_md_summary_token_length,
+                aget_md_summary_token_length,
+                ("md_summary_length", "get_md_summary_token_length"),
+            ),
+            "load_document_text": (
+                load_document_txt_extract,
+                aload_document_txt_extract,
+                ("load_document_txt_extract",),
+            ),
+            "get_document_description": (
+                get_document_description,
+                aget_document_description,
+                (),
+            ),
+            "update_document_description": (
+                update_document_description,
+                aupdate_document_description,
+                (),
+            ),
+            "get_document_summary": (get_document_summary, aget_document_summary, ()),
+            "get_document_summary_versions": (
+                get_document_summary_versions,
+                aget_document_summary_versions,
+                (),
+            ),
+            "get_document_summary_diff": (
+                get_document_summary_diff,
+                aget_document_summary_diff,
+                (),
+            ),
+            "update_document_summary": (
+                update_document_summary,
+                aupdate_document_summary,
+                (),
+            ),
+            "get_document_notes": (
+                get_notes_for_document_corpus,
+                aget_notes_for_document_corpus,
+                ("get_notes", "get_notes_for_document_corpus"),
+            ),
+            "search_document_notes": (
+                search_document_notes,
+                asearch_document_notes,
+                (),
+            ),
+            "add_document_note": (add_document_note, aadd_document_note, ()),
+            "update_document_note": (update_document_note, aupdate_document_note, ()),
+            "search_exact_text": (
+                search_exact_text_as_sources,
+                asearch_exact_text_as_sources,
+                ("search_exact_text_as_sources",),
+            ),
+            "get_page_image": (get_page_image, aget_page_image, ()),
+            "duplicate_annotations_with_label": (
+                duplicate_annotations_with_label,
+                aduplicate_annotations_with_label,
+                (),
+            ),
+            "add_annotations_from_exact_strings": (
+                add_annotations_from_exact_strings,
+                aadd_annotations_from_exact_strings,
+                (),
+            ),
+            # Corpus tools
+            "get_corpus_description": (
+                get_corpus_description,
+                aget_corpus_description,
+                (),
+            ),
+            "update_corpus_description": (
+                update_corpus_description,
+                aupdate_corpus_description,
+                (),
+            ),
+            # Image tools
+            "list_document_images": (list_document_images, alist_document_images, ()),
+            "get_document_image": (get_document_image, aget_document_image, ()),
+            "get_annotation_images": (
+                get_annotation_images,
+                aget_annotation_images,
+                (),
+            ),
+            # Moderation tools
+            "get_thread_context": (get_thread_context, aget_thread_context, ()),
+            "get_thread_messages": (get_thread_messages, aget_thread_messages, ()),
+            "get_message_content": (get_message_content, aget_message_content, ()),
+            "delete_message": (delete_message, adelete_message, ()),
+            "lock_thread": (lock_thread, alock_thread, ()),
+            "unlock_thread": (unlock_thread, aunlock_thread, ()),
+            "add_thread_message": (add_thread_message, aadd_thread_message, ()),
+            "pin_thread": (pin_thread, apin_thread, ()),
+            "unpin_thread": (unpin_thread, aunpin_thread, ()),
+            # Utility tools
+            "create_markdown_link": (create_markdown_link, acreate_markdown_link, ()),
+        }
+        # NOTE: similarity_search, get_document_text_length, list_documents,
+        # and ask_document are NOT in FUNCTION_MAP because they require
+        # runtime context (vector store, cache, sub-agent) that is built
+        # in the agent factory.  They have ToolDefinition entries only for
+        # the GraphQL "available tools" API.
+
+        # Legacy aliases (short names -> canonical names)
+        LEGACY_ALIASES: dict[str, str] = {
+            "summarize": "load_document_summary",
+            "notes": "get_document_notes",
+        }
+
+        definitions_by_name = {d.name: d for d in AVAILABLE_TOOLS}
+        for name, (sync_fn, async_fn, aliases) in FUNCTION_MAP.items():
+            defn = definitions_by_name.get(name)
+            if defn is None:
+                logger.debug(
+                    "Tool '%s' in FUNCTION_MAP has no matching ToolDefinition — skipping",
+                    name,
+                )
+                continue
+            self.register(
+                ToolRegistryEntry(
+                    definition=defn,
+                    sync_func=sync_fn,
+                    async_func=async_fn,
+                    aliases=aliases,
+                )
+            )
+
+        for alias, canonical in LEGACY_ALIASES.items():
+            self._aliases[alias] = canonical
