@@ -27,6 +27,7 @@ from doclatticeserver.conversations.models import (
 )
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
+from doclatticeserver.llms.context_guardrails import CompactionConfig
 from doclatticeserver.llms.tools.tool_factory import CoreTool
 from doclatticeserver.llms.vector_stores.core_vector_stores import (
     CoreAnnotationVectorStore,
@@ -277,6 +278,10 @@ class AgentConfig:
 
     # Tool configuration
     tools: list[Any] = field(default_factory=list)
+
+    # Context guardrails — controls conversation compaction and tool output
+    # truncation.  ``None`` uses sensible defaults from CompactionConfig.
+    compaction: CompactionConfig = field(default_factory=CompactionConfig)
 
 
 @dataclass
