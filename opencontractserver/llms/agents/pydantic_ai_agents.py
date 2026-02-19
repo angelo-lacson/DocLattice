@@ -320,7 +320,8 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         force_llm_id: int | None = None,
         force_user_msg_id: int | None = None,
         initial_timeline: list[dict] | None = None,
-        **kwargs,
+        deps: Any | None = None,
+        message_history: list[Any] | None = None,
     ) -> AsyncGenerator[UnifiedStreamEvent, None]:
         """Internal streaming generator – TimelineStreamMixin adds timeline."""
 
@@ -356,30 +357,33 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         final_usage_data: dict[str, Any] | None = None
 
         # Re-hydrate the historical context for Pydantic-AI, if any exists.
-        message_history = await self._get_message_history()
+        # Callers (e.g. resume_with_approval) may override via the explicit
+        # ``message_history`` param; otherwise we load from the DB.
+        effective_history = message_history
+        if effective_history is None:
+            effective_history = await self._get_message_history()
 
         # CRITICAL FIX: Exclude the most recent HUMAN message from history since
         # pydantic_ai.iter() will automatically add the current `message` parameter.
         # This prevents duplicate consecutive user messages which violate OpenAI's API contract.
-        if message_history:
+        if effective_history:
             # Remove the last message if it's a user prompt (HUMAN message)
-            if message_history and isinstance(message_history[-1], ModelRequest):
-                last_parts = message_history[-1].parts
+            if effective_history and isinstance(effective_history[-1], ModelRequest):
+                last_parts = effective_history[-1].parts
                 if last_parts and isinstance(last_parts[0], UserPromptPart):
                     logger.debug(
                         f"[Session {self.session_id if hasattr(self, 'session_id') else 'N/A'}] "
                         "Removing duplicate user message from history to prevent API error"
                     )
-                    message_history = message_history[:-1]
+                    effective_history = effective_history[:-1]
 
             # If history is now empty, set to None for pydantic_ai
-            if not message_history:
-                message_history = None
+            if not effective_history:
+                effective_history = None
 
-        stream_kwargs: dict[str, Any] = {"deps": self.agent_deps}
-        if message_history:
-            stream_kwargs["message_history"] = message_history
-        stream_kwargs.update(kwargs)
+        stream_kwargs: dict[str, Any] = {"deps": deps or self.agent_deps}
+        if effective_history:
+            stream_kwargs["message_history"] = effective_history
 
         # Timeline builder – captures reasoning steps for persistence/UI
         builder = TimelineBuilder()

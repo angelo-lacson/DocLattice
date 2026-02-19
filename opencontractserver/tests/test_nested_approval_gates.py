@@ -969,15 +969,18 @@ class TestNestedApprovalGates(TransactionTestCase):
             tool_fn, "update_corpus_description tool not found in effective_tools"
         )
 
-        # The tool callable should carry requires_approval via core_tool
+        # Both the underlying core_tool and the wrapper must carry the flag.
+        # Assert unconditionally so a regression where either is dropped is caught.
         core_tool = getattr(tool_fn, "core_tool", None)
-        if core_tool is not None:
-            self.assertTrue(
-                core_tool.requires_approval,
-                "update_corpus_description core_tool.requires_approval should be True",
-            )
-        # Also check the direct attribute set by the wrapper
+        self.assertIsNotNone(
+            core_tool,
+            "update_corpus_description wrapper should expose .core_tool attribute",
+        )
+        self.assertTrue(
+            core_tool.requires_approval,
+            "update_corpus_description core_tool.requires_approval should be True",
+        )
         self.assertTrue(
             getattr(tool_fn, "requires_approval", False),
-            "update_corpus_description should have requires_approval=True",
+            "update_corpus_description wrapper should have requires_approval=True",
         )
