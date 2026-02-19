@@ -251,7 +251,7 @@ class AgentConfig:
 
     # Basic configuration
     user_id: Optional[int] = None
-    model_name: str = "gpt-4o-mini"
+    model_name: str = "gpt-4o"
     api_key: Optional[str] = None
     embedder_path: Optional[str] = None
     similarity_top_k: int = 10
@@ -1427,14 +1427,15 @@ class CoreConversationManager:
 def get_default_config(**overrides) -> AgentConfig:
     """Get default agent configuration with optional overrides."""
     defaults = {
-        "model_name": "gpt-4o-mini",
+        "model_name": getattr(settings, "OPENAI_MODEL", "gpt-4o"),
         "api_key": getattr(settings, "OPENAI_API_KEY", None),
         "similarity_top_k": 10,
         "streaming": True,
         "verbose": True,
         "temperature": 0.7,
     }
-    defaults.update(overrides)
+    # Filter out None values so callers can't accidentally clobber defaults
+    defaults.update({k: v for k, v in overrides.items() if v is not None})
     return AgentConfig(**defaults)
 
 
