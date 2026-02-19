@@ -60,6 +60,7 @@ from config.graphql.graphene_types import (
     AnnotationLabelType,
     AnnotationType,
     ColumnType,
+    CorpusActionExecutionType,
     CorpusActionType,
     CorpusType,
     DatacellType,
@@ -5336,6 +5337,108 @@ class DeleteCorpusAction(DRFDeletion):
         )
 
 
+class RunCorpusAction(graphene.Mutation):
+    """
+    Manually trigger a specific agent-based corpus action on a document.
+
+    Superuser-only. Creates a CorpusActionExecution record and dispatches
+    the run_agent_corpus_action Celery task.
+    """
+
+    class Arguments:
+        corpus_action_id = graphene.ID(
+            required=True,
+            description="ID of the CorpusAction to run",
+        )
+        document_id = graphene.ID(
+            required=True,
+            description="ID of the Document to run the action against",
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    obj = graphene.Field(CorpusActionExecutionType)
+
+    @user_passes_test(lambda user: user.is_superuser)
+    @graphql_ratelimit(rate=RateLimits.ADMIN_OPERATION)
+    def mutate(root, info, corpus_action_id: str, document_id: str):
+        from graphql_relay import from_global_id
+
+        from opencontractserver.corpuses.models import CorpusActionExecution
+        from opencontractserver.documents.models import DocumentPath
+        from opencontractserver.tasks.agent_tasks import run_agent_corpus_action
+
+        user = info.context.user
+
+        # Decode Relay global IDs to database PKs
+        _, action_pk = from_global_id(corpus_action_id)
+        _, doc_pk = from_global_id(document_id)
+
+        # Validate action exists
+        try:
+            action = CorpusAction.objects.get(pk=action_pk)
+        except CorpusAction.DoesNotExist:
+            return RunCorpusAction(ok=False, message="Corpus action not found.")
+
+        # Must be an agent action
+        if not action.is_agent_action:
+            return RunCorpusAction(
+                ok=False,
+                message="Only agent-based actions can be manually triggered.",
+            )
+
+        # Validate document exists and belongs to the action's corpus
+        try:
+            document = Document.objects.get(pk=doc_pk)
+        except Document.DoesNotExist:
+            return RunCorpusAction(ok=False, message="Document not found.")
+
+        if not DocumentPath.objects.filter(
+            document=document, corpus=action.corpus
+        ).exists():
+            return RunCorpusAction(
+                ok=False,
+                message="Document is not in this action's corpus.",
+            )
+
+        # Create execution record
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=document,
+            corpus=action.corpus,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            status=CorpusActionExecution.Status.QUEUED,
+            trigger=action.trigger,
+            queued_at=timezone.now(),
+            creator=user,
+        )
+
+        # Dispatch Celery task after transaction commits (ATOMIC_REQUESTS
+        # wraps the entire request — dispatching inside the transaction
+        # causes Celery to look up the execution before it's visible).
+        from django.db import transaction
+
+        transaction.on_commit(
+            lambda: run_agent_corpus_action.delay(
+                corpus_action_id=action.id,
+                document_id=document.id,
+                user_id=user.id,
+                execution_id=execution.id,
+                force=True,
+            )
+        )
+
+        # Refresh so Django TextChoices enums are properly stored as
+        # plain strings, which Graphene's enum serialization expects.
+        execution.refresh_from_db()
+
+        return RunCorpusAction(
+            ok=True,
+            message="Action queued successfully.",
+            obj=execution,
+        )
+
+
 class UpdateNote(graphene.Mutation):
     """
     Mutation to update a note's content, creating a new version in the process.
@@ -5974,6 +6077,7 @@ class Mutation(graphene.ObjectType):
     create_corpus_action = CreateCorpusAction.Field()
     update_corpus_action = UpdateCorpusAction.Field()
     delete_corpus_action = DeleteCorpusAction.Field()
+    run_corpus_action = RunCorpusAction.Field()
 
     # CORPUS FOLDER MUTATIONS ##################################################
     create_corpus_folder = CreateCorpusFolderMutation.Field()

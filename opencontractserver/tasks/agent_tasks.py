@@ -412,6 +412,7 @@ def run_agent_corpus_action(
     document_id: int,
     user_id: int,
     execution_id: int | None = None,
+    force: bool = False,
 ) -> dict:
     """
     Execute an agent-based corpus action on a single document.
@@ -425,6 +426,7 @@ def run_agent_corpus_action(
         document_id: ID of the Document to process
         user_id: ID of the User triggering the action
         execution_id: Optional ID of CorpusActionExecution record for tracking
+        force: If True, re-run even if a completed result already exists
 
     Returns:
         dict with status information and result_id
@@ -456,6 +458,7 @@ def run_agent_corpus_action(
                 corpus_action_id=corpus_action_id,
                 document_id=document_id,
                 user_id=user_id,
+                force=force,
             )
         )
 
@@ -517,14 +520,16 @@ def _resolve_action_tools(action: CorpusAction, trigger: str) -> list[str]:
     """Resolve the tool list for an agent corpus action.
 
     Priority order:
-    1. ``action.pre_authorized_tools`` (explicit override on the action)
-    2. ``action.agent_config.available_tools`` (from linked agent config)
-    3. Trigger-appropriate defaults from constants
+    1. ``action.agent_config.available_tools`` (from linked agent config)
+    2. Trigger-appropriate defaults from constants
+
+    Note: ``action.pre_authorized_tools`` controls which tools skip approval
+    gates — it does NOT restrict which tools are available to the agent.
     """
     from opencontractserver.constants.corpus_actions import DEFAULT_TOOLS_BY_TRIGGER
 
-    tools = action.pre_authorized_tools or []
-    if not tools and action.agent_config:
+    tools: list[str] = []
+    if action.agent_config:
         tools = action.agent_config.available_tools or []
     if not tools:
         tools = list(DEFAULT_TOOLS_BY_TRIGGER.get(trigger, []))
@@ -702,6 +707,7 @@ async def _run_agent_corpus_action_async(
     corpus_action_id: int,
     document_id: int,
     user_id: int,
+    force: bool = False,
 ) -> dict:
     """Async implementation of agent corpus action execution."""
     from channels.db import database_sync_to_async
@@ -755,7 +761,7 @@ async def _run_agent_corpus_action_async(
                 return result, "created"
 
             # Record exists and we hold the lock - try to claim it
-            if existing.status not in [
+            if force or existing.status not in [
                 AgentActionResult.Status.RUNNING,
                 AgentActionResult.Status.COMPLETED,
             ]:
@@ -763,7 +769,7 @@ async def _run_agent_corpus_action_async(
                 existing.started_at = timezone.now()
                 existing.error_message = ""
                 existing.save(update_fields=["status", "started_at", "error_message"])
-                return existing, "claimed"
+                return existing, "forced" if force else "claimed"
 
             return existing, f"already_{existing.status}"
 

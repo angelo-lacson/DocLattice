@@ -4466,6 +4466,25 @@ export const GET_AVAILABLE_MODERATION_TOOLS = gql`
   }
 `;
 
+/**
+ * GET_AVAILABLE_DOCUMENT_TOOLS - Get available document-category tools from backend
+ * Used in CreateCorpusActionModal for inline agent creation on document triggers
+ */
+export interface GetAvailableDocumentToolsOutput {
+  availableTools: AvailableTool[];
+}
+
+export const GET_AVAILABLE_DOCUMENT_TOOLS = gql`
+  query GetAvailableDocumentTools {
+    availableTools(category: "document") {
+      name
+      description
+      category
+      requiresApproval
+    }
+  }
+`;
+
 // ============================================================
 // CORPUS ACTION EXECUTION QUERIES
 // ============================================================

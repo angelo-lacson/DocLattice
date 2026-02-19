@@ -50,6 +50,8 @@ interface CorpusActionsSectionProps {
   onAddAction: () => void;
   onEditAction: (action: CorpusActionData) => void;
   onDeleteAction: (id: string) => void;
+  onRunAction?: (action: CorpusAction) => void;
+  isSuperuser?: boolean;
 }
 
 export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
@@ -57,6 +59,8 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
   onAddAction,
   onEditAction,
   onDeleteAction,
+  onRunAction,
+  isSuperuser,
 }) => {
   const getTriggerType = (trigger: string): "add" | "edit" => {
     return trigger.toLowerCase().includes("add") ? "add" : "edit";
@@ -227,6 +231,22 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       )}
                       {action.disabled ? "Disabled" : "Active"}
                     </ActionStatusBadge>
+
+                    {isSuperuser && (
+                      <Button
+                        icon
+                        size="tiny"
+                        disabled={!!action.fieldset || !!action.analyzer}
+                        title={
+                          action.fieldset || action.analyzer
+                            ? "Only agent actions can be manually triggered"
+                            : "Run this action on a document"
+                        }
+                        onClick={() => onRunAction?.(action)}
+                      >
+                        <Icon name="play" />
+                      </Button>
+                    )}
 
                     <Button
                       icon

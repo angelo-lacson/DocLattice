@@ -216,6 +216,7 @@ class TestRunAgentCorpusActionAsync(TestCase):
             corpus_action_id=self.corpus_action.id,
             document_id=self.document.id,
             user_id=self.user.id,
+            force=False,
         )
 
     @patch(ASYNC_FUNC_PATH)
@@ -281,6 +282,7 @@ class TestRunAgentCorpusActionTask(TestCase):
             corpus_action_id=self.corpus_action.id,
             document_id=self.document.id,
             user_id=self.user.id,
+            force=False,
         )
 
     @patch(ASYNC_FUNC_PATH)
@@ -568,8 +570,8 @@ class TestResolveActionTools(TestCase):
             creator=self.user,
         )
 
-    def test_returns_pre_authorized_tools_when_set(self):
-        """Pre-authorized tools on the action take highest priority."""
+    def test_pre_authorized_tools_does_not_override_available_tools(self):
+        """pre_authorized_tools controls approval gates, not tool availability."""
         from opencontractserver.tasks.agent_tasks import _resolve_action_tools
 
         action = CorpusAction.objects.create(
@@ -580,8 +582,9 @@ class TestResolveActionTools(TestCase):
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
+        # Should use agent_config.available_tools, not pre_authorized_tools
         result = _resolve_action_tools(action, "add_document")
-        self.assertEqual(result, ["explicit_tool_1", "explicit_tool_2"])
+        self.assertEqual(result, ["tool_from_config_a", "tool_from_config_b"])
 
     def test_falls_back_to_agent_config_tools(self):
         """When no pre_authorized_tools, use agent_config.available_tools."""
