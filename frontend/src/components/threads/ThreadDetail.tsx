@@ -68,13 +68,13 @@ const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 1rem 2rem;
+  padding: 0.5rem 2rem;
   background: ${CORPUS_COLORS.white};
   border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
-  gap: 1rem;
+  gap: 0.5rem;
 
   @media (max-width: 768px) {
-    padding: 1rem;
+    padding: 0.5rem 1rem;
     flex-direction: column;
   }
 `;
@@ -82,16 +82,9 @@ const Header = styled.div`
 const HeaderLeft = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: 0.25rem;
   flex: 1;
   min-width: 0;
-`;
-
-const HeaderTop = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
 `;
 
 const BackButton = styled.button`
@@ -193,34 +186,47 @@ const StatusBadge = styled.span<{ $variant: "pinned" | "locked" | "deleted" }>`
 const TitleRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 `;
 
 const Title = styled.h1`
   font-family: "Georgia", "Times New Roman", serif;
-  font-size: 28px;
+  font-size: 1.25rem;
   font-weight: 400;
   color: #1e293b;
   margin: 0;
 `;
 
-const Description = styled.p`
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 16px;
-  color: #475569;
+const Description = styled.span`
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[500]};
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 `;
 
 const MetaRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   font-family: ${CORPUS_FONTS.sans};
   font-size: 0.8125rem;
   color: ${CORPUS_COLORS.slate[500]};
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+`;
+
+const MetaRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
 `;
 
 const MetaItem = styled.span`
@@ -247,10 +253,10 @@ const MetaDot = styled.span`
 const ContentArea = styled.div`
   flex: 1;
   overflow: auto;
-  padding: 32px 24px;
+  padding: 16px 24px;
 
   @media (max-width: 768px) {
-    padding: 24px 16px;
+    padding: 12px 16px;
   }
 `;
 
@@ -270,12 +276,12 @@ const EmptyMessageState = styled.div`
 `;
 
 const ReplyComposerArea = styled.div`
-  padding: 1rem 2rem;
+  padding: 0.5rem 2rem 0.75rem;
   background: ${CORPUS_COLORS.white};
   border-top: 1px solid ${CORPUS_COLORS.slate[200]};
 
   @media (max-width: 768px) {
-    padding: 1rem;
+    padding: 0.5rem 1rem 0.75rem;
   }
 `;
 
@@ -412,6 +418,14 @@ export function ThreadDetail({
     navigate(-1);
   };
 
+  // Find the message being replied to (for bottom composer context)
+  const replyTargetMessage = useMemo(() => {
+    if (!replyingToMessageId || !thread?.allMessages) return null;
+    return (
+      thread.allMessages.find((msg) => msg.id === replyingToMessageId) || null
+    );
+  }, [replyingToMessageId, thread?.allMessages]);
+
   // Infer discussion category from title/description
   const discussionCategory = useMemo(() => {
     if (!thread) return "question";
@@ -452,16 +466,16 @@ export function ThreadDetail({
       {/* Compact Header */}
       <Header>
         <HeaderLeft>
-          {/* Top row: Back button (only in compact/sidebar mode) + document link + status badges */}
-          <HeaderTop>
+          {/* Title row: Back + badge + title + status badges */}
+          <TitleRow>
             {compact && (
               <BackButton onClick={handleBack} aria-label="Back to discussions">
                 <ArrowLeft />
                 Back
               </BackButton>
             )}
-
-            {/* Corpus link removed - shown in route NavBar */}
+            <DiscussionTypeBadge category={discussionCategory} />
+            <Title>{thread.title || "Untitled Discussion"}</Title>
 
             {thread.chatWithDocument && (
               <ContextLink
@@ -491,39 +505,35 @@ export function ThreadDetail({
                 Deleted
               </StatusBadge>
             )}
-          </HeaderTop>
-
-          {/* Title row: Category badge + title */}
-          <TitleRow>
-            <DiscussionTypeBadge category={discussionCategory} />
-            <Title>{thread.title || "Untitled Discussion"}</Title>
           </TitleRow>
 
-          {/* Description (if present) */}
-          {thread.description && (
-            <Description>{thread.description}</Description>
-          )}
-
-          {/* Meta row: Author + time + message count */}
+          {/* Meta row: description (left, truncated) + author/time/count (right) */}
           <MetaRow>
-            <MetaItem>
-              <Users />
-              <strong>
-                {formatUsername(
-                  thread.creator?.username,
-                  thread.creator?.email
-                )}
-              </strong>
-            </MetaItem>
-            <MetaDot>•</MetaDot>
-            <MetaItem>
-              <RelativeTime date={thread.createdAt} />
-            </MetaItem>
-            <MetaDot>•</MetaDot>
-            <MetaItem>
-              <MessageCircle />
-              {messageCount} {messageCount === 1 ? "message" : "messages"}
-            </MetaItem>
+            {thread.description && (
+              <Description title={thread.description}>
+                {thread.description}
+              </Description>
+            )}
+            <MetaRight>
+              <MetaItem>
+                <Users />
+                <strong>
+                  {formatUsername(
+                    thread.creator?.username,
+                    thread.creator?.email
+                  )}
+                </strong>
+              </MetaItem>
+              <MetaDot>•</MetaDot>
+              <MetaItem>
+                <RelativeTime date={thread.createdAt} />
+              </MetaItem>
+              <MetaDot>•</MetaDot>
+              <MetaItem>
+                <MessageCircle />
+                {messageCount} {messageCount === 1 ? "message" : "messages"}
+              </MetaItem>
+            </MetaRight>
           </MetaRow>
         </HeaderLeft>
       </Header>
@@ -546,8 +556,6 @@ export function ThreadDetail({
               onReply={handleReply}
               badgesByUser={badgesByUser}
               conversationId={conversationId}
-              replyingToMessageId={replyingToMessageId}
-              onCancelReply={() => setReplyingToMessageId(null)}
               currentUserId={currentUser?.id}
               canModerate={canModerate}
               corpusId={corpusId}
@@ -558,19 +566,30 @@ export function ThreadDetail({
         )}
       </ContentArea>
 
-      {/* Bottom-level message composer */}
+      {/* Bottom composer — switches between top-level and reply mode */}
       {!thread.isLocked && (
         <ReplyComposerArea>
           <ReplyComposerInner>
             <ReplyForm
               conversationId={conversationId}
+              parentMessageId={replyingToMessageId || undefined}
+              replyingToUsername={
+                replyTargetMessage
+                  ? formatUsername(
+                      replyTargetMessage.creator?.username,
+                      replyTargetMessage.creator?.email
+                    )
+                  : undefined
+              }
+              parentMessageContent={replyTargetMessage?.content || undefined}
               onSuccess={() => {
-                // Apollo's refetchQueries in ReplyForm handles refetching
+                setReplyingToMessageId(null);
               }}
               onCancel={() => {
-                // No-op for bottom composer - it's always visible
+                setReplyingToMessageId(null);
               }}
               autoFocus={false}
+              corpusId={corpusId}
             />
           </ReplyComposerInner>
         </ReplyComposerArea>
