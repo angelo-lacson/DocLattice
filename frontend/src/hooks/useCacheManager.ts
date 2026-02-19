@@ -43,7 +43,9 @@ import {
  */
 export interface UseCacheManagerReturn {
   /**
-   * Resets the entire cache and refetches active queries.
+   * Resets the entire cache. Refetch of active queries is handled
+   * separately by the `useRefetchOnAuthChange` hook (registered at the
+   * app root). The `refetchActive` flag defaults to `false`.
    * Use this on authentication state changes (login/logout).
    */
   resetOnAuthChange: (

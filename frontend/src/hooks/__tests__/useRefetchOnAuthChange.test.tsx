@@ -2,7 +2,8 @@
  * useRefetchOnAuthChange Hook Tests
  *
  * Verifies that the hook registers an onClearStore callback that
- * refetches all active queries after any Apollo cache clear.
+ * refetches all active queries after any Apollo cache clear,
+ * skipping the refetch when there is no auth token (logout).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -10,6 +11,7 @@ import { renderHook } from "@testing-library/react-hooks";
 import { ApolloClient, InMemoryCache, ApolloProvider } from "@apollo/client";
 import React from "react";
 import { useRefetchOnAuthChange } from "../useRefetchOnAuthChange";
+import { authToken } from "../../graphql/cache";
 
 // ============================================================================
 // Test Setup
@@ -43,18 +45,22 @@ describe("useRefetchOnAuthChange", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     client = createMockApolloClient();
+    // Default to authenticated state
+    authToken("test-token");
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // Reset to default
+    authToken("");
   });
 
-  it("should refetch active queries after clearStore", async () => {
+  it("should refetch active queries after clearStore when authenticated", async () => {
     renderHook(() => useRefetchOnAuthChange(), {
       wrapper: createWrapper(client),
     });
 
-    // Trigger a cache clear (simulates login/logout)
+    // Trigger a cache clear (simulates login)
     await client.clearStore();
 
     expect(client.refetchQueries).toHaveBeenCalledWith({
@@ -81,5 +87,37 @@ describe("useRefetchOnAuthChange", () => {
     await client.clearStore();
 
     expect(client.refetchQueries).not.toHaveBeenCalled();
+  });
+
+  it("should skip refetch when auth token is empty (logout)", async () => {
+    renderHook(() => useRefetchOnAuthChange(), {
+      wrapper: createWrapper(client),
+    });
+
+    // Simulate logout: clear auth state before cache clear
+    authToken("");
+
+    await client.clearStore();
+
+    expect(client.refetchQueries).not.toHaveBeenCalled();
+  });
+
+  it("should not propagate refetchQueries errors", async () => {
+    vi.spyOn(client, "refetchQueries").mockRejectedValue(
+      new Error("Network error")
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    renderHook(() => useRefetchOnAuthChange(), {
+      wrapper: createWrapper(client),
+    });
+
+    // Should not throw despite refetchQueries rejecting
+    await client.clearStore();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[useRefetchOnAuthChange] refetchQueries failed:",
+      expect.any(Error)
+    );
   });
 });

@@ -41,7 +41,7 @@ export interface CacheOperationResult {
  * Options for cache reset operations
  */
 export interface CacheResetOptions {
-  /** Whether to refetch active queries after reset (default: true) */
+  /** Whether to refetch active queries after reset (default: false) */
   refetchActive?: boolean;
   /** Reason for the reset (for logging) */
   reason?: string;
@@ -171,7 +171,7 @@ export class CacheManager {
   async resetOnAuthChange(
     options: CacheResetOptions = {}
   ): Promise<CacheOperationResult> {
-    const { refetchActive = true, reason = "auth_change" } = options;
+    const { refetchActive = false, reason = "auth_change" } = options;
     const startTime = performance.now();
 
     // Debounce: prevent multiple resets within the threshold
