@@ -343,15 +343,18 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
     # care of collecting the reasoning timeline.
 
     async def _stream_core(
-        self, message: str, **kwargs
+        self,
+        message: str,
+        *,
+        force_llm_id: int | None = None,
+        force_user_msg_id: int | None = None,
+        initial_timeline: list[dict] | None = None,
+        deps: Any | None = None,
+        message_history: list[Any] | None = None,
     ) -> AsyncGenerator[UnifiedStreamEvent, None]:
         """Internal streaming generator – TimelineStreamMixin adds timeline."""
 
         logger.info(f"[PydanticAI stream] Starting stream with message: {message!r}")
-
-        # Extract optional overrides (used by resume_with_approval)
-        force_llm_id: int | None = kwargs.pop("force_llm_id", None)
-        force_user_msg_id: int | None = kwargs.pop("force_user_msg_id", None)
 
         user_msg_id: int | None = force_user_msg_id
         llm_msg_id: int | None = force_llm_id
@@ -383,30 +386,33 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         final_usage_data: dict[str, Any] | None = None
 
         # Re-hydrate the historical context for Pydantic-AI, if any exists.
-        message_history = await self._get_message_history()
+        # Callers (e.g. resume_with_approval) may override via the explicit
+        # ``message_history`` param; otherwise we load from the DB.
+        effective_history = message_history
+        if effective_history is None:
+            effective_history = await self._get_message_history()
 
         # CRITICAL FIX: Exclude the most recent HUMAN message from history since
         # pydantic_ai.iter() will automatically add the current `message` parameter.
         # This prevents duplicate consecutive user messages which violate OpenAI's API contract.
-        if message_history:
+        if effective_history:
             # Remove the last message if it's a user prompt (HUMAN message)
-            if message_history and isinstance(message_history[-1], ModelRequest):
-                last_parts = message_history[-1].parts
+            if effective_history and isinstance(effective_history[-1], ModelRequest):
+                last_parts = effective_history[-1].parts
                 if last_parts and isinstance(last_parts[0], UserPromptPart):
                     logger.debug(
                         f"[Session {self.session_id if hasattr(self, 'session_id') else 'N/A'}] "
                         "Removing duplicate user message from history to prevent API error"
                     )
-                    message_history = message_history[:-1]
+                    effective_history = effective_history[:-1]
 
             # If history is now empty, set to None for pydantic_ai
-            if not message_history:
-                message_history = None
+            if not effective_history:
+                effective_history = None
 
-        stream_kwargs: dict[str, Any] = {"deps": self.agent_deps}
-        if message_history:
-            stream_kwargs["message_history"] = message_history
-        stream_kwargs.update(kwargs)
+        stream_kwargs: dict[str, Any] = {"deps": deps or self.agent_deps}
+        if effective_history:
+            stream_kwargs["message_history"] = effective_history
 
         # Timeline builder – captures reasoning steps for persistence/UI
         builder = TimelineBuilder()
@@ -414,9 +420,6 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         # Allow callers (e.g. resume_with_approval) to inject pre-built
         # timeline entries so they appear in both the persisted DB record
         # and the FinalEvent sent to the frontend.
-        initial_timeline: list[dict] | None = stream_kwargs.pop(
-            "initial_timeline", None
-        )
         if initial_timeline:
             for entry in initial_timeline:
                 builder.add(entry)
@@ -1280,7 +1283,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             # Signal post-approval context so closures (e.g. ask_document_tool)
             # can bypass sub-agent approval gates without exposing a parameter
             # that the LLM could abuse.
-            self.config._approval_bypass_allowed = True  # type: ignore[attr-defined]
+            self.config._approval_bypass_allowed = True
 
             # Try to execute the tool
             tool_executed = False
@@ -1356,7 +1359,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         )
                         raise
             finally:
-                self.config._approval_bypass_allowed = False  # type: ignore[attr-defined]
+                self.config._approval_bypass_allowed = False
 
             tool_result = {"result": result}
             status_str = "approved"
@@ -1402,6 +1405,12 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         # so the LLM sees a proper tool-call / tool-return pair when it resumes.
         # Without this the LLM receives a text continuation prompt and often
         # re-invokes the same tool, creating an infinite approval loop.
+        #
+        # NOTE: These entries are injected as *historical context*, not live
+        # tool calls.  pydantic-ai's iter() treats message_history entries as
+        # past state and does NOT re-evaluate requires_approval for them.
+        # The actual tool execution has already completed above, so there is
+        # no risk of re-triggering the approval gate here.
         tool_call_id = pending.get("tool_call_id") or str(uuid4())
         if approved:
             resume_history = await self._get_message_history() or []
