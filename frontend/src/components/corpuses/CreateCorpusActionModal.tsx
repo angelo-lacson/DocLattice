@@ -18,6 +18,31 @@ import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
 
+import {
+  CREATE_CORPUS_ACTION,
+  CreateCorpusActionInput,
+  CreateCorpusActionOutput,
+  UPDATE_CORPUS_ACTION,
+  UpdateCorpusActionInput,
+  UpdateCorpusActionOutput,
+} from "../../graphql/mutations";
+import {
+  GET_FIELDSETS,
+  GET_ANALYZERS,
+  GET_AGENT_CONFIGURATIONS,
+  GET_AVAILABLE_MODERATION_TOOLS,
+  GET_AVAILABLE_DOCUMENT_TOOLS,
+  GetFieldsetsInputs,
+  GetFieldsetsOutputs,
+  GetAnalyzersInputs,
+  GetAnalyzersOutputs,
+  GetAgentConfigurationsInput,
+  GetAgentConfigurationsOutput,
+  GetAvailableModerationToolsOutput,
+  GetAvailableDocumentToolsOutput,
+  AvailableTool,
+} from "../../graphql/queries";
+
 /**
  * Default moderation tools (fallback when backend query fails or returns no data).
  * These are pre-selected by default when creating inline moderator agents.
@@ -43,31 +68,6 @@ You have access to thread context, messages, and moderation tools. Use them judi
 
 const DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS =
   "You are a document processing agent for this corpus.";
-
-import {
-  CREATE_CORPUS_ACTION,
-  CreateCorpusActionInput,
-  CreateCorpusActionOutput,
-  UPDATE_CORPUS_ACTION,
-  UpdateCorpusActionInput,
-  UpdateCorpusActionOutput,
-} from "../../graphql/mutations";
-import {
-  GET_FIELDSETS,
-  GET_ANALYZERS,
-  GET_AGENT_CONFIGURATIONS,
-  GET_AVAILABLE_MODERATION_TOOLS,
-  GET_AVAILABLE_DOCUMENT_TOOLS,
-  GetFieldsetsInputs,
-  GetFieldsetsOutputs,
-  GetAnalyzersInputs,
-  GetAnalyzersOutputs,
-  GetAgentConfigurationsInput,
-  GetAgentConfigurationsOutput,
-  GetAvailableModerationToolsOutput,
-  GetAvailableDocumentToolsOutput,
-  AvailableTool,
-} from "../../graphql/queries";
 
 /**
  * Shape of an existing corpus action for editing
