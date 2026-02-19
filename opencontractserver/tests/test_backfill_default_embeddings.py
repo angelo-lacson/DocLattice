@@ -12,7 +12,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel, Embedding
 from opencontractserver.corpuses.models import Corpus
@@ -77,8 +77,12 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             },
         )
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
-    def test_command_no_annotations_no_errors(self):
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
+    def test_command_no_annotations_no_errors(self, _mock_path):
         """Command should succeed with no annotations to process."""
         out = StringIO()
         call_command("backfill_default_embeddings", stdout=out)
@@ -87,13 +91,17 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         self.assertIn("Found 0 annotations missing default embeddings", output)
         self.assertIn("All annotations have default embeddings", output)
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
     def test_command_processes_annotations_without_default_embedding(
-        self, mock_calc_embedding
+        self, mock_calc_embedding, _mock_path
     ):
         """Command should process annotations missing default embeddings."""
         mock_calc_embedding.delay = MagicMock()
@@ -115,13 +123,17 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             corpus_id=self.corpus.id,
         )
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
     def test_command_skips_annotations_with_default_embedding(
-        self, mock_calc_embedding
+        self, mock_calc_embedding, _mock_path
     ):
         """Command should skip annotations that already have default embeddings."""
         mock_calc_embedding.delay = MagicMock()
@@ -147,8 +159,12 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         # Task should not be called
         mock_calc_embedding.delay.assert_not_called()
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
-    def test_command_dry_run_no_changes(self):
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
+    def test_command_dry_run_no_changes(self, _mock_path):
         """Dry run should not make any changes."""
         document = self._create_document()
         self._create_annotation(document)
@@ -163,12 +179,16 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         # No embeddings should be created
         self.assertEqual(Embedding.objects.count(), 0)
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_batch_size_option(self, mock_calc_embedding):
+    def test_command_batch_size_option(self, mock_calc_embedding, _mock_path):
         """Batch size option should be accepted."""
         mock_calc_embedding.delay = MagicMock()
 
@@ -181,12 +201,16 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         output = out.getvalue()
         self.assertIn("Backfill complete!", output)
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_handles_embedding_failures_gracefully(self, mock_calc_embedding):
+    def test_command_handles_embedding_failures_gracefully(self, mock_calc_embedding, _mock_path):
         """Command should continue processing after individual failures."""
         # Make delay raise an exception
         mock_calc_embedding.delay = MagicMock(side_effect=Exception("Queue error"))
@@ -201,12 +225,16 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
         self.assertIn("Errors: 1", output)
         self.assertIn("Backfill complete!", output)
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_respects_corpus_filter(self, mock_calc_embedding):
+    def test_command_respects_corpus_filter(self, mock_calc_embedding, _mock_path):
         """Command should filter by corpus when corpus-id is provided."""
         mock_calc_embedding.delay = MagicMock()
 
@@ -242,12 +270,16 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             corpus_id=self.corpus.id,
         )
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_respects_document_filter(self, mock_calc_embedding):
+    def test_command_respects_document_filter(self, mock_calc_embedding, _mock_path):
         """Command should filter by document when document-id is provided."""
         mock_calc_embedding.delay = MagicMock()
 
@@ -274,12 +306,16 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             corpus_id=self.corpus.id,
         )
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_skips_annotations_without_text(self, mock_calc_embedding):
+    def test_command_skips_annotations_without_text(self, mock_calc_embedding, _mock_path):
         """Command should skip annotations with empty or null raw_text."""
         mock_calc_embedding.delay = MagicMock()
 
@@ -304,12 +340,16 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             corpus_id=self.corpus.id,
         )
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_sync_mode(self, mock_calc_embedding):
+    def test_command_sync_mode(self, mock_calc_embedding, _mock_path):
         """Command with --sync should run synchronously."""
         document = self._create_document()
         annotation = self._create_annotation(document)
@@ -330,12 +370,16 @@ class TestBackfillDefaultEmbeddingsCommand(TestCase):
             hasattr(mock_calc_embedding, "delay") and mock_calc_embedding.delay.called
         )
 
-    @override_settings(DEFAULT_EMBEDDER="test.embedder.path")
+    @patch(
+        "opencontractserver.annotations.management.commands.backfill_default_embeddings"
+        ".get_default_embedder_path",
+        return_value="test.embedder.path",
+    )
     @patch(
         "opencontractserver.annotations.management.commands.backfill_default_embeddings"
         ".calculate_embedding_for_annotation_text"
     )
-    def test_command_verbose_mode(self, mock_calc_embedding):
+    def test_command_verbose_mode(self, mock_calc_embedding, _mock_path):
         """Verbose mode should show detailed progress."""
         mock_calc_embedding.delay = MagicMock()
 
