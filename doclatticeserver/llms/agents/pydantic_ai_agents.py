@@ -11,7 +11,6 @@ from asgiref.sync import sync_to_async
 from pydantic_ai.agent import Agent as PydanticAIAgent
 from pydantic_ai.agent import (
     CallToolsNode,
-    End,
     ModelRequestNode,
     UserPromptNode,
 )
@@ -29,6 +28,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_graph import End
 
 from doclatticeserver.conversations.models import Conversation
 from doclatticeserver.corpuses.models import Corpus
@@ -1083,7 +1083,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             structured_agent = PydanticAIAgent(
                 model=model or self.config.model_name,
-                system_prompt=structured_system_prompt,
+                instructions=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
                 tools=final_tools,
@@ -2257,7 +2257,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,
@@ -2648,7 +2648,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
 
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,
