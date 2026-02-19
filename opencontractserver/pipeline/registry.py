@@ -162,8 +162,15 @@ class PipelineComponentRegistry:
         so that module-level aliases (e.g. ``Alias = RealClass``) don't cause
         the same class to appear twice.  Abstract intermediate base classes are
         also skipped — only concrete (instantiable) components are registered.
+
+        Note: inspect.isabstract() returns True only when a class has unimplemented
+        abstract methods.  An intermediate base class that accidentally implements
+        all parent abstract methods (while intending to remain abstract) will pass
+        through this filter.  If you add intermediate bases, mark them with ABC and
+        leave at least one @abstractmethod unimplemented, or add a dedicated
+        ``_is_abstract = True`` sentinel checked here.
         """
-        seen: set[int] = set()
+        seen: set[type] = set()
         subclasses: list[type] = []
         try:
             package = importlib.import_module(module_name)
@@ -177,10 +184,10 @@ class PipelineComponentRegistry:
                             if (
                                 issubclass(obj, base_class)
                                 and obj is not base_class
-                                and id(obj) not in seen
+                                and obj not in seen
                                 and not inspect.isabstract(obj)
                             ):
-                                seen.add(id(obj))
+                                seen.add(obj)
                                 subclasses.append(obj)
                     except Exception as e:
                         logger.warning(f"Failed to import {modname}: {e}")
