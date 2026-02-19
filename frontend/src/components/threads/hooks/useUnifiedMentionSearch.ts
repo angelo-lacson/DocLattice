@@ -291,9 +291,10 @@ export function useUnifiedMentionSearch(
           };
         }) || [];
 
-    // Annotation results
+    // Annotation results (filter out annotations with null documents)
     const annotations: UnifiedMentionResource[] =
       annotationData?.searchAnnotationsForMention?.edges
+        ?.filter((edge) => edge.node.document != null)
         ?.slice(0, limitPerCategory)
         .map((edge) => {
           // Create short preview text from rawText for primary display
