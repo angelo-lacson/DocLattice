@@ -8,10 +8,10 @@ The dual embedding strategy ensures:
 
 from unittest.mock import MagicMock, patch
 
-from django.conf import settings
 from django.test import TestCase
 
 from opencontractserver.annotations.models import Annotation
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.tasks.embeddings_task import (
@@ -87,7 +87,7 @@ class TestDualEmbeddingHelpers(TestCase):
 
         # Should only call default embedder
         self.assertEqual(len(embed_calls), 1)
-        self.assertEqual(embed_calls[0], settings.DEFAULT_EMBEDDER)
+        self.assertEqual(embed_calls[0], get_default_embedder_path())
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
     @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
@@ -101,7 +101,7 @@ class TestDualEmbeddingHelpers(TestCase):
         corpus = Corpus.objects.create(
             title="Test Corpus",
             creator=self.user,
-            preferred_embedder=settings.DEFAULT_EMBEDDER,  # Same as default
+            preferred_embedder=get_default_embedder_path(),  # Same as default
         )
 
         mock_obj = MagicMock()
@@ -125,7 +125,7 @@ class TestDualEmbeddingHelpers(TestCase):
 
         # Should only call default embedder (corpus uses same)
         self.assertEqual(len(embed_calls), 1)
-        self.assertEqual(embed_calls[0], settings.DEFAULT_EMBEDDER)
+        self.assertEqual(embed_calls[0], get_default_embedder_path())
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
     @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
@@ -166,7 +166,7 @@ class TestDualEmbeddingHelpers(TestCase):
 
         # Should call both default and corpus embedder
         self.assertEqual(len(embed_calls), 2)
-        self.assertIn(settings.DEFAULT_EMBEDDER, embed_calls)
+        self.assertIn(get_default_embedder_path(), embed_calls)
         self.assertIn(custom_embedder_path, embed_calls)
 
     def test_apply_dual_embedding_empty_text(self):
@@ -302,7 +302,7 @@ class TestAnnotationEmbeddingTask(TestCase):
         # Check that default embedding was created
         self.assertTrue(
             annotation.embedding_set.filter(
-                embedder_path=settings.DEFAULT_EMBEDDER
+                embedder_path=get_default_embedder_path()
             ).exists()
         )
 
@@ -340,7 +340,7 @@ class TestAnnotationEmbeddingTask(TestCase):
         embeddings = annotation.embedding_set.all()
         embedder_paths = {e.embedder_path for e in embeddings}
 
-        self.assertIn(settings.DEFAULT_EMBEDDER, embedder_paths)
+        self.assertIn(get_default_embedder_path(), embedder_paths)
         self.assertIn(custom_embedder_path, embedder_paths)
         self.assertEqual(len(embedder_paths), 2)
 
@@ -437,6 +437,6 @@ class TestIdempotentEmbedding(TestCase):
 
         # Should still only have one embedding per embedder_path
         default_embeddings = annotation.embedding_set.filter(
-            embedder_path=settings.DEFAULT_EMBEDDER
+            embedder_path=get_default_embedder_path()
         )
         self.assertEqual(default_embeddings.count(), 1)

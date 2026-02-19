@@ -12,11 +12,11 @@ Covers:
 
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 
 from opencontractserver.corpuses.models import Corpus
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 
 User = get_user_model()
@@ -36,12 +36,12 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
     def test_preferred_embedder_auto_populated_from_default(self):
         """Corpus without explicit embedder gets DEFAULT_EMBEDDER frozen."""
         corpus = Corpus.objects.create(title="Auto Embed", creator=self.user)
-        self.assertEqual(corpus.preferred_embedder, settings.DEFAULT_EMBEDDER)
+        self.assertEqual(corpus.preferred_embedder, get_default_embedder_path())
 
     def test_created_with_embedder_set_on_creation(self):
         """created_with_embedder is set automatically and matches preferred."""
         corpus = Corpus.objects.create(title="Audit Trail", creator=self.user)
-        self.assertEqual(corpus.created_with_embedder, settings.DEFAULT_EMBEDDER)
+        self.assertEqual(corpus.created_with_embedder, get_default_embedder_path())
 
     def test_explicit_embedder_preserved(self):
         """Corpus with explicit embedder keeps it, not DEFAULT_EMBEDDER."""
@@ -733,7 +733,7 @@ class TestEmbedderConsistencyCheck(TestCase):
         Corpus.objects.create(
             title="Matching",
             creator=self.user,
-            created_with_embedder=settings.DEFAULT_EMBEDDER,
+            created_with_embedder=get_default_embedder_path(),
         )
         warnings = check_default_embedder_consistency(None)
         # Should not contain W002

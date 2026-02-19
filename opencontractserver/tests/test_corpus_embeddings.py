@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from opencontractserver.corpuses.models import Corpus
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 
 User = get_user_model()
@@ -70,7 +70,7 @@ class CorpusEmbeddingsTestCase(TestCase):
         self.corpus.save()
 
         # Set up expected return values
-        expected_embedder = settings.DEFAULT_EMBEDDER
+        expected_embedder = get_default_embedder_path()
         expected_embeddings = [0.1] * 768
 
         # Mock generate_embeddings_from_text to return our expected values

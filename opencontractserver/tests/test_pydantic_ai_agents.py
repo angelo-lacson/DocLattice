@@ -15,6 +15,7 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import RunContext
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.llms.agents.agent_factory import UnifiedAgentFactory
@@ -229,8 +230,8 @@ class TestPydanticAIAgents(TransactionTestCase):
         )
 
         # Add embeddings to annotations
-        # Use settings.DEFAULT_EMBEDDER to match what vector store searches for
-        embedder_path = settings.DEFAULT_EMBEDDER
+        # Use get_default_embedder_path() to match what vector store searches for
+        embedder_path = get_default_embedder_path()
         self.anno1.add_embedding(embedder_path, constant_vector(384, 0.1))
         self.anno2.add_embedding(embedder_path, constant_vector(384, 0.2))
         self.anno3.add_embedding(embedder_path, constant_vector(384, 0.3))
