@@ -6,7 +6,6 @@ from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, override_settings
 from pydantic import BaseModel
@@ -15,7 +14,6 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import RunContext
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel
-from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.llms.agents.agent_factory import UnifiedAgentFactory
@@ -34,6 +32,7 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
 from opencontractserver.llms.vector_stores.vector_store_factory import (
     UnifiedVectorStoreFactory,
 )
+from opencontractserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 

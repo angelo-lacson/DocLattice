@@ -19,9 +19,9 @@ from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from opencontractserver.annotations.models import Annotation
-from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.utils.permissioning import (
     PermissionTypes,
     set_permissions_for_obj_to_user,

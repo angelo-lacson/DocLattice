@@ -11,9 +11,9 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 
 from opencontractserver.annotations.models import Annotation
-from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.tasks.embeddings_task import (
     _apply_dual_embedding_strategy,
     _create_text_embedding,

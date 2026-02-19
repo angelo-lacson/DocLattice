@@ -16,8 +16,8 @@ from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 
