@@ -37,7 +37,7 @@ class BaseVisibilityManager(Manager):
     more specific permission requirements.
     """
 
-    def visible_to_user(self, user=None) -> QuerySet:
+    def visible_to_user(self, user=None, lightweight=False) -> QuerySet:
         """
         Returns queryset filtered to only objects visible to the user.
 
@@ -45,6 +45,13 @@ class BaseVisibilityManager(Manager):
         - Superusers see everything
         - Anonymous users see only public objects
         - Authenticated users see: public objects, objects they created, or objects with explicit permissions
+
+        Args:
+            user: The requesting user (None treated as anonymous).
+            lightweight: If True, skip heavy prefetch_related lookups for
+                Document queries (doc_annotations, rows, relationships,
+                notes). Useful for queries that only need basic fields
+                like id, title, slug, icon, fileType, creator.
         """
 
         from django.apps import apps
@@ -132,47 +139,48 @@ class BaseVisibilityManager(Manager):
                 # Document counts are now computed via DocumentPath subqueries
             elif model_name.upper() == "DOCUMENT":
                 logger.debug("Applying Document specific optimizations")
-                from opencontractserver.annotations.models import Annotation
 
                 queryset = queryset.select_related("creator", "user_lock")
 
-                # Prefetch annotations to avoid N+1 when doc_annotations is accessed
-                # This is critical for the docAnnotations GraphQL field
-                queryset = queryset.prefetch_related(
-                    Prefetch(
-                        "doc_annotations",
-                        queryset=Annotation.objects.select_related(
-                            "annotation_label", "corpus", "analysis", "creator"
-                        ),
-                        to_attr="_prefetched_doc_annotations",
-                    ),
-                    # Add other important relationships to avoid N+1 queries
-                    "rows",
-                    "source_relationships",
-                    "target_relationships",
-                    "notes",
-                )
+                if not lightweight:
+                    from opencontractserver.annotations.models import Annotation
 
-                # Prefetch permission objects to avoid N+1 queries in myPermissions resolver
-                # Only do this for authenticated non-superuser users
-                if user and not user.is_anonymous and not user.is_superuser:
-                    from opencontractserver.documents.models import (
-                        DocumentUserObjectPermission,
-                    )
-
-                    # Prefetch user permissions for this specific user
+                    # Prefetch annotations to avoid N+1 when doc_annotations is
+                    # accessed. This is critical for the docAnnotations GraphQL
+                    # field but unnecessary for list/TOC queries that only need
+                    # basic document fields.
                     queryset = queryset.prefetch_related(
                         Prefetch(
-                            "documentuserobjectpermission_set",
-                            queryset=DocumentUserObjectPermission.objects.filter(
-                                user_id=user.id
-                            ).select_related("permission"),
-                            to_attr="_prefetched_user_perms",
+                            "doc_annotations",
+                            queryset=Annotation.objects.select_related(
+                                "annotation_label", "corpus", "analysis", "creator"
+                            ),
+                            to_attr="_prefetched_doc_annotations",
                         ),
-                        # Also prefetch group permissions
-                        "documentgroupobjectpermission_set__permission",
-                        "documentgroupobjectpermission_set__group",
+                        "rows",
+                        "source_relationships",
+                        "target_relationships",
+                        "notes",
                     )
+
+                    # Prefetch permission objects to avoid N+1 queries in
+                    # myPermissions resolver
+                    if user and not user.is_anonymous and not user.is_superuser:
+                        from opencontractserver.documents.models import (
+                            DocumentUserObjectPermission,
+                        )
+
+                        queryset = queryset.prefetch_related(
+                            Prefetch(
+                                "documentuserobjectpermission_set",
+                                queryset=DocumentUserObjectPermission.objects.filter(
+                                    user_id=user.id
+                                ).select_related("permission"),
+                                to_attr="_prefetched_user_perms",
+                            ),
+                            "documentgroupobjectpermission_set__permission",
+                            "documentgroupobjectpermission_set__group",
+                        )
             # Add elif blocks here for other models needing specific optimizations
 
             # Apply distinct *after* optimizations only when necessary.
