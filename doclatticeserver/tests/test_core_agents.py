@@ -270,6 +270,87 @@ class TestCoreConversationManager(TestCoreAgentComponentsSetup):
         self.assertEqual(message.content, "Updated content")
         self.assertEqual(message.data["status"], "edited")
 
+    async def test_complete_message_stores_model_name(self):
+        """complete_message() should persist the model name from AgentConfig."""
+        config = AgentConfig(user_id=self.user.id, model_name="gpt-4o")
+        manager = CoreConversationManager(
+            conversation=self.conversation1, user_id=self.user.id, config=config
+        )
+        msg_id = await manager.create_placeholder_message("LLM")
+        await manager.complete_message(msg_id, "Response text")
+        message = await ChatMessage.objects.aget(id=msg_id)
+        self.assertEqual(message.data["model_name"], "gpt-4o")
+
+    async def test_complete_message_uses_default_model_name(self):
+        """complete_message() should use the default model name when none is explicitly set."""
+        config = AgentConfig(user_id=self.user.id)
+        manager = CoreConversationManager(
+            conversation=self.conversation1, user_id=self.user.id, config=config
+        )
+        msg_id = await manager.create_placeholder_message("LLM")
+        await manager.complete_message(msg_id, "Response text")
+        message = await ChatMessage.objects.aget(id=msg_id)
+        self.assertEqual(message.data["model_name"], config.model_name)
+
+    async def test_store_llm_message_stores_model_name(self):
+        """store_llm_message() should persist the model name from AgentConfig."""
+        config = AgentConfig(user_id=self.user.id, model_name="claude-3-opus")
+        manager = CoreConversationManager(
+            conversation=self.conversation1, user_id=self.user.id, config=config
+        )
+        msg_id = await manager.store_llm_message("LLM response")
+        message = await ChatMessage.objects.aget(id=msg_id)
+        self.assertEqual(message.data["model_name"], "claude-3-opus")
+
+    async def test_placeholder_message_stores_model_name(self):
+        """create_placeholder_message() should persist the model name for traceability."""
+        config = AgentConfig(user_id=self.user.id, model_name="gpt-4-turbo")
+        manager = CoreConversationManager(
+            conversation=self.conversation1, user_id=self.user.id, config=config
+        )
+        msg_id = await manager.create_placeholder_message("LLM")
+        message = await ChatMessage.objects.aget(id=msg_id)
+        self.assertEqual(message.data["model_name"], "gpt-4-turbo")
+
+    async def test_update_message_stores_model_name(self):
+        """update_message() should backfill model_name when absent."""
+        config = AgentConfig(user_id=self.user.id, model_name="gpt-4o")
+        manager = CoreConversationManager(
+            conversation=self.conversation1, user_id=self.user.id, config=config
+        )
+        msg_id = await manager.store_user_message("Original content")
+        await manager.update_message(msg_id, "Updated content")
+        message = await ChatMessage.objects.aget(id=msg_id)
+        self.assertEqual(message.data["model_name"], "gpt-4o")
+
+    async def test_mark_message_error_stores_model_name(self):
+        """mark_message_error() should backfill model_name when absent."""
+        config = AgentConfig(user_id=self.user.id, model_name="claude-3-opus")
+        manager = CoreConversationManager(
+            conversation=self.conversation1, user_id=self.user.id, config=config
+        )
+        msg_id = await manager.create_placeholder_message("LLM")
+        await manager.mark_message_error(msg_id, "Something went wrong")
+        message = await ChatMessage.objects.aget(id=msg_id)
+        self.assertEqual(message.data["model_name"], "claude-3-opus")
+        self.assertEqual(message.data["error"], "Something went wrong")
+
+    async def test_complete_message_preserves_placeholder_model_name(self):
+        """complete_message() should not overwrite model_name set by create_placeholder_message()."""
+        config = AgentConfig(user_id=self.user.id, model_name="gpt-4o")
+        manager = CoreConversationManager(
+            conversation=self.conversation1, user_id=self.user.id, config=config
+        )
+        msg_id = await manager.create_placeholder_message("LLM")
+
+        # Simulate config change between placeholder creation and completion
+        manager.config.model_name = "gpt-4o-mini"
+        await manager.complete_message(msg_id, "Response text")
+
+        message = await ChatMessage.objects.aget(id=msg_id)
+        # Placeholder value ("gpt-4o") should be preserved via setdefault
+        self.assertEqual(message.data["model_name"], "gpt-4o")
+
 
 class TestCoreAgentFactoriesDefaults(TestCoreAgentComponentsSetup):
     # These test the default prompt generation, not full context creation
