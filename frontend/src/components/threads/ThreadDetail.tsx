@@ -90,27 +90,24 @@ const HeaderLeft = styled.div`
 const BackButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.375rem 0.75rem;
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  background: ${CORPUS_COLORS.white};
-  font-family: ${CORPUS_FONTS.sans};
-  color: ${CORPUS_COLORS.slate[600]};
-  font-size: 0.8125rem;
-  font-weight: 500;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  border-radius: ${CORPUS_RADII.sm};
+  background: transparent;
+  color: ${CORPUS_COLORS.slate[400]};
   cursor: pointer;
   transition: all ${CORPUS_TRANSITIONS.fast};
+  flex-shrink: 0;
 
   &:hover {
-    border-color: ${CORPUS_COLORS.teal[300]};
-    background: ${CORPUS_COLORS.teal[50]};
+    background: ${CORPUS_COLORS.slate[100]};
     color: ${CORPUS_COLORS.teal[700]};
   }
 
   svg {
-    width: 0.875rem;
-    height: 0.875rem;
+    width: 1.125rem;
+    height: 1.125rem;
   }
 `;
 
@@ -185,9 +182,9 @@ const StatusBadge = styled.span<{ $variant: "pinned" | "locked" | "deleted" }>`
 
 const TitleRow = styled.div`
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  min-width: 0;
 `;
 
 const Title = styled.h1`
@@ -196,18 +193,19 @@ const Title = styled.h1`
   font-weight: 400;
   color: #1e293b;
   margin: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
 `;
 
 const Description = styled.span`
   font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.8125rem;
-  color: ${CORPUS_COLORS.slate[500]};
-  margin: 0;
-  line-height: 1.4;
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[400]};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  flex: 1;
 `;
 
 const MetaRow = styled.div`
@@ -215,18 +213,8 @@ const MetaRow = styled.div`
   align-items: center;
   gap: 0.5rem;
   font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: ${CORPUS_COLORS.slate[500]};
-  flex-wrap: nowrap;
-`;
-
-const MetaRight = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-left: auto;
-  flex-shrink: 0;
-  white-space: nowrap;
 `;
 
 const MetaItem = styled.span`
@@ -471,11 +459,16 @@ export function ThreadDetail({
             {compact && (
               <BackButton onClick={handleBack} aria-label="Back to discussions">
                 <ArrowLeft />
-                Back
               </BackButton>
             )}
             <DiscussionTypeBadge category={discussionCategory} />
             <Title>{thread.title || "Untitled Discussion"}</Title>
+
+            {thread.description && (
+              <Description title={thread.description}>
+                {thread.description}
+              </Description>
+            )}
 
             {thread.chatWithDocument && (
               <ContextLink
@@ -507,33 +500,26 @@ export function ThreadDetail({
             )}
           </TitleRow>
 
-          {/* Meta row: description (left, truncated) + author/time/count (right) */}
+          {/* Meta row: Author + time + message count */}
           <MetaRow>
-            {thread.description && (
-              <Description title={thread.description}>
-                {thread.description}
-              </Description>
-            )}
-            <MetaRight>
-              <MetaItem>
-                <Users />
-                <strong>
-                  {formatUsername(
-                    thread.creator?.username,
-                    thread.creator?.email
-                  )}
-                </strong>
-              </MetaItem>
-              <MetaDot>•</MetaDot>
-              <MetaItem>
-                <RelativeTime date={thread.createdAt} />
-              </MetaItem>
-              <MetaDot>•</MetaDot>
-              <MetaItem>
-                <MessageCircle />
-                {messageCount} {messageCount === 1 ? "message" : "messages"}
-              </MetaItem>
-            </MetaRight>
+            <MetaItem>
+              <Users />
+              <strong>
+                {formatUsername(
+                  thread.creator?.username,
+                  thread.creator?.email
+                )}
+              </strong>
+            </MetaItem>
+            <MetaDot>•</MetaDot>
+            <MetaItem>
+              <RelativeTime date={thread.createdAt} />
+            </MetaItem>
+            <MetaDot>•</MetaDot>
+            <MetaItem>
+              <MessageCircle />
+              {messageCount} {messageCount === 1 ? "message" : "messages"}
+            </MetaItem>
           </MetaRow>
         </HeaderLeft>
       </Header>
