@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
 import { Button, Dropdown, Message, Modal } from "semantic-ui-react";
 import { toast } from "react-toastify";
@@ -30,6 +30,12 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
   onClose,
 }) => {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+
+  // Reset document selection when the action changes (e.g. modal reopened
+  // for a different action without unmounting).
+  useEffect(() => {
+    setSelectedDocId(null);
+  }, [actionId]);
 
   const {
     data: docsData,

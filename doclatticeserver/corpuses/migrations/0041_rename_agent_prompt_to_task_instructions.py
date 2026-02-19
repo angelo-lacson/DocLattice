@@ -65,11 +65,14 @@ class Migration(migrations.Migration):
                         analyzer__isnull=False,
                         agent_config__isnull=True,
                     )
-                    # Agent with config
-                    | models.Q(
-                        fieldset__isnull=True,
-                        analyzer__isnull=True,
-                        agent_config__isnull=False,
+                    # Agent with config (requires non-empty task_instructions)
+                    | (
+                        models.Q(
+                            fieldset__isnull=True,
+                            analyzer__isnull=True,
+                            agent_config__isnull=False,
+                        )
+                        & ~models.Q(task_instructions="")
                     )
                     # Lightweight agent: task_instructions only
                     | (

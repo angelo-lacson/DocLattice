@@ -68,7 +68,7 @@ class TestCoreAgentComponentsSetup(TestCase):
 class TestAgentConfig(TestCoreAgentComponentsSetup):
     def test_get_default_config(self):
         config = get_default_config()
-        self.assertEqual(config.model_name, "gpt-4o-mini")  # Default model
+        self.assertEqual(config.model_name, "gpt-4o")  # Default model
         # Handle gracefully - API key might be None or present from environment
         self.assertIsNotNone(config)  # Just check config exists
         self.assertTrue(config.streaming)
