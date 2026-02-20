@@ -1242,8 +1242,8 @@ type CorpusActionType implements Node {
   """Agent configuration to use for this action"""
   agentConfig: AgentConfigurationType
 
-  """Task-specific prompt for the agent (e.g., 'Summarize this document')"""
-  agentPrompt: String!
+  """Task-specific instructions for the agent (e.g., 'Summarize this document')"""
+  taskInstructions: String!
   preAuthorizedTools: [String]
   trigger: CorpusesCorpusActionTriggerChoices!
   disabled: Boolean!
@@ -4705,8 +4705,8 @@ type Mutation {
     """ID of the agent configuration to use"""
     agentConfigId: ID
 
-    """Task prompt for the agent (required if agent_config_id is provided)"""
-    agentPrompt: String
+    """Task instructions for the agent (required if agent_config_id is provided)"""
+    taskInstructions: String
 
     """ID of the analyzer to run"""
     analyzerId: ID
@@ -4760,8 +4760,8 @@ type Mutation {
     """ID of the agent configuration (clears other action types)"""
     agentConfigId: ID
 
-    """Task prompt for the agent"""
-    agentPrompt: String
+    """Task instructions for the agent"""
+    taskInstructions: String
 
     """ID of the analyzer to run (clears other action types)"""
     analyzerId: ID
