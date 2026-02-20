@@ -372,7 +372,9 @@ def get_default_embedder_for_filetype(mimetype: str) -> Optional[type[BaseEmbedd
     """
     Get the default embedder for a specific filetype.
 
-    Reads from the database PipelineSettings singleton's preferred_embedders.
+    Reads from the database PipelineSettings singleton's preferred_embedders,
+    falling back to the global default embedder if no MIME-specific embedder
+    is configured.
 
     Args:
         mimetype: The MIME type of the file
@@ -381,7 +383,10 @@ def get_default_embedder_for_filetype(mimetype: str) -> Optional[type[BaseEmbedd
         Optional[Type[BaseEmbedder]]: The default embedder for the specified filetype,
         or None if not found
     """
-    return get_preferred_embedder(mimetype)
+    embedder = get_preferred_embedder(mimetype)
+    if embedder is not None:
+        return embedder
+    return get_default_embedder()
 
 
 def get_dimension_from_embedder(
@@ -448,7 +453,10 @@ def find_embedder_for_filetype(
     else:
         mimetype = mimetype_or_enum
 
-    return get_preferred_embedder(mimetype)
+    embedder = get_preferred_embedder(mimetype)
+    if embedder is not None:
+        return embedder
+    return get_default_embedder()
 
 
 def run_post_processors(

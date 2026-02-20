@@ -2292,6 +2292,9 @@ class Query(graphene.ObjectType):
 
         # If document_id or corpus_id provided, use the instance-based search
         # which respects corpus-specific embedders
+        # Import here to avoid circular imports
+        from opencontractserver.pipeline.utils import get_default_embedder_path
+
         if document_pk or corpus_pk:
             # Issue #437: Use corpus.preferred_embedder for corpus-scoped search
             # instead of the global default embedder. Each corpus has a frozen
@@ -2300,8 +2303,6 @@ class Query(graphene.ObjectType):
             # even if the default embedder changes after the corpus was created.
             # When no corpus_id is provided (document-only search), fall back to
             # the PipelineSettings default embedder.
-            from opencontractserver.pipeline.utils import get_default_embedder_path
-
             scoped_embedder_path = get_default_embedder_path()
             if corpus_pk:
                 # Fetch the corpus's frozen embedder directly to avoid a
