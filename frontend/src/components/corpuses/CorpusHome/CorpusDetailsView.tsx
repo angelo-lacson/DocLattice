@@ -61,6 +61,7 @@ import {
   MobileTabList,
   MobileTab,
   MobileTabContent,
+  HeaderRow,
   MobileMenuButton,
 } from "./styles";
 
@@ -161,14 +162,7 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
       <DetailsPage>
         {/* Header section - clean, minimal */}
         <DetailsHeader>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              width: "100%",
-            }}
-          >
+          <HeaderRow>
             <BackButton
               onClick={onBack}
               whileHover={{ scale: 1.01 }}
@@ -187,7 +181,7 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
                 <MoreVertical />
               </MobileMenuButton>
             )}
-          </div>
+          </HeaderRow>
 
           <DetailsTitleRow>
             <DetailsTitleSection>

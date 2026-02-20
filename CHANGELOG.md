@@ -135,7 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Mobile Navigation & URL-Driven Corpus Navigation
 
-- **Tab switching now pushes browser history**: `updateTabParam()` and `updateDetailViewParam()` in `frontend/src/utils/navigationUtils.ts` now push new history entries instead of replacing, so browser back/forward navigates between tabs and between landing/details views
+- **Detail view switching now pushes browser history**: `updateDetailViewParam()` in `frontend/src/utils/navigationUtils.ts` now pushes new history entries instead of replacing, so browser back/forward navigates between landing and details views. `updateTabParam()` retains replace semantics so tab switches don't accumulate history entries
 - **Thread selection now URL-driven**: Discussions tab thread selection uses the existing `?thread=` query parameter (synced by CentralRouteManager) instead of the local `inlineSelectedThreadIdAtom` Jotai atom. Clicking a thread pushes `?thread=<id>` to the URL; browser back returns to the list
   - Files: `frontend/src/components/discussions/CorpusDiscussionsView.tsx`, `frontend/src/utils/navigationUtils.ts`, `frontend/src/views/Corpuses.tsx`
 - **Tab-specific params cleared on tab switch**: `updateTabParam()` now removes `thread` and `message` params when switching tabs to prevent stale state persisting across tab changes
