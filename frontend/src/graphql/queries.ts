@@ -71,6 +71,9 @@ export const GET_DOCUMENTS = gql`
           title
           description
           backendLock
+          processingStatus
+          processingError
+          canRetry
           pdfFile
           txtExtractFile
           fileType
@@ -3332,9 +3335,7 @@ export const GET_MY_CORPUSES = gql`
         node {
           id
           title
-          documents {
-            totalCount
-          }
+          documentCount
           myPermissions
         }
       }
@@ -3430,7 +3431,7 @@ export const GET_CORPUS_ACTIONS = gql`
             name
             description
           }
-          agentPrompt
+          taskInstructions
           preAuthorizedTools
           created
           modified
@@ -3470,7 +3471,7 @@ export interface GetCorpusActionsOutput {
           name: string;
           description: string;
         };
-        agentPrompt?: string;
+        taskInstructions?: string;
         preAuthorizedTools?: string[];
         created: string;
         modified: string;
@@ -4457,6 +4458,25 @@ export interface GetAvailableModerationToolsOutput {
 export const GET_AVAILABLE_MODERATION_TOOLS = gql`
   query GetAvailableModerationTools {
     availableTools(category: "moderation") {
+      name
+      description
+      category
+      requiresApproval
+    }
+  }
+`;
+
+/**
+ * GET_AVAILABLE_DOCUMENT_TOOLS - Get available document-category tools from backend
+ * Used in CreateCorpusActionModal for inline agent creation on document triggers
+ */
+export interface GetAvailableDocumentToolsOutput {
+  availableTools: AvailableTool[];
+}
+
+export const GET_AVAILABLE_DOCUMENT_TOOLS = gql`
+  query GetAvailableDocumentTools {
+    availableTools(category: "document") {
       name
       description
       category

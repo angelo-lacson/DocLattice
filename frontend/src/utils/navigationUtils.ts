@@ -804,7 +804,10 @@ export function clearThreadSelection(
 
 /**
  * Update tab selection in URL
- * Used for deep-linking to specific tabs in corpus or document views
+ * Used for deep-linking to specific tabs in corpus or document views.
+ * Pushes a new history entry so browser back/forward navigates between tabs.
+ * Also clears tab-specific params (thread, message) when switching tabs to
+ * prevent stale state from persisting across tab changes.
  * @param location - React Router location object
  * @param navigate - React Router navigate function
  * @param tabId - Tab identifier (e.g., "discussions", "documents", "chat", "feed")
@@ -821,7 +824,44 @@ export function updateTabParam(
   } else {
     searchParams.delete("tab");
   }
+  // Clear tab-specific params to prevent stale state across tabs
+  searchParams.delete("thread");
+  searchParams.delete("message");
+  // Replace (not push) so tab switches don't accumulate history entries
   navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update thread selection in URL
+ * Used for deep-linking to a specific thread in corpus discussions.
+ * By default pushes a new history entry so browser back/forward navigates
+ * between thread list and thread detail views. Pass `{ replace: true }` to
+ * replace the current entry instead (useful for "back to list" actions).
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param threadId - Thread identifier, or null to clear and return to list
+ * @param options - Optional navigation options (e.g., `{ replace: true }`)
+ */
+export function updateThreadParam(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  threadId: string | null,
+  options?: { replace?: boolean }
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (threadId) {
+    searchParams.set("thread", threadId);
+  } else {
+    searchParams.delete("thread");
+    searchParams.delete("message"); // Also clear message when clearing thread
+  }
+  // Default: push so browser back returns to the thread list
+  const searchString = { search: searchParams.toString() };
+  if (options) {
+    navigate(searchString, options);
+  } else {
+    navigate(searchString);
+  }
 }
 
 /**
@@ -871,7 +911,8 @@ export function updateTocExpandedParam(
 
 /**
  * Update corpus detail view selection in URL
- * Used for switching between landing view and details view on corpus home
+ * Used for switching between landing view and details view on corpus home.
+ * Pushes a new history entry so browser back/forward navigates between views.
  * @param location - React Router location object
  * @param navigate - React Router navigate function
  * @param view - View identifier ("landing" or "details")
@@ -889,7 +930,8 @@ export function updateDetailViewParam(
   } else {
     searchParams.delete("view");
   }
-  navigate({ search: searchParams.toString() }, { replace: true });
+  // Push (not replace) so browser back returns to the previous view
+  navigate({ search: searchParams.toString() });
 }
 
 /**

@@ -270,3 +270,7 @@ self.assertIn("criteria_config", cm.exception.message_dict)
 - Criteria Config: `frontend/src/components/badges/BadgeCriteriaConfig.tsx`
 - GraphQL Queries: `frontend/src/graphql/queries.ts`
 - GraphQL Mutations: `frontend/src/graphql/mutations.ts`
+
+---
+
+*Last Updated: 2026-01-09*

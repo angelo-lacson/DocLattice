@@ -19,6 +19,27 @@ logger = logging.getLogger(__name__)
 def home_redirect(request):
     scheme = "https" if request.is_secure() else "http"
     host = request.get_host().split(":")[0]
+
+    # Validate the host against ALLOWED_HOSTS to prevent open-redirect
+    # attacks via a crafted Host header.
+    allowed = settings.ALLOWED_HOSTS
+    host_valid = False
+    for pattern in allowed:
+        if pattern == "*":
+            host_valid = True
+            break
+        if pattern.startswith("."):
+            # Django treats ".example.com" as a suffix match
+            if host == pattern[1:] or host.endswith(pattern):
+                host_valid = True
+                break
+        elif host == pattern:
+            host_valid = True
+            break
+
+    if not host_valid:
+        return HttpResponseRedirect("/")
+
     new_url = f"{scheme}://{host}:3000"
     return HttpResponseRedirect(new_url)
 

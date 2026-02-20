@@ -64,7 +64,7 @@ class TestAgentActionResultAdmin(TestCase):
             name="Test Agent Action",
             corpus=cls.corpus,
             agent_config=cls.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=cls.superuser,
         )

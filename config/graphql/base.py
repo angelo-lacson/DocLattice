@@ -63,17 +63,10 @@ class CountableConnection(graphene.relay.Connection):
     total_count = graphene.Int()
 
     def resolve_total_count(root, info, **kwargs):
-        # Access the original iterable/queryset BEFORE pagination/slicing
-        # This might be root.iterable if the resolver returns the full list,
-        # or you might need access to the original QuerySet object used by the resolver.
-        # If root.iterable is already sliced, this won't work directly.
-        # The key is to call .count() on the *unpaginated* queryset.
         if isinstance(root.iterable, django.db.models.QuerySet):
-            return root.iterable.model.objects.filter(
-                pk__in=[obj.pk for obj in root.iterable]
-            ).count()  # Or ideally access the original QS
+            return root.iterable.count()
         else:
-            return len(root.iterable)  # Fallback for non-queryset iterables
+            return len(root.iterable)
 
 
 class DRFDeletion(graphene.Mutation):
@@ -94,14 +87,15 @@ class DRFDeletion(graphene.Mutation):
         ok = False
 
         id = from_global_id(kwargs.get(cls.IOSettings.lookup_field, None))[1]
-        obj = cls.IOSettings.model.objects.get(pk=id)
+        # Filter through visible_to_user() to prevent IDOR -- returns same
+        # DoesNotExist error whether object is missing or user lacks access.
+        obj = cls.IOSettings.model.objects.visible_to_user(info.context.user).get(pk=id)
 
-        # if there's a user lock
+        # if there's a user lock, only the lock holder (or superuser) can proceed
         if hasattr(obj, "user_lock") and obj.user_lock is not None:
-            if info.context.user.id == obj.user_lock_id:
+            if info.context.user.id != obj.user_lock_id:
                 raise PermissionError(
-                    f"Specified object is locked by {info.context.user.username}. Cannot be "
-                    f"deleted by another user."
+                    "Specified object is locked by another user. Cannot be " "deleted."
                 )
 
         # NOTE - we are explicitly ALLOWING deletion of something that's been locked by the backend. If an important
@@ -116,7 +110,7 @@ class DRFDeletion(graphene.Mutation):
             include_group_permissions=True,
         ):
             raise PermissionError(
-                "You do no have sufficient permissions to delete requested object"
+                "You do not have sufficient permissions to delete requested object"
             )
 
         obj.delete()
@@ -185,7 +179,11 @@ class DRFMutation(graphene.Mutation):
 
             if is_update:
                 logger.info("Lookup_field specified - update")
-                obj = cls.IOSettings.model.objects.get(
+                # Filter through visible_to_user() to prevent IDOR --
+                # returns same DoesNotExist whether missing or no access.
+                obj = cls.IOSettings.model.objects.visible_to_user(
+                    info.context.user
+                ).get(
                     pk=from_global_id(kwargs.get(cls.IOSettings.lookup_field, None))[1]
                 )
 
@@ -193,10 +191,10 @@ class DRFMutation(graphene.Mutation):
 
                 # Check the object isn't locked by another user
                 if hasattr(obj, "user_lock") and obj.user_lock is not None:
-                    if info.context.user.id == obj.user_lock_id:
+                    if info.context.user.id != obj.user_lock_id:
                         raise PermissionError(
-                            f"Specified object is locked by {info.context.user.username}. Cannot be "
-                            f"updated / edited by another user."
+                            "Specified object is locked by another user. Cannot be "
+                            "updated / edited."
                         )
 
                 # Check that the object hasn't been locked by the backend
