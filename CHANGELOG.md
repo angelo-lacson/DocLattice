@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `frontend/src/views/Corpuses.tsx`
 - **TypeScript type update**: Added `mdDescription` optional field to `RawCorpusType`.
   - File: `frontend/src/types/graphql-api.ts`
-  
+
 #### Edit Description Modal Does Not Save on Update (Issue #899)
 - **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
   - File: `frontend/src/App.tsx` (lines 128-149, 398)

@@ -249,13 +249,26 @@ class Corpus(TreeNode):
 
     @staticmethod
     def _markdown_to_plain_text(md: str) -> str:
-        """Convert markdown to plain text by stripping formatting syntax."""
+        """Convert markdown to plain text by stripping formatting syntax.
+
+        Handles the most common markdown constructs. Table cell separators
+        and exotic extensions are not covered — the output is best-effort
+        plain text suitable for card display and search indexing.
+        """
         text = md
+        # Remove fenced code blocks (keep content)
+        text = re.sub(
+            r"^```[^\n]*\n(.*?)^```", r"\1", text, flags=re.MULTILINE | re.DOTALL
+        )
+        # Remove HTML tags
+        text = re.sub(r"<[^>]+>", "", text)
         # Remove headings markers
         text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
-        # Remove bold/italic markers
-        text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text)
-        text = re.sub(r"_{1,3}(.+?)_{1,3}", r"\1", text)
+        # Remove bold/italic markers (DOTALL for multiline spans)
+        text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text, flags=re.DOTALL)
+        text = re.sub(r"_{1,3}(.+?)_{1,3}", r"\1", text, flags=re.DOTALL)
+        # Remove strikethrough
+        text = re.sub(r"~~(.+?)~~", r"\1", text, flags=re.DOTALL)
         # Convert links [text](url) → text
         text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
         # Remove images ![alt](url)

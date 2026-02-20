@@ -1942,7 +1942,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const refetch = corpusId ? refetchWithCorpus : refetchDocumentOnly;
 
   // Fetch versioned markdown description for corpus info display
-  const { content: corpusMdContent } = useCorpusMdDescription(
+  const corpusMdContent = useCorpusMdDescription(
     corpusData?.corpus?.mdDescription
   );
 
