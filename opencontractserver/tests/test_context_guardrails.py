@@ -132,9 +132,15 @@ class TestTruncateToolOutput(SimpleTestCase):
         self.assertIn("truncated", result)
 
     def test_truncation_notice_contains_limit(self):
-        text = "y" * 200
-        result = truncate_tool_output(text, max_chars=50)
-        self.assertIn("50", result)
+        text = "y" * 500
+        result = truncate_tool_output(text, max_chars=200)
+        self.assertIn("200", result)
+
+    def test_very_small_max_chars_does_not_exceed_limit(self):
+        """When max_chars is smaller than the notice, result must not exceed max_chars."""
+        text = "x" * 200
+        result = truncate_tool_output(text, max_chars=10)
+        self.assertLessEqual(len(result), 10)
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +328,26 @@ class TestDeterministicSummary(SimpleTestCase):
         summary = _deterministic_summary([])
         self.assertEqual(summary, "")
 
+    def test_abbreviation_not_split(self):
+        """'Dr. Smith said hello' should not produce just 'Dr'."""
+        messages = [
+            _MessageProxy(role="human", content="Who signed?"),
+            _MessageProxy(role="llm", content="Dr. Smith said hello."),
+        ]
+        summary = _deterministic_summary(messages)
+        self.assertIn("Dr. Smith", summary)
+
+    def test_decimal_not_split(self):
+        """'Version 1.5 is out' should not produce just '1'."""
+        messages = [
+            _MessageProxy(role="human", content="What version?"),
+            _MessageProxy(
+                role="llm", content="Version 1.5 is out. It has new features."
+            ),
+        ]
+        summary = _deterministic_summary(messages)
+        self.assertIn("Version 1.5", summary)
+
 
 # ---------------------------------------------------------------------------
 # messages_to_proxies (ORM ↔ proxy bridge)
@@ -402,6 +428,26 @@ class TestCompactionConfig(SimpleTestCase):
         self.assertEqual(cfg.min_recent_messages, 10)
         self.assertEqual(cfg.max_recent_messages, 50)
         self.assertEqual(cfg.max_tool_output_chars, 10_000)
+
+    def test_min_greater_than_max_raises(self):
+        with self.assertRaises(ValueError):
+            CompactionConfig(min_recent_messages=20, max_recent_messages=4)
+
+    def test_threshold_ratio_zero_raises(self):
+        with self.assertRaises(ValueError):
+            CompactionConfig(threshold_ratio=0)
+
+    def test_threshold_ratio_one_raises(self):
+        with self.assertRaises(ValueError):
+            CompactionConfig(threshold_ratio=1.0)
+
+    def test_threshold_ratio_negative_raises(self):
+        with self.assertRaises(ValueError):
+            CompactionConfig(threshold_ratio=-0.5)
+
+    def test_max_tool_output_chars_zero_raises(self):
+        with self.assertRaises(ValueError):
+            CompactionConfig(max_tool_output_chars=0)
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +629,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
             mock_qs.aupdate = AsyncMock(return_value=1)
             MockConv.objects.filter.return_value = mock_qs
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 manager.persist_compaction(summary="Summary A", cutoff_message_id=100)
             )
 
@@ -602,13 +648,54 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
             mock_qs.aupdate = AsyncMock(return_value=0)
             MockConv.objects.filter.return_value = mock_qs
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 manager.persist_compaction(summary="Summary B", cutoff_message_id=90)
             )
 
             # In-memory state should NOT be updated (stale write was skipped)
             self.assertEqual(mock_conv.compaction_summary, "Summary A")
             self.assertEqual(mock_conv.compacted_before_message_id, 100)
+
+
+# ---------------------------------------------------------------------------
+# Summary growth cap
+# ---------------------------------------------------------------------------
+
+
+class TestSummaryGrowthCap(SimpleTestCase):
+    """Verify that merged summaries are capped to prevent unbounded growth."""
+
+    def test_merged_summary_is_capped(self):
+        """Simulating N compaction rounds should not produce an ever-growing summary."""
+        from opencontractserver.constants.context_guardrails import (
+            CHARS_PER_TOKEN_ESTIMATE,
+            COMPACTION_SUMMARY_MAX_TOKENS,
+        )
+        from opencontractserver.llms.context_guardrails import cap_summary_length
+
+        max_chars = int(COMPACTION_SUMMARY_MAX_TOKENS * CHARS_PER_TOKEN_ESTIMATE)
+
+        # Simulate 20 compaction rounds each adding a 300-token summary
+        accumulated = ""
+        single_round = "x" * int(300 * CHARS_PER_TOKEN_ESTIMATE)
+        for _ in range(20):
+            accumulated = (
+                accumulated.rstrip() + "\n\n" + single_round
+                if accumulated
+                else single_round
+            )
+            accumulated = cap_summary_length(accumulated)
+
+        self.assertLessEqual(
+            len(accumulated), max_chars + 10
+        )  # small slack for ellipsis
+
+    def test_short_summary_unchanged(self):
+        """A summary well under the cap should pass through unchanged."""
+        from opencontractserver.llms.context_guardrails import cap_summary_length
+
+        short = "This is a short summary."
+        self.assertEqual(cap_summary_length(short), short)
 
 
 # ---------------------------------------------------------------------------
@@ -646,3 +733,73 @@ class TestCompactionRunningTotalLoop(SimpleTestCase):
         )
         if result.compacted:
             self.assertLessEqual(result.preserved_count, 5)
+
+
+# ---------------------------------------------------------------------------
+# _HistoryResult dataclass tests
+# ---------------------------------------------------------------------------
+
+
+class TestHistoryResult(SimpleTestCase):
+    """Tests for the _HistoryResult dataclass used in context status reporting."""
+
+    def test_default_fields(self):
+        from opencontractserver.llms.agents.pydantic_ai_agents import _HistoryResult
+
+        result = _HistoryResult(messages=None)
+        self.assertIsNone(result.messages)
+        self.assertEqual(result.estimated_tokens, 0)
+        self.assertEqual(result.context_window, 0)
+        self.assertFalse(result.was_compacted)
+        self.assertEqual(result.tokens_before_compaction, 0)
+
+    def test_populated_fields_no_compaction(self):
+        from opencontractserver.llms.agents.pydantic_ai_agents import _HistoryResult
+
+        result = _HistoryResult(
+            messages=[],
+            estimated_tokens=5000,
+            context_window=128000,
+            was_compacted=False,
+            tokens_before_compaction=0,
+        )
+        self.assertEqual(result.estimated_tokens, 5000)
+        self.assertEqual(result.context_window, 128000)
+        self.assertFalse(result.was_compacted)
+        self.assertEqual(result.tokens_before_compaction, 0)
+
+    def test_populated_fields_with_compaction(self):
+        from opencontractserver.llms.agents.pydantic_ai_agents import _HistoryResult
+
+        result = _HistoryResult(
+            messages=[],
+            estimated_tokens=40000,
+            context_window=128000,
+            was_compacted=True,
+            tokens_before_compaction=100000,
+        )
+        self.assertTrue(result.was_compacted)
+        self.assertEqual(result.tokens_before_compaction, 100000)
+        self.assertEqual(result.estimated_tokens, 40000)
+
+    def test_context_status_dict_generation(self):
+        """Verify the pattern used in _stream_core to build context_status."""
+        from opencontractserver.llms.agents.pydantic_ai_agents import _HistoryResult
+
+        result = _HistoryResult(
+            messages=None,
+            estimated_tokens=15000,
+            context_window=128000,
+            was_compacted=True,
+            tokens_before_compaction=95000,
+        )
+        context_status = {
+            "used_tokens": result.estimated_tokens,
+            "context_window": result.context_window,
+            "was_compacted": result.was_compacted,
+            "tokens_before_compaction": result.tokens_before_compaction,
+        }
+        self.assertEqual(context_status["used_tokens"], 15000)
+        self.assertEqual(context_status["context_window"], 128000)
+        self.assertTrue(context_status["was_compacted"])
+        self.assertEqual(context_status["tokens_before_compaction"], 95000)

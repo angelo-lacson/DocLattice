@@ -55,6 +55,13 @@ from opencontractserver.llms.agents.core_agents import (
     get_default_config,
 )
 from opencontractserver.llms.agents.timeline_stream_mixin import TimelineStreamMixin
+from opencontractserver.llms.context_guardrails import (
+    cap_summary_length,
+    compact_message_history,
+    estimate_token_count,
+    get_context_window_for_model,
+    messages_to_proxies,
+)
 from opencontractserver.llms.exceptions import ToolConfirmationRequired
 from opencontractserver.llms.tools.core_tools import (
     aadd_annotations_from_exact_strings,
@@ -94,6 +101,22 @@ logger = logging.getLogger(__name__)
 
 # Type variable for structured responses
 T = TypeVar("T")
+
+
+@dataclasses.dataclass
+class _HistoryResult:
+    """Result of ``_get_message_history()`` with context metadata.
+
+    Carries both the Pydantic-AI message list and token-level metrics
+    that downstream code uses for context status reporting and
+    compaction notifications.
+    """
+
+    messages: Optional[list[ModelMessage]]
+    estimated_tokens: int = 0  # tokens going to model (after compaction)
+    context_window: int = 0  # model's context window size
+    was_compacted: bool = False  # whether compaction ran this turn
+    tokens_before_compaction: int = 0  # 0 if no compaction
 
 
 def _to_source_node(raw: Any) -> SourceNode:
@@ -232,7 +255,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             "[DIAGNOSTIC _finalise_llm_message]   complete_message() returned successfully"
         )
 
-    async def _get_message_history(self) -> Optional[list[ModelMessage]]:
+    async def _get_message_history(self) -> _HistoryResult:
         """Convert OpenContracts ``ChatMessage`` history to Pydantic-AI format.
 
         Uses a **compact-once, read-cheaply** strategy:
@@ -250,21 +273,26 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         This means a long conversation pays the compaction cost exactly
         once per growth spurt, and every subsequent call is a cheap
         filtered read.
-        """
-        from opencontractserver.llms.context_guardrails import (
-            compact_message_history,
-            estimate_token_count,
-            messages_to_proxies,
-        )
 
+        Returns a :class:`_HistoryResult` carrying both the message list
+        and token-level context metadata for status reporting.
+        """
         raw_messages = await self.conversation_manager.get_conversation_messages()
 
         # Resolve the previously-persisted compaction summary (if any).
         conv = self.conversation_manager.conversation
         stored_summary = getattr(conv, "compaction_summary", "") or "" if conv else ""
 
+        context_window = get_context_window_for_model(self.config.model_name)
+        was_compacted = False
+        tokens_before_compaction = 0
+
         if not raw_messages and not stored_summary:
-            return None
+            return _HistoryResult(
+                messages=None,
+                estimated_tokens=0,
+                context_window=context_window,
+            )
 
         # -----------------------------------------------------------------
         # Check whether a *new* compaction pass is needed on the messages
@@ -291,16 +319,22 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             )
 
             if result.compacted:
+                was_compacted = True
+                tokens_before_compaction = result.estimated_tokens_before
+
                 # Determine the cutoff message id — the last message that
                 # will be folded into the summary.
                 cutoff_idx = len(raw_messages) - result.preserved_count
                 cutoff_msg = raw_messages[cutoff_idx - 1]
 
-                # Merge old stored summary with the new compaction summary.
+                # Merge old stored summary with the new compaction summary,
+                # capping the result to prevent unbounded growth across cycles.
                 if stored_summary:
-                    merged_summary = stored_summary.rstrip() + "\n\n" + result.summary
+                    merged_summary = cap_summary_length(
+                        stored_summary.rstrip() + "\n\n" + result.summary
+                    )
                 else:
-                    merged_summary = result.summary
+                    merged_summary = cap_summary_length(result.summary)
 
                 # Persist the bookmark so future calls skip these messages.
                 # The in-memory trim MUST be inside the try block so that if
@@ -330,6 +364,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         "Failed to persist compaction bookmark — "
                         "keeping full message list for this call"
                     )
+                    # On persist failure, compaction didn't actually take effect
+                    was_compacted = False
+                    tokens_before_compaction = 0
 
         # -----------------------------------------------------------------
         # Build Pydantic-AI ModelMessage list
@@ -358,7 +395,27 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 history.append(ModelRequest(parts=[SystemPromptPart(content=content)]))
             # else: skip unknown types
 
-        return history or None
+        # Compute final token estimate from the messages that will be sent
+        final_system_tokens = estimate_token_count(
+            (self.config.system_prompt or "") + stored_summary
+        )
+        final_msg_tokens = sum(
+            estimate_token_count(
+                " ".join(
+                    getattr(part, "content", "") for part in getattr(msg, "parts", [])
+                )
+            )
+            for msg in history
+        )
+        estimated_tokens = final_system_tokens + final_msg_tokens
+
+        return _HistoryResult(
+            messages=history or None,
+            estimated_tokens=estimated_tokens,
+            context_window=context_window,
+            was_compacted=was_compacted,
+            tokens_before_compaction=tokens_before_compaction,
+        )
 
     def _build_structured_system_prompt(
         self, target_type: type[T], user_prompt: str
@@ -383,7 +440,8 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         """Low-level chat; returns content, sources, metadata (no DB ops)."""
         logger.info(f"[PydanticAI sync chat] Starting chat with message: {message!r}")
 
-        message_history = await self._get_message_history()
+        history_result = await self._get_message_history()
+        message_history = history_result.messages
 
         # Prepare parameters for run(); include history only if available
         run_kwargs: dict[str, Any] = {"deps": self.agent_deps}
@@ -450,7 +508,14 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         final_usage_data: dict[str, Any] | None = None
 
         # Re-hydrate the historical context for Pydantic-AI, if any exists.
-        message_history = await self._get_message_history()
+        history_result = await self._get_message_history()
+        message_history = history_result.messages
+        context_status = {
+            "used_tokens": history_result.estimated_tokens,
+            "context_window": history_result.context_window,
+            "was_compacted": history_result.was_compacted,
+            "tokens_before_compaction": history_result.tokens_before_compaction,
+        }
 
         # CRITICAL FIX: Exclude the most recent HUMAN message from history since
         # pydantic_ai.iter() will automatically add the current `message` parameter.
@@ -487,6 +552,28 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         if initial_timeline:
             for entry in initial_timeline:
                 builder.add(entry)
+
+        # Emit a compaction notification so the frontend can display it.
+        if history_result.was_compacted:
+            compaction_evt = ThoughtEvent(
+                thought=(
+                    f"Conversation history compacted: "
+                    f"{history_result.tokens_before_compaction:,} → "
+                    f"{history_result.estimated_tokens:,} estimated tokens "
+                    f"({history_result.context_window:,} token window)"
+                ),
+                user_message_id=user_msg_id,
+                llm_message_id=llm_msg_id,
+                metadata={
+                    "compaction": {
+                        "tokens_before": history_result.tokens_before_compaction,
+                        "tokens_after": history_result.estimated_tokens,
+                        "context_window": history_result.context_window,
+                    }
+                },
+            )
+            builder.add(compaction_evt)
+            yield compaction_evt
 
         try:
             logger.debug(
@@ -1029,6 +1116,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 metadata={
                     "usage": final_usage_data,
                     "framework": "pydantic_ai",
+                    "context_status": context_status,
                 },
                 user_message_id=user_msg_id,
                 llm_message_id=llm_msg_id,

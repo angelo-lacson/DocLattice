@@ -19,10 +19,12 @@ tune behaviour without touching code.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 
 from opencontractserver.constants.context_guardrails import (
     CHARS_PER_TOKEN_ESTIMATE,
+    COMPACTION_SUMMARY_MAX_TOKENS,
     COMPACTION_SUMMARY_PREFIX,
     COMPACTION_SUMMARY_TARGET_TOKENS,
     COMPACTION_THRESHOLD_RATIO,
@@ -40,10 +42,16 @@ __all__ = [
     "estimate_token_count",
     "get_context_window_for_model",
     "truncate_tool_output",
+    "cap_summary_length",
     "CompactionConfig",
     "CompactionResult",
     "compact_message_history",
     "should_compact",
+    "messages_to_proxies",
+    # Testable internals — underscore-prefixed but intentionally exported
+    # for unit testing without coupling tests to implementation details.
+    "_MessageProxy",
+    "_deterministic_summary",
 ]
 
 
@@ -120,7 +128,12 @@ def truncate_tool_output(
         return output
 
     notice = TOOL_OUTPUT_TRUNCATION_NOTICE.format(limit=max_chars)
-    # Leave room for the notice itself
+
+    # When max_chars is too small to fit any content plus the notice,
+    # just hard-truncate without a notice.
+    if max_chars <= len(notice):
+        return output[:max_chars]
+
     truncated = output[: max_chars - len(notice)] + notice
     logger.debug(
         "Truncated tool output from %d to %d characters",
@@ -257,8 +270,8 @@ def compact_message_history(
             break
         recent_count = candidate
 
-    # Edge case: if even min_recent messages exceed the threshold,
-    # keep only the very last message to guarantee *some* context.
+    # Safety net: when min_recent=0 is caller-supplied and even one
+    # message exceeds the threshold, ensure we keep at least one message.
     if recent_count < 1:
         recent_count = 1
 
@@ -317,8 +330,13 @@ def _deterministic_summary(messages: list[_MessageProxy]) -> str:
         parts.append(f'User initially asked: "{first_q}"')
 
     for m in llm_messages:
-        # First sentence heuristic
-        sentence = m.content.split(".")[0].strip()
+        # First sentence heuristic — split on sentence-ending punctuation
+        # followed by whitespace, avoiding false splits on abbreviations
+        # (e.g. "Dr."), decimals (e.g. "1.5"), and URLs.  Requires at
+        # least three word characters before the punctuation mark so
+        # short tokens like "Dr.", "Mr.", "1." are not treated as
+        # sentence boundaries.
+        sentence = re.split(r"(?<=\w{3}[.!?])\s+", m.content, maxsplit=1)[0].strip()
         if sentence and len(sentence) > 10:
             parts.append(f'Assistant noted: "{sentence[:150]}"')
 
@@ -363,6 +381,18 @@ def messages_to_proxies(
     return proxies
 
 
+def cap_summary_length(summary: str) -> str:
+    """Truncate *summary* to at most COMPACTION_SUMMARY_MAX_TOKENS tokens.
+
+    Prevents the cumulative compaction summary from growing without bound
+    across repeated compaction cycles.
+    """
+    max_chars = int(COMPACTION_SUMMARY_MAX_TOKENS * CHARS_PER_TOKEN_ESTIMATE)
+    if len(summary) <= max_chars:
+        return summary
+    return summary[:max_chars] + "\u2026"
+
+
 @dataclass
 class CompactionConfig:
     """Per-agent compaction configuration.
@@ -377,3 +407,18 @@ class CompactionConfig:
     min_recent_messages: int = MIN_RECENT_MESSAGES
     max_recent_messages: int = MAX_RECENT_MESSAGES
     max_tool_output_chars: int = MAX_TOOL_OUTPUT_CHARS
+
+    def __post_init__(self) -> None:
+        if self.min_recent_messages > self.max_recent_messages:
+            raise ValueError(
+                f"min_recent_messages ({self.min_recent_messages}) must be "
+                f"<= max_recent_messages ({self.max_recent_messages})"
+            )
+        if not (0 < self.threshold_ratio < 1):
+            raise ValueError(
+                f"threshold_ratio must be in (0, 1), got {self.threshold_ratio}"
+            )
+        if self.max_tool_output_chars < 1:
+            raise ValueError(
+                f"max_tool_output_chars must be positive, got {self.max_tool_output_chars}"
+            )
