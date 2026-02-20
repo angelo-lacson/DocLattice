@@ -1,7 +1,6 @@
 import React, { useCallback } from "react";
 import { MessageNode } from "./utils";
 import { MessageItem } from "./MessageItem";
-import { ReplyForm } from "./ReplyForm";
 import { UserBadgeType } from "../../types/graphql-api";
 import { PermissionTypes } from "../types";
 import { formatUsername } from "./userUtils";
@@ -15,8 +14,6 @@ interface MessageTreeProps {
   onReply?: (messageId: string) => void;
   badgesByUser?: Map<string, UserBadgeType[]>;
   conversationId?: string;
-  replyingToMessageId?: string | null;
-  onCancelReply?: () => void;
   /** Current user ID for permission checking */
   currentUserId?: string;
   /** Whether current user can moderate this thread */
@@ -42,8 +39,6 @@ export const MessageTree = React.memo(function MessageTree({
   onReply,
   badgesByUser = new Map(),
   conversationId,
-  replyingToMessageId,
-  onCancelReply,
   currentUserId,
   canModerate = false,
   corpusId,
@@ -103,8 +98,6 @@ export const MessageTree = React.memo(function MessageTree({
       {messages.map((message) => {
         // Get badges for this message's creator
         const userBadges = badgesByUser.get(message.creator.id) || [];
-        const isReplyingToThisMessage = replyingToMessageId === message.id;
-
         // Compute permissions for this message
         const { canEdit, canDelete } = getMessagePermissions(message);
 
@@ -126,31 +119,6 @@ export const MessageTree = React.memo(function MessageTree({
               parentAuthor={parentAuthor}
             />
 
-            {/* Render reply form if replying to this message */}
-            {isReplyingToThisMessage && conversationId && onCancelReply && (
-              <div
-                style={{
-                  marginLeft: `${Math.min(message.depth * 24 + 24, 264)}px`,
-                  marginBottom: "12px",
-                }}
-              >
-                <ReplyForm
-                  conversationId={conversationId}
-                  parentMessageId={message.id}
-                  replyingToUsername={
-                    message.creator?.username || message.creator?.email
-                  }
-                  parentMessageContent={message.content || undefined}
-                  onSuccess={() => {
-                    onCancelReply();
-                  }}
-                  onCancel={onCancelReply}
-                  autoFocus
-                  corpusId={corpusId}
-                />
-              </div>
-            )}
-
             {/* Recursively render children */}
             {message.children && message.children.length > 0 && (
               <MessageTree
@@ -159,8 +127,6 @@ export const MessageTree = React.memo(function MessageTree({
                 onReply={onReply}
                 badgesByUser={badgesByUser}
                 conversationId={conversationId}
-                replyingToMessageId={replyingToMessageId}
-                onCancelReply={onCancelReply}
                 currentUserId={currentUserId}
                 canModerate={canModerate}
                 corpusId={corpusId}

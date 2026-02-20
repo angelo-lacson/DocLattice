@@ -89,8 +89,7 @@ Available embedder implementations in [`opencontractserver/pipeline/embedders/`]
 
 **Multimodal (text + images):**
 - **`CLIPMicroserviceEmbedder`**: CLIP-based multimodal embedder via microservice (768-dim)
-- **`QwenMicroserviceEmbedder`**: Qwen-based multimodal embedder via microservice
-- **`MultimodalMicroserviceEmbedder`**: Alias for `CLIPMicroserviceEmbedder` (backwards compatibility)
+- **`QwenMicroserviceEmbedder`**: Qwen-based multimodal embedder via microservice (1024-dim)
 
 ### Searching Embeddings
 
