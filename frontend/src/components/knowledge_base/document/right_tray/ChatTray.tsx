@@ -912,6 +912,11 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
             mergeSourcesIntoMessage(data?.sources, data?.message_id);
             break;
           case "ASYNC_APPROVAL_NEEDED":
+            // NOTE: No sub-tool unwrapping (_sub_tool_name) needed here.
+            // ChatTray handles document-level chat which talks to a document
+            // agent directly — it never goes through ask_document, so nested
+            // sub-agent approvals don't occur. Sub-tool unwrapping is only
+            // relevant in CorpusChat.
             if (data?.pending_tool_call && data?.message_id) {
               setPendingApproval({
                 messageId: data.message_id,

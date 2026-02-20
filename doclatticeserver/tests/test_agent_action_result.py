@@ -33,7 +33,7 @@ class AgentActionResultModelTestCase(TestCase):
         self.corpus_action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )

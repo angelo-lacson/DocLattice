@@ -26,9 +26,37 @@ Corpus actions automatically wait for documents to be fully processed (parsed, t
 
 ## Via the GUI
 
-For Corpuses you *own*, you can go to the Corpus settings tab and view configured actions or configure new actions:
+For Corpuses you *own*, you can go to the Corpus settings tab and view configured actions or configure new actions.
 
-![Corpus Actions](../assets/images/screenshots/Corpus_Action_Settings.png)
+### Action List View
+
+The settings tab shows all configured actions with their type, trigger, status, and task instructions:
+
+![Corpus Actions List](../assets/images/screenshots/auto/corpus-actions--list-view--with-actions.png)
+
+### Creating a New Action
+
+Click **Add Action** to open the creation modal. The default view shows fieldset configuration:
+
+![Create Action - Fieldset](../assets/images/screenshots/auto/corpus-actions--create-modal--fieldset-config.png)
+
+Switch to **Analyzer** for classification actions:
+
+![Create Action - Analyzer](../assets/images/screenshots/auto/corpus-actions--create-modal--analyzer-config.png)
+
+Switch to **Agent** for AI-powered actions with pre-authorized tools:
+
+![Create Action - Agent](../assets/images/screenshots/auto/corpus-actions--create-modal--existing-agent-document.png)
+
+### Thread Moderation Actions
+
+For thread/message triggers, a quick-create moderator mode is available with pre-selected moderation tools:
+
+![Create Action - Thread Moderator](../assets/images/screenshots/auto/corpus-actions--create-modal--agent-thread-quick.png)
+
+Or select an existing agent configuration:
+
+![Create Action - Existing Agent](../assets/images/screenshots/auto/corpus-actions--create-modal--agent-thread-existing.png)
 
 ## Via API
 
@@ -58,7 +86,7 @@ query GetDocumentActions($documentId: ID!, $corpusId: ID!) {
         name
         system_instructions
       }
-      agent_prompt
+      task_instructions
       pre_authorized_tools
     }
     extracts {
@@ -140,7 +168,7 @@ mutation CreateAgentAction {
     trigger: "add_document"
     name: "Auto-Generate Summary"
     agentConfigId: "QWdlbnRDb25maWd1cmF0aW9uVHlwZTox"
-    agentPrompt: """
+    taskInstructions: """
       Analyze this document and create a comprehensive summary.
 
       1. Use load_document_text to read the full content
@@ -157,7 +185,7 @@ mutation CreateAgentAction {
     obj {
       id
       name
-      agent_prompt
+      task_instructions
       pre_authorized_tools
     }
   }
@@ -174,7 +202,7 @@ mutation CreateAgentAction {
 | `fieldsetId` | One of three | Fieldset for data extraction (document triggers only) |
 | `analyzerId` | One of three | Analyzer for classification/annotation (document triggers only) |
 | `agentConfigId` | One of three | Agent configuration for AI processing |
-| `agentPrompt` | No | Task-specific prompt for agent actions |
+| `taskInstructions` | No | Task-specific prompt for agent actions |
 | `preAuthorizedTools` | No | Tools pre-approved for automated execution |
 | `disabled` | No | Whether action is initially disabled |
 | `runOnAllCorpuses` | No | Run on all corpuses (admin only) |
@@ -269,7 +297,7 @@ mutation {
     trigger: "add_document"
     name: "Auto-Summarize"
     agentConfigId: "..."
-    agentPrompt: "Read this document and create a concise summary highlighting key points."
+    taskInstructions: "Read this document and create a concise summary highlighting key points."
     preAuthorizedTools: ["load_document_text", "update_document_summary"]
   ) { ok }
 }
@@ -284,7 +312,7 @@ mutation {
     trigger: "add_document"
     name: "Auto-Tag Documents"
     agentConfigId: "..."
-    agentPrompt: "Analyze this document and add appropriate tags based on content type and subject matter."
+    taskInstructions: "Analyze this document and add appropriate tags based on content type and subject matter."
     preAuthorizedTools: ["load_document_text", "add_document_annotation"]
   ) { ok }
 }
@@ -314,7 +342,7 @@ mutation {
     trigger: "new_message"
     name: "Auto-Moderate Messages"
     agentConfigId: "..."
-    agentPrompt: """
+    taskInstructions: """
       You are a thread moderator. Review the new message for policy compliance.
 
       1. Use get_thread_context to understand the discussion
@@ -349,7 +377,7 @@ mutation {
     trigger: "new_thread"
     name: "Welcome New Threads"
     agentConfigId: "..."
-    agentPrompt: """
+    taskInstructions: """
       A new discussion thread has been created. Welcome the user and provide
       any relevant context about the corpus or discussion guidelines.
 
