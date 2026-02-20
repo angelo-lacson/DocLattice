@@ -1,6 +1,10 @@
 # API Reference
 
+> **Last Updated:** 2026-01-09
+
 ## Django Models
+
+**Source:** [`opencontractserver/extracts/models.py`](../../opencontractserver/extracts/models.py)
 
 ### Extraction Models
 
@@ -8,12 +12,11 @@
 
 Defines a collection of fields to extract from documents.
 
-```python
-class Fieldset(BaseOCModel):
-    name: str                    # Fieldset name
-    description: str             # Description of purpose
-    corpus: Corpus | None        # Optional link for metadata schemas
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `CharField(256)` | Fieldset name |
+| `description` | `TextField` | Description of purpose |
+| `corpus` | `OneToOneField(Corpus)` | Optional link for metadata schemas (nullable) |
 
 **Permissions:**
 - `permission_fieldset` - Base permission
@@ -21,35 +24,38 @@ class Fieldset(BaseOCModel):
 - `read_fieldset` - View fieldsets
 - `update_fieldset` - Modify fieldsets
 - `remove_fieldset` - Delete fieldsets
+- `comment_fieldset` - Comment on fieldsets
+- `publish_fieldset` - Publish fieldsets
+
+---
 
 #### Column
 
-Defines individual data fields within a fieldset.
+Defines individual data fields within a fieldset. Supports both automated extraction and manual entry modes.
 
-```python
-class Column(BaseOCModel):
-    # Basic fields
-    name: str                           # Column name
-    fieldset: Fieldset                  # Parent fieldset
-
-    # Extraction configuration
-    query: str | None                   # Extraction prompt
-    match_text: str | None              # Alternative to query
-    must_contain_text: str | None       # Required text constraint
-    limit_to_label: str | None          # Annotation label filter
-    instructions: str | None            # Additional instructions
-
-    # Output configuration
-    output_type: str                    # Python type as string
-    extract_is_list: bool = False       # Wrap in List[]
-
-    # Task configuration
-    task_name: str = "...doc_extract_query_task"  # Celery task
-
-    # Metadata fields
-    data_type: str | None              # METADATA_DATA_TYPES choice
-    validation_config: dict | None      # Validation rules
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| **Basic Fields** | | |
+| `name` | `CharField(256)` | Column name |
+| `fieldset` | `ForeignKey(Fieldset)` | Parent fieldset |
+| **Extraction Configuration** | | |
+| `query` | `TextField` | Extraction prompt (nullable) |
+| `match_text` | `TextField` | Alternative to query for text matching (nullable) |
+| `must_contain_text` | `TextField` | Required text constraint (nullable) |
+| `limit_to_label` | `CharField(512)` | Annotation label filter (nullable) |
+| `instructions` | `TextField` | Additional extraction instructions (nullable) |
+| **Output Configuration** | | |
+| `output_type` | `TextField` | Python type as string (e.g., `str`, `int`, `list[str]`) |
+| `extract_is_list` | `BooleanField` | Wrap output in `List[]` (default: `False`) |
+| **Task Configuration** | | |
+| `task_name` | `CharField(1024)` | Celery task path (default: `doc_extract_query_task`) |
+| **Manual Entry Fields** | | |
+| `is_manual_entry` | `BooleanField` | `True` for manual metadata, `False` for extraction (default: `False`) |
+| `data_type` | `CharField(32)` | Structured data type for manual entry (see Data Types below) |
+| `default_value` | `JSONField` | Default value for manual entry fields (nullable) |
+| `help_text` | `TextField` | Help text to display for manual entry fields (nullable) |
+| `display_order` | `IntegerField` | Order in which to display manual entry fields (default: `0`) |
+| `validation_config` | `JSONField` | Validation rules for manual entry (nullable) |
 
 **Data Types (for manual entry):**
 - `STRING` - Single line text
@@ -57,60 +63,102 @@ class Column(BaseOCModel):
 - `BOOLEAN` - True/False
 - `INTEGER` - Whole numbers
 - `FLOAT` - Decimal numbers
-- `DATE` - Date only
-- `DATETIME` - Date and time
+- `DATE` - Date only (YYYY-MM-DD format)
+- `DATETIME` - Date and time (ISO format)
 - `URL` - Web addresses
 - `EMAIL` - Email addresses
-- `CHOICE` - Single selection
-- `MULTI_CHOICE` - Multiple selections
-- `JSON` - JSON objects
+- `CHOICE` - Single selection (requires `choices` in `validation_config`)
+- `MULTI_CHOICE` - Multiple selections (requires `choices` in `validation_config`)
+- `JSON` - JSON objects or arrays
+
+**Validation Config Structure:**
+```json
+{
+  "required": true,
+  "choices": ["option1", "option2"],
+  "min_value": 0,
+  "max_value": 100,
+  "min_length": 1,
+  "max_length": 500,
+  "regex_pattern": "^[A-Z]+"
+}
+```
+
+**Permissions:**
+- `permission_column` - Base permission
+- `create_column` - Create new columns
+- `read_column` - View columns
+- `update_column` - Modify columns
+- `remove_column` - Delete columns
+- `comment_column` - Comment on columns
+- `publish_column` - Publish columns
+
+---
 
 #### Extract
 
 Represents an extraction job.
 
-```python
-class Extract(BaseOCModel):
-    # Scope
-    corpus: Corpus | None              # Target corpus
-    documents: ManyToMany[Document]    # Documents to process
+| Field | Type | Description |
+|-------|------|-------------|
+| `corpus` | `ForeignKey(Corpus)` | Target corpus (nullable) |
+| `documents` | `ManyToManyField(Document)` | Documents to process |
+| `name` | `CharField(512)` | Extract name |
+| `fieldset` | `ForeignKey(Fieldset)` | Fields to extract |
+| `corpus_action` | `ForeignKey(CorpusAction)` | Associated CorpusAction if triggered by automation (nullable) |
+| **Status Fields** | | |
+| `created` | `DateTimeField` | Creation time (auto-set) |
+| `started` | `DateTimeField` | Processing start time (nullable) |
+| `finished` | `DateTimeField` | Completion time (nullable) |
+| `error` | `TextField` | Error message if failed (nullable) |
 
-    # Configuration
-    name: str                          # Extract name
-    fieldset: Fieldset                 # Fields to extract
+**Permissions:**
+- `permission_extract` - Base permission
+- `create_extract` - Create new extracts
+- `read_extract` - View extracts
+- `update_extract` - Modify extracts
+- `remove_extract` - Delete extracts
+- `comment_extract` - Comment on extracts
+- `publish_extract` - Publish extracts
 
-    # Status
-    created: datetime                  # Creation time
-    started: datetime | None           # Start time
-    finished: datetime | None          # Completion time
-    error: str | None                  # Error message if failed
-```
+---
 
 #### Datacell
 
-Stores extracted data for a document/column pair.
+Stores extracted data for a document/column pair. Supports both automated extraction results and manual metadata entry.
 
-```python
-class Datacell(BaseOCModel):
-    # Relations
-    extract: Extract                   # Parent extract
-    column: Column                     # Column definition
-    document: Document                 # Source document
+| Field | Type | Description |
+|-------|------|-------------|
+| **Relations** | | |
+| `extract` | `ForeignKey(Extract)` | Parent extract (nullable for manual metadata) |
+| `column` | `ForeignKey(Column)` | Column definition |
+| `document` | `ForeignKey(Document)` | Source document |
+| `sources` | `ManyToManyField(Annotation)` | Source annotations used for extraction |
+| **Data Fields** | | |
+| `data` | `JSONField` | Extracted or entered data (nullable) |
+| `data_definition` | `TextField` | Data type description |
+| `corrected_data` | `JSONField` | Human-corrected data (nullable) |
+| **Status Fields** | | |
+| `started` | `DateTimeField` | Processing start time (nullable) |
+| `completed` | `DateTimeField` | Processing completion time (nullable) |
+| `failed` | `DateTimeField` | Failure time (nullable) |
+| `stacktrace` | `TextField` | Error details if failed (nullable) |
+| **Approval Workflow** | | |
+| `approved_by` | `ForeignKey(User)` | User who approved the cell (nullable) |
+| `rejected_by` | `ForeignKey(User)` | User who rejected the cell (nullable) |
+| **Debugging** | | |
+| `llm_call_log` | `TextField` | Captured LLM message history for debugging extraction issues (nullable) |
 
-    # Results
-    data: Any | None                   # Extracted data (JSON)
-    data_definition: str               # Data type description
-    sources: ManyToMany[Annotation]    # Source annotations
+**Unique Constraint:** For manual metadata (where `extract` is null), only one datacell per document/column combination is allowed.
 
-    # Status
-    started: datetime | None           # Processing start
-    completed: datetime | None         # Processing end
-    failed: datetime | None            # Failure time
-    stacktrace: str | None            # Error details
-
-    # Metadata
-    creator: User                      # User who created
-```
+**Permissions:**
+- `permission_datacell` - Base permission
+- `create_datacell` - Create new datacells
+- `read_datacell` - View datacells
+- `update_datacell` - Modify datacells
+- `remove_datacell` - Delete datacells
+- `comment_datacell` - Comment on datacells
+- `publish_datacell` - Publish datacells
 
 ## Celery Tasks
 
@@ -285,52 +333,46 @@ class CoreAnnotationVectorStore:
 
 ## WebSocket Consumers
 
-### `CorpusQueryConsumer`
+### `UnifiedAgentConsumer`
 
-Handles real-time corpus queries over WebSocket.
+Handles all agent conversation contexts (corpus, document, standalone) over WebSocket.
 
 ```python
-class CorpusQueryConsumer(AsyncWebsocketConsumer):
+class UnifiedAgentConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        """Authenticate and initialize corpus agent."""
+        """Authenticate, parse query params, and initialize context."""
 
     async def receive(self, text_data):
-        """Process incoming queries."""
+        """Process incoming queries and approval decisions."""
 
     async def disconnect(self, close_code):
         """Clean up on disconnection."""
 ```
 
-**WebSocket URL:** `/ws/corpus/<corpus_id>/`
+**WebSocket URL:** `/ws/agent-chat/?corpus_id=X&document_id=X`
+
+**Query Parameters:** `corpus_id`, `document_id`, `conversation_id`, `agent_id`
 
 **Message Types:**
 
 Client → Server:
 ```json
 {
-    "query": "string",           // User question
-    "tools": ["list"],          // Optional tools
-    "approve_tool": "string"    // Tool approval
+    "query": "string",                    // User question
+    "approval_decision": true,            // Tool approval
+    "llm_message_id": "string"            // For approval context
 }
 ```
 
 Server → Client:
 ```json
 {
-    "type": "ASYNC_START|ASYNC_CONTENT|ASYNC_SOURCES|...",
+    "type": "ASYNC_START|ASYNC_CONTENT|ASYNC_SOURCES|ASYNC_FINISH|...",
     "data": {}  // Type-specific payload
 }
 ```
 
-### `DocumentQueryConsumer`
-
-Handles document-specific queries.
-
-```python
-class DocumentQueryConsumer(AsyncWebsocketConsumer):
-    # Similar interface to CorpusQueryConsumer
-    # URL: /ws/document/<document_id>/
-```
+See [WebSocket Backend Documentation](../architecture/websocket/backend.md) for full details on all consumers (`UnifiedAgentConsumer`, `ThreadUpdatesConsumer`, `NotificationUpdatesConsumer`).
 
 ## GraphQL API
 

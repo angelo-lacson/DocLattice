@@ -131,8 +131,14 @@ docker compose -f production.yml up
 5. **Pluggable Parser Pipeline**:
    - Base classes in `opencontractserver/pipeline/base/`
    - Parsers, embedders, thumbnailers auto-discovered and registered
-   - Multiple backends: Docling (ML-based), NLM-Ingest, Text
+   - Multiple backends: Docling (ML-based), LlamaParse, Text
    - All convert to unified PAWLs format for frontend
+
+6. **Agent Tool Architecture** (see `docs/architecture/llms/README.md`):
+   - `CoreTool` (framework-agnostic) → `PydanticAIToolWrapper` (pydantic-ai specific)
+   - **All production tools MUST be async** (`a`-prefixed in `core_tools.py`). The wrapper supports sync functions for lightweight helpers/tests but does NOT wrap them in a thread pool — sync ORM calls will raise `SynchronousOnlyOperation`.
+   - Tool fault tolerance (issue #820): operational exceptions are caught and returned as error strings to the LLM; security exceptions (`PermissionError`, `ToolConfirmationRequired`) propagate.
+   - Pre-execution checks run on every call (not cached): permission validation, resource ID validation, approval gates.
 
 ### Frontend Architecture
 
@@ -187,7 +193,7 @@ docker compose -f production.yml up
 ### Data Flow Architecture
 
 **Document Processing**:
-1. Upload → Parser Selection (Docling/NLM-Ingest/Text)
+1. Upload → Parser Selection (Docling/LlamaParse/Text)
 2. Parser generates PAWLs JSON (tokens with bounding boxes)
 3. Text layer extracted from PAWLs
 4. Annotations created for structure (headers, sections, etc.)
@@ -308,6 +314,65 @@ const component = await mount(
 );
 ```
 
+### Automated Documentation Screenshots
+
+**Location**: `docs/assets/images/screenshots/auto/` (output) | `frontend/tests/utils/docScreenshot.ts` (utility)
+
+Screenshots for documentation are **automatically captured** during Playwright component tests and committed back to the PR branch by the `screenshots.yml` CI workflow.
+
+**How it works**:
+1. Import `docScreenshot` from `./utils/docScreenshot` in any `.ct.tsx` test file
+2. Call `await docScreenshot(page, "area--component--state")` after the component reaches the desired visual state
+3. Reference the image in markdown: `![Alt text](../assets/images/screenshots/auto/area--component--state.png)`
+4. CI runs tests on every PR, captures screenshots, and auto-commits any changes
+
+**Naming convention** (`--` separates segments, `-` within words):
+
+| Segment | Purpose | Examples |
+|---------|---------|----------|
+| `area` | Feature area | `landing`, `badges`, `corpus`, `versioning`, `annotations` |
+| `component` | Specific view or component | `hero-section`, `celebration-modal`, `list-view` |
+| `state` | Visual state captured | `anonymous`, `with-data`, `empty`, `auto-award` |
+
+At least 2 segments required, 3 recommended. All lowercase alphanumeric with single hyphens.
+
+**Example**:
+```typescript
+import { docScreenshot } from "./utils/docScreenshot";
+
+// After the component renders and assertions pass:
+await docScreenshot(page, "badges--celebration-modal--auto-award");
+```
+
+**Rules**:
+- Place `docScreenshot()` calls AFTER assertions that confirm the desired visual state
+- The filename IS the contract between tests and docs — keep names stable
+- Never manually edit files in `docs/assets/images/screenshots/auto/` — they are overwritten by CI
+- Manually curated screenshots stay in `docs/assets/images/screenshots/` (parent directory)
+
+#### Release Screenshots (Point-in-Time)
+
+For release notes, use `releaseScreenshot` to capture screenshots that are **locked in amber** — they show the UI at a specific release and never change.
+
+**Location**: `docs/assets/images/screenshots/releases/{version}/` (output)
+
+```typescript
+import { releaseScreenshot } from "./utils/docScreenshot";
+
+await releaseScreenshot(page, "v3.0.0.b3", "landing-page", { fullPage: true });
+```
+
+**Key differences from `docScreenshot`:**
+- Output: `docs/assets/images/screenshots/releases/{version}/{name}.png`
+- **Write-once**: If the file already exists, the function is a no-op (won't overwrite)
+- CI never touches the `releases/` directory
+- Name is a simple kebab-case string (no `--` segment convention)
+- Version must match `v{major}.{minor}.{patch}` format (with optional suffix)
+
+**When to use which:**
+- `docScreenshot` → README, quickstart, guides (always fresh)
+- `releaseScreenshot` → Release notes (frozen at release time)
+
 ## Documentation Locations
 
 - **Permissioning**: `docs/permissioning/consolidated_permissioning_guide.md`
@@ -318,6 +383,7 @@ const component = await mount(
 - **LLM Framework**: `docs/architecture/llms/README.md`
 - **Collaboration System**: `docs/commenting_system/README.md`
 - **Auth Pattern (detailed)**: `frontend/src/docs/AUTHENTICATION_PATTERN.md`
+- **Documentation Screenshots**: `docs/development/screenshots.md`
 
 ## Branch Strategy
 
@@ -389,7 +455,9 @@ Run manually: `pre-commit run --all-files`
 10. **Empty lists on direct navigation**: AuthGate pattern solves this (don't check auth status, it's always ready)
 11. **URL desynchronization**: Use CentralRouteManager, don't bypass routing system
 12. **Jotai state not updating**: Ensure atoms are properly imported and used with useAtom hook
-13. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
+13. **Writing sync agent tools**: All agent tools must be async. The `PydanticAIToolWrapper` accepts sync functions but calls them directly (no thread pool) — sync Django ORM calls will raise `SynchronousOnlyOperation`. Use the `a`-prefixed async versions in `core_tools.py`.
+14. **PydanticAI `system_prompt` silently dropped**: When creating `PydanticAIAgent`, use `instructions=` NOT `system_prompt=`. The `system_prompt` parameter is only included when `message_history` is `None`, but OpenContracts' `chat()` persists a HUMAN message before calling pydantic-ai's `run()`, so history is always non-empty. This causes the system prompt to be silently dropped. See `docs/architecture/llms/README.md` for full details.
+15. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
     ```bash
     sudo systemctl stop docker && sudo systemctl stop docker.socket && sudo ip link delete docker0 2>/dev/null || true && sudo iptables -t nat -F && sudo iptables -t nat -X && sudo iptables -t filter -F && sudo iptables -t filter -X 2>/dev/null || true && sudo iptables -t mangle -F && sudo iptables -t mangle -X && sudo iptables -t filter -N INPUT 2>/dev/null || true && sudo iptables -t filter -N FORWARD 2>/dev/null || true && sudo iptables -t filter -N OUTPUT 2>/dev/null || true && sudo iptables -P INPUT ACCEPT && sudo iptables -P FORWARD ACCEPT && sudo iptables -P OUTPUT ACCEPT && sudo systemctl start docker
     ```

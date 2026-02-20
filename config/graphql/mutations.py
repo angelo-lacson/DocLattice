@@ -60,6 +60,7 @@ from config.graphql.graphene_types import (
     AnnotationLabelType,
     AnnotationType,
     ColumnType,
+    CorpusActionExecutionType,
     CorpusActionType,
     CorpusType,
     DatacellType,
@@ -171,6 +172,7 @@ from opencontractserver.tasks.export_tasks import (
     on_demand_post_processors,
     package_funsd_exports,
 )
+from opencontractserver.tasks.export_tasks_v2 import package_corpus_export_v2
 from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
 from opencontractserver.tasks.permissioning_tasks import (
     make_analysis_public_task,
@@ -1152,13 +1154,22 @@ class StartCorpusFork(graphene.Mutation):
             required=True,
             description="Graphene id of the corpus you want to package for export",
         )
+        preferred_embedder = graphene.String(
+            required=False,
+            description=(
+                "Override the embedder for the forked corpus. If provided and "
+                "different from the source corpus, the fork will generate new "
+                "embeddings using this embedder. If not provided, inherits "
+                "the source corpus's preferred_embedder."
+            ),
+        )
 
     ok = graphene.Boolean()
     message = graphene.String()
     new_corpus = graphene.Field(CorpusType)
 
     @login_required
-    def mutate(root, info, corpus_id):
+    def mutate(root, info, corpus_id, preferred_embedder=None):
 
         ok = False
         message = ""
@@ -1248,6 +1259,12 @@ class StartCorpusFork(graphene.Mutation):
             # Adjust the title to indicate it's a fork
             corpus.title = f"[FORK] {corpus.title}"
 
+            # Issue #437: Allow specifying a different embedder for the forked corpus.
+            # If provided, the fork's ensure_embeddings_for_corpus will automatically
+            # generate new embeddings using the target embedder when documents are added.
+            if preferred_embedder:
+                corpus.preferred_embedder = preferred_embedder
+
             # lock the corpus which will tell frontend to show this as loading and disable selection
             corpus.backend_lock = True
             corpus.creator = info.context.user  # switch the creator to the current user
@@ -1307,6 +1324,113 @@ class StartCorpusFork(graphene.Mutation):
         )
 
         return StartCorpusFork(ok=ok, message=message, new_corpus=new_corpus)
+
+
+class ReEmbedCorpus(graphene.Mutation):
+    """
+    Re-embed all annotations in a corpus with a different embedder (Issue #437).
+
+    This is the controlled migration path for changing a corpus's embedder
+    after documents have been added. It:
+    1. Validates the new embedder exists in the registry
+    2. Locks the corpus (backend_lock=True)
+    3. Queues a background task that updates preferred_embedder and
+       generates new embeddings for all annotations
+    4. The corpus unlocks automatically when re-embedding completes
+
+    Only the corpus creator can trigger re-embedding.
+    """
+
+    class Arguments:
+        corpus_id = graphene.String(
+            required=True,
+            description="Global ID of the corpus to re-embed",
+        )
+        new_embedder = graphene.String(
+            required=True,
+            description=(
+                "Fully qualified Python path to the new embedder class "
+                "(e.g., 'opencontractserver.pipeline.embedders."
+                "sent_transformer_microservice.MicroserviceEmbedder')"
+            ),
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(root, info, corpus_id, new_embedder):
+        from opencontractserver.pipeline.base.embedder import BaseEmbedder
+        from opencontractserver.pipeline.utils import get_component_by_name
+        from opencontractserver.tasks.corpus_tasks import reembed_corpus
+
+        user = info.context.user
+
+        try:
+            corpus_pk = from_global_id(corpus_id)[1]
+        except Exception:
+            return ReEmbedCorpus(ok=False, message="Invalid corpus ID")
+
+        try:
+            corpus = Corpus.objects.get(pk=corpus_pk)
+        except Corpus.DoesNotExist:
+            return ReEmbedCorpus(ok=False, message="Corpus not found")
+
+        # Only creator can re-embed
+        if corpus.creator != user:
+            return ReEmbedCorpus(ok=False, message="Corpus not found")
+
+        # Validate the new embedder exists in the registry and is an embedder
+        try:
+            embedder_class = get_component_by_name(new_embedder)
+            if embedder_class is None:
+                return ReEmbedCorpus(
+                    ok=False,
+                    message=f"Embedder '{new_embedder}' not found in the registry.",
+                )
+            if not issubclass(embedder_class, BaseEmbedder):
+                return ReEmbedCorpus(
+                    ok=False,
+                    message=f"'{new_embedder}' is not an embedder component.",
+                )
+        except Exception as e:
+            return ReEmbedCorpus(
+                ok=False,
+                message=f"Invalid embedder path: {e}",
+            )
+
+        # No-op if the embedder is already the same
+        if corpus.preferred_embedder == new_embedder:
+            return ReEmbedCorpus(
+                ok=True,
+                message="Corpus already uses this embedder. No re-embedding needed.",
+            )
+
+        # Atomically lock the corpus to prevent concurrent re-embed operations.
+        # Uses UPDATE ... WHERE to avoid TOCTOU race conditions.
+        locked = Corpus.objects.filter(pk=corpus.pk, backend_lock=False).update(
+            backend_lock=True, modified=timezone.now()
+        )
+
+        if locked == 0:
+            return ReEmbedCorpus(
+                ok=False,
+                message="Corpus is currently locked by another operation. "
+                "Please wait for it to complete.",
+            )
+
+        transaction.on_commit(
+            lambda: reembed_corpus.delay(
+                corpus_id=corpus.pk,
+                new_embedder_path=new_embedder,
+            )
+        )
+
+        return ReEmbedCorpus(
+            ok=True,
+            message=f"Re-embedding started. The corpus will use "
+            f"'{new_embedder}' once complete.",
+        )
 
 
 class StartCorpusExport(graphene.Mutation):
@@ -1478,6 +1602,16 @@ class StartCorpusExport(graphene.Mutation):
                     ),
                 ).apply_async()
 
+                ok = True
+                message = "SUCCESS"
+
+            elif export_format == ExportType.OPEN_CONTRACTS_V2.value:
+                package_corpus_export_v2.delay(
+                    export_id=export.id,
+                    corpus_pk=int(corpus_pk),
+                    analysis_pk_list=analysis_pk_list if analysis_pk_list else None,
+                    annotation_filter_mode=annotation_filter_mode,
+                )
                 ok = True
                 message = "SUCCESS"
 
@@ -3614,6 +3748,35 @@ class UpdateCorpusMutation(DRFMutation):
             description="Category IDs to assign (replaces existing)",
         )
 
+    @classmethod
+    def mutate(cls, root, info, *args, **kwargs):
+        # Issue #437: Prevent changing preferred_embedder after documents exist.
+        # This avoids creating inconsistent embeddings within a corpus.
+        # Use the ReEmbedCorpus mutation instead for controlled embedder migration.
+        if "preferred_embedder" in kwargs:
+            corpus_global_id = kwargs.get("id")
+            if corpus_global_id:
+                corpus_pk = from_global_id(corpus_global_id)[1]
+                try:
+                    corpus = Corpus.objects.get(pk=corpus_pk)
+                    if corpus.has_documents():
+                        new_embedder = kwargs["preferred_embedder"]
+                        if new_embedder != corpus.preferred_embedder:
+                            return cls(
+                                ok=False,
+                                message=(
+                                    "Cannot change preferred_embedder after documents "
+                                    "have been added to this corpus. Changing the "
+                                    "embedder would create inconsistent embeddings. "
+                                    "Use the reEmbedCorpus mutation to migrate to a "
+                                    "different embedder."
+                                ),
+                            )
+                except Corpus.DoesNotExist:
+                    pass  # Let the parent class handle not-found
+
+        return super().mutate(root, info, *args, **kwargs)
+
 
 class UpdateMe(graphene.Mutation):
     """Update basic profile fields for the current user, including slug."""
@@ -4015,7 +4178,14 @@ class StartDocumentExtract(graphene.Mutation):
         corpus = None
         if corpus_id:
             corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            try:
+                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                    pk=corpus_pk
+                )
+            except Corpus.DoesNotExist:
+                return StartDocumentExtract(
+                    ok=False, message="Resource not found", obj=None
+                )
 
         extract = Extract.objects.create(
             name=f"Extract {uuid.uuid4()} for {document.title}",
@@ -4050,14 +4220,15 @@ class DeleteAnalysisMutation(graphene.Mutation):
         # message = "Could not complete"
 
         analysis_pk = from_global_id(id)[1]
-        analysis = Analysis.objects.get(id=analysis_pk)
+        analysis = Analysis.objects.visible_to_user(info.context.user).get(
+            id=analysis_pk
+        )
 
         # Check the object isn't locked by another user
         if analysis.user_lock is not None:
-            if info.context.user.id == analysis.user_lock_id:
+            if info.context.user.id != analysis.user_lock_id:
                 raise PermissionError(
-                    f"Specified object is locked by {info.context.user.username}. Cannot be "
-                    f"updated / edited by another user."
+                    "Specified object is locked by another user. Cannot be " "deleted."
                 )
 
         # We ARE OK with deleting something that's been locked by the backend, however, as sh@t happens, and we want
@@ -4236,7 +4407,9 @@ class CreateColumn(graphene.Mutation):
         if {query, match_text} == {None}:
             raise ValueError("One of `query` or `match_text` must be provided.")
 
-        fieldset = Fieldset.objects.get(pk=from_global_id(fieldset_id)[1])
+        fieldset = Fieldset.objects.visible_to_user(info.context.user).get(
+            pk=from_global_id(fieldset_id)[1]
+        )
         column = Column(
             name=name,
             fieldset=fieldset,
@@ -4336,8 +4509,11 @@ class CreateExtract(graphene.Mutation):
         corpus = None
         if corpus_id is not None:
             corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
-            if not (corpus.creator == info.context.user or corpus.is_public):
+            try:
+                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                    pk=corpus_pk
+                )
+            except Corpus.DoesNotExist:
                 return CreateExtract(
                     ok=False,
                     msg="You don't have permission to create an extract for this corpus.",
@@ -4345,7 +4521,9 @@ class CreateExtract(graphene.Mutation):
                 )
 
         if fieldset_id is not None:
-            fieldset = Fieldset.objects.get(pk=from_global_id(fieldset_id)[1])
+            fieldset = Fieldset.objects.visible_to_user(info.context.user).get(
+                pk=from_global_id(fieldset_id)[1]
+            )
         else:
             if fieldset_name is None:
                 fieldset_name = f"{name} Fieldset"
@@ -4626,13 +4804,18 @@ class DeleteExtract(DRFDeletion):
 
 class CreateCorpusAction(graphene.Mutation):
     """
-    Create a new CorpusAction that will be triggered when documents are added or edited in a corpus.
-    The action can run a fieldset extraction, an analyzer, or an agent - but exactly one must be specified.
-    Requires UPDATE permission on the corpus to create actions.
+    Create a new CorpusAction that will be triggered when events occur in a corpus.
 
-    For thread/message-based triggers (new_thread, new_message), supports inline agent creation
-    via create_agent_inline=True with agent creation parameters. This creates a corpus-scoped
-    moderator agent and links it to the action in one transaction.
+    Action types:
+    - **Fieldset**: Run data extraction (fieldset_id)
+    - **Analyzer**: Run classification/annotation (analyzer_id)
+    - **Agent**: Execute an AI agent task. Provide task_instructions describing what the
+      agent should do. Optionally link an agent_config_id for custom persona/tool defaults,
+      or use create_agent_inline=True for thread/message moderation.
+    - **Lightweight agent**: Just provide task_instructions (no agent_config needed).
+      The system auto-selects tools based on the trigger type.
+
+    Requires UPDATE permission on the corpus.
     """
 
     class Arguments:
@@ -4642,7 +4825,7 @@ class CreateCorpusAction(graphene.Mutation):
         name = graphene.String(required=False, description="Name of the action")
         trigger = graphene.String(
             required=True,
-            description="When to trigger the action (add_document or edit_document)",
+            description="When to trigger: add_document, edit_document, new_thread, new_message",
         )
         fieldset_id = graphene.ID(
             required=False, description="ID of the fieldset to run"
@@ -4650,18 +4833,23 @@ class CreateCorpusAction(graphene.Mutation):
         analyzer_id = graphene.ID(
             required=False, description="ID of the analyzer to run"
         )
-        # Agent-based action arguments (existing agent)
-        agent_config_id = graphene.ID(
-            required=False, description="ID of the agent configuration to use"
-        )
-        agent_prompt = graphene.String(
+        # Agent-based action arguments
+        task_instructions = graphene.String(
             required=False,
-            description="Task prompt for the agent (required if agent_config_id is provided)",
+            description="What the agent should do. This is the single required "
+            "field for agent actions (e.g., 'Read this document and update its "
+            "description with a one-paragraph summary').",
+        )
+        agent_config_id = graphene.ID(
+            required=False,
+            description="Optional agent configuration for persona/tool defaults. "
+            "Not required — task_instructions alone is sufficient for agent actions.",
         )
         pre_authorized_tools = graphene.List(
             graphene.String,
             required=False,
-            description="Tools pre-authorized to run without approval",
+            description="Tools pre-authorized to run without approval. "
+            "If empty, uses agent_config tools or trigger-appropriate defaults.",
         )
         # Inline agent creation arguments (for thread/message triggers)
         create_agent_inline = graphene.Boolean(
@@ -4705,8 +4893,8 @@ class CreateCorpusAction(graphene.Mutation):
         name: str = None,
         fieldset_id: str = None,
         analyzer_id: str = None,
+        task_instructions: str = None,
         agent_config_id: str = None,
-        agent_prompt: str = None,
         pre_authorized_tools: list = None,
         create_agent_inline: bool = False,
         inline_agent_name: str = None,
@@ -4722,8 +4910,8 @@ class CreateCorpusAction(graphene.Mutation):
             user = info.context.user
             corpus_pk = from_global_id(corpus_id)[1]
 
-            # Get corpus and check permissions
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Get corpus with visibility filter to prevent IDOR
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Check if user has update permission on the corpus
             if corpus.creator.id != user.id:
@@ -4747,10 +4935,10 @@ class CreateCorpusAction(graphene.Mutation):
                         message="inline_agent_instructions is required when create_agent_inline=True",
                         obj=None,
                     )
-                if not agent_prompt:
+                if not task_instructions:
                     return CreateCorpusAction(
                         ok=False,
-                        message="agent_prompt is required when creating an agent action",
+                        message="task_instructions is required when creating an agent action",
                         obj=None,
                     )
                 # Cannot provide both inline creation and existing agent
@@ -4762,25 +4950,18 @@ class CreateCorpusAction(graphene.Mutation):
                     )
 
             # For thread/message triggers with inline agent, validate tools are moderation category.
-            # Rationale: Thread/message triggered actions are specifically designed for automated
-            # moderation workflows (spam detection, content filtering, etc.). Restricting tools
-            # to the MODERATION category ensures these agents can only perform moderation-related
-            # operations and cannot access broader corpus/document manipulation tools which could
-            # pose security risks when triggered automatically by user content.
             if create_agent_inline and trigger in ["new_thread", "new_message"]:
                 from opencontractserver.llms.tools.tool_registry import (
                     TOOL_REGISTRY,
                     ToolCategory,
                 )
 
-                # Get valid moderation tool names
                 valid_moderation_tools = {
                     tool.name
                     for tool in TOOL_REGISTRY
                     if tool.category == ToolCategory.MODERATION
                 }
 
-                # Require at least one tool for moderation agents
                 if not inline_agent_tools:
                     return CreateCorpusAction(
                         ok=False,
@@ -4789,7 +4970,6 @@ class CreateCorpusAction(graphene.Mutation):
                         obj=None,
                     )
 
-                # Validate provided tools are valid moderation tools
                 invalid_tools = set(inline_agent_tools) - valid_moderation_tools
                 if invalid_tools:
                     return CreateCorpusAction(
@@ -4799,30 +4979,52 @@ class CreateCorpusAction(graphene.Mutation):
                         obj=None,
                     )
 
-            # Validate that exactly one of fieldset_id, analyzer_id, agent_config_id, or create_agent_inline is provided
-            action_types_provided = sum(
-                [
-                    bool(fieldset_id),
-                    bool(analyzer_id),
-                    bool(agent_config_id),
-                    bool(create_agent_inline),
-                ]
+            # Determine action type: fieldset, analyzer, agent (with config),
+            # agent (inline), or lightweight agent (task_instructions only)
+            has_fieldset = bool(fieldset_id)
+            has_analyzer = bool(analyzer_id)
+            has_agent_config = bool(agent_config_id)
+            has_inline_agent = bool(create_agent_inline)
+            has_task_instructions = bool(task_instructions)
+
+            # Fieldset/analyzer/agent_config/inline are mutually exclusive
+            fk_count = sum(
+                [has_fieldset, has_analyzer, has_agent_config, has_inline_agent]
             )
-            if action_types_provided != 1:
+            if fk_count > 1:
                 return CreateCorpusAction(
                     ok=False,
                     message=(
-                        "Exactly one of fieldset_id, analyzer_id, "
-                        "agent_config_id, or create_agent_inline must be provided"
+                        "Only one of fieldset_id, analyzer_id, "
+                        "agent_config_id, or create_agent_inline can be provided"
                     ),
                     obj=None,
                 )
 
-            # Validate agent_prompt is provided when agent_config_id is set
-            if agent_config_id and not agent_prompt:
+            # Must have at least one action type
+            if fk_count == 0 and not has_task_instructions:
                 return CreateCorpusAction(
                     ok=False,
-                    message="agent_prompt is required when agent_config_id is provided",
+                    message=(
+                        "Provide one of: fieldset_id, analyzer_id, agent_config_id, "
+                        "create_agent_inline, or task_instructions"
+                    ),
+                    obj=None,
+                )
+
+            # task_instructions is required for all agent-type actions
+            if (has_agent_config or has_inline_agent) and not has_task_instructions:
+                return CreateCorpusAction(
+                    ok=False,
+                    message="task_instructions is required for agent actions",
+                    obj=None,
+                )
+
+            # task_instructions must not be set on fieldset/analyzer actions
+            if (has_fieldset or has_analyzer) and has_task_instructions:
+                return CreateCorpusAction(
+                    ok=False,
+                    message="task_instructions cannot be set on fieldset or analyzer actions",
                     obj=None,
                 )
 
@@ -4833,16 +5035,17 @@ class CreateCorpusAction(graphene.Mutation):
 
             if fieldset_id:
                 fieldset_pk = from_global_id(fieldset_id)[1]
-                fieldset = Fieldset.objects.get(pk=fieldset_pk)
+                fieldset = Fieldset.objects.visible_to_user(user).get(pk=fieldset_pk)
 
             if analyzer_id:
                 analyzer_pk = from_global_id(analyzer_id)[1]
-                analyzer = Analyzer.objects.get(pk=analyzer_pk)
+                analyzer = Analyzer.objects.visible_to_user(user).get(pk=analyzer_pk)
 
             if agent_config_id:
                 agent_config_pk = from_global_id(agent_config_id)[1]
-                agent_config = AgentConfiguration.objects.get(pk=agent_config_pk)
-                # Verify agent config is active
+                agent_config = AgentConfiguration.objects.visible_to_user(user).get(
+                    pk=agent_config_pk
+                )
                 if not agent_config.is_active:
                     return CreateCorpusAction(
                         ok=False,
@@ -4853,14 +5056,13 @@ class CreateCorpusAction(graphene.Mutation):
             # Create inline agent if requested (wrapped in transaction with action creation)
             if create_agent_inline:
                 with transaction.atomic():
-                    # Create corpus-scoped agent configuration
                     agent_config = AgentConfiguration.objects.create(
                         name=inline_agent_name,
                         description=inline_agent_description
                         or f"Moderator agent for {corpus.title}",
                         system_instructions=inline_agent_instructions,
                         available_tools=inline_agent_tools or [],
-                        permission_required_tools=[],  # All tools are pre-authorized for corpus actions
+                        permission_required_tools=[],
                         badge_config={
                             "icon": "shield",
                             "color": "#6366f1",
@@ -4870,22 +5072,20 @@ class CreateCorpusAction(graphene.Mutation):
                         corpus=corpus,
                         creator=user,
                         is_active=True,
-                        is_public=False,  # Corpus-scoped agents are private to corpus
+                        is_public=False,
                     )
 
-                    # Set permissions for the inline agent
                     set_permissions_for_obj_to_user(
                         user, agent_config, [PermissionTypes.CRUD]
                     )
 
-                    # Create the corpus action
                     corpus_action = CorpusAction.objects.create(
                         name=name or "Corpus Action",
                         corpus=corpus,
                         fieldset=fieldset,
                         analyzer=analyzer,
                         agent_config=agent_config,
-                        agent_prompt=agent_prompt or "",
+                        task_instructions=task_instructions or "",
                         pre_authorized_tools=pre_authorized_tools or [],
                         trigger=trigger,
                         disabled=disabled,
@@ -4903,14 +5103,14 @@ class CreateCorpusAction(graphene.Mutation):
                         obj=corpus_action,
                     )
 
-            # Standard path: Create the corpus action (no inline agent)
+            # Standard path: Create the corpus action
             corpus_action = CorpusAction.objects.create(
                 name=name or "Corpus Action",
                 corpus=corpus,
                 fieldset=fieldset,
                 analyzer=analyzer,
                 agent_config=agent_config,
-                agent_prompt=agent_prompt or "",
+                task_instructions=task_instructions or "",
                 pre_authorized_tools=pre_authorized_tools or [],
                 trigger=trigger,
                 disabled=disabled,
@@ -4964,9 +5164,9 @@ class UpdateCorpusAction(graphene.Mutation):
             required=False,
             description="ID of the agent configuration (clears other action types)",
         )
-        agent_prompt = graphene.String(
+        task_instructions = graphene.String(
             required=False,
-            description="Task prompt for the agent",
+            description="What the agent should do",
         )
         pre_authorized_tools = graphene.List(
             graphene.String,
@@ -4994,7 +5194,7 @@ class UpdateCorpusAction(graphene.Mutation):
         fieldset_id: str = None,
         analyzer_id: str = None,
         agent_config_id: str = None,
-        agent_prompt: str = None,
+        task_instructions: str = None,
         pre_authorized_tools: list = None,
         disabled: bool = None,
         run_on_all_corpuses: bool = None,
@@ -5005,8 +5205,8 @@ class UpdateCorpusAction(graphene.Mutation):
             user = info.context.user
             action_pk = from_global_id(id)[1]
 
-            # Get the corpus action
-            corpus_action = CorpusAction.objects.get(pk=action_pk)
+            # Get the corpus action with visibility filter
+            corpus_action = CorpusAction.objects.visible_to_user(user).get(pk=action_pk)
 
             # Check if user is the creator
             if corpus_action.creator.id != user.id:
@@ -5033,25 +5233,27 @@ class UpdateCorpusAction(graphene.Mutation):
             # If any of these are provided, clear the others and set the new one
             if fieldset_id is not None:
                 fieldset_pk = from_global_id(fieldset_id)[1]
-                fieldset = Fieldset.objects.get(pk=fieldset_pk)
+                fieldset = Fieldset.objects.visible_to_user(user).get(pk=fieldset_pk)
                 corpus_action.fieldset = fieldset
                 corpus_action.analyzer = None
                 corpus_action.agent_config = None
-                corpus_action.agent_prompt = ""
+                corpus_action.task_instructions = ""
                 corpus_action.pre_authorized_tools = []
 
             elif analyzer_id is not None:
                 analyzer_pk = from_global_id(analyzer_id)[1]
-                analyzer = Analyzer.objects.get(pk=analyzer_pk)
+                analyzer = Analyzer.objects.visible_to_user(user).get(pk=analyzer_pk)
                 corpus_action.analyzer = analyzer
                 corpus_action.fieldset = None
                 corpus_action.agent_config = None
-                corpus_action.agent_prompt = ""
+                corpus_action.task_instructions = ""
                 corpus_action.pre_authorized_tools = []
 
             elif agent_config_id is not None:
                 agent_config_pk = from_global_id(agent_config_id)[1]
-                agent_config = AgentConfiguration.objects.get(pk=agent_config_pk)
+                agent_config = AgentConfiguration.objects.visible_to_user(user).get(
+                    pk=agent_config_pk
+                )
                 if not agent_config.is_active:
                     return UpdateCorpusAction(
                         ok=False,
@@ -5061,12 +5263,21 @@ class UpdateCorpusAction(graphene.Mutation):
                 corpus_action.agent_config = agent_config
                 corpus_action.fieldset = None
                 corpus_action.analyzer = None
-                # Agent prompt and pre_authorized_tools are updated below
 
-            # Update agent-specific fields if agent is being used
-            if corpus_action.agent_config:
-                if agent_prompt is not None:
-                    corpus_action.agent_prompt = agent_prompt
+            # Reject task_instructions on non-agent actions early,
+            # before setting fields that model validation would later reject.
+            will_be_agent = corpus_action.is_agent_action or agent_config_id is not None
+            if not will_be_agent and task_instructions:
+                return UpdateCorpusAction(
+                    ok=False,
+                    message="task_instructions can only be set on agent-based actions",
+                    obj=None,
+                )
+
+            # Update agent-specific fields if this is (or is becoming) an agent action
+            if will_be_agent or task_instructions is not None:
+                if task_instructions is not None:
+                    corpus_action.task_instructions = task_instructions
                 if pre_authorized_tools is not None:
                     corpus_action.pre_authorized_tools = pre_authorized_tools
 
@@ -5123,6 +5334,106 @@ class DeleteCorpusAction(DRFDeletion):
     class Arguments:
         id = graphene.String(
             required=True, description="ID of the corpus action to delete"
+        )
+
+
+class RunCorpusAction(graphene.Mutation):
+    """
+    Manually trigger a specific agent-based corpus action on a document.
+
+    Superuser-only. Creates a CorpusActionExecution record and dispatches
+    the run_agent_corpus_action Celery task.
+    """
+
+    class Arguments:
+        corpus_action_id = graphene.ID(
+            required=True,
+            description="ID of the CorpusAction to run",
+        )
+        document_id = graphene.ID(
+            required=True,
+            description="ID of the Document to run the action against",
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    obj = graphene.Field(CorpusActionExecutionType)
+
+    @user_passes_test(lambda user: user.is_superuser)
+    @graphql_ratelimit(rate=RateLimits.ADMIN_OPERATION)
+    def mutate(root, info, corpus_action_id: str, document_id: str):
+        from graphql_relay import from_global_id
+
+        from opencontractserver.corpuses.models import CorpusActionExecution
+        from opencontractserver.documents.models import DocumentPath
+        from opencontractserver.tasks.agent_tasks import run_agent_corpus_action
+
+        user = info.context.user
+
+        # Decode Relay global IDs to database PKs
+        _, action_pk = from_global_id(corpus_action_id)
+        _, doc_pk = from_global_id(document_id)
+
+        # Validate action exists
+        try:
+            action = CorpusAction.objects.get(pk=action_pk)
+        except CorpusAction.DoesNotExist:
+            return RunCorpusAction(ok=False, message="Corpus action not found.")
+
+        # Must be an agent action
+        if not action.is_agent_action:
+            return RunCorpusAction(
+                ok=False,
+                message="Only agent-based actions can be manually triggered.",
+            )
+
+        # Validate document exists and belongs to the action's corpus
+        try:
+            document = Document.objects.get(pk=doc_pk)
+        except Document.DoesNotExist:
+            return RunCorpusAction(ok=False, message="Document not found.")
+
+        if not DocumentPath.objects.filter(
+            document=document, corpus=action.corpus
+        ).exists():
+            return RunCorpusAction(
+                ok=False,
+                message="Document is not in this action's corpus.",
+            )
+
+        # Create execution record
+        execution = CorpusActionExecution.objects.create(
+            corpus_action=action,
+            document=document,
+            corpus=action.corpus,
+            action_type=CorpusActionExecution.ActionType.AGENT,
+            status=CorpusActionExecution.Status.QUEUED,
+            trigger=action.trigger,
+            queued_at=timezone.now(),
+            creator=user,
+        )
+
+        # Dispatch Celery task after transaction commits (ATOMIC_REQUESTS
+        # wraps the entire request — dispatching inside the transaction
+        # causes Celery to look up the execution before it's visible).
+        transaction.on_commit(
+            lambda: run_agent_corpus_action.delay(
+                corpus_action_id=action.id,
+                document_id=document.id,
+                user_id=user.id,
+                execution_id=execution.id,
+                force=True,
+            )
+        )
+
+        # Refresh so Django TextChoices enums are properly stored as
+        # plain strings, which Graphene's enum serialization expects.
+        execution.refresh_from_db()
+
+        return RunCorpusAction(
+            ok=True,
+            message="Action queued successfully.",
+            obj=execution,
         )
 
 
@@ -5254,16 +5565,8 @@ class CreateNote(graphene.Mutation):
             user = info.context.user
             document_pk = from_global_id(document_id)[1]
 
-            # Get the document
-            document = Document.objects.get(pk=document_pk)
-
-            # Check if user has permission to add notes to this document
-            if not (document.is_public or document.creator == user):
-                return CreateNote(
-                    ok=False,
-                    message="You don't have permission to add notes to this document.",
-                    obj=None,
-                )
+            # Get the document with visibility filter to prevent IDOR
+            document = Document.objects.visible_to_user(user).get(pk=document_pk)
 
             # Prepare note data
             note_data = {
@@ -5273,16 +5576,16 @@ class CreateNote(graphene.Mutation):
                 "creator": user,
             }
 
-            # Handle optional corpus
+            # Handle optional corpus with visibility filter
             if corpus_id:
                 corpus_pk = from_global_id(corpus_id)[1]
-                corpus = Corpus.objects.get(pk=corpus_pk)
+                corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
                 note_data["corpus"] = corpus
 
-            # Handle optional parent note
+            # Handle optional parent note with visibility filter
             if parent_id:
                 parent_pk = from_global_id(parent_id)[1]
-                parent_note = Note.objects.get(pk=parent_pk)
+                parent_note = Note.objects.visible_to_user(user).get(pk=parent_pk)
                 note_data["parent"] = parent_note
 
             # Create the note
@@ -5760,6 +6063,7 @@ class Mutation(graphene.ObjectType):
 
     # CORPUS MUTATIONS #########################################################
     fork_corpus = StartCorpusFork.Field()
+    re_embed_corpus = ReEmbedCorpus.Field()
     set_corpus_visibility = SetCorpusVisibility.Field()
     create_corpus = CreateCorpusMutation.Field()
     update_corpus = UpdateCorpusMutation.Field()
@@ -5771,6 +6075,7 @@ class Mutation(graphene.ObjectType):
     create_corpus_action = CreateCorpusAction.Field()
     update_corpus_action = UpdateCorpusAction.Field()
     delete_corpus_action = DeleteCorpusAction.Field()
+    run_corpus_action = RunCorpusAction.Field()
 
     # CORPUS FOLDER MUTATIONS ##################################################
     create_corpus_folder = CreateCorpusFolderMutation.Field()

@@ -148,14 +148,14 @@ class CorpusActionModelTestCase(TestCase):
         corpus_action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
         self.assertIsNotNone(corpus_action.id)
         self.assertEqual(corpus_action.corpus, self.corpus)
         self.assertEqual(corpus_action.agent_config, self.agent_config)
-        self.assertEqual(corpus_action.agent_prompt, "Summarize this document")
+        self.assertEqual(corpus_action.task_instructions, "Summarize this document")
         self.assertIsNone(corpus_action.fieldset)
         self.assertIsNone(corpus_action.analyzer)
         self.assertEqual(corpus_action.trigger, CorpusActionTrigger.ADD_DOCUMENT)
@@ -165,7 +165,7 @@ class CorpusActionModelTestCase(TestCase):
         corpus_action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Analyze the document and update its description",
+            task_instructions="Analyze the document and update its description",
             pre_authorized_tools=["update_document_description", "search_annotations"],
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
@@ -185,7 +185,7 @@ class CorpusActionModelTestCase(TestCase):
                 trigger=CorpusActionTrigger.ADD_DOCUMENT,
                 creator=self.user,
             )
-        self.assertIn("agent_prompt", str(context.exception))
+        self.assertIn("task_instructions", str(context.exception))
 
     def test_create_corpus_action_with_agent_and_analyzer_fails(self):
         """Test that providing both agent_config and analyzer fails validation."""
@@ -193,7 +193,7 @@ class CorpusActionModelTestCase(TestCase):
             CorpusAction.objects.create(
                 corpus=self.corpus,
                 agent_config=self.agent_config,
-                agent_prompt="Test prompt",
+                task_instructions="Test prompt",
                 analyzer=self.analyzer,
                 trigger=CorpusActionTrigger.ADD_DOCUMENT,
                 creator=self.user,
@@ -205,7 +205,7 @@ class CorpusActionModelTestCase(TestCase):
             CorpusAction.objects.create(
                 corpus=self.corpus,
                 agent_config=self.agent_config,
-                agent_prompt="Test prompt",
+                task_instructions="Test prompt",
                 fieldset=self.fieldset,
                 trigger=CorpusActionTrigger.ADD_DOCUMENT,
                 creator=self.user,
@@ -216,9 +216,88 @@ class CorpusActionModelTestCase(TestCase):
         corpus_action = CorpusAction.objects.create(
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
         expected_str = f"CorpusAction for {self.corpus} - Agent - Add Document"
         self.assertEqual(str(corpus_action), expected_str)
+
+    # ---- is_agent_action property edge cases ----
+
+    def test_is_agent_action_with_agent_config(self):
+        """is_agent_action returns True when agent_config is set."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Summarize this document",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertTrue(action.is_agent_action)
+
+    def test_is_agent_action_with_task_instructions_only(self):
+        """is_agent_action returns True for lightweight agent (task_instructions only)."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Summarize this document",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertTrue(action.is_agent_action)
+
+    def test_is_agent_action_false_for_fieldset(self):
+        """is_agent_action returns False for fieldset-only actions."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            fieldset=self.fieldset,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertFalse(action.is_agent_action)
+
+    def test_is_agent_action_false_for_analyzer(self):
+        """is_agent_action returns False for analyzer-only actions."""
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            analyzer=self.analyzer,
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        self.assertFalse(action.is_agent_action)
+
+    def test_task_instructions_on_fieldset_action_rejected(self):
+        """Setting task_instructions on a fieldset action should fail validation."""
+        with self.assertRaises(ValidationError):
+            CorpusAction.objects.create(
+                corpus=self.corpus,
+                fieldset=self.fieldset,
+                task_instructions="Should not be allowed",
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                creator=self.user,
+            )
+
+    def test_task_instructions_on_analyzer_action_rejected(self):
+        """Setting task_instructions on an analyzer action should fail validation."""
+        with self.assertRaises(ValidationError):
+            CorpusAction.objects.create(
+                corpus=self.corpus,
+                analyzer=self.analyzer,
+                task_instructions="Should not be allowed",
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                creator=self.user,
+            )
+
+    # ---- Constants alignment with CorpusActionTrigger ----
+
+    def test_constants_keys_match_trigger_enum(self):
+        """Verify DEFAULT_TOOLS_BY_TRIGGER and TRIGGER_DESCRIPTIONS keys
+        match CorpusActionTrigger enum values (guards against typos)."""
+        from opencontractserver.constants.corpus_actions import (
+            DEFAULT_TOOLS_BY_TRIGGER,
+            TRIGGER_DESCRIPTIONS,
+        )
+
+        trigger_values = {choice.value for choice in CorpusActionTrigger}
+        self.assertEqual(set(DEFAULT_TOOLS_BY_TRIGGER.keys()), trigger_values)
+        self.assertEqual(set(TRIGGER_DESCRIPTIONS.keys()), trigger_values)

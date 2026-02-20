@@ -74,13 +74,13 @@ class CreateCorpusFolderMutation(graphene.Mutation):
 
         try:
             corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
-            # Get parent folder if provided
+            # Get parent folder if provided (scoped to corpus)
             parent = None
             if parent_id:
                 parent_pk = from_global_id(parent_id)[1]
-                parent = CorpusFolder.objects.get(pk=parent_pk)
+                parent = CorpusFolder.objects.get(pk=parent_pk, corpus=corpus)
 
             # Delegate to service - handles permission checks, validation, creation
             folder, error = DocumentFolderService.create_folder(
@@ -107,16 +107,10 @@ class CreateCorpusFolderMutation(graphene.Mutation):
                 folder=folder,
             )
 
-        except Corpus.DoesNotExist:
+        except (Corpus.DoesNotExist, CorpusFolder.DoesNotExist):
             return CreateCorpusFolderMutation(
                 ok=False,
-                message="Corpus not found",
-                folder=None,
-            )
-        except CorpusFolder.DoesNotExist:
-            return CreateCorpusFolderMutation(
-                ok=False,
-                message="Parent folder not found",
+                message="Resource not found",
                 folder=None,
             )
         except Exception as e:
@@ -165,7 +159,14 @@ class UpdateCorpusFolderMutation(graphene.Mutation):
 
         try:
             folder_pk = from_global_id(folder_id)[1]
-            folder = CorpusFolder.objects.get(pk=folder_pk)
+            folder = CorpusFolder.objects.select_related("corpus").get(pk=folder_pk)
+            # Verify user can see the parent corpus to prevent IDOR
+            if (
+                not Corpus.objects.visible_to_user(user)
+                .filter(pk=folder.corpus_id)
+                .exists()
+            ):
+                raise CorpusFolder.DoesNotExist
 
             # Delegate to service - handles permission checks, validation, update
             success, error = DocumentFolderService.update_folder(
@@ -236,13 +237,22 @@ class MoveCorpusFolderMutation(graphene.Mutation):
 
         try:
             folder_pk = from_global_id(folder_id)[1]
-            folder = CorpusFolder.objects.get(pk=folder_pk)
+            folder = CorpusFolder.objects.select_related("corpus").get(pk=folder_pk)
+            # Verify user can see the parent corpus
+            if (
+                not Corpus.objects.visible_to_user(user)
+                .filter(pk=folder.corpus_id)
+                .exists()
+            ):
+                raise CorpusFolder.DoesNotExist
 
-            # Get new parent if provided
+            # Get new parent if provided (scoped to same corpus)
             new_parent = None
             if new_parent_id:
                 new_parent_pk = from_global_id(new_parent_id)[1]
-                new_parent = CorpusFolder.objects.get(pk=new_parent_pk)
+                new_parent = CorpusFolder.objects.get(
+                    pk=new_parent_pk, corpus=folder.corpus
+                )
 
             # Delegate to service - handles permission checks, validation, move
             success, error = DocumentFolderService.move_folder(
@@ -309,7 +319,14 @@ class DeleteCorpusFolderMutation(graphene.Mutation):
 
         try:
             folder_pk = from_global_id(folder_id)[1]
-            folder = CorpusFolder.objects.get(pk=folder_pk)
+            folder = CorpusFolder.objects.select_related("corpus").get(pk=folder_pk)
+            # Verify user can see the parent corpus
+            if (
+                not Corpus.objects.visible_to_user(user)
+                .filter(pk=folder.corpus_id)
+                .exists()
+            ):
+                raise CorpusFolder.DoesNotExist
 
             # Delegate to service - handles permission checks, cleanup, deletion
             success, error = DocumentFolderService.delete_folder(
@@ -374,9 +391,9 @@ class MoveDocumentToFolderMutation(graphene.Mutation):
             document_pk = from_global_id(document_id)[1]
             corpus_pk = from_global_id(corpus_id)[1]
 
-            # Get objects
-            document = Document.objects.get(pk=document_pk)
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Get objects with visibility filtering
+            document = Document.objects.visible_to_user(user).get(pk=document_pk)
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Get folder if provided
             folder = None
@@ -464,7 +481,7 @@ class MoveDocumentsToFolderMutation(graphene.Mutation):
 
         try:
             corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Get folder if provided
             folder = None

@@ -1,5 +1,7 @@
 # Quick Start (For use on your local machine)
 
+*Last Updated: 2026-01-09*
+
 This guide is for people who want to quickly get started using the application and aren't interested in hosting
 it online for others to use. You'll get a default, local user with admin access. We recommend you change
 the user password after completing this tutorial.
@@ -225,7 +227,9 @@ For more detailed configuration options, see our [configuration guides](./config
 
 ## **Production Deployment Notes**
 
-The quick start guide above is for **local development**. For **production deployments** using `production.yml`, there are key differences:
+The quick start guide above is for **local development**. For **production deployments** using `production.yml`, there are key differences.
+
+**Reference**: See [production.yml](../production.yml) for the complete production Docker Compose configuration.
 
 ### Database Migrations in Production
 

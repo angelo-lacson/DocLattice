@@ -26,7 +26,7 @@ This strategy is implemented in the embedding tasks (`opencontractserver/tasks/e
 ### Creating Embeddings
 
 1. **Generate the Embeddings (Text → Vector)**
-   - Use the unified utility function **`generate_embeddings_from_text(text, embedder_path=None)`** or **`agenerate_embeddings_from_text(text, embedder_path=None)`** from `opencontractserver/utils/embeddings.py`.
+   - Use the unified utility function **`generate_embeddings_from_text(text, embedder_path=None)`** or **`agenerate_embeddings_from_text(text, embedder_path=None)`** from [`opencontractserver/utils/embeddings.py`](../../opencontractserver/utils/embeddings.py).
    - These functions:
      - *Retrieve* any configured Python embedder class for the specified corpus (if `corpus_id` is provided to `get_embedder()`).
      - If no embedder is found or it fails, *fall back* to the configured default embedder (typically our built-in microservice).
@@ -67,10 +67,29 @@ This strategy is implemented in the embedding tasks (`opencontractserver/tasks/e
 
 The embedding system uses a dedicated `Embedding` model that supports multiple vector dimensions:
 
-- **Supported Dimensions**: 384, 768, 1536, 3072
-- **Vector Fields**: `vector_384`, `vector_768`, `vector_1536`, `vector_3072` (other dimensions could easily be added)
+- **Supported Dimensions**: 384, 768, 1024, 1536, 2048, 3072, 4096
+- **Vector Fields**: `vector_384`, `vector_768`, `vector_1024`, `vector_1536`, `vector_2048`, `vector_3072`, `vector_4096`
 - **Reference Fields**: `document_id`, `annotation_id`, `note_id` (depending on the model type)
 - **Embedder Tracking**: `embedder_path` field stores the identifier of the embedding model used
+
+### Embedder Configuration
+
+Embedder settings are configured in [`config/settings/base.py`](../../config/settings/base.py):
+
+- **`PREFERRED_EMBEDDERS`**: Map of MIME types to preferred embedder class paths
+- **`DEFAULT_EMBEDDER`**: Fallback embedder when no preferred embedder is found
+- **`DEFAULT_EMBEDDING_DIMENSION`**: Default dimension (768)
+- **`DEFAULT_EMBEDDERS_BY_FILETYPE`**: Map of MIME types to default embedders
+- **`PIPELINE_SETTINGS`**: Component-specific configuration overrides
+
+Available embedder implementations in [`opencontractserver/pipeline/embedders/`](../../opencontractserver/pipeline/embedders/):
+
+**Text-only:**
+- **`MicroserviceEmbedder`**: Calls external sentence-transformer microservice (384-dim, default)
+
+**Multimodal (text + images):**
+- **`CLIPMicroserviceEmbedder`**: CLIP-based multimodal embedder via microservice (768-dim)
+- **`QwenMicroserviceEmbedder`**: Qwen-based multimodal embedder via microservice (1024-dim)
 
 ### Searching Embeddings
 
@@ -79,51 +98,14 @@ Our search architecture is designed with two layers: a **core API** that contain
 #### Core Search API
 
 1. **`CoreAnnotationVectorStore`** - Framework-Agnostic Business Logic
-   - Located in `opencontractserver/llms/vector_stores/core_vector_stores.py`
+   - Located in [`opencontractserver/llms/vector_stores/core_vector_stores.py`](../../opencontractserver/llms/vector_stores/core_vector_stores.py)
    - Contains all the business logic for vector search without dependencies on specific agent frameworks
-   - Key components:
-     ```python
-     from opencontractserver.llms.vector_stores.core_vector_stores import (
-         CoreAnnotationVectorStore,
-         VectorSearchQuery,
-         VectorSearchResult,
-     )
-
-     # Initialize the core store
-     store = CoreAnnotationVectorStore(
-         corpus_id=my_corpus_id,
-         user_id=my_user_id,
-         embedder_path="my-embedder",
-         embed_dim=384,
-     )
-
-     # Create a search query
-     query = VectorSearchQuery(
-         query_text="What is the main topic?",
-         similarity_top_k=10,
-         filters={"label": "important"}
-     )
-
-     # Execute search (sync or async)
-     results = store.search(query)
-     # OR
-     results = await store.async_search(query)
-
-     # Access results
-     for result in results:
-         annotation = result.annotation
-         similarity = result.similarity_score
-     ```
+   - Key classes: `CoreAnnotationVectorStore`, `VectorSearchQuery`, `VectorSearchResult`
+   - See the source file for initialization and usage examples
 
 2. **Framework-Agnostic Data Structures**
    - `VectorSearchQuery`: Contains query text/embedding, filters, and search parameters
-     - `query_text`: Optional text to convert to embedding
-     - `query_embedding`: Optional pre-computed embedding vector
-     - `similarity_top_k`: Number of results to return (default: 100)
-     - `filters`: Optional metadata filters
    - `VectorSearchResult`: Contains the annotation and similarity score
-     - `annotation`: The matched Annotation instance
-     - `similarity_score`: Cosine distance similarity score
 
 3. **Filtering Logic**
    - **Corpus Filtering**: Annotations are filtered by corpus membership. Structural annotations (`structural=True`) are always included regardless of corpus, while non-structural annotations must belong to the specified corpus.
@@ -172,123 +154,27 @@ for result in results:
 
 #### Vector Search Mixin
 
-Models that store embeddings can use the `VectorSearchViaEmbeddingMixin` to enable vector similarity searches WHERE
-model also uses `HasEmbeddingMixin`:
-
-```python
-from opencontractserver.shared.mixins import VectorSearchViaEmbeddingMixin
-
-class AnnotationQuerySet(QuerySet, VectorSearchViaEmbeddingMixin):
-    EMBEDDING_RELATED_NAME = "embeddings"  # or "embedding_set" by default
-
-# Usage
-annotations = Annotation.objects.search_by_embedding(
-    query_vector=[0.1, 0.2, 0.3, ...],
-    embedder_path="openai/text-embedding-ada-002",
-    top_k=10
-)
-```
+Models that store embeddings can use `VectorSearchViaEmbeddingMixin` from [`opencontractserver/shared/mixins.py`](../../opencontractserver/shared/mixins.py) to enable vector similarity searches (the model must also use `HasEmbeddingMixin`). See the source file for usage examples.
 
 #### Framework Adapters
 
 Framework adapters are thin wrappers that translate between the core API and specific agent frameworks:
 
 1. **LlamaIndex Adapter** - *Removed*
-   - The LlamaIndex vector store adapter has been removed from the codebase
-   - To use LlamaIndex, implement your own adapter following the CoreAnnotationVectorStore interface
-   - Implements LlamaIndex's `BasePydanticVectorStore` interface
-   - Converts between LlamaIndex types and our core types:
-     ```python
-     # LlamaIndex integration example (adapter removed)
-     # To use LlamaIndex with OpenContracts vector stores:
-     # 1. Create your own adapter class that inherits from BasePydanticVectorStore
-     # 2. Wrap CoreAnnotationVectorStore functionality
-     # 3. Convert between LlamaIndex and OpenContracts types
+   - The LlamaIndex vector store adapter has been removed from the codebase.
+   - If you need LlamaIndex integration, implement your own adapter wrapping `CoreAnnotationVectorStore`.
 
-     # Example structure (not implemented):
-     # class MyLlamaIndexVectorStore(BasePydanticVectorStore):
-     #     def __init__(self, core_store: CoreAnnotationVectorStore):
-     #         self.core_store = core_store
-     ```
-
-2. **Removed Adapter**
-   - The LlamaIndex vector store adapter (`LlamaIndexAnnotationVectorStore`) has been removed
-   - To use LlamaIndex, create your own adapter following the `BasePydanticVectorStore` interface
-
-3. **PydanticAI Adapter** - `PydanticAIAnnotationVectorStore`
-   - Located in `opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py`
+2. **PydanticAI Adapter** - `PydanticAIAnnotationVectorStore`
+   - Located in [`opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py`](../../opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py)
    - Provides async-first API with Pydantic models for type safety
-   - Converts between PydanticAI types and our core types:
-     ```python
-     # PydanticAI usage
-     from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
-         PydanticAIAnnotationVectorStore
-     )
+   - Converts between PydanticAI types and our core types (see source file for usage examples)
 
-     vector_store = PydanticAIAnnotationVectorStore(
-         corpus_id=my_corpus_id,
-         user_id=my_user_id,
-         embed_dim=384,
-     )
+3. **PydanticAI Tool Creation**
+   - Use `create_vector_search_tool()` from [`pydantic_ai_vector_stores.py`](../../opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py) to create vector search tools for PydanticAI agents.
 
-     # Async search
-     response = await vector_store.search_annotations(
-         query_text="What is the main topic?",
-         similarity_top_k=10
-     )
-
-     # Access results
-     for result in response.results:
-         annotation_id = result["annotation_id"]
-         content = result["content"]
-         similarity = result["similarity_score"]
-     ```
-
-4. **PydanticAI Tool Creation**
-   - Use the convenience function to create vector search tools for PydanticAI agents:
-     ```python
-     from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
-         create_vector_search_tool
-     )
-
-     # Create a tool function
-     vector_search_tool = await create_vector_search_tool(
-         user_id=user_id,
-         corpus_id=corpus_id,
-         document_id=document_id,  # Optional
-     )
-
-     # Use with PydanticAI agent
-     from pydantic_ai import Agent
-
-     agent = Agent(
-         model=my_model,
-         tools=[vector_search_tool],
-     )
-     ```
-
-5. **PydanticAI Response Format**
-   - Returns structured `PydanticAIVectorSearchResponse` with validated data:
-     ```python
-     response = await vector_store.search_annotations("query text")
-
-     # Response structure
-     {
-         "results": [
-             {
-                 "annotation_id": 123,
-                 "content": "text content",
-                 "document_id": 456,
-                 "corpus_id": 789,
-                 "similarity_score": 0.95,
-                 "annotation_label": "label text",
-                 "page": 1,
-                 "bounds": {"top": 100, "bottom": 200, "left": 50, "right": 300}
-             }
-         ],
-         "total_results": 1
-     }
-     ```
+4. **PydanticAI Response Format**
+   - Returns structured `PydanticAIVectorSearchResponse` with validated data containing annotation details, similarity scores, and location information.
+   - See [`pydantic_ai_vector_stores.py`](../../opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py) for the complete response structure.
 
 ### Async/Sync Compatibility
 
@@ -326,18 +212,11 @@ When working in async contexts (such as Django Channels WebSocket consumers), al
 
 4. **Result Conversion**
    - Framework adapter converts `VectorSearchResult` objects to framework-specific format
-   - For LlamaIndex: Creates `TextNode` objects with annotation data and metadata
    - Embedding vectors are retrieved using `aget_embedding()` for async contexts
 
 ### Performance Considerations
 
-1. **Database Indexes**: The `Annotation` model includes composite indexes for optimal query performance:
-   ```python
-   indexes = [
-       django.db.models.Index(fields=["structural", "corpus"]),
-       # ... other indexes
-   ]
-   ```
+1. **Database Indexes**: The `Annotation` model includes composite indexes for optimal query performance. See [`opencontractserver/annotations/models.py`](../../opencontractserver/annotations/models.py) for index definitions.
 
 2. **Embedding Retrieval**: Use `prefetch_related("embeddings")` when fetching multiple annotations to avoid N+1 queries.
 

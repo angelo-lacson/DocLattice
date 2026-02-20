@@ -154,7 +154,17 @@ class Corpus(TreeNode):
         max_length=1024,
         null=True,
         blank=True,
-        help_text="Fully qualified Python path to the embedder class to use for this corpus",
+        help_text="Fully qualified Python path to the embedder class to use for this corpus. "
+        "Auto-populated from DEFAULT_EMBEDDER at creation if not set. "
+        "Immutable after documents are added (use re-embed to change).",
+    )
+    created_with_embedder = django.db.models.CharField(
+        max_length=1024,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="The embedder that was active when this corpus was created. "
+        "Set automatically and never changes (audit trail).",
     )
 
     # Agent instructions
@@ -338,7 +348,9 @@ class Corpus(TreeNode):
 
     # Override save to update modified on save
     def save(self, *args, **kwargs):
-        """On save, update timestamps"""
+        """On save, update timestamps and freeze embedder on creation."""
+        from django.conf import settings
+
         # Ensure slug exists and is unique within creator scope
         if not self.slug or not isinstance(self.slug, str) or not self.slug.strip():
             base_value = self.title or "corpus"
@@ -357,9 +369,31 @@ class Corpus(TreeNode):
 
         if not self.pk:
             self.created = timezone.now()
+
+            # Freeze embedder at creation time (Issue #437):
+            # If no preferred_embedder was explicitly provided, default to the
+            # current DEFAULT_EMBEDDER so the corpus has a stable, immutable
+            # binding that won't change if the global setting is later updated.
+            default_embedder = getattr(settings, "DEFAULT_EMBEDDER", None)
+            if not self.preferred_embedder and default_embedder:
+                self.preferred_embedder = default_embedder
+
+            # Record which embedder was active at creation (audit trail).
+            # This never changes, even if preferred_embedder is later updated
+            # through a re-embed operation.
+            self.created_with_embedder = self.preferred_embedder or default_embedder
+
         self.modified = timezone.now()
 
         return super().save(*args, **kwargs)
+
+    def has_documents(self) -> bool:
+        """Check whether this corpus has any active documents (via DocumentPath)."""
+        from opencontractserver.documents.models import DocumentPath
+
+        return DocumentPath.objects.filter(
+            corpus=self, is_current=True, is_deleted=False
+        ).exists()
 
     def clean(self):
         """Validate the model before saving."""
@@ -446,7 +480,6 @@ class Corpus(TreeNode):
         path: str = None,
         user=None,
         folder=None,
-        content: bytes = None,
         **doc_kwargs,
     ):
         """
@@ -465,7 +498,6 @@ class Corpus(TreeNode):
             path: The filesystem path within the corpus (auto-generated if not provided)
             user: The user performing the operation (required)
             folder: Optional CorpusFolder to place the document in
-            content: DEPRECATED - use import_content() for content-based imports
             **doc_kwargs: Override properties for the corpus copy
 
         Returns:
@@ -486,13 +518,6 @@ class Corpus(TreeNode):
         if not document:
             raise ValueError(
                 "Document is required. For content-based imports, use import_content()"
-            )
-
-        # Handle deprecated content parameter
-        if content is not None:
-            logger.warning(
-                "content parameter is deprecated in add_document(). "
-                "Use import_content() for content-based imports."
             )
 
         from opencontractserver.documents.models import Document, DocumentPath
@@ -714,46 +739,6 @@ class Corpus(TreeNode):
         )
 
         return doc, status, doc_path
-
-    def _create_text_document_internal(
-        self,
-        content: bytes,
-        filename: str,
-        user,
-        path: str = None,
-        folder=None,
-        file_type: str = "text/plain",
-        **doc_kwargs,
-    ) -> tuple:
-        """
-        DEPRECATED: Use import_content() instead.
-
-        This method is kept for backwards compatibility but no longer supports
-        versioning. New code should use import_content() which routes all file
-        types through the unified versioning pipeline.
-        """
-        logger.warning(
-            "_create_text_document_internal is deprecated. "
-            "Use import_content() for full versioning support."
-        )
-        return self.import_content(
-            content=content,
-            user=user,
-            path=path,
-            folder=folder,
-            filename=filename,
-            file_type=file_type,
-            **doc_kwargs,
-        )
-
-    # Backwards compatibility alias
-    def create_text_document(self, *args, **kwargs):
-        """DEPRECATED: Use import_content() instead."""
-        logger.warning(
-            "create_text_document is deprecated. "
-            "Use import_content() for full versioning support."
-        )
-        return self.import_content(*args, **kwargs)
 
     def remove_document(self, document=None, path: str = None, user=None):
         """
@@ -982,17 +967,21 @@ class CorpusAction(BaseOCModel):
         null=True,
         blank=True,
         related_name="corpus_actions",
-        help_text="Agent configuration to use for this action",
+        help_text="Optional agent configuration for persona/tool defaults. "
+        "Not required for agent actions — task_instructions alone is sufficient.",
     )
-    agent_prompt = django.db.models.TextField(
+    task_instructions = django.db.models.TextField(
         blank=True,
         default="",
-        help_text="Task-specific prompt for the agent (e.g., 'Summarize this document')",
+        help_text="What the agent should do (e.g., 'Read this document and update "
+        "its description with a one-paragraph summary'). This is the single "
+        "required field for agent-based actions.",
     )
     pre_authorized_tools = django.db.models.JSONField(
         default=list,
         blank=True,
-        help_text="Tools pre-authorized to run without approval. If empty, uses agent_config.available_tools",
+        help_text="Tools pre-authorized to run without approval. If empty, uses "
+        "agent_config.available_tools or trigger-appropriate defaults.",
     )
     trigger = django.db.models.CharField(
         max_length=256, choices=CorpusActionTrigger.choices
@@ -1004,29 +993,41 @@ class CorpusAction(BaseOCModel):
 
     class Meta:
         constraints = [
-            # Exactly ONE of fieldset, analyzer, or agent_config must be set
             django.db.models.CheckConstraint(
                 check=(
-                    # Fieldset only
+                    # Fieldset only (no analyzer, no agent)
                     django.db.models.Q(
                         fieldset__isnull=False,
                         analyzer__isnull=True,
                         agent_config__isnull=True,
                     )
-                    # Analyzer only
+                    # Analyzer only (no fieldset, no agent)
                     | django.db.models.Q(
                         fieldset__isnull=True,
                         analyzer__isnull=False,
                         agent_config__isnull=True,
                     )
-                    # Agent config only
-                    | django.db.models.Q(
-                        fieldset__isnull=True,
-                        analyzer__isnull=True,
-                        agent_config__isnull=False,
+                    # Agent with config (no fieldset, no analyzer).
+                    # Requires non-empty task_instructions to match clean().
+                    | (
+                        django.db.models.Q(
+                            fieldset__isnull=True,
+                            analyzer__isnull=True,
+                            agent_config__isnull=False,
+                        )
+                        & ~django.db.models.Q(task_instructions="")
+                    )
+                    # Lightweight agent: task_instructions only
+                    | (
+                        django.db.models.Q(
+                            fieldset__isnull=True,
+                            analyzer__isnull=True,
+                            agent_config__isnull=True,
+                        )
+                        & ~django.db.models.Q(task_instructions="")
                     )
                 ),
-                name="exactly_one_of_fieldset_analyzer_or_agent",
+                name="valid_action_type_configuration",
             )
         ]
         permissions = (
@@ -1039,26 +1040,56 @@ class CorpusAction(BaseOCModel):
             ("comment_corpusaction", "comment corpusaction"),
         )
 
+    @property
+    def is_agent_action(self) -> bool:
+        """Whether this action is an agent-based action (with or without config).
+
+        An action is agent-based if it has an agent_config, or if it has
+        task_instructions without a fieldset or analyzer (lightweight agent).
+
+        Keep in sync with: clean() validation and Meta.constraints
+        (valid_action_type_configuration).
+        """
+        if self.agent_config_id:
+            return True
+        if self.task_instructions and not self.fieldset_id and not self.analyzer_id:
+            return True
+        return False
+
     def clean(self):
-        # Count how many action types are set
-        action_types_set = sum(
-            [
-                self.fieldset is not None,
-                self.analyzer is not None,
-                self.agent_config is not None,
-            ]
-        )
-        if action_types_set > 1:
+        has_fieldset = self.fieldset is not None
+        has_analyzer = self.analyzer is not None
+        has_agent_config = self.agent_config is not None
+        has_task_instructions = bool(self.task_instructions)
+
+        fk_count = sum([has_fieldset, has_analyzer, has_agent_config])
+
+        # Fieldset/analyzer/agent_config are mutually exclusive
+        if fk_count > 1:
             raise ValidationError(
                 "Only one of fieldset, analyzer, or agent_config can be set."
             )
-        if action_types_set == 0:
+
+        # Must have at least one action type
+        if fk_count == 0 and not has_task_instructions:
             raise ValidationError(
-                "One of fieldset, analyzer, or agent_config must be set."
+                "One of fieldset, analyzer, agent_config, or "
+                "task_instructions must be set."
             )
-        # Validate agent_prompt is provided when agent_config is set
-        if self.agent_config and not self.agent_prompt:
-            raise ValidationError("agent_prompt is required when agent_config is set.")
+
+        # task_instructions must not be set on fieldset/analyzer actions
+        if (has_fieldset or has_analyzer) and has_task_instructions:
+            raise ValidationError(
+                "task_instructions cannot be set on fieldset or analyzer actions."
+            )
+
+        # Agent actions (with config) require task_instructions.
+        # Keep in sync with: is_agent_action property and Meta.constraints
+        # (valid_action_type_configuration).
+        if has_agent_config and not has_task_instructions:
+            raise ValidationError(
+                "task_instructions is required for agent-based actions."
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -1069,7 +1100,7 @@ class CorpusAction(BaseOCModel):
             action_type = "Fieldset"
         elif self.analyzer:
             action_type = "Analyzer"
-        elif self.agent_config:
+        elif self.is_agent_action:
             action_type = "Agent"
         else:
             action_type = "Unknown"

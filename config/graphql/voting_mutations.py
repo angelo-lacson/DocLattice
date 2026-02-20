@@ -27,7 +27,6 @@ from opencontractserver.conversations.models import (
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
     set_permissions_for_obj_to_user,
-    user_has_permission_for_obj,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,24 +70,15 @@ class VoteMessageMutation(graphene.Mutation):
                     obj=None,
                 )
 
-            # Get message
+            # Get message with visibility filter to prevent IDOR
             try:
                 message_pk = from_global_id(message_id)[1]
-                chat_message = ChatMessage.objects.get(pk=message_pk)
+                chat_message = ChatMessage.objects.visible_to_user(user).get(
+                    pk=message_pk
+                )
             except ChatMessage.DoesNotExist:
                 return VoteMessageMutation(
                     ok=False, message="Message not found", obj=None
-                )
-
-            # Check if user has permission to read the conversation
-            conversation = chat_message.conversation
-            if not user_has_permission_for_obj(
-                user, conversation, PermissionTypes.READ
-            ):
-                return VoteMessageMutation(
-                    ok=False,
-                    message="You do not have permission to vote on messages in this conversation",
-                    obj=None,
                 )
 
             # Prevent users from voting on their own messages
@@ -155,24 +145,15 @@ class RemoveVoteMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get message
+            # Get message with visibility filter to prevent IDOR
             try:
                 message_pk = from_global_id(message_id)[1]
-                chat_message = ChatMessage.objects.get(pk=message_pk)
+                chat_message = ChatMessage.objects.visible_to_user(user).get(
+                    pk=message_pk
+                )
             except ChatMessage.DoesNotExist:
                 return RemoveVoteMutation(
                     ok=False, message="Message not found", obj=None
-                )
-
-            # Check if user has permission to read the conversation
-            conversation = chat_message.conversation
-            if not user_has_permission_for_obj(
-                user, conversation, PermissionTypes.READ
-            ):
-                return RemoveVoteMutation(
-                    ok=False,
-                    message="You do not have permission to access this conversation",
-                    obj=None,
                 )
 
             # Check if vote exists

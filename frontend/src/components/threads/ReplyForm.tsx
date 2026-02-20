@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useMutation } from "@apollo/client";
 import styled from "styled-components";
-import { X, Quote } from "lucide-react";
+import { X, CornerDownRight } from "lucide-react";
 import {
   CREATE_THREAD_MESSAGE,
   REPLY_TO_MESSAGE,
@@ -20,42 +20,60 @@ import {
 } from "./styles/discussionStyles";
 
 const Container = styled.div`
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
   border-radius: ${CORPUS_RADII.lg};
-  background: ${CORPUS_COLORS.slate[50]};
-  padding: 0.875rem;
+  background: transparent;
+  padding: 0;
 `;
 
-const Header = styled.div`
+const ReplyContext = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-`;
-
-const ReplyingTo = styled.div`
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.375rem;
+  background: ${CORPUS_COLORS.slate[50]};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.8125rem;
-  color: ${CORPUS_COLORS.slate[600]};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[500]};
+  line-height: 1.4;
 
-  strong {
-    color: ${CORPUS_COLORS.teal[700]};
-    font-weight: 600;
+  svg:first-child {
+    width: 0.875rem;
+    height: 0.875rem;
+    color: ${CORPUS_COLORS.teal[500]};
+    flex-shrink: 0;
   }
 `;
 
-const CancelButton = styled.button`
+const ReplyUsername = styled.span`
+  color: ${CORPUS_COLORS.teal[700]};
+  font-weight: 600;
+  flex-shrink: 0;
+`;
+
+const ReplyPreview = styled.span`
+  color: ${CORPUS_COLORS.slate[500]};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+`;
+
+const CancelReplyButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
   border: none;
   border-radius: ${CORPUS_RADII.sm};
   background: transparent;
-  font-family: ${CORPUS_FONTS.sans};
-  color: ${CORPUS_COLORS.slate[500]};
-  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[400]};
   cursor: pointer;
+  flex-shrink: 0;
   transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
@@ -64,68 +82,20 @@ const CancelButton = styled.button`
   }
 
   svg {
-    width: 0.875rem;
-    height: 0.875rem;
+    width: 0.75rem;
+    height: 0.75rem;
   }
 `;
 
 const ErrorMessage = styled.div`
   padding: 0.5rem 0.75rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.375rem;
   background: #fee2e2;
   border: 1px solid #fca5a5;
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
   color: #dc2626;
   font-size: 0.8125rem;
-`;
-
-const QuoteButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.sm};
-  background: ${CORPUS_COLORS.white};
-  font-family: ${CORPUS_FONTS.sans};
-  color: ${CORPUS_COLORS.slate[600]};
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all ${CORPUS_TRANSITIONS.fast};
-  margin-left: auto;
-
-  &:hover {
-    background: ${CORPUS_COLORS.teal[50]};
-    border-color: ${CORPUS_COLORS.teal[300]};
-    color: ${CORPUS_COLORS.teal[700]};
-  }
-
-  svg {
-    width: 0.875rem;
-    height: 0.875rem;
-  }
-`;
-
-const QuotedMessage = styled.div`
-  padding: 0.625rem;
-  margin-bottom: 0.625rem;
-  border-left: 3px solid ${CORPUS_COLORS.teal[400]};
-  background: ${CORPUS_COLORS.slate[100]};
-  border-radius: ${CORPUS_RADII.sm};
-  font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.8125rem;
-  color: ${CORPUS_COLORS.slate[600]};
-  font-style: italic;
-
-  &::before {
-    content: "Quoting:";
-    display: block;
-    font-weight: 600;
-    font-style: normal;
-    margin-bottom: 0.25rem;
-    color: ${CORPUS_COLORS.slate[700]};
-  }
 `;
 
 export interface ReplyFormProps {
@@ -161,7 +131,6 @@ export function ReplyForm({
   corpusId,
 }: ReplyFormProps) {
   const [error, setError] = useState("");
-  const [showQuote, setShowQuote] = useState(false);
 
   // Submission guard to prevent double submissions
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -274,55 +243,37 @@ export function ReplyForm({
     }
   };
 
-  const handleToggleQuote = () => {
-    setShowQuote(!showQuote);
-  };
-
-  // Extract plain text from HTML content for quote
-  const getPlainTextFromHTML = (html: string) => {
+  // Extract plain text from HTML/markdown content for preview
+  const getPlainText = (content: string) => {
     const div = document.createElement("div");
-    div.innerHTML = html;
+    div.innerHTML = content;
     return div.textContent || div.innerText || "";
   };
 
-  const quotedText = parentMessageContent
-    ? getPlainTextFromHTML(parentMessageContent)
+  const previewText = parentMessageContent
+    ? getPlainText(parentMessageContent)
     : "";
 
   return (
     <Container>
       {replyingToUsername && (
-        <Header>
-          <ReplyingTo>
-            Replying to <strong>@{replyingToUsername}</strong>
-          </ReplyingTo>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            {parentMessageContent && (
-              <QuoteButton
-                onClick={handleToggleQuote}
-                title="Quote parent message"
-              >
-                <Quote />
-                {showQuote ? "Hide Quote" : "Quote"}
-              </QuoteButton>
-            )}
-            <CancelButton onClick={onCancel} title="Cancel">
-              <X />
-              Cancel
-            </CancelButton>
-          </div>
-        </Header>
+        <ReplyContext>
+          <CornerDownRight />
+          <ReplyUsername>@{replyingToUsername}</ReplyUsername>
+          {previewText && (
+            <ReplyPreview>
+              {previewText.length > 120
+                ? previewText.substring(0, 120) + "..."
+                : previewText}
+            </ReplyPreview>
+          )}
+          <CancelReplyButton onClick={onCancel} title="Cancel reply">
+            <X />
+          </CancelReplyButton>
+        </ReplyContext>
       )}
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
-
-      {showQuote && quotedText && (
-        <QuotedMessage>
-          {quotedText.length > 200
-            ? quotedText.substring(0, 200) + "..."
-            : quotedText}
-        </QuotedMessage>
-      )}
 
       <MessageComposer
         placeholder={

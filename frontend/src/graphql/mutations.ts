@@ -1023,6 +1023,34 @@ export const DELETE_MULTIPLE_DOCUMENTS = gql`
   }
 `;
 
+export interface RetryDocumentProcessingOutputType {
+  retryDocumentProcessing: {
+    ok: boolean;
+    message: string;
+    document: DocumentType | null;
+  };
+}
+
+export interface RetryDocumentProcessingInputType {
+  documentId: string;
+}
+
+export const RETRY_DOCUMENT_PROCESSING = gql`
+  mutation ($documentId: String!) {
+    retryDocumentProcessing(documentId: $documentId) {
+      ok
+      message
+      document {
+        id
+        backendLock
+        processingStatus
+        processingError
+        canRetry
+      }
+    }
+  }
+`;
+
 export interface NewAnnotationOutputType {
   addAnnotation: {
     ok: boolean;
@@ -2150,7 +2178,7 @@ export const CREATE_CORPUS_ACTION = gql`
     $fieldsetId: ID
     $analyzerId: ID
     $agentConfigId: ID
-    $agentPrompt: String
+    $taskInstructions: String
     $preAuthorizedTools: [String]
     $createAgentInline: Boolean
     $inlineAgentName: String
@@ -2167,7 +2195,7 @@ export const CREATE_CORPUS_ACTION = gql`
       fieldsetId: $fieldsetId
       analyzerId: $analyzerId
       agentConfigId: $agentConfigId
-      agentPrompt: $agentPrompt
+      taskInstructions: $taskInstructions
       preAuthorizedTools: $preAuthorizedTools
       createAgentInline: $createAgentInline
       inlineAgentName: $inlineAgentName
@@ -2198,7 +2226,7 @@ export const CREATE_CORPUS_ACTION = gql`
           name
           description
         }
-        agentPrompt
+        taskInstructions
         preAuthorizedTools
       }
     }
@@ -2212,7 +2240,7 @@ export interface CreateCorpusActionInput {
   fieldsetId?: string;
   analyzerId?: string;
   agentConfigId?: string;
-  agentPrompt?: string;
+  taskInstructions?: string;
   preAuthorizedTools?: string[];
   // Inline agent creation parameters
   createAgentInline?: boolean;
@@ -2260,7 +2288,7 @@ export const UPDATE_CORPUS_ACTION = gql`
     $fieldsetId: ID
     $analyzerId: ID
     $agentConfigId: ID
-    $agentPrompt: String
+    $taskInstructions: String
     $preAuthorizedTools: [String]
     $disabled: Boolean
     $runOnAllCorpuses: Boolean
@@ -2272,7 +2300,7 @@ export const UPDATE_CORPUS_ACTION = gql`
       fieldsetId: $fieldsetId
       analyzerId: $analyzerId
       agentConfigId: $agentConfigId
-      agentPrompt: $agentPrompt
+      taskInstructions: $taskInstructions
       preAuthorizedTools: $preAuthorizedTools
       disabled: $disabled
       runOnAllCorpuses: $runOnAllCorpuses
@@ -2298,7 +2326,7 @@ export const UPDATE_CORPUS_ACTION = gql`
           name
           description
         }
-        agentPrompt
+        taskInstructions
         preAuthorizedTools
       }
     }
@@ -2312,7 +2340,7 @@ export interface UpdateCorpusActionInput {
   fieldsetId?: string;
   analyzerId?: string;
   agentConfigId?: string;
-  agentPrompt?: string;
+  taskInstructions?: string;
   preAuthorizedTools?: string[];
   disabled?: boolean;
   runOnAllCorpuses?: boolean;
@@ -2323,6 +2351,51 @@ export interface UpdateCorpusActionOutput {
     ok: boolean;
     message: string;
     obj: CorpusActionType | null;
+  };
+}
+
+export const RUN_CORPUS_ACTION = gql`
+  mutation RunCorpusAction($corpusActionId: ID!, $documentId: ID!) {
+    runCorpusAction(corpusActionId: $corpusActionId, documentId: $documentId) {
+      ok
+      message
+      obj {
+        id
+        status
+        actionType
+        trigger
+        queuedAt
+        corpusAction {
+          id
+          name
+        }
+        document {
+          id
+          title
+        }
+      }
+    }
+  }
+`;
+
+export interface RunCorpusActionInput {
+  corpusActionId: string;
+  documentId: string;
+}
+
+export interface RunCorpusActionOutput {
+  runCorpusAction: {
+    ok: boolean;
+    message: string;
+    obj: {
+      id: string;
+      status: string;
+      actionType: string;
+      trigger: string;
+      queuedAt: string;
+      corpusAction: { id: string; name: string };
+      document: { id: string; title: string };
+    } | null;
   };
 }
 

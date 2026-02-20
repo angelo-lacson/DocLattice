@@ -21,3 +21,6 @@ class CorpusesConfig(AppConfig):
 
         except ImportError:
             pass
+
+        # Register system checks for embedder consistency (Issue #437).
+        import opencontractserver.corpuses.checks  # noqa: F401

@@ -3,7 +3,6 @@
 import inspect
 import logging
 from collections.abc import Awaitable
-from functools import partial
 from typing import Any, Callable, Optional, get_type_hints
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,25 +15,6 @@ from opencontractserver.llms.vector_stores.core_vector_stores import (
 )
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Async-safe wrapper for synchronous database operations
-# ---------------------------------------------------------------------------
-# When sync tools are registered with PydanticAI agents, they get called from
-# an async context. Django's ORM is not async-safe by default and will raise
-# "You cannot call this from an async context" errors. We use database_sync_to_async
-# (from channels) or sync_to_async (from asgiref) to run sync functions in a
-# thread pool, making them safe to call from async contexts.
-# ---------------------------------------------------------------------------
-
-try:
-    from channels.db import database_sync_to_async as _database_sync_to_async
-
-    _db_sync_to_async = partial(_database_sync_to_async, thread_sensitive=False)
-except ModuleNotFoundError:  # Channels not installed – fall back gracefully
-    from asgiref.sync import sync_to_async as _sync_to_async
-
-    _db_sync_to_async = partial(_sync_to_async, thread_sensitive=False)
 
 
 async def _check_user_permissions(
@@ -64,7 +44,7 @@ async def _check_user_permissions(
     Raises:
         PermissionError: If user lacks READ permission on document or corpus
     """
-    from channels.db import database_sync_to_async
+    from asgiref.sync import sync_to_async
 
     deps = ctx.deps
     if deps is None:
@@ -79,8 +59,6 @@ async def _check_user_permissions(
 
     from opencontractserver.corpuses.models import Corpus
     from opencontractserver.documents.models import Document
-    from opencontractserver.types.enums import PermissionTypes
-    from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
     User = get_user_model()
 
@@ -117,36 +95,35 @@ async def _check_user_permissions(
         raise PermissionError(f"User {user_id} not found")
 
     if document_id:
-        try:
-            doc = await Document.objects.aget(pk=document_id)
-            has_perm = await database_sync_to_async(user_has_permission_for_obj)(
-                user, doc, PermissionTypes.READ
+        # Use visible_to_user() queryset which properly handles creator access,
+        # public status, and guardian permissions — unlike user_has_permission_for_obj
+        # which misses creator-based access (see its docstring warning).
+        # Use Django's native aexists() to avoid thread-hopping via
+        # database_sync_to_async, which breaks under TestCase transaction isolation.
+        has_perm = await sync_to_async(
+            lambda: Document.objects.visible_to_user(user)
+            .filter(pk=document_id)
+            .exists()
+        )()
+        if not has_perm:
+            logger.warning(
+                f"User {user_id} tool access denied - lacks READ on document {document_id}"
             )
-            if not has_perm:
-                logger.warning(
-                    f"User {user_id} tool access denied - lacks READ on document {document_id}"
-                )
-                raise PermissionError(
-                    f"User {user_id} lacks READ permission on document {document_id}"
-                )
-        except Document.DoesNotExist:
-            raise PermissionError(f"Document {document_id} not found")
+            raise PermissionError(
+                f"User {user_id} lacks READ permission on document {document_id}"
+            )
 
     if corpus_id:
-        try:
-            corpus = await Corpus.objects.aget(pk=corpus_id)
-            has_perm = await database_sync_to_async(user_has_permission_for_obj)(
-                user, corpus, PermissionTypes.READ
+        has_perm = await sync_to_async(
+            lambda: Corpus.objects.visible_to_user(user).filter(pk=corpus_id).exists()
+        )()
+        if not has_perm:
+            logger.warning(
+                f"User {user_id} tool access denied - lacks READ on corpus {corpus_id}"
             )
-            if not has_perm:
-                logger.warning(
-                    f"User {user_id} tool access denied - lacks READ on corpus {corpus_id}"
-                )
-                raise PermissionError(
-                    f"User {user_id} lacks READ permission on corpus {corpus_id}"
-                )
-        except Corpus.DoesNotExist:
-            raise PermissionError(f"Corpus {corpus_id} not found")
+            raise PermissionError(
+                f"User {user_id} lacks READ permission on corpus {corpus_id}"
+            )
 
 
 def _validate_resource_id_params(
@@ -383,9 +360,20 @@ class PydanticAIToolWrapper:
 
                 try:
                     return await original_func(*args, **kwargs)
-                except Exception as e:
-                    logger.error(f"Error in tool {func_name}: {e}")
+                except (PermissionError, ToolConfirmationRequired):
+                    # Security and approval exceptions must propagate to the
+                    # agent loop so they can be handled at the framework level.
                     raise
+                except Exception as e:
+                    # Operational errors (bad input, missing data, network
+                    # failures, etc.) are caught and returned as a descriptive
+                    # string so the LLM can inform the user gracefully instead
+                    # of crashing the entire agent loop.  See issue #820.
+                    logger.error(f"Error in tool {func_name}: {e}")
+                    return (
+                        f"[Tool error] {func_name} failed: {e}. "
+                        "Please inform the user and suggest alternatives."
+                    )
 
             # Set proper metadata
             async_wrapper.__name__ = func_name
@@ -393,7 +381,11 @@ class PydanticAIToolWrapper:
             async_wrapper.__signature__ = new_sig
             # Ensure the injected ``ctx`` parameter has a proper annotation so
             # that Pydantic-AI's `_takes_ctx` helper can detect it.
-            _anns = dict(getattr(original_func, "__annotations__", {}))
+            _anns = {
+                k: v
+                for k, v in getattr(original_func, "__annotations__", {}).items()
+                if k not in self.inject_params
+            }
             _anns.setdefault("ctx", RunContext[PydanticAIDependencies])
             async_wrapper.__annotations__ = _anns
             # Attach reference to the wrapper for approval checking
@@ -403,53 +395,49 @@ class PydanticAIToolWrapper:
             async_wrapper.requires_approval = self.core_tool.requires_approval
             return async_wrapper
         else:
-            # Convert sync function to async using database_sync_to_async
-            # This wraps the sync function to run in a thread pool, making it
-            # safe to call Django ORM operations from async contexts
-            async_original_func = _db_sync_to_async(original_func)
+            # Sync tools are called directly (no thread pool).  All
+            # production tools are async; this path exists only for
+            # lightweight helpers and tests.  If a sync tool touches
+            # Django ORM it will raise SynchronousOnlyOperation — the
+            # fix is to make the tool async, not to paper over it.
 
-            async def sync_to_async_wrapper(
+            async def sync_wrapper(
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
             ):
-                """Sync to async wrapper for PydanticAI tools."""
-                # Inject context-bound parameters before any other processing.
-                # These params are hidden from the LLM and set deterministically.
+                """Wrapper that calls a sync tool from an async context."""
                 for param_name, value in self.inject_params.items():
                     kwargs[param_name] = value
 
-                # Defense-in-depth: validate user permissions BEFORE any tool execution
-                # This prevents permission escalation via agents
                 await _check_user_permissions(ctx)
-
-                # Defense-in-depth: validate resource ID params match context
-                # This prevents prompt injection attacks that try to access other resources
-                # (Also validates injected params match deps as additional safety check)
                 _validate_resource_id_params(ctx, **kwargs)
-
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
-                    return await async_original_func(*args, **kwargs)
+                    return original_func(*args, **kwargs)
+                except (PermissionError, ToolConfirmationRequired):
+                    raise
                 except Exception as e:
                     logger.error(f"Error in tool {func_name}: {e}")
-                    raise
+                    return (
+                        f"[Tool error] {func_name} failed: {e}. "
+                        "Please inform the user and suggest alternatives."
+                    )
 
-            # Set proper metadata
-            sync_to_async_wrapper.__name__ = func_name
-            sync_to_async_wrapper.__doc__ = (
-                original_func.__doc__ or self._metadata.description
-            )
-            sync_to_async_wrapper.__signature__ = new_sig
-            _anns_sync = dict(getattr(original_func, "__annotations__", {}))
+            sync_wrapper.__name__ = func_name
+            sync_wrapper.__doc__ = original_func.__doc__ or self._metadata.description
+            sync_wrapper.__signature__ = new_sig
+            _anns_sync = {
+                k: v
+                for k, v in getattr(original_func, "__annotations__", {}).items()
+                if k not in self.inject_params
+            }
             _anns_sync.setdefault("ctx", RunContext[PydanticAIDependencies])
-            sync_to_async_wrapper.__annotations__ = _anns_sync
-            # Attach reference to the wrapper for approval checking
-            sync_to_async_wrapper._pydantic_ai_wrapper = self
-            sync_to_async_wrapper.core_tool = self.core_tool
-            # Attach requires_approval directly for easy access by _check_tool_requires_approval
-            sync_to_async_wrapper.requires_approval = self.core_tool.requires_approval
+            sync_wrapper.__annotations__ = _anns_sync
+            sync_wrapper._pydantic_ai_wrapper = self
+            sync_wrapper.core_tool = self.core_tool
+            sync_wrapper.requires_approval = self.core_tool.requires_approval
 
-            return sync_to_async_wrapper
+            return sync_wrapper
 
     @property
     def name(self) -> str:

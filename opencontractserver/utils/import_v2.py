@@ -4,11 +4,13 @@ Import utilities for V2 corpus import format.
 Handles import of new features added since original import design:
 - Structural annotation sets (with deduplication)
 - Corpus folders (reconstruct hierarchy)
-- DocumentPath version trees (preserve history)
-- Relationships (with ID mapping)
 - Agent configurations
 - Markdown descriptions with revisions
 - Conversations and messages (optional)
+
+Note: DocumentPath creation is handled by corpus.add_document() and
+corpus-level relationship import is handled by _import_v2_relationships
+in import_tasks_v2.py.
 """
 
 from __future__ import annotations
@@ -31,13 +33,10 @@ from opencontractserver.corpuses.models import (
     CorpusDescriptionRevision,
     CorpusFolder,
 )
-from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.types.dicts import (
     AgentConfigExport,
     CorpusFolderExport,
     DescriptionRevisionExport,
-    DocumentPathExport,
-    OpenContractsRelationshipPythonType,
     StructuralAnnotationSetExport,
 )
 
@@ -247,159 +246,6 @@ def import_corpus_folders(
         logger.error(f"Error importing folders: {e}")
 
     return folder_map
-
-
-def import_document_paths(
-    paths_data: list[DocumentPathExport],
-    corpus: Corpus,
-    document_map: dict[str, Document],
-    folder_map: dict[str, CorpusFolder],
-    user_obj: User,
-) -> None:
-    """
-    Import DocumentPath version trees.
-
-    Reconstructs complete version history preserving parent relationships.
-
-    Args:
-        paths_data: List of DocumentPathExport dicts
-        corpus: Target Corpus instance
-        document_map: Mapping of document references to Document instances
-        folder_map: Mapping of folder paths to CorpusFolder instances
-        user_obj: User performing import
-    """
-    try:
-        # Sort by path and version number to ensure proper order
-        sorted_paths = sorted(
-            paths_data, key=lambda p: (p["path"], p["version_number"])
-        )
-
-        # Track created paths for parent lookup
-        path_map = {}  # (path, version_number) -> DocumentPath
-
-        for path_data in sorted_paths:
-            doc_ref = path_data["document_ref"]
-            document = document_map.get(doc_ref)
-
-            if not document:
-                logger.warning(f"Document {doc_ref} not found, skipping path")
-                continue
-
-            # Get folder if specified
-            folder = None
-            folder_path = path_data.get("folder_path")
-            if folder_path:
-                # Find folder by path
-                folder = (
-                    CorpusFolder.objects.filter(corpus=corpus)
-                    .filter(
-                        # Match by reconstructing path
-                    )
-                    .first()
-                )
-                # Simplified: use folder_map if we have exact match
-                for fpath, fobj in folder_map.items():
-                    if fobj.get_path() == folder_path:
-                        folder = fobj
-                        break
-
-            # Get parent DocumentPath if specified
-            parent_path = None
-            parent_version = path_data.get("parent_version_number")
-            if parent_version is not None:
-                path_key = (path_data["path"], parent_version)
-                parent_path = path_map.get(path_key)
-
-            # Create DocumentPath
-            doc_path = DocumentPath.objects.create(
-                document=document,
-                corpus=corpus,
-                folder=folder,
-                path=path_data["path"],
-                version_number=path_data["version_number"],
-                parent=parent_path,
-                is_current=path_data.get("is_current", True),
-                is_deleted=path_data.get("is_deleted", False),
-                creator=user_obj,
-            )
-
-            # Track for parent lookup
-            path_key = (path_data["path"], path_data["version_number"])
-            path_map[path_key] = doc_path
-
-            logger.info(
-                f"Created DocumentPath: {doc_path.path} v{doc_path.version_number}"
-            )
-
-    except Exception as e:
-        logger.error(f"Error importing document paths: {e}")
-
-
-def import_relationships(
-    relationships_data: list[OpenContractsRelationshipPythonType],
-    corpus: Corpus,
-    document_map: dict[str, Document],
-    annot_id_map: dict[str, int],
-    label_lookup: dict,
-    user_obj: User,
-) -> None:
-    """
-    Import relationships with ID mapping.
-
-    Args:
-        relationships_data: List of relationship dicts
-        corpus: Target Corpus instance
-        document_map: Mapping of document references to Documents
-        annot_id_map: Mapping of old annotation IDs to new IDs
-        label_lookup: Mapping of label text to AnnotationLabel instances
-        user_obj: User performing import
-    """
-    try:
-        for rel_data in relationships_data:
-            label_text = rel_data.get("relationshipLabel", "")
-            label_obj = label_lookup.get(label_text)
-
-            if not label_obj:
-                logger.warning(f"Relationship label '{label_text}' not found")
-                continue
-
-            # Skip structural relationships (handled by structural sets)
-            if rel_data.get("structural"):
-                continue
-
-            # Map annotation IDs
-            source_ids = [
-                annot_id_map.get(str(old_id))
-                for old_id in rel_data.get("source_annotation_ids", [])
-                if str(old_id) in annot_id_map
-            ]
-            target_ids = [
-                annot_id_map.get(str(old_id))
-                for old_id in rel_data.get("target_annotation_ids", [])
-                if str(old_id) in annot_id_map
-            ]
-
-            if source_ids and target_ids:
-                # Get document from first source annotation
-                from opencontractserver.annotations.models import Annotation
-
-                first_source_annot = Annotation.objects.get(id=source_ids[0])
-                document = first_source_annot.document
-
-                rel = Relationship.objects.create(
-                    corpus=corpus,
-                    document=document,
-                    relationship_label=label_obj,
-                    structural=False,
-                    creator=user_obj,
-                )
-                rel.source_annotations.set(source_ids)
-                rel.target_annotations.set(target_ids)
-
-                logger.info(f"Created relationship with label '{label_text}'")
-
-    except Exception as e:
-        logger.error(f"Error importing relationships: {e}")
 
 
 def import_agent_config(

@@ -1,5 +1,7 @@
 # Comprehensive Guide to Document Analyzers
 
+Last Updated: 2026-01-09
+
 ## Overview
 OpenContracts supports document analyzers that run as Celery tasks within the main application. These analyzers can automatically process documents and create annotations.
 
@@ -76,23 +78,24 @@ analyzer = Analyzer.objects.create(
   analysis_id: str   # Analysis record ID
   corpus_id: str     # Optional corpus ID
   ```
-- Must return a tuple of four elements:
-  ```python
-  (
-      doc_annotations: List[str],  # Document-level labels
-      span_label_pairs: List[Tuple[TextSpan, str]],  # Text annotations with labels
-      metadata: List[Dict[str, Any]],  # Must include 'data' key
-      task_pass: bool  # Success indicator
-  )
-  ```
+- Must return a tuple of **4 or 5 elements**:
+  - **4-element return** (default message "No Return Message"):
+    ```python
+    (doc_annotations, span_label_pairs, metadata, task_pass)
+    ```
+  - **5-element return** (with custom message):
+    ```python
+    (doc_annotations, span_label_pairs, metadata, task_pass, message)
+    ```
 
-### Example Implementation
-```python
-@doc_analyzer_task()
-def my_analyzer_task(doc_id, analysis_id, corpus_id=None, **kwargs):
-    # Task implementation
-    return [], [], [{"data": results}], True
-```
+  Where:
+  - `doc_annotations: List[str]` - Document-level labels
+  - `span_label_pairs: List[Tuple[TextSpan, str]]` - Text annotations with labels
+  - `metadata: List[Dict[str, Any]]` - Must include 'data' key
+  - `task_pass: bool` - Success indicator
+  - `message: str` (optional) - Stored in `Analysis.result_message` (on success) or `Analysis.error_message` (on failure)
+
+For complete implementation details, see the decorator source at [`opencontractserver/shared/decorators.py`](../../opencontractserver/shared/decorators.py) and the detailed walkthrough at [`docs/walkthrough/advanced/register-doc-analyzer.md`](../walkthrough/advanced/register-doc-analyzer.md).
 
 ### Validation Rules
 - Task name must be unique

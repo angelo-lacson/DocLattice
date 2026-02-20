@@ -1,6 +1,6 @@
 # @ Mention Permissioning Specification
 
-**Last Updated:** 2025-11-09
+**Last Updated:** 2026-01-09
 **Feature:** Issue #623 - Global Discussions + @ Mentions
 **Status:** Specification Draft for Review
 
@@ -547,10 +547,12 @@ test("renders mention as chip when user has permission", () => {
 - [x] Update `resolve_search_corpuses_for_mention` to use write permission filtering
 - [x] Update `resolve_search_documents_for_mention` to use write permission + public document filtering
 - [x] Implement `resolve_mentioned_resources` on `MessageType` with viewer-based filtering (already exists)
-- [x] Add backend tests for mention permission filtering (**18/18 tests passing**)
-  - `CorpusMentionPermissionTestCase`: 8 tests (creator, contributor, update, delete, viewer, outsider, superuser, public)
-  - `DocumentMentionPermissionTestCase`: 7 tests (owner, corpus write, document write, viewer blocked, outsider blocked, public docs, superuser)
-  - `MentionIDORProtectionTestCase`: 3 tests (corpus IDOR, document IDOR, empty results)
+- [x] Add backend tests for mention permission filtering (**31 tests total** in `opencontractserver/tests/test_mention_permissions.py`)
+  - `CorpusMentionPermissionTestCase`: 8 tests (owner, contributor with UPDATE, viewer read-only blocked, outsider blocked, anonymous blocked, superuser, CREATE allows, DELETE allows)
+  - `DocumentMentionPermissionTestCase`: 7 tests (owner all docs, corpus write grants doc mention, doc write allows mention, viewer read-only blocked, public docs mentionable, anonymous blocked, superuser)
+  - `MentionIDORProtectionTestCase`: 3 tests (corpus IDOR, document IDOR, empty results indistinguishable)
+  - `CorpusScopedMentionSearchTestCase`: 9 tests (document search scoped to corpus A/B, without corpus returns all, annotation search scoped, invalid corpus returns empty)
+  - `AgentMentionCorpusScopingTestCase`: 4 tests (agent search scoped returns global + corpus agents, without corpus returns all, anonymous blocked)
 - [x] Add backend tests for mention rendering with different viewer permissions (covered in IDOR tests)
 
 ### Frontend Updates

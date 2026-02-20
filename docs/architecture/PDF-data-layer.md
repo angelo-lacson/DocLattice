@@ -8,20 +8,23 @@ OpenContracts uses a modern, pluggable document processing pipeline that has evo
 
 ### Parser Pipeline System
 
-OpenContracts implements a modular pipeline architecture with three main parser options:
+OpenContracts implements a modular pipeline architecture with four main parser options:
 
 1. **Docling Parser (Primary)** - IBM's advanced ML-based parser running as a REST microservice
+   - Source: [`opencontractserver/pipeline/parsers/docling_parser_rest.py`](../../opencontractserver/pipeline/parsers/docling_parser_rest.py)
    - Superior layout understanding and table extraction
    - Intelligent OCR with automatic detection
    - Hierarchical document structure extraction
    - Group relationship detection for contract clauses
 
 2. **LlamaParse Parser** - Cloud-based parser using LlamaIndex API
+   - Source: [`opencontractserver/pipeline/parsers/llamaparse_parser.py`](../../opencontractserver/pipeline/parsers/llamaparse_parser.py)
    - High-quality layout extraction
    - Automatic OCR support
    - Good for complex document structures
 
 3. **Text Parser** - Simple parser for plain text and markdown files
+   - Source: [`opencontractserver/pipeline/parsers/oc_text_parser.py`](../../opencontractserver/pipeline/parsers/oc_text_parser.py)
    - Direct text extraction
    - Minimal processing overhead
    - Preserves original formatting
@@ -82,10 +85,12 @@ graph LR
     B --> C[Docling REST API]
     B --> D[LlamaParse API]
     B --> E[Text Parser]
+    B --> P[LlamaParse API]
 
     C --> F[PAWLs Generation]
     D --> F
     E --> F
+    P --> F
 
     F --> G[Text Extraction]
     F --> H[Annotation Creation]
@@ -128,8 +133,14 @@ Despite the architectural evolution, OpenContracts maintains full compatibility:
 
 ## Configuration
 
-Parsers are configured in Django settings:
+Parsers are configured in Django settings. See the base settings file for current defaults.
 
+**Available Parser Classes:**
+- `opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser` - Primary ML-based parser
+- `opencontractserver.pipeline.parsers.oc_text_parser.TxtParser` - Plain text parser
+- `opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser` - LlamaIndex cloud parser
+
+**Example Configuration:**
 ```python
 PREFERRED_PARSERS = {
     "application/pdf": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser",

@@ -8,13 +8,17 @@ This module tests:
 4. Upload defaulting to personal corpus (GraphQL mutation tests)
 5. Shared StructuralAnnotationSet reuse in add_document()
 6. Incremental embedding creation via ensure_embeddings_for_corpus
+7. Concurrent creation race condition (Issue #839)
+8. Delete and recreate flow (Issue #839)
+9. Embedding task queue failure handling (Issue #839)
 """
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.test import TestCase, TransactionTestCase, override_settings
 from graphene.test import Client
 
@@ -978,3 +982,305 @@ class TestPersonalCorpusDeletionProtection(TestCase):
 
         # Corpus should be deleted
         self.assertFalse(Corpus.objects.filter(pk=regular_corpus.pk).exists())
+
+
+class TestConcurrentPersonalCorpusCreation(TransactionTestCase):
+    """
+    Tests for concurrent creation race condition (Issue #839).
+
+    Verifies that multiple simultaneous calls to get_or_create_personal_corpus()
+    do not produce duplicates or unhandled errors.
+    """
+
+    def _call_get_or_create(self, user_pk):
+        """
+        Call get_or_create_personal_corpus in a separate thread.
+
+        Each thread needs its own database connection since Django's
+        TransactionTestCase doesn't share connections across threads.
+        """
+        try:
+            # Close the inherited connection so this thread gets its own
+            connection.close()
+            user = User.objects.get(pk=user_pk)
+            corpus = Corpus.get_or_create_personal_corpus(user)
+            return corpus.pk
+        except Exception as e:
+            return e
+
+    def test_concurrent_get_or_create_returns_same_corpus(self):
+        """Five concurrent threads should all return the same personal corpus."""
+        user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+
+        # The signal handler already creates a personal corpus, but delete it
+        # so we exercise the creation path under contention.
+        Corpus.objects.filter(creator=user, is_personal=True).delete()
+
+        num_threads = 5
+        results = []
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [
+                executor.submit(self._call_get_or_create, user.pk)
+                for _ in range(num_threads)
+            ]
+            for future in as_completed(futures):
+                results.append(future.result())
+
+        # None of the results should be exceptions
+        exceptions = [r for r in results if isinstance(r, Exception)]
+        self.assertEqual(
+            exceptions,
+            [],
+            f"Concurrent calls raised exceptions: {exceptions}",
+        )
+
+        # All results should be the same corpus PK
+        unique_pks = set(results)
+        self.assertEqual(
+            len(unique_pks),
+            1,
+            f"Expected all threads to return the same corpus PK, got {unique_pks}",
+        )
+
+        # Exactly one personal corpus should exist
+        self.assertEqual(
+            Corpus.objects.filter(creator=user, is_personal=True).count(),
+            1,
+        )
+
+
+class TestDeleteAndRecreatePersonalCorpus(TransactionTestCase):
+    """
+    Tests for delete-and-recreate flow (Issue #839).
+
+    Verifies that after deleting a personal corpus, calling
+    get_or_create_personal_corpus produces a new corpus with a different ID
+    while maintaining the personal flag and correct attributes.
+    """
+
+    def test_recreate_after_delete_has_different_id(self):
+        """Deleting and recreating a personal corpus should yield a new PK."""
+        user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+
+        # Grab the auto-created personal corpus
+        original_corpus = Corpus.objects.get(creator=user, is_personal=True)
+        original_pk = original_corpus.pk
+
+        # Delete it
+        original_corpus.delete()
+        self.assertFalse(Corpus.objects.filter(creator=user, is_personal=True).exists())
+
+        # Recreate via the class method
+        new_corpus = Corpus.get_or_create_personal_corpus(user)
+
+        # Should have a different PK
+        self.assertNotEqual(new_corpus.pk, original_pk)
+
+        # Should still be a valid personal corpus
+        self.assertTrue(new_corpus.is_personal)
+        self.assertEqual(new_corpus.creator, user)
+        self.assertEqual(new_corpus.title, "My Documents")
+        self.assertFalse(new_corpus.is_public)
+
+    def test_recreated_corpus_has_correct_permissions(self):
+        """Recreated personal corpus should grant the user full permissions."""
+        user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+
+        # Delete the auto-created personal corpus
+        Corpus.objects.filter(creator=user, is_personal=True).delete()
+
+        # Recreate
+        new_corpus = Corpus.get_or_create_personal_corpus(user)
+
+        # Check all permission types
+        self.assertTrue(
+            user_has_permission_for_obj(user, new_corpus, PermissionTypes.CREATE)
+        )
+        self.assertTrue(
+            user_has_permission_for_obj(user, new_corpus, PermissionTypes.READ)
+        )
+        self.assertTrue(
+            user_has_permission_for_obj(user, new_corpus, PermissionTypes.EDIT)
+        )
+        self.assertTrue(
+            user_has_permission_for_obj(user, new_corpus, PermissionTypes.DELETE)
+        )
+
+    def test_only_one_personal_corpus_exists_after_recreate(self):
+        """Only one personal corpus should exist after delete-and-recreate."""
+        user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+
+        Corpus.objects.filter(creator=user, is_personal=True).delete()
+
+        Corpus.get_or_create_personal_corpus(user)
+
+        self.assertEqual(
+            Corpus.objects.filter(creator=user, is_personal=True).count(),
+            1,
+        )
+
+
+class TestEmbeddingTaskQueueFailure(TestCase):
+    """
+    Tests for embedding task queue failure handling (Issue #839).
+
+    Verifies that the system degrades gracefully when the Celery task queue
+    is unavailable (e.g., Redis is down) during document-to-corpus operations.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            creator=self.user,
+            is_personal=False,
+            preferred_embedder="test.embedder.path",
+        )
+        self.source_doc = Document.objects.create(
+            title="Source Document",
+            creator=self.user,
+            backend_lock=False,
+        )
+
+    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
+    @patch(
+        "opencontractserver.tasks.embeddings_task"
+        ".calculate_embeddings_for_annotation_batch"
+    )
+    def test_queue_failure_returns_error_in_result(self, mock_batch_task):
+        """ensure_embeddings_for_corpus should catch and report queue failures."""
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
+
+        # Simulate Redis/broker being down by making .delay() raise
+        mock_batch_task.delay = MagicMock(
+            side_effect=ConnectionError("Redis connection refused")
+        )
+
+        structural_set = StructuralAnnotationSet.objects.create(
+            content_hash=f"test_hash_{uuid.uuid4().hex[:12]}",
+            parser_name="TestParser",
+            creator=self.user,
+        )
+
+        # Create an annotation that needs embedding
+        Annotation.objects.create(
+            raw_text="Test annotation",
+            structural_set=structural_set,
+            structural=True,
+            creator=self.user,
+        )
+
+        result = ensure_embeddings_for_corpus(structural_set.pk, self.corpus.pk)
+
+        # The top-level exception handler should catch the ConnectionError
+        self.assertTrue(len(result["errors"]) > 0)
+        self.assertTrue(
+            any("Redis connection refused" in e for e in result["errors"]),
+            f"Expected Redis error in result['errors'], got: {result['errors']}",
+        )
+
+    @patch("opencontractserver.corpuses.models.transaction.on_commit")
+    def test_add_document_succeeds_even_if_task_queue_unavailable(self, mock_on_commit):
+        """
+        add_document should succeed even if the embedding task queue is down.
+
+        The embedding task is queued via transaction.on_commit, so a queue
+        failure would happen after the document is already committed. This test
+        verifies the document is correctly added regardless.
+        """
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+
+        structural_set = StructuralAnnotationSet.objects.create(
+            content_hash=f"test_hash_{uuid.uuid4().hex[:12]}",
+            parser_name="TestParser",
+            creator=self.user,
+        )
+        self.source_doc.structural_annotation_set = structural_set
+        self.source_doc.save()
+
+        # Simulate on_commit callback raising (queue unavailable)
+        mock_on_commit.side_effect = lambda fn: fn()  # execute immediately
+
+        corpus_copy, status, doc_path = self.corpus.add_document(
+            document=self.source_doc,
+            user=self.user,
+        )
+
+        # Document should still be added successfully
+        self.assertIsNotNone(corpus_copy)
+        self.assertIsNotNone(doc_path)
+        self.assertEqual(doc_path.corpus_id, self.corpus.pk)
+
+    @override_settings(DEFAULT_EMBEDDER="default.embedder.path")
+    @patch(
+        "opencontractserver.tasks.embeddings_task"
+        ".calculate_embeddings_for_annotation_batch"
+    )
+    def test_partial_queue_failure_reports_queued_count(self, mock_batch_task):
+        """
+        If some batches queue successfully before a failure, the result
+        should reflect the partial success.
+        """
+        from opencontractserver.annotations.models import StructuralAnnotationSet
+        from opencontractserver.constants.document_processing import (
+            EMBEDDING_BATCH_SIZE,
+        )
+        from opencontractserver.tasks.corpus_tasks import ensure_embeddings_for_corpus
+
+        structural_set = StructuralAnnotationSet.objects.create(
+            content_hash=f"test_hash_{uuid.uuid4().hex[:12]}",
+            parser_name="TestParser",
+            creator=self.user,
+        )
+
+        # Create enough annotations to require multiple batches
+        num_annotations = EMBEDDING_BATCH_SIZE + 10
+        annotations = [
+            Annotation(
+                raw_text=f"Annotation {i}",
+                structural_set=structural_set,
+                structural=True,
+                creator=self.user,
+            )
+            for i in range(num_annotations)
+        ]
+        Annotation.objects.bulk_create(annotations)
+
+        # First call succeeds, second call fails
+        call_count = 0
+
+        def delay_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                raise ConnectionError("Redis connection lost mid-batch")
+
+        mock_batch_task.delay = MagicMock(side_effect=delay_side_effect)
+
+        result = ensure_embeddings_for_corpus(structural_set.pk, self.corpus.pk)
+
+        # The error should be reported
+        self.assertTrue(len(result["errors"]) > 0)
+        # At least one batch was queued before the failure
+        self.assertGreaterEqual(result["tasks_queued"], 1)

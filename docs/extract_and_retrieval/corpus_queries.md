@@ -17,13 +17,13 @@ Corpus queries are served **live** over Django Channels WebSockets, providing:
 ### End-to-End Flow
 
 ```python
-# From config/websocket/consumers/corpus_conversation.py
-class CorpusQueryConsumer(AsyncWebsocketConsumer):
-    """Streams answers for questions about an entire corpus."""
+# From config/websocket/consumers/unified_agent_conversation.py
+class UnifiedAgentConsumer(AsyncWebsocketConsumer):
+    """Unified consumer for all agent conversation contexts (corpus, document, standalone)."""
 ```
 
-1. **Client → Server**: React frontend opens `wss://…/ws/corpus/<globalId>/` and sends `{ "query": "…" }`
-2. **Authentication**: `CorpusQueryConsumer.connect` authenticates user and resolves Corpus
+1. **Client → Server**: React frontend opens `wss://…/ws/agent-chat/?corpus_id=<globalId>` and sends `{ "query": "…" }`
+2. **Authentication**: `UnifiedAgentConsumer.connect` authenticates user and resolves Corpus
 3. **Agent Initialization**: Consumer lazily creates a `CoreAgent` via `opencontractserver.llms.agents.for_corpus(...)`
 4. **Framework Selection**: Agent uses `UnifiedVectorStoreFactory` and framework from `settings.LLMS_DEFAULT_AGENT_FRAMEWORK`
 5. **Streaming Response**: LLM streams answer with incremental `ASYNC_*` messages to UI
