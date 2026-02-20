@@ -682,16 +682,17 @@ describe("buildQueryParams() with tab and message", () => {
 });
 
 describe("updateTabParam()", () => {
-  it("should set tab parameter and push (not replace) history", () => {
+  it("should set tab parameter and replace (not push) history", () => {
     const mockNavigate = vi.fn();
     const location = { search: "" };
 
     updateTabParam(location, mockNavigate, "discussions");
 
-    // Should push, not replace, for proper browser back/forward
-    expect(mockNavigate).toHaveBeenCalledWith({ search: "tab=discussions" });
-    // Verify no second argument (no { replace: true })
-    expect(mockNavigate.mock.calls[0]).toHaveLength(1);
+    // Should replace so tab switches don't accumulate history entries
+    expect(mockNavigate).toHaveBeenCalledWith(
+      { search: "tab=discussions" },
+      { replace: true }
+    );
   });
 
   it("should preserve non-tab-specific parameters when adding tab", () => {
@@ -723,7 +724,10 @@ describe("updateTabParam()", () => {
 
     updateTabParam(location, mockNavigate, "documents");
 
-    expect(mockNavigate).toHaveBeenCalledWith({ search: "tab=documents" });
+    expect(mockNavigate).toHaveBeenCalledWith(
+      { search: "tab=documents" },
+      { replace: true }
+    );
   });
 
   it("should clear thread param when switching tabs", () => {
