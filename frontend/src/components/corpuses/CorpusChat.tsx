@@ -865,6 +865,27 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   } | null>(null);
   const [showApprovalModal, setShowApprovalModal] = useState<boolean>(false);
 
+  /**
+   * Update approval status on a message in both chat and serverMessages arrays.
+   * Mirrors the updateMessageApprovalStatus helper in ChatTray / useAgentChat.
+   */
+  const updateMessageApprovalStatus = useCallback(
+    (
+      messageId: string,
+      status: "awaiting" | "approved" | "rejected",
+      opts?: { isComplete?: boolean }
+    ): void => {
+      const patch: Partial<ChatMessageProps> = { approvalStatus: status };
+      if (opts?.isComplete) patch.isComplete = true;
+
+      const mapper = (msg: ChatMessageProps) =>
+        msg.messageId === messageId ? { ...msg, ...patch } : msg;
+      setChat((prev) => prev.map(mapper));
+      setServerMessages((prev) => prev.map(mapper));
+    },
+    [setChat, setServerMessages]
+  );
+
   // Query for listing CORPUS conversations
   const {
     data,
@@ -1071,20 +1092,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               setShowApprovalModal(true);
 
               // Mark the message as awaiting approval
-              setChat((prev) =>
-                prev.map((msg) =>
-                  msg.messageId === data.message_id
-                    ? { ...msg, approvalStatus: "awaiting" as const }
-                    : msg
-                )
-              );
-              setServerMessages((prev) =>
-                prev.map((msg) =>
-                  msg.messageId === data.message_id
-                    ? { ...msg, approvalStatus: "awaiting" as const }
-                    : msg
-                )
-              );
+              updateMessageApprovalStatus(data.message_id, "awaiting");
             }
             break;
           case "ASYNC_APPROVAL_RESULT":
@@ -1096,20 +1104,10 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               setPendingApproval(null);
               setShowApprovalModal(false);
               if (data?.decision) {
-                const status = data.decision as "approved" | "rejected";
-                setChat((prev) =>
-                  prev.map((msg) =>
-                    msg.messageId === data.message_id
-                      ? { ...msg, approvalStatus: status, isComplete: true }
-                      : msg
-                  )
-                );
-                setServerMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.messageId === data.message_id
-                      ? { ...msg, approvalStatus: status, isComplete: true }
-                      : msg
-                  )
+                updateMessageApprovalStatus(
+                  data.message_id,
+                  data.decision as "approved" | "rejected",
+                  { isComplete: true }
                 );
               }
             }

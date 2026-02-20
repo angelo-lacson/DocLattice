@@ -252,7 +252,7 @@ class AgentConfig:
 
     # Basic configuration
     user_id: Optional[int] = None
-    model_name: str = "gpt-4o-mini"
+    model_name: str = "gpt-4o"
     api_key: Optional[str] = None
     embedder_path: Optional[str] = None
     similarity_top_k: int = 10
@@ -282,6 +282,12 @@ class AgentConfig:
     # Context guardrails — controls conversation compaction and tool output
     # truncation.  Defaults are sourced from the constants module.
     compaction: CompactionConfig = field(default_factory=CompactionConfig)
+
+    # Transient flag set by resume_with_approval() so that sub-agent closures
+    # (e.g. ask_document_tool) can bypass nested approval gates after the user
+    # has already approved.  Safe to mutate: AgentConfig is instantiated
+    # per-request via UnifiedAgentFactory, never shared across sessions.
+    _approval_bypass_allowed: bool = False
 
 
 @dataclass
@@ -1309,6 +1315,7 @@ class CoreConversationManager:
             data={
                 "state": MessageState.IN_PROGRESS,
                 "created_at": timezone.now().isoformat(),
+                "model_name": self.config.model_name,
             },
             state=MessageState.IN_PROGRESS,
         )
@@ -1345,6 +1352,7 @@ class CoreConversationManager:
 
         data = message.data or {}
         data["completed_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
@@ -1407,6 +1415,7 @@ class CoreConversationManager:
         data = {
             "state": MessageState.COMPLETED,
             "created_at": timezone.now().isoformat(),
+            "model_name": self.config.model_name,
         }
 
         if sources:
@@ -1442,6 +1451,7 @@ class CoreConversationManager:
 
         data = message.data or {}
         data["updated_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
@@ -1473,6 +1483,7 @@ class CoreConversationManager:
         data = message.data or {}
         data["error"] = error
         data["errored_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
         message.data = data
 
         await message.asave()
@@ -1481,14 +1492,15 @@ class CoreConversationManager:
 def get_default_config(**overrides) -> AgentConfig:
     """Get default agent configuration with optional overrides."""
     defaults = {
-        "model_name": "gpt-4o-mini",
+        "model_name": getattr(settings, "OPENAI_MODEL", "gpt-4o"),
         "api_key": getattr(settings, "OPENAI_API_KEY", None),
         "similarity_top_k": 10,
         "streaming": True,
         "verbose": True,
         "temperature": 0.7,
     }
-    defaults.update(overrides)
+    # Filter out None values so callers can't accidentally clobber defaults
+    defaults.update({k: v for k, v in overrides.items() if v is not None})
     return AgentConfig(**defaults)
 
 

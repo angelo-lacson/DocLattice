@@ -303,7 +303,7 @@ class CorpusActionExecutionBulkOpsTestCase(TestCase):
             name="Agent Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -780,7 +780,7 @@ class PackageActionTrailTestCase(TestCase):
             name="Agent Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -790,7 +790,7 @@ class PackageActionTrailTestCase(TestCase):
         self.assertEqual(len(result["actions"]), 1)
         self.assertEqual(result["actions"][0]["action_type"], "agent")
         self.assertEqual(
-            result["actions"][0]["agent_prompt"], "Summarize this document"
+            result["actions"][0]["task_instructions"], "Summarize this document"
         )
 
     def test_package_action_trail_with_executions(self):

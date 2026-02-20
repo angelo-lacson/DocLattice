@@ -153,7 +153,7 @@ test.describe("ReplyForm - Nested Reply", () => {
     );
 
     await expect(page.locator(".ProseMirror")).toBeVisible();
-    await expect(page.getByText(/replying to/i)).toBeVisible();
+    // Reply context shows username with @ prefix (icon replaces "Replying to" text)
     await expect(page.getByText("@testuser")).toBeVisible();
   });
 
