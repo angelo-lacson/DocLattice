@@ -827,8 +827,8 @@ export function updateTabParam(
   // Clear tab-specific params to prevent stale state across tabs
   searchParams.delete("thread");
   searchParams.delete("message");
-  // Push (not replace) so browser back/forward works between tabs
-  navigate({ search: searchParams.toString() });
+  // Replace (not push) so tab switches don't accumulate history entries
+  navigate({ search: searchParams.toString() }, { replace: true });
 }
 
 /**

@@ -146,24 +146,33 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
     <LandingContainer data-testid={testId}>
       <LandingContent>
         <LandingHero>
-          {/* Centered breadcrumbs with mobile menu button */}
-          <CenteredBreadcrumbs
-            aria-label="Breadcrumb navigation"
-            data-testid={`${testId}-breadcrumbs`}
+          {/* Centered breadcrumbs with mobile menu button as sibling */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+            }}
           >
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigateToCorpuses?.();
-              }}
+            <CenteredBreadcrumbs
+              aria-label="Breadcrumb navigation"
+              data-testid={`${testId}-breadcrumbs`}
             >
-              Corpuses
-            </a>
-            <ChevronRight aria-hidden="true" />
-            <span className="current">
-              {fullCorpus.title || "Untitled Corpus"}
-            </span>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigateToCorpuses?.();
+                }}
+              >
+                Corpuses
+              </a>
+              <ChevronRight aria-hidden="true" />
+              <span className="current">
+                {fullCorpus.title || "Untitled Corpus"}
+              </span>
+            </CenteredBreadcrumbs>
             {onOpenMobileMenu && (
               <MobileMenuButton
                 onClick={onOpenMobileMenu}
@@ -173,7 +182,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                 <MoreVertical />
               </MobileMenuButton>
             )}
-          </CenteredBreadcrumbs>
+          </div>
 
           {/* Corpus badge */}
           <CorpusBadge>CORPUS</CorpusBadge>
