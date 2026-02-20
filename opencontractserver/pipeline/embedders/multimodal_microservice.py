@@ -599,8 +599,3 @@ class QwenMicroserviceEmbedder(BaseMultimodalMicroserviceEmbedder):
         headers = maybe_add_cloud_run_auth(service_url, headers, use_cloud_run_iam_auth)
 
         return service_url, api_key, headers
-
-
-# Backwards compatibility alias - points to CLIP embedder as that was the original
-# implementation. New code should use the specific embedder class directly.
-MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder

@@ -671,6 +671,11 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
             break;
 
           case "ASYNC_APPROVAL_NEEDED":
+            // NOTE: No sub-tool unwrapping (_sub_tool_name) needed here.
+            // This hook is used for document-level and generic chat contexts
+            // that talk to agents directly — never via ask_document. Sub-tool
+            // unwrapping for nested corpus→document approvals lives only in
+            // CorpusChat.
             if (data?.pending_tool_call && data?.message_id) {
               setPendingApproval({
                 messageId: data.message_id,

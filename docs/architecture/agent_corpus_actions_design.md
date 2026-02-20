@@ -45,7 +45,7 @@ The `CorpusAction` model has been extended to support agent-based actions.
 
 Key fields added:
 - `agent_config` - ForeignKey to `AgentConfiguration`
-- `agent_prompt` - Task-specific prompt for the agent
+- `task_instructions` - Task-specific prompt for the agent
 - `pre_authorized_tools` - JSON list of tools pre-authorized to run without approval
 
 Database constraint ensures exactly ONE of `fieldset`, `analyzer`, or `agent_config` is set.
@@ -122,7 +122,7 @@ The agent task implementation sets `skip_approval_gate=True` when invoking agent
 
 Extended to support agent-based actions:
 - `agent_config_id` - ID of the agent configuration to use
-- `agent_prompt` - Task prompt for the agent
+- `task_instructions` - Task prompt for the agent
 - `pre_authorized_tools` - List of tool names pre-authorized for execution
 - `create_agent_inline` - Create a new corpus-scoped agent inline (for thread/message triggers)
 
@@ -138,7 +138,7 @@ Supports updating all agent-specific fields including trigger type, agent config
 
 Exposes agent-related fields:
 - `agent_config` - The linked AgentConfiguration
-- `agent_prompt` - Task prompt
+- `task_instructions` - Task prompt
 - `pre_authorized_tools` - List of pre-authorized tool names
 
 #### AgentActionResultType (lines 1982-2015)
@@ -172,7 +172,7 @@ mutation CreateAutoSummaryAction {
     trigger: "add_document"
     name: "Auto-Generate Summary"
     agentConfigId: "QWdlbnRDb25maWd1cmF0aW9uVHlwZTox"
-    agentPrompt: """
+    taskInstructions: """
       Analyze this document and create a comprehensive summary.
 
       1. Use load_document_text to read the full content
@@ -188,7 +188,7 @@ mutation CreateAutoSummaryAction {
     obj {
       id
       name
-      agentPrompt
+      taskInstructions
       preAuthorizedTools
     }
   }

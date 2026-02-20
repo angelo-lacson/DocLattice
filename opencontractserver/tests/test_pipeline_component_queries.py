@@ -70,7 +70,7 @@ class TestParser(BaseParser):
     dependencies: List[str] = []
     supported_file_types: List[FileTypeEnum] = [FileTypeEnum.PDF]
 
-    def parse_document(self, user_id: int, doc_id: int) -> Optional[OpenContractDocExport]:
+    def _parse_document_impl(self, user_id: int, doc_id: int, **all_kwargs) -> Optional[OpenContractDocExport]:
         return None
 '''
 
@@ -91,7 +91,7 @@ class TestEmbedder(BaseEmbedder):
     vector_size: int = 128
     supported_file_types: List[FileTypeEnum] = [FileTypeEnum.PDF, FileTypeEnum.TXT, FileTypeEnum.DOCX]
 
-    def embed_text(self, text: str, **kwargs) -> Optional[List[float]]:
+    def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[List[float]]:
         # Return a dummy embedding vector
         return [0.0] * self.vector_size
 '''
@@ -99,8 +99,7 @@ class TestEmbedder(BaseEmbedder):
         cls.thumbnailer_code = '''
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
-from typing import Optional, List
-from django.core.files.base import ContentFile
+from typing import Optional, List, Tuple
 
 class TestThumbnailer(BaseThumbnailGenerator):
     """
@@ -113,7 +112,9 @@ class TestThumbnailer(BaseThumbnailGenerator):
     dependencies: List[str] = []
     supported_file_types: List[FileTypeEnum] = [FileTypeEnum.PDF]
 
-    def generate_thumbnail(self, file_bytes: bytes) -> Optional[ContentFile]:
+    def _generate_thumbnail_impl(
+        self, txt_content: Optional[str], pdf_bytes: Optional[bytes], **all_kwargs
+    ) -> Optional[Tuple[bytes, str]]:
         return None
 '''
 
@@ -134,10 +135,11 @@ class TestPostProcessor(BasePostProcessor):
     dependencies: list[str] = []
     supported_file_types: List[FileTypeEnum] = [FileTypeEnum.PDF]
 
-    def process_export(
+    def _process_export_impl(
         self,
         zip_bytes: bytes,
         export_data: OpenContractsExportDataJsonPythonType,
+        **all_kwargs,
     ) -> Tuple[bytes, OpenContractsExportDataJsonPythonType]:
         return zip_bytes, export_data
 '''
