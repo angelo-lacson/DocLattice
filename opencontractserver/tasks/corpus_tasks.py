@@ -322,8 +322,8 @@ def process_corpus_action(
                     affected_objects=[{"type": "analysis", "id": analysis.id}],
                 )
 
-        elif action.agent_config:
-            # Agent-based corpus action
+        elif action.is_agent_action:
+            # Agent-based corpus action (with or without agent_config)
             from opencontractserver.tasks.agent_tasks import run_agent_corpus_action
 
             logger.info(
@@ -343,7 +343,8 @@ def process_corpus_action(
 
         else:
             raise ValueError(
-                "Unexpected action configuration... no analyzer, fieldset, or agent_config."
+                "Unexpected action configuration... no analyzer, fieldset, "
+                "agent_config, or task_instructions."
             )
 
     logger.info(

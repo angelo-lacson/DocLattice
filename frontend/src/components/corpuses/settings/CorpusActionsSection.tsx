@@ -39,7 +39,7 @@ interface CorpusAction {
   analyzer?: { id: string; name: string } | null;
   fieldset?: { id: string; name: string } | null;
   agentConfig?: { id: string; name: string; description?: string } | null;
-  agentPrompt?: string | null;
+  taskInstructions?: string | null;
   preAuthorizedTools?: string[] | null;
   creator: { username: string };
   created: string;
@@ -50,6 +50,8 @@ interface CorpusActionsSectionProps {
   onAddAction: () => void;
   onEditAction: (action: CorpusActionData) => void;
   onDeleteAction: (id: string) => void;
+  onRunAction?: (action: CorpusAction) => void;
+  isSuperuser?: boolean;
 }
 
 export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
@@ -57,6 +59,8 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
   onAddAction,
   onEditAction,
   onDeleteAction,
+  onRunAction,
+  isSuperuser,
 }) => {
   const getTriggerType = (trigger: string): "add" | "edit" => {
     return trigger.toLowerCase().includes("add") ? "add" : "edit";
@@ -183,14 +187,14 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       </div>
                     </div>
 
-                    {action.agentConfig && action.agentPrompt && (
+                    {action.taskInstructions && (
                       <AgentPromptBox>
-                        <div className="prompt-label">Agent Prompt:</div>
+                        <div className="prompt-label">Task Instructions:</div>
                         <div className="prompt-text">
                           "
-                          {action.agentPrompt.length > 100
-                            ? `${action.agentPrompt.substring(0, 100)}...`
-                            : action.agentPrompt}
+                          {action.taskInstructions.length > 100
+                            ? `${action.taskInstructions.substring(0, 100)}...`
+                            : action.taskInstructions}
                           "
                         </div>
                         {action.preAuthorizedTools &&
@@ -227,6 +231,22 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       )}
                       {action.disabled ? "Disabled" : "Active"}
                     </ActionStatusBadge>
+
+                    {isSuperuser && (
+                      <Button
+                        icon
+                        size="tiny"
+                        disabled={!!action.fieldset || !!action.analyzer}
+                        title={
+                          action.fieldset || action.analyzer
+                            ? "Only agent actions can be manually triggered"
+                            : "Run this action on a document"
+                        }
+                        onClick={() => onRunAction?.(action)}
+                      >
+                        <Icon name="play" />
+                      </Button>
+                    )}
 
                     <Button
                       icon

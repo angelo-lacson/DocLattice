@@ -999,17 +999,21 @@ class CorpusAction(BaseOCModel):
         null=True,
         blank=True,
         related_name="corpus_actions",
-        help_text="Agent configuration to use for this action",
+        help_text="Optional agent configuration for persona/tool defaults. "
+        "Not required for agent actions — task_instructions alone is sufficient.",
     )
-    agent_prompt = django.db.models.TextField(
+    task_instructions = django.db.models.TextField(
         blank=True,
         default="",
-        help_text="Task-specific prompt for the agent (e.g., 'Summarize this document')",
+        help_text="What the agent should do (e.g., 'Read this document and update "
+        "its description with a one-paragraph summary'). This is the single "
+        "required field for agent-based actions.",
     )
     pre_authorized_tools = django.db.models.JSONField(
         default=list,
         blank=True,
-        help_text="Tools pre-authorized to run without approval. If empty, uses agent_config.available_tools",
+        help_text="Tools pre-authorized to run without approval. If empty, uses "
+        "agent_config.available_tools or trigger-appropriate defaults.",
     )
     trigger = django.db.models.CharField(
         max_length=256, choices=CorpusActionTrigger.choices
@@ -1021,29 +1025,41 @@ class CorpusAction(BaseOCModel):
 
     class Meta:
         constraints = [
-            # Exactly ONE of fieldset, analyzer, or agent_config must be set
             django.db.models.CheckConstraint(
                 check=(
-                    # Fieldset only
+                    # Fieldset only (no analyzer, no agent)
                     django.db.models.Q(
                         fieldset__isnull=False,
                         analyzer__isnull=True,
                         agent_config__isnull=True,
                     )
-                    # Analyzer only
+                    # Analyzer only (no fieldset, no agent)
                     | django.db.models.Q(
                         fieldset__isnull=True,
                         analyzer__isnull=False,
                         agent_config__isnull=True,
                     )
-                    # Agent config only
-                    | django.db.models.Q(
-                        fieldset__isnull=True,
-                        analyzer__isnull=True,
-                        agent_config__isnull=False,
+                    # Agent with config (no fieldset, no analyzer).
+                    # Requires non-empty task_instructions to match clean().
+                    | (
+                        django.db.models.Q(
+                            fieldset__isnull=True,
+                            analyzer__isnull=True,
+                            agent_config__isnull=False,
+                        )
+                        & ~django.db.models.Q(task_instructions="")
+                    )
+                    # Lightweight agent: task_instructions only
+                    | (
+                        django.db.models.Q(
+                            fieldset__isnull=True,
+                            analyzer__isnull=True,
+                            agent_config__isnull=True,
+                        )
+                        & ~django.db.models.Q(task_instructions="")
                     )
                 ),
-                name="exactly_one_of_fieldset_analyzer_or_agent",
+                name="valid_action_type_configuration",
             )
         ]
         permissions = (
@@ -1056,26 +1072,56 @@ class CorpusAction(BaseOCModel):
             ("comment_corpusaction", "comment corpusaction"),
         )
 
+    @property
+    def is_agent_action(self) -> bool:
+        """Whether this action is an agent-based action (with or without config).
+
+        An action is agent-based if it has an agent_config, or if it has
+        task_instructions without a fieldset or analyzer (lightweight agent).
+
+        Keep in sync with: clean() validation and Meta.constraints
+        (valid_action_type_configuration).
+        """
+        if self.agent_config_id:
+            return True
+        if self.task_instructions and not self.fieldset_id and not self.analyzer_id:
+            return True
+        return False
+
     def clean(self):
-        # Count how many action types are set
-        action_types_set = sum(
-            [
-                self.fieldset is not None,
-                self.analyzer is not None,
-                self.agent_config is not None,
-            ]
-        )
-        if action_types_set > 1:
+        has_fieldset = self.fieldset is not None
+        has_analyzer = self.analyzer is not None
+        has_agent_config = self.agent_config is not None
+        has_task_instructions = bool(self.task_instructions)
+
+        fk_count = sum([has_fieldset, has_analyzer, has_agent_config])
+
+        # Fieldset/analyzer/agent_config are mutually exclusive
+        if fk_count > 1:
             raise ValidationError(
                 "Only one of fieldset, analyzer, or agent_config can be set."
             )
-        if action_types_set == 0:
+
+        # Must have at least one action type
+        if fk_count == 0 and not has_task_instructions:
             raise ValidationError(
-                "One of fieldset, analyzer, or agent_config must be set."
+                "One of fieldset, analyzer, agent_config, or "
+                "task_instructions must be set."
             )
-        # Validate agent_prompt is provided when agent_config is set
-        if self.agent_config and not self.agent_prompt:
-            raise ValidationError("agent_prompt is required when agent_config is set.")
+
+        # task_instructions must not be set on fieldset/analyzer actions
+        if (has_fieldset or has_analyzer) and has_task_instructions:
+            raise ValidationError(
+                "task_instructions cannot be set on fieldset or analyzer actions."
+            )
+
+        # Agent actions (with config) require task_instructions.
+        # Keep in sync with: is_agent_action property and Meta.constraints
+        # (valid_action_type_configuration).
+        if has_agent_config and not has_task_instructions:
+            raise ValidationError(
+                "task_instructions is required for agent-based actions."
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -1086,7 +1132,7 @@ class CorpusAction(BaseOCModel):
             action_type = "Fieldset"
         elif self.analyzer:
             action_type = "Analyzer"
-        elif self.agent_config:
+        elif self.is_agent_action:
             action_type = "Agent"
         else:
             action_type = "Unknown"

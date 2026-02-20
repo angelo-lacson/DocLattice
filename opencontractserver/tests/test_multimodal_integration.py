@@ -29,7 +29,7 @@ from PIL import Image
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, PipelineSettings
 from opencontractserver.pipeline.embedders.multimodal_microservice import (
-    MultimodalMicroserviceEmbedder,
+    CLIPMicroserviceEmbedder,
 )
 from opencontractserver.pipeline.parsers.docling_parser_rest import DoclingParser
 from opencontractserver.tests.fixtures.pdf_generator import (
@@ -97,7 +97,7 @@ class TestMultimodalEmbedderService(TestCase):
     def setUpTestData(cls):
         # Populate PipelineSettings from env vars (single source of truth)
         setup_pipeline_settings_from_env()
-        cls.embedder = MultimodalMicroserviceEmbedder()
+        cls.embedder = CLIPMicroserviceEmbedder()
 
     def test_text_embedding_returns_768_dimensions(self):
         """Test text embedding returns correct dimension (768 for CLIP ViT-L-14)."""
@@ -137,20 +137,20 @@ class TestMultimodalEmbedderService(TestCase):
         """Verify embedder correctly reports its multimodal capabilities."""
         self.assertTrue(
             self.embedder.is_multimodal,
-            "MultimodalMicroserviceEmbedder should report is_multimodal=True",
+            "CLIPMicroserviceEmbedder should report is_multimodal=True",
         )
         self.assertTrue(
             self.embedder.supports_text,
-            "MultimodalMicroserviceEmbedder should support text",
+            "CLIPMicroserviceEmbedder should support text",
         )
         self.assertTrue(
             self.embedder.supports_images,
-            "MultimodalMicroserviceEmbedder should support images",
+            "CLIPMicroserviceEmbedder should support images",
         )
         self.assertEqual(
             self.embedder.vector_size,
             768,
-            "MultimodalMicroserviceEmbedder should have vector_size=768",
+            "CLIPMicroserviceEmbedder should have vector_size=768",
         )
 
     def test_supported_modalities(self):
@@ -213,7 +213,7 @@ class TestMultimodalEmbedderBatch(TestCase):
     def setUpTestData(cls):
         # Populate PipelineSettings from env vars (single source of truth)
         setup_pipeline_settings_from_env()
-        cls.embedder = MultimodalMicroserviceEmbedder()
+        cls.embedder = CLIPMicroserviceEmbedder()
 
     def test_batch_text_embedding(self):
         """Test batch text embedding returns correct dimensions."""
@@ -388,7 +388,7 @@ class TestFullMultimodalPipeline(TransactionTestCase):
             title="Full Pipeline Test Corpus",
             creator=self.user,
         )
-        self.embedder = MultimodalMicroserviceEmbedder()
+        self.embedder = CLIPMicroserviceEmbedder()
 
     def test_full_pipeline_text_and_image_embedding(self):
         """
@@ -493,7 +493,7 @@ class TestFullMultimodalPipeline(TransactionTestCase):
 
         try:
             # Create new embedder that will read the empty URL from DB
-            embedder = MultimodalMicroserviceEmbedder()
+            embedder = CLIPMicroserviceEmbedder()
 
             # Should return None, not raise exception
             result = embedder.embed_text("test")
@@ -539,7 +539,7 @@ class TestMultimodalEmbedderErrorHandling(TestCase):
     def setUp(self):
         # Populate PipelineSettings from env vars (single source of truth)
         setup_pipeline_settings_from_env()
-        self.embedder = MultimodalMicroserviceEmbedder()
+        self.embedder = CLIPMicroserviceEmbedder()
 
     def test_empty_text_handling(self):
         """Test that empty text is handled gracefully."""

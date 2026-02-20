@@ -1,5 +1,5 @@
 """
-Unit tests for MultimodalMicroserviceEmbedder.
+Unit tests for CLIPMicroserviceEmbedder.
 
 These tests use mocks to test all code paths without requiring the actual
 multimodal embedder service to be running.
@@ -17,7 +17,7 @@ from PIL import Image
 from requests.exceptions import ConnectionError, Timeout
 
 from opencontractserver.pipeline.embedders.multimodal_microservice import (
-    MultimodalMicroserviceEmbedder,
+    CLIPMicroserviceEmbedder,
 )
 from opencontractserver.types.enums import ContentModality
 
@@ -67,11 +67,11 @@ def create_test_image_base64(width: int = 100, height: int = 100) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
-class TestMultimodalMicroserviceEmbedderUnit(TestCase):
-    """Unit tests for MultimodalMicroserviceEmbedder with mocked HTTP calls."""
+class TestCLIPMicroserviceEmbedderUnit(TestCase):
+    """Unit tests for CLIPMicroserviceEmbedder with mocked HTTP calls."""
 
     def setUp(self):
-        self.embedder = MultimodalMicroserviceEmbedder()
+        self.embedder = CLIPMicroserviceEmbedder()
 
     # =========================================================================
     # Text Embedding Tests
@@ -519,7 +519,7 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
 
         # Mock the Settings dataclass with specific values (simulating PipelineSettings DB)
-        embedder = MultimodalMicroserviceEmbedder()
+        embedder = CLIPMicroserviceEmbedder()
         embedder._settings = create_mock_clip_settings(
             clip_embedder_url="http://settings-url:8000",
             clip_embedder_api_key="settings-api-key",
@@ -690,7 +690,7 @@ class TestMultimodalMicroserviceEmbedderUnit(TestCase):
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
 
         # Mock the Settings dataclass (simulating values from PipelineSettings DB)
-        embedder = MultimodalMicroserviceEmbedder()
+        embedder = CLIPMicroserviceEmbedder()
         embedder._settings = create_mock_clip_settings(
             clip_embedder_url="http://new-settings-url:8000",
             clip_embedder_api_key="new-settings-api-key",
