@@ -98,9 +98,7 @@ export const CorpusContextSidebar: React.FC<CorpusContextSidebarProps> =
     const stats: CorpusStats | null = statsData?.corpusStats ?? null;
 
     // Fetch markdown description from the file URL, falling back to plain text
-    const { content: mdContent } = useCorpusMdDescription(
-      corpus?.mdDescription
-    );
+    const mdContent = useCorpusMdDescription(corpus?.mdDescription);
     const description = mdContent || corpus?.description || null;
 
     // Don't render on small screens

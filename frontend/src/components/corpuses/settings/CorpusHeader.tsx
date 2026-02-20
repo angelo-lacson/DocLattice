@@ -25,7 +25,7 @@ interface CorpusHeaderProps {
 }
 
 export const CorpusHeader: React.FC<CorpusHeaderProps> = ({ corpus }) => {
-  const { content: mdContent } = useCorpusMdDescription(corpus.mdDescription);
+  const mdContent = useCorpusMdDescription(corpus.mdDescription);
   const displayContent = mdContent || corpus.description;
 
   return (
