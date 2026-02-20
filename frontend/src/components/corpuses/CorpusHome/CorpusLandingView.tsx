@@ -41,6 +41,7 @@ import {
   AccessBadge,
   ChatSection,
   ViewDetailsButton,
+  HeaderRow,
   MobileMenuButton,
 } from "./styles";
 
@@ -147,14 +148,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
       <LandingContent>
         <LandingHero>
           {/* Centered breadcrumbs with mobile menu button as sibling */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "100%",
-            }}
-          >
+          <HeaderRow $justify="center">
             <CenteredBreadcrumbs
               aria-label="Breadcrumb navigation"
               data-testid={`${testId}-breadcrumbs`}
@@ -182,7 +176,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                 <MoreVertical />
               </MobileMenuButton>
             )}
-          </div>
+          </HeaderRow>
 
           {/* Corpus badge */}
           <CorpusBadge>CORPUS</CorpusBadge>

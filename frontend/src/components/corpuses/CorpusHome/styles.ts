@@ -861,6 +861,19 @@ export const MobileTabContent = styled.div`
 `;
 
 // ============================================================================
+// HEADER ROW (breadcrumb / back-button + mobile menu)
+// ============================================================================
+
+/** Flex row that holds breadcrumbs (or a back button) and the mobile menu
+ *  button side-by-side, keeping the menu button outside the <nav> landmark. */
+export const HeaderRow = styled.div<{ $justify?: string }>`
+  display: flex;
+  align-items: center;
+  justify-content: ${(props) => props.$justify || "space-between"};
+  width: 100%;
+`;
+
+// ============================================================================
 // MOBILE MENU BUTTON
 // ============================================================================
 

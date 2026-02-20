@@ -451,11 +451,13 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     [location, navigate]
   );
 
-  // Handle back from thread detail by popping the history entry that the
-  // thread click pushed, so browser back/forward stays in sync.
+  // Handle back from thread detail by clearing the ?thread= param.
+  // Uses replace semantics so the thread-detail entry is removed from history,
+  // avoiding double entries. This is also safe for direct-link navigation
+  // (e.g., from a notification) where navigate(-1) would leave the corpus.
   const handleBackToList = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
+    updateThreadParam(location, navigate, null, { replace: true });
+  }, [location, navigate]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

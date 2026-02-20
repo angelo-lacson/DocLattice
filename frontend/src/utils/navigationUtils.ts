@@ -834,16 +834,19 @@ export function updateTabParam(
 /**
  * Update thread selection in URL
  * Used for deep-linking to a specific thread in corpus discussions.
- * Pushes a new history entry so browser back/forward navigates between
- * thread list and thread detail views.
+ * By default pushes a new history entry so browser back/forward navigates
+ * between thread list and thread detail views. Pass `{ replace: true }` to
+ * replace the current entry instead (useful for "back to list" actions).
  * @param location - React Router location object
  * @param navigate - React Router navigate function
  * @param threadId - Thread identifier, or null to clear and return to list
+ * @param options - Optional navigation options (e.g., `{ replace: true }`)
  */
 export function updateThreadParam(
   location: { search: string },
   navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
-  threadId: string | null
+  threadId: string | null,
+  options?: { replace?: boolean }
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (threadId) {
@@ -852,8 +855,13 @@ export function updateThreadParam(
     searchParams.delete("thread");
     searchParams.delete("message"); // Also clear message when clearing thread
   }
-  // Push (not replace) so browser back returns to the thread list
-  navigate({ search: searchParams.toString() });
+  // Default: push so browser back returns to the thread list
+  const searchString = { search: searchParams.toString() };
+  if (options) {
+    navigate(searchString, options);
+  } else {
+    navigate(searchString);
+  }
 }
 
 /**
