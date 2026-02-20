@@ -80,6 +80,11 @@ TOOL_OUTPUT_TRUNCATION_NOTICE: str = (
 # Keeps the summary concise while preserving key facts.
 COMPACTION_SUMMARY_TARGET_TOKENS: int = 300
 
+# Maximum token budget for the *cumulative* compaction summary stored in
+# the database.  When a merge would exceed this, the summary is truncated
+# to keep it from becoming a significant fraction of the context window.
+COMPACTION_SUMMARY_MAX_TOKENS: int = 600
+
 # System-level instruction prepended to the summary so the LLM knows its
 # origin.  Must be kept short to avoid eating into the summary budget.
 COMPACTION_SUMMARY_PREFIX: str = (
