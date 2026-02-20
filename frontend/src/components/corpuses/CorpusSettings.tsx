@@ -29,6 +29,7 @@ import {
   CreateCorpusActionModal,
   CorpusActionData,
 } from "./CreateCorpusActionModal";
+import { RunCorpusActionModal } from "./RunCorpusActionModal";
 import { CorpusMetadataSettings } from "./CorpusMetadataSettings";
 import { CorpusAgentSettings } from "./CorpusAgentSettings";
 import { CorpusAgentManagement } from "./CorpusAgentManagement";
@@ -132,6 +133,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
 
   const isOwner = isOwnerByIdentity || hasFullOwnerPermissions;
   const canChangeVisibility = isOwner || canPermission;
+  const isSuperuser = currentUser?.isSuperuser === true;
 
   // Form state
   const [slugDraft, setSlugDraft] = useState<string>("");
@@ -243,6 +245,10 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
   );
   const [actionToEdit, setActionToEdit] =
     React.useState<CorpusActionData | null>(null);
+  const [actionToRun, setActionToRun] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Fetch corpus actions
   const { data: actionsData, refetch: refetchActions } = useQuery<
@@ -369,6 +375,10 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
             setIsModalOpen(true);
           }}
           onDeleteAction={(id) => setActionToDelete(id)}
+          onRunAction={(action) =>
+            setActionToRun({ id: action.id, name: action.name })
+          }
+          isSuperuser={isSuperuser}
         />
 
         {/* Action Execution History - Permission Gated to owner/admin/editor */}
@@ -441,6 +451,16 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
           }}
           actionToEdit={actionToEdit}
         />
+
+        {actionToRun && (
+          <RunCorpusActionModal
+            open={!!actionToRun}
+            corpusId={corpus.id}
+            actionId={actionToRun.id}
+            actionName={actionToRun.name}
+            onClose={() => setActionToRun(null)}
+          />
+        )}
 
         <Confirm
           open={!!actionToDelete}

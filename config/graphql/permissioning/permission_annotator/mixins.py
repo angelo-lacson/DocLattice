@@ -105,12 +105,18 @@ class AnnotatePermissionsForReadMixin:
                 # logger.info(f"resolve_my_permissions() - user is anon user")
                 return []
 
-        # Check if permissions were pre-computed by query optimizer (ONLY for annotations/relationships)
+        # Check if permissions were pre-computed by query optimizer
         # These are annotated as _can_read, _can_create, _can_update, _can_delete
-        # Only apply this optimization to Annotation and Relationship models
+        # Applies to Annotation, Relationship, and DocumentRelationship models
+        # (DocumentRelationship has no guardian tables — permissions are inherited
+        # from source/target documents + corpus and pre-computed by the optimizer)
         model_name = self._meta.model_name
 
-        if model_name in ["annotation", "relationship"] and hasattr(self, "_can_read"):
+        if model_name in [
+            "annotation",
+            "relationship",
+            "documentrelationship",
+        ] and hasattr(self, "_can_read"):
             # logger.info("resolve_my_permissions() - Using pre-computed permissions from query optimizer")
             permissions = set()
 
