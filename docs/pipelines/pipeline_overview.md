@@ -32,7 +32,6 @@ graph TD
         D --> D1[MicroserviceEmbedder]
         D --> D2[CLIPMicroserviceEmbedder]
         D --> D3[QwenMicroserviceEmbedder]
-        D --> D4[MultimodalMicroserviceEmbedder]
 
         PP --> PP1[PDFRedactor]
     end
@@ -42,7 +41,6 @@ graph TD
     D1 --> F[Vector Database]
     D2 --> F
     D3 --> F
-    D4 --> F
     PP1 --> G[Processed Document]
 ```
 
@@ -141,16 +139,15 @@ Current implementations:
 - **MicroserviceEmbedder**: Generates 384-dim embeddings using a sentence-transformer microservice
 
 **Multimodal Embedders:**
-- **[MultimodalMicroserviceEmbedder](multimodal_embedder.md)**: Microservice-based embedder supporting both text and images. Works with any embedding service implementing the standard API. Configurable host, port, and vector dimensions.
-- **CLIPMicroserviceEmbedder**: CLIP-based multimodal embedder via microservice
-- **QwenMicroserviceEmbedder**: Qwen-based multimodal embedder via microservice
+- **[CLIPMicroserviceEmbedder](multimodal_embedder.md)**: CLIP-based multimodal embedder (768-dim) via microservice. Works with any embedding service implementing the standard API. Configurable host, port, and vector dimensions.
+- **QwenMicroserviceEmbedder**: Qwen-based multimodal embedder (1024-dim) via microservice
 
 #### Supported Embedding Dimensions
 
 The OpenContracts database supports the following embedding dimensions via dedicated vector fields:
 
 - **384 dimensions** (`vector_384`): Used by MicroserviceEmbedder (sentence-transformers)
-- **768 dimensions** (`vector_768`): Used by MultimodalMicroserviceEmbedder (CLIP ViT-L-14)
+- **768 dimensions** (`vector_768`): Used by CLIPMicroserviceEmbedder (CLIP ViT-L-14)
 - **1024 dimensions** (`vector_1024`): Available for future embedders
 - **1536 dimensions** (`vector_1536`): Used by OpenAI text-embedding-3-small and similar models
 - **2048 dimensions** (`vector_2048`): Available for mid-range high-dimensional embedders

@@ -5,9 +5,46 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-12
+## [Unreleased] - 2026-02-19
+
+### Changed
+
+#### Pipeline Registry: Deduplicate and Filter Abstract Components
+- **Removed `MultimodalMicroserviceEmbedder` backwards-compatibility alias**: The module-level alias `MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder` in `opencontractserver/pipeline/embedders/multimodal_microservice.py` has been removed. Use `CLIPMicroserviceEmbedder` directly.
+- **Fixed duplicate embedder entries in pipeline registry**: `_discover_subclasses()` in `opencontractserver/pipeline/registry.py` now deduplicates discovered classes by identity and skips abstract intermediate base classes via `inspect.isabstract()`, preventing aliases and abstract bases from appearing in the get-embedders query endpoint.
+### Fixed
+
+#### Edit Description Modal Does Not Save on Update (Issue #899)
+- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
+  - File: `frontend/src/App.tsx` (lines 128-149, 398)
+- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
+- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
+  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
+
+### Changed
+
+#### Import/Export Pipeline Consolidation
+- **DRY refactor of import/export code**: Extracted shared helpers into `opencontractserver/utils/importing.py`:
+  - `prepare_import_labels()` - eliminates 4x duplicated label loading boilerplate
+  - `create_document_from_export_data()` - eliminates 3x duplicated document creation
+  - `import_doc_annotations()` - eliminates 3x duplicated doc+text annotation import loops
+- **V1 import now delegates to V2 machinery**: `import_corpus()` in `import_tasks.py` delegates to `import_corpus_v2()` which handles both V1 and V2 formats through a unified `_import_corpus()` handler
+- **V2 import fixed to use `corpus.add_document()`**: Previously created documents directly without corpus isolation; now properly uses the versioning API for correct DocumentPath records and corpus isolation
+- **V2 import now sets permissions on annotations**: Previously skipped `set_permissions_for_obj_to_user` on annotations
+- **V2 import now handles `content_modalities`**: Via the shared `import_annotations()` helper
+- **Export finalization DRYed up**: New `finalize_export()` in `export_tasks.py` replaces 4x repeated save/timestamp/notification pattern in `package_annotated_docs`, `package_funsd_exports`, `on_demand_post_processors`, and `package_corpus_export_v2`
+- **Removed duplicate `import_relationships` and `import_document_paths`** from `utils/import_v2.py` - relationship import handled inline in `_import_v2_relationships`, DocumentPaths created by `corpus.add_document()`
+- **Deleted empty `opencontractserver/utils/export.py`**
 
 ### Added
+
+#### Store Model Name in ChatMessage Metadata (#897)
+- **Automatic model name persistence**: The LLM model name from `AgentConfig` is now stored in the `data` JSON field of every `ChatMessage` produced by an agent, enabling debugging, auditing, and reproducibility
+  - `opencontractserver/llms/agents/core_agents.py` — all five `CoreConversationManager` message-writing methods now persist `data["model_name"]`:
+    - `create_placeholder_message()` and `store_llm_message()` — unconditional write at creation time
+    - `complete_message()`, `update_message()`, `mark_message_error()` — use `setdefault` to backfill without overwriting placeholder values
+- **Tests**: Seven new async tests verifying model name storage across all message lifecycle paths
+  - `opencontractserver/tests/test_core_agents.py` — covers explicit model name, default model name, all five methods, and `setdefault` preservation semantics
 
 #### Nested Approval Gates for Corpus Agent Sub-Agents
 - **Sub-agent approval propagation**: When a corpus agent delegates a question to a document sub-agent via `ask_document`, and the sub-agent encounters a tool requiring approval, the approval request now propagates up to the corpus agent level and is surfaced to the user via WebSocket (`ASYNC_APPROVAL_NEEDED`)
@@ -19,8 +56,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Architecture documentation**: Added "Nested Approval Gates" section to LLM framework docs with flow diagrams and security notes
   - File: `docs/architecture/llms/README.md`
 
-### Added
-
 #### Expose Tool Usage in Chat UI
 - **Tool Usage Badge** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1180-1288`): Assistant messages that use tools now display a wrench icon badge ("X tools used") in the message header, visible in both document and corpus chat views. Users can quickly see AI tool usage without expanding the full timeline, improving agent transparency.
 - **Tool Call Popover** (`ChatMessage.tsx:1222-1286`): Hovering over the badge opens a popover listing each tool call's formatted name, JSON input arguments, and output result. Keyboard accessible (Enter/Space to toggle, Escape to close) with full ARIA attributes.
@@ -30,7 +65,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `opencontractserver/llms/agents/pydantic_ai_agents.py:123-155` — `_extract_tool_result_summary()` extracts and truncates at source
 - **Tool result entries for search tools** (`pydantic_ai_agents.py:642-657, 686-702, 807-813`): `similarity_search`, `search_exact_text`, and `ask_document` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"). Other tools use a generic extractor with "Completed" fallback.
 
+#### Automated Documentation Screenshots
+- **Screenshot capture utility** (`frontend/tests/utils/docScreenshot.ts`): Captures screenshots during Playwright component tests using an enforced `{area}--{component}--{state}` naming convention
+- **CI workflow** (`.github/workflows/screenshots.yml`): Automatically runs component tests on PRs touching `frontend/` or `docs/`, then commits updated screenshots back to the PR branch
+- **Initial screenshot coverage**: Landing page components (hero, stats bar, trending corpuses, call-to-action) and badge components (celebration modal, toast)
+
+#### V2 Export Format
+- **`OPEN_CONTRACTS_V2` export format**: New export type available in `StartCorpusExport` mutation that includes structural annotation sets, folder hierarchy, relationships, agent config, markdown descriptions, and conversations
+- **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
+- **Migration `0025_alter_userexport_format_add_v2`**: Adds `OPEN_CONTRACTS_V2` to UserExport format choices
+
+#### Edge Case Tests for Personal Corpus (Issue #839)
+- **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
+- **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
+- **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
+
 ### Fixed
+
+#### Edit Description Modal Does Not Save on Update (Issue #899)
+- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
+  - File: `frontend/src/App.tsx` (lines 128-149, 398)
+- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
+- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
+  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
 
 #### Security: LLM Prompt Injection Protection for Approval Bypass
 - **Replaced `skip_approval` function parameter with `config._approval_bypass_allowed` flag**: The previous design exposed a `skip_approval` parameter in `ask_document_tool`'s function signature that a malicious LLM could set to `True` to bypass approval gates. Now uses a runtime flag on `AgentConfig` that only `resume_with_approval()` can set, wrapped in a `try/finally` block to guarantee reset
@@ -59,39 +119,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-#### Import/Export Pipeline Consolidation
-- **DRY refactor of import/export code**: Extracted shared helpers into `opencontractserver/utils/importing.py`:
-  - `prepare_import_labels()` - eliminates 4x duplicated label loading boilerplate
-  - `create_document_from_export_data()` - eliminates 3x duplicated document creation
-  - `import_doc_annotations()` - eliminates 3x duplicated doc+text annotation import loops
-- **V1 import now delegates to V2 machinery**: `import_corpus()` in `import_tasks.py` delegates to `import_corpus_v2()` which handles both V1 and V2 formats through a unified `_import_corpus()` handler
-- **V2 import fixed to use `corpus.add_document()`**: Previously created documents directly without corpus isolation; now properly uses the versioning API for correct DocumentPath records and corpus isolation
-- **V2 import now sets permissions on annotations**: Previously skipped `set_permissions_for_obj_to_user` on annotations
-- **V2 import now handles `content_modalities`**: Via the shared `import_annotations()` helper
-- **Export finalization DRYed up**: New `finalize_export()` in `export_tasks.py` replaces 4x repeated save/timestamp/notification pattern in `package_annotated_docs`, `package_funsd_exports`, `on_demand_post_processors`, and `package_corpus_export_v2`
-- **Removed duplicate `import_relationships` and `import_document_paths`** from `utils/import_v2.py` - relationship import handled inline in `_import_v2_relationships`, DocumentPaths created by `corpus.add_document()`
-- **Deleted empty `opencontractserver/utils/export.py`**
+#### Streamlined Agentic Corpus Action Configuration
+- **Renamed `agent_prompt` to `task_instructions`** on `CorpusAction` model (`opencontractserver/corpuses/models.py`): Single, clearly-named field for describing what the agent should do. Migration `0041` handles the rename.
+- **Goal-oriented system prompt assembly** (`opencontractserver/tasks/agent_tasks.py`): Agent corpus actions now auto-generate a structured system prompt with automation guardrails ("you MUST use tools"), execution context (trigger type, document metadata, corpus info), and the user's task instructions. Agents no longer receive raw `system_instructions` as the system prompt — the system wraps everything in a goal-oriented format that prevents conversational responses.
+- **Document context injection**: Document-based agent actions now inject document title, ID, corpus title, and current description into the system prompt so agents don't waste tool calls loading basic metadata.
+- **Thread context injection refactored**: Thread-based agent actions now use the same structured prompt pattern as document actions, with thread context, recent messages, and triggering message content all included in the system prompt rather than the user message.
+- **`AgentConfiguration` is now optional for agent actions**: `CorpusAction` can be created with just `task_instructions` (no `agent_config` required). The DB constraint (`valid_action_type_configuration`) now allows lightweight agent actions. `AgentConfiguration` is still supported for custom persona/tool defaults.
+- **Default tool selection by trigger type** (`opencontractserver/constants/corpus_actions.py`): When no tools are specified on `agent_config.available_tools`, the system auto-selects trigger-appropriate defaults (document tools for add/edit triggers, moderation tools for thread/message triggers).
+- **`pre_authorized_tools` semantics changed** (`opencontractserver/tasks/agent_tasks.py`): `pre_authorized_tools` now only controls which tools skip approval gates. Tool availability is determined by `agent_config.available_tools` (if set) or trigger-appropriate defaults. See **Breaking Changes** below for migration guidance.
+- **GraphQL API updated**: `CreateCorpusAction` and `UpdateCorpusAction` mutations use `taskInstructions` instead of `agentPrompt`. The `taskInstructions` field alone (without `agentConfigId`) is now sufficient to create an agent action.
+- **Frontend updated**: `CreateCorpusActionModal` and `CorpusActionsSection` use "Task Instructions" labeling instead of "Agent Prompt".
+- **Unified Quick Create flow**: `CreateCorpusActionModal` now supports inline agent creation for document triggers (add_document, edit_document) in addition to thread triggers. The modal auto-selects trigger-appropriate tools and default instructions.
+- **Manual action trigger** (`config/graphql/mutations.py`): New `RunCorpusAction` mutation allows superusers to manually trigger agent actions on specific documents. Uses `transaction.on_commit()` to dispatch Celery tasks after the DB transaction commits, and `force=True` to bypass dedup checks for manual triggers.
+- **ToolFunctionRegistry** (`opencontractserver/llms/tools/tool_registry.py`): Centralized singleton registry mapping tool names to sync/async function implementations. Replaces 3 manually-curated dicts in `_resolve_tools()`. Adding a new tool now requires edits in 2 files instead of 4+.
 
-### Added
+### Breaking Changes
 
-#### Automated Documentation Screenshots
-- **Screenshot capture utility** (`frontend/tests/utils/docScreenshot.ts`): Captures screenshots during Playwright component tests using an enforced `{area}--{component}--{state}` naming convention
-- **CI workflow** (`.github/workflows/screenshots.yml`): Automatically runs component tests on PRs touching `frontend/` or `docs/`, then commits updated screenshots back to the PR branch
-- **Initial screenshot coverage**: Landing page components (hero, stats bar, trending corpuses, call-to-action) and badge components (celebration modal, toast)
+- **`pre_authorized_tools` no longer controls tool availability**: Previously, `pre_authorized_tools` was used as both the tool set AND the approval gate — if set, it replaced `agent_config.available_tools` entirely. Now it only controls which tools skip the approval gate. **Migration**: If you relied on `pre_authorized_tools` to restrict which tools an agent can access, move those tool names to `agent_config.available_tools` instead. `pre_authorized_tools` should only list tools that are safe to run without human approval.
 
-#### V2 Export Format
-- **`OPEN_CONTRACTS_V2` export format**: New export type available in `StartCorpusExport` mutation that includes structural annotation sets, folder hierarchy, relationships, agent config, markdown descriptions, and conversations
-- **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
-- **Migration `0025_alter_userexport_format_add_v2`**: Adds `OPEN_CONTRACTS_V2` to UserExport format choices
+### Known Limitations
 
-#### Edge Case Tests for Personal Corpus (Issue #839)
-- **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
-  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
-- **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
-  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
-- **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
-  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
-### Fixed
+- **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
+
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
 
