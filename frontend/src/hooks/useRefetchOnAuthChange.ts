@@ -14,8 +14,17 @@ import { authToken } from "../graphql/cache";
  * The callback is skipped when there is no auth token (i.e. on logout),
  * since refetching anonymous data for a departing user is wasted work.
  *
+ * ORDERING CONTRACT: Callers that clear auth state before calling
+ * `CacheManager.resetOnAuthChange()` (e.g. logout in useNavMenu.ts) MUST
+ * set `authToken("")` BEFORE the clearStore fires. This hook reads
+ * `authToken()` synchronously inside the callback to decide whether to
+ * skip refetch. Reversing the order would cause queries to refetch with
+ * a still-valid token during logout.
+ *
  * Note: This fires on ANY `clearStore()` call, not only auth-related ones.
- * Currently all `clearStore()` calls go through `CacheManager.resetOnAuthChange`.
+ * All `clearStore()` calls currently go through `CacheManager.resetOnAuthChange`;
+ * the `getCacheManager()` singleton exposes the same `CacheManager` instance,
+ * so it also routes through `resetOnAuthChange`.
  *
  * Place this hook once near the app root (e.g., in App.tsx).
  *

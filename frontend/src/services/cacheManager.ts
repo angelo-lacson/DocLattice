@@ -86,7 +86,9 @@ export interface InvalidationOptions {
  * // In a component
  * const { resetOnAuthChange, invalidateEntityQueries } = useCacheManager();
  *
- * // On logout
+ * // On logout (refetchActive defaults to false — the useRefetchOnAuthChange
+ * // hook handles post-clear refetching for login; logout skips refetch
+ * // because authToken is cleared before clearStore fires).
  * await resetOnAuthChange({ reason: "user_logout" });
  *
  * // After document upload

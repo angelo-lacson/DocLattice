@@ -102,6 +102,19 @@ describe("useRefetchOnAuthChange", () => {
     expect(client.refetchQueries).not.toHaveBeenCalled();
   });
 
+  it("should refetch for each clearStore call when called in quick succession", async () => {
+    renderHook(() => useRefetchOnAuthChange(), {
+      wrapper: createWrapper(client),
+    });
+
+    // Fire two clearStore calls back-to-back — the hook has no internal
+    // debounce so both should trigger refetchQueries.
+    await client.clearStore();
+    await client.clearStore();
+
+    expect(client.refetchQueries).toHaveBeenCalledTimes(2);
+  });
+
   it("should not propagate refetchQueries errors", async () => {
     vi.spyOn(client, "refetchQueries").mockRejectedValue(
       new Error("Network error")

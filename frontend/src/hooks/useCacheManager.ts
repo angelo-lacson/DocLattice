@@ -12,6 +12,8 @@
  *   const { resetOnAuthChange } = useCacheManager();
  *
  *   const handleLogout = async () => {
+ *     // refetchActive defaults to false — post-clear refetching is handled
+ *     // by the useRefetchOnAuthChange hook (App.tsx).
  *     await resetOnAuthChange({ reason: "user_logout" });
  *     // ... rest of logout logic
  *   };
