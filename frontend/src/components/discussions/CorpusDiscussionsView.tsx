@@ -451,11 +451,11 @@ export const CorpusDiscussionsView: React.FC<CorpusDiscussionsViewProps> = ({
     [location, navigate]
   );
 
-  // Handle back from thread detail by clearing the ?thread= param via URL utility.
-  // CentralRouteManager Phase 2 will detect the URL change and clear selectedThreadId.
+  // Handle back from thread detail by popping the history entry that the
+  // thread click pushed, so browser back/forward stays in sync.
   const handleBackToList = useCallback(() => {
-    updateThreadParam(location, navigate, null);
-  }, [location, navigate]);
+    navigate(-1);
+  }, [navigate]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

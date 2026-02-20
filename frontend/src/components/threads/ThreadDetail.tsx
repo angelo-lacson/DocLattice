@@ -193,8 +193,10 @@ const Title = styled.h1`
   font-weight: 400;
   color: #1e293b;
   margin: 0;
-  flex-shrink: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 `;
 
 const Description = styled.span`
