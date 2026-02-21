@@ -191,6 +191,11 @@ export class ServerTokenAnnotation {
   }
 }
 
+/**
+ * Union type covering both PDF token and text span annotations.
+ */
+export type ServerAnnotation = ServerTokenAnnotation | ServerSpanAnnotation;
+
 export class RenderedSpanAnnotation {
   public readonly id: string;
 
