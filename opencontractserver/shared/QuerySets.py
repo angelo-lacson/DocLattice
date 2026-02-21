@@ -186,14 +186,46 @@ class PermissionQuerySet(models.QuerySet):
 
 class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
     """
-    Custom QuerySet for Document that includes both permission filtering
-    (PermissionQuerySet) and vector-based search (VectorSearchViaEmbeddingMixin).
+    Custom QuerySet for Document that includes permission filtering
+    with guardian checks and vector-based search.
     """
 
-    # If your Embedding related_name on Document is not "embeddings",
-    # override the Mixin attribute here:
-    # EMBEDDING_RELATED_NAME = "my_custom_related_name"
-    pass
+    def visible_to_user(self, user, perm=None):
+        """
+        Override PermissionQuerySet.visible_to_user to include guardian
+        permission checks. Without this override, chaining
+        .filter().visible_to_user() would skip guardian entirely.
+
+        Follows the same pattern as BaseVisibilityManager.visible_to_user
+        (opencontractserver/shared/Managers.py lines 103-118).
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        if user is None:
+            user = AnonymousUser()
+
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return self.all()
+
+        if user.is_anonymous:
+            return self.filter(is_public=True).distinct()
+
+        # Query guardian permission table directly for performance
+        from django.apps import apps
+
+        try:
+            permission_model = apps.get_model(
+                "documents", "documentuserobjectpermission"
+            )
+            permitted_ids = permission_model.objects.filter(
+                permission__codename="read_document", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+
+            return self.filter(
+                Q(creator=user) | Q(is_public=True) | Q(id__in=permitted_ids)
+            ).distinct()
+        except LookupError:
+            return self.filter(Q(creator=user) | Q(is_public=True)).distinct()
 
 
 class AnnotationQuerySet(
