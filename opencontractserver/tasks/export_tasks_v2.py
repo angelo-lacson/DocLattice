@@ -179,7 +179,9 @@ def package_corpus_export_v2(
         if include_conversations:
             logger.info("Including conversations in export")
             conversations_export, messages_export, votes_export = package_conversations(
-                corpus
+                corpus,
+                document_ids=document_ids,
+                user=export.creator,
             )
 
         # ===== PART 10: Export Action Trail (Optional) =====

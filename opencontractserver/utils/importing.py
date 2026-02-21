@@ -312,6 +312,7 @@ def create_document_from_export_data(
         pdf_file=pdf_file,
         pawls_parse_file=pawls_parse_file,
         txt_extract_file=txt_extract_file,
+        file_type=doc_data.get("file_type", "application/pdf"),
         backend_lock=True,
         creator=user_obj,
         page_count=doc_data.get("page_count") or len(doc_data["pawls_file_content"]),

@@ -337,9 +337,16 @@ def import_conversations(
     votes_data: list,
     corpus: Corpus,
     user_obj: User,
+    doc_hash_to_doc: dict | None = None,
 ) -> None:
     """
     Import conversations, messages, and votes.
+
+    Handles:
+    - Corpus-level and document-level conversations
+    - Preserving original timestamps (auto_now_add fields are patched post-create)
+    - Threaded replies via parent_message re-linking
+    - Message data (JSON) field
 
     Args:
         conversations_data: List of conversation dicts
@@ -347,6 +354,8 @@ def import_conversations(
         votes_data: List of vote dicts
         corpus: Target Corpus instance
         user_obj: User performing import
+        doc_hash_to_doc: Optional mapping of document hash strings to imported
+            Document instances, used to re-link document-level conversations.
     """
     from opencontractserver.conversations.models import (
         ChatMessage,
@@ -363,28 +372,45 @@ def import_conversations(
             creator_email = conv_data.get("creator_email", "")
             creator = User.objects.filter(email=creator_email).first() or user_obj
 
-            # Parse timestamps
-            created = datetime.fromisoformat(
-                conv_data["created"].replace("Z", "+00:00")
-            )
-            modified = datetime.fromisoformat(
-                conv_data["modified"].replace("Z", "+00:00")
-            )
+            # Determine corpus vs document linkage
+            chat_with_corpus = corpus if conv_data.get("chat_with_corpus", True) else None
+            chat_with_document = None
+            doc_hash = conv_data.get("chat_with_document_hash")
+            if doc_hash_to_doc and doc_hash:
+                chat_with_document = doc_hash_to_doc.get(doc_hash)
 
             conv = Conversation.objects.create(
-                chat_with_corpus=corpus,
+                chat_with_corpus=chat_with_corpus,
+                chat_with_document=chat_with_document,
                 title=conv_data.get("title", ""),
+                description=conv_data.get("description", ""),
                 conversation_type=conv_data.get("conversation_type", "chat"),
                 is_public=conv_data.get("is_public", False),
+                is_locked=conv_data.get("is_locked", False),
+                is_pinned=conv_data.get("is_pinned", False),
                 creator=creator,
-                created_at=created,
-                updated_at=modified,
             )
+
+            # Patch auto_now_add / auto_now timestamps using QuerySet.update()
+            # to bypass the auto_now behavior that ignores values in create().
+            timestamp_updates = {}
+            if "created" in conv_data:
+                timestamp_updates["created_at"] = datetime.fromisoformat(
+                    conv_data["created"].replace("Z", "+00:00")
+                )
+            if "modified" in conv_data:
+                timestamp_updates["updated_at"] = datetime.fromisoformat(
+                    conv_data["modified"].replace("Z", "+00:00")
+                )
+            if timestamp_updates:
+                Conversation.all_objects.filter(pk=conv.pk).update(**timestamp_updates)
 
             conv_map[conv_data["id"]] = conv
             logger.info(f"Created conversation: {conv.title}")
 
-        # Build message ID mapping
+        # Build message ID mapping — two passes:
+        # Pass 1: create all messages (without parent links)
+        # Pass 2: re-link parent_message references
         msg_map = {}
 
         for msg_data in messages_data:
@@ -399,19 +425,36 @@ def import_conversations(
             creator_email = msg_data.get("creator_email", "")
             creator = User.objects.filter(email=creator_email).first() or user_obj
 
-            created = datetime.fromisoformat(msg_data["created"].replace("Z", "+00:00"))
-
             message = ChatMessage.objects.create(
                 conversation=conversation,
                 content=msg_data.get("content", ""),
                 msg_type=msg_data.get("msg_type", "HUMAN"),
                 state=msg_data.get("state", "completed"),
                 agent_type=msg_data.get("agent_type"),
+                data=msg_data.get("data"),
                 creator=creator,
-                created_at=created,
             )
 
+            # Patch auto_now_add timestamp
+            if "created" in msg_data:
+                created_ts = datetime.fromisoformat(
+                    msg_data["created"].replace("Z", "+00:00")
+                )
+                ChatMessage.all_objects.filter(pk=message.pk).update(
+                    created_at=created_ts
+                )
+
             msg_map[msg_data["id"]] = message
+
+        # Pass 2: Re-link parent_message references
+        for msg_data in messages_data:
+            parent_id = msg_data.get("parent_message_id")
+            if parent_id:
+                message = msg_map.get(msg_data["id"])
+                parent = msg_map.get(parent_id)
+                if message and parent:
+                    message.parent_message = parent
+                    message.save(update_fields=["parent_message"])
 
         # Import votes
         for vote_data in votes_data:
@@ -424,16 +467,18 @@ def import_conversations(
             creator_email = vote_data.get("creator_email", "")
             creator = User.objects.filter(email=creator_email).first() or user_obj
 
-            created = datetime.fromisoformat(
-                vote_data["created"].replace("Z", "+00:00")
-            )
-
-            MessageVote.objects.create(
+            vote = MessageVote.objects.create(
                 message=message,
                 vote_type=vote_data.get("vote_type", "upvote"),
                 creator=creator,
-                created_at=created,
             )
+
+            # Patch auto_now_add timestamp
+            if "created" in vote_data:
+                created_ts = datetime.fromisoformat(
+                    vote_data["created"].replace("Z", "+00:00")
+                )
+                MessageVote.objects.filter(pk=vote.pk).update(created_at=created_ts)
 
         logger.info(
             "Imported %d conversations, %d messages, %d votes",

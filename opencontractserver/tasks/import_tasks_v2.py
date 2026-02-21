@@ -241,13 +241,19 @@ def _import_corpus(
             _setup_corpus_and_labels(data_json, user_obj, seed_corpus_id)
         )
 
+        # Build a text-keyed label lookup for structural annotations and
+        # relationships, which reference labels by text rather than PK.
+        label_lookup_by_text = {
+            label.text: label for label in label_lookup.values()
+        }
+
         # ===== V2 only: Import structural annotation sets =====
         structural_sets = {}
         if is_v2:
             struct_sets_data = data_json.get("structural_annotation_sets", {})
             for content_hash, struct_data in struct_sets_data.items():
                 struct_set = import_structural_annotation_set(
-                    struct_data, label_lookup, user_obj
+                    struct_data, label_lookup_by_text, user_obj
                 )
                 if struct_set:
                     structural_sets[content_hash] = struct_set
@@ -255,6 +261,10 @@ def _import_corpus(
 
         # ===== Shared: Import documents =====
         all_annot_id_maps = {}  # aggregated old_id -> new_id across all docs
+        # Track doc_hash -> corpus_doc for DocumentPath reconstruction
+        doc_hash_to_corpus_doc: dict[str, Document] = {}
+        # Track doc_filename -> corpus_doc_id for conversation doc linking
+        doc_filename_to_id: dict[str, int] = {}
 
         for doc_filename, doc_data in data_json["annotated_docs"].items():
             logger.info(f"Importing document: {doc_filename}")
@@ -271,12 +281,27 @@ def _import_corpus(
 
             if corpus_doc:
                 all_annot_id_maps.update(annot_id_map)
+                # Build hash mapping for DocumentPath reconstruction
+                if corpus_doc.pdf_file_hash:
+                    doc_hash_to_corpus_doc[corpus_doc.pdf_file_hash] = corpus_doc
+                # Also map by old ID (fallback if hash is not available)
+                doc_hash_to_corpus_doc[str(corpus_doc.id)] = corpus_doc
+                doc_filename_to_id[doc_filename] = corpus_doc.id
 
         # ===== V2 only: Import additional features =====
         if is_v2:
             # Import folders
             folders_data = data_json.get("folders", [])
             import_corpus_folders(folders_data, corpus_obj, user_obj)
+
+            # Reconstruct DocumentPaths from exported version trees
+            document_paths_data = data_json.get("document_paths", [])
+            if document_paths_data:
+                _reconstruct_document_paths(
+                    document_paths_data,
+                    corpus_obj,
+                    doc_hash_to_corpus_doc,
+                )
 
             # Import relationships (corpus-level, non-structural)
             relationships_data = data_json.get("relationships", [])
@@ -285,7 +310,7 @@ def _import_corpus(
                     relationships_data,
                     corpus_obj,
                     all_annot_id_maps,
-                    label_lookup,
+                    label_lookup_by_text,
                     user_obj,
                 )
 
@@ -308,7 +333,12 @@ def _import_corpus(
                 messages = data_json.get("messages", [])
                 votes = data_json.get("message_votes", [])
                 import_conversations(
-                    conversations, messages, votes, corpus_obj, user_obj
+                    conversations,
+                    messages,
+                    votes,
+                    corpus_obj,
+                    user_obj,
+                    doc_hash_to_doc=doc_hash_to_corpus_doc,
                 )
 
         logger.info(f"Import completed successfully for corpus {corpus_obj.id}")
@@ -370,3 +400,75 @@ def _import_v2_relationships(
             rel.source_annotations.set(source_ids)
             rel.target_annotations.set(target_ids)
             set_permissions_for_obj_to_user(user_obj, rel, [PermissionTypes.ALL])
+
+
+def _reconstruct_document_paths(
+    document_paths_data: list[dict],
+    corpus_obj,
+    doc_hash_to_corpus_doc: dict[str, Document],
+) -> None:
+    """
+    Update DocumentPaths created by corpus.add_document() to match the exported
+    path, version_number, and folder assignments.
+
+    Only current, non-deleted paths from the export are applied since historical
+    versions don't have file content in the export. This ensures the document
+    tree structure matches the original corpus.
+
+    Args:
+        document_paths_data: List of exported DocumentPath dicts.
+        corpus_obj: The target corpus.
+        doc_hash_to_corpus_doc: Mapping of document_ref (hash or old ID) to
+            the imported corpus-isolated Document.
+    """
+    from opencontractserver.corpuses.models import CorpusFolder
+    from opencontractserver.documents.models import DocumentPath
+
+    for path_data in document_paths_data:
+        # Only reconstruct current, non-deleted paths
+        if not path_data.get("is_current", True) or path_data.get("is_deleted", False):
+            continue
+
+        doc_ref = path_data.get("document_ref")
+        corpus_doc = doc_hash_to_corpus_doc.get(doc_ref)
+        if not corpus_doc:
+            logger.debug(
+                f"DocumentPath reconstruction: no matching doc for ref {doc_ref}"
+            )
+            continue
+
+        # Find the DocumentPath created by add_document() for this corpus_doc
+        existing_path = DocumentPath.objects.filter(
+            corpus=corpus_obj, document=corpus_doc
+        ).first()
+        if not existing_path:
+            continue
+
+        # Update path and version_number to match export
+        updates = {}
+        exported_path = path_data.get("path")
+        if exported_path and exported_path != existing_path.path:
+            updates["path"] = exported_path
+
+        exported_version = path_data.get("version_number")
+        if exported_version and exported_version != existing_path.version_number:
+            updates["version_number"] = exported_version
+
+        # Update folder assignment if folder_path is specified
+        folder_path = path_data.get("folder_path")
+        if folder_path:
+            folder = CorpusFolder.objects.filter(
+                corpus=corpus_obj
+            ).all()
+            for f in folder:
+                if f.get_path() == folder_path:
+                    updates["folder"] = f
+                    break
+
+        if updates:
+            for key, value in updates.items():
+                setattr(existing_path, key, value)
+            existing_path.save(update_fields=list(updates.keys()))
+            logger.debug(
+                f"Updated DocumentPath for doc {corpus_doc.id}: {updates}"
+            )

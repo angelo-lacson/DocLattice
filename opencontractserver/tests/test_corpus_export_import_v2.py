@@ -24,6 +24,7 @@ from django.utils import timezone
 from opencontractserver.annotations.models import (
     DOC_TYPE_LABEL,
     RELATIONSHIP_LABEL,
+    SPAN_LABEL,
     TOKEN_LABEL,
     Annotation,
     AnnotationLabel,
@@ -50,6 +51,7 @@ from opencontractserver.tasks.import_tasks_v2 import (
 )
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.users.models import UserExport
+from opencontractserver.utils.etl import build_label_lookups
 from opencontractserver.utils.export_v2 import (
     package_agent_config,
     package_conversations,
@@ -1523,3 +1525,462 @@ class TestV2EdgeCases(TransactionTestCase):
 
         # Should succeed even without optional fields
         self.assertIsNotNone(imported_id)
+
+
+class TestLabelTypeExportCompleteness(TransactionTestCase):
+    """Test that all label types (TOKEN, DOC, SPAN, RELATIONSHIP) are exported."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            label_set=self.labelset,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+
+        # Create labels of all types
+        self.token_label = AnnotationLabel.objects.create(
+            text="Token Label", label_type=TOKEN_LABEL, creator=self.user
+        )
+        self.doc_label = AnnotationLabel.objects.create(
+            text="Doc Label", label_type=DOC_TYPE_LABEL, creator=self.user
+        )
+        self.span_label = AnnotationLabel.objects.create(
+            text="Span Label", label_type=SPAN_LABEL, creator=self.user
+        )
+        self.rel_label = AnnotationLabel.objects.create(
+            text="Rel Label", label_type=RELATIONSHIP_LABEL, creator=self.user
+        )
+        self.labelset.annotation_labels.add(
+            self.token_label, self.doc_label, self.span_label, self.rel_label
+        )
+
+        # Create a document
+        minimal_pdf = b"%PDF-1.4 minimal"
+        self.doc = Document.objects.create(
+            title="Test Doc",
+            pdf_file=ContentFile(minimal_pdf, name="test.pdf"),
+            creator=self.user,
+            page_count=1,
+        )
+        DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/test.pdf",
+            creator=self.user,
+        )
+
+        # Create annotations with TOKEN_LABEL and SPAN_LABEL
+        Annotation.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            annotation_label=self.token_label,
+            raw_text="Token text",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            annotation_label=self.span_label,
+            raw_text="Span text",
+            creator=self.user,
+        )
+        Annotation.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            annotation_label=self.doc_label,
+            annotation_type=DOC_TYPE_LABEL,
+            creator=self.user,
+        )
+
+        # Create a relationship using the RELATIONSHIP_LABEL
+        annot1 = Annotation.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            annotation_label=self.token_label,
+            raw_text="Source",
+            creator=self.user,
+        )
+        annot2 = Annotation.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            annotation_label=self.token_label,
+            raw_text="Target",
+            creator=self.user,
+        )
+        rel = Relationship.objects.create(
+            corpus=self.corpus,
+            document=self.doc,
+            relationship_label=self.rel_label,
+            creator=self.user,
+        )
+        rel.source_annotations.add(annot1)
+        rel.target_annotations.add(annot2)
+
+    def test_build_label_lookups_includes_all_types(self):
+        """Verify that build_label_lookups exports SPAN_LABEL and RELATIONSHIP_LABEL."""
+        lookups = build_label_lookups(corpus_id=self.corpus.id)
+
+        text_labels = lookups["text_labels"]
+        doc_labels = lookups["doc_labels"]
+
+        # Collect all label types from text_labels
+        text_label_types = {v["label_type"] for v in text_labels.values()}
+        doc_label_types = {v["label_type"] for v in doc_labels.values()}
+
+        # TOKEN_LABEL, SPAN_LABEL, and RELATIONSHIP_LABEL should be in text_labels
+        self.assertIn("TOKEN_LABEL", text_label_types)
+        self.assertIn("SPAN_LABEL", text_label_types)
+        self.assertIn("RELATIONSHIP_LABEL", text_label_types)
+
+        # DOC_TYPE_LABEL should be in doc_labels
+        self.assertIn("DOC_TYPE_LABEL", doc_label_types)
+
+    def test_roundtrip_preserves_all_label_types(self):
+        """Full roundtrip test verifying all label types survive export/import."""
+        export = UserExport.objects.create(backend_lock=True, creator=self.user)
+
+        package_corpus_export_v2(
+            export_id=export.id,
+            corpus_pk=self.corpus.id,
+        )
+
+        export.refresh_from_db()
+
+        # Read export data
+        with export.file.open("rb") as f:
+            with zipfile.ZipFile(f, "r") as zip_ref:
+                with zip_ref.open("data.json") as data_file:
+                    data = json.load(data_file)
+
+        # Verify text_labels contains all non-DOC types
+        text_label_types = {v["label_type"] for v in data["text_labels"].values()}
+        self.assertIn("TOKEN_LABEL", text_label_types)
+        self.assertIn("SPAN_LABEL", text_label_types)
+        self.assertIn("RELATIONSHIP_LABEL", text_label_types)
+
+        # Verify doc_labels contains DOC_TYPE_LABEL
+        doc_label_types = {v["label_type"] for v in data["doc_labels"].values()}
+        self.assertIn("DOC_TYPE_LABEL", doc_label_types)
+
+        # Import and verify labels are reconstructed
+        temp_file = TemporaryFileHandle.objects.create()
+        export.file.open("rb")
+        temp_file.file.save("test_labels.zip", export.file)
+        export.file.close()
+
+        imported_corpus_id = import_corpus_v2(
+            temporary_file_handle_id=temp_file.id,
+            user_id=self.user.id,
+            seed_corpus_id=None,
+        )
+        self.assertIsNotNone(imported_corpus_id)
+
+        imported_corpus = Corpus.objects.get(id=imported_corpus_id)
+        imported_labels = imported_corpus.label_set.annotation_labels.all()
+        imported_label_types = set(imported_labels.values_list("label_type", flat=True))
+
+        self.assertIn(TOKEN_LABEL, imported_label_types)
+        self.assertIn(DOC_TYPE_LABEL, imported_label_types)
+        self.assertIn(SPAN_LABEL, imported_label_types)
+        self.assertIn(RELATIONSHIP_LABEL, imported_label_types)
+
+
+class TestDocumentFileTypeRoundTrip(TransactionTestCase):
+    """Test that document file_type is preserved through export/import."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            label_set=self.labelset,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+
+    def test_file_type_in_export(self):
+        """Verify file_type is included in exported document data."""
+        doc = Document.objects.create(
+            title="Test Text Doc",
+            file_type="text/plain",
+            pdf_file=ContentFile(b"plain text content", name="test.txt"),
+            creator=self.user,
+            page_count=1,
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/test.txt",
+            creator=self.user,
+        )
+
+        export = UserExport.objects.create(backend_lock=True, creator=self.user)
+        package_corpus_export_v2(
+            export_id=export.id,
+            corpus_pk=self.corpus.id,
+        )
+
+        export.refresh_from_db()
+        with export.file.open("rb") as f:
+            with zipfile.ZipFile(f, "r") as zip_ref:
+                with zip_ref.open("data.json") as data_file:
+                    data = json.load(data_file)
+
+        # Check that file_type is present in exported doc data
+        for doc_data in data["annotated_docs"].values():
+            self.assertEqual(doc_data["file_type"], "text/plain")
+
+
+class TestConversationExportEnhancements(TransactionTestCase):
+    """Test enhanced conversation export features."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testuser", password="testpass", email="test@test.com"
+        )
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            label_set=self.labelset,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+
+        # Create a document for doc-level conversations
+        minimal_pdf = b"%PDF-1.4 minimal"
+        self.doc = Document.objects.create(
+            title="Test Doc",
+            pdf_file=ContentFile(minimal_pdf, name="test.pdf"),
+            creator=self.user,
+            page_count=1,
+        )
+        self.doc_path = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/test.pdf",
+            creator=self.user,
+        )
+
+    def test_doc_level_conversations_exported(self):
+        """Verify document-level conversations are included in export."""
+        # Create corpus-level conversation
+        corpus_conv = Conversation.objects.create(
+            chat_with_corpus=self.corpus,
+            title="Corpus Thread",
+            creator=self.user,
+        )
+
+        # Create document-level conversation
+        doc_conv = Conversation.objects.create(
+            chat_with_document=self.doc,
+            title="Doc Thread",
+            creator=self.user,
+        )
+
+        conversations, messages, votes = package_conversations(
+            self.corpus, document_ids=[self.doc.id]
+        )
+
+        self.assertEqual(len(conversations), 2)
+        titles = {c["title"] for c in conversations}
+        self.assertIn("Corpus Thread", titles)
+        self.assertIn("Doc Thread", titles)
+
+        # Verify doc-level conversation has document reference
+        doc_conv_data = next(
+            c for c in conversations if c["title"] == "Doc Thread"
+        )
+        self.assertIsNotNone(doc_conv_data["chat_with_document_id"])
+
+    def test_conversation_description_exported(self):
+        """Verify conversation description is included in export."""
+        Conversation.objects.create(
+            chat_with_corpus=self.corpus,
+            title="Thread with Desc",
+            description="This is a description",
+            creator=self.user,
+        )
+
+        conversations, _, _ = package_conversations(self.corpus)
+
+        self.assertEqual(len(conversations), 1)
+        self.assertEqual(conversations[0]["description"], "This is a description")
+
+    def test_message_parent_and_data_exported(self):
+        """Verify parent_message and data fields are exported."""
+        conv = Conversation.objects.create(
+            chat_with_corpus=self.corpus,
+            title="Threaded",
+            creator=self.user,
+        )
+
+        parent_msg = ChatMessage.objects.create(
+            conversation=conv,
+            content="Parent message",
+            msg_type="HUMAN",
+            data={"key": "value"},
+            creator=self.user,
+        )
+
+        ChatMessage.objects.create(
+            conversation=conv,
+            content="Reply",
+            msg_type="HUMAN",
+            parent_message=parent_msg,
+            creator=self.user,
+        )
+
+        _, messages, _ = package_conversations(self.corpus)
+
+        self.assertEqual(len(messages), 2)
+
+        # Find parent and child
+        parent_data = next(m for m in messages if m["content"] == "Parent message")
+        child_data = next(m for m in messages if m["content"] == "Reply")
+
+        self.assertIsNone(parent_data["parent_message_id"])
+        self.assertEqual(parent_data["data"], {"key": "value"})
+        self.assertEqual(child_data["parent_message_id"], parent_data["id"])
+
+    def test_conversation_import_timestamps_preserved(self):
+        """Verify timestamps survive import despite auto_now_add fields."""
+        from datetime import timedelta
+
+        original_time = timezone.now() - timedelta(days=30)
+
+        conversations_data = [
+            {
+                "id": "conv_1",
+                "title": "Old Conversation",
+                "conversation_type": "chat",
+                "is_public": False,
+                "creator_email": self.user.email,
+                "chat_with_corpus": True,
+                "created": original_time.isoformat(),
+                "modified": original_time.isoformat(),
+            }
+        ]
+
+        messages_data = [
+            {
+                "id": "msg_1",
+                "conversation_id": "conv_1",
+                "content": "Old message",
+                "msg_type": "HUMAN",
+                "state": "COMPLETE",
+                "creator_email": self.user.email,
+                "created": original_time.isoformat(),
+            }
+        ]
+
+        import_conversations(
+            conversations_data, messages_data, [], self.corpus, self.user
+        )
+
+        conv = Conversation.objects.filter(chat_with_corpus=self.corpus).first()
+        self.assertIsNotNone(conv)
+
+        # Timestamps should be close to the original (within a second)
+        self.assertAlmostEqual(
+            conv.created_at.timestamp(),
+            original_time.timestamp(),
+            delta=1.0,
+        )
+
+        msg = ChatMessage.objects.filter(conversation=conv).first()
+        self.assertIsNotNone(msg)
+        self.assertAlmostEqual(
+            msg.created_at.timestamp(),
+            original_time.timestamp(),
+            delta=1.0,
+        )
+
+    def test_conversation_import_parent_message_relinked(self):
+        """Verify parent_message re-linking works on import."""
+        conversations_data = [
+            {
+                "id": "conv_1",
+                "title": "Threaded Conv",
+                "conversation_type": "thread",
+                "is_public": False,
+                "creator_email": self.user.email,
+                "chat_with_corpus": True,
+                "created": timezone.now().isoformat(),
+                "modified": timezone.now().isoformat(),
+            }
+        ]
+
+        messages_data = [
+            {
+                "id": "msg_parent",
+                "conversation_id": "conv_1",
+                "content": "Parent",
+                "msg_type": "HUMAN",
+                "state": "COMPLETE",
+                "parent_message_id": None,
+                "creator_email": self.user.email,
+                "created": timezone.now().isoformat(),
+            },
+            {
+                "id": "msg_child",
+                "conversation_id": "conv_1",
+                "content": "Reply",
+                "msg_type": "HUMAN",
+                "state": "COMPLETE",
+                "parent_message_id": "msg_parent",
+                "creator_email": self.user.email,
+                "created": timezone.now().isoformat(),
+            },
+        ]
+
+        import_conversations(
+            conversations_data, messages_data, [], self.corpus, self.user
+        )
+
+        messages = ChatMessage.objects.filter(
+            conversation__chat_with_corpus=self.corpus
+        ).order_by("created_at")
+        self.assertEqual(messages.count(), 2)
+
+        parent = messages.filter(content="Parent").first()
+        child = messages.filter(content="Reply").first()
+
+        self.assertIsNone(parent.parent_message)
+        self.assertEqual(child.parent_message_id, parent.id)
+
+    def test_conversation_import_description_and_flags(self):
+        """Verify description, is_locked, is_pinned survive import."""
+        conversations_data = [
+            {
+                "id": "conv_1",
+                "title": "Annotated Conv",
+                "description": "Important discussion",
+                "conversation_type": "thread",
+                "is_public": True,
+                "is_locked": True,
+                "is_pinned": True,
+                "creator_email": self.user.email,
+                "chat_with_corpus": True,
+                "created": timezone.now().isoformat(),
+                "modified": timezone.now().isoformat(),
+            }
+        ]
+
+        import_conversations(
+            conversations_data, [], [], self.corpus, self.user
+        )
+
+        conv = Conversation.objects.filter(chat_with_corpus=self.corpus).first()
+        self.assertEqual(conv.description, "Important discussion")
+        self.assertTrue(conv.is_locked)
+        self.assertTrue(conv.is_pinned)
