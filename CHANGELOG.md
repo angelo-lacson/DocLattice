@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Information leakage fix**: Outer exception handlers no longer return `str(e)` to clients; errors are logged server-side only
 - **Test Coverage**: Added IDOR protection tests in `test_permission_fixes.py` and `test_voting_mutations_graphql.py`
 
+#### QuerySet Permission Filtering Gaps Fixed
+- `DocumentQuerySet.visible_to_user()` and `NoteQuerySet.visible_to_user()` inherited from `PermissionQuerySet` which had guardian permission checks commented out — only checking `is_public` and `creator`
+  - `opencontractserver/shared/QuerySets.py` (classes `DocumentQuerySet`, `NoteQuerySet`)
+- **Bug**: Code calling `Document.objects.filter(...).visible_to_user(user)` hit the QuerySet method instead of the Manager method, bypassing guardian permissions
+- **Impact**: Documents shared via `set_permissions_for_obj_to_user()` were invisible through the QuerySet chain code path; Notes on accessible documents were not visible to users who could see the parent document and corpus
+- **Fix**: Both QuerySets now override `visible_to_user()` with proper permission checks. Documents check guardian tables directly; Notes inherit from document + corpus permissions
+
 ### Added
 
 #### Context Guardrails & Conversation Compaction (Closes #898)
