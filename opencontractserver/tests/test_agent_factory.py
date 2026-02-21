@@ -115,7 +115,7 @@ class TestUnifiedAgentFactory(TestAgentFactorySetup):
 
         mock_get_config.assert_called_once_with(
             user_id=None,
-            model_name="gpt-4o-mini",
+            model_name=None,
             system_prompt=None,
             temperature=0.7,
             max_tokens=None,
@@ -154,7 +154,7 @@ class TestUnifiedAgentFactory(TestAgentFactorySetup):
 
         mock_get_config.assert_called_once_with(
             user_id=None,
-            model_name="gpt-4o-mini",  # Default from factory
+            model_name=None,  # Resolved by get_default_config from settings
             system_prompt=None,
             temperature=0.7,  # Default
             max_tokens=None,  # Default

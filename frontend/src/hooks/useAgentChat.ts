@@ -62,6 +62,8 @@ export interface AgentMessageData {
     | "ASYNC_THOUGHT"
     | "ASYNC_SOURCES"
     | "ASYNC_APPROVAL_NEEDED"
+    | "ASYNC_APPROVAL_RESULT"
+    | "ASYNC_RESUME"
     | "ASYNC_ERROR";
   content: string;
   data?: {
@@ -653,6 +655,11 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
             break;
 
           case "ASYNC_APPROVAL_NEEDED":
+            // NOTE: No sub-tool unwrapping (_sub_tool_name) needed here.
+            // This hook is used for document-level and generic chat contexts
+            // that talk to agents directly — never via ask_document. Sub-tool
+            // unwrapping for nested corpus→document approvals lives only in
+            // CorpusChat.
             if (data?.pending_tool_call && data?.message_id) {
               setPendingApproval({
                 messageId: data.message_id,
@@ -668,6 +675,28 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
                 )
               );
             }
+            break;
+
+          case "ASYNC_APPROVAL_RESULT":
+            // Informational – backend echoes the user's decision.
+            if (
+              pendingApproval &&
+              data?.message_id === pendingApproval.messageId
+            ) {
+              setPendingApproval(null);
+              setShowApprovalModal(false);
+              if (data?.decision) {
+                updateMessageApprovalStatus(
+                  pendingApproval.messageId,
+                  data.decision as "approved" | "rejected"
+                );
+              }
+            }
+            break;
+
+          case "ASYNC_RESUME":
+            // Agent is resuming after approval – keep processing indicator.
+            setIsProcessing(true);
             break;
 
           case "ASYNC_FINISH":

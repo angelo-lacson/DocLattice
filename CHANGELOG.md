@@ -5,18 +5,21 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-10
+## [Unreleased] - 2026-02-19
 
+### Changed
+
+#### Pipeline Registry: Deduplicate and Filter Abstract Components
+- **Removed `MultimodalMicroserviceEmbedder` backwards-compatibility alias**: The module-level alias `MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder` in `opencontractserver/pipeline/embedders/multimodal_microservice.py` has been removed. Use `CLIPMicroserviceEmbedder` directly.
+- **Fixed duplicate embedder entries in pipeline registry**: `_discover_subclasses()` in `opencontractserver/pipeline/registry.py` now deduplicates discovered classes by identity and skips abstract intermediate base classes via `inspect.isabstract()`, preventing aliases and abstract bases from appearing in the get-embedders query endpoint.
 ### Fixed
 
-#### Corpus Agent Action Failure: griffe/pydantic-ai Incompatibility
-- **Pin `griffe>=1.3.2,<2`** (`requirements/base.txt`): griffe 2.0.0 (released 2026-02-09) removed the `**options` catch-all from all docstring parsers. pydantic-ai 0.2.x unconditionally passes `returns_named_value` and `returns_multiple_items` as parser options to all parsers (including numpy), causing `TypeError: parse_numpy() got an unexpected keyword argument 'returns_named_value'`. This broke all `run_agent_corpus_action` tasks during agent creation. Pinning griffe below 2.0 restores the `**options` parameter that absorbs these Google-specific options harmlessly.
-
-#### SynchronousOnlyOperation in Vector Store Construction from Async Context
-- **Wrap vector store construction in `sync_to_async`** (`opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py:392`): `create_vector_search_tool()` now wraps `PydanticAIAnnotationVectorStore(...)` in `sync_to_async` so the sync ORM calls inside `CoreAnnotationVectorStore.__init__` (embedder resolution via `get_embedder()`) run in a thread pool instead of triggering Django's `SynchronousOnlyOperation`.
-- **Pre-resolve embedder_path in `PydanticAIDocumentAgent.create()`** (`opencontractserver/llms/agents/pydantic_ai_agents.py:1529`): Added async embedder pre-resolution using `aget_embedder()` before constructing the vector store, matching the existing pattern in `PydanticAICorpusAgent.create()`. This prevents the sync `get_embedder()` fallback from hitting the ORM in an async context.
-- **Defensive `sync_to_async` fallback in both agent `create()` methods** (`pydantic_ai_agents.py`): If `aget_embedder()` fails and `embedder_path` remains `None`, the `PydanticAIAnnotationVectorStore(...)` constructor is wrapped in `sync_to_async` so the ORM calls inside `get_embedder()` run in a thread pool. Applied to both `PydanticAIDocumentAgent.create()` and `PydanticAICorpusAgent.create()`.
-- **Fix async test** (`opencontractserver/tests/test_pydantic_ai_agents.py:412`): Wrapped `PydanticAIAnnotationVectorStore(...)` construction in `sync_to_async` in `test_pydantic_ai_vector_store_search`.
+#### Edit Description Modal Does Not Save on Update (Issue #899)
+- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
+  - File: `frontend/src/App.tsx` (lines 128-149, 398)
+- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
+- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
+  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
 
 ### Changed
 
@@ -35,6 +38,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Store Model Name in ChatMessage Metadata (#897)
+- **Automatic model name persistence**: The LLM model name from `AgentConfig` is now stored in the `data` JSON field of every `ChatMessage` produced by an agent, enabling debugging, auditing, and reproducibility
+  - `opencontractserver/llms/agents/core_agents.py` — all five `CoreConversationManager` message-writing methods now persist `data["model_name"]`:
+    - `create_placeholder_message()` and `store_llm_message()` — unconditional write at creation time
+    - `complete_message()`, `update_message()`, `mark_message_error()` — use `setdefault` to backfill without overwriting placeholder values
+- **Tests**: Seven new async tests verifying model name storage across all message lifecycle paths
+  - `opencontractserver/tests/test_core_agents.py` — covers explicit model name, default model name, all five methods, and `setdefault` preservation semantics
+
+#### Nested Approval Gates for Corpus Agent Sub-Agents
+- **Sub-agent approval propagation**: When a corpus agent delegates a question to a document sub-agent via `ask_document`, and the sub-agent encounters a tool requiring approval, the approval request now propagates up to the corpus agent level and is surfaced to the user via WebSocket (`ASYNC_APPROVAL_NEEDED`)
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py` (ask_document_tool closure)
+- **Frontend sub-tool unwrapping**: CorpusChat's approval modal now displays the actual sub-tool name/arguments instead of the generic `ask_document` wrapper, with validation for malformed metadata
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx` (ASYNC_APPROVAL_NEEDED handler)
+- **Comprehensive nested approval test suite**: 10 async tests covering approval propagation, metadata stripping, bypass flag lifecycle, malformed event handling, and schema safety
+  - File: `opencontractserver/tests/test_nested_approval_gates.py`
+- **Architecture documentation**: Added "Nested Approval Gates" section to LLM framework docs with flow diagrams and security notes
+  - File: `docs/architecture/llms/README.md`
+
+#### Expose Tool Usage in Chat UI
+- **Tool Usage Badge** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1180-1288`): Assistant messages that use tools now display a wrench icon badge ("X tools used") in the message header, visible in both document and corpus chat views. Users can quickly see AI tool usage without expanding the full timeline, improving agent transparency.
+- **Tool Call Popover** (`ChatMessage.tsx:1222-1286`): Hovering over the badge opens a popover listing each tool call's formatted name, JSON input arguments, and output result. Keyboard accessible (Enter/Space to toggle, Escape to close) with full ARIA attributes.
+- **Tool result content in timeline**: Backend now captures tool result/output content in timeline `tool_result` entries (previously only stored tool name)
+  - `opencontractserver/llms/agents/timeline_schema.py:52` — added `result` field
+  - `opencontractserver/llms/agents/timeline_utils.py:77-92` — captures result from metadata, truncated to 500 chars
+  - `opencontractserver/llms/agents/pydantic_ai_agents.py:123-155` — `_extract_tool_result_summary()` extracts and truncates at source
+- **Tool result entries for search tools** (`pydantic_ai_agents.py:642-657, 686-702, 807-813`): `similarity_search`, `search_exact_text`, and `ask_document` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"). Other tools use a generic extractor with "Completed" fallback.
+
+#### Automated Documentation Screenshots
+- **Screenshot capture utility** (`frontend/tests/utils/docScreenshot.ts`): Captures screenshots during Playwright component tests using an enforced `{area}--{component}--{state}` naming convention
+- **CI workflow** (`.github/workflows/screenshots.yml`): Automatically runs component tests on PRs touching `frontend/` or `docs/`, then commits updated screenshots back to the PR branch
+- **Initial screenshot coverage**: Landing page components (hero, stats bar, trending corpuses, call-to-action) and badge components (celebration modal, toast)
+
 #### V2 Export Format
 - **`OPEN_CONTRACTS_V2` export format**: New export type available in `StartCorpusExport` mutation that includes structural annotation sets, folder hierarchy, relationships, agent config, markdown descriptions, and conversations
 - **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
@@ -47,11 +82,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
 - **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
+
 ### Fixed
 
 #### MCP Telemetry in Async Context
 - **`SynchronousOnlyOperation` in MCP server** (`config/telemetry.py`, `opencontractserver/mcp/telemetry.py`, `opencontractserver/mcp/server.py`): Added async telemetry functions (`arecord_event`, `arecord_mcp_tool_call`, `arecord_mcp_resource_read`, `arecord_mcp_request`) that use `sync_to_async` to safely run Django ORM lookups in a thread pool. Prevents "You cannot call this from an async context" errors on every MCP request.
 - **Installation ID caching** (`config/telemetry.py:91-113`): Added process-lifetime cache for installation UUID to eliminate redundant database queries on every telemetry call, particularly beneficial for high-frequency MCP requests.
+
+#### Edit Description Modal Does Not Save on Update (Issue #899)
+- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
+  - File: `frontend/src/App.tsx` (lines 128-149, 398)
+- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
+- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
+  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
+
+#### Security: LLM Prompt Injection Protection for Approval Bypass
+- **Replaced `skip_approval` function parameter with `config._approval_bypass_allowed` flag**: The previous design exposed a `skip_approval` parameter in `ask_document_tool`'s function signature that a malicious LLM could set to `True` to bypass approval gates. Now uses a runtime flag on `AgentConfig` that only `resume_with_approval()` can set, wrapped in a `try/finally` block to guarantee reset
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py`
+
+#### Inconsistent Approval Status Handling in CorpusChat
+- **Added `updateMessageApprovalStatus` to CorpusChat**: Previously, `ASYNC_APPROVAL_RESULT` handler in CorpusChat only cleared pending state without updating message `approvalStatus`, unlike ChatTray and useAgentChat which both call `updateMessageApprovalStatus`. Now consistent across all components
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx`
+- **Added message `approvalStatus: "awaiting"` on ASYNC_APPROVAL_NEEDED**: CorpusChat now marks messages as awaiting approval in both `chat` and `serverMessages` state arrays, matching ChatTray/useAgentChat behavior
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx`
+
+#### Defensive Handling of Malformed Approval Events
+- **Backend**: `ask_document_tool` now validates `pending_tool_call` is a dict with a non-empty `name` key before raising `ToolConfirmationRequired`; malformed events are logged and skipped
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py`
+- **Frontend**: `_sub_tool_name` validation checks type is string and non-empty; `_sub_tool_arguments` validates type is object before use
+  - File: `frontend/src/components/corpuses/CorpusChat.tsx`
+
+#### Corpus Agent Action Failure: griffe/pydantic-ai Incompatibility
+- **Pin `griffe>=1.3.2,<2`** (`requirements/base.txt`): griffe 2.0.0 (released 2026-02-09) removed the `**options` catch-all from all docstring parsers. pydantic-ai 0.2.x unconditionally passes `returns_named_value` and `returns_multiple_items` as parser options to all parsers (including numpy), causing `TypeError: parse_numpy() got an unexpected keyword argument 'returns_named_value'`. This broke all `run_agent_corpus_action` tasks during agent creation. Pinning griffe below 2.0 restores the `**options` parameter that absorbs these Google-specific options harmlessly.
+
+#### SynchronousOnlyOperation in Vector Store Construction from Async Context
+- **Wrap vector store construction in `sync_to_async`** (`opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py:392`): `create_vector_search_tool()` now wraps `PydanticAIAnnotationVectorStore(...)` in `sync_to_async` so the sync ORM calls inside `CoreAnnotationVectorStore.__init__` (embedder resolution via `get_embedder()`) run in a thread pool instead of triggering Django's `SynchronousOnlyOperation`.
+- **Pre-resolve embedder_path in `PydanticAIDocumentAgent.create()`** (`opencontractserver/llms/agents/pydantic_ai_agents.py:1529`): Added async embedder pre-resolution using `aget_embedder()` before constructing the vector store, matching the existing pattern in `PydanticAICorpusAgent.create()`. This prevents the sync `get_embedder()` fallback from hitting the ORM in an async context.
+- **Defensive `sync_to_async` fallback in both agent `create()` methods** (`pydantic_ai_agents.py`): If `aget_embedder()` fails and `embedder_path` remains `None`, the `PydanticAIAnnotationVectorStore(...)` constructor is wrapped in `sync_to_async` so the ORM calls inside `get_embedder()` run in a thread pool. Applied to both `PydanticAIDocumentAgent.create()` and `PydanticAICorpusAgent.create()`.
+- **Fix async test** (`opencontractserver/tests/test_pydantic_ai_agents.py:412`): Wrapped `PydanticAIAnnotationVectorStore(...)` construction in `sync_to_async` in `test_pydantic_ai_vector_store_search`.
+
+### Changed
+
+#### Streamlined Agentic Corpus Action Configuration
+- **Renamed `agent_prompt` to `task_instructions`** on `CorpusAction` model (`opencontractserver/corpuses/models.py`): Single, clearly-named field for describing what the agent should do. Migration `0041` handles the rename.
+- **Goal-oriented system prompt assembly** (`opencontractserver/tasks/agent_tasks.py`): Agent corpus actions now auto-generate a structured system prompt with automation guardrails ("you MUST use tools"), execution context (trigger type, document metadata, corpus info), and the user's task instructions. Agents no longer receive raw `system_instructions` as the system prompt — the system wraps everything in a goal-oriented format that prevents conversational responses.
+- **Document context injection**: Document-based agent actions now inject document title, ID, corpus title, and current description into the system prompt so agents don't waste tool calls loading basic metadata.
+- **Thread context injection refactored**: Thread-based agent actions now use the same structured prompt pattern as document actions, with thread context, recent messages, and triggering message content all included in the system prompt rather than the user message.
+- **`AgentConfiguration` is now optional for agent actions**: `CorpusAction` can be created with just `task_instructions` (no `agent_config` required). The DB constraint (`valid_action_type_configuration`) now allows lightweight agent actions. `AgentConfiguration` is still supported for custom persona/tool defaults.
+- **Default tool selection by trigger type** (`opencontractserver/constants/corpus_actions.py`): When no tools are specified on `agent_config.available_tools`, the system auto-selects trigger-appropriate defaults (document tools for add/edit triggers, moderation tools for thread/message triggers).
+- **`pre_authorized_tools` semantics changed** (`opencontractserver/tasks/agent_tasks.py`): `pre_authorized_tools` now only controls which tools skip approval gates. Tool availability is determined by `agent_config.available_tools` (if set) or trigger-appropriate defaults. See **Breaking Changes** below for migration guidance.
+- **GraphQL API updated**: `CreateCorpusAction` and `UpdateCorpusAction` mutations use `taskInstructions` instead of `agentPrompt`. The `taskInstructions` field alone (without `agentConfigId`) is now sufficient to create an agent action.
+- **Frontend updated**: `CreateCorpusActionModal` and `CorpusActionsSection` use "Task Instructions" labeling instead of "Agent Prompt".
+- **Unified Quick Create flow**: `CreateCorpusActionModal` now supports inline agent creation for document triggers (add_document, edit_document) in addition to thread triggers. The modal auto-selects trigger-appropriate tools and default instructions.
+- **Manual action trigger** (`config/graphql/mutations.py`): New `RunCorpusAction` mutation allows superusers to manually trigger agent actions on specific documents. Uses `transaction.on_commit()` to dispatch Celery tasks after the DB transaction commits, and `force=True` to bypass dedup checks for manual triggers.
+- **ToolFunctionRegistry** (`opencontractserver/llms/tools/tool_registry.py`): Centralized singleton registry mapping tool names to sync/async function implementations. Replaces 3 manually-curated dicts in `_resolve_tools()`. Adding a new tool now requires edits in 2 files instead of 4+.
+
+#### Mobile Navigation & URL-Driven Corpus Navigation
+
+- **Detail view switching now pushes browser history**: `updateDetailViewParam()` in `frontend/src/utils/navigationUtils.ts` now pushes new history entries instead of replacing, so browser back/forward navigates between landing and details views. `updateTabParam()` retains replace semantics so tab switches don't accumulate history entries
+- **Thread selection now URL-driven**: Discussions tab thread selection uses the existing `?thread=` query parameter (synced by CentralRouteManager) instead of the local `inlineSelectedThreadIdAtom` Jotai atom. Clicking a thread pushes `?thread=<id>` to the URL; browser back returns to the list
+  - Files: `frontend/src/components/discussions/CorpusDiscussionsView.tsx`, `frontend/src/utils/navigationUtils.ts`, `frontend/src/views/Corpuses.tsx`
+- **Tab-specific params cleared on tab switch**: `updateTabParam()` now removes `thread` and `message` params when switching tabs to prevent stale state persisting across tab changes
+- **Removed `inlineSelectedThreadIdAtom`**: Replaced by URL-driven `selectedThreadId` reactive var from `frontend/src/graphql/cache.ts`; dead `onViewModeChange` callback removed from `CorpusDiscussionsView`
+
+### Added
+
+#### Mobile Menu Access in Corpus Home Views
+
+- **Mobile navigation menu buttons**: Added `MobileMenuButton` (kebab icon, visible ≤600px) to `CorpusLandingView` (breadcrumb row) and `CorpusDetailsView` (header row), allowing mobile users to open the sidebar bottom sheet from the home tab — previously only accessible from non-home tabs
+  - Files: `frontend/src/components/corpuses/CorpusHome/CorpusLandingView.tsx`, `frontend/src/components/corpuses/CorpusHome/CorpusDetailsView.tsx`, `frontend/src/components/corpuses/CorpusHome/styles.ts`
+- **`updateThreadParam()` utility**: New navigation utility for setting/clearing the `?thread=` URL param with push semantics, following the same pattern as `updateTabParam()` and `updateMessageParam()`
+  - File: `frontend/src/utils/navigationUtils.ts`
+
+### Breaking Changes
+
+- **`pre_authorized_tools` no longer controls tool availability**: Previously, `pre_authorized_tools` was used as both the tool set AND the approval gate — if set, it replaced `agent_config.available_tools` entirely. Now it only controls which tools skip the approval gate. **Migration**: If you relied on `pre_authorized_tools` to restrict which tools an agent can access, move those tool names to `agent_config.available_tools` instead. `pre_authorized_tools` should only list tools that are safe to run without human approval.
+
+### Known Limitations
+
+- **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
 
@@ -76,6 +185,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Migration 0040 (`corpus_created_with_embedder`) backfills existing corpuses**
 
 This release includes a data migration that:
+
 - Adds a `created_with_embedder` audit field to all corpuses
 - Backfills `preferred_embedder` on existing corpuses that don't have one set (uses current `DEFAULT_EMBEDDER`)
 - Backfills `created_with_embedder` from `preferred_embedder`
@@ -87,6 +197,7 @@ This migration is safe and non-destructive. Existing corpuses with explicit `pre
 This release includes a data migration that creates personal "My Documents" corpuses for all users and moves standalone documents into them. This migration **cannot be rolled back** via `python manage.py migrate`. Attempting to reverse will raise `NotImplementedError`.
 
 **Before deploying to production:**
+
 - Ensure you have a database backup
 - Test the migration in a staging environment first
 - Plan for this being a one-way migration
@@ -96,6 +207,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Document Processing Failure Indicators and Retry Controls (Issue #825)
+
 - **Processing status display**: Document cards and list items now show distinct states for processing (spinner) vs. failed (error overlay with message) instead of a generic "Processing..." overlay for all locked documents
 - **Retry button**: Failed documents display a retry button that triggers the `RetryDocumentProcessing` GraphQL mutation, allowing users to re-process documents without backend access
 - **Context menu retry**: "Retry Processing" option added to the document context menu for failed documents
@@ -104,6 +216,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - Files: `frontend/src/components/documents/ModernDocumentItem.tsx`, `frontend/src/components/documents/DocumentItem.tsx`, `frontend/src/graphql/queries.ts`, `frontend/src/graphql/mutations.ts`, `frontend/src/types/graphql-api.ts`
 
 #### Embedder Consistency Management (Issue #437)
+
 - **Frozen embedder binding at corpus creation**: `preferred_embedder` is now auto-populated from `DEFAULT_EMBEDDER` when a corpus is created without an explicit embedder. This decouples existing corpuses from future changes to the global setting.
   - Files: `opencontractserver/corpuses/models.py` (save method)
 - **Audit trail field `created_with_embedder`**: Records which embedder was active at corpus creation. Never changes, even after re-embedding.
@@ -120,6 +233,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/corpuses/checks.py`, `opencontractserver/corpuses/apps.py`
 
 #### Auth0 Authentication for Django Admin
+
 - **Auth0 admin login support**: Django admin now supports Auth0 authentication when `USE_AUTH0=True`
   - Custom login view displays Auth0 "Sign in" button with password fallback
   - Custom logout view properly clears both Django session and Auth0 session
@@ -133,21 +247,30 @@ If rollback is required after deployment, you must write a custom migration to h
   - Configurable namespace via `AUTH0_ADMIN_CLAIM_NAMESPACE` env var
   - Files: `config/graphql_auth0_auth/utils.py:269-360`
   - **Required Auth0 Action** (Post-Login): Set up the following Auth0 Action to include admin claims in tokens:
+
     ```javascript
     exports.onExecutePostLogin = async (event, api) => {
-      const namespace = 'https://opencontracts.opensource.legal/';
+      const namespace = "https://opencontracts.opensource.legal/";
       const appMetadata = event.user.app_metadata || {};
 
       // Add admin claims to access token
       if (appMetadata.is_staff !== undefined) {
-        api.accessToken.setCustomClaim(`${namespace}is_staff`, appMetadata.is_staff);
+        api.accessToken.setCustomClaim(
+          `${namespace}is_staff`,
+          appMetadata.is_staff,
+        );
       }
       if (appMetadata.is_superuser !== undefined) {
-        api.accessToken.setCustomClaim(`${namespace}is_superuser`, appMetadata.is_superuser);
+        api.accessToken.setCustomClaim(
+          `${namespace}is_superuser`,
+          appMetadata.is_superuser,
+        );
       }
     };
     ```
+
     Then set `app_metadata.is_staff` and `app_metadata.is_superuser` on users via Auth0 Management API or Dashboard.
+
 - **Auth0AdminBackend**: Dedicated authentication backend for admin login via Auth0
   - Validates user exists, is active, and has `is_staff=True`
   - Files: `config/admin_auth/backends.py:18-88`
@@ -173,6 +296,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Token storage scope**: Admin Auth0 SPA client now uses in-memory token storage instead of localStorage. Files: `opencontractserver/templates/admin/auth0_login.html:249-257`
 
 #### Runtime-Configurable Pipeline Settings (Superuser Only)
+
 - **PipelineSettings singleton model**: Database-backed configuration for document processing pipeline
   - Stores preferred parsers, embedders, and thumbnailers per MIME type
   - Stores parser-specific kwargs and component settings overrides
@@ -221,6 +345,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/pipeline/utils.py:303-361`
 
 ### Changed
+
 - Pipeline settings getters (`get_preferred_parser`, `get_preferred_embedder`, `get_parser_kwargs`, `get_default_embedder`) no longer fall back to Django settings at runtime. Database is the sole source of truth; initial values are populated from Django settings via `get_instance()`.
   - Files: `opencontractserver/documents/models.py:977-1092`
 - Pipeline component settings are now DB-only at runtime (Django settings fallback removed from `PipelineComponentBase.get_component_settings()`)
@@ -231,6 +356,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/assets/configurations/constants.ts:174-187`
 
 ### Fixed
+
 - Secrets modal now validates component existence, required secret fields, and payload size before mutation.
   - Files: `frontend/src/components/admin/SystemSettings.tsx:1500-1558`
 - MIME filter accessibility labels now include stage context.
@@ -251,6 +377,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Removed
 
 #### ModernBERT Embedders
+
 - **⚠️ Breaking Change**: ModernBERT embedders have been removed from the codebase
   - `opencontractserver/pipeline/embedders/modern_bert_embedder.py` - removed
   - `opencontractserver/pipeline/embedders/minn_modern_bert_embedder.py` - removed
@@ -264,6 +391,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Update PipelineSettings via admin UI or management command before upgrading
 
 #### Personal Corpus ("My Documents") Feature
+
 - **Personal corpus auto-creation**: Each user now automatically receives a personal "My Documents" corpus
   - Created via signal handler when user account is created
   - Uses database constraint to ensure one personal corpus per user (`one_personal_corpus_per_user`)
@@ -284,6 +412,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/corpuses/migrations/0038_create_personal_corpuses.py`
 
 #### Shared StructuralAnnotationSet
+
 - **Reuse structural sets instead of duplicating**: `add_document()` now reuses the source document's structural set
   - Previously, adding a document to a corpus duplicated the entire StructuralAnnotationSet
   - Now shares the set, reducing storage and maintaining single source of truth
@@ -295,6 +424,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/tasks/corpus_tasks.py:712-850`
 
 #### Inline Thread View with Corpus Context Sidebar
+
 - **Added inline thread viewing**: Users can now view thread details inline within the Discussions tab instead of navigating away
   - Click a thread to view details in-place with a "Back" button to return to the list
   - Thread state tracked via `inlineSelectedThreadIdAtom` Jotai atom
@@ -324,12 +454,14 @@ If rollback is required after deployment, you must write a custom migration to h
   - Compact vote button tests: `frontend/tests/VoteButtonsCompact.ct.tsx`
 
 ### Technical Details
+
 - Added `is_personal` BooleanField to Corpus model with database constraint
 - Added composite index on `(creator, is_personal)` for efficient lookups
 - Schema migration: `opencontractserver/corpuses/migrations/0037_add_is_personal_corpus.py`
 - Comprehensive test suite: `opencontractserver/tests/test_personal_corpus.py` (14 tests)
 
 #### AnnotationsPanel Shared Component
+
 - **Created `AnnotationsPanel` reusable component**: Extracts shared filtering/display logic from annotations views
   - Provides filter tabs for type (All/Doc/Text) and source (All/Human/Agent/Structural)
   - Includes SearchBox, grid display with ModernAnnotationCard, empty state, and pagination
@@ -355,6 +487,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Annotations Panel Scroll Issue
+
 - **Fixed corpus annotations tab scroll behavior**: Restructured AnnotationsPanel to scroll only the cards grid
   - Container uses flex column layout with `overflow: hidden`
   - FiltersSection has `flex-shrink: 0` to stay fixed at top
@@ -363,6 +496,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/components/annotations/AnnotationsPanel.tsx`
 
 #### Annotations Query Missing Pagination
+
 - **Added initial page limit to annotations queries**: Previously loaded all annotations at once
   - Added `limit` and `cursor` fields to `GetAnnotationsInputs` interface
   - Set initial page size to 20 annotations for both Annotations.tsx and CorpusAnnotationCards.tsx
@@ -370,6 +504,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/graphql/queries.ts`, `frontend/src/views/Annotations.tsx`, `frontend/src/components/annotations/CorpusAnnotationCards.tsx`
 
 #### Corpus Annotations Tab Source Filter
+
 - **Fixed structural annotations not visible in corpus tab**: Annotations tab now shows filter controls even when empty
   - Added source filter (Human/Agent/Structural) to `CorpusAnnotationCards`
   - Source filter syncs to GraphQL query variables: "structural" → `structural: true`, "human" → `structural: false, analysis_Isnull: true`, "agent" → `structural: false, analysis_Isnull: false`
@@ -381,6 +516,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### BREAKING: Removed Corpus.documents M2M Relationship (PR #840)
+
 - **Removed `Corpus.documents` ManyToManyField**: DocumentPath is now the sole source of truth for corpus-document relationships
   - Migration `0039_remove_corpus_documents_m2m` validates no orphaned M2M entries before removal
   - All code paths now use `corpus.add_document()`, `corpus.remove_document()`, `corpus.get_documents()`, `corpus.document_count()`
@@ -401,6 +537,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/components/modals/AddToCorpusModal.tsx`, `frontend/src/graphql/queries.ts`
 
 #### Pipeline Configuration UI Redesign
+
 - **Replaced JSON-based configuration with visual pipeline flow**: System Settings page redesigned for intuitive configuration
   - Visual pipeline stages: Document Upload → Parser → Thumbnailer → Embedder → Ready for Search
   - Clickable component cards replace JSON text editing
@@ -420,18 +557,21 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/components/admin/SystemSettings.tsx`
 
 #### Window Resize Performance
+
 - **Added debounce to window resize handler**: Prevents excessive re-renders during window resize
   - 150ms debounce delay on resize events
   - Properly cleans up timeout on unmount
   - Files: `frontend/src/components/hooks/WindowDimensionHook.tsx`
 
 #### Annotations View Refactoring
+
 - **Updated Annotations.tsx to use AnnotationsPanel**: DRY refactoring, keeps hero section, stats, semantic search, advanced filters
   - Files: `frontend/src/views/Annotations.tsx`
 - **Deleted superseded AnnotationCards.tsx**: Functionality absorbed into AnnotationsPanel
   - Files: `frontend/src/components/annotations/AnnotationCards.tsx` (deleted)
 
 #### Annotations Query Optimization
+
 - **Switched to lightweight query for annotation cards**: Both `Annotations.tsx` and `CorpusAnnotationCards.tsx` now use `GET_ANNOTATIONS_FOR_CARDS`
   - Previous query fetched `tokensJsons` (huge JSON), `json`, full document paths (pdfFile, txtExtractFile, pawlsParseFile), full corpus details
   - New query fetches only: id, created, creator (id, email, username), corpus (id, slug, labelSet.title), document (id, slug, title), annotationLabel (id, text, color, labelType), analysis (id, analyzer.analyzerId), annotationType, structural, rawText, isPublic, contentModalities
@@ -441,6 +581,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### GraphQL Corpus Query Optimization
+
 - **Added `documentCount` field to CorpusType**: Efficient document count using annotated subquery instead of N+1 queries
   - For list queries (`corpuses`), the resolver annotates `_document_count` via `DocumentPath` subquery
   - For single corpus queries, falls back to model's `document_count()` method
@@ -461,6 +602,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### DiscoveryLanding GraphQL Query Optimization
+
 - **Removed unused fields from landing page queries**: Eliminates ~39 N+1 queries per landing page load
   - Removed from `GET_DISCOVERY_DATA`: `chatMessages { totalCount }` (unused by ActivitySection), `totalMessages`, `totalThreadsCreated`, `totalAnnotationsCreated` (unused by CompactLeaderboard)
   - Replaced `documents { totalCount }` and `annotations { totalCount }` with `documentCount` and `annotationCount` (efficient subquery-backed fields)
@@ -473,6 +615,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/components/landing/RecentDiscussions.tsx`
 
 #### Frontend Corpus Query Cleanup
+
 - **Removed unused fields from GET_CORPUSES query**: Reduces payload and eliminates N+1 queries
   - Removed: `preferredEmbedder`, `appliedAnalyzerIds`, `documents.edges`, `annotations.totalCount`
   - Added: `documentCount` (efficient server-side count)
@@ -485,6 +628,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `frontend/src/types/graphql-api.ts`
 
 ### Technical Details
+
 - **Query reduction**: DiscoveryLanding page goes from ~39 N+1 queries to ~0 extra queries (all counts resolved via subqueries or removed)
 - **Backward compatibility**: All new fields (`documentCount`, `annotationCount`) gracefully fall back to model methods for single corpus queries
 - **Pattern**: Label counts are passed from corpus to label_set via instance attribute injection in `resolve_label_set`
@@ -493,6 +637,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### 2048-Dimensional Embedding Support
+
 - **Added vector_2048 field to Embedding model**: Support for 2048-dimensional embeddings used by newer embedding models
   - Migration 0061 adds nullable `vector_2048` column to `annotations_embedding` table
   - Files: `opencontractserver/annotations/models.py:470`, `opencontractserver/annotations/migrations/0061_add_vector_2048.py`
@@ -504,6 +649,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/shared/Managers.py`, `opencontractserver/shared/mixins.py`, `opencontractserver/llms/vector_stores/core_vector_stores.py`, `opencontractserver/llms/vector_stores/core_conversation_vector_stores.py`
 
 #### Multimodal Embedder Refactoring
+
 - **Refactored MultimodalMicroserviceEmbedder into inheritance hierarchy**:
   - `BaseMultimodalMicroserviceEmbedder`: Abstract base class with shared multimodal embedding logic
   - `CLIPMicroserviceEmbedder`: CLIP ViT-L-14 model (768 dimensions) with backwards-compatible legacy settings
@@ -517,12 +663,14 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### MicroserviceEmbedder Reliability
+
 - **Fixed MicroserviceEmbedder production failures**: Added Content-Type header and 30s timeout to prevent silent failures
   - Files: `opencontractserver/pipeline/embedders/sent_transformer_microservice.py:522, 530`
 
 ### Added
 
 #### Bulk Document Selection and Removal
+
 - **Bulk document selection in folder toolbar**: New Select All / Deselect All functionality for corpus documents
   - Selection count display showing "X of Y" documents selected
   - Clear selection button to deselect all
@@ -541,6 +689,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Embedder Error Handling and Response Parsing (PR #828)
+
 - **Fixed silent embedding failures**: Added `EmbeddingGenerationError` exception class that triggers Celery task retries when default embeddings fail
   - Default embedding failures now properly raise and retry (up to 3 times with 60s delay)
   - Corpus-specific embedding failures are logged but don't fail the task (non-fatal)
@@ -564,10 +713,12 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/pipeline/embedders/test_embedder.py`, `config/settings/test.py:120-134`
 
 #### Cache Eviction Consistency
+
 - **Fixed folder document counts not updating after bulk removal**: Added `corpusFolders` cache eviction to `REMOVE_DOCUMENTS_FROM_CORPUS` mutation to match the pattern used by `MOVE_DOCUMENT_TO_FOLDER`
   - Files: `frontend/src/components/corpuses/folders/RemoveDocumentsModal.tsx:109-112`
 
 #### Duplicate Tool Registration and Caller Tool Precedence
+
 - **Fixed duplicate tool registration error in PydanticAI agent**: Resolved `pydantic_ai.exceptions.UserError` when caller-provided tools have the same name as default tools
   - Files: `opencontractserver/llms/agents/pydantic_ai_agents.py:2063-2082`
 - **Caller-provided tools now take precedence over defaults**: When a caller passes a tool with the same name as a built-in default, the caller's tool configuration (description, requires_approval, etc.) is now used instead of silently dropping it
@@ -591,6 +742,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Document Processing Pipeline Hardening (PR #824)
+
 - **Document processing status tracking**: New `DocumentProcessingStatus` enum with PENDING, PROCESSING, COMPLETED, FAILED states
   - `processing_status` field on Document model with database index
   - `processing_error` and `processing_error_traceback` fields for failure diagnostics
@@ -614,6 +766,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/tests/test_pipeline_hardening.py`
 
 #### Bifurcated Conversation Permissions (CHAT vs THREAD)
+
 - **New `conversation_type` field on Conversation model**: Distinguishes between personal agent chats and collaborative discussions
   - `CHAT` type: Restrictive permissions (creator + explicit permissions + public only)
   - `THREAD` type: Context-based permissions (inherits visibility from linked corpus/document)
@@ -637,6 +790,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `docs/permissioning/consolidated_permissioning_guide.md`
 
 #### Corpus Forking: Folder and Relationship Preservation
+
 - **Folder hierarchy preservation during fork**: Forked corpora now maintain the complete folder structure
   - Folders cloned in tree-depth order to preserve parent-child relationships
   - Documents retain their folder assignments in the forked corpus
@@ -653,6 +807,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/tests/test_corpus_fork_round_trip.py`
 
 #### Corpus-Scoped MCP Endpoints for Shareable Links
+
 - **New `/mcp/corpus/{corpus_slug}/` endpoint**: Scoped MCP endpoint for single-corpus access
   - All tools automatically operate within the specified corpus context
   - No need for explicit `corpus_slug` parameters in tool calls
@@ -677,6 +832,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `docs/mcp/README.md`
 
 #### Unified Upload Modal with @os-legal/ui Design System
+
 - **Consolidated `BulkUploadModal` and `DocumentUploadModal`** into single `UploadModal` component
   - Auto-detects upload mode: ZIP files → bulk mode, PDFs → single mode
   - Multi-step wizard for single mode (Select → Details → Corpus)
@@ -694,6 +850,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Upload constants**: Added `UPLOAD.MAX_FILE_SIZE_BYTES` and `DEBOUNCE.CORPUS_SEARCH_MS` to `frontend/src/assets/configurations/constants.ts`
 
 #### Pre-extracted Image Content for Annotations
+
 - **`image_content_file` FileField on Annotation model**: Stores pre-extracted image data as JSON files
   - Eliminates need to reload full PAWLs file (~10MB) for each image embedding request
   - Performance improvement: ~10-20x faster for image annotation embeddings
@@ -707,6 +864,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Migration: `opencontractserver/annotations/migrations/0059_add_embedding_unique_constraints.py`
 
 #### Corpus-Specific Embeddings
+
 - **Dual embedding strategy**: Creates both default (global search) and corpus-specific embeddings
   - Default embedder for cross-corpus search compatibility
   - Corpus-preferred embedder for corpus-specific semantic search
@@ -716,6 +874,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `opencontractserver/tasks/doc_tasks.py:203-248`, `opencontractserver/pipeline/base/parser.py:130-143`
 
 ### Fixed
+
 - **Corpus title not getting [FORK] prefix**: Fixed f-string that did nothing (`f"{corpus.title}"` → `f"[FORK] {corpus.title}"`)
   - Files: `config/graphql/mutations.py:1199`
 - **tree_depth ordering error**: Removed explicit `order_by("tree_depth", "pk")` and rely on default `tree_ordering` from `with_tree_fields()`. The `tree_depth` field is CTE-computed and only available at SQL execution time, not during Django's `order_by()` validation.
@@ -747,6 +906,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - **Files**: `opencontractserver/shared/Managers.py:369-442`, `opencontractserver/annotations/migrations/0059_add_embedding_unique_constraints.py`
 
 ### Changed
+
 - **Permission consistency**: Utility function `build_fork_corpus_task()` now uses `PermissionTypes.CRUD` (was `ALL`) to match mutation
   - Files: `opencontractserver/utils/corpus_forking.py:69`
 - **`BulkUploadModal`** is now a thin wrapper: `<UploadModal forceMode="bulk" />`
@@ -759,7 +919,9 @@ If rollback is required after deployment, you must write a custom migration to h
 - **`StructuralAnnotationSet.duplicate()` copies image files**: Preserves pre-extracted images during corpus isolation
   - Files: `opencontractserver/annotations/models.py:705-745`
 -
+
 ### Technical Details
+
 - Documentation consolidated from separate remediation/edit plan files into `docs/architecture/corpus_forking.md`
 - Removed obsolete files: `corpus_forking_edit_plan.md`, `corpus_forking_remediation_plan.md`
 - Migrated from Semantic UI to `@os-legal/ui` design system (Modal, Button, Input, Progress, etc.)
@@ -768,9 +930,11 @@ If rollback is required after deployment, you must write a custom migration to h
 - Sequential uploads to avoid server overload (documented trade-off)
 
 ### Removed
+
 - **Deleted unused components**: `DocumentUploadList.tsx`, `DocumentListItem.tsx`
 
 ### Security
+
 - **JWT authentication error message hardening** (CWE-209: Information Exposure Through Error Messages)
   - JWT errors now return generic messages (`"Invalid token"`) instead of exposing exception details
   - Detailed errors logged server-side only for debugging
@@ -785,6 +949,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Image Annotation Display in UnifiedContentFeed
+
 - **Modality badges for annotations**: Visual indicators showing TEXT, IMAGE, or MIXED modalities
   - Color-coded badges: Blue (text), Orange (image), Purple (mixed)
   - Integrated inline with annotation labels in HighlightItem
@@ -806,6 +971,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Files: `config/graphql/graphene_types.py`
 
 ### Fixed
+
 - **Image annotations now clearly visible**: Image and mixed-modality annotations display properly in UnifiedContentFeed
   - Previously showed as empty text with no indication of content
   - Files: `frontend/src/components/annotator/sidebar/HighlightItem.tsx:163-167,225,249`
@@ -831,6 +997,7 @@ If rollback is required after deployment, you must write a custom migration to h
     - Usage: `python manage.py populate_content_modalities [--dry-run] [--force]`
 
 ### Changed
+
 - **Unified JWT authentication architecture**: Refactored authentication to use single shared utility
   - **REST API**: `config/rest_jwt_auth.py` now uses `jwt_utils.get_user_from_jwt_token()`
   - **WebSocket**: Unified `JWTAuthMiddleware` replaces separate Auth0/non-Auth0 middlewares
@@ -840,6 +1007,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - **Benefit**: DRY architecture - token validation logic centralized in one place
 
 ### Removed
+
 - **NLM Ingest Parser**: Removed legacy NLM-Ingest PDF parser in favor of Docling (default) and LlamaParse
   - **Rationale**: Docling provides superior ML-based parsing with better structure extraction; NLM parser was rarely used
   - **Migration**: Users with `PDF_PARSER=nlm` should switch to `PDF_PARSER=docling` (default) or `PDF_PARSER=llamaparse`
@@ -850,6 +1018,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - **Settings Updated**: Removed `nlm` option from `_PDF_PARSER_MAP` in `config/settings/base.py`
 
 ### Technical Details
+
 - **Backend**: REST endpoint leverages existing permission-checked `image_tools.py` functions
 - **Frontend hook**: `useAnnotationImages` conditionally fetches images only for IMAGE modality (performance optimization)
 - **TypeScript types**: Added `contentModalities?: string[]` to annotation types
@@ -861,6 +1030,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Corpus-Isolated Structural Annotations
+
 - **StructuralAnnotationSet duplication per corpus**: Each corpus now gets its own copy of structural annotations when documents are added
   - Enables multi-embedder support (each corpus can use different embedding models)
   - Maintains consistent per-corpus vector spaces for similarity search
@@ -869,6 +1039,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Migration: `opencontractserver/annotations/migrations/0056_alter_structuralannotationset_content_hash.py`
 
 #### Multimodal Embedding Support
+
 - **Image token extraction from PDFs**: Extract images from PDFs via Docling parser and store as unified tokens in PAWLs format
   - Storage path convention: `document_images/{doc_id}/page_{page}_img_{idx}.{format}`
   - Image tokens include position, dimensions, format, and storage path
@@ -897,12 +1068,14 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### Corpus Isolation Architecture
+
 - **Removed content-based deduplication**: Each upload creates independent documents regardless of content hash
 - **Removed source_document provenance**: `source_document_id` no longer set when adding documents to corpus
 - **Structural annotations no longer shared**: Each corpus gets duplicated structural annotation sets
 - **Updated documentation**: Rewrote `structural_vs_non_structural_annotations.md`, updated `document_versioning.md`, `documents_and_annotations.md`
 
 #### Multimodal Support
+
 - Extended PAWLs token format to support unified image tokens (`is_image=True`)
 - Updated `BaseEmbedder` to use `ContentModality` enum instead of boolean flags
 - Updated `PipelineComponentDefinition` in registry to store `supported_modalities`
@@ -911,6 +1084,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Android Share URL Missing Entity Prefix (PR #795)
+
 - **Bug**: Android native share was dropping entity type prefixes (`/c/`, `/d/`, `/e/`) from shared URLs
 - **Root Cause**: `frontend/src/components/seo/MetaTags.tsx:50-56` was generating canonical URLs as `/{userSlug}/{entitySlug}` instead of `/{prefix}/{userSlug}/{entitySlug}`
 - **Impact**: Links shared via Android browser resulted in 404s (e.g., `/john/my-corpus` instead of `/c/john/my-corpus`)
@@ -922,6 +1096,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Security
 
 #### WebSocket Agent Permission Vulnerability Fixed (PR #792)
+
 - **CRITICAL**: Fixed permission bypass in legacy WebSocket consumers
   - `config/websocket/consumers/corpus_conversation.py` - No permission checks
   - `config/websocket/consumers/document_conversation.py` - No permission checks
@@ -938,6 +1113,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### WebSocket Permission Escalation Tests (49 tests)
+
 - **Test file**: `opencontractserver/tests/websocket/test_agent_permission_escalation.py`
 - **Consumer-level permission tests** (13 tests): Validates connection-time permission checks for corpus, document, and combined contexts
 - **Tool filtering tests** (13 tests): Verifies write tools filtered for read-only users and anonymous access
@@ -946,6 +1122,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Integration tests** (8 tests): Full conversation flows with permission verification
 
 #### MCP Telemetry Tracking
+
 - **PostHog telemetry for MCP usage** (`opencontractserver/mcp/telemetry.py`): Track MCP tool calls and resource reads when telemetry is enabled
   - Records tool usage (`mcp_tool_call`): tool name, success/failure, error type
   - Records resource access (`mcp_resource_read`): resource type (corpus, document, annotation, thread), success/failure
@@ -966,6 +1143,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Removed
 
 #### Legacy WebSocket Consumers (Security Cleanup)
+
 - **Deleted**: `config/websocket/consumers/corpus_conversation.py` (~330 lines)
 - **Deleted**: `config/websocket/consumers/document_conversation.py` (~610 lines)
 - **Deleted**: `config/websocket/consumers/standalone_document_conversation.py` (~530 lines)
@@ -977,10 +1155,12 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### Frontend WebSocket Migration
+
 - **Updated**: `frontend/src/components/chat/get_websockets.ts` - All WebSocket URLs now use unified endpoint
 - **Updated**: `frontend/src/components/knowledge_base/document/utils.ts` - Document chat uses unified endpoint
 
 ### Technical Details
+
 - Uses existing PostHog infrastructure from `config/telemetry.py`
 - Respects `TELEMETRY_ENABLED` setting and TEST mode disable
 - IP hashing uses `TELEMETRY_IP_SALT` setting to prevent rainbow table attacks
@@ -989,6 +1169,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### NavMenu Refactoring (PR #779)
+
 - **Migrated to @os-legal/ui NavBar** (`frontend/src/components/layout/NavMenu.tsx`): Complete refactor from Semantic UI Menu to unified NavBar component
   - Single responsive component replaces separate NavMenu and MobileNavMenu
   - Built-in hamburger menu at 1100px breakpoint eliminates conditional rendering in App.tsx
@@ -1003,6 +1184,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### NavMenu Component Tests
+
 - **Playwright component tests** (`frontend/tests/NavMenu.ct.tsx`): 18 comprehensive tests covering:
   - Navigation items and active state highlighting
   - Authentication states (login button vs user menu)
@@ -1015,6 +1197,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Superuser Features in Non-Auth0 Mode
+
 - **LOGIN_MUTATION missing isSuperuser** (`frontend/src/graphql/mutations.ts:49-65`): Added `isSuperuser` field to login query
   - Previously, superuser features (Badge Management, Admin Settings) were broken in non-Auth0 mode
   - Updated `LoginOutputs` interface to include `username`, `isUsageCapped`, and `isSuperuser` fields
@@ -1022,6 +1205,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### WebSocket Connection Performance (Issue: Chat "Reconnecting" delay)
+
 - **Auth0 JWKS caching** (`config/graphql_auth0_auth/utils.py:17-38`): Added in-memory cache for Auth0 JWKS with 10-minute TTL
   - Previously fetched JWKS from Auth0 on every token validation, causing 6-10 second delays
   - Now caches JWKS keys, reducing subsequent WebSocket auth to near-instant
@@ -1035,6 +1219,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Extract View Refactoring (PR #772)
+
 - **Route-based extract detail view** (`frontend/src/views/ExtractDetail.tsx:439-1063`, `frontend/src/components/routes/ExtractDetailRoute.tsx:1-58`): Complete refactor from modal-based to route-based architecture
   - Modern full-page layout with tabbed interface (Data, Documents, Schema)
   - Stats grid showing document count, column count, rows, and success rate
@@ -1056,11 +1241,13 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Extract landing route** (`frontend/src/components/routes/ExtractLandingRoute.tsx:1-35`): Route component for /extracts
 
 ### Removed
+
 - **EditExtractModal component**: Replaced by route-based ExtractDetail view - modal approach deprecated
 - **Obsolete test files** (`frontend/tests/EditExtractModal.ct.tsx`, `frontend/tests/EditExtractModalTestWrapper.tsx`): Removed tests for deleted modal component
 - **Polling constants** (`frontend/src/constants/extract.ts`): Removed `EXTRACT_POLLING_INTERVAL_MS` and `EXTRACT_POLLING_TIMEOUT_MS` - replaced by WebSocket notifications
 
 ### Changed
+
 - **openedExtract reactive var documentation** (`frontend/src/graphql/cache.ts:364-388`): Clarified that route components (like ExtractDetailRoute) can set this var, not just CentralRouteManager
 - **Consolidated constants** (`frontend/src/assets/configurations/constants.ts:47-51`): Moved `EXTRACT_SEARCH_DEBOUNCE_MS` to centralized `DEBOUNCE` object
 - **extractUtils refactor** (`frontend/src/utils/extractUtils.ts:32-55`): Now uses `EXTRACT_STATUS` and `EXTRACT_STATUS_COLORS` constants instead of hardcoded values
@@ -1068,6 +1255,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Corpuses Page Redesign
+
 - **CorpusListView component** (`frontend/src/components/corpuses/CorpusListView.tsx`): Modern corpus listing page using @os-legal/ui components
   - Hero section with search and filter tabs (All, My Corpuses, Shared, Public)
   - Stats grid showing corpus, document, annotation, and shared counts
@@ -1085,19 +1273,23 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Routing Audit Follow-ups
+
 - **Notification navigation fallback** (`frontend/src/components/notifications/NotificationDropdown.tsx:182-188`, `NotificationCenter.tsx:207-213`): Added fallback navigation to `/discussions` when corpus slug data is missing. Previously, users clicking notifications with missing slug data would see no response.
 - **Network-only fetch policy optimization** (`frontend/src/routing/CentralRouteManager.tsx:621-632`): Changed thread resolution corpus query from `network-only` to `cache-and-network` since `authInitComplete` now ensures `clearStore()` completes before route queries run. This improves navigation performance when corpus data is already cached.
 - **Unit test coverage** (`frontend/src/utils/__tests__/navigationUtils.test.ts:497-503`): Added missing test for `parseRoute("/discussions")` to prevent regression of discussions route parsing.
 
 #### Type Safety and Bug Fixes
+
 - **User email detection** (`frontend/src/components/corpuses/CorpusListView.tsx:345-349`): Fixed currentUserEmail logic to use `userObj` reactive variable from Apollo cache instead of inferring from corpus permissions - prevents filter failures when no corpus has CAN_REMOVE permission
 - **TypeScript type casts** (`frontend/src/components/corpuses/CorpusListView.tsx`, `CorpusModal.tsx`): Removed 7 `as any` type casts by correcting `CorpusType.categories` type from `CorpusCategoryTypeConnection` to `CorpusCategoryType[]` to match backend GraphQL schema
 - **N+1 query prevention** (`config/graphql/queries.py:820-825`): Added `prefetch_related("categories")` to `resolve_corpuses` to avoid N+1 queries when fetching corpus categories
 
 ### Changed
+
 - **Deleted CorpusCards component** (`frontend/src/components/corpuses/CorpusCards.tsx`): Replaced by CorpusListView with @os-legal/ui components
 
 #### LabelSet Detail Page Refactoring
+
 - **LabelSetDetailPage component split** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx`): Reduced from 2,064 lines to ~1,100 lines
   - Extracted 16 SVG icons to `detail/LabelSetIcons.tsx`
   - Extracted 40+ styled-components to `detail/LabelSetDetailStyles.ts`
@@ -1105,6 +1297,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Color constants centralized** (`frontend/src/assets/configurations/constants.ts`): Added `DEFAULT_LABEL_COLOR` and `PRIMARY_LABEL_COLOR`
 
 ### Security
+
 - **Frontend permission checks** (`frontend/src/components/labelsets/LabelSetDetailPage.tsx:1189-1344`): Added defensive permission checks to all mutation handlers
   - `handleDeleteLabel` now verifies `canRemove` before deletion
   - `handleSaveEdit` now verifies `canUpdate` before updating
@@ -1115,6 +1308,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Prevents potential XSS via CSS color injection
 
 ### Technical Details
+
 - New test file: `frontend/tests/LabelSetDetailPage.ct.tsx` with comprehensive component tests
   - Rendering tests for all tabs (Overview, Text/Doc/Span/Relationship Labels)
   - Permission-based UI visibility tests
@@ -1124,6 +1318,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Secure Zip Import with Folder Structure Preservation
+
 - **Zip security utilities** (`opencontractserver/utils/zip_security.py`): Comprehensive security validation for zip file imports
   - Path traversal protection: Sanitizes all paths, rejects `..` sequences, drive letters, absolute paths
   - Zip bomb detection: Monitors compression ratios, enforces size limits (500MB total, 100MB per file)
@@ -1148,6 +1343,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Design documentation** (`docs/features/zip_import_with_folders_design.md`): Complete specification including security model, API, error handling
 
 #### Corpus Categories and Landing Page Redesign
+
 - **CorpusCategory model** (`opencontractserver/corpuses/models.py`): New model for organizing corpuses by type (Legislation, Contracts, Case Law, Knowledge)
   - Admin-provisioned structural data - managed via Django Admin only
   - ManyToMany relationship with Corpus for flexible categorization
@@ -1165,15 +1361,18 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Security and Performance
+
 - **System user security** (`opencontractserver/corpuses/migrations/0035_seed_default_categories.py`): Defense-in-depth with unusable password for system user
 - **N+1 query in corpusCount** (`config/graphql/queries.py:835-866`): Pre-annotated counts in `resolve_corpus_categories` resolver
 - **Type safety** (`frontend/src/components/corpuses/CorpusModal.tsx`, `CorpusSettings.tsx`): Removed `as any` casts for categories field
 
 ### Changed
+
 - **Permission model** (`config/graphql/graphene_types.py`): `CorpusCategoryType` no longer uses `AnnotatePermissionsForReadMixin` - categories are globally visible structural data
 - **Documentation** (`docs/permissioning/consolidated_permissioning_guide.md`): Added section on CorpusCategory permissions
 
 ### Technical Details
+
 - Categories are created by a `system` user with `is_active=False` and unusable password
 - `corpusCount` respects user visibility: anonymous sees public corpuses only, authenticated users see corpuses they have access to
 - Removed 632-line `TopContributors.tsx` component, replaced with ~280-line `CompactLeaderboard.tsx`
@@ -1181,6 +1380,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Moderation Dashboard and Rollback Features (Issue #742)
+
 - **ModerationActionType GraphQL type** (`config/graphql/graphene_types.py:3071-3121`): Exposes ModerationAction audit records with computed fields:
   - `corpusId`: Links to parent corpus for filtering
   - `isAutomated`: Identifies agent vs. human moderation
@@ -1208,15 +1408,17 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Race Condition in Agent Thread Actions (Issue #742)
+
 - **Fixed TOCTOU vulnerability** (`opencontractserver/tasks/agent_tasks.py:859-898`): Added `select_for_update()` with `transaction.atomic()` to prevent duplicate agent execution claims
 
 #### Tool Validation for Inline Agents (Issue #742)
-- **Added tool category validation** (`config/graphql/mutations.py:3875-3897`): CreateCorpusAction now validates that inline agent tools are from the MODERATION category when using thread/message triggers
 
+- **Added tool category validation** (`config/graphql/mutations.py:3875-3897`): CreateCorpusAction now validates that inline agent tools are from the MODERATION category when using thread/message triggers
 
 ### Added
 
 #### MCP (Model Context Protocol) Interface Proposal (Issue #387)
+
 - **Comprehensive MCP interface design** (`docs/mcp/mcp_interface_proposal.md`): Read-only access to public OpenContracts resources for AI assistants
 - **4 resource types**: corpus, document, annotation, thread - with hierarchical URI patterns
 - **7 tools for discovery and retrieval**: `list_public_corpuses`, `list_documents`, `get_document_text`, `list_annotations`, `search_corpus`, `list_threads`, `get_thread_messages`
@@ -1227,6 +1429,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Helper function implementations**: Complete `format_*` functions for corpus, document, annotation, thread, and message formatting
 
 #### Markdown Link Generation Tool for Agent Responses (Issue #530)
+
 - **New `create_markdown_link` agent tool** (`opencontractserver/llms/tools/core_tools.py:1990-2174`): Agents can now generate properly formatted markdown links for annotations, corpus, documents, and conversations
 - **Supported entity types**:
   - **Annotations**: `[Annotation text](/d/user/corpus/doc?ann=123)` - Links to annotation with document context
@@ -1246,6 +1449,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Validation of error messages for missing entities, creators, slugs, and invalid types
 
 #### Real-Time Notification System via WebSocket (Issue #637)
+
 - **WebSocket notification consumer** (`config/websocket/consumers/notification_updates.py`): New `NotificationUpdatesConsumer` provides real-time notification delivery for all notification types (BADGE, REPLY, MENTION, THREAD_REPLY, moderation actions)
 - **Frontend WebSocket hook** (`frontend/src/hooks/useNotificationWebSocket.ts`): `useNotificationWebSocket` hook manages WebSocket connection lifecycle with auto-reconnection, heartbeat monitoring, and graceful error handling
 - **Signal broadcasting** (`opencontractserver/notifications/signals.py:33-100`): All notification creation signals now broadcast via WebSocket channel layer for instant delivery
@@ -1255,6 +1459,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### Badge Notifications Migrated from Polling to WebSocket (Issue #637)
+
 - **useBadgeNotifications hook** (`frontend/src/hooks/useBadgeNotifications.ts`): Completely refactored from Apollo Client polling (30s intervals) to WebSocket-based real-time updates
 - **Zero latency**: Badge awards now appear instantly instead of 0-30 second delay
 - **Reduced server load**: Eliminated continuous polling requests from all connected clients
@@ -1263,6 +1468,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### WebSocket Token Expiration Close Code Handling (PR #746)
+
 - **Updated all WebSocket consumers** to check `scope['auth_error']` from middleware and use specific close codes:
   - `config/websocket/consumers/document_conversation.py:77-91`: Uses auth_error codes for expired/invalid tokens
   - `config/websocket/consumers/corpus_conversation.py:67-79`: Uses auth_error codes for expired/invalid tokens
@@ -1274,6 +1480,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Added Auth0 test settings** in `config/settings/test.py:120-133`: Default Auth0 settings for test environment to allow importing Auth0 modules during testing
 
 #### Impact
+
 - Frontend can now distinguish between expired tokens (4001) and invalid tokens (4002) via WebSocket close codes
 - Enables targeted token refresh vs full re-authentication based on close code
 - Fixes issue #744 where token expiration wasn't properly signaled to clients
@@ -1281,6 +1488,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### LlamaParse Document Parser Integration (Issue #692)
+
 - **New LlamaParseParser** (`opencontractserver/pipeline/parsers/llamaparse_parser.py`): Full integration with LlamaParse API for document parsing with layout extraction
   - Supports PDF and DOCX file types
   - Extracts structural annotations (Title, Heading, Paragraph, Table, Figure, List, etc.) with bounding boxes
@@ -1306,6 +1514,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Tests for configuration via settings and kwargs override
 
 #### Thread/Message Triggered Corpus Actions for Automated Moderation
+
 - **Extended CorpusActionTrigger enum** with `NEW_THREAD` and `NEW_MESSAGE` triggers (`opencontractserver/corpuses/models.py:849-854`) to enable automated moderation of discussion threads
 - **New moderation tools** (`opencontractserver/llms/tools/moderation_tools.py`): 9 tools for thread moderation including:
   - `get_thread_context`: Retrieve thread metadata (title, creator, lock/pin status)
@@ -1335,12 +1544,14 @@ If rollback is required after deployment, you must write a custom migration to h
   - `opencontractserver/corpuses/migrations/0032_add_thread_message_triggers.py`: Adds nullable `conversation` and `message` FKs to CorpusActionExecution
 
 #### Use Cases Enabled
+
 - Automated content moderation (e.g., auto-delete messages with prohibited content)
 - Thread management (e.g., auto-lock threads discussing prohibited topics)
 - Automated responses (e.g., welcome messages for new threads)
 - Content classification (e.g., auto-pin important announcements)
 
 #### Proactive Apollo Cache Management System (PR #725)
+
 - **New `CacheManager` service** (`frontend/src/services/cacheManager.ts`): Centralized Apollo cache management with debouncing, targeted invalidation, and auth-aware cache operations
   - `resetOnAuthChange()`: Full cache clear with optional refetch for login/logout transitions
   - `refreshActiveQueries()`: Soft refresh without clearing cache
@@ -1353,6 +1564,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Technical Details
 
 #### LlamaParse Parser Architecture
+
 - Uses `llama-parse` library for API communication
 - JSON mode with `extract_layout=True` provides bounding boxes as fractions of page dimensions (0-1)
 - Converts LlamaParse layout elements to OpenContracts structural annotations
@@ -1361,6 +1573,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - Falls back to text extraction mode when layout extraction is disabled
 
 #### Markdown Link Tool Implementation
+
 - Follows OpenContracts routing patterns from `docs/frontend/routing_system.md`
 - Uses `select_related()` to minimize database queries (single query per entity)
 - Handles both standalone documents and corpus-based document contexts
@@ -1370,6 +1583,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Token Expiration Signal to Frontend (Issue #744)
+
 - **Fixed `Auth0RemoteUserJSONWebTokenBackend.authenticate()` swallowing `JSONWebTokenExpired` exceptions** (`config/graphql_auth0_auth/backends.py:44-52`):
   - Previously, when a JWT token expired, the authentication backend caught all exceptions and returned `None`
   - The GraphQL layer then returned a generic "User is not authenticated" error
@@ -1389,6 +1603,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Tests for WebSocket close code consistency
 
 #### Independent Structural Annotation and Show Selected Controls (Issue #735)
+
 - **Removed forced coupling between structural and showSelectedOnly controls** (`frontend/src/components/annotator/controls/AnnotationControls.tsx:200-207`):
   - Previously, enabling "Show Structural" would force "Show Only Selected" to be checked and disabled
   - Users can now toggle "Show Only Selected" independently when structural annotations are visible
@@ -1403,6 +1618,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Note**: Users who previously had `showStructural: true` will notice different behavior: the "Show Only Selected" control now respects their actual preference instead of being forced to true
 
 #### Cache Management Race Condition Fix (PR #725)
+
 - **Auth state now set BEFORE cache clear** (`frontend/src/components/auth/AuthGate.tsx:69-92`, `frontend/src/views/Login.tsx:106-117`, `frontend/src/components/layout/useNavMenu.ts:64-90`):
   - Previously, cache was cleared before updating auth state, creating a window where queries could fetch with wrong auth context
   - Fixed by setting auth token/user/status first, then clearing cache
@@ -1413,6 +1629,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Technical Details
 
 #### Cache Management Architecture
+
 - **Race condition prevention**: Auth state updates are synchronous; cache clear is async. By setting auth first, any queries triggered during cache clear use the correct credentials.
 - **Singleton pattern preserved for non-React contexts**: The singleton functions (`initializeCacheManager`, `getCacheManager`, etc.) remain exported for testing and non-React usage, with documentation clarifying when to use hooks vs singleton.
 - **Dependency management**: `useCacheManager` hook returns stable callback references via `useCallback`, safe to include in effect dependencies.
@@ -1420,12 +1637,14 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Mobile Responsive Styling for Settings and Badge Widgets (Issue #690)
+
 - **Badge component z-index optimization** (`frontend/src/components/badges/Badge.tsx:47,107`): Lowered z-index values from 9999/10000 to 200/201 to avoid conflicts with other UI elements while maintaining proper layering
 - **Unified mobile behavior detection** (`frontend/src/components/badges/Badge.tsx:148-152`): Combined touch device detection with viewport width check to ensure mobile UX works consistently across real devices and test environments
 - **Test wrapper extraction** (`frontend/tests/UserBadgesTestWrapper.tsx`, `frontend/tests/GlobalSettingsPanelTestWrapper.tsx`): Moved test wrappers to separate files following Playwright component testing best practices
 - **Improved test reliability** (`frontend/tests/mobile-responsive.ct.tsx`): Fixed element disambiguation issues using proper locator strategies
 
 #### Agent Chat Processing Indicator (PR #687)
+
 - **Added visual feedback for agent processing** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1342-1405`): When an agent starts processing a response, an animated "Agent is thinking..." indicator now displays instead of an empty message bubble
 - **Processing indicator conditions**: Shows when assistant message is incomplete with no content and no timeline entries
 - **Accessibility improvements**: Added ARIA attributes (`role="status"`, `aria-live="polite"`, `aria-label`) for screen reader support
@@ -1435,6 +1654,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Trash View Error Prevention (Issue #691)
+
 - **State synchronization fix** (`frontend/src/components/corpuses/folders/FolderTreeSidebar.tsx:363-369`):
   - Fixed trash folder click handler to use consistent state update pattern matching other folder navigation
   - Added `handleTrashClick` callback that properly delegates to `onFolderSelect` when provided (URL-driven state)
@@ -1450,6 +1670,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Agent Message Visual Differentiation (Issue #688)
+
 - **Enhanced MessageItem component** (`frontend/src/components/threads/MessageItem.tsx:27-50, 59-66, 68-191, 211-245, 461-466, 530-550`):
   - Agent detection logic using `getAgentDisplayData()` helper function
   - `hexToRgba()` utility for generating color-tinted backgrounds from agent badge colors
@@ -1465,6 +1686,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - Agent color sourced from `AgentConfiguration.badgeConfig.color` field (falls back to default blue #4A90E2)
 
 #### Network Recovery on Screen Unlock (Issue #697)
+
 - **New `useNetworkStatus` hook** (`frontend/src/hooks/useNetworkStatus.ts`): Monitors page visibility and network status changes to detect when the app resumes from background (e.g., screen unlock on mobile)
 - **New `NetworkStatusHandler` component** (`frontend/src/components/network/NetworkStatusHandler.tsx`): Automatically refetches active Apollo Client queries when:
   - The page becomes visible after being hidden (screen unlock on mobile)
@@ -1475,6 +1697,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Technical Details
 
 #### Real-Time Notification System Architecture (Issue #637)
+
 - **Security**: User-specific channel groups (`notification_user_{user_id}`) prevent IDOR and cross-user data leakage
 - **Performance optimizations**:
   - User-specific WebSocket channels (not global broadcast)
@@ -1488,6 +1711,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Network monitoring**: Integrated with `useNetworkStatus` hook for automatic reconnection on mobile screen unlock and network recovery
 
 #### Network Recovery Implementation
+
 - Uses `visibilitychange` event to detect page visibility changes
 - Uses `online`/`offline` events to detect network status changes
 - Configurable resume threshold (default 2s for NetworkStatusHandler, 1s for WebSocket hooks)
@@ -1495,12 +1719,14 @@ If rollback is required after deployment, you must write a custom migration to h
 - Graceful degradation: continues to work if events are not supported
 
 #### Upload Modal Styling Improvements (Issue #696)
+
 - **New styled components for upload modals** (`frontend/src/components/widgets/modals/UploadModalStyles.ts`): Comprehensive styled-components library with 25+ responsive components including `StyledUploadModal`, `DropZone`, `StepIndicator`, `FileListItem`, and more
 - **Step indicator UI** for DocumentUploadModal showing progress through upload workflow (Select → Details → Corpus)
 - **Modern gradient header** with icon and subtitle for both upload modals
 - **Progress bar integration** showing real-time upload progress with success/error states
 
 #### Mobile UI Improvements for Picker and Edit Message Modal (Issue #686)
+
 - **Backend UpdateMessage mutation** (`config/graphql/conversation_mutations.py:455-619`):
   - New `UpdateMessageMutation` for editing existing thread messages
   - Validates CRUD permission on message or moderator status
@@ -1523,6 +1749,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Backdrop overlay on mobile for visual focus
 
 #### Improved Inline Reference Cards for Mentions (Issue #689)
+
 - **Annotation mentions** now display the first ~24 characters of annotation text instead of cryptic IDs
   - Full annotation text accessible via hover tooltip
   - Falls back to label type if no raw text available
@@ -1542,6 +1769,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### Upload Modal Mobile Responsiveness (Issue #696)
+
 - **DocumentUploadModal** (`frontend/src/components/widgets/modals/DocumentUploadModal.tsx`): Refactored to use new styled components with responsive grid layout for edit step
 - **BulkUploadModal** (`frontend/src/components/widgets/modals/BulkUploadModal.tsx`): Complete visual overhaul with styled drop zone, file size display, and responsive layout
 - **DocumentUploadList** (`frontend/src/components/documents/DocumentUploadList.tsx`): New drop zone styling with drag-active feedback and pulse animation
@@ -1552,6 +1780,7 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Custom scrollbar styling**: File list has styled scrollbars for visual polish
 
 #### MentionChip Component Improvements (Issue #689)
+
 - Extended `MentionChip` to support ANNOTATION type with green gradient styling
 - Added default cases to all switch statements for TypeScript exhaustiveness checking
 - Refactored `handleClick` to `handleActivation` accepting `React.MouseEvent | React.KeyboardEvent` union type (fixes unsafe `as any` assertion)
@@ -1560,6 +1789,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Mobile Layout for Picker Components (Issue #686)
+
 - **Picker keyboard handling** (`MentionPicker.tsx:22-54`, `UnifiedMentionPicker.tsx:25-57`):
   - Added CSS environment variables (`env(safe-area-inset-bottom)`) for keyboard-aware positioning
   - Smooth slide-up animation for picker appearance
@@ -1575,18 +1805,21 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Technical Details
 
 #### Message Editing Tests (Issue #686)
+
 - **New test for parent relationship preservation** (`opencontractserver/tests/test_conversation_mutations_graphql.py:1071-1168`):
   - Verifies that editing a reply message preserves its `parent_message` field
   - Ensures thread structure integrity when users edit replies
   - Part of comprehensive UpdateMessage mutation test suite
 
 #### Upload Modal Architecture
+
 - Styled-components with transient props (`$active`, `$selected`, `$status`) to prevent DOM attribute warnings
 - CSS keyframe animations for drag-active pulse effect and fade-in modal transitions
 - Gradient backgrounds using `linear-gradient(135deg, #667eea 0%, #764ba2 100%)` for visual consistency
 - Semantic UI React components wrapped with styled-components for enhanced styling while preserving functionality
 
 #### Permanent Deletion (Empty Trash) Functionality (PR #707)
+
 - **Core deletion logic** (`opencontractserver/documents/versioning.py:617-760`):
   - `permanently_delete_document()`: Irreversible deletion with cascade cleanup
   - `permanently_delete_all_in_trash()`: Bulk deletion (empty trash) with partial success support
@@ -1609,12 +1842,14 @@ If rollback is required after deployment, you must write a custom migration to h
 - **Comprehensive test suite** (`opencontractserver/tests/test_permanent_deletion.py`): 34 tests covering core logic, cascade cleanup, Rule Q1, permissions, GraphQL mutations, and edge cases
 
 ### Technical Details
+
 - Partial deletions are allowed in bulk operations (each document deletion is atomic)
 - Structural annotations are preserved (shared via StructuralAnnotationSet)
 - Corpus-isolated deletion: Only affects target corpus, other corpus references preserved
 - Composite index `[corpus, is_current, is_deleted]` on DocumentPath for efficient trash queries
 
 #### Mobile-Friendly Corpus Modal
+
 - **New CorpusModal component** (`frontend/src/components/corpuses/CorpusModal.tsx`): Purpose-built modal replacing CRUDModal for corpus create/edit/view operations with mobile-first design
 - **13 comprehensive component tests** (`frontend/tests/corpus-modal.ct.tsx`): Full test coverage for all modal modes and interactions
 - **Smart change detection for EDIT mode**: Only sends changed fields to backend using original value comparison (`CorpusModal.tsx:498-519`)
@@ -1623,17 +1858,20 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### Corpus Modal Architecture
+
 - **Replaced CRUDModal with CorpusModal**: Simplified form handling with controlled inputs instead of complex JSON Schema Form library
 - **Removed debug console.log statements** (`Corpuses.tsx`): Cleaned up 4 debug logging statements
 
 ### Technical Details
 
 #### Corpus Modal Implementation
+
 - Mobile-first responsive design: 16px input font prevents iOS auto-zoom, 48px min touch targets
 - Proper TypeScript types: Icon type is `string | null` (not ArrayBuffer), slug field uses existing type from RawCorpusType
 - isDirty computed by comparing current values against stored original values (not just tracking changes)
 
 #### Social Media Preview (OG Metadata) System (PR #701)
+
 - **Cloudflare Worker for social media previews** (`cloudflare-og-worker/`): Intercepts requests from social media crawlers (Facebook, Twitter, LinkedIn, Discord, Slack, etc.) and returns HTML with Open Graph meta tags for rich link previews
 - **Public OG metadata GraphQL queries** (`config/graphql/queries.py:3235-3403`): New unauthenticated queries for fetching public corpus, document, thread, and extract metadata
   - `ogCorpusMetadata`: Returns title, description, icon, document count for public corpuses
@@ -1647,6 +1885,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### New Corpus Modal Mobile Issues (Issue #702)
+
 - **Mobile form data loss in CorpusModal** (`frontend/src/components/corpuses/CorpusModal.tsx:406-418`):
   - Fixed fields clearing when typing on mobile by tracking modal open transitions with `prevOpenRef` instead of resetting form on every render
   - The original `useEffect` was running on every `corpus` or `open` change, causing form state to reset during keyboard/focus events on mobile
@@ -1659,10 +1898,12 @@ If rollback is required after deployment, you must write a custom migration to h
   - Made EditBadge smaller and better positioned on mobile viewports
 
 #### Production Deployment
+
 - **Missing COLLECTFAST_STRATEGY for GCP storage backend** (`config/settings/base.py:436`): Added `collectfast.strategies.gcloud.GoogleCloudStrategy` for GCP deployments. Previously, `collectfast` was installed in production but `COLLECTFAST_STRATEGY` was only configured for AWS, causing `collectstatic` to fail with `ImproperlyConfigured: No strategy configured` error when using `STORAGE_BACKEND=GCP`.
 - **GCS static files ACL incompatible with uniform bucket-level access** (`opencontractserver/utils/storages.py:38`): Changed `StaticRootGoogleCloudStorage.default_acl` from `"publicRead"` to `None`. GCS buckets with uniform bucket-level access enabled cannot use per-object ACLs; access must be controlled via IAM policies at the bucket level instead.
 
 #### Social Media Preview Security & Performance Fixes (PR #701 remediation)
+
 - **Prevented potential infinite loop in worker passthrough** (`cloudflare-og-worker/src/index.ts:23-42`): Added `passToOrigin()` helper function with `X-OG-Worker-Pass` header to prevent Cloudflare Worker from re-invoking itself on route-based deployments
 - **Added rate limiting to public OG queries** (`config/graphql/queries.py`): All five OG metadata resolvers now have `@graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")` to prevent abuse and DoS attacks
 - **Fixed N+1 query in corpus document count** (`config/graphql/queries.py:3250-3255`): Changed from `corpus.documents.count()` to `Corpus.objects.annotate(doc_count=Count("documents"))` for single-query optimization
@@ -1673,6 +1914,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### Mobile UI/UX Improvements for Corpus Navigation
+
 - **Mobile-first folder sidebar defaults**: Sidebar now collapses by default on mobile/tablet devices (≤768px) to maximize document viewing area
 - **Mobile bottom-sheet mention pickers**: User, resource, and unified mention pickers now display as bottom sheets on mobile (≤600px) for thumb-friendly interaction
 - **Discussions and Analytics quick access**: Added icon buttons to CorpusHome stat cards for direct navigation to Discussions and Analytics tabs
@@ -1684,11 +1926,13 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Fixed
 
 #### Mobile UI/UX Fixes
+
 - **Settings button variable name bug** (`frontend/src/components/corpuses/CorpusHome.tsx:780`): Fixed `canUpdate` → `canEdit` reference error that prevented Settings button from displaying for users with update permissions
 - **FAB z-index layering** (`frontend/src/views/Corpuses.tsx:1320`): Raised FAB z-index from 100 to 150 to ensure visibility above folder sidebar toggle (z-index: 101)
 - **Explicit z-index layering**: Made mobile sidebar z-index layering explicit (backdrop: 98, toggle button: 99) to prevent fragile DOM-order-dependent behavior
 
 #### Mobile Responsive Styling for Settings and Badge Widgets (PR #690)
+
 - **UserSettingsModal responsive styling** (`frontend/src/components/modals/UserSettingsModal.tsx:14-80`):
   - Modal takes 95% width on mobile (≤768px) with reduced padding
   - Form groups stack vertically on small screens (≤480px) for single-column layout
@@ -1714,6 +1958,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Changed
 
 #### Mobile UI/UX Refactoring
+
 - **Hardcoded breakpoints replaced with constants**: Updated all hardcoded `768px` references in `FolderDocumentBrowser.tsx` and `folderAtoms.ts` to use `TABLET_BREAKPOINT` constant for maintainability
 - **Improved breakpoint documentation**: Added detailed JSDoc comment in `folderAtoms.ts` explaining why `TABLET_BREAKPOINT` (768px) is used for sidebar collapse rather than `MOBILE_VIEW_BREAKPOINT` (600px)
 
@@ -1722,6 +1967,7 @@ If rollback is required after deployment, you must write a custom migration to h
 ### Added
 
 #### v3.0.0.b3 Migration Tools (Issue #654)
+
 - **New management command: `validate_v3_migration`**
   - Pre-flight and post-migration validation for dual-tree versioning and structural annotations
   - Checks: version_tree_id, is_current, DocumentPath records, XOR constraints, structural set uniqueness
@@ -1753,6 +1999,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - FAQ addressing common concerns (XOR constraint safety, storage savings, incremental migration)
 
 #### Discovery Landing Page (New)
+
 - **Beautiful, modern landing page** as the main entry point for the application
   - Replaces direct redirect to /corpuses with a unified discovery experience
   - Different content for anonymous vs authenticated users
@@ -1789,6 +2036,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - DiscoveryLanding integration tests: full page rendering, section visibility
 
 #### Permission Audit Remediation - Query Optimizers
+
 - **New `UserQueryOptimizer`** for centralized user profile visibility logic
   - Respects `is_profile_public` privacy setting
   - Private profiles visible via corpus membership with > READ permission
@@ -1822,6 +2070,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `docs/permissioning/consolidated_permissioning_guide.md`
 
 #### Corpus Engagement Analytics Dashboard (Issue #579)
+
 - **New CorpusEngagementDashboard component** displaying comprehensive engagement metrics
   - Thread metrics: total threads, active threads, average messages per thread
   - Message activity: total messages, 7-day and 30-day message counts with bar chart visualization
@@ -1845,6 +2094,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Added react-countup for animated number counters
 
 #### Thread Search UI (Issue #580)
+
 - **Backend pagination support for conversation search**
   - Updated `searchConversations` resolver to use `relay.ConnectionField` with cursor-based pagination
   - Supports `first`, `after`, `last`, `before` parameters for efficient result pagination
@@ -1899,6 +2149,7 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `opencontractserver/tests/test_conversation_search.py:2666-3050`
 
 #### Structural Annotation Sets (Phase 2.5)
+
 - **New `StructuralAnnotationSet` model** for shared, immutable structural annotations
   - Content-hash based uniqueness (`content_hash` field)
   - Stores parser metadata (`parser_name`, `parser_version`, `page_count`, `token_count`)
@@ -2063,6 +2314,7 @@ The structural annotation set feature implements Phase 2.5 of the dual-tree vers
 #### File Changes Summary
 
 **New Files:**
+
 - `opencontractserver/tests/test_structural_annotation_sets.py`
 - `opencontractserver/tests/test_structural_annotation_portability.py`
 - `opencontractserver/annotations/migrations/0048_add_structural_annotation_set.py`
@@ -2071,6 +2323,7 @@ The structural annotation set feature implements Phase 2.5 of the dual-tree vers
 - `CHANGELOG.md`
 
 **Modified Files:**
+
 - `opencontractserver/annotations/models.py` - Added StructuralAnnotationSet model, updated Annotation/Relationship models
 - `opencontractserver/documents/models.py` - Added structural_annotation_set FK
 - `opencontractserver/corpuses/models.py` - Fixed add_document() to copy all artifacts + structural set
@@ -2090,93 +2343,99 @@ The structural annotation set feature implements Phase 2.5 of the dual-tree vers
 ### Fixed (Continued)
 
 10. **Query optimizer missing structural_set annotations**
-   - **Files**: `opencontractserver/annotations/query_optimizer.py:189-212, 273-301, 541-564, 624-643`
-   - **Issue**: `AnnotationQueryOptimizer.get_document_annotations()` and `RelationshipQueryOptimizer.get_document_relationships()` only queried by `document_id`, missing annotations/relationships stored in `structural_set` (which have `document_id=NULL`)
-   - **Impact**: GraphQL queries using query optimizer (most annotation/relationship queries) did NOT return structural annotations from structural sets - only vector store had the dual-query logic
-   - **Fixed**:
-     - Added document fetch with `select_related("structural_annotation_set")` for efficiency
-     - Built OR filter: `Q(document_id=X) | Q(structural_set_id=Y, structural=True)` to query BOTH sources
-     - Updated corpus filtering to preserve structural_set items (which have `corpus_id=NULL`)
-     - Applied same fix to both AnnotationQueryOptimizer and RelationshipQueryOptimizer
-   - **Tests Added**: `opencontractserver/tests/test_query_optimizer_structural_sets.py` (10 comprehensive integration tests)
-   - **Test Results**: All 42 structural annotation tests pass (10 new + 32 existing)
+
+- **Files**: `opencontractserver/annotations/query_optimizer.py:189-212, 273-301, 541-564, 624-643`
+- **Issue**: `AnnotationQueryOptimizer.get_document_annotations()` and `RelationshipQueryOptimizer.get_document_relationships()` only queried by `document_id`, missing annotations/relationships stored in `structural_set` (which have `document_id=NULL`)
+- **Impact**: GraphQL queries using query optimizer (most annotation/relationship queries) did NOT return structural annotations from structural sets - only vector store had the dual-query logic
+- **Fixed**:
+  - Added document fetch with `select_related("structural_annotation_set")` for efficiency
+  - Built OR filter: `Q(document_id=X) | Q(structural_set_id=Y, structural=True)` to query BOTH sources
+  - Updated corpus filtering to preserve structural_set items (which have `corpus_id=NULL`)
+  - Applied same fix to both AnnotationQueryOptimizer and RelationshipQueryOptimizer
+- **Tests Added**: `opencontractserver/tests/test_query_optimizer_structural_sets.py` (10 comprehensive integration tests)
+- **Test Results**: All 42 structural annotation tests pass (10 new + 32 existing)
 
 11. **Vector store returning duplicate results**
-   - **File**: `opencontractserver/shared/mixins.py:40-89`
-   - **Issue**: `search_by_embedding()` method returned duplicate results (2x, 4x, 6x expected counts) when annotations had multiple Embedding rows with the same `embedder_path`
-   - **Root Cause**: JOIN to Embedding table created cartesian product - if annotation had 2 Embedding rows, JOIN produced 2 result rows
-   - **Investigation**: Confirmed annotations have multiple Embedding rows due to dual FK relationship:
-     1. `Embedding.annotation` FK (one-to-many): annotation can have multiple embeddings
-     2. `Annotation.embeddings` FK (many-to-one): annotation points to single "primary" embedding
-   - **Fixed**: Hybrid deduplication approach in `search_by_embedding()`:
-     1. Order by `id, similarity_score` and apply PostgreSQL `DISTINCT ON (id)`
-     2. Materialize query to list
-     3. Sort in Python by `similarity_score`
-     4. Return top_k results
-   - **Rationale**: PostgreSQL `DISTINCT ON` requires the distinct field to be first in ORDER BY, conflicting with need to order by similarity_score. Hybrid approach ensures correctness.
-   - **Test Results**: All 9 version-aware vector store tests now pass (previously all 8 failing)
+
+- **File**: `opencontractserver/shared/mixins.py:40-89`
+- **Issue**: `search_by_embedding()` method returned duplicate results (2x, 4x, 6x expected counts) when annotations had multiple Embedding rows with the same `embedder_path`
+- **Root Cause**: JOIN to Embedding table created cartesian product - if annotation had 2 Embedding rows, JOIN produced 2 result rows
+- **Investigation**: Confirmed annotations have multiple Embedding rows due to dual FK relationship:
+  1.  `Embedding.annotation` FK (one-to-many): annotation can have multiple embeddings
+  2.  `Annotation.embeddings` FK (many-to-one): annotation points to single "primary" embedding
+- **Fixed**: Hybrid deduplication approach in `search_by_embedding()`:
+  1.  Order by `id, similarity_score` and apply PostgreSQL `DISTINCT ON (id)`
+  2.  Materialize query to list
+  3.  Sort in Python by `similarity_score`
+  4.  Return top_k results
+- **Rationale**: PostgreSQL `DISTINCT ON` requires the distinct field to be first in ORDER BY, conflicting with need to order by similarity_score. Hybrid approach ensures correctness.
+- **Test Results**: All 9 version-aware vector store tests now pass (previously all 8 failing)
 
 12. **Vector store excluding structural annotations from StructuralAnnotationSet**
-   - **File**: `opencontractserver/llms/vector_stores/core_vector_stores.py:168-196, 221-270`
-   - **Issue**: Version filtering excluded ALL structural annotations from structural sets, causing vector search to return 0 results
-   - **Root Cause - Filter Ordering Bug**:
-     1. `only_current_versions` filter applied `Q(document__is_current=True)` (line 170)
-     2. This creates `INNER JOIN` on document table
-     3. Structural annotations have `document_id=NULL` (stored in StructuralAnnotationSet)
-     4. NULL document_id fails the JOIN → structural annotations excluded
-     5. This happened BEFORE document/corpus scoping (lines 221-270)
-     6. Result: Scoping logic tried to include structural annotations, but they were already filtered out
-   - **Symptoms**:
-     - Initial queryset: 1344 annotations
-     - After version filter: 0 results (all structural annotations excluded)
-     - WebSocket tests failed with no ASYNC_CONTENT (agent had no context)
-   - **Fixed**:
-     - Modified version filter to preserve structural annotations:
-       ```python
-       active_filters &= Q(document__is_current=True) | Q(
-           document_id__isnull=True, structural=True
-       )
-       ```
-     - Logic: Annotations with document FK must have `is_current=True`, structural annotations (no document FK) pass through
-     - Later scoping filters by `structural_set_id` to ensure only relevant structural annotations included
-   - **Comments Added**: Comprehensive inline documentation explaining:
-     - Why structural annotations have `document_id=NULL`
-     - Filter ordering and interaction between version filter and scoping
-     - Two-phase filtering approach (version → scoping)
-   - **Test Results**:
-     - Vector store now finds 336 annotations (was 0)
-     - SQL shows correct filter: `(document.is_current OR (annotation.document_id IS NULL AND structural))`
+
+- **File**: `opencontractserver/llms/vector_stores/core_vector_stores.py:168-196, 221-270`
+- **Issue**: Version filtering excluded ALL structural annotations from structural sets, causing vector search to return 0 results
+- **Root Cause - Filter Ordering Bug**:
+  1.  `only_current_versions` filter applied `Q(document__is_current=True)` (line 170)
+  2.  This creates `INNER JOIN` on document table
+  3.  Structural annotations have `document_id=NULL` (stored in StructuralAnnotationSet)
+  4.  NULL document_id fails the JOIN → structural annotations excluded
+  5.  This happened BEFORE document/corpus scoping (lines 221-270)
+  6.  Result: Scoping logic tried to include structural annotations, but they were already filtered out
+- **Symptoms**:
+  - Initial queryset: 1344 annotations
+  - After version filter: 0 results (all structural annotations excluded)
+  - WebSocket tests failed with no ASYNC_CONTENT (agent had no context)
+- **Fixed**:
+  - Modified version filter to preserve structural annotations:
+    ```python
+    active_filters &= Q(document__is_current=True) | Q(
+        document_id__isnull=True, structural=True
+    )
+    ```
+  - Logic: Annotations with document FK must have `is_current=True`, structural annotations (no document FK) pass through
+  - Later scoping filters by `structural_set_id` to ensure only relevant structural annotations included
+- **Comments Added**: Comprehensive inline documentation explaining:
+  - Why structural annotations have `document_id=NULL`
+  - Filter ordering and interaction between version filter and scoping
+  - Two-phase filtering approach (version → scoping)
+- **Test Results**:
+  - Vector store now finds 336 annotations (was 0)
+  - SQL shows correct filter: `(document.is_current OR (annotation.document_id IS NULL AND structural))`
 
 13. **Agent tool execution failing due to list/QuerySet type mismatch**
-   - **Files**: `opencontractserver/llms/vector_stores/core_vector_stores.py:30-90`
-   - **Issue**: After deduplication fix (#10), `search_by_embedding()` returns list instead of QuerySet, breaking agent tool execution
-   - **Root Cause - Type Assumption**:
-     1. Deduplication fix materialized QuerySet to list for DISTINCT ON + Python sorting
-     2. Helper functions `_safe_queryset_info()` and `_safe_execute_queryset()` assumed QuerySet
-     3. Called `.count()` method on lists (which don't have `.count()` for length)
-     4. Agent's `similarity_search` tool failed silently
-     5. LLM called tool → tool execution broke → no second LLM call → no ASYNC_CONTENT
-   - **Symptoms**:
-     - Only 1 LLM API call in cassettes (should be 2: tool call + final answer)
-     - Agent produced ASYNC_START and ASYNC_FINISH but no ASYNC_CONTENT
-     - Cassette files abnormally small (27KB vs expected 50-70KB)
-   - **Fixed**: Updated helper functions to handle both QuerySets and lists:
-     ```python
-     async def _safe_queryset_info(queryset, description: str) -> str:
-         if isinstance(queryset, list):
-             return f"{description}: {len(queryset)} results"
-         # ... handle QuerySet
 
-     async def _safe_execute_queryset(queryset) -> list:
-         if isinstance(queryset, list):
-             return queryset  # Already materialized
-         # ... execute QuerySet
-     ```
-   - **Test Results**:
-     - Tool execution now succeeds ✅
-     - Cassettes show 2 LLM calls (tool call + response) ✅
-     - Cassette size increased to 55KB (proper content) ✅
-     - WebSocket tests still fail (different issue: agent streaming layer - not tool execution)
+- **Files**: `opencontractserver/llms/vector_stores/core_vector_stores.py:30-90`
+- **Issue**: After deduplication fix (#10), `search_by_embedding()` returns list instead of QuerySet, breaking agent tool execution
+- **Root Cause - Type Assumption**:
+  1.  Deduplication fix materialized QuerySet to list for DISTINCT ON + Python sorting
+  2.  Helper functions `_safe_queryset_info()` and `_safe_execute_queryset()` assumed QuerySet
+  3.  Called `.count()` method on lists (which don't have `.count()` for length)
+  4.  Agent's `similarity_search` tool failed silently
+  5.  LLM called tool → tool execution broke → no second LLM call → no ASYNC_CONTENT
+- **Symptoms**:
+  - Only 1 LLM API call in cassettes (should be 2: tool call + final answer)
+  - Agent produced ASYNC_START and ASYNC_FINISH but no ASYNC_CONTENT
+  - Cassette files abnormally small (27KB vs expected 50-70KB)
+- **Fixed**: Updated helper functions to handle both QuerySets and lists:
+
+  ```python
+  async def _safe_queryset_info(queryset, description: str) -> str:
+      if isinstance(queryset, list):
+          return f"{description}: {len(queryset)} results"
+      # ... handle QuerySet
+
+  async def _safe_execute_queryset(queryset) -> list:
+      if isinstance(queryset, list):
+          return queryset  # Already materialized
+      # ... execute QuerySet
+  ```
+
+- **Test Results**:
+  - Tool execution now succeeds ✅
+  - Cassettes show 2 LLM calls (tool call + response) ✅
+  - Cassette size increased to 55KB (proper content) ✅
+  - WebSocket tests still fail (different issue: agent streaming layer - not tool execution)
 
 ### Known Issues
 

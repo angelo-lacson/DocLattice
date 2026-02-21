@@ -60,32 +60,26 @@ from opencontractserver.llms.tools.core_tools import (
     aadd_annotations_from_exact_strings,
     aadd_document_note,
     aduplicate_annotations_with_label,
-    aget_corpus_description,
-    aget_document_description,
     aget_document_summary,
-    aget_document_summary_diff,
-    aget_document_summary_versions,
-    aget_md_summary_token_length,
-    aget_notes_for_document_corpus,
     aload_document_md_summary,
     aload_document_txt_extract,
-    asearch_document_notes,
     asearch_exact_text_as_sources,
     aupdate_corpus_description,
-    aupdate_document_description,
     aupdate_document_note,
-    aupdate_document_summary,
 )
 from opencontractserver.llms.tools.pydantic_ai_tools import (
     PydanticAIDependencies,
     PydanticAIToolFactory,
 )
-from opencontractserver.llms.tools.tool_factory import CoreTool
+from opencontractserver.llms.tools.tool_factory import (
+    CoreTool,
+    build_inject_params_for_context,
+)
 from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
-from opencontractserver.utils.tools import deduplicate_tools
+from opencontractserver.utils.tools import deduplicate_tools, get_tool_name
 
 from .timeline_schema import TimelineEntry
 from .timeline_utils import TimelineBuilder
@@ -94,6 +88,41 @@ logger = logging.getLogger(__name__)
 
 # Type variable for structured responses
 T = TypeVar("T")
+
+
+def _build_tools_from_registry(
+    tool_names: list[str],
+    *,
+    document_id: int | None = None,
+    corpus_id: int | None = None,
+    user_id: int | None = None,
+) -> list[Callable]:
+    """Auto-build PydanticAI tools from the registry with context injection.
+
+    For each tool name, resolves the async function and metadata from the
+    registry, computes inject_params via build_inject_params_for_context(),
+    and wraps with PydanticAIToolFactory.
+    """
+    from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+
+    registry = ToolFunctionRegistry.get()
+    tools: list[Callable] = []
+    for name in tool_names:
+        core_tool = registry.to_core_tool(name)
+        if core_tool is None:
+            logger.warning("Tool '%s' not found in registry, skipping auto-build", name)
+            continue
+        inject_params = build_inject_params_for_context(
+            core_tool,
+            document_id=document_id,
+            corpus_id=corpus_id,
+            user_id=user_id,
+        )
+        wrapped = PydanticAIToolFactory.create_tool(
+            core_tool, inject_params=inject_params
+        )
+        tools.append(wrapped)
+    return tools
 
 
 def _to_source_node(raw: Any) -> SourceNode:
@@ -118,6 +147,40 @@ def _to_source_node(raw: Any) -> SourceNode:
         metadata=raw,
         similarity_score=raw.get("similarity_score", 1.0),
     )
+
+
+def _extract_tool_result_summary(event: Any, tool_name: str) -> str:
+    """Safely extract a human-readable summary from a tool result event.
+
+    Returns a non-empty string suitable for inclusion in the timeline
+    ``tool_result`` metadata.  Falls back to ``"Completed"`` if extraction
+    fails or produces an empty value.
+
+    Truncates at source using :data:`MAX_TOOL_RESULT_LENGTH` so large results
+    (e.g. full ``ask_document`` answers) don't bloat ThoughtEvent metadata.
+    """
+    from .timeline_utils import MAX_TOOL_RESULT_LENGTH
+
+    try:
+        result_content = event.result.content  # type: ignore[attr-defined]
+        summary = ""
+        if isinstance(result_content, dict):
+            # ask_document returns {"answer": ..., "sources": ..., "timeline": ...}
+            summary = str(result_content.get("answer", ""))
+        elif isinstance(result_content, str):
+            summary = result_content
+        elif result_content is not None:
+            summary = str(result_content)
+
+        if summary:
+            if len(summary) > MAX_TOOL_RESULT_LENGTH:
+                summary = summary[:MAX_TOOL_RESULT_LENGTH] + "..."
+            return summary
+    except Exception:
+        logger.debug(
+            "Could not extract tool result summary for %s", tool_name, exc_info=True
+        )
+    return "Completed"
 
 
 # ---------------------------------------------------------------------------
@@ -173,19 +236,19 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         timeline: list[TimelineEntry],
     ) -> None:
         """Finalize LLM message with content, sources, and metadata."""
-        logger.error("[DIAGNOSTIC _finalise_llm_message] Called with:")
-        logger.error(f"[DIAGNOSTIC _finalise_llm_message]   llm_id: {llm_id}")
-        logger.error(
+        logger.debug("[DIAGNOSTIC _finalise_llm_message] Called with:")
+        logger.debug(f"[DIAGNOSTIC _finalise_llm_message]   llm_id: {llm_id}")
+        logger.debug(
             f"[DIAGNOSTIC _finalise_llm_message]   final_content length: {len(final_content)}"
         )
-        logger.error(
+        logger.debug(
             f"[DIAGNOSTIC _finalise_llm_message]   sources count: {len(sources)}"
         )
         if sources:
-            logger.error(
+            logger.debug(
                 f"[DIAGNOSTIC _finalise_llm_message]   First source: {sources[0].to_dict()}"
             )
-        logger.error(
+        logger.debug(
             "[DIAGNOSTIC _finalise_llm_message]   About to call complete_message()..."
         )
         await self.complete_message(
@@ -194,7 +257,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             sources=sources,
             metadata={"usage": usage, "framework": "pydantic_ai", "timeline": timeline},
         )
-        logger.error(
+        logger.debug(
             "[DIAGNOSTIC _finalise_llm_message]   complete_message() returned successfully"
         )
 
@@ -280,15 +343,18 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
     # care of collecting the reasoning timeline.
 
     async def _stream_core(
-        self, message: str, **kwargs
+        self,
+        message: str,
+        *,
+        force_llm_id: int | None = None,
+        force_user_msg_id: int | None = None,
+        initial_timeline: list[dict] | None = None,
+        deps: Any | None = None,
+        message_history: list[Any] | None = None,
     ) -> AsyncGenerator[UnifiedStreamEvent, None]:
         """Internal streaming generator – TimelineStreamMixin adds timeline."""
 
         logger.info(f"[PydanticAI stream] Starting stream with message: {message!r}")
-
-        # Extract optional overrides (used by resume_with_approval)
-        force_llm_id: int | None = kwargs.pop("force_llm_id", None)
-        force_user_msg_id: int | None = kwargs.pop("force_user_msg_id", None)
 
         user_msg_id: int | None = force_user_msg_id
         llm_msg_id: int | None = force_llm_id
@@ -320,43 +386,53 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         final_usage_data: dict[str, Any] | None = None
 
         # Re-hydrate the historical context for Pydantic-AI, if any exists.
-        message_history = await self._get_message_history()
+        # Callers (e.g. resume_with_approval) may override via the explicit
+        # ``message_history`` param; otherwise we load from the DB.
+        effective_history = message_history
+        if effective_history is None:
+            effective_history = await self._get_message_history()
 
         # CRITICAL FIX: Exclude the most recent HUMAN message from history since
         # pydantic_ai.iter() will automatically add the current `message` parameter.
         # This prevents duplicate consecutive user messages which violate OpenAI's API contract.
-        if message_history:
+        if effective_history:
             # Remove the last message if it's a user prompt (HUMAN message)
-            if message_history and isinstance(message_history[-1], ModelRequest):
-                last_parts = message_history[-1].parts
+            if effective_history and isinstance(effective_history[-1], ModelRequest):
+                last_parts = effective_history[-1].parts
                 if last_parts and isinstance(last_parts[0], UserPromptPart):
                     logger.debug(
                         f"[Session {self.session_id if hasattr(self, 'session_id') else 'N/A'}] "
                         "Removing duplicate user message from history to prevent API error"
                     )
-                    message_history = message_history[:-1]
+                    effective_history = effective_history[:-1]
 
             # If history is now empty, set to None for pydantic_ai
-            if not message_history:
-                message_history = None
+            if not effective_history:
+                effective_history = None
 
-        stream_kwargs: dict[str, Any] = {"deps": self.agent_deps}
-        if message_history:
-            stream_kwargs["message_history"] = message_history
-        stream_kwargs.update(kwargs)
+        stream_kwargs: dict[str, Any] = {"deps": deps or self.agent_deps}
+        if effective_history:
+            stream_kwargs["message_history"] = effective_history
 
         # Timeline builder – captures reasoning steps for persistence/UI
         builder = TimelineBuilder()
 
+        # Allow callers (e.g. resume_with_approval) to inject pre-built
+        # timeline entries so they appear in both the persisted DB record
+        # and the FinalEvent sent to the frontend.
+        if initial_timeline:
+            for entry in initial_timeline:
+                builder.add(entry)
+
         try:
-            logger.error(
+            logger.debug(
                 f"[DIAGNOSTIC] Entering pydantic_ai agent.iter() for message: {message!r}"
             )
             async with self.pydantic_ai_agent.iter(
                 message, **stream_kwargs
             ) as agent_run:
                 async for node in agent_run:
-                    logger.error(
+                    logger.debug(
                         f"[DIAGNOSTIC] Processing node type: {type(node).__name__}"
                     )
 
@@ -376,7 +452,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     # MODEL REQUEST NODE – We can stream raw model deltas from here.
                     # ------------------------------------------------------------------
                     elif isinstance(node, ModelRequestNode):
-                        logger.error(
+                        logger.debug(
                             "[DIAGNOSTIC] Entering ModelRequestNode - will stream model deltas"
                         )
                         event_obj = ThoughtEvent(
@@ -392,20 +468,20 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                             async with node.stream(agent_run.ctx) as model_stream:
                                 async for event in model_stream:
                                     model_event_count += 1
-                                    logger.error(
+                                    logger.debug(
                                         f"[DIAGNOSTIC] Model stream event #{model_event_count}: {type(event).__name__}"
                                     )
                                     text, is_answer, meta = _event_to_text_and_meta(
                                         event
                                     )
-                                    logger.error(
+                                    logger.debug(
                                         "[DIAGNOSTIC] _event_to_text_and_meta returned: "
                                         f"text={text!r}, is_answer={is_answer}, meta={meta}"
                                     )
                                     if text:
                                         if is_answer:
                                             accumulated_content += text
-                                            logger.error(
+                                            logger.debug(
                                                 f"[DIAGNOSTIC] Accumulated content now: {accumulated_content!r}"
                                             )
                                             # Content timeline now handled by TimelineStreamMixin
@@ -427,15 +503,15 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                             metadata=meta,
                                         )
                                         builder.add(content_ev)
-                                        logger.error(
+                                        logger.debug(
                                             f"[DIAGNOSTIC] Yielding ContentEvent with text: {text!r}"
                                         )
                                         yield content_ev
                                     else:
-                                        logger.error(
+                                        logger.debug(
                                             "[DIAGNOSTIC] No text extracted from event - skipping ContentEvent"
                                         )
-                            logger.error(
+                            logger.debug(
                                 f"[DIAGNOSTIC] Exited ModelRequestNode stream - total events: "
                                 f"{model_event_count}, accumulated_content length: "
                                 f"{len(accumulated_content)}"
@@ -448,7 +524,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     # CALL TOOLS NODE – Capture tool call & result events.
                     # ------------------------------------------------------------------
                     elif isinstance(node, CallToolsNode):
-                        logger.error(
+                        logger.debug(
                             "[DIAGNOSTIC] Entering CallToolsNode - will process tool calls"
                         )
                         event_obj = ThoughtEvent(
@@ -461,25 +537,25 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
                         try:
                             tool_event_count = 0
-                            logger.error(
+                            logger.debug(
                                 "[DIAGNOSTIC] About to start node.stream(agent_run.ctx) for CallToolsNode"
                             )
                             async with node.stream(agent_run.ctx) as tool_stream:
-                                logger.error(
+                                logger.debug(
                                     "[DIAGNOSTIC] Entered tool_stream context - starting iteration"
                                 )
                                 async for event in tool_stream:
                                     tool_event_count += 1
-                                    logger.error(
+                                    logger.debug(
                                         f"[DIAGNOSTIC] Tool stream event #{tool_event_count}: "
                                         f"event_kind={event.event_kind}"
                                     )
-                                    logger.error(
+                                    logger.debug(
                                         f"[DIAGNOSTIC] Event type: {type(event).__name__}"
                                     )
 
                                     if event.event_kind == "function_tool_call":
-                                        logger.error(
+                                        logger.debug(
                                             "[DIAGNOSTIC] Processing function_tool_call event"
                                         )
                                         tool_name = event.part.tool_name
@@ -552,7 +628,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                             return  # Exit the stream
 
                                         # If no approval needed, emit the tool call event normally
-                                        logger.error(
+                                        logger.debug(
                                             f"[DIAGNOSTIC] Tool '{tool_name}' does not require "
                                             "approval - emitting ThoughtEvent"
                                         )
@@ -567,23 +643,23 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                         )
                                         builder.add(tool_ev)
                                         yield tool_ev
-                                        logger.error(
+                                        logger.debug(
                                             f"[DIAGNOSTIC] Finished processing function_tool_call "
                                             f"for '{tool_name}' - continuing iteration"
                                         )
 
                                     elif event.event_kind == "function_tool_result":
-                                        logger.error(
+                                        logger.debug(
                                             "[DIAGNOSTIC] Processing function_tool_result event"
                                         )
                                         tool_name = event.result.tool_name  # type: ignore[attr-defined]
-                                        logger.error(
+                                        logger.debug(
                                             f"[DIAGNOSTIC] Tool result received: tool_name={tool_name}"
                                         )
                                         # Capture vector-search results (our canonical source provider)
                                         if tool_name == "similarity_search":
                                             raw_sources = event.result.content  # type: ignore[attr-defined]
-                                            logger.error(
+                                            logger.debug(
                                                 f"[DIAGNOSTIC] similarity_search returned "
                                                 f"{len(raw_sources) if isinstance(raw_sources, list) else 'non-list'} "
                                                 "sources"
@@ -594,7 +670,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                     for s in raw_sources
                                                 ]
                                                 accumulated_sources.extend(new_sources)
-                                                logger.error(
+                                                logger.debug(
                                                     f"[DIAGNOSTIC] Accumulated {len(new_sources)} sources "
                                                     f"from similarity_search. Total accumulated_sources "
                                                     f"now: {len(accumulated_sources)}"
@@ -608,10 +684,28 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                     llm_message_id=llm_msg_id,
                                                 )
                                                 builder.add(src_ev)
-                                                logger.error(
+                                                logger.debug(
                                                     f"[DIAGNOSTIC] Yielding SourceEvent with {len(new_sources)} sources"
                                                 )
                                                 yield src_ev
+
+                                            # Emit tool_result entry for timeline
+                                            tool_result_summary = (
+                                                f"Found {len(raw_sources)} matching annotations"
+                                                if isinstance(raw_sources, list)
+                                                else "No results found"
+                                            )
+                                            tool_ev = ThoughtEvent(
+                                                thought=f"Tool `{tool_name}` returned a result.",
+                                                user_message_id=user_msg_id,
+                                                llm_message_id=llm_msg_id,
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": tool_result_summary,
+                                                },
+                                            )
+                                            builder.add(tool_ev)
+                                            yield tool_ev
 
                                         # Capture exact text search results (similar to similarity_search)
                                         elif tool_name == "search_exact_text":
@@ -638,6 +732,25 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                     "[search_exact_text] No sources to emit - "
                                                     f"raw_sources is {type(raw_sources)} with value: {raw_sources!r}"
                                                 )
+
+                                            # Emit tool_result entry for timeline
+                                            tool_result_summary = (
+                                                f"Found {len(raw_sources)} exact text matches"
+                                                if isinstance(raw_sources, list)
+                                                and raw_sources
+                                                else "No results found"
+                                            )
+                                            tool_ev = ThoughtEvent(
+                                                thought=f"Tool `{tool_name}` returned a result.",
+                                                user_message_id=user_msg_id,
+                                                llm_message_id=llm_msg_id,
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": tool_result_summary,
+                                                },
+                                            )
+                                            builder.add(tool_ev)
+                                            yield tool_ev
 
                                         # Special handling for nested document-agent responses
                                         elif tool_name == "ask_document":
@@ -740,7 +853,12 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 thought=f"Tool `{tool_name}` returned a result.",
                                                 user_message_id=user_msg_id,
                                                 llm_message_id=llm_msg_id,
-                                                metadata={"tool_name": tool_name},
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": _extract_tool_result_summary(
+                                                        event, tool_name
+                                                    ),
+                                                },
                                             )
                                             builder.add(tool_ev)
                                             yield tool_ev
@@ -751,30 +869,40 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                                                 thought=f"Tool `{tool_name}` returned a result.",
                                                 user_message_id=user_msg_id,
                                                 llm_message_id=llm_msg_id,
-                                                metadata={"tool_name": tool_name},
+                                                metadata={
+                                                    "tool_name": tool_name,
+                                                    "tool_result": _extract_tool_result_summary(
+                                                        event, tool_name
+                                                    ),
+                                                },
                                             )
                                             builder.add(tool_ev)
                                             yield tool_ev
-                                        logger.error(
+                                        logger.debug(
                                             f"[DIAGNOSTIC] Finished processing event kind: {event.event_kind}"
                                         )
-                                        logger.error(
+                                        logger.debug(
                                             "[DIAGNOSTIC] About to continue to next iteration of tool_stream"
                                         )
-                                logger.error(
+                                logger.debug(
                                     f"[DIAGNOSTIC] Exited tool_stream loop normally - "
                                     f"processed {tool_event_count} events total"
                                 )
+                        except ToolConfirmationRequired:
+                            # Sub-agent approval gates must propagate so the
+                            # outer ToolConfirmationRequired handler can pause
+                            # the conversation and surface it to the user.
+                            raise
                         except Exception as tool_exc:
                             # Already handled by outer error handler – stop processing this node
-                            logger.error(
+                            logger.debug(
                                 f"[DIAGNOSTIC] EXCEPTION in CallToolsNode processing: "
                                 f"{type(tool_exc).__name__}: {str(tool_exc)}"
                             )
-                            logger.error(
+                            logger.debug(
                                 "[DIAGNOSTIC] Exception traceback:", exc_info=True
                             )
-                            logger.error(
+                            logger.debug(
                                 "[DIAGNOSTIC] Breaking out of tool processing due to exception"
                             )
                             break
@@ -792,12 +920,12 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         yield end_ev
 
                 # After exiting the for-loop, the agent_run is complete and contains the final result.
-                logger.error(
+                logger.debug(
                     "[DIAGNOSTIC] Exited all nodes. Checking agent_run.result..."
                 )
                 if agent_run.result:
                     result_content = str(agent_run.result.output)
-                    logger.error(
+                    logger.debug(
                         f"[DIAGNOSTIC] agent_run.result.output: {result_content!r}"
                     )
                     # If we failed to stream tokens (e.g. provider buffered) or the
@@ -805,7 +933,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     if not accumulated_content or len(result_content) > len(
                         accumulated_content
                     ):
-                        logger.error(
+                        logger.debug(
                             "[DIAGNOSTIC] Using result_content as accumulated_content "
                             "(streamed content was empty or shorter)"
                         )
@@ -813,21 +941,21 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     final_usage_data = _usage_to_dict(agent_run.result.usage())
                     # builder will add run_finished status
                 else:
-                    logger.error("[DIAGNOSTIC] No agent_run.result found!")
+                    logger.debug("[DIAGNOSTIC] No agent_run.result found!")
 
             # --------------------------------------------------------------
             # Build and inject the final timeline, then persist via helper
             # --------------------------------------------------------------
 
-            logger.error("[DIAGNOSTIC] About to persist message:")
-            logger.error(
+            logger.debug("[DIAGNOSTIC] About to persist message:")
+            logger.debug(
                 f"[DIAGNOSTIC]   accumulated_content length: {len(accumulated_content)}"
             )
-            logger.error(
+            logger.debug(
                 f"[DIAGNOSTIC]   accumulated_sources count: {len(accumulated_sources)}"
             )
             if accumulated_sources:
-                logger.error(
+                logger.debug(
                     f"[DIAGNOSTIC]   First source: {accumulated_sources[0].to_dict()}"
                 )
 
@@ -987,7 +1115,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             structured_agent = PydanticAIAgent(
                 model=model or self.config.model_name,
-                system_prompt=structured_system_prompt,
+                instructions=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
                 tools=final_tools,
@@ -1106,6 +1234,12 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             logger.error(f"Unexpected tool_args type: {type(tool_args_raw)}")
             tool_args = {}
 
+        # Strip internal metadata keys (prefixed with _) that are not part
+        # of the tool's actual function signature.  These are injected by
+        # sub-agent approval propagation (e.g. _sub_tool_name) and are
+        # only needed for UI display, not for execution.
+        tool_args = {k: v for k, v in tool_args.items() if not k.startswith("_")}
+
         # Emit ApprovalResultEvent immediately so consumers are aware of decision
         yield ApprovalResultEvent(
             decision="approved" if approved else "rejected",
@@ -1146,72 +1280,86 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     else call_result
                 )
 
+            # Signal post-approval context so closures (e.g. ask_document_tool)
+            # can bypass sub-agent approval gates without exposing a parameter
+            # that the LLM could abuse.
+            self.config._approval_bypass_allowed = True
+
             # Try to execute the tool
             tool_executed = False
 
-            if wrapper_fn is not None:
-                # Found in config.tools - these should be callable functions
-                logger.info(
-                    f"Executing tool '{tool_name}' from config.tools with args: {tool_args}"
-                )
-                try:
-                    result = await _maybe_await(wrapper_fn(_EmptyCtx(), **tool_args))
-                    tool_executed = True
-                except TypeError as e:
-                    logger.error(f"TypeError calling tool from config: {e}")
-                    # Don't retry here, fall through to registry lookup
+            try:
+                if wrapper_fn is not None:
+                    # Found in config.tools - these should be callable functions
+                    logger.info(
+                        f"Executing tool '{tool_name}' from config.tools with args: {tool_args}"
+                    )
+                    try:
+                        result = await _maybe_await(
+                            wrapper_fn(_EmptyCtx(), **tool_args)
+                        )
+                        tool_executed = True
+                    except TypeError as e:
+                        logger.error(f"TypeError calling tool from config: {e}")
+                        # Don't retry here, fall through to registry lookup
 
-            if not tool_executed:
-                # Resort to pydantic-ai registry – may return Tool object.
-                tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
-                if tool_obj is None:
-                    raise ValueError(f"Tool '{tool_name}' not found for execution")
+                if not tool_executed:
+                    # Resort to pydantic-ai registry – may return Tool object.
+                    tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
+                    if tool_obj is None:
+                        raise ValueError(f"Tool '{tool_name}' not found for execution")
 
-                # Try common attributes to reach the underlying callable.
-                candidate = None
-                for attr in ("function", "_wrapped_function", "callable_function"):
-                    candidate = getattr(tool_obj, attr, None)
-                    if callable(candidate):
-                        break
+                    # Try common attributes to reach the underlying callable.
+                    candidate = None
+                    for attr in (
+                        "function",
+                        "_wrapped_function",
+                        "callable_function",
+                    ):
+                        candidate = getattr(tool_obj, attr, None)
+                        if callable(candidate):
+                            break
 
-                if candidate is None or not callable(candidate):
-                    raise TypeError(
-                        "Tool object is not callable and no inner function found"
+                    if candidate is None or not callable(candidate):
+                        raise TypeError(
+                            "Tool object is not callable and no inner function found"
+                        )
+
+                    logger.info(
+                        f"Executing tool '{tool_name}' via registry with args: {tool_args}"
                     )
 
-                logger.info(
-                    f"Executing tool '{tool_name}' via registry with args: {tool_args}"
-                )
-
-                # Final check to ensure tool_args is a dict
-                if not isinstance(tool_args, dict):
-                    logger.error(
-                        f"tool_args is not a dict at execution time! "
-                        f"Type: {type(tool_args)}, Value: {tool_args!r}"
-                    )
-                    # Try to recover
-                    if isinstance(tool_args, str):
-                        # For known tools, use the correct parameter name
-                        if tool_name == "update_document_summary":
-                            tool_args = {"new_content": tool_args}
-                        elif tool_name == "update_document_description":
-                            tool_args = {"new_description": tool_args}
+                    # Final check to ensure tool_args is a dict
+                    if not isinstance(tool_args, dict):
+                        logger.error(
+                            f"tool_args is not a dict at execution time! "
+                            f"Type: {type(tool_args)}, Value: {tool_args!r}"
+                        )
+                        # Try to recover
+                        if isinstance(tool_args, str):
+                            # For known tools, use the correct parameter name
+                            if tool_name == "update_document_summary":
+                                tool_args = {"new_content": tool_args}
+                            elif tool_name == "update_document_description":
+                                tool_args = {"new_description": tool_args}
+                            else:
+                                tool_args = {"arg": tool_args}
                         else:
-                            tool_args = {"arg": tool_args}
-                    else:
-                        tool_args = {}
+                            tool_args = {}
 
-                try:
-                    result = await _maybe_await(candidate(_EmptyCtx(), **tool_args))
-                except TypeError as e:
-                    # Log full details for debugging
-                    logger.error(
-                        f"TypeError calling tool {tool_name}: {e}\n"
-                        f"Args: {tool_args}\n"
-                        f"Candidate: {candidate}\n"
-                        f"Tool obj: {tool_obj}"
-                    )
-                    raise
+                    try:
+                        result = await _maybe_await(candidate(_EmptyCtx(), **tool_args))
+                    except TypeError as e:
+                        # Log full details for debugging
+                        logger.error(
+                            f"TypeError calling tool {tool_name}: {e}\n"
+                            f"Args: {tool_args}\n"
+                            f"Candidate: {candidate}\n"
+                            f"Tool obj: {tool_obj}"
+                        )
+                        raise
+            finally:
+                self.config._approval_bypass_allowed = False
 
             tool_result = {"result": result}
             status_str = "approved"
@@ -1253,19 +1401,35 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 "Please inform the user and ask if they would like to try a different approach."
             )
 
-        # Append tool_return part to history only when *approved*; for rejected we
-        # simply finish the message lifecycle and emit a final event.
+        # Build native pydantic-ai history with ToolCallPart + ToolReturnPart
+        # so the LLM sees a proper tool-call / tool-return pair when it resumes.
+        # Without this the LLM receives a text continuation prompt and often
+        # re-invokes the same tool, creating an infinite approval loop.
+        #
+        # NOTE: These entries are injected as *historical context*, not live
+        # tool calls.  pydantic-ai's iter() treats message_history entries as
+        # past state and does NOT re-evaluate requires_approval for them.
+        # The actual tool execution has already completed above, so there is
+        # no risk of re-triggering the approval gate here.
+        tool_call_id = pending.get("tool_call_id") or str(uuid4())
         if approved:
-            tool_call_id = pending.get("tool_call_id") or str(uuid4())
+            resume_history = await self._get_message_history() or []
 
+            # 1) The LLM's original tool call (ModelResponse)
+            tool_call_part = ToolCallPart(
+                tool_name=tool_name,
+                args=json.dumps(pending.get("arguments", {}), default=str),
+                tool_call_id=tool_call_id,
+            )
+            resume_history.append(ModelResponse(parts=[tool_call_part]))
+
+            # 2) The tool return (ModelRequest)
             tool_return_part = ToolReturnPart(
                 tool_name=tool_name,
                 content=json.dumps(tool_result, default=str),
                 tool_call_id=tool_call_id,
             )
-
-            history = await self._get_message_history() or []
-            history.append(ModelRequest(parts=[tool_return_part]))
+            resume_history.append(ModelRequest(parts=[tool_return_part]))
 
         # ------------------------------------------------------------------
         # Mark the original paused message as completed/rejected BEFORE any
@@ -1342,36 +1506,85 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 llm_message_id=resumed_llm_id,
             )
 
+            # ----------------------------------------------------------
+            # Emit tool_call / tool_result ThoughtEvents so the frontend
+            # adds them to this message's timeline in real-time, and
+            # build initial_timeline entries for DB persistence.
+            # ----------------------------------------------------------
+            tool_args_str = json.dumps(pending.get("arguments", {}), default=str)
+            tool_result_str = json.dumps(tool_result, default=str)
+
+            # ThoughtEvent for tool_call
+            yield ThoughtEvent(
+                thought=f"Calling tool `{tool_name}` …",
+                llm_message_id=resumed_llm_id,
+                user_message_id=user_message_id,
+                metadata={
+                    "tool_name": tool_name,
+                    "args": tool_args_str,
+                    "message_id": str(resumed_llm_id),
+                },
+            )
+
+            # ThoughtEvent for tool_result
+            yield ThoughtEvent(
+                thought=f"Tool `{tool_name}` returned result",
+                llm_message_id=resumed_llm_id,
+                user_message_id=user_message_id,
+                metadata={
+                    "tool_name": tool_name,
+                    "result": tool_result_str[:500],
+                    "message_id": str(resumed_llm_id),
+                },
+            )
+
+            # Pre-built timeline entries for DB persistence (injected into
+            # _stream_core's TimelineBuilder via initial_timeline kwarg)
+            initial_timeline = [
+                {
+                    "type": "tool_call",
+                    "tool": tool_name,
+                    "args": tool_args_str,
+                },
+                {
+                    "type": "tool_result",
+                    "tool": tool_name,
+                    "result": tool_result_str[:500],
+                },
+            ]
+
             # ----------------------------------------------
-            # Run normal streaming continuation via _stream_core
+            # Run streaming continuation via _stream_core with native
+            # tool-call/tool-return history so the LLM sees a completed
+            # tool round-trip and can produce a natural follow-up.
             # ----------------------------------------------
 
             accumulated_content = ""
 
-            # Create a continuation prompt that includes the tool result and
-            # provides clear guidance if the tool failed
             if tool_succeeded:
                 continuation_prompt = (
-                    f"The tool '{tool_name}' was executed with user approval and returned: "
-                    f"{json.dumps(tool_result, indent=2)}. "
-                    f"Please continue with your original task based on this result."
+                    "The user approved the tool call. "
+                    "Please summarise what was done and continue."
                 )
             else:
                 continuation_prompt = (
-                    f"The tool '{tool_name}' was executed with user approval but did not succeed. "
-                    f"Result: {json.dumps(tool_result, indent=2)}. "
+                    f"The tool '{tool_name}' was approved but did not succeed. "
                     f"\n\n{failure_message}\n\n"
-                    f"IMPORTANT: Do NOT retry the same tool call. Instead, inform the user "
-                    f"about what happened and wait for their guidance."
+                    "IMPORTANT: Do NOT retry the same tool call. Instead, inform the user "
+                    "about what happened and wait for their guidance."
                 )
 
-            logger.info(f"Resuming with continuation prompt: {continuation_prompt}")
+            logger.info(
+                f"Resuming with native tool history and prompt: {continuation_prompt}"
+            )
 
             async for ev in self._stream_core(
                 continuation_prompt,
                 force_llm_id=resumed_llm_id,
                 force_user_msg_id=user_message_id,
                 deps=self.agent_deps,
+                message_history=resume_history,
+                initial_timeline=initial_timeline,
             ):
                 if isinstance(ev, FinalEvent):
                     ev.metadata["approval_decision"] = status_str
@@ -1574,27 +1787,43 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         default_vs_tool: Callable = vector_store.similarity_search
 
         # -----------------------------
-        # Document-specific async tools
+        # Auto-build pure passthrough tools from registry
         # -----------------------------
-        async def load_document_summary_tool(
-            truncate_length: int | None = None,
-            from_start: bool = True,
-        ) -> str:
-            """Load the document's markdown summary (optionally truncated)."""
-            return await aload_document_md_summary(
-                context.document.id, truncate_length, from_start
+        _corpus_id = context.corpus.id if context.corpus else None
+        auto_built_tools = _build_tools_from_registry(
+            [
+                "load_document_summary",
+                "get_summary_token_length",
+                "load_document_text",
+                "get_document_description",
+                "update_document_description",
+                "get_document_summary_diff",
+                "update_document_summary",
+                "get_document_summary_versions",
+            ],
+            document_id=context.document.id,
+            corpus_id=_corpus_id,
+            user_id=config.user_id,
+        )
+
+        # Corpus-required passthrough tools (only available when corpus context exists)
+        corpus_passthrough_tools = (
+            _build_tools_from_registry(
+                [
+                    "search_document_notes",
+                    "get_document_notes",
+                ],
+                document_id=context.document.id,
+                corpus_id=_corpus_id,
+                user_id=config.user_id,
             )
+            if context.corpus is not None
+            else []
+        )
 
-        async def get_summary_token_length_tool() -> int:
-            """Return token length of the document's markdown summary."""
-            return await aget_md_summary_token_length(context.document.id)
-
-        async def get_document_notes_tool() -> list[dict[str, Any]]:
-            """Retrieve metadata & first 512-char preview of notes for this document."""
-            return await aget_notes_for_document_corpus(
-                context.document.id, context.corpus.id
-            )
-
+        # -----------------------------
+        # Custom tools (unique logic, not pure passthroughs)
+        # -----------------------------
         async def get_document_text_length_tool() -> int:
             """Get the total character length of the document's plain-text extract."""
             # Load just the first character to get the full text length from cache
@@ -1609,87 +1838,14 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             full_text = await aload_document_txt_extract(context.document.id)
             return len(full_text)
 
-        async def load_document_text_tool(
-            start: int | None = None,
-            end: int | None = None,
-            refresh: bool = False,
-        ) -> str:
-            """Return a slice of the document's plain-text extract.
-
-            IMPORTANT USAGE GUIDELINES:
-            - First use get_document_text_length to check the total document size
-            - Recommended chunk size: 5,000 to 50,000 characters per request
-            - DO NOT load chunks smaller than 1,000 characters (inefficient, wastes tool calls)
-            - DO NOT load chunks larger than 100,000 characters (may overflow context)
-            - Tool call limit is 50, so plan your chunking strategy accordingly
-            - For a 500K char document, use ~10-20 chunks of 25-50K chars each
-
-            🔴 CRITICAL - CITATION REQUIREMENT:
-            After reading text with this tool, you MUST:
-            1. Identify 3-5 most relevant exact quotes/passages (5-50 words each)
-            2. Call search_exact_text with those EXACT strings
-            3. This creates proper citations with page numbers
-
-            WHY: This tool returns raw text WITHOUT sources. Only search_exact_text
-            creates citations. Skip this and your answer will have NO SOURCES!
-
-            Example: For a 200,000 character document:
-            - Good: Load in 4-8 chunks of 25,000-50,000 chars each
-            - Bad: Load 100 chars at a time (would need 2000 tool calls!)
-            - Bad: Load all 200,000 chars at once (might overflow context)
-            """
-            return await aload_document_txt_extract(
-                context.document.id, start, end, refresh=refresh
-            )
-
-        # Wrap with PydanticAI factory
-        load_summary_tool = PydanticAIToolFactory.from_function(
-            load_document_summary_tool,
-            name="load_document_summary",
-            description="Load the markdown summary of the document. Optionally truncate by length and direction.",
-            parameter_descriptions={
-                "truncate_length": "Optional number of characters to truncate the summary to",
-                "from_start": "If True, truncate from start; if False, truncate from end",
-            },
-        )
-
-        get_summary_length_tool = PydanticAIToolFactory.from_function(
-            get_summary_token_length_tool,
-            name="get_summary_token_length",
-            description="Get the approximate token length of the document's markdown summary.",
-        )
-
-        get_notes_tool = PydanticAIToolFactory.from_function(
-            get_document_notes_tool,
-            name="get_document_notes",
-            description="Retrieve all notes attached to this document in the current corpus.",
-            requires_corpus=True,
-        )
-
         get_text_length_tool = PydanticAIToolFactory.from_function(
             get_document_text_length_tool,
             name="get_document_text_length",
             description="Get the total character length of the document's plain-text extract. Use this BEFORE loading text to plan your chunking strategy.",  # noqa: E501
         )
 
-        load_text_tool = PydanticAIToolFactory.from_function(
-            load_document_text_tool,
-            name="load_document_text",
-            description=(
-                "Load the document's plain-text extract. ALWAYS use get_document_text_length first! "
-                "Load in chunks of 5K-50K chars to avoid context overflow or tool call limits. "
-                "🔴 CRITICAL: After reading, you MUST call search_exact_text on 3-5 key passages (5-50 words each) "
-                "to create proper citations with page numbers. Without this step, your answer will have NO SOURCES."
-            ),
-            parameter_descriptions={
-                "start": "Inclusive start character index (default 0)",
-                "end": "Exclusive end character index (defaults to end of file)",
-                "refresh": "If true, refresh the cached content from disk",
-            },
-        )
-
         # -----------------------------
-        # Exact text search tool
+        # Near-passthrough tools (result transformation)
         # -----------------------------
         async def search_exact_text_tool(search_strings: list[str]) -> list[dict]:
             """Search for exact text matches and return source nodes with location information."""
@@ -1741,51 +1897,7 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         )
 
         # -----------------------------
-        # Document description tools (corpus-agnostic)
-        # -----------------------------
-        async def get_document_description_tool(
-            truncate_length: int | None = None,
-            from_start: bool = True,
-        ) -> str:
-            """Get the document's description field."""
-            return await aget_document_description(
-                document_id=context.document.id,
-                truncate_length=truncate_length,
-                from_start=from_start,
-            )
-
-        get_description_wrapped = PydanticAIToolFactory.from_function(
-            get_document_description_tool,
-            name="get_document_description",
-            description="Get the document's description field.",
-            parameter_descriptions={
-                "truncate_length": "Optionally truncate to this many characters",
-                "from_start": "If true, truncate from beginning; otherwise from end",
-            },
-        )
-
-        async def update_document_description_tool(new_description: str) -> dict:
-            """Update the document's description field."""
-            logger.info(
-                f"Updating document description with content: {new_description}"
-            )
-            return await aupdate_document_description(
-                document_id=context.document.id,
-                new_description=new_description,
-            )
-
-        update_description_wrapped = PydanticAIToolFactory.from_function(
-            update_document_description_tool,
-            name="update_document_description",
-            description="Update the document's description field (requires approval).",
-            parameter_descriptions={
-                "new_description": "The new description content for the document",
-            },
-            requires_approval=True,
-        )
-
-        # -----------------------------
-        # Document summary tools (new)
+        # Genuinely custom: get_document_summary has fallback logic
         # -----------------------------
         async def get_document_summary_tool(
             truncate_length: int | None = None,
@@ -1815,67 +1927,8 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             requires_corpus=True,
         )
 
-        async def get_document_summary_diff_tool(from_version: int, to_version: int):
-            """Return unified diff between two document summary versions."""
-            return await aget_document_summary_diff(
-                document_id=context.document.id,
-                corpus_id=context.corpus.id,
-                from_version=from_version,
-                to_version=to_version,
-            )
-
-        async def update_document_summary_tool(new_content: str):
-            """Update (or create) the document summary, returning version info."""
-            logger.info(f"Updating document summary with content: {new_content}")
-            return await aupdate_document_summary(
-                document_id=context.document.id,
-                corpus_id=context.corpus.id,
-                new_content=new_content,
-                author_id=config.user_id,
-            )
-
-        async def get_document_summary_versions_tool(limit: int | None = None):
-            """Return version history for the document summary."""
-            return await aget_document_summary_versions(
-                document_id=context.document.id,
-                corpus_id=context.corpus.id,
-                limit=limit,
-            )
-
-        get_summary_versions_wrapped = PydanticAIToolFactory.from_function(
-            get_document_summary_versions_tool,
-            name="get_document_summary_versions",
-            description="Get version history for the document summary.",
-            parameter_descriptions={
-                "limit": "Optional maximum number of versions to return (newest first)",
-            },
-            requires_corpus=True,
-        )
-
-        get_summary_diff_wrapped = PydanticAIToolFactory.from_function(
-            get_document_summary_diff_tool,
-            name="get_document_summary_diff",
-            description="Get unified diff between two summary versions.",
-            parameter_descriptions={
-                "from_version": "Starting version number",
-                "to_version": "Ending version number",
-            },
-            requires_corpus=True,
-        )
-
-        update_summary_wrapped = PydanticAIToolFactory.from_function(
-            update_document_summary_tool,
-            name="update_document_summary",
-            description="Create or update the document summary (requires approval).",
-            parameter_descriptions={
-                "new_content": "Full markdown content for the new summary version",
-            },
-            requires_approval=True,
-            requires_corpus=True,
-        )
-
         # -----------------------------
-        # New note manipulation tools
+        # Near-passthrough note manipulation tools (result transformation)
         # -----------------------------
 
         async def add_document_note_tool(title: str, content: str) -> dict[str, int]:
@@ -1901,17 +1954,6 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             version = rev.version if rev else None
             return {"version": version}
 
-        async def search_document_notes_tool(
-            search_term: str, limit: int | None = None
-        ):
-            """Search notes attached to this document for a keyword."""
-            return await asearch_document_notes(
-                document_id=context.document.id,
-                search_term=search_term,
-                corpus_id=context.corpus.id,
-                limit=limit,
-            )
-
         add_note_tool_wrapped = PydanticAIToolFactory.from_function(
             add_document_note_tool,
             name="add_document_note",
@@ -1933,17 +1975,6 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 "new_content": "New note content (markdown)",
             },
             requires_approval=True,
-        )
-
-        search_notes_tool_wrapped = PydanticAIToolFactory.from_function(
-            search_document_notes_tool,
-            name="search_document_notes",
-            description="Search notes for a keyword (title or content)",
-            parameter_descriptions={
-                "search_term": "Keyword or phrase to search for (case-insensitive)",
-                "limit": "Maximum number of results to return",
-            },
-            requires_corpus=True,
         )
 
         # -----------------------------
@@ -2043,46 +2074,66 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             requires_corpus=True,
         )
 
-        # Merge caller-supplied tools (if any) after the default one so callers
+        # Merge caller-supplied tools (if any) after the default ones so callers
         # can override behaviour/order if desired.
         # Build the list conditionally to avoid corpus-required tools in standalone mode.
         effective_tools: list[Callable] = [
-            default_vs_tool,
-            load_summary_tool,  # corpus-agnostic
-            get_summary_length_tool,  # corpus-agnostic
-            get_text_length_tool,  # corpus-agnostic
-            load_text_tool,  # corpus-agnostic
-            search_exact_text_wrapped,  # corpus-agnostic exact text search
-            get_description_wrapped,  # corpus-agnostic document description
-            update_description_wrapped,  # corpus-agnostic document description (requires approval)
+            default_vs_tool,  # genuinely custom (vector store bound method)
+            get_text_length_tool,  # genuinely custom (cache access)
+            *auto_built_tools,  # registry-driven passthrough tools
+            search_exact_text_wrapped,  # near-passthrough (result transform)
         ]
 
         if context.corpus is not None:
             # Only add corpus-dependent tools when corpus is available
+            effective_tools.extend(corpus_passthrough_tools)
             effective_tools.extend(
                 [
-                    get_notes_tool,
-                    search_notes_tool_wrapped,
-                    # Write operations below – all require approval
-                    add_note_tool_wrapped,
-                    update_note_tool_wrapped,
-                    duplicate_ann_tool_wrapped,
-                    add_exact_ann_tool_wrapped,
-                    get_summary_content_wrapped,
-                    get_summary_versions_wrapped,
-                    get_summary_diff_wrapped,
-                    update_summary_wrapped,
+                    get_summary_content_wrapped,  # genuinely custom (fallback logic)
+                    add_note_tool_wrapped,  # near-passthrough (result transform)
+                    update_note_tool_wrapped,  # near-passthrough (result transform)
+                    duplicate_ann_tool_wrapped,  # near-passthrough (result transform)
+                    add_exact_ann_tool_wrapped,  # near-passthrough (complex normalization)
                 ]
             )
-        if tools:
+        restrict_tool_names: set[str] | None = kwargs.pop("restrict_tool_names", None)
+        if restrict_tool_names is not None:
+            # Restrict mode: only keep tools whose names appear in the
+            # specified set.  This prevents tool overload when the caller
+            # (e.g. corpus actions) specifies an exact tool set.  The
+            # set uses original string names so runtime-context tools
+            # (e.g. get_document_text_length) that aren't in FUNCTION_MAP
+            # are still preserved.
+            allowed = set(restrict_tool_names)
+            before_count = len(effective_tools)
+            effective_tools = [
+                t for t in effective_tools if get_tool_name(t) in allowed
+            ]
+            # Now apply caller overrides (tools from registry) on top
+            if tools:
+                effective_tools = deduplicate_tools(
+                    effective_tools, tools, context="Caller"
+                )
+            logger.info(
+                "Restricted agent tools to %d (from %d defaults)",
+                len(effective_tools),
+                before_count,
+            )
+        elif tools:
             effective_tools = deduplicate_tools(
                 effective_tools, tools, context="Caller"
             )
 
+        tool_names = [get_tool_name(t) for t in effective_tools]
+        logger.info(
+            "Creating pydantic-ai agent: model=%s, tools=%s",
+            config.model_name,
+            tool_names,
+        )
         logger.info(f"Created pydantic ai agent with context {config.system_prompt}")
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,
@@ -2212,20 +2263,15 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         default_vs_tool: Callable = vector_store.similarity_search
 
         # -----------------------------
-        # Corpus description tools
+        # Auto-build passthrough tools from registry
         # -----------------------------
+        corpus_auto_tools = _build_tools_from_registry(
+            ["get_corpus_description"],
+            corpus_id=context.corpus.id,
+            user_id=config.user_id,
+        )
 
-        async def get_corpus_description_tool(
-            truncate_length: int | None = None,
-            from_start: bool = True,
-        ) -> str:
-            """Return the current corpus markdown description (optionally truncated)."""
-            return await aget_corpus_description(
-                corpus_id=context.corpus.id,
-                truncate_length=truncate_length,
-                from_start=from_start,
-            )
-
+        # Near-passthrough: update_corpus_description has result transformation
         async def update_corpus_description_tool(
             new_content: str,
         ) -> dict[str, int | None]:
@@ -2238,17 +2284,6 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             version = rev.version if rev else None
             return {"version": version}
 
-        get_corpus_desc_tool_wrapped = PydanticAIToolFactory.from_function(
-            get_corpus_description_tool,
-            name="get_corpus_description",
-            description="Retrieve the latest markdown description for this corpus.",
-            parameter_descriptions={
-                "truncate_length": "Optionally truncate the description to this many characters",
-                "from_start": "If true, truncate from beginning else from end",
-            },
-            requires_corpus=True,
-        )
-
         update_corpus_desc_tool_wrapped = PydanticAIToolFactory.from_function(
             update_corpus_description_tool,
             name="update_corpus_description",
@@ -2257,6 +2292,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 "new_content": "Full markdown content",
             },
             requires_corpus=True,
+            requires_approval=True,
         )
 
         # -----------------------------
@@ -2283,7 +2319,10 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 for doc in context.documents
             ]
 
-        async def ask_document_tool(document_id: int, question: str) -> dict[str, Any]:
+        async def ask_document_tool(
+            document_id: int,
+            question: str,
+        ) -> dict[str, Any]:
             """Ask a question to a **document-specific** agent inside this corpus.
 
             The call transparently streams the document agent so we can capture
@@ -2334,6 +2373,11 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                     timeline=[],
                 ).model_dump()
 
+            # The _approval_bypass_allowed flag is set by resume_with_approval()
+            # when the user has already approved the sub-agent tool.  It is NOT
+            # exposed as a function parameter to prevent LLM prompt injection.
+            bypass = getattr(config, "_approval_bypass_allowed", False)
+
             doc_agent = await _agents_api.for_document(
                 document=document_id,
                 corpus=context.corpus.id,
@@ -2341,6 +2385,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 store_user_messages=False,
                 store_llm_messages=False,
                 framework=_AgentFramework.PYDANTIC_AI,
+                skip_approval_gate=bypass,
             )
 
             # Side-channel observer from AgentConfig (set by WebSocket layer)
@@ -2354,6 +2399,44 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 # Capture content
                 if getattr(ev, "type", "") == "content":
                     accumulated_answer += getattr(ev, "content", "")
+
+                # ----------------------------------------------------------
+                # Sub-agent approval gate: if the document agent's tool
+                # requires approval, surface it to the corpus agent level so
+                # the user is prompted.  We raise ToolConfirmationRequired
+                # which the corpus agent's outer handler converts into an
+                # ApprovalNeededEvent for the frontend.
+                # ----------------------------------------------------------
+                if getattr(ev, "type", "") == "approval_needed":
+                    sub_tool = getattr(ev, "pending_tool_call", {})
+                    sub_name = (
+                        sub_tool.get("name") if isinstance(sub_tool, dict) else None
+                    )
+                    if not sub_name:
+                        logger.warning(
+                            "[ask_document] Received approval_needed event with "
+                            "missing or malformed pending_tool_call: %r",
+                            sub_tool,
+                        )
+                        continue
+                    logger.info(
+                        "[ask_document] Sub-agent requested approval for tool '%s' "
+                        "– propagating to corpus agent level.",
+                        sub_name,
+                    )
+                    raise ToolConfirmationRequired(
+                        tool_name="ask_document",
+                        tool_args={
+                            "document_id": document_id,
+                            "question": question,
+                            # Preserve sub-agent tool details for the UI.
+                            # Prefixed with _ so resume_with_approval strips
+                            # them before calling the function.
+                            "_sub_tool_name": sub_name,
+                            "_sub_tool_arguments": sub_tool.get("arguments"),
+                        },
+                        tool_call_id=sub_tool.get("tool_call_id"),
+                    )
 
                 # Forward raw event upstream (side-channel)
                 if callable(observer_cb):
@@ -2412,7 +2495,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         # override behaviour/order if desired.
         effective_tools: list[Callable] = [
             default_vs_tool,
-            get_corpus_desc_tool_wrapped,
+            *corpus_auto_tools,
             update_corpus_desc_tool_wrapped,
             list_docs_tool_wrapped,
             ask_doc_tool_wrapped,
@@ -2425,7 +2508,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
 
         pydantic_ai_agent_instance = PydanticAIAgent(
             model=config.model_name,
-            system_prompt=config.system_prompt,
+            instructions=config.system_prompt,
             deps_type=PydanticAIDependencies,
             tools=effective_tools,
             model_settings=model_settings,
