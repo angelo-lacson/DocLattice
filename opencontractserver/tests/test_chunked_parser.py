@@ -443,3 +443,40 @@ class TestBaseChunkedParserIntegration(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(call_count["value"], 2)
         mock_sleep.assert_called_once()
+
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
+    )
+    def test_concurrent_failure_cancels_remaining(self, mock_open):
+        """When one chunk fails concurrently, remaining futures should be cancelled."""
+        large_pdf = make_test_pdf(200)
+        mock_file = MagicMock()
+        mock_file.read.return_value = large_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        class SlowFailParser(ConcreteChunkedParser):
+            def _parse_single_chunk_impl(self, *args, **kwargs):
+                chunk_index = kwargs.get("chunk_index")
+                if chunk_index is None:
+                    # Positional: user_id, doc_id, chunk_pdf_bytes, chunk_index, ...
+                    chunk_index = args[3] if len(args) > 3 else 0
+                if chunk_index == 0:
+                    raise DocumentParsingError("chunk 0 boom", is_transient=False)
+                import time
+                time.sleep(5)
+                return _make_chunk_result()
+
+        parser = SlowFailParser()
+        parser.max_pages_per_chunk = 50
+        parser.min_pages_for_chunking = 75
+        parser.max_concurrent_chunks = 4
+        parser.chunk_retry_limit = 0
+
+        import time
+        start = time.monotonic()
+        with self.assertRaises(DocumentParsingError):
+            parser._parse_document_impl(
+                user_id=self.user.id, doc_id=self.doc.id
+            )
+        elapsed = time.monotonic() - start
+        self.assertLess(elapsed, 3.0, "Failure should not wait for remaining chunks")
