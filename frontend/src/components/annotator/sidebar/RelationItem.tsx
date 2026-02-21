@@ -1,10 +1,106 @@
-import { Label, Card, Divider, List } from "semantic-ui-react";
-
-import _ from "lodash";
+import { Button } from "semantic-ui-react";
+import styled from "styled-components";
+import { Trash2 } from "lucide-react";
 
 import "./AnnotatorSidebar.css";
 import { RelationHighlightItem } from "./RelationHighlightItem";
 import { RelationGroup, ServerAnnotation } from "../types/annotations";
+
+interface RelationContainerProps {
+  $color?: string;
+  $selected?: boolean;
+}
+
+const RelationContainer = styled.div<RelationContainerProps>`
+  border-left: 4px solid ${(props) => props.$color || "#e0e1e2"};
+  background-color: ${(props) =>
+    props.$selected ? "rgba(46, 204, 113, 0.08)" : "white"};
+  box-shadow: ${(props) =>
+    props.$selected
+      ? "0 2px 8px rgba(46, 204, 113, 0.2)"
+      : "0 1px 3px rgba(0, 0, 0, 0.08)"};
+  border-radius: 6px;
+  padding: 0.875rem 1rem;
+  margin: 0.5rem 0.75rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+    background-color: ${(props) =>
+      props.$selected ? "rgba(46, 204, 113, 0.08)" : "rgba(0, 0, 0, 0.01)"};
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+`;
+
+const RelationHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 0.25rem;
+`;
+
+const DeleteButton = styled(Button)`
+  &&& {
+    padding: 0.4em;
+    margin: 0;
+    background-color: transparent;
+    color: #99a1a7;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background-color: #fee2e2;
+      color: #dc2626;
+    }
+
+    &:active {
+      background-color: #fecaca;
+    }
+  }
+`;
+
+const AnnotationList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+interface LabelPillProps {
+  $color?: string;
+}
+
+const LabelPill = styled.div<LabelPillProps>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35em 0.9em;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  background-color: ${(props) => props.$color || "#6b7280"};
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+`;
+
+const DividerRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.625rem 0;
+`;
+
+const DividerLine = styled.div`
+  flex: 1;
+  height: 1px;
+  background-color: #e2e8f0;
+`;
 
 export function RelationItem({
   relation,
@@ -30,7 +126,7 @@ export function RelationItem({
     relationId: string
   ) => void;
 }) {
-  let source_cards = source_annotations.map((source_annotation) => (
+  const source_cards = source_annotations.map((source_annotation) => (
     <RelationHighlightItem
       key={`1_${source_annotation.id}`}
       type="SOURCE"
@@ -43,7 +139,7 @@ export function RelationItem({
     />
   ));
 
-  let target_cards = target_annotations.map((target_annotation) => (
+  const target_cards = target_annotations.map((target_annotation) => (
     <RelationHighlightItem
       key={`2_${target_annotation.id}`}
       type="TARGET"
@@ -57,43 +153,36 @@ export function RelationItem({
   ));
 
   return (
-    <Card
-      style={{
-        ...(selected ? { backgroundColor: "#e2ffdb" } : {}),
-        userSelect: "none",
-        MsUserSelect: "none",
-        MozUserSelect: "none",
-      }}
-      fluid
-      raised
+    <RelationContainer
+      $color={relation.label.color}
+      $selected={selected}
       onClick={onSelectRelation}
     >
       {!relation.structural && (
-        <Label
-          corner="right"
-          icon="trash"
-          color="red"
-          onClick={() => onDeleteRelation(relation.id)}
-        />
+        <RelationHeader>
+          <DeleteButton
+            icon={<Trash2 size={16} />}
+            size="mini"
+            circular
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onDeleteRelation(relation.id);
+            }}
+          />
+        </RelationHeader>
       )}
 
-      <List
-        style={{ marginTop: "0px", marginBottom: "0px" }}
-        celled
-        size="mini"
-      >
-        {source_cards}
-      </List>
-      <Divider horizontal>
-        <strong>{relation.label.text}:</strong>
-      </Divider>
-      <List
-        style={{ marginTop: "0px", marginBottom: "0px" }}
-        celled
-        size="mini"
-      >
-        {target_cards}
-      </List>
-    </Card>
+      <AnnotationList>{source_cards}</AnnotationList>
+
+      <DividerRow>
+        <DividerLine />
+        <LabelPill $color={relation.label.color}>
+          {relation.label.text}
+        </LabelPill>
+        <DividerLine />
+      </DividerRow>
+
+      <AnnotationList>{target_cards}</AnnotationList>
+    </RelationContainer>
   );
 }

@@ -152,11 +152,24 @@ const AnnotatedSpan = styled.span<{
   hasBorder?: boolean;
   borderColor?: string;
   zIndex?: number;
+  $hasAnnotation?: boolean;
+  $annotationColor?: string;
 }>`
   position: relative;
   cursor: text;
   user-select: text;
   white-space: pre-wrap;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+
+  ${(props) =>
+    props.$hasAnnotation &&
+    css`
+      padding: 1px 2px;
+      border-radius: 3px;
+      border-bottom: 2px solid ${props.$annotationColor || "#cccccc"};
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    `}
 
   ${(props) =>
     props.approved &&
@@ -855,6 +868,12 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           const borderColor =
             finalAnnotations[0]?.annotationLabel?.color || "#000";
 
+          // Determine the primary annotation color for the bottom border
+          const primaryAnnotationColor =
+            finalAnnotations.length > 0
+              ? finalAnnotations[0].annotationLabel.color || "#cccccc"
+              : undefined;
+
           return (
             <AnnotatedSpan
               key={index}
@@ -870,6 +889,8 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
               rejected={rejected}
               hasBorder={hasBorder}
               borderColor={borderColor}
+              $hasAnnotation={finalAnnotations.length > 0}
+              $annotationColor={primaryAnnotationColor}
               style={{
                 ...backgroundStyle,
                 position: "relative",
