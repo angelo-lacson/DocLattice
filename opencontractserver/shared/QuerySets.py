@@ -323,11 +323,32 @@ class AnnotationQuerySet(
         )
 
         # Also need document/corpus visibility
+        # Query guardian permission tables for documents and corpuses
+        from django.apps import apps
+
+        try:
+            doc_perm_model = apps.get_model("documents", "documentuserobjectpermission")
+            doc_permitted_ids = doc_perm_model.objects.filter(
+                permission__codename="read_document", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+        except LookupError:
+            doc_permitted_ids = []
+
+        try:
+            corpus_perm_model = apps.get_model("corpuses", "corpususerobjectpermission")
+            corpus_permitted_ids = corpus_perm_model.objects.filter(
+                permission__codename="read_corpus", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+        except LookupError:
+            corpus_permitted_ids = []
+
         # Handle TWO types of annotations:
         # 1. Document-attached: have document FK set, check document visibility
         # 2. Structural via structural_set: have document=NULL, check via structural_set__documents
         doc_attached_filter = Q(document__isnull=False) & (
-            Q(document__is_public=True) | Q(document__creator=user)
+            Q(document__is_public=True)
+            | Q(document__creator=user)
+            | Q(document_id__in=doc_permitted_ids)
         )
 
         # Structural annotations linked via structural_set (document FK is NULL)
@@ -339,6 +360,7 @@ class AnnotationQuerySet(
             & (
                 Q(structural_set__documents__is_public=True)
                 | Q(structural_set__documents__creator=user)
+                | Q(structural_set__documents__id__in=doc_permitted_ids)
             )
         )
 
@@ -346,7 +368,10 @@ class AnnotationQuerySet(
 
         # Corpus visibility (for document-attached annotations with corpus)
         corpus_filter = (
-            Q(corpus__isnull=True) | Q(corpus__is_public=True) | Q(corpus__creator=user)
+            Q(corpus__isnull=True)
+            | Q(corpus__is_public=True)
+            | Q(corpus__creator=user)
+            | Q(corpus_id__in=corpus_permitted_ids)
         )
 
         return qs.filter(
