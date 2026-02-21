@@ -72,6 +72,8 @@ class BaseChunkedParser(BaseParser):
     max_pages_per_chunk: int = DEFAULT_MAX_PAGES_PER_CHUNK
     min_pages_for_chunking: int = DEFAULT_MIN_PAGES_FOR_CHUNKING
     max_concurrent_chunks: int = DEFAULT_MAX_CONCURRENT_CHUNKS
+    # Intentionally low: per-chunk retries handle transient blips, while the
+    # outer Celery task provides a second tier of retries for broader failures.
     chunk_retry_limit: int = DEFAULT_CHUNK_RETRY_LIMIT
 
     # ------------------------------------------------------------------
@@ -312,7 +314,7 @@ class BaseChunkedParser(BaseParser):
 
         Results are collected and returned in original chunk order.
         """
-        results_by_index: dict[int, OpenContractDocExport] = {}
+        results: list[Optional[OpenContractDocExport]] = [None] * len(chunk_data)
         max_workers = min(self.max_concurrent_chunks, len(chunk_data))
 
         logger.info(
@@ -353,11 +355,11 @@ class BaseChunkedParser(BaseParser):
                         f"Chunk {chunk_index} returned None for document {doc_id}",
                         is_transient=True,
                     )
-                results_by_index[chunk_index] = result
+                results[chunk_index] = result
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
 
-        return [results_by_index[i] for i in range(len(chunk_data))]
+        return results  # type: ignore[return-value]  # None slots would have raised above
 
     # ------------------------------------------------------------------
     # Per-chunk retry logic
