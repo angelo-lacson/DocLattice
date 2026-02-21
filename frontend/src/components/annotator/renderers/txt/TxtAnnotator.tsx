@@ -330,20 +330,33 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
   /**
    * Register annotation DOM refs so the sidebar can scrollIntoView directly.
-   * For each annotation, we find the first span that contains it and register
-   * that element via the onAnnotationRefChange callback.
+   * For each visible annotation, we find the first span that contains it and
+   * register that element via the onAnnotationRefChange callback.
+   *
+   * Only annotations whose labels pass the visibleLabels filter get registered,
+   * matching the spans-building logic below.
    */
   useEffect(() => {
     if (!onAnnotationRefChange || !containerRef.current) return;
 
-    const currentIds = new Set<string>();
+    // Filter to only visible annotations, matching span-building logic
+    const isLabelVisible = (labelText: string) => {
+      if (visibleLabels === null) return true;
+      return visibleLabels.some((label) => label.text === labelText);
+    };
 
-    for (const ann of annotations) {
+    const visibleAnnotations = annotations.filter(
+      (ann) =>
+        ann.annotationLabel?.text && isLabelVisible(ann.annotationLabel.text)
+    );
+
+    const currentIds = new Set<string>();
+    for (const ann of visibleAnnotations) {
       currentIds.add(ann.id);
     }
 
-    // Find and register the first DOM span for each annotation
-    for (const ann of annotations) {
+    // Find and register the first DOM span for each visible annotation
+    for (const ann of visibleAnnotations) {
       const spanIndex = spans.findIndex(
         (span) => ann.json.start >= span.start && ann.json.start < span.end
       );
@@ -357,7 +370,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       }
     }
 
-    // Unregister annotations that were removed
+    // Unregister annotations that were removed or became hidden
     for (const prevId of registeredAnnotationIdsRef.current) {
       if (!currentIds.has(prevId)) {
         onAnnotationRefChange(prevId, null);
@@ -365,15 +378,20 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     }
 
     registeredAnnotationIdsRef.current = currentIds;
+  }, [annotations, spans, visibleLabels, onAnnotationRefChange]);
 
+  /**
+   * Cleanup all registered refs on unmount only (empty dependency array).
+   */
+  useEffect(() => {
     return () => {
-      // Cleanup all refs on unmount
+      if (!onAnnotationRefChange) return;
       for (const id of registeredAnnotationIdsRef.current) {
         onAnnotationRefChange(id, null);
       }
       registeredAnnotationIdsRef.current = new Set();
     };
-  }, [annotations, spans, onAnnotationRefChange]);
+  }, [onAnnotationRefChange]);
 
   /**
    * Handle mouse enter on a specific span index.

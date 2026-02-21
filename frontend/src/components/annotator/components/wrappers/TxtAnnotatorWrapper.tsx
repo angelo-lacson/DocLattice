@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback } from "react";
+import { useSetAtom } from "jotai";
 import {
   useApproveAnnotation,
   useCreateAnnotation,
@@ -26,7 +27,10 @@ import {
 } from "../../context/UISettingsAtom";
 import { useCorpusState } from "../../context/CorpusAtom";
 import { useChatSourceState } from "../../context/ChatSourceAtom";
-import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
+import {
+  registerRefAtom,
+  unregisterRefAtom,
+} from "../../context/AnnotationRefsAtoms";
 
 interface TxtAnnotatorWrapperProps {
   readOnly: boolean;
@@ -58,7 +62,11 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
   const handleApproveAnnotation = useApproveAnnotation();
   const handleRejectAnnotation = useRejectAnnotation();
 
-  const { registerRef, unregisterRef } = useAnnotationRefs();
+  // Use write-only atoms directly to avoid subscribing to the combined read
+  // atom, which would cause rerenders on every ref change — contradicting
+  // this wrapper's purpose of minimizing rerenders.
+  const dispatchRegister = useSetAtom(registerRefAtom);
+  const dispatchUnregister = useSetAtom(unregisterRefAtom);
 
   /**
    * Callback for TxtAnnotator to register/unregister annotation DOM elements
@@ -68,12 +76,12 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
     (annotationId: string, element: HTMLElement | null) => {
       if (element) {
         const ref = { current: element };
-        registerRef("annotation", ref, annotationId);
+        dispatchRegister({ type: "annotation", ref, id: annotationId });
       } else {
-        unregisterRef("annotation", annotationId);
+        dispatchUnregister({ type: "annotation", id: annotationId });
       }
     },
-    [registerRef, unregisterRef]
+    [dispatchRegister, dispatchUnregister]
   );
 
   const { messages, selectedMessageId, selectedSourceIndex } =
