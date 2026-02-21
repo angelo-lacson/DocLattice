@@ -33,9 +33,6 @@ import {
   DeleteMultipleDocumentsInputs,
   DeleteMultipleDocumentsOutputs,
   DELETE_MULTIPLE_DOCUMENTS,
-  UpdateDocumentInputs,
-  UpdateDocumentOutputs,
-  UPDATE_DOCUMENT,
 } from "../graphql/mutations";
 import {
   RequestDocumentsInputs,
@@ -58,15 +55,10 @@ import {
   backendUserObj,
 } from "../graphql/cache";
 
-import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
 import { FilterToLabelSelector } from "../components/widgets/model-filters/FilterToLabelSelector";
 import { DocumentType, LabelType } from "../types/graphql-api";
 import { AddToCorpusModal } from "../components/modals/AddToCorpusModal";
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
-import {
-  editDocForm_Schema,
-  editDocForm_Ui_Schema,
-} from "../components/forms/schemas";
 import { FilterToLabelsetSelector } from "../components/widgets/model-filters/FilterToLabelsetSelector";
 import { FilterToCorpusSelector } from "../components/widgets/model-filters/FilterToCorpusSelector";
 import { BulkUploadModal } from "../components/widgets/modals/BulkUploadModal";
@@ -876,8 +868,6 @@ function getDocumentType(doc: DocumentType): string {
 export const Documents = () => {
   const current_user = useReactiveVar(userObj);
   const backend_user = useReactiveVar(backendUserObj);
-  const document_to_edit = useReactiveVar(editingDocument);
-  const document_to_view = useReactiveVar(viewingDocument);
   const show_bulk_upload_modal = useReactiveVar(showBulkUploadModal);
   const show_upload_new_documents_modal = useReactiveVar(
     showUploadNewDocumentsModal
@@ -1075,25 +1065,6 @@ export const Documents = () => {
     }
   };
 
-  const [tryUpdateDocument] = useMutation<
-    UpdateDocumentOutputs,
-    UpdateDocumentInputs
-  >(UPDATE_DOCUMENT, {
-    onCompleted: () => {
-      toast.success("Document updated successfully");
-      refetchDocuments();
-    },
-    onError: (error) => {
-      toast.error(`Failed to update document: ${error.message}`);
-    },
-  });
-
-  const handleUpdateDocument = (document_obj: Record<string, unknown>) => {
-    tryUpdateDocument({
-      variables: document_obj as unknown as UpdateDocumentInputs,
-    });
-  };
-
   // Infinite scroll
   const handleFetchMore = useCallback(() => {
     if (
@@ -1246,36 +1217,6 @@ export const Documents = () => {
           toggleModal={() => showDeleteDocumentsModal(false)}
           visible={show_delete_documents_modal}
         />
-        <CRUDModal
-          open={document_to_edit !== null}
-          mode="EDIT"
-          oldInstance={document_to_edit ? document_to_edit : {}}
-          modelName="document"
-          uiSchema={editDocForm_Ui_Schema}
-          dataSchema={editDocForm_Schema}
-          onSubmit={handleUpdateDocument}
-          onClose={() => editingDocument(null)}
-          hasFile={true}
-          fileField="pdfFile"
-          fileLabel="PDF File"
-          fileIsImage={false}
-          acceptedFileTypes="pdf"
-        />
-        <CRUDModal
-          open={document_to_view !== null}
-          mode="VIEW"
-          oldInstance={document_to_view ? document_to_view : {}}
-          modelName="document"
-          uiSchema={editDocForm_Ui_Schema}
-          dataSchema={editDocForm_Schema}
-          onClose={() => viewingDocument(null)}
-          hasFile={true}
-          fileField="pdfFile"
-          fileLabel="PDF File"
-          fileIsImage={false}
-          acceptedFileTypes="pdf"
-        />
-
         {/* Hero Section */}
         <HeroSection>
           <HeroTitle>

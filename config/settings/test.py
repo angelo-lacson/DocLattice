@@ -125,11 +125,6 @@ TELEMETRY_ENABLED = False
 # Integration tests that need to verify actual service connectivity should
 # explicitly instantiate the real embedder class (e.g., MicroserviceEmbedder).
 DEFAULT_EMBEDDER = "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder"
-DEFAULT_EMBEDDERS_BY_FILETYPE = {
-    "application/pdf": "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder",
-    "text/plain": "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.test_embedder.TestEmbedder",  # noqa: E501
-}
 
 # Auth0 settings for tests
 # ------------------------------------------------------------------------------

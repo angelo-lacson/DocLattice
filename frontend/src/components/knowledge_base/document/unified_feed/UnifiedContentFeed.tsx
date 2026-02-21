@@ -9,7 +9,7 @@ import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader, Button, Icon } from "semantic-ui-react";
 import { toast } from "react-toastify";
-import { List, useListCallbackRef, useDynamicRowHeight } from "react-window";
+import { List, useListCallbackRef } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 import {
   UnifiedContentItem,
@@ -85,7 +85,7 @@ const FeedViewport = styled.div`
 const PageHeader = styled.div`
   background: linear-gradient(to right, #f8fafc 0%, #ffffff 100%);
   backdrop-filter: blur(8px);
-  padding: 1rem 1.25rem;
+  padding: 0.625rem 1.25rem;
   margin: 0 -0.5rem;
   border-bottom: 2px solid #e2e8f0;
   border-top: 1px solid #f1f5f9;
@@ -113,7 +113,7 @@ const PageNumber = styled.span`
 `;
 
 const ContentWrapper = styled.div`
-  padding: 0.75rem 0.5rem;
+  padding: 0.5rem 0.5rem;
 `;
 
 const SelectionToolbar = styled(motion.div)`
@@ -144,10 +144,11 @@ const SelectionToolbar = styled(motion.div)`
 
 // Base heights for different content types - includes padding, margins, and chrome
 const ESTIMATED_HEIGHTS = {
-  pageHeader: 90,
+  pageHeader: 46,
   note: 200,
-  annotation: 160, // Accounts for padding (0.875rem top/bottom) + margin (0.5rem top/bottom) + content
-  relationship: 220,
+  annotation: 166,
+  annotationWithBadges: 210,
+  relationship: 260,
   search: 140,
 };
 
@@ -200,11 +201,8 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
     setSelectedAnnotationIds([]);
   }, [filters, sortBy]);
 
-  /* Ref for List and dynamic height management */
+  /* Ref for List */
   const [listRef, setListRef] = useListCallbackRef();
-  const rowHeightManager = useDynamicRowHeight({
-    defaultRowHeight: ESTIMATED_HEIGHTS.annotation,
-  });
 
   /* Aggregate and filter content - apply all filters EXCEPT showSelectedOnly */
   const contentItems = useMemo(() => {
@@ -441,55 +439,114 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
     setSelectedAnnotationIds(annotationIds);
   }, [contentItems]);
 
-  /* Height function with dynamic measurement fallback */
-  const rowHeight = useMemo(() => {
-    return {
-      ...rowHeightManager,
-      getRowHeight: (index: number) => {
-        // First check if we have a measured height
-        const measured = rowHeightManager.getRowHeight(index);
-        if (measured !== undefined) return measured;
+  /* Per-type height estimate for initial positioning */
+  const estimateRowHeight = useCallback(
+    (index: number): number => {
+      const virtualItem = virtualItems[index];
+      if (!virtualItem) return ESTIMATED_HEIGHTS.annotation;
 
-        // Otherwise estimate
-        const virtualItem = virtualItems[index];
-        if (!virtualItem) return ESTIMATED_HEIGHTS.annotation;
+      if (virtualItem.type === "header") {
+        return ESTIMATED_HEIGHTS.pageHeader;
+      }
 
-        if (virtualItem.type === "header") {
-          return ESTIMATED_HEIGHTS.pageHeader;
+      const item = virtualItem.item;
+      switch (item.type) {
+        case "note": {
+          const note = item.data as any;
+          const contentLength = note.content?.length || 0;
+          return ESTIMATED_HEIGHTS.note + Math.floor(contentLength / 100) * 20;
         }
+        case "annotation": {
+          const ann = item.data as any;
+          const textLength = ann.rawText?.length || 0;
+          const extraLines = Math.floor(textLength / 50);
+          // Check if annotation participates in any relationships (adds badge rows)
+          const hasBadges = allRelationships.some(
+            (rel) =>
+              rel.sourceIds.includes(ann.id) || rel.targetIds.includes(ann.id)
+          );
+          const base = hasBadges
+            ? ESTIMATED_HEIGHTS.annotationWithBadges
+            : ESTIMATED_HEIGHTS.annotation;
+          return base + extraLines * 20;
+        }
+        case "relationship":
+          return ESTIMATED_HEIGHTS.relationship;
+        case "search":
+          return ESTIMATED_HEIGHTS.search;
+        default:
+          return ESTIMATED_HEIGHTS.annotation;
+      }
+    },
+    [virtualItems, allRelationships]
+  );
 
-        const item = virtualItem.item;
-        switch (item.type) {
-          case "note": {
-            const note = item.data as any;
-            const contentLength = note.content?.length || 0;
-            return (
-              ESTIMATED_HEIGHTS.note + Math.floor(contentLength / 100) * 20
-            );
+  /* Custom DynamicRowHeight with per-type estimates and ResizeObserver.
+   * The library detects dynamic mode via duck-typing (getAverageRowHeight),
+   * sets height:undefined on rows so they auto-size, and calls
+   * observeRowElements with visible DOM elements for measurement. */
+  const heightMapRef = useRef<Map<number, number>>(new Map());
+  const [heightMapVersion, setHeightMapVersion] = useState(0);
+
+  // ResizeObserver created once, synchronously
+  const [observer] = useState(
+    () =>
+      new ResizeObserver((entries) => {
+        let changed = false;
+        for (const entry of entries) {
+          const attr = entry.target.getAttribute("data-react-window-index");
+          if (attr === null) continue;
+          const index = parseInt(attr, 10);
+          const height = entry.borderBoxSize?.[0]?.blockSize;
+          if (
+            height &&
+            height > 0 &&
+            heightMapRef.current.get(index) !== height
+          ) {
+            heightMapRef.current.set(index, height);
+            changed = true;
           }
-          case "annotation": {
-            const ann = item.data as any;
-            const textLength = ann.rawText?.length || 0;
-            const extraLines = Math.floor(textLength / 50);
-            return ESTIMATED_HEIGHTS.annotation + extraLines * 20;
-          }
-          case "relationship": {
-            const rel = item.data as any;
-            const sourceCount = rel.sourceIds?.length || 0;
-            const targetCount = rel.targetIds?.length || 0;
-            return (
-              ESTIMATED_HEIGHTS.relationship + (sourceCount + targetCount) * 10
-            );
-          }
-          case "search":
-            return ESTIMATED_HEIGHTS.search;
-          default:
-            return ESTIMATED_HEIGHTS.annotation;
+        }
+        if (changed) {
+          setHeightMapVersion((v) => v + 1);
+        }
+      })
+  );
+
+  // Clean up observer on unmount
+  useEffect(() => () => observer.disconnect(), [observer]);
+
+  const rowHeight = useMemo(
+    () => ({
+      getRowHeight: (index: number) => {
+        const measured = heightMapRef.current.get(index);
+        if (measured !== undefined) return measured;
+        return estimateRowHeight(index);
+      },
+      getAverageRowHeight: () => {
+        const map = heightMapRef.current;
+        if (map.size === 0) return ESTIMATED_HEIGHTS.annotation;
+        let sum = 0;
+        map.forEach((v) => (sum += v));
+        return sum / map.size;
+      },
+      setRowHeight: (index: number, height: number) => {
+        if (heightMapRef.current.get(index) !== height) {
+          heightMapRef.current.set(index, height);
+          setHeightMapVersion((v) => v + 1);
         }
       },
-      getAverageRowHeight: () => ESTIMATED_HEIGHTS.annotation,
-    };
-  }, [virtualItems, rowHeightManager]);
+      observeRowElements: (
+        elements: Element[] | NodeListOf<Element>
+      ): (() => void) => {
+        const arr = Array.from(elements);
+        arr.forEach((el) => observer.observe(el));
+        return () => arr.forEach((el) => observer.unobserve(el));
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [estimateRowHeight, observer, heightMapVersion]
+  );
 
   /* Row renderer component for List */
   const RowComponent = ({

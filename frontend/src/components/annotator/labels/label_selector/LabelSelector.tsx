@@ -6,6 +6,7 @@ import { AnnotationLabelType } from "../../../../types/graphql-api";
 import useWindowDimensions from "../../../hooks/WindowDimensionHook";
 import { useCorpusState } from "../../context/CorpusAtom";
 import { useSelectedDocument } from "../../context/DocumentAtom";
+import { isTextFileType, isPdfFileType } from "../../../../utils/files";
 
 interface LabelSelectorProps {
   activeSpanLabel: AnnotationLabelType | null;
@@ -47,9 +48,8 @@ export const LabelSelector: React.FC<LabelSelectorProps> = ({
    * If an active label exists, filter it out from the choices.
    */
   const filteredLabelChoices = useMemo<AnnotationLabelType[]>(() => {
-    const isTextFile: boolean =
-      selectedDocument?.fileType?.startsWith("text/") ?? false;
-    const isPdfFile: boolean = selectedDocument?.fileType === "application/pdf";
+    const isTextFile = isTextFileType(selectedDocument?.fileType);
+    const isPdfFile = isPdfFileType(selectedDocument?.fileType);
     let availableLabels: AnnotationLabelType[] = [];
 
     if (isTextFile) {

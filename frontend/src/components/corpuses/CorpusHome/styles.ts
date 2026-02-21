@@ -861,6 +861,65 @@ export const MobileTabContent = styled.div`
 `;
 
 // ============================================================================
+// HEADER ROW (breadcrumb / back-button + mobile menu)
+// ============================================================================
+
+/** Flex row that holds breadcrumbs (or a back button) and the mobile menu
+ *  button side-by-side, keeping the menu button outside the <nav> landmark. */
+export const HeaderRow = styled.div<{ $justify?: string }>`
+  display: flex;
+  align-items: center;
+  justify-content: ${(props) => props.$justify || "space-between"};
+  width: 100%;
+`;
+
+// ============================================================================
+// MOBILE MENU BUTTON
+// ============================================================================
+
+/** Mobile-only menu button for opening the sidebar on the home tab.
+ *  Uses the same kebab-menu pattern as other tab headers for consistency. */
+export const MobileMenuButton = styled.button`
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: ${CORPUS_COLORS.white};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  color: ${CORPUS_COLORS.slate[500]};
+  cursor: pointer;
+  transition: all ${CORPUS_TRANSITIONS.fast};
+  flex-shrink: 0;
+
+  &:hover {
+    background: ${CORPUS_COLORS.teal[50]};
+    border-color: ${CORPUS_COLORS.teal[200]};
+    color: ${CORPUS_COLORS.teal[700]};
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${CORPUS_COLORS.teal[500]};
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  ${mediaQuery.mobile} {
+    display: flex;
+  }
+`;
+
+// ============================================================================
 // EXPAND TOGGLE BUTTON
 // ============================================================================
 
