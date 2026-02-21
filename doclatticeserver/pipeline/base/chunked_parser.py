@@ -18,9 +18,8 @@ from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
-from pypdf import PdfReader
-
 from django.core.files.storage import default_storage
+from pypdf import PdfReader
 
 from doclatticeserver.constants import (
     DEFAULT_CHUNK_RETRY_LIMIT,
@@ -72,6 +71,8 @@ class BaseChunkedParser(BaseParser):
     max_pages_per_chunk: int = DEFAULT_MAX_PAGES_PER_CHUNK
     min_pages_for_chunking: int = DEFAULT_MIN_PAGES_FOR_CHUNKING
     max_concurrent_chunks: int = DEFAULT_MAX_CONCURRENT_CHUNKS
+    # Intentionally low: per-chunk retries handle transient blips, while the
+    # outer Celery task provides a second tier of retries for broader failures.
     chunk_retry_limit: int = DEFAULT_CHUNK_RETRY_LIMIT
 
     # ------------------------------------------------------------------
@@ -312,7 +313,7 @@ class BaseChunkedParser(BaseParser):
 
         Results are collected and returned in original chunk order.
         """
-        results_by_index: dict[int, DocLatticeDocExport] = {}
+        results: list[Optional[DocLatticeDocExport]] = [None] * len(chunk_data)
         max_workers = min(self.max_concurrent_chunks, len(chunk_data))
 
         logger.info(
@@ -353,11 +354,11 @@ class BaseChunkedParser(BaseParser):
                         f"Chunk {chunk_index} returned None for document {doc_id}",
                         is_transient=True,
                     )
-                results_by_index[chunk_index] = result
+                results[chunk_index] = result
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
 
-        return [results_by_index[i] for i in range(len(chunk_data))]
+        return results  # type: ignore[return-value]  # None slots would have raised above
 
     # ------------------------------------------------------------------
     # Per-chunk retry logic
@@ -468,9 +469,7 @@ def _reassemble_chunk_results(
 
     seen_doc_labels: set[str] = set()
 
-    for chunk_idx, (chunk, offset) in enumerate(
-        zip(chunk_results, page_offsets)
-    ):
+    for chunk_idx, (chunk, offset) in enumerate(zip(chunk_results, page_offsets)):
         prefix = f"c{chunk_idx}_"
 
         # -- PAWLs pages --
@@ -578,10 +577,8 @@ def _offset_relationship(relationship: dict, id_prefix: str) -> None:
         relationship["id"] = f"{id_prefix}{old_id}"
 
     relationship["source_annotation_ids"] = [
-        f"{id_prefix}{sid}"
-        for sid in relationship.get("source_annotation_ids", [])
+        f"{id_prefix}{sid}" for sid in relationship.get("source_annotation_ids", [])
     ]
     relationship["target_annotation_ids"] = [
-        f"{id_prefix}{tid}"
-        for tid in relationship.get("target_annotation_ids", [])
+        f"{id_prefix}{tid}" for tid in relationship.get("target_annotation_ids", [])
     ]
