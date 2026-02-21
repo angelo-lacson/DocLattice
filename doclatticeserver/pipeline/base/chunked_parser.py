@@ -310,7 +310,8 @@ class BaseChunkedParser(BaseParser):
             f"with {max_workers} concurrent workers"
         )
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        try:
             future_to_index = {}
             for chunk_index, chunk_bytes, page_offset in chunk_data:
                 future = executor.submit(
@@ -343,6 +344,8 @@ class BaseChunkedParser(BaseParser):
                         is_transient=True,
                     )
                 results_by_index[chunk_index] = result
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         return [results_by_index[i] for i in range(len(chunk_data))]
 
