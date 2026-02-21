@@ -139,7 +139,8 @@ export function convertToServerAnnotation(
       approved,
       rejected,
       allowComments ?? false,
-      annotation.id
+      annotation.id,
+      annotation.contentModalities
     );
   }
 
@@ -154,7 +155,8 @@ export function convertToServerAnnotation(
     approved,
     rejected,
     allowComments ?? false,
-    annotation.id
+    annotation.id,
+    annotation.contentModalities
   );
 }
 

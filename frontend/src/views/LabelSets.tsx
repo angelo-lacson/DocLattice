@@ -24,7 +24,6 @@ import _ from "lodash";
 
 import { LabelSetType } from "../types/graphql-api";
 import {
-  authToken,
   labelsetSearchTerm,
   showNewLabelsetModal,
   userObj,
@@ -185,12 +184,12 @@ const TagsIcon = () => (
 
 export const Labelsets = () => {
   const navigate = useNavigate();
-  const auth_token = useReactiveVar(authToken);
   const currentUser = useReactiveVar(userObj);
   const labelset_search_term = useReactiveVar(labelsetSearchTerm);
   const show_new_label_modal = useReactiveVar(showNewLabelsetModal);
   const labelset_to_delete = useReactiveVar(deletingLabelset);
-  const isAuthenticated = Boolean(auth_token);
+  // Use userObj for auth check - consistent with NavMenu pattern
+  const isAuthenticated = Boolean(currentUser);
   const currentUserEmail = currentUser?.email;
 
   // Local state

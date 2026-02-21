@@ -18,8 +18,7 @@ from opencontractserver.annotations.models import (
     Relationship,
     StructuralAnnotationSet,
 )
-from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.documents.models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +30,10 @@ class Command(BaseCommand):
     Checks:
     1. All documents have version_tree_id (not NULL)
     2. All documents have is_current=True (initially)
-    3. All corpus-document M2M relationships have corresponding DocumentPath
-    4. No annotations violate XOR constraint
-    5. No orphaned annotations (both FKs NULL)
-    6. StructuralAnnotationSet content_hash uniqueness
-    7. Report documents eligible for structural migration
+    3. No annotations violate XOR constraint
+    4. No orphaned annotations (both FKs NULL)
+    5. StructuralAnnotationSet content_hash uniqueness
+    6. Report documents eligible for structural migration
     """
 
     help = "Validate v3.0.0.b3 migration status for dual-tree versioning and structural annotations"
@@ -76,27 +74,22 @@ class Command(BaseCommand):
         if not results["is_current"]["passed"]:
             all_passed = False
 
-        # Check 3: DocumentPath records for M2M relationships
-        results["document_paths"] = self._check_document_paths(verbose)
-        if not results["document_paths"]["passed"]:
-            all_passed = False
-
-        # Check 4: XOR constraint on Annotations
+        # Check 3: XOR constraint on Annotations
         results["annotation_xor"] = self._check_annotation_xor_constraint(verbose)
         if not results["annotation_xor"]["passed"]:
             all_passed = False
 
-        # Check 5: XOR constraint on Relationships
+        # Check 4: XOR constraint on Relationships
         results["relationship_xor"] = self._check_relationship_xor_constraint(verbose)
         if not results["relationship_xor"]["passed"]:
             all_passed = False
 
-        # Check 6: StructuralAnnotationSet uniqueness
+        # Check 5: StructuralAnnotationSet uniqueness
         results["structural_set_hash"] = self._check_structural_set_uniqueness(verbose)
         if not results["structural_set_hash"]["passed"]:
             all_passed = False
 
-        # Check 7: Structural migration candidates
+        # Check 6: Structural migration candidates
         results["migration_candidates"] = self._check_structural_migration_candidates(
             verbose
         )
@@ -111,7 +104,7 @@ class Command(BaseCommand):
 
     def _check_version_tree_id(self, verbose, fix):
         """Check that all documents have version_tree_id."""
-        self.stdout.write("\n[1/7] Checking Document.version_tree_id...")
+        self.stdout.write("\n[1/6] Checking Document.version_tree_id...")
 
         docs_without_tree_id = Document.objects.filter(version_tree_id__isnull=True)
         count = docs_without_tree_id.count()
@@ -151,7 +144,7 @@ class Command(BaseCommand):
 
     def _check_is_current(self, verbose):
         """Check that documents have is_current set properly."""
-        self.stdout.write("\n[2/7] Checking Document.is_current...")
+        self.stdout.write("\n[2/6] Checking Document.is_current...")
 
         # For migration validation, we expect all docs to have is_current=True initially
         # unless they've been versioned (which creates new docs with is_current=True
@@ -188,67 +181,9 @@ class Command(BaseCommand):
             "non_current": non_current_count,
         }
 
-    def _check_document_paths(self, verbose):
-        """Check that all corpus-document relationships have DocumentPath records."""
-        self.stdout.write("\n[3/7] Checking DocumentPath records...")
-
-        issues = []
-        total_m2m = 0
-        total_paths = 0
-
-        for corpus in Corpus.objects.prefetch_related("documents").all():
-            m2m_doc_ids = set(corpus.documents.values_list("id", flat=True))
-            path_doc_ids = set(
-                DocumentPath.objects.filter(
-                    corpus=corpus, is_current=True, is_deleted=False
-                ).values_list("document_id", flat=True)
-            )
-
-            total_m2m += len(m2m_doc_ids)
-            total_paths += len(path_doc_ids)
-
-            # Find M2M relationships without DocumentPath
-            missing = m2m_doc_ids - path_doc_ids
-            if missing:
-                issues.append(
-                    {
-                        "corpus_id": corpus.pk,
-                        "corpus_title": corpus.title,
-                        "missing_count": len(missing),
-                        "missing_ids": list(missing)[:5],
-                    }
-                )
-
-        if not issues:
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"  PASSED: All M2M relationships have DocumentPath records "
-                    f"({total_paths} paths for {total_m2m} M2M relationships)"
-                )
-            )
-            return {"passed": True, "total_m2m": total_m2m, "total_paths": total_paths}
-
-        total_missing = sum(i["missing_count"] for i in issues)
-        self.stdout.write(
-            self.style.ERROR(
-                f"  FAILED: {total_missing} M2M relationships missing DocumentPath"
-            )
-        )
-
-        if verbose:
-            for issue in issues[:5]:
-                self.stdout.write(
-                    f"    - Corpus {issue['corpus_id']} ({issue['corpus_title']}): "
-                    f"{issue['missing_count']} missing"
-                )
-            if len(issues) > 5:
-                self.stdout.write(f"    ... and {len(issues) - 5} more corpuses")
-
-        return {"passed": False, "issues": issues, "total_missing": total_missing}
-
     def _check_annotation_xor_constraint(self, verbose):
         """Check that all annotations satisfy XOR constraint."""
-        self.stdout.write("\n[4/7] Checking Annotation XOR constraint...")
+        self.stdout.write("\n[3/6] Checking Annotation XOR constraint...")
 
         # Check for both being NULL (orphaned)
         orphaned = Annotation.objects.filter(
@@ -295,7 +230,7 @@ class Command(BaseCommand):
 
     def _check_relationship_xor_constraint(self, verbose):
         """Check that all relationships satisfy XOR constraint."""
-        self.stdout.write("\n[5/7] Checking Relationship XOR constraint...")
+        self.stdout.write("\n[4/6] Checking Relationship XOR constraint...")
 
         # Check for both being NULL (orphaned)
         orphaned = Relationship.objects.filter(
@@ -335,7 +270,7 @@ class Command(BaseCommand):
 
     def _check_structural_set_uniqueness(self, verbose):
         """Check StructuralAnnotationSet content_hash uniqueness."""
-        self.stdout.write("\n[6/7] Checking StructuralAnnotationSet uniqueness...")
+        self.stdout.write("\n[5/6] Checking StructuralAnnotationSet uniqueness...")
 
         total_sets = StructuralAnnotationSet.objects.count()
 
@@ -372,7 +307,7 @@ class Command(BaseCommand):
 
     def _check_structural_migration_candidates(self, verbose):
         """Report documents eligible for structural annotation migration."""
-        self.stdout.write("\n[7/7] Checking structural migration candidates...")
+        self.stdout.write("\n[6/6] Checking structural migration candidates...")
 
         # Documents with structural annotations but no structural_annotation_set
         candidates = Document.objects.filter(
@@ -438,7 +373,6 @@ class Command(BaseCommand):
         checks = [
             ("Document.version_tree_id", results["version_tree_id"]["passed"]),
             ("Document.is_current", results["is_current"]["passed"]),
-            ("DocumentPath records", results["document_paths"]["passed"]),
             ("Annotation XOR constraint", results["annotation_xor"]["passed"]),
             ("Relationship XOR constraint", results["relationship_xor"]["passed"]),
             (

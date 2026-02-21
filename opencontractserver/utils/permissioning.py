@@ -206,17 +206,17 @@ def get_users_permissions_for_obj(
 ) -> set[str]:
 
     model_name = instance._meta.model_name
-    logger.info(
+    logger.debug(
         f"get_users_permissions_for_obj() - Starting check for {user.username} with model type {model_name}"
     )
 
     app_label = instance._meta.app_label
-    logger.info(f"get_users_permissions_for_obj - App name: {app_label}")
+    logger.debug(f"get_users_permissions_for_obj - App name: {app_label}")
 
     # Check if the model has django-guardian permission tables
     # Some models (like AnnotationLabel) use creator-based permissions instead
     if not hasattr(instance, f"{model_name}userobjectpermission_set"):
-        logger.info(
+        logger.debug(
             f"Model {model_name} does not have guardian permissions, using creator-based permissions"
         )
         # For models without guardian permissions, use creator-based permissions
@@ -242,16 +242,16 @@ def get_users_permissions_for_obj(
         elif hasattr(instance, "is_public") and instance.is_public:
             model_permissions_for_user.add(f"read_{model_name}")
 
-        logger.info(f"Creator-based permissions: {model_permissions_for_user}")
+        logger.debug(f"Creator-based permissions: {model_permissions_for_user}")
         return model_permissions_for_user
 
     this_user_perms = getattr(instance, f"{model_name}userobjectpermission_set")
 
-    logger.info(f"get_users_permissions_for_obj - this_user_perms: {this_user_perms}")
+    logger.debug(f"get_users_permissions_for_obj - this_user_perms: {this_user_perms}")
     permission_id_to_name_map = get_permission_id_to_name_map_for_model(
         instance=instance
     )
-    logger.info(
+    logger.debug(
         f"get_users_permissions_for_obj - permission_id_to_name_map: {permission_id_to_name_map}"
     )
 
@@ -270,7 +270,7 @@ def get_users_permissions_for_obj(
         this_users_group_perms = getattr(
             instance, f"{model_name}groupobjectpermission_set"
         ).filter(group_id__in=get_users_group_ids(user_instance=user))
-        logger.info(
+        logger.debug(
             f"get_users_permissions_for_obj - this_users_group_perms: {this_users_group_perms}"
         )
         for perm in this_users_group_perms:
@@ -278,7 +278,7 @@ def get_users_permissions_for_obj(
                 permission_id_to_name_map[perm.permission_id]
             )
 
-    logger.info(f"Final permissions: {model_permissions_for_user}")
+    logger.debug(f"Final permissions: {model_permissions_for_user}")
 
     return model_permissions_for_user
 
@@ -290,9 +290,31 @@ def user_has_permission_for_obj(
     include_group_permissions: bool = False,
 ) -> bool:
     """
-    Helper method to see make it easier to check if a given user has a certain permission type
-    for a given object. Uses database queries to quickly query what permissions on the model for
-    provided users intersect with permission defined in specified PermissionType.
+    Check if user has a specific permission on an object via django-guardian.
+
+    ⚠️  IMPORTANT LIMITATION - READ THIS BEFORE USING ⚠️
+
+    This function checks ONLY for explicit object-level permissions:
+    - Django-guardian user/group permissions on the object
+    - is_public flag (grants READ)
+    - Superuser status
+
+    It does NOT consider:
+    - Creator status (for models with guardian permissions)
+    - Corpus context / inherited permissions
+    - Complex visibility rules from query resolvers
+
+    FOR CORPUS-SCOPED OBJECTS (documents in a corpus, metadata, etc.):
+    Do NOT use this function for READ/visibility checks. Instead use:
+        Model.objects.visible_to_user(user).filter(id=obj_id).exists()
+
+    The visible_to_user() pattern handles the full permission model including
+    creator access, corpus membership, and other context-dependent rules.
+
+    USE THIS FUNCTION FOR:
+    - Top-level objects with explicit permissions (Corpus, Analysis, Extract)
+    - Write permission checks where explicit guardian permissions are required
+    - Annotation/Relationship permission checks (has special handling built-in)
 
     Special handling for Annotations:
     - Annotations with created_by_analysis or created_by_extract fields require permission
@@ -470,10 +492,10 @@ def user_has_permission_for_obj(
         instance=instance,
         include_group_permissions=include_group_permissions,
     )
-    logger.info(
+    logger.debug(
         f"user_has_permission_for_obj - user {user} has model_permissions: {model_permissions_for_user}"
     )
-    logger.info(f"user_has_permission_for_obj - permission: {permission}")
+    logger.debug(f"user_has_permission_for_obj - permission: {permission}")
 
     if permission == PermissionTypes.READ:
         return len(model_permissions_for_user.intersection({f"read_{model_name}"})) > 0

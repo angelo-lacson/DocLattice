@@ -2,6 +2,7 @@ import logging
 from typing import TYPE_CHECKING, Optional
 
 from django.contrib.auth.models import AnonymousUser
+from django.db import IntegrityError
 from django.db.models import Manager, Prefetch, Q, QuerySet
 from django_cte import CTEManager
 
@@ -126,11 +127,9 @@ class BaseVisibilityManager(Manager):
                     "creator",
                     "label_set",
                     "user_lock",  # If user_lock info is displayed
-                ).prefetch_related(
-                    "documents"  # Very important if showing document counts or list previews
-                    # Add other prefetches if CorpusType uses them:
-                    # 'annotations', 'relationships', 'queries', 'actions', 'notes'
                 )
+                # NOTE: documents M2M was removed in favor of DocumentPath
+                # Document counts are now computed via DocumentPath subqueries
             elif model_name.upper() == "DOCUMENT":
                 logger.debug("Applying Document specific optimizations")
                 from opencontractserver.annotations.models import Annotation
@@ -355,10 +354,16 @@ class EmbeddingManager(BaseVisibilityManager):
             return "vector_384"
         elif dimension == 768:
             return "vector_768"
+        elif dimension == 1024:
+            return "vector_1024"
         elif dimension == 1536:
             return "vector_1536"
+        elif dimension == 2048:
+            return "vector_2048"
         elif dimension == 3072:
             return "vector_3072"
+        elif dimension == 4096:
+            return "vector_4096"
         raise ValueError(f"Unsupported embedding dimension: {dimension}")
 
     def store_embedding(
@@ -379,6 +384,15 @@ class EmbeddingManager(BaseVisibilityManager):
         Document, Annotation, Note, Conversation, or ChatMessage.
         If an Embedding already exists for (embedder_path + parent_id), update its vector field
         instead of creating a new record.
+
+        This method handles race conditions atomically: if a concurrent worker creates
+        the same embedding between our check and create, we catch the IntegrityError
+        and update the existing record instead.
+
+        Note: We use filter() instead of visible_to_user() for existence checks because
+        unique constraints apply regardless of who created the embedding. Permission
+        filtering would cause us to miss embeddings created by other users, leading to
+        constraint violations.
         """
         if not any([document_id, annotation_id, note_id, conversation_id, message_id]):
             raise ValueError(
@@ -387,33 +401,42 @@ class EmbeddingManager(BaseVisibilityManager):
 
         field_name = self._get_vector_field_name(dimension)
 
-        # Find existing embedding (if any)
-        embedding = (
-            self.visible_to_user(user=creator)
-            .filter(
-                embedder_path=embedder_path,
-                document_id=document_id,
-                annotation_id=annotation_id,
-                note_id=note_id,
-                conversation_id=conversation_id,
-                message_id=message_id,
-            )
-            .first()
-        )
+        # Build lookup kwargs for the unique constraint
+        lookup = {
+            "embedder_path": embedder_path,
+            "document_id": document_id,
+            "annotation_id": annotation_id,
+            "note_id": note_id,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+        }
+
+        # Check for existing embedding without permission filtering.
+        # The unique constraint applies regardless of who created the embedding.
+        embedding = self.filter(**lookup).first()
 
         if embedding:
             setattr(embedding, field_name, vector)
-            embedding.save()
+            embedding.save(update_fields=[field_name, "modified"])
             return embedding
 
-        # Create a new embedding if none found
-        return self.create(
-            creator=creator,
-            embedder_path=embedder_path,
-            document_id=document_id,
-            annotation_id=annotation_id,
-            note_id=note_id,
-            conversation_id=conversation_id,
-            message_id=message_id,
-            **{field_name: vector},
-        )
+        # Try to create a new embedding. If a race condition causes a constraint
+        # violation (another worker created the same embedding between our check
+        # and create), catch the IntegrityError and update the existing record.
+        try:
+            return self.create(
+                creator=creator,
+                **lookup,
+                **{field_name: vector},
+            )
+        except IntegrityError:
+            # Race condition: another worker created the embedding first.
+            # Fetch the existing one and update it.
+            logger.info(
+                f"Race condition in store_embedding: embedding for {lookup} was created "
+                f"by another worker. Fetching and updating instead."
+            )
+            embedding = self.get(**lookup)
+            setattr(embedding, field_name, vector)
+            embedding.save(update_fields=[field_name, "modified"])
+            return embedding

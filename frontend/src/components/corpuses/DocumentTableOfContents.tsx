@@ -65,8 +65,8 @@ interface DocumentNode {
 // ============================================================================
 
 const Container = styled.div<{ $embedded?: boolean }>`
-  padding: ${(props) => (props.$embedded ? "20px 24px" : "16px")};
-  background: ${OS_LEGAL_COLORS.surface};
+  padding: ${(props) => (props.$embedded ? "0" : "16px")};
+  background: transparent;
   border: ${(props) =>
     props.$embedded ? "none" : `1px solid ${OS_LEGAL_COLORS.border}`};
   border-radius: ${(props) =>
@@ -154,29 +154,36 @@ const TreeContainer = styled.div`
 `;
 
 const TreeNode = styled.div<{ $depth: number }>`
-  margin-left: ${(props) => props.$depth * 24}px;
+  margin-left: ${(props) => props.$depth * 16}px;
+  ${(props) =>
+    props.$depth > 0 &&
+    `
+    border-left: 1px solid #e2e8f0;
+    margin-left: ${props.$depth * 16 - 1}px;
+    padding-left: 1px;
+  `}
 `;
 
-const NodeItem = styled.div<{ $hasChildren: boolean }>`
+const NodeItem = styled.div<{
+  $hasChildren: boolean;
+  $hasDescription: boolean;
+}>`
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 18px;
-  margin: 6px 0;
-  border-radius: 10px;
+  align-items: ${(props) => (props.$hasDescription ? "flex-start" : "center")};
+  gap: 12px;
+  padding: ${(props) => (props.$hasDescription ? "12px 14px" : "10px 14px")};
+  margin: 2px 0;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
-  border: 1px solid transparent;
+  transition: background 0.15s ease;
 
   &:hover {
-    background: ${OS_LEGAL_COLORS.surfaceHover};
-    border-color: ${OS_LEGAL_COLORS.border};
+    background: #f1f5f9;
   }
 
   &:focus {
     outline: 2px solid ${OS_LEGAL_COLORS.accent};
     outline-offset: -2px;
-    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:focus-visible {
@@ -189,18 +196,17 @@ const ChevronContainer = styled.span<{ $visible: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
-  color: ${OS_LEGAL_COLORS.textMuted};
+  color: #94a3b8;
   opacity: ${(props) => (props.$visible ? 1 : 0)};
   cursor: ${(props) => (props.$visible ? "pointer" : "default")};
-  border-radius: 4px;
-  margin-top: 2px;
+  border-radius: 3px;
 
   &:hover {
-    background: ${(props) =>
-      props.$visible ? OS_LEGAL_COLORS.border : "transparent"};
+    background: ${(props) => (props.$visible ? "#e2e8f0" : "transparent")};
+    color: ${(props) => (props.$visible ? "#0f766e" : "#94a3b8")};
   }
 `;
 
@@ -208,12 +214,10 @@ const IconContainer = styled.div<{ $fileType?: string }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
-  border-radius: 10px;
-  background: ${OS_LEGAL_COLORS.accentLight};
-  color: ${OS_LEGAL_COLORS.accent};
+  color: #64748b;
 `;
 
 const NodeContent = styled.div`
@@ -222,54 +226,42 @@ const NodeContent = styled.div`
 `;
 
 const NodeTitle = styled.div`
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
-  font-size: 1.0625rem;
-  font-weight: 600;
-  color: ${OS_LEGAL_COLORS.textPrimary};
-  line-height: 1.35;
-  margin-bottom: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 1.1875rem;
+  font-weight: 500;
+  color: #1e293b;
+  line-height: 1.5;
 
-  /* Allow wrapping but limit to 2 lines */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  /* Single line with ellipsis */
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* Hover state shows teal */
+  ${NodeItem}:hover & {
+    color: #0f766e;
+  }
 `;
 
 const NodeDescription = styled.div`
-  font-size: 0.9375rem;
-  color: ${OS_LEGAL_COLORS.textSecondary};
-  line-height: 1.5;
-  max-height: calc(1.5em * 2); /* Exactly 2 lines */
+  font-size: 1.0625rem;
+  color: #64748b;
+  line-height: 1.55;
+  margin-top: 4px;
 
   /* Limit to 2 lines with ellipsis */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 `;
 
 const NodeMeta = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
+  display: none; /* Hide by default - too chunky */
 `;
 
 const FileTypeBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  background: ${OS_LEGAL_COLORS.surfaceHover};
-  border: 1px solid ${OS_LEGAL_COLORS.border};
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: ${OS_LEGAL_COLORS.textMuted};
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  display: none; /* Hide file type badges for cleaner look */
 `;
 
 const LoadingState = styled.div`
@@ -721,12 +713,14 @@ export const DocumentTableOfContents: React.FC<
   const renderNode = (node: DocumentNode, depth: number) => {
     const isExpanded = expandedNodes.has(node.id);
     const hasChildren = node.children.length > 0;
+    const hasDescription = Boolean(node.description);
     const FileIcon = getFileIcon(node.fileType);
 
     return (
       <TreeNode key={node.id} $depth={depth}>
         <NodeItem
           $hasChildren={hasChildren}
+          $hasDescription={hasDescription}
           onClick={() => handleDocumentClick(node)}
           onKeyDown={(e) => handleKeyDown(e, node, hasChildren, isExpanded)}
           role="treeitem"
@@ -744,14 +738,14 @@ export const DocumentTableOfContents: React.FC<
           >
             {hasChildren &&
               (isExpanded ? (
-                <ChevronDown size={16} />
+                <ChevronDown size={14} />
               ) : (
-                <ChevronRight size={16} />
+                <ChevronRight size={14} />
               ))}
           </ChevronContainer>
 
           <IconContainer $fileType={node.fileType}>
-            <FileIcon size={22} />
+            <FileIcon size={20} />
           </IconContainer>
 
           <NodeContent>

@@ -115,6 +115,8 @@ export interface MessageData {
     | "ASYNC_THOUGHT"
     | "ASYNC_SOURCES"
     | "ASYNC_APPROVAL_NEEDED"
+    | "ASYNC_APPROVAL_RESULT"
+    | "ASYNC_RESUME"
     | "ASYNC_ERROR";
   content: string;
   data?: {
@@ -173,11 +175,13 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
 }) => {
   // User / Auth state – must be declared before any state that depends on it
   const user_obj = useReactiveVar(userObj);
+  // Note: auth_token is kept for WebSocket URL construction which requires the token
+  // for authentication. GraphQL queries use userObj for skip conditions.
   const auth_token = useReactiveVar(authToken);
 
   // Chat state
-  // Start with new chat if readOnly OR if user is anonymous (no token)
-  const [isNewChat, setIsNewChat] = useState<boolean>(readOnly || !auth_token);
+  // Start with new chat if readOnly OR if user is anonymous
+  const [isNewChat, setIsNewChat] = useState<boolean>(readOnly || !user_obj);
   const [newMessage, setNewMessage] = useState("");
   const [chat, setChat] = useState<ChatMessageProps[]>([]);
   const [wsReady, setWsReady] = useState(false);
@@ -237,7 +241,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       createdAt_Lte: createdAtLte || undefined,
     },
     fetchPolicy: "network-only",
-    skip: !auth_token, // Skip loading conversations for anonymous users
+    skip: !user_obj, // Skip loading conversations for anonymous users
   });
 
   // Lazy query for loading messages of a specific conversation
@@ -703,6 +707,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
       text: thoughtText,
       tool: data?.tool_name,
       args: data?.args,
+      result: data?.tool_result,
     };
 
     // Update chat UI timeline
@@ -930,6 +935,28 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                 )
               );
             }
+            break;
+          case "ASYNC_APPROVAL_RESULT":
+            // Informational – backend echoes the user's decision.
+            if (
+              pendingApproval &&
+              data?.message_id === pendingApproval.messageId
+            ) {
+              setPendingApproval(null);
+              setShowApprovalModal(false);
+              if (data?.decision) {
+                updateMessageApprovalStatus(
+                  pendingApproval.messageId,
+                  data.decision as "approved" | "rejected"
+                );
+              }
+            }
+            break;
+          case "ASYNC_RESUME":
+            // Agent is resuming after approval.  Unlike CorpusChat (which has
+            // an explicit isProcessing state), ChatTray derives its processing
+            // indicator from message state (isAssistantResponding), so no
+            // additional state update is needed here.
             break;
           case "ASYNC_FINISH":
             finalizeStreamingResponse(
@@ -1627,7 +1654,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     <ChatContainer id="chat-container">
       <ConversationIndicator id="conversation-indicator">
         <AnimatePresence>
-          {isNewChat || selectedConversationId || readOnly || !auth_token ? (
+          {isNewChat || selectedConversationId || readOnly || !user_obj ? (
             <motion.div
               style={{
                 display: "flex",
@@ -1656,7 +1683,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
               >
-                {!readOnly && auth_token && (
+                {!readOnly && user_obj && (
                   <Button
                     size="small"
                     onClick={exitConversation}

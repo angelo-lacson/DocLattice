@@ -58,22 +58,23 @@ def get_document_resource(corpus_slug: str, document_slug: str) -> str:
 
     URI: document://{corpus_slug}/{document_slug}
     Returns: JSON with document metadata and extracted text
+
+    Note: Documents are accessible if they're in a public corpus, even if the
+    document itself isn't marked public. The corpus visibility acts as the
+    permission gate.
     """
     from opencontractserver.corpuses.models import Corpus
     from opencontractserver.documents.models import Document
 
     anonymous = AnonymousUser()
 
-    # Get corpus context
+    # Get corpus context - this validates corpus is visible to anonymous
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
 
-    # Get document in corpus via DocumentPath (source of truth), filtered by visibility
-    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
-    document = (
-        Document.objects.visible_to_user(anonymous)
-        .filter(id__in=corpus_doc_ids, slug=document_slug)
-        .first()
-    )
+    # Get document in corpus via DocumentPath (source of truth)
+    # Since corpus is visible to anonymous, documents in it are accessible
+    # through the corpus relationship (corpus acts as permission gate)
+    document = corpus.get_documents().filter(slug=document_slug).first()
 
     if not document:
         raise Document.DoesNotExist(
@@ -112,6 +113,9 @@ def get_annotation_resource(
 
     URI: annotation://{corpus_slug}/{document_slug}/{annotation_id}
     Returns: JSON with annotation details including label and bounding box
+
+    Note: Annotations are accessible if they're in a document within a public
+    corpus. The corpus visibility acts as the permission gate.
     """
     from opencontractserver.annotations.query_optimizer import AnnotationQueryOptimizer
     from opencontractserver.corpuses.models import Corpus
@@ -119,12 +123,17 @@ def get_annotation_resource(
 
     anonymous = AnonymousUser()
 
-    # Get corpus and document in corpus via DocumentPath (source of truth)
+    # Get corpus context - this validates corpus is visible to anonymous
     corpus = Corpus.objects.visible_to_user(anonymous).get(slug=corpus_slug)
-    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
-    document = Document.objects.visible_to_user(anonymous).get(
-        id__in=corpus_doc_ids, slug=document_slug
-    )
+
+    # Get document in corpus via DocumentPath (source of truth)
+    # Since corpus is visible to anonymous, documents in it are accessible
+    document = corpus.get_documents().filter(slug=document_slug).first()
+
+    if not document:
+        raise Document.DoesNotExist(
+            f"Document '{document_slug}' not found in corpus '{corpus_slug}'"
+        )
 
     # Use query optimizer for efficient permission checking
     annotations = AnnotationQueryOptimizer.get_document_annotations(

@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import { ConversationType, ChatMessageType } from "../types/graphql-api";
 
 // ============================================================================
@@ -70,15 +71,20 @@ export const replyingToMessageIdAtom = atom<string | null>(null);
 export const editingMessageIdAtom = atom<string | null>(null);
 
 // ============================================================================
-// DERIVED ATOMS
+// INLINE THREAD VIEW STATE
 // ============================================================================
 
 /**
- * Computes whether current user can create threads in selected corpus
- * This will be implemented later with actual permission checks
+ * Currently selected thread ID when viewing inline (in Discussions tab)
+ * When set, CorpusDiscussionsView shows ThreadDetailWithContext instead of ThreadList
  */
-export const canCreateThreadAtom = atom<boolean>((get) => {
-  // TODO: Implement permission checking from Apollo cache
-  // For now, return true as placeholder
-  return true;
-});
+export const inlineSelectedThreadIdAtom = atom<string | null>(null);
+
+/**
+ * Corpus context sidebar expanded state (persisted to localStorage)
+ * Controls whether the sidebar is expanded or collapsed when viewing thread details
+ */
+export const threadContextSidebarExpandedAtom = atomWithStorage(
+  "threadContextSidebarExpanded",
+  true
+);

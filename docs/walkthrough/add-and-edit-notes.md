@@ -11,7 +11,7 @@ Notes in OpenContracts are markdown-based annotations that can be attached to sp
 There are two ways to create a new note:
 
 ### 1. Using the Floating Action Button
-- Look for the **floating "+" button** in the bottom-right corner of the document viewer
+- When viewing a document in the **Knowledge Base** panel (the right-side panel showing notes, annotations, and summaries), look for the **floating "+" button** in the bottom-right corner
 - Click it to open the new note creation modal
 - Enter a title and content for your note
 - Click **Create Note** to save

@@ -1,18 +1,21 @@
 """
-Tests for security fixes documented in REMEDIATION_GUIDE.md
+Tests for IDOR protection fixes in GraphQL mutations.
 
-This test suite verifies the 7 critical GraphQL mutation vulnerabilities
-and IDOR protection fixes have been properly implemented.
+This test suite verifies IDOR vulnerabilities have been properly fixed
+by ensuring identical error messages for 'not found' vs 'no permission' cases.
 
 Tests cover:
-1. RemoveRelationships - Cannot delete relationships without permission
-2. UpdateRelations - Cannot update relationships without permission
-3. StartCorpusFork - Cannot fork private corpuses
-4. StartQueryForCorpus - Cannot create queries for inaccessible corpuses
-5. StartCorpusExport - Cannot export corpuses without permission
-6. StartDocumentExtract - Cannot create extracts for inaccessible documents/fieldsets
-7. DeleteMultipleLabelMutation - Cannot delete labels without permission
-8. Badge/Moderation IDOR protection - Same error for "not found" vs "no permission"
+1. RemoveAnnotation - Cannot delete annotations without permission
+2. RejectAnnotation - Cannot reject annotations without permission
+3. ApproveAnnotation - Cannot approve annotations without permission
+4. RemoveRelationship - Cannot delete relationships without permission
+5. RemoveRelationships (batch) - Cannot batch-delete relationships without permission
+6. UpdateRelations - Cannot update relationships without permission
+7. StartCorpusFork - Cannot fork private corpuses
+8. StartCorpusExport - Cannot export corpuses without permission
+9. StartDocumentExtract - Cannot create extracts for inaccessible documents/fieldsets
+10. DeleteMultipleLabelMutation - Cannot delete labels without permission
+11. Badge IDOR protection - Same error for "not found" vs "no permission"
 """
 
 from django.contrib.auth import get_user_model
@@ -35,7 +38,7 @@ from opencontractserver.utils.permissioning import set_permissions_for_obj_to_us
 User = get_user_model()
 
 
-class TestContext:
+class MockContext:
     """Mock context for GraphQL client."""
 
     def __init__(self, user):
@@ -90,7 +93,7 @@ class TestRemoveRelationshipsSecurity(TestCase):
         WHEN: User attempts to delete the relationship via RemoveRelationships mutation
         THEN: Mutation should fail with permission denied error
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation RemoveRelationships($relationshipIds: [String]!) {
@@ -123,7 +126,7 @@ class TestRemoveRelationshipsSecurity(TestCase):
         WHEN: Owner attempts to delete the relationship via RemoveRelationships mutation
         THEN: Mutation should succeed and relationship should be deleted
         """
-        client = Client(schema, context_value=TestContext(self.owner))
+        client = Client(schema, context_value=MockContext(self.owner))
 
         mutation = """
             mutation RemoveRelationships($relationshipIds: [String]!) {
@@ -153,7 +156,7 @@ class TestRemoveRelationshipsSecurity(TestCase):
         WHEN: User attempts to delete a non-existent relationship
         THEN: Error message should be same as when relationship exists but user lacks permission (IDOR protection)
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation RemoveRelationships($relationshipIds: [String]!) {
@@ -225,7 +228,7 @@ class TestUpdateRelationsSecurity(TestCase):
         WHEN: User attempts to update the relationship via UpdateRelations mutation
         THEN: Mutation should fail with permission denied error
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation UpdateRelationships($relationships: [RelationInputType]!) {
@@ -289,7 +292,7 @@ class TestStartCorpusForkSecurity(TestCase):
         WHEN: Unauthorized user attempts to fork the corpus
         THEN: Mutation should fail with "Corpus not found" error (IDOR protection)
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation StartCorpusFork($corpusId: String!) {
@@ -320,7 +323,7 @@ class TestStartCorpusForkSecurity(TestCase):
         WHEN: User attempts to fork it
         THEN: Same error message as when corpus exists but user lacks permission (IDOR protection)
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation StartCorpusFork($corpusId: String!) {
@@ -372,7 +375,7 @@ class TestStartCorpusExportSecurity(TestCase):
         WHEN: Unauthorized user attempts to export the corpus
         THEN: Mutation should fail with "Corpus not found" error (IDOR protection)
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation StartCorpusExport($corpusId: String!, $exportFormat: ExportType!) {
@@ -439,7 +442,7 @@ class TestStartDocumentExtractSecurity(TestCase):
         WHEN: Unauthorized user attempts to create extract
         THEN: Mutation should fail with "Resource not found" error (IDOR protection)
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation StartExtractForDoc($documentId: ID!, $fieldsetId: ID!) {
@@ -478,7 +481,7 @@ class TestStartDocumentExtractSecurity(TestCase):
             self.unauthorized_user, self.private_document, [PermissionTypes.READ]
         )
 
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation StartExtractForDoc($documentId: ID!, $fieldsetId: ID!) {
@@ -536,7 +539,7 @@ class TestDeleteMultipleLabelMutationSecurity(TransactionTestCase):
         WHEN: Unauthorized user attempts to delete the label
         THEN: Mutation should fail with IDOR-safe error message (Label not found)
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation DeleteMultipleLabels($labelIds: [String]!) {
@@ -569,7 +572,7 @@ class TestDeleteMultipleLabelMutationSecurity(TransactionTestCase):
         WHEN: Creator attempts to delete their own label
         THEN: Mutation should succeed and label should be deleted
         """
-        client = Client(schema, context_value=TestContext(self.owner))
+        client = Client(schema, context_value=MockContext(self.owner))
 
         mutation = """
             mutation DeleteMultipleLabels($labelIds: [String]!) {
@@ -632,7 +635,7 @@ class TestBadgeMutationIDORProtection(TestCase):
         WHEN: User attempts to create a corpus badge for that corpus
         THEN: Should get same "Corpus not found" error as for non-existent corpus (IDOR protection)
         """
-        client = Client(schema, context_value=TestContext(self.normal_user))
+        client = Client(schema, context_value=MockContext(self.normal_user))
 
         # Test with inaccessible corpus
         mutation_inaccessible = f"""
@@ -715,7 +718,9 @@ class TestAnnotationMutationIDORProtection(TestCase):
         )
 
         # Create label
-        self.label = AnnotationLabel.objects.create(text="Test Label", creator=self.owner)
+        self.label = AnnotationLabel.objects.create(
+            text="Test Label", creator=self.owner
+        )
 
         # Create annotation
         self.annotation = Annotation.objects.create(
@@ -734,7 +739,7 @@ class TestAnnotationMutationIDORProtection(TestCase):
         IDOR Protection: RemoveAnnotation should return the same error message
         for non-existent and inaccessible annotations.
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation RemoveAnnotation($annotationId: String!) {
@@ -748,7 +753,9 @@ class TestAnnotationMutationIDORProtection(TestCase):
         # Test 1: Inaccessible annotation
         result_no_perm = client.execute(
             mutation,
-            variables={"annotationId": to_global_id("AnnotationType", self.annotation.id)},
+            variables={
+                "annotationId": to_global_id("AnnotationType", self.annotation.id)
+            },
         )
         self.assertIsNone(result_no_perm.get("errors"))
         error_msg_no_perm = result_no_perm["data"]["removeAnnotation"]["message"]
@@ -775,7 +782,7 @@ class TestAnnotationMutationIDORProtection(TestCase):
         IDOR Protection: RejectAnnotation should return the same error message
         for non-existent and inaccessible annotations.
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation RejectAnnotation($annotationId: ID!) {
@@ -789,7 +796,9 @@ class TestAnnotationMutationIDORProtection(TestCase):
         # Test 1: Inaccessible annotation
         result_no_perm = client.execute(
             mutation,
-            variables={"annotationId": to_global_id("AnnotationType", self.annotation.id)},
+            variables={
+                "annotationId": to_global_id("AnnotationType", self.annotation.id)
+            },
         )
         self.assertIsNone(result_no_perm.get("errors"))
         error_msg_no_perm = result_no_perm["data"]["rejectAnnotation"]["message"]
@@ -816,7 +825,7 @@ class TestAnnotationMutationIDORProtection(TestCase):
         IDOR Protection: ApproveAnnotation should return the same error message
         for non-existent and inaccessible annotations.
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation ApproveAnnotation($annotationId: ID!) {
@@ -830,7 +839,9 @@ class TestAnnotationMutationIDORProtection(TestCase):
         # Test 1: Inaccessible annotation
         result_no_perm = client.execute(
             mutation,
-            variables={"annotationId": to_global_id("AnnotationType", self.annotation.id)},
+            variables={
+                "annotationId": to_global_id("AnnotationType", self.annotation.id)
+            },
         )
         self.assertIsNone(result_no_perm.get("errors"))
         error_msg_no_perm = result_no_perm["data"]["approveAnnotation"]["message"]
@@ -903,7 +914,7 @@ class TestRemoveRelationshipIDORProtection(TestCase):
         IDOR Protection: RemoveRelationship should return the same error message
         for non-existent and inaccessible relationships.
         """
-        client = Client(schema, context_value=TestContext(self.unauthorized_user))
+        client = Client(schema, context_value=MockContext(self.unauthorized_user))
 
         mutation = """
             mutation RemoveRelationship($relationshipId: String!) {

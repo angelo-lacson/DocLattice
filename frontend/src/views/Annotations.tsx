@@ -10,28 +10,10 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import _ from "lodash";
 
-import { useQuery, useReactiveVar } from "@apollo/client";
-import {
-  SearchBox,
-  FilterTabs,
-  StatBlock,
-  StatGrid,
-  Button,
-  EmptyState,
-} from "@os-legal/ui";
+import { useQuery, useLazyQuery, useReactiveVar } from "@apollo/client";
+import { FilterTabs } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
-import {
-  FileText,
-  AlignLeft,
-  User,
-  Bot,
-  Settings,
-  ChevronDown,
-  Globe,
-  Users,
-  Lock,
-  PenLine,
-} from "lucide-react";
+import { FileText, AlignLeft, User, ChevronDown, PenLine } from "lucide-react";
 
 import {
   authToken,
@@ -41,26 +23,29 @@ import {
   filterToCorpus,
   filterToLabelId,
   filterToStructuralAnnotations,
-  selectedAnnotationIds,
 } from "../graphql/cache";
 import {
   GetAnnotationsInputs,
   GetAnnotationsOutputs,
   GetCorpusLabelsetAndLabelsInputs,
   GetCorpusLabelsetAndLabelsOutputs,
-  GET_ANNOTATIONS,
+  GET_ANNOTATIONS_FOR_CARDS,
   GET_CORPUS_LABELSET_AND_LABELS,
+  SemanticSearchInput,
+  SemanticSearchOutput,
+  SemanticSearchResult,
+  SEMANTIC_SEARCH_ANNOTATIONS,
 } from "../graphql/queries";
-import { ServerAnnotationType, PageInfo } from "../types/graphql-api";
-import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
-import { LoadingOverlay } from "../components/common/LoadingOverlay";
+import { ServerAnnotationType } from "../types/graphql-api";
 import { getDocumentUrl } from "../utils/navigationUtils";
 import {
-  ModernAnnotationCard,
+  AnnotationsPanel,
+  TypeFilterValue,
+  SourceFilterValue,
+} from "../components/annotations/AnnotationsPanel";
+import {
   getAnnotationSource,
   getAnnotationLabelType,
-  AnnotationSourceType,
-  AnnotationLabelTypeFilter,
 } from "../components/annotations/ModernAnnotationCard";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -70,9 +55,6 @@ import {
 interface LooseObject {
   [key: string]: any;
 }
-
-type TypeFilterValue = "all" | "doc" | "text";
-type SourceFilterValue = "all" | "human" | "agent" | "structural";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS
@@ -143,12 +125,6 @@ const StatsContainer = styled.div`
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-
-  /* Override stat value size */
-  [class*="StatBlock"] > *:first-child,
-  [data-testid="stat-value"] {
-    font-size: 24px !important;
-  }
 `;
 
 const StatsRow = styled.div`
@@ -215,39 +191,11 @@ const StatDivider = styled.div`
   }
 `;
 
-const FiltersSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 24px;
-`;
-
-const FiltersRow = styled.div`
+const AdvancedFiltersToggle = styled.div`
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
-`;
-
-const SearchContainer = styled.div`
-  flex: 1;
-  max-width: 400px;
-
-  @media (max-width: 768px) {
-    max-width: none;
-    width: 100%;
-  }
-`;
-
-const DropdownsContainer = styled.div`
-  display: flex;
-  gap: 8px;
-
-  @media (max-width: 768px) {
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
+  margin-bottom: 16px;
 `;
 
 const FilterDropdown = styled.button<{ $active?: boolean }>`
@@ -276,6 +224,7 @@ const AdvancedFiltersContainer = styled.div`
   flex-wrap: wrap;
   gap: 12px;
   padding: 16px;
+  margin-bottom: 16px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -292,47 +241,16 @@ const FilterWidgetWrapper = styled.div`
   }
 `;
 
-const AnnotationsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
+const PanelWrapper = styled.div`
+  /* Override AnnotationsPanel's internal padding since we handle layout here */
+  > div {
+    padding: 0;
+    background: transparent;
   }
 `;
 
-const AnnotationsListContainer = styled.section`
-  position: relative;
-  min-height: 200px;
-`;
-
-const EmptyStateWrapper = styled.div`
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 24px;
-  text-align: center;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-`;
-
-const AnnotationIconWrapper = styled.div`
-  width: 64px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f1f5f9;
-  border-radius: 16px;
-  color: #94a3b8;
-`;
-
 // ═══════════════════════════════════════════════════════════════════════════════
-// FILTER COMPONENTS (inline versions for cleaner integration)
+// FILTER COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { FilterToStructuralAnnotationsSelector } from "../components/widgets/model-filters/FilterStructuralAnnotations";
@@ -340,6 +258,12 @@ import { FilterToLabelsetSelector } from "../components/widgets/model-filters/Fi
 import { FilterToCorpusSelector } from "../components/widgets/model-filters/FilterToCorpusSelector";
 import { FilterToLabelSelector } from "../components/widgets/model-filters/FilterToLabelSelector";
 import { LabelType } from "../types/graphql-api";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SEMANTIC_SEARCH_LIMIT = 20;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -358,17 +282,27 @@ export const Annotations = () => {
   const exclude_structural_annotations = useReactiveVar(
     filterToStructuralAnnotations
   );
-  const selected_annotation_ids = useReactiveVar(selectedAnnotationIds);
 
-  // Local state for new filters
+  // Local state for filters
   const [typeFilter, setTypeFilter] = useState<TypeFilterValue>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilterValue>("all");
   const [searchValue, setSearchValue] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
+  // Semantic search state
+  const [semanticSearchOffset, setSemanticSearchOffset] = useState(0);
+  const [semanticSearchResults, setSemanticSearchResults] = useState<
+    SemanticSearchResult[]
+  >([]);
+  const [hasMoreSemanticResults, setHasMoreSemanticResults] = useState(true);
+
+  // Number of annotations to load per page
+  const ANNOTATIONS_PAGE_SIZE = 20;
+
   // Build query variables
   let annotation_variables: LooseObject = {
     label_Type: "TEXT_LABEL",
+    limit: ANNOTATIONS_PAGE_SIZE,
   };
 
   if (exclude_structural_annotations === "EXCLUDE") {
@@ -394,20 +328,17 @@ export const Annotations = () => {
   const {
     refetch: refetch_annotations,
     loading: annotation_loading,
-    error: annotation_error,
     data: annotation_data,
     fetchMore: fetchMoreAnnotations,
-  } = useQuery<GetAnnotationsOutputs, GetAnnotationsInputs>(GET_ANNOTATIONS, {
-    variables: annotation_variables,
-    notifyOnNetworkStatusChange: true,
-  });
+  } = useQuery<GetAnnotationsOutputs, GetAnnotationsInputs>(
+    GET_ANNOTATIONS_FOR_CARDS,
+    {
+      variables: annotation_variables,
+      notifyOnNetworkStatusChange: true,
+    }
+  );
 
-  const {
-    refetch: refetch_corpus,
-    loading: corpus_loading,
-    data: corpus_data,
-    error: corpus_error,
-  } = useQuery<
+  const { refetch: refetch_corpus } = useQuery<
     GetCorpusLabelsetAndLabelsOutputs,
     GetCorpusLabelsetAndLabelsInputs
   >(GET_CORPUS_LABELSET_AND_LABELS, {
@@ -418,8 +349,35 @@ export const Annotations = () => {
     notifyOnNetworkStatusChange: true,
   });
 
+  // Semantic search query
+  const [
+    executeSemanticSearch,
+    { loading: semanticSearchLoading, error: semanticSearchError },
+  ] = useLazyQuery<SemanticSearchOutput, SemanticSearchInput>(
+    SEMANTIC_SEARCH_ANNOTATIONS,
+    {
+      fetchPolicy: "network-only",
+      notifyOnNetworkStatusChange: true,
+      onCompleted: (data) => {
+        if (data?.semanticSearch) {
+          const newResults = data.semanticSearch;
+          if (semanticSearchOffset === 0) {
+            setSemanticSearchResults(newResults);
+          } else {
+            setSemanticSearchResults((prev) => [...prev, ...newResults]);
+          }
+          setHasMoreSemanticResults(
+            newResults.length === SEMANTIC_SEARCH_LIMIT
+          );
+        }
+      },
+    }
+  );
+
+  // Determine if we're in semantic search mode
+  const isSemanticSearchActive = searchValue.trim().length > 0;
+
   // Consolidated effect for refetching annotations on filter changes
-  // This prevents race conditions from multiple simultaneous filter changes
   useEffect(() => {
     refetch_annotations();
   }, [
@@ -432,7 +390,6 @@ export const Annotations = () => {
     refetch_annotations,
   ]);
 
-  // Separate effect for opened_corpus since it also needs to refetch corpus data
   useEffect(() => {
     if (opened_corpus) {
       refetch_annotations();
@@ -444,54 +401,51 @@ export const Annotations = () => {
   useEffect(() => {
     if (sourceFilter === "structural") {
       filterToStructuralAnnotations("ONLY");
-    } else if (
-      sourceFilter === "human" ||
-      sourceFilter === "agent" ||
-      sourceFilter === "all"
-    ) {
-      // For human/agent/all, we need structural annotations included or excluded
-      if (sourceFilter !== "all") {
-        filterToStructuralAnnotations("EXCLUDE");
-      } else {
-        filterToStructuralAnnotations("INCLUDE");
-      }
+    } else if (sourceFilter === "human" || sourceFilter === "agent") {
+      filterToStructuralAnnotations("EXCLUDE");
+    } else {
+      filterToStructuralAnnotations("INCLUDE");
     }
   }, [sourceFilter]);
 
+  // Re-execute semantic search when filters change
+  useEffect(() => {
+    if (searchValue.trim()) {
+      setSemanticSearchOffset(0);
+      setSemanticSearchResults([]);
+      setHasMoreSemanticResults(true);
+      const timeoutId = setTimeout(() => {
+        performSemanticSearch(searchValue, 0);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered_to_corpus?.id, sourceFilter, typeFilter]);
+
   // Get raw items from query
   const rawItems: ServerAnnotationType[] = useMemo(() => {
+    if (isSemanticSearchActive) {
+      return semanticSearchResults.map((result) => result.annotation);
+    }
     if (annotation_data?.annotations) {
       return annotation_data.annotations.edges.map((edge) => edge.node);
     }
     return [];
-  }, [annotation_data]);
+  }, [annotation_data, isSemanticSearchActive, semanticSearchResults]);
 
-  // Apply local filters (type and source)
-  const filteredItems = useMemo(() => {
-    let items = rawItems;
-
-    // Filter by type (doc vs text)
-    if (typeFilter !== "all") {
-      items = items.filter((item) => {
-        const labelType = getAnnotationLabelType(item);
-        return labelType === typeFilter;
+  // Create similarity score map
+  const similarityScoreMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (isSemanticSearchActive) {
+      semanticSearchResults.forEach((result) => {
+        map.set(result.annotation.id, result.similarityScore);
       });
     }
+    return map;
+  }, [isSemanticSearchActive, semanticSearchResults]);
 
-    // Filter by source (human vs agent vs structural)
-    if (sourceFilter !== "all") {
-      items = items.filter((item) => {
-        const source = getAnnotationSource(item);
-        return source === sourceFilter;
-      });
-    }
-
-    return _.uniqBy(items, "id");
-  }, [rawItems, typeFilter, sourceFilter]);
-
-  // Calculate stats - use totalCount from backend for accurate total
+  // Calculate stats
   const stats = useMemo(() => {
-    // Use backend totalCount for accurate total count, fallback to loaded items
     const total = annotation_data?.annotations?.totalCount ?? rawItems.length;
     const docLabels = rawItems.filter(
       (item) => getAnnotationLabelType(item) === "doc"
@@ -506,46 +460,111 @@ export const Annotations = () => {
     return { total, docLabels, textLabels, humanAnnotated };
   }, [rawItems, annotation_data?.annotations?.totalCount]);
 
-  // Debounced search
-  const debouncedSearch = useRef(
-    _.debounce((searchTerm: string) => {
-      annotationContentSearchTerm(searchTerm);
-    }, 1000)
+  // Execute semantic search with current filters
+  const performSemanticSearch = useCallback(
+    (query: string, offset: number = 0) => {
+      if (!query.trim()) return;
+
+      const variables: SemanticSearchInput = {
+        query: query.trim(),
+        limit: SEMANTIC_SEARCH_LIMIT,
+        offset,
+      };
+
+      if (filtered_to_corpus?.id) {
+        variables.corpusId = filtered_to_corpus.id;
+      }
+
+      executeSemanticSearch({ variables });
+    },
+    [executeSemanticSearch, filtered_to_corpus]
   );
 
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchValue(value);
-    debouncedSearch.current(value);
+  // Debounced semantic search
+  const debouncedSearch = useRef(
+    _.debounce((searchTerm: string) => {
+      if (searchTerm.trim()) {
+        setSemanticSearchOffset(0);
+        setSemanticSearchResults([]);
+        setHasMoreSemanticResults(true);
+        performSemanticSearch(searchTerm, 0);
+      } else {
+        setSemanticSearchResults([]);
+        setSemanticSearchOffset(0);
+        setHasMoreSemanticResults(true);
+      }
+    }, 500)
+  );
+
+  useEffect(() => {
+    return () => {
+      debouncedSearch.current.cancel();
+    };
   }, []);
 
-  const handleSearchSubmit = useCallback((value: string) => {
-    annotationContentSearchTerm(value);
-  }, []);
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchValue(value);
+      debouncedSearch.current(value);
+    },
+    [debouncedSearch]
+  );
+
+  const handleSearchSubmit = useCallback(
+    (value: string) => {
+      debouncedSearch.current.cancel();
+      setSearchValue(value);
+
+      if (value.trim()) {
+        setSemanticSearchOffset(0);
+        setSemanticSearchResults([]);
+        setHasMoreSemanticResults(true);
+        performSemanticSearch(value, 0);
+      } else {
+        setSemanticSearchResults([]);
+        setSemanticSearchOffset(0);
+        setHasMoreSemanticResults(true);
+      }
+    },
+    [performSemanticSearch, debouncedSearch]
+  );
 
   // Handle infinite scroll
   const handleFetchMore = useCallback(() => {
-    const pageInfo = annotation_data?.annotations?.pageInfo;
-    if (!annotation_loading && pageInfo?.hasNextPage) {
-      fetchMoreAnnotations({
-        variables: {
-          limit: 20,
-          cursor: pageInfo.endCursor,
-        },
-      });
+    if (isSemanticSearchActive) {
+      if (!semanticSearchLoading && hasMoreSemanticResults) {
+        const newOffset = semanticSearchOffset + SEMANTIC_SEARCH_LIMIT;
+        setSemanticSearchOffset(newOffset);
+        performSemanticSearch(searchValue, newOffset);
+      }
+    } else {
+      const pageInfo = annotation_data?.annotations?.pageInfo;
+      if (!annotation_loading && pageInfo?.hasNextPage) {
+        fetchMoreAnnotations({
+          variables: {
+            limit: ANNOTATIONS_PAGE_SIZE,
+            cursor: pageInfo.endCursor,
+          },
+        });
+      }
     }
-  }, [annotation_loading, annotation_data, fetchMoreAnnotations]);
+  }, [
+    isSemanticSearchActive,
+    semanticSearchLoading,
+    hasMoreSemanticResults,
+    semanticSearchOffset,
+    searchValue,
+    performSemanticSearch,
+    annotation_loading,
+    annotation_data,
+    fetchMoreAnnotations,
+  ]);
 
-  // Handle annotation click - navigate to document
-  // Supports both corpus-linked and standalone documents (e.g., structural annotations)
+  // Handle annotation click
   const handleAnnotationClick = useCallback(
     (annotation: ServerAnnotationType) => {
       try {
-        if (!annotation) {
-          toast.error("Unable to open annotation: Invalid annotation data");
-          return;
-        }
-
-        if (!annotation.document) {
+        if (!annotation?.document) {
           toast.error("Unable to open annotation: Document not available");
           return;
         }
@@ -561,7 +580,6 @@ export const Annotations = () => {
           queryParams.analysisIds = [annotation.analysis.id];
         }
 
-        // getDocumentUrl handles null corpus by generating standalone document URL
         const url = getDocumentUrl(
           annotation.document,
           annotation.corpus ?? null,
@@ -582,22 +600,6 @@ export const Annotations = () => {
     },
     [navigate]
   );
-
-  // Filter tab configurations
-  const typeFilterTabs: FilterTabItem[] = [
-    { id: "all", label: "All Types" },
-    { id: "doc", label: "Doc Labels" },
-    { id: "text", label: "Text Labels" },
-  ];
-
-  const sourceFilterTabs: FilterTabItem[] = [
-    { id: "all", label: "All Sources" },
-    { id: "human", label: "Human" },
-    { id: "agent", label: "AI Agent" },
-    { id: "structural", label: "Structural" },
-  ];
-
-  const pageInfo = annotation_data?.annotations?.pageInfo;
 
   return (
     <PageContainer>
@@ -662,131 +664,80 @@ export const Annotations = () => {
           </StatsRow>
         </StatsContainer>
 
-        {/* Filters */}
-        <FiltersSection>
-          <FiltersRow>
-            <SearchContainer>
-              <SearchBox
-                placeholder="Search annotations by label, text, or document..."
-                value={searchValue}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onSubmit={handleSearchSubmit}
+        {/* Advanced Filters Toggle */}
+        <AdvancedFiltersToggle>
+          <FilterDropdown
+            $active={showAdvancedFilters}
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+          >
+            Advanced Filters
+            <ChevronDown size={14} />
+          </FilterDropdown>
+        </AdvancedFiltersToggle>
+
+        {/* Advanced Filters (collapsible) */}
+        {showAdvancedFilters && (
+          <AdvancedFiltersContainer>
+            <FilterWidgetWrapper>
+              <FilterToLabelsetSelector
+                fixed_labelset_id={
+                  filtered_to_corpus?.labelSet?.id
+                    ? filtered_to_corpus.labelSet.id
+                    : undefined
+                }
               />
-            </SearchContainer>
-            <DropdownsContainer>
-              <FilterDropdown
-                $active={showAdvancedFilters}
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              >
-                Advanced Filters
-                <ChevronDown size={14} />
-              </FilterDropdown>
-            </DropdownsContainer>
-          </FiltersRow>
-
-          <FiltersRow>
-            <FilterTabs
-              items={typeFilterTabs}
-              value={typeFilter}
-              onChange={(id) => setTypeFilter(id as TypeFilterValue)}
-            />
-          </FiltersRow>
-
-          <FiltersRow>
-            <FilterTabs
-              items={sourceFilterTabs}
-              value={sourceFilter}
-              onChange={(id) => setSourceFilter(id as SourceFilterValue)}
-            />
-          </FiltersRow>
-
-          {/* Advanced Filters (collapsible) */}
-          {showAdvancedFilters && (
-            <AdvancedFiltersContainer>
+            </FilterWidgetWrapper>
+            <FilterWidgetWrapper>
+              <FilterToCorpusSelector
+                uses_labelset_id={filter_to_labelset_id}
+              />
+            </FilterWidgetWrapper>
+            {(filter_to_labelset_id || filtered_to_corpus?.labelSet?.id) && (
               <FilterWidgetWrapper>
-                <FilterToLabelsetSelector
-                  fixed_labelset_id={
-                    filtered_to_corpus?.labelSet?.id
+                <FilterToLabelSelector
+                  label_type={LabelType.TokenLabel}
+                  only_labels_for_labelset_id={
+                    filter_to_labelset_id
+                      ? filter_to_labelset_id
+                      : filtered_to_corpus?.labelSet?.id
                       ? filtered_to_corpus.labelSet.id
                       : undefined
                   }
                 />
               </FilterWidgetWrapper>
-              <FilterWidgetWrapper>
-                <FilterToCorpusSelector
-                  uses_labelset_id={filter_to_labelset_id}
-                />
-              </FilterWidgetWrapper>
-              {(filter_to_labelset_id || filtered_to_corpus?.labelSet?.id) && (
-                <FilterWidgetWrapper>
-                  <FilterToLabelSelector
-                    label_type={LabelType.TokenLabel}
-                    only_labels_for_labelset_id={
-                      filter_to_labelset_id
-                        ? filter_to_labelset_id
-                        : filtered_to_corpus?.labelSet?.id
-                        ? filtered_to_corpus.labelSet.id
-                        : undefined
-                    }
-                  />
-                </FilterWidgetWrapper>
-              )}
-            </AdvancedFiltersContainer>
-          )}
-        </FiltersSection>
+            )}
+          </AdvancedFiltersContainer>
+        )}
 
-        {/* Annotations Grid */}
-        <AnnotationsListContainer>
-          <LoadingOverlay
-            active={annotation_loading}
-            inverted
-            size="large"
-            content="Loading Annotations..."
+        {/* Annotations Panel */}
+        <PanelWrapper>
+          <AnnotationsPanel
+            items={rawItems}
+            loading={
+              isSemanticSearchActive
+                ? semanticSearchLoading
+                : annotation_loading
+            }
+            loadingMessage={
+              isSemanticSearchActive
+                ? "Searching annotations..."
+                : "Loading Annotations..."
+            }
+            pageInfo={annotation_data?.annotations?.pageInfo}
+            typeFilter={typeFilter}
+            sourceFilter={sourceFilter}
+            searchValue={searchValue}
+            onTypeFilterChange={setTypeFilter}
+            onSourceFilterChange={setSourceFilter}
+            onSearchChange={handleSearchChange}
+            onSearchSubmit={handleSearchSubmit}
+            onFetchMore={handleFetchMore}
+            onItemClick={handleAnnotationClick}
+            similarityScores={similarityScoreMap}
+            searchError={semanticSearchError}
+            isSemanticSearch={isSemanticSearchActive}
           />
-
-          <AnnotationsGrid>
-            {filteredItems.length > 0 ? (
-              filteredItems.map((annotation) => (
-                <ModernAnnotationCard
-                  key={annotation.id}
-                  annotation={annotation}
-                  onClick={() => handleAnnotationClick(annotation)}
-                  isSelected={selected_annotation_ids.includes(annotation.id)}
-                />
-              ))
-            ) : !annotation_loading ? (
-              <EmptyStateWrapper>
-                <AnnotationIconWrapper>
-                  <PenLine size={32} />
-                </AnnotationIconWrapper>
-                <h3
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: 600,
-                    color: "#1e293b",
-                    margin: "24px 0 8px",
-                  }}
-                >
-                  No annotations found
-                </h3>
-                <p
-                  style={{
-                    fontSize: "14px",
-                    color: "#64748b",
-                    margin: 0,
-                    maxWidth: "300px",
-                  }}
-                >
-                  Try adjusting your filters or search query to find what you're
-                  looking for.
-                </p>
-              </EmptyStateWrapper>
-            ) : null}
-          </AnnotationsGrid>
-
-          {/* Infinite scroll trigger */}
-          <FetchMoreOnVisible fetchNextPage={handleFetchMore} />
-        </AnnotationsListContainer>
+        </PanelWrapper>
       </ContentContainer>
     </PageContainer>
   );

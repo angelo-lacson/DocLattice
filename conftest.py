@@ -12,6 +12,97 @@ import pytest
 from django import db
 
 
+@pytest.fixture(scope="session", autouse=True)
+def disable_document_processing_signals(django_db_setup):
+    """
+    Disable document and annotation processing signals for all tests by default.
+
+    This prevents Celery tasks from being triggered when creating test documents,
+    which would fail because test documents typically don't have actual files.
+
+    Tests that specifically need document processing signals (e.g., integration tests
+    for the processing pipeline) can use the `enable_doc_processing_signals` fixture
+    to temporarily re-enable them.
+
+    The signals are reconnected after all tests complete.
+    """
+    from django.db.models.signals import post_save
+
+    from opencontractserver.annotations.models import Annotation
+    from opencontractserver.annotations.signals import (
+        ANNOT_CREATE_UID,
+        process_annot_on_create_atomic,
+    )
+    from opencontractserver.documents.models import Document
+    from opencontractserver.documents.signals import (
+        DOC_CREATE_UID,
+        process_doc_on_create_atomic,
+    )
+
+    # Disconnect signals
+    post_save.disconnect(
+        process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+    )
+    post_save.disconnect(
+        process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+
+    yield
+
+    # Reconnect signals after all tests complete
+    post_save.connect(
+        process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+    )
+    post_save.connect(
+        process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+
+
+@pytest.fixture
+def enable_doc_processing_signals():
+    """
+    Re-enable document processing signals for a specific test.
+
+    Use this fixture in tests that specifically need to test document processing
+    pipeline behavior with signals firing.
+
+    Example:
+        def test_document_processing_flow(enable_doc_processing_signals):
+            # Signals are enabled for this test
+            doc = Document.objects.create(...)  # Will trigger processing
+    """
+    from django.db.models.signals import post_save
+
+    from opencontractserver.annotations.models import Annotation
+    from opencontractserver.annotations.signals import (
+        ANNOT_CREATE_UID,
+        process_annot_on_create_atomic,
+    )
+    from opencontractserver.documents.models import Document
+    from opencontractserver.documents.signals import (
+        DOC_CREATE_UID,
+        process_doc_on_create_atomic,
+    )
+
+    # Re-enable signals for this test
+    post_save.connect(
+        process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+    )
+    post_save.connect(
+        process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+
+    yield
+
+    # Disable signals again after the test
+    post_save.disconnect(
+        process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+    )
+    post_save.disconnect(
+        process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+
+
 def pytest_configure(config):
     """Configure pytest settings, including xdist worker handling."""
     # Ensure the serial marker is registered only once

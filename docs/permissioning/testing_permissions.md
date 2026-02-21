@@ -413,6 +413,18 @@ it('should prefer corpus permissions', () => {
 });
 ```
 
+## Mention Permission Tests
+
+For testing @ mention autocomplete permissions, see the comprehensive test suite at:
+- `opencontractserver/tests/test_mention_permissions.py`
+
+This file contains test cases for:
+- **CorpusMentionPermissionTestCase**: Tests corpus mention autocomplete respects write permissions (8 tests)
+- **DocumentMentionPermissionTestCase**: Tests document mention autocomplete respects write + corpus permissions (7 tests)
+- **MentionIDORProtectionTestCase**: Tests IDOR protection - no information leakage about inaccessible resources (3 tests)
+- **CorpusScopedMentionSearchTestCase**: Tests corpus-scoped mention searches for documents and annotations (9 tests)
+- **AgentMentionCorpusScopingTestCase**: Tests corpus-scoped agent mention searches (4 tests)
+
 ## Debugging Permission Tests
 
 ### Console Logging

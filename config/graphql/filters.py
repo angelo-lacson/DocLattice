@@ -383,32 +383,17 @@ class DocumentFilter(django_filters.FilterSet):
 
     def in_corpus(self, queryset, name, value):
         """
-        Filter documents by corpus membership.
-
-        Uses DocumentPath to find documents - this is the new versioning system.
-        Falls back to M2M relationship for backward compatibility.
+        Filter documents by corpus membership via DocumentPath.
         """
         from opencontractserver.documents.models import DocumentPath
 
         corpus_pk = from_global_id(value)[1]
 
-        # Get document IDs from active DocumentPath records (new versioning system)
-        doc_ids_from_paths = list(
-            DocumentPath.objects.filter(
-                corpus_id=corpus_pk, is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True)
-        )
+        doc_ids = DocumentPath.objects.filter(
+            corpus_id=corpus_pk, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
 
-        # Also include documents from the M2M relationship (backward compatibility)
-        # Note: Corpus.documents is M2M, so reverse filter uses 'corpus' (not corpus_set)
-        doc_ids_from_m2m = list(
-            queryset.filter(corpus=corpus_pk).values_list("id", flat=True)
-        )
-
-        # Combine both sets
-        all_doc_ids = set(doc_ids_from_paths) | set(doc_ids_from_m2m)
-
-        return queryset.filter(id__in=all_doc_ids).distinct()
+        return queryset.filter(id__in=doc_ids).distinct()
 
     def in_folder(self, queryset, name, value):
         """

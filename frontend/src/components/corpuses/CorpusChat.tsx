@@ -1,14 +1,17 @@
 /**
  * CorpusChat Component - Similar to ChatTray, but for corpuses.
  *
- * This component connects to our WebSocket backend IF the user is logged in
- * and we have a valid auth token in the Apollo reactive vars.
+ * This component connects to our WebSocket backend for both authenticated
+ * and anonymous users. Anonymous users can chat on public corpuses.
  * It will:
  *   1) Load existing corpus-specific conversation data from a GraphQL query (GET_CORPUS_CONVERSATIONS).
- *   2) If authenticated, open a WebSocket to stream new messages with partial updates
+ *   2) Open a WebSocket to stream new messages with partial updates
  *      (ASYNC_START, ASYNC_CONTENT, ASYNC_FINISH) or synchronous messages (SYNC_CONTENT).
  *   3) Display those messages in real time, appending them to the chat.
  *   4) Allow sending user queries through the socket.
+ *
+ * Note: The backend handles authentication - anonymous users are allowed on public corpuses,
+ * but will receive a 4003 close code if attempting to access non-public corpuses.
  */
 
 import React, {
@@ -35,6 +38,9 @@ import {
 } from "lucide-react";
 import { Button, Loader } from "semantic-ui-react";
 import styled from "styled-components";
+import { color } from "../../theme/colors";
+import { MessageCircle } from "lucide-react";
+import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
 
 import {
   GET_CORPUS_CONVERSATIONS,
@@ -48,12 +54,6 @@ import {
 import {
   ErrorContainer,
   ConversationGrid,
-  ConversationCard,
-  CardContent,
-  CardTitle,
-  CardMeta,
-  TimeStamp,
-  Creator,
   ChatInputContainer,
   ChatInput,
   SendButton,
@@ -110,6 +110,8 @@ interface MessageData {
     | "ASYNC_THOUGHT"
     | "ASYNC_SOURCES"
     | "ASYNC_APPROVAL_NEEDED"
+    | "ASYNC_APPROVAL_RESULT"
+    | "ASYNC_RESUME"
     | "ASYNC_ERROR";
   content: string;
   data?: {
@@ -138,6 +140,11 @@ interface CorpusChatProps {
   initialQuery?: string;
   forceNewChat?: boolean;
   onClose?: () => void;
+  /**
+   * Callback fired when the component transitions between list view and conversation view.
+   * Parent components can use this to adjust their navigation headers.
+   */
+  onViewModeChange?: (isInConversation: boolean) => void;
 }
 
 // Add these styled components near your other styled components
@@ -180,127 +187,145 @@ const ConversationHeader = styled.div`
 `;
 
 const EnhancedConversationGrid = styled(ConversationGrid)`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 1.5rem;
-  padding: 2rem;
-  width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
-
-  /* Add subtle animation to the grid */
-  animation: fadeInUp 0.4s ease-out;
-
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    padding: 1rem;
-    gap: 1rem;
-  }
-`;
-
-const EnhancedConversationCard = styled(ConversationCard)`
   display: flex;
   flex-direction: column;
-  height: 200px;
-  padding: 1.75rem;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
+  gap: 0;
+  padding: 0;
+  width: 100%;
+  overflow-y: auto;
+  background: ${color.N2};
+`;
 
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 3px;
-    background: #4a90e2;
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.2s ease;
-  }
+const EnhancedConversationCard = styled(motion.div)`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: ${color.N1};
+  border-bottom: 1px solid ${color.N4};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
 
   &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    border-color: #cbd5e1;
-
-    &::before {
-      transform: scaleX(1);
-    }
+    background: ${color.G1};
   }
 
   &:active {
-    transform: translateY(0);
+    background: ${color.G2};
   }
 `;
 
-const MessageCount = styled(motion.div)`
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  min-width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 8px;
+const ChatItemIcon = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, ${color.B2} 0%, ${color.B3} 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 0.875rem;
-  background: #f0f7ff;
-  color: #4a90e2;
-  border: 1px solid #e0e7ff;
+  flex-shrink: 0;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    color: ${color.B7};
+  }
 `;
 
-const EnhancedCardContent = styled(CardContent)`
+const ChatItemContent = styled.div`
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  justify-content: space-between;
+  gap: 0.25rem;
 `;
 
-const EnhancedCardTitle = styled(CardTitle)`
-  font-size: 1.1rem;
+const ChatItemTitle = styled.div`
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: #1a202c;
-  margin-bottom: 0.75rem;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  color: ${color.N10};
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
 
-const EnhancedCardMeta = styled(CardMeta)`
+const ChatItemMeta = styled.div`
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: ${color.N6};
+`;
+
+const MessageCountBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: ${color.B4};
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
 `;
 
 const EnhancedFilterContainer = styled(FilterContainer)`
-  margin: 0 1.5rem 1rem;
-  padding: 0.75rem 1rem;
-  background: rgba(247, 250, 252, 0.8);
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  background: ${color.N1};
+  border-bottom: 1px solid ${color.N4};
+  margin: 0;
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+`;
+
+const NewChatButton = styled(motion.button)`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: ${color.G6};
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    background: ${color.G7};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.5rem;
+    span {
+      display: none;
+    }
+  }
+`;
+
+const ToolbarDivider = styled.div`
+  width: 1px;
+  height: 24px;
+  background: ${color.N4};
+  margin: 0 0.25rem;
+  flex-shrink: 0;
 `;
 
 const EmptyStateContainer = styled.div`
@@ -308,35 +333,67 @@ const EmptyStateContainer = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 5rem 2rem;
+  padding: 4rem 2rem;
   text-align: center;
-  animation: fadeIn 0.6s ease-out;
+  flex: 1;
+  background: ${color.N2};
+`;
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+const EmptyStateIcon = styled.div`
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, ${color.G1} 0%, ${color.G2} 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+
+  svg {
+    width: 36px;
+    height: 36px;
+    color: ${color.G6};
+  }
+`;
+
+const EmptyStateTitle = styled.h3`
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: ${color.N10};
+  letter-spacing: -0.025em;
+`;
+
+const EmptyStateDescription = styled.p`
+  color: ${color.N7};
+  max-width: 360px;
+  margin: 0 0 1.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+`;
+
+const EmptyStateButton = styled(motion.button)`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  background: ${color.G6};
+  color: white;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${color.G7};
+    transform: translateY(-1px);
   }
 
-  h3 {
-    font-size: 1.75rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    color: #1a202c;
-    letter-spacing: -0.02em;
-  }
-
-  p {
-    color: #64748b;
-    max-width: 500px;
-    margin-bottom: 2.5rem;
-    font-size: 1.0625rem;
-    line-height: 1.6;
+  svg {
+    width: 18px;
+    height: 18px;
   }
 `;
 
@@ -724,6 +781,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   initialQuery,
   forceNewChat = false,
   onClose,
+  onViewModeChange,
 }) => {
   // Window dimensions for responsive layout
   const { width } = useWindowDimensions();
@@ -799,6 +857,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         title_Contains: debouncedTitle || undefined,
         createdAt_Gte: createdAtGte || undefined,
         createdAt_Lte: createdAtLte || undefined,
+        conversationType: CONVERSATION_TYPE.CHAT,
       },
       fetchPolicy: "network-only",
     }
@@ -906,9 +965,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   /**
    * (Re)Establish the WebSocket connection if a conversation is selected (or if isNewChat),
    * otherwise close any existing socket.
+   *
+   * Note: We allow connections without auth_token to support anonymous users on public corpuses.
+   * The backend will reject anonymous connections to non-public corpuses with code 4003.
    */
   useEffect(() => {
-    if (!auth_token || (!selectedConversationId && !isNewChat)) {
+    if (!selectedConversationId && !isNewChat) {
       if (socketRef.current) {
         socketRef.current.close();
         socketRef.current = null;
@@ -967,12 +1029,71 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             break;
           case "ASYNC_APPROVAL_NEEDED":
             if (data?.pending_tool_call && data?.message_id) {
+              // For sub-agent approvals (ask_document), show the inner
+              // tool name/args so the user understands what is being approved.
+              const toolCall = { ...data.pending_tool_call };
+              if (toolCall.name === "ask_document") {
+                const subName = toolCall.arguments?._sub_tool_name;
+                if (typeof subName === "string" && subName.length > 0) {
+                  toolCall.name = subName;
+                  const subArgs = toolCall.arguments?._sub_tool_arguments;
+                  toolCall.arguments =
+                    subArgs && typeof subArgs === "object" ? subArgs : {};
+                }
+              }
               setPendingApproval({
                 messageId: data.message_id,
-                toolCall: data.pending_tool_call,
+                toolCall,
               });
               setShowApprovalModal(true);
+
+              // Mark the message as awaiting approval
+              setChat((prev) =>
+                prev.map((msg) =>
+                  msg.messageId === data.message_id
+                    ? { ...msg, approvalStatus: "awaiting" as const }
+                    : msg
+                )
+              );
+              setServerMessages((prev) =>
+                prev.map((msg) =>
+                  msg.messageId === data.message_id
+                    ? { ...msg, approvalStatus: "awaiting" as const }
+                    : msg
+                )
+              );
             }
+            break;
+          case "ASYNC_APPROVAL_RESULT":
+            // Informational – the backend echoes the decision back.
+            if (
+              pendingApproval &&
+              data?.message_id === pendingApproval.messageId
+            ) {
+              setPendingApproval(null);
+              setShowApprovalModal(false);
+              if (data?.decision) {
+                const status = data.decision as "approved" | "rejected";
+                setChat((prev) =>
+                  prev.map((msg) =>
+                    msg.messageId === data.message_id
+                      ? { ...msg, approvalStatus: status, isComplete: true }
+                      : msg
+                  )
+                );
+                setServerMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.messageId === data.message_id
+                      ? { ...msg, approvalStatus: status, isComplete: true }
+                      : msg
+                  )
+                );
+              }
+            }
+            break;
+          case "ASYNC_RESUME":
+            // Agent is resuming after approval – keep processing indicator.
+            setIsProcessing(true);
             break;
           case "ASYNC_FINISH":
             finalizeStreamingResponse(
@@ -1342,6 +1463,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
       text: thoughtText,
       tool: data?.tool_name,
       args: data?.args,
+      result: data?.tool_result,
     };
 
     setChat((prev) => {
@@ -1434,6 +1556,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    */
   const isConversation = isNewChat || !!selectedConversationId;
 
+  // Notify parent when view mode changes (conversation vs list)
+  useEffect(() => {
+    onViewModeChange?.(isConversation);
+  }, [isConversation, onViewModeChange]);
+
   /**
    * Send approval decision back to the WebSocket.
    */
@@ -1486,28 +1613,20 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   return (
     <ChatContainer id="corpus-chat-container">
       <ConversationIndicator id="conversation-indicator">
-        {/* Mobile navigation header for conversation view
-            Always render on mobile when in conversation mode */}
-        {use_mobile_layout && isConversation && (
+        {/* Navigation header for conversation view
+            Shows on both mobile and desktop when viewing a conversation */}
+        {isConversation && (
           <ChatNavigationHeader>
             <BackButton
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log("Back button clicked", {
-                  selectedConversationId,
-                  isNewChat,
-                });
-                if (selectedConversationId || !isNewChat) {
-                  // Go back to conversation list (internal navigation)
-                  setSelectedConversationId(undefined);
-                  setIsNewChat(false);
-                  setChat([]);
-                  setServerMessages([]);
-                } else if (onClose) {
-                  // Go back to corpus home (use parent callback)
-                  onClose();
-                }
+                // Back button in conversation view always goes to the chat list
+                // (The Home button is for going directly to corpus home)
+                setSelectedConversationId(undefined);
+                setIsNewChat(false);
+                setChat([]);
+                setServerMessages([]);
               }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -1764,6 +1883,17 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               transition={{ duration: 0.3 }}
             >
               <EnhancedFilterContainer>
+                <NewChatButton
+                  onClick={startNewChat}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Plus size={16} />
+                  <span>New Chat</span>
+                </NewChatButton>
+
+                <ToolbarDivider />
+
                 <AnimatePresence>
                   {showSearch && (
                     <ExpandingInput
@@ -1774,7 +1904,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     >
                       <input
                         className="expanded"
-                        placeholder="Search by title..."
+                        placeholder="Search chats..."
                         value={titleFilter}
                         onChange={(e) => setTitleFilter(e.target.value)}
                         autoFocus
@@ -1787,6 +1917,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   onClick={() => setShowSearch(!showSearch)}
                   $isActive={!!titleFilter}
                   whileTap={{ scale: 0.95 }}
+                  title="Search"
                 >
                   <Search />
                 </IconButton>
@@ -1795,16 +1926,9 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   onClick={() => setShowDatePicker(!showDatePicker)}
                   $isActive={!!(createdAtGte || createdAtLte)}
                   whileTap={{ scale: 0.95 }}
+                  title="Filter by date"
                 >
                   <Calendar />
-                </IconButton>
-
-                <IconButton
-                  onClick={() => showQueryViewState("ASK")}
-                  title="Return to Dashboard"
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Home />
                 </IconButton>
 
                 <AnimatePresence>
@@ -1851,44 +1975,41 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 <EnhancedConversationGrid id="conversation-grid">
                   {conversations.map((conv, index) => {
                     if (!conv) return null;
+                    const messageCount = conv.chatMessages?.totalCount || 0;
                     return (
                       <EnhancedConversationCard
                         key={conv.id}
                         onClick={() => loadConversation(conv.id)}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
                         transition={{
-                          duration: 0.3,
-                          delay: index * 0.05,
-                          ease: [0.4, 0, 0.2, 1],
+                          duration: 0.2,
+                          delay: index * 0.03,
                         }}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
                       >
-                        <MessageCount
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 500,
-                            damping: 25,
-                            delay: index * 0.05 + 0.2,
-                          }}
-                        >
-                          {conv.chatMessages?.totalCount || 0}
-                        </MessageCount>
-                        <EnhancedCardContent>
-                          <EnhancedCardTitle>
-                            {conv.title || "Untitled Conversation"}
-                          </EnhancedCardTitle>
-                          <EnhancedCardMeta>
-                            <TimeStamp>
+                        <ChatItemIcon>
+                          <MessageCircle />
+                        </ChatItemIcon>
+                        <ChatItemContent>
+                          <ChatItemTitle>
+                            {conv.title || "Untitled Chat"}
+                          </ChatItemTitle>
+                          <ChatItemMeta>
+                            <span>
                               {formatDistanceToNow(new Date(conv.createdAt))}{" "}
                               ago
-                            </TimeStamp>
-                            <Creator>{conv.creator?.email}</Creator>
-                          </EnhancedCardMeta>
-                        </EnhancedCardContent>
+                            </span>
+                            {conv.creator?.email && (
+                              <>
+                                <span>·</span>
+                                <span>{conv.creator.email}</span>
+                              </>
+                            )}
+                          </ChatItemMeta>
+                        </ChatItemContent>
+                        {messageCount > 0 && (
+                          <MessageCountBadge>{messageCount}</MessageCountBadge>
+                        )}
                       </EnhancedConversationCard>
                     );
                   })}
@@ -1898,24 +2019,22 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 </EnhancedConversationGrid>
               ) : (
                 <EmptyStateContainer>
-                  <h3>No conversations yet</h3>
-                  <p>
-                    Start a new conversation to ask questions about this corpus.
-                  </p>
-                  <Button
-                    primary
-                    icon="plus"
-                    content="Start New Conversation"
+                  <EmptyStateIcon>
+                    <MessageCircle />
+                  </EmptyStateIcon>
+                  <EmptyStateTitle>No chats yet</EmptyStateTitle>
+                  <EmptyStateDescription>
+                    Start a conversation with the AI to ask questions about this
+                    corpus.
+                  </EmptyStateDescription>
+                  <EmptyStateButton
                     onClick={startNewChat}
-                    size="large"
-                    style={{
-                      background: "linear-gradient(90deg, #4299E1, #2B6CB0)",
-                      color: "white",
-                      borderRadius: "6px",
-                      boxShadow: "0 2px 8px rgba(66, 153, 225, 0.3)",
-                      padding: "0.75rem 1.5rem",
-                    }}
-                  />
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Plus size={18} />
+                    Start New Chat
+                  </EmptyStateButton>
                 </EmptyStateContainer>
               )}
             </motion.div>

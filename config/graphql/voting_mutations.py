@@ -25,7 +25,9 @@ from opencontractserver.conversations.models import (
     MessageVote,
 )
 from opencontractserver.types.enums import PermissionTypes
-from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
+from opencontractserver.utils.permissioning import (
+    set_permissions_for_obj_to_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +70,7 @@ class VoteMessageMutation(graphene.Mutation):
                     obj=None,
                 )
 
-            # Get message - use visible_to_user for permission check
+            # Get message with visibility filter to prevent IDOR
             try:
                 message_pk = from_global_id(message_id)[1]
                 chat_message = ChatMessage.objects.visible_to_user(user).get(
@@ -76,13 +78,8 @@ class VoteMessageMutation(graphene.Mutation):
                 )
             except ChatMessage.DoesNotExist:
                 return VoteMessageMutation(
-                    ok=False,
-                    message="Message not found or you do not have permission to access it",
-                    obj=None,
+                    ok=False, message="Message not found", obj=None
                 )
-
-            # Get the conversation for the message
-            conversation = chat_message.conversation
 
             # Prevent users from voting on their own messages
             if chat_message.creator == user:
@@ -148,7 +145,7 @@ class RemoveVoteMutation(graphene.Mutation):
         try:
             user = info.context.user
 
-            # Get message - use visible_to_user for permission check
+            # Get message with visibility filter to prevent IDOR
             try:
                 message_pk = from_global_id(message_id)[1]
                 chat_message = ChatMessage.objects.visible_to_user(user).get(
@@ -156,9 +153,7 @@ class RemoveVoteMutation(graphene.Mutation):
                 )
             except ChatMessage.DoesNotExist:
                 return RemoveVoteMutation(
-                    ok=False,
-                    message="Message not found or you do not have permission to access it",
-                    obj=None,
+                    ok=False, message="Message not found", obj=None
                 )
 
             # Check if vote exists

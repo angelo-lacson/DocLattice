@@ -6,6 +6,7 @@ from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, override_settings
 from pydantic import BaseModel
@@ -228,7 +229,8 @@ class TestPydanticAIAgents(TransactionTestCase):
         )
 
         # Add embeddings to annotations
-        embedder_path = "opencontractserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder"
+        # Use settings.DEFAULT_EMBEDDER to match what vector store searches for
+        embedder_path = settings.DEFAULT_EMBEDDER
         self.anno1.add_embedding(embedder_path, constant_vector(384, 0.1))
         self.anno2.add_embedding(embedder_path, constant_vector(384, 0.2))
         self.anno3.add_embedding(embedder_path, constant_vector(384, 0.3))
@@ -405,7 +407,9 @@ class TestPydanticAIAgents(TransactionTestCase):
 
     async def test_pydantic_ai_vector_store_search(self) -> None:
         """Test vector search functionality with PydanticAI vector store."""
-        vector_store = PydanticAIAnnotationVectorStore(
+        from asgiref.sync import sync_to_async
+
+        vector_store = await sync_to_async(PydanticAIAnnotationVectorStore)(
             user_id=self.user.id,
             corpus_id=self.corpus.id,
         )

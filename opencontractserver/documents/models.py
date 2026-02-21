@@ -6,7 +6,7 @@ import uuid
 import django
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 from pgvector.django import VectorField
@@ -19,6 +19,15 @@ from opencontractserver.shared.mixins import HasEmbeddingMixin
 from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.slug_utils import generate_unique_slug, sanitize_slug
 from opencontractserver.shared.utils import calc_oc_file_path
+
+
+class DocumentProcessingStatus(models.TextChoices):
+    """Processing status for documents in the parsing pipeline."""
+
+    PENDING = "pending", "Pending"
+    PROCESSING = "processing", "Processing"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
 
 
 class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
@@ -128,6 +137,25 @@ class Document(TreeNode, BaseOCModel, HasEmbeddingMixin):
 
     processing_started = django.db.models.DateTimeField(null=True)
     processing_finished = django.db.models.DateTimeField(null=True)
+
+    # Processing status fields for pipeline hardening (PR #824)
+    processing_status = django.db.models.CharField(
+        max_length=20,
+        choices=DocumentProcessingStatus.choices,
+        default=DocumentProcessingStatus.PENDING,
+        db_index=True,
+        help_text="Current processing status of the document in the parsing pipeline",
+    )
+    processing_error = django.db.models.TextField(
+        blank=True,
+        default="",
+        help_text="Error message if processing failed",
+    )
+    processing_error_traceback = django.db.models.TextField(
+        blank=True,
+        default="",
+        help_text="Full traceback if processing failed",
+    )
 
     # Vector for vector search
     embedding = VectorField(dimensions=384, null=True, blank=True)
@@ -698,3 +726,741 @@ class DocumentSummaryRevision(django.db.models.Model):
         return (
             f"DocumentSummaryRevision(document_id={self.document_id}, v={self.version})"
         )
+
+
+# -------------------- PipelineSettings (Singleton) -------------------- #
+
+
+class PipelineSettings(django.db.models.Model):
+    """
+    Singleton model for configurable document processing pipeline settings.
+
+    This model stores runtime-configurable settings for the document ingestion
+    pipeline, allowing superusers to change parsers, embedders, and thumbnailers
+    without code deployment.
+
+    The singleton instance is created via migration and cannot be deleted.
+    Only superusers can modify these settings via the GraphQL API.
+
+    ⚠️  CRITICAL: SECRET_KEY Dependency
+    ----------------------------------
+    Encrypted secrets (API keys, credentials) are tied to Django's SECRET_KEY.
+    If you rotate SECRET_KEY, ALL encrypted secrets become PERMANENTLY UNRECOVERABLE.
+
+    Before rotating SECRET_KEY:
+    1. Export secrets via Django shell: PipelineSettings.get_instance().get_secrets()
+    2. Store exported secrets securely
+    3. After rotation, re-import via: instance.set_secrets(exported_secrets); instance.save()
+
+    Settings Structure:
+        preferred_parsers: Dict mapping MIME types to parser class paths
+            Example: {"application/pdf": "opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser"}
+
+        preferred_embedders: Dict mapping MIME types to embedder class paths
+            Example: {"application/pdf":
+                "opencontractserver.pipeline.embedders...MicroserviceEmbedder"}
+
+        preferred_thumbnailers: Dict mapping MIME types to thumbnailer class paths
+            Example: {"application/pdf":
+                "opencontractserver.pipeline.thumbnailers...PdfThumbnailGenerator"}
+
+        parser_kwargs: Dict mapping parser class paths to their configuration kwargs
+            Example: {"opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser": {"force_ocr": false}}
+
+        component_settings: Dict mapping component class paths to their settings overrides
+            Example: {"opencontractserver.pipeline.embedders.MicroserviceEmbedder": {"timeout": 30}}
+
+        default_embedder: Default embedder class path when no MIME-specific embedder is found
+
+    Security - Encrypted Secrets Storage:
+        Sensitive values (API keys, credentials) can be stored in the `encrypted_secrets`
+        field, which is encrypted at rest using Fernet symmetric encryption. The encryption
+        key is derived from Django's SECRET_KEY.
+
+        Structure of encrypted_secrets (after decryption):
+            {
+                "component_class_path": {
+                    "api_key": "...",
+                    "secret_token": "...",
+                }
+            }
+
+        Use set_secrets() and get_secrets() methods to access encrypted data.
+        The GraphQL mutations handle encryption/decryption transparently.
+    """
+
+    # Preferred parsers per MIME type
+    preferred_parsers = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of MIME types to preferred parser class paths",
+    )
+
+    # Preferred embedders per MIME type
+    preferred_embedders = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of MIME types to preferred embedder class paths",
+    )
+
+    # Preferred thumbnailers per MIME type
+    preferred_thumbnailers = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of MIME types to preferred thumbnailer class paths",
+    )
+
+    # Parser-specific kwargs
+    parser_kwargs = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of parser class paths to configuration kwargs",
+    )
+
+    # Component-specific settings overrides
+    component_settings = NullableJSONField(
+        default=dict,
+        blank=True,
+        help_text="Mapping of component class paths to settings overrides",
+    )
+
+    # Default embedder when no MIME-specific one is found
+    default_embedder = django.db.models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Default embedder class path",
+    )
+
+    # Encrypted secrets storage (API keys, tokens, credentials)
+    # Stored as Fernet-encrypted JSON blob
+    encrypted_secrets = django.db.models.BinaryField(
+        blank=True,
+        null=True,
+        help_text="Encrypted storage for sensitive configuration (API keys, credentials)",
+    )
+
+    # Audit fields
+    modified = django.db.models.DateTimeField(auto_now=True, db_index=True)
+    modified_by = django.db.models.ForeignKey(
+        get_user_model(),
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pipeline_settings_modifications",
+        help_text="User who last modified these settings",
+    )
+
+    class Meta:
+        verbose_name = "Pipeline Settings"
+        verbose_name_plural = "Pipeline Settings"
+        constraints = [
+            django.db.models.CheckConstraint(
+                check=django.db.models.Q(pk=1),
+                name="pipeline_settings_singleton_pk",
+            ),
+        ]
+
+    def __str__(self):
+        return "PipelineSettings (Singleton)"
+
+    # Cache settings
+    CACHE_KEY = "pipeline_settings_singleton"
+
+    @classmethod
+    def _get_cache_ttl(cls) -> int:
+        """Get cache TTL from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(django_settings, "PIPELINE_SETTINGS_CACHE_TTL_SECONDS", 300)
+
+    @classmethod
+    def _get_encryption_salt_length(cls) -> int:
+        """Get encryption salt length from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(django_settings, "PIPELINE_SETTINGS_ENCRYPTION_SALT_LENGTH", 16)
+
+    @classmethod
+    def _get_encryption_iterations(cls) -> int:
+        """Get PBKDF2 iteration count from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(
+            django_settings, "PIPELINE_SETTINGS_ENCRYPTION_ITERATIONS", 480000
+        )
+
+    @classmethod
+    def _get_max_secret_size(cls) -> int:
+        """Get maximum secret payload size from Django settings."""
+        from django.conf import settings as django_settings
+
+        return getattr(
+            django_settings, "PIPELINE_SETTINGS_MAX_SECRET_SIZE_BYTES", 10240
+        )
+
+    def save(self, *args, **kwargs):
+        """Ensure singleton pattern and invalidate cache on save."""
+        from django.db import transaction
+
+        if not self.pk and PipelineSettings.objects.exists():
+            raise ValidationError(
+                "PipelineSettings is a singleton. Use PipelineSettings.get_instance() instead."
+            )
+        super().save(*args, **kwargs)
+        # Eagerly invalidate cache after save for immediate consistency
+        # (required in autocommit mode and Django TestCase which never commits).
+        self._invalidate_cache()
+        # Also invalidate on commit in case save() runs inside a larger
+        # transaction that might roll back and be retried.
+        transaction.on_commit(lambda: self._invalidate_cache())
+
+    def delete(self, *args, **kwargs):
+        """Prevent deletion of the singleton instance."""
+        raise ValidationError("PipelineSettings singleton cannot be deleted.")
+
+    @classmethod
+    def _invalidate_cache(cls) -> None:
+        """Invalidate the cached instance."""
+        from django.core.cache import cache
+
+        cache.delete(cls.CACHE_KEY)
+
+    @classmethod
+    def get_instance(cls, use_cache: bool = True) -> "PipelineSettings":
+        """
+        Get the singleton PipelineSettings instance.
+
+        Uses Django's cache framework with a 5-minute TTL to reduce database
+        queries during document processing.
+
+        If no instance exists (shouldn't happen after migration), creates one
+        with default values from Django settings.
+
+        Args:
+            use_cache: If True (default), use cached instance. Set to False
+                to bypass cache and get fresh data from database.
+
+        Returns:
+            PipelineSettings: The singleton instance.
+        """
+        from django.conf import settings as django_settings
+        from django.core.cache import cache
+        from django.db import transaction
+
+        # Try cache first (if enabled)
+        if use_cache:
+            cached = cache.get(cls.CACHE_KEY)
+            if cached is not None:
+                return cached
+
+        # Get from database with atomic transaction to prevent race conditions
+        # during concurrent startup or migration.
+        with transaction.atomic():
+            instance, created = cls.objects.select_related("modified_by").get_or_create(
+                pk=1,
+                defaults={
+                    "preferred_parsers": getattr(
+                        django_settings, "PREFERRED_PARSERS", {}
+                    ),
+                    "preferred_embedders": getattr(
+                        django_settings, "PREFERRED_EMBEDDERS", {}
+                    ),
+                    "preferred_thumbnailers": {},  # No default in Django settings
+                    "parser_kwargs": getattr(django_settings, "PARSER_KWARGS", {}),
+                    "component_settings": getattr(
+                        django_settings, "PIPELINE_SETTINGS", {}
+                    ),
+                    "default_embedder": getattr(
+                        django_settings, "DEFAULT_EMBEDDER", ""
+                    ),
+                },
+            )
+
+        # Cache the instance
+        if use_cache:
+            cache.set(cls.CACHE_KEY, instance, cls._get_cache_ttl())
+
+        return instance
+
+    def get_preferred_parser(self, mimetype: str) -> str | None:
+        """
+        Get the preferred parser class path for a MIME type.
+
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
+
+        Args:
+            mimetype: The MIME type (e.g., "application/pdf")
+
+        Returns:
+            Parser class path or None if not found.
+        """
+        if self.preferred_parsers and mimetype in self.preferred_parsers:
+            return self.preferred_parsers[mimetype]
+        return None
+
+    def get_preferred_embedder(self, mimetype: str) -> str | None:
+        """
+        Get the preferred embedder class path for a MIME type.
+
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
+
+        Args:
+            mimetype: The MIME type (e.g., "application/pdf")
+
+        Returns:
+            Embedder class path or None if not found.
+        """
+        if self.preferred_embedders and mimetype in self.preferred_embedders:
+            return self.preferred_embedders[mimetype]
+        return None
+
+    def get_preferred_thumbnailer(self, mimetype: str) -> str | None:
+        """
+        Get the preferred thumbnailer class path for a MIME type.
+
+        Database is the single source of truth at runtime.
+
+        Args:
+            mimetype: The MIME type (e.g., "application/pdf")
+
+        Returns:
+            Thumbnailer class path or None if not found.
+        """
+        if self.preferred_thumbnailers and mimetype in self.preferred_thumbnailers:
+            return self.preferred_thumbnailers[mimetype]
+        return None
+
+    def get_parser_kwargs(self, parser_class_path: str) -> dict:
+        """
+        Get configuration kwargs for a specific parser.
+
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
+
+        Args:
+            parser_class_path: Full class path of the parser
+
+        Returns:
+            Dict of kwargs for the parser.
+        """
+        if self.parser_kwargs and parser_class_path in self.parser_kwargs:
+            return self.parser_kwargs[parser_class_path]
+        return {}
+
+    def get_component_settings(self, component_class_path: str) -> dict:
+        """
+        Get settings overrides for a specific component from database.
+
+        This method only returns database settings, not Django settings fallback.
+        The Django settings fallback (with proper simple name vs full path
+        precedence) is handled by PipelineComponentBase.get_component_settings().
+
+        Args:
+            component_class_path: Full class path of the component
+
+        Returns:
+            Dict of settings for the component from database, or empty dict.
+        """
+        # Only return database settings - no Django fallback here
+        # The fallback chain is handled by PipelineComponentBase
+        if self.component_settings and component_class_path in self.component_settings:
+            return self.component_settings[component_class_path]
+
+        return {}
+
+    def get_default_embedder(self) -> str:
+        """
+        Get the default embedder class path.
+
+        Database is the single source of truth at runtime.
+        Initial values are populated from Django settings via get_instance().
+
+        Returns:
+            Default embedder class path.
+        """
+        return self.default_embedder or ""
+
+    # =====================================================================
+    # Encrypted Secrets Management
+    # =====================================================================
+
+    @classmethod
+    def _derive_key(cls, salt: bytes) -> bytes:
+        """
+        Derive encryption key from Django SECRET_KEY using PBKDF2.
+
+        Uses PBKDF2-HMAC-SHA256 with high iteration count as recommended
+        by OWASP for secure key derivation.
+
+        Args:
+            salt: Random salt bytes (16 bytes recommended)
+
+        Returns:
+            32-byte derived key suitable for Fernet
+        """
+        import base64
+        import hashlib
+
+        from django.conf import settings as django_settings
+
+        # Use PBKDF2 with SHA256 for secure key derivation
+        key = hashlib.pbkdf2_hmac(
+            "sha256",
+            django_settings.SECRET_KEY.encode(),
+            salt,
+            cls._get_encryption_iterations(),
+            dklen=32,
+        )
+        return base64.urlsafe_b64encode(key)
+
+    def get_secrets(self) -> dict:
+        """
+        Get the decrypted secrets dictionary.
+
+        Returns:
+            Dict mapping component class paths to their secrets:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": "...",
+                },
+                ...
+            }
+        """
+        import json
+        import logging
+
+        from cryptography.fernet import Fernet, InvalidToken
+
+        logger = logging.getLogger(__name__)
+
+        if not self.encrypted_secrets:
+            return {}
+
+        try:
+            raw_data = bytes(self.encrypted_secrets)
+
+            # Extract salt and ciphertext
+            salt_length = self._get_encryption_salt_length()
+            if len(raw_data) < salt_length:
+                logger.error(
+                    "PipelineSettings: encrypted_secrets too short to contain salt"
+                )
+                return {}
+
+            salt = raw_data[:salt_length]
+            ciphertext = raw_data[salt_length:]
+
+            # Derive key from salt and decrypt
+            key = self._derive_key(salt)
+            fernet = Fernet(key)
+            decrypted = fernet.decrypt(ciphertext)
+            return json.loads(decrypted.decode("utf-8"))
+
+        except InvalidToken:
+            logger.critical(
+                "PipelineSettings: Failed to decrypt secrets - InvalidToken. "
+                "This may indicate SECRET_KEY has changed. Secrets are unrecoverable "
+                "without the original SECRET_KEY."
+            )
+            return {}
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"PipelineSettings: Decrypted secrets contain invalid JSON: {e}"
+            )
+            return {}
+        except Exception as e:
+            logger.critical(
+                f"PipelineSettings: Unexpected error decrypting secrets: {e}. "
+                "Secrets may be corrupted or SECRET_KEY may have changed."
+            )
+            return {}
+
+    def set_secrets(self, secrets: dict) -> None:
+        """
+        Encrypt and store secrets.
+
+        Args:
+            secrets: Dict mapping component class paths to their secrets:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": "...",
+                },
+            }
+
+        Raises:
+            ValueError: If secrets payload exceeds size limit
+        """
+        import json
+        import os
+
+        from cryptography.fernet import Fernet
+
+        json_bytes = json.dumps(secrets).encode("utf-8")
+
+        # Validate size
+        max_size = self._get_max_secret_size()
+        if len(json_bytes) > max_size:
+            raise ValueError(
+                f"Secrets payload exceeds maximum size of {max_size} bytes"
+            )
+
+        # Generate random salt for this encryption
+        salt = os.urandom(self._get_encryption_salt_length())
+
+        # Derive key and encrypt
+        key = self._derive_key(salt)
+        fernet = Fernet(key)
+        ciphertext = fernet.encrypt(json_bytes)
+
+        # Store salt + ciphertext
+        self.encrypted_secrets = salt + ciphertext
+
+    def update_secrets(self, component_path: str, secret_values: dict) -> None:
+        """
+        Update secrets for a specific component (merge with existing).
+
+        Args:
+            component_path: Full class path of the component
+            secret_values: Dict of secret key-value pairs to set
+        """
+        secrets = self.get_secrets()
+        if component_path not in secrets:
+            secrets[component_path] = {}
+        secrets[component_path].update(secret_values)
+        self.set_secrets(secrets)
+
+    def get_component_secrets(self, component_path: str) -> dict:
+        """
+        Get secrets for a specific component.
+
+        Args:
+            component_path: Full class path of the component
+
+        Returns:
+            Dict of secret key-value pairs for the component.
+        """
+        secrets = self.get_secrets()
+        return secrets.get(component_path, {})
+
+    def delete_component_secrets(self, component_path: str) -> None:
+        """
+        Delete all secrets for a specific component.
+
+        Args:
+            component_path: Full class path of the component
+        """
+        secrets = self.get_secrets()
+        if component_path in secrets:
+            del secrets[component_path]
+            self.set_secrets(secrets)
+
+    def get_full_component_settings(self, component_class_path: str) -> dict:
+        """
+        Get full settings for a component, merging non-sensitive settings
+        with decrypted secrets.
+
+        This is the method pipeline components should use to get their
+        complete configuration.
+
+        Args:
+            component_class_path: Full class path of the component
+
+        Returns:
+            Dict of all settings (non-sensitive + secrets) for the component.
+        """
+        # Get non-sensitive settings
+        settings = dict(self.get_component_settings(component_class_path))
+
+        # Merge with secrets (secrets take precedence)
+        secrets = self.get_component_secrets(component_class_path)
+        settings.update(secrets)
+
+        return settings
+
+    # =====================================================================
+    # Component Schema and Validation Methods
+    # =====================================================================
+
+    def get_component_schema(self, component_path: str) -> dict:
+        """
+        Get the settings schema for a specific component.
+
+        This is useful for the admin UI to dynamically generate configuration
+        forms based on what a component requires.
+
+        Args:
+            component_path: Full class path or simple name of the component
+
+        Returns:
+            Dict mapping setting names to their schema information:
+            {
+                "api_key": {
+                    "type": "secret",
+                    "required": True,
+                    "default": "",
+                    "description": "API key",
+                    "python_type": "str",
+                    "has_value": True,  # Whether a value is currently configured
+                },
+                ...
+            }
+        """
+        import logging
+
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        logger = logging.getLogger(__name__)
+        registry = get_registry()
+
+        # Try to find component by full path or simple name
+        component_def = registry.get_by_class_name(component_path)
+        if not component_def:
+            component_def = registry.get_by_name(component_path)
+
+        if not component_def or not component_def.component_class:
+            logger.warning(f"Component not found: {component_path}")
+            return {}
+
+        schema = get_settings_schema(component_def.component_class)
+
+        # Augment schema with current value status
+        current_settings = self.get_full_component_settings(component_def.class_name)
+        for setting_name, info in schema.items():
+            value = current_settings.get(setting_name)
+            # For secrets, only indicate whether a value exists, never the value itself
+            if info.get("type") == "secret":
+                info["has_value"] = value is not None and value != ""
+                info["current_value"] = None  # Never expose secret values
+            else:
+                info["has_value"] = value is not None
+                info["current_value"] = value
+
+        return schema
+
+    def validate_all_components(self) -> dict[str, list[str]]:
+        """
+        Validate that all registered components have their required settings configured.
+
+        Scans all parsers, embedders, thumbnailers, and post-processors,
+        checks their Settings schemas, and reports any missing required settings.
+
+        Returns:
+            Dict mapping component class paths to lists of missing settings:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": [
+                    "api_key"
+                ],
+                ...
+            }
+            Empty dict if all required settings are configured.
+        """
+        import logging
+
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_required_settings,
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        logger = logging.getLogger(__name__)
+        registry = get_registry()
+        missing_by_component: dict[str, list[str]] = {}
+
+        # Collect all components
+        all_components = []
+        all_components.extend(registry.parsers)
+        all_components.extend(registry.embedders)
+        all_components.extend(registry.thumbnailers)
+        all_components.extend(registry.post_processors)
+
+        for component_def in all_components:
+            component_class = component_def.component_class
+            if component_class is None:
+                continue
+
+            class_path = component_def.class_name
+            schema = get_settings_schema(component_class)
+
+            if not schema:
+                # Component has no Settings schema, skip
+                continue
+
+            required_settings = get_required_settings(component_class)
+            if not required_settings:
+                # No required settings, skip
+                continue
+
+            # Get current settings from DB
+            current_settings = self.get_full_component_settings(class_path)
+
+            missing = []
+            for setting_name in required_settings:
+                value = current_settings.get(setting_name)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    missing.append(setting_name)
+
+            if missing:
+                missing_by_component[class_path] = missing
+                logger.warning(
+                    f"Component '{class_path}' is missing required settings: "
+                    f"{', '.join(missing)}"
+                )
+
+        return missing_by_component
+
+    def get_all_component_schemas(self) -> dict[str, dict]:
+        """
+        Get settings schemas for all registered components.
+
+        Returns:
+            Dict mapping component class paths to their schemas:
+            {
+                "opencontractserver.pipeline.parsers.llamaparse_parser.LlamaParseParser": {
+                    "api_key": {...},
+                    "num_workers": {...},
+                },
+                ...
+            }
+        """
+        from opencontractserver.pipeline.base.settings_schema import (
+            get_settings_schema,
+        )
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        schemas: dict[str, dict] = {}
+
+        all_components = []
+        all_components.extend(registry.parsers)
+        all_components.extend(registry.embedders)
+        all_components.extend(registry.thumbnailers)
+        all_components.extend(registry.post_processors)
+
+        for component_def in all_components:
+            if component_def.component_class is None:
+                continue
+
+            schema = get_settings_schema(component_def.component_class)
+            if schema:
+                # Augment with current value status
+                current_settings = self.get_full_component_settings(
+                    component_def.class_name
+                )
+                for setting_name, info in schema.items():
+                    value = current_settings.get(setting_name)
+                    if info.get("type") == "secret":
+                        info["has_value"] = value is not None and value != ""
+                        info["current_value"] = None
+                    else:
+                        info["has_value"] = value is not None
+                        info["current_value"] = value
+
+                schemas[component_def.class_name] = schema
+
+        return schemas

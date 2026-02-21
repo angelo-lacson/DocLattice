@@ -11,9 +11,9 @@ import { LoadingOverlay } from "../common/LoadingOverlay";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExtractType, CorpusType, PageInfo } from "../../types/graphql-api";
 import {
-  authToken,
   showCreateExtractModal,
   selectedExtractIds,
+  userObj,
 } from "../../graphql/cache";
 import {
   REQUEST_DELETE_EXTRACT,
@@ -83,9 +83,10 @@ export const ExtractCards = ({
 }: ExtractCardsProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const auth_token = useReactiveVar(authToken);
+  const currentUser = useReactiveVar(userObj);
   const selected_extract_ids = useReactiveVar(selectedExtractIds);
-  const isAuthenticated = Boolean(auth_token);
+  // Use userObj for auth check - consistent with NavMenu pattern
+  const isAuthenticated = Boolean(currentUser);
 
   // Filter extracts based on active filter
   const filteredExtracts = useMemo(() => {

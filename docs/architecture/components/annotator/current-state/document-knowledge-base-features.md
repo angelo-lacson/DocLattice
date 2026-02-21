@@ -1,6 +1,8 @@
 # DocumentKnowledgeBase Advanced Features
 
-This document details the advanced features implemented in `DocumentKnowledgeBase.tsx` that extend beyond basic PDF annotation functionality.
+**Last Updated**: 2026-01-09
+
+This document details the advanced features implemented in [`DocumentKnowledgeBase.tsx`](../../../../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx) that extend beyond basic PDF annotation functionality.
 
 ## Table of Contents
 
@@ -35,26 +37,16 @@ A summary-focused view designed for knowledge synthesis:
 
 ### Layer Switching Logic
 
-```typescript
-// Layer state management (referenced in 4:270)
-const [activeLayer, setActiveLayer] = useState<"knowledge" | "document">("document");
-
-// Automatic layer switching based on user actions (4:382-388)
-useEffect(() => {
-  if (selectedAnalysis || (selectedAnnotations?.length ?? 0) > 0) {
-    setActiveLayer("document");
-  }
-}, [selectedAnalysis, selectedAnnotations]);
-```
-
 The system intelligently switches layers based on context:
 - Selecting an annotation switches to document layer
 - Clicking summary tab switches to knowledge layer
-- Some tabs (like chat) maintain the current layer
+- Some sidebar modes (like chat) maintain the current layer
+
+See the layer state management in [`DocumentKnowledgeBase.tsx`](../../../../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx).
 
 ## Unified Content Feed
 
-The unified feed system (`UnifiedContentFeed` component) provides a consolidated view of all document-related content:
+The unified feed system ([`UnifiedContentFeed`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx)) provides a consolidated view of all document-related content.
 
 ### Features
 - **Multi-content type support**: Notes, annotations, relationships, search results
@@ -63,21 +55,17 @@ The unified feed system (`UnifiedContentFeed` component) provides a consolidated
 - **Real-time updates**: Content updates immediately when changes occur
 - **Consistent UI**: Unified interaction patterns across content types
 
-### Implementation Details
+### Sidebar View Modes
 
-```typescript
-// Feed state management (4:1940-1949)
-const [sidebarViewMode, setSidebarViewMode] = useState<SidebarViewMode["mode"]>("chat");
-const [feedFilters, setFeedFilters] = useState<ContentFilters>({
-  contentTypes: new Set(["note", "annotation", "relationship", "search"]),
-  annotationFilters: { showStructural: false },
-  relationshipFilters: { showStructural: false },
-});
-const [feedSortBy, setFeedSortBy] = useState<SortOption>("page");
-```
+The sidebar uses a `SidebarViewMode` type (defined in [`types.ts`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/types.ts)) with these modes:
+- `chat` - AI chat interface
+- `feed` - Unified content feed
+- `extract` - Extract results view
+- `analysis` - Analysis results view
+- `discussions` - Document discussions/threads
 
 ### Control Bar
-The `SidebarControlBar` provides UI controls for:
+The [`SidebarControlBar`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/SidebarControlBar.tsx) provides UI controls for:
 - Switching between chat and feed modes
 - Managing content filters
 - Changing sort order
@@ -85,7 +73,7 @@ The `SidebarControlBar` provides UI controls for:
 
 ## Summary Version History
 
-The summary versioning system provides Git-like version control for document summaries:
+The summary versioning system provides Git-like version control for document summaries.
 
 ### Core Features
 - **Version tracking**: Each edit creates a new version with incrementing numbers
@@ -96,17 +84,7 @@ The summary versioning system provides Git-like version control for document sum
 
 ### Implementation
 
-```typescript
-// Version management hook usage (4:1704-1713)
-const {
-  versions: summaryVersions,
-  currentVersion: currentSummaryVersion,
-  currentContent: currentSummaryContentFromHook,
-  loading: summaryLoading,
-  updateSummary,
-  refetch: refetchSummary,
-} = useSummaryVersions(documentId, corpusId);
-```
+The `useSummaryVersions` hook manages version state. See usage in [`DocumentKnowledgeBase.tsx`](../../../../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx).
 
 ### Version History UI
 - Collapsible sidebar showing all versions
@@ -115,31 +93,19 @@ const {
 - One-click version switching
 - Warning when viewing historical versions
 
+Related components:
+- [`SummaryHistoryModal`](../../../../../frontend/src/components/knowledge_base/document/floating_summary_preview/SummaryHistoryModal.tsx)
+- [`SummaryVersionStack`](../../../../../frontend/src/components/knowledge_base/document/floating_summary_preview/SummaryVersionStack.tsx)
+
 ## Resizable Panel System
 
-The chat panel implements sophisticated width management:
+The chat panel implements sophisticated width management via the `useChatPanelWidth` hook (defined in [`UISettingsAtom.tsx`](../../../../../frontend/src/components/annotator/context/UISettingsAtom.tsx)).
 
 ### Width Modes
 - **Quarter** (25%): Compact view for minimal distraction
 - **Half** (50%): Standard balanced view
 - **Full** (90%): Wide view for detailed chat conversations
 - **Custom**: User-defined width via drag handle
-
-### Advanced Features
-
-```typescript
-// Width management hook (4:280-291)
-const {
-  mode,
-  customWidth,
-  autoMinimize,
-  setMode,
-  setCustomWidth,
-  toggleAutoMinimize,
-  minimize,
-  restore,
-} = useChatPanelWidth();
-```
 
 ### Auto-minimize Behavior
 - Panel minimizes when user hovers over document
@@ -158,6 +124,8 @@ const {
 Several floating components enhance the user experience:
 
 ### FloatingSummaryPreview
+**Source**: [`FloatingSummaryPreview.tsx`](../../../../../frontend/src/components/knowledge_base/document/floating_summary_preview/FloatingSummaryPreview.tsx)
+
 Picture-in-picture style preview that:
 - Shows summary while in document layer
 - Allows quick context switching
@@ -166,6 +134,8 @@ Picture-in-picture style preview that:
 - Smart positioning to avoid overlap
 
 ### FloatingDocumentControls
+**Source**: [`FloatingDocumentControls.tsx`](../../../../../frontend/src/components/knowledge_base/document/FloatingDocumentControls.tsx)
+
 Contextual action buttons that:
 - Float over the document
 - Show/hide based on current layer
@@ -173,6 +143,8 @@ Contextual action buttons that:
 - Maintain consistent positioning
 
 ### FloatingDocumentInput
+**Source**: [`FloatingDocumentInput.tsx`](../../../../../frontend/src/components/knowledge_base/document/FloatingDocumentInput.tsx)
+
 Unified input for chat and search:
 - Toggle between chat and search modes
 - Submit messages directly to chat
@@ -180,44 +152,41 @@ Unified input for chat and search:
 - Keyboard shortcuts support
 
 ### ZoomControls
+**Source**: [`ZoomControls.tsx`](../../../../../frontend/src/components/knowledge_base/document/ZoomControls.tsx)
+
 Simple zoom interface:
 - Zoom in/out buttons
 - Current zoom level display
 - Smooth zoom transitions
 - Keyboard shortcuts (Ctrl +/-)
 
-## Tab Navigation System
+## Sidebar Navigation System
 
-The sidebar implements a sophisticated tab system:
+The sidebar implements a mode-based navigation system using `SidebarViewMode` (defined in [`types.ts`](../../../../../frontend/src/components/knowledge_base/document/unified_feed/types.ts)).
 
-### Tab Configuration
-
-```typescript
-// Tab definitions with layer associations (4:1223-1272)
-const allTabs: NavTab[] = [
-  { key: "summary", label: "Summary View", icon: <BookOpen />, layer: "knowledge" },
-  { key: "chat", label: "Chat", icon: <MessageSquare />, layer: "both" },
-  { key: "notes", label: "Notes", icon: <Notebook />, layer: "both" },
-  // ... more tabs
-];
-```
+### Available Modes
+- `chat` - AI chat interface
+- `feed` - Unified content feed with notes, annotations, relationships
+- `extract` - Extract results view (when an extract is selected)
+- `analysis` - Analysis results view (when an analysis is selected)
+- `discussions` - Document discussions/threads
 
 ### Features
-- **Layer-aware tabs**: Some tabs only available in specific layers
+- **Layer-aware modes**: Some modes may only be relevant in specific layers
 - **Collapsible sidebar**: Hover to expand, auto-collapse when not in use
-- **Visual feedback**: Active tab highlighting and hover effects
-- **Smart panel management**: Right panel shows/hides based on tab selection
+- **Visual feedback**: Active mode highlighting and hover effects
+- **Smart panel management**: Right panel shows/hides based on mode selection
+- **Auto-switching**: Mode automatically switches when selecting extracts/analyses
 
 ## Note Management
 
-The note system provides rich functionality for document annotations:
+The note system provides rich functionality for document annotations.
 
 ### Components
-- **NoteModal**: View/edit individual notes
-- **NotesGrid**: Sticky note style grid layout
-- **PostItNote**: Individual note display with animations
-- **NoteEditor**: Rich text editing interface
-- **NewNoteModal**: Note creation interface
+- [`NoteModal`](../../../../../frontend/src/components/knowledge_base/document/StickyNotes.tsx) - View/edit individual notes
+- [`NoteEditor`](../../../../../frontend/src/components/knowledge_base/document/NoteEditor.tsx) - Rich text editing interface
+- [`NewNoteModal`](../../../../../frontend/src/components/knowledge_base/document/NewNoteModal.tsx) - Note creation interface
+- [`SafeMarkdown`](../../../../../frontend/src/components/knowledge_base/markdown/SafeMarkdown.tsx) - Safe markdown rendering
 
 ### Features
 - Markdown content support via `SafeMarkdown`
@@ -229,18 +198,7 @@ The note system provides rich functionality for document annotations:
 ## Integration Points
 
 ### GraphQL Data Loading
-The component uses a comprehensive query to load all necessary data:
-
-```typescript
-// Main data query (4:646-697)
-const { data: combinedData, loading, error: queryError, refetch } = useQuery<
-  GetDocumentKnowledgeAndAnnotationsOutput,
-  GetDocumentKnowledgeAndAnnotationsInput
->(GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS, {
-  variables: { documentId, corpusId, analysisId: undefined },
-  // ... configuration
-});
-```
+The component uses the `GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS` query to load all necessary data. See the query definition in [`queries.ts`](../../../../../frontend/src/graphql/queries.ts).
 
 ### URL Synchronization
 - Annotation selection synced with URL parameters

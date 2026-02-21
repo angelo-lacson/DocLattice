@@ -24,7 +24,6 @@ import _ from "lodash";
 
 import { ExtractType } from "../types/graphql-api";
 import {
-  authToken,
   extractSearchTerm,
   selectedExtractIds,
   showCreateExtractModal,
@@ -170,13 +169,13 @@ const TableIcon = () => (
 // Main Component
 
 export const Extracts = () => {
-  const auth_token = useReactiveVar(authToken);
   const currentUser = useReactiveVar(userObj);
   const extract_search_term = useReactiveVar(extractSearchTerm);
   const show_create_extract_modal = useReactiveVar(showCreateExtractModal);
   const show_delete_extract_modal = useReactiveVar(showDeleteExtractModal);
   const selected_extract_ids = useReactiveVar(selectedExtractIds);
-  const isAuthenticated = Boolean(auth_token);
+  // Use userObj for auth check - consistent with NavMenu pattern
+  const isAuthenticated = Boolean(currentUser);
   const currentUserEmail = currentUser?.email;
 
   // Local state
@@ -386,10 +385,10 @@ export const Extracts = () => {
 
   // Refetch on auth change
   useEffect(() => {
-    if (auth_token) {
+    if (currentUser) {
       refetch();
     }
-  }, [auth_token, refetch]);
+  }, [currentUser, refetch]);
 
   // Determine section title based on filter
   const getSectionTitle = () => {

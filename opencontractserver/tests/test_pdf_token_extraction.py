@@ -18,8 +18,12 @@ from shapely.geometry import box
 from shapely.strtree import STRtree
 
 from opencontractserver.utils.pdf_token_extraction import (
+    crop_image_from_pdf,
+    extract_images_from_pdf,
     extract_pawls_tokens_from_pdf,
     find_tokens_in_bbox,
+    get_image_as_base64,
+    get_image_data_url,
     has_extractable_text,
 )
 
@@ -418,3 +422,348 @@ class TestFindTokensInBbox(TestCase):
         # All refs should have pageIndex=5
         for ref in token_refs:
             self.assertEqual(ref["pageIndex"], 5)
+
+
+class TestExtractImagesFromPdf(TestCase):
+    """Tests for the extract_images_from_pdf function."""
+
+    @patch("pdfplumber.open")
+    def test_extract_images_returns_dict_by_page(self, mock_pdfplumber_open):
+        """Test that extract_images_from_pdf returns dict mapping page to images."""
+        # Mock pdfplumber page with images
+        mock_image_info = {
+            "x0": 100,
+            "top": 100,
+            "x1": 300,
+            "bottom": 300,
+        }
+
+        mock_page = MagicMock()
+        mock_page.width = 612
+        mock_page.height = 792
+        mock_page.images = [mock_image_info]
+
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
+
+        # Mock PIL Image
+        mock_pil_image = MagicMock()
+        mock_pil_image.mode = "RGB"
+        mock_pil_image.width = 200
+        mock_pil_image.height = 200
+
+        # Mock _crop_pdf_region to return our mock image
+        with patch(
+            "opencontractserver.utils.pdf_token_extraction._crop_pdf_region"
+        ) as mock_crop:
+            mock_crop.return_value = mock_pil_image
+
+            images_by_page = extract_images_from_pdf(b"fake pdf bytes")
+
+            # Should return dict
+            self.assertIsInstance(images_by_page, dict)
+
+    @patch("pdfplumber.open")
+    def test_extract_images_returns_empty_for_no_images(self, mock_pdfplumber_open):
+        """Test that extract_images_from_pdf returns empty dict for PDFs without images."""
+        mock_page = MagicMock()
+        mock_page.width = 612
+        mock_page.height = 792
+        mock_page.images = []
+
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
+
+        images_by_page = extract_images_from_pdf(b"pdf without images")
+
+        self.assertEqual(len(images_by_page.get(0, [])), 0)
+
+    @patch("pdfplumber.open")
+    def test_extract_images_skips_small_images(self, mock_pdfplumber_open):
+        """Test that small images below minimum size are skipped."""
+        # Image that is too small (40x40, below 50x50 default)
+        mock_image_info = {
+            "x0": 100,
+            "top": 100,
+            "x1": 140,  # width = 40
+            "bottom": 140,  # height = 40
+        }
+
+        mock_page = MagicMock()
+        mock_page.width = 612
+        mock_page.height = 792
+        mock_page.images = [mock_image_info]
+
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [mock_page]
+        mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
+
+        images_by_page = extract_images_from_pdf(b"pdf", min_width=50, min_height=50)
+
+        # Small image should be skipped
+        self.assertEqual(len(images_by_page.get(0, [])), 0)
+
+
+class TestCropImageFromPdf(TestCase):
+    """Tests for the crop_image_from_pdf function."""
+
+    @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
+    def test_crop_image_returns_image_token(self, mock_crop_region):
+        """Test that crop_image_from_pdf returns a valid image token."""
+        # Mock the cropped PIL image
+        mock_pil_image = MagicMock()
+        mock_pil_image.mode = "RGB"
+        mock_pil_image.width = 150
+        mock_pil_image.height = 100
+
+        # Mock save to write some bytes
+        def mock_save(buf, format, quality=85):
+            buf.write(b"fake image bytes")
+
+        mock_pil_image.save = mock_save
+        mock_crop_region.return_value = mock_pil_image
+
+        bbox = {"left": 100, "top": 100, "right": 250, "bottom": 200}
+
+        image_token = crop_image_from_pdf(
+            b"fake pdf", 0, bbox, 612, 792, image_format="jpeg"
+        )
+
+        # Should return a valid image token
+        self.assertIsNotNone(image_token)
+        self.assertEqual(image_token["x"], 100)
+        self.assertEqual(image_token["y"], 100)
+        self.assertEqual(image_token["width"], 150)
+        self.assertEqual(image_token["height"], 100)
+        self.assertEqual(image_token["format"], "jpeg")
+        self.assertIn("base64_data", image_token)
+        self.assertIn("content_hash", image_token)
+
+    @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
+    def test_crop_image_returns_none_on_failure(self, mock_crop_region):
+        """Test that crop_image_from_pdf returns None when cropping fails."""
+        mock_crop_region.return_value = None
+
+        bbox = {"left": 100, "top": 100, "right": 250, "bottom": 200}
+
+        image_token = crop_image_from_pdf(b"fake pdf", 0, bbox, 612, 792)
+
+        self.assertIsNone(image_token)
+
+    @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
+    def test_crop_image_handles_swapped_coordinates(self, mock_crop_region):
+        """Test that crop_image_from_pdf handles swapped left/right or top/bottom."""
+        mock_pil_image = MagicMock()
+        mock_pil_image.mode = "RGB"
+        mock_pil_image.width = 150
+        mock_pil_image.height = 100
+        mock_pil_image.save = lambda buf, format, quality=85: buf.write(b"fake")
+        mock_crop_region.return_value = mock_pil_image
+
+        # Swapped coordinates
+        bbox = {"left": 250, "top": 200, "right": 100, "bottom": 100}
+
+        image_token = crop_image_from_pdf(b"fake pdf", 0, bbox, 612, 792)
+
+        # Should still work with corrected coordinates
+        self.assertIsNotNone(image_token)
+        self.assertEqual(image_token["x"], 100)  # Swapped back
+        self.assertEqual(image_token["y"], 100)
+
+    @patch("opencontractserver.utils.pdf_token_extraction._save_image_to_storage")
+    @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
+    def test_crop_image_saves_to_storage(self, mock_crop_region, mock_save):
+        """Test that crop_image_from_pdf saves to storage when storage_path is provided."""
+        mock_pil_image = MagicMock()
+        mock_pil_image.mode = "RGB"
+        mock_pil_image.width = 150
+        mock_pil_image.height = 100
+        mock_pil_image.save = lambda buf, format, quality=85: buf.write(b"fake")
+        mock_crop_region.return_value = mock_pil_image
+        mock_save.return_value = "documents/123/images/page_0_img_0.jpg"
+
+        bbox = {"left": 100, "top": 100, "right": 250, "bottom": 200}
+
+        image_token = crop_image_from_pdf(
+            b"fake pdf",
+            0,
+            bbox,
+            612,
+            792,
+            storage_path="documents/123/images",
+            img_idx=0,
+        )
+
+        # Should call storage saver
+        mock_save.assert_called_once()
+        # Should have image_path instead of base64_data
+        self.assertEqual(
+            image_token["image_path"], "documents/123/images/page_0_img_0.jpg"
+        )
+        self.assertNotIn("base64_data", image_token)
+
+    @patch("opencontractserver.utils.pdf_token_extraction._save_image_to_storage")
+    @patch("opencontractserver.utils.pdf_token_extraction._crop_pdf_region")
+    def test_crop_image_falls_back_to_base64_on_storage_failure(
+        self, mock_crop_region, mock_save
+    ):
+        """Test that crop_image_from_pdf falls back to base64 when storage save fails."""
+        mock_pil_image = MagicMock()
+        mock_pil_image.mode = "RGB"
+        mock_pil_image.width = 150
+        mock_pil_image.height = 100
+        mock_pil_image.save = lambda buf, format, quality=85: buf.write(b"fake")
+        mock_crop_region.return_value = mock_pil_image
+        mock_save.return_value = None  # Simulate storage failure
+
+        bbox = {"left": 100, "top": 100, "right": 250, "bottom": 200}
+
+        image_token = crop_image_from_pdf(
+            b"fake pdf",
+            0,
+            bbox,
+            612,
+            792,
+            storage_path="documents/123/images",
+            img_idx=0,
+        )
+
+        # Should fall back to base64_data
+        self.assertIn("base64_data", image_token)
+        self.assertNotIn("image_path", image_token)
+
+
+class TestImageHelperFunctions(TestCase):
+    """Tests for image helper functions."""
+
+    def test_get_image_as_base64_returns_base64_data(self):
+        """Test that get_image_as_base64 returns the base64_data field."""
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "base64_data": "SGVsbG8gV29ybGQ=",
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        self.assertEqual(result, "SGVsbG8gV29ybGQ=")
+
+    @patch("opencontractserver.utils.pdf_token_extraction._load_image_from_storage")
+    def test_get_image_as_base64_loads_from_storage(self, mock_load):
+        """Test that get_image_as_base64 loads from storage when image_path is present."""
+        # Mock storage to return image bytes
+        mock_load.return_value = b"Hello World"
+
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "image_path": "documents/123/images/page_0_img_0.jpg",
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        # Should call storage loader
+        mock_load.assert_called_once_with("documents/123/images/page_0_img_0.jpg")
+        # Should return base64 encoded bytes
+        self.assertEqual(result, "SGVsbG8gV29ybGQ=")
+
+    @patch("opencontractserver.utils.pdf_token_extraction._load_image_from_storage")
+    def test_get_image_as_base64_returns_none_when_storage_fails(self, mock_load):
+        """Test that get_image_as_base64 returns None when storage load fails."""
+        mock_load.return_value = None
+
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "image_path": "documents/123/images/missing.jpg",
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        self.assertIsNone(result)
+
+    def test_get_image_as_base64_prefers_inline_base64(self):
+        """Test that base64_data is preferred over image_path when both exist."""
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "base64_data": "aW5saW5lZGF0YQ==",  # "inlinedata" in base64
+            "image_path": "documents/123/images/page_0_img_0.jpg",
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        # Should return inline data, not load from storage
+        self.assertEqual(result, "aW5saW5lZGF0YQ==")
+
+    def test_get_image_as_base64_returns_none_for_missing_data(self):
+        """Test that get_image_as_base64 returns None when no image data."""
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "format": "jpeg",
+        }
+
+        result = get_image_as_base64(image_token)
+
+        self.assertIsNone(result)
+
+    def test_get_image_data_url_returns_correct_format(self):
+        """Test that get_image_data_url returns properly formatted data URL."""
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "base64_data": "SGVsbG8gV29ybGQ=",
+            "format": "jpeg",
+        }
+
+        result = get_image_data_url(image_token)
+
+        self.assertEqual(result, "data:image/jpeg;base64,SGVsbG8gV29ybGQ=")
+
+    def test_get_image_data_url_handles_png_format(self):
+        """Test that get_image_data_url uses correct MIME type for PNG."""
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "base64_data": "iVBORw0KGgo=",
+            "format": "png",
+        }
+
+        result = get_image_data_url(image_token)
+
+        self.assertTrue(result.startswith("data:image/png;base64,"))
+
+    def test_get_image_data_url_returns_none_for_missing_data(self):
+        """Test that get_image_data_url returns None when no image data."""
+        image_token = {
+            "x": 100,
+            "y": 100,
+            "width": 50,
+            "height": 50,
+            "format": "jpeg",
+        }
+
+        result = get_image_data_url(image_token)
+
+        self.assertIsNone(result)

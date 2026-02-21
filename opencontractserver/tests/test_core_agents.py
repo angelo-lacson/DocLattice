@@ -38,13 +38,15 @@ class TestCoreAgentComponentsSetup(TestCase):
             creator=cls.user,
             preferred_embedder="test/embedder/corpus_default",
         )
-        cls.doc1 = Document.objects.create(
+        # Create document and add to corpus - add_document returns corpus-isolated copy
+        original_doc1 = Document.objects.create(
             title="Core Test Doc 1",
-            corpus=cls.corpus1,
             creator=cls.user,
             description="Doc1 Description",
             is_public=True,
         )
+        cls.doc1, _, _ = cls.corpus1.add_document(document=original_doc1, user=cls.user)
+
         cls.doc2 = Document.objects.create(
             title="Core Test Doc 2",
             creator=cls.user,

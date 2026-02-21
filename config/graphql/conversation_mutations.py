@@ -106,11 +106,12 @@ class CreateThreadMutation(graphene.Mutation):
                     obj=None,
                 )
 
-            # Resolve corpus if provided
+            # Resolve corpus if provided -- use visible_to_user() to prevent
+            # IDOR enumeration (same error for missing vs no-permission).
             if corpus_id:
                 corpus_pk = from_global_id(corpus_id)[1]
                 try:
-                    corpus = Corpus.objects.get(pk=corpus_pk)
+                    corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
                 except Corpus.DoesNotExist:
                     return CreateThreadMutation(
                         ok=False,
@@ -118,30 +119,15 @@ class CreateThreadMutation(graphene.Mutation):
                         obj=None,
                     )
 
-                # Check if user has permission to access the corpus
-                if not user_has_permission_for_obj(user, corpus, PermissionTypes.READ):
-                    return CreateThreadMutation(
-                        ok=False,
-                        message="You do not have permission to create threads in this corpus",
-                        obj=None,
-                    )
-
-            # Resolve document if provided
+            # Resolve document if provided -- use visible_to_user() to
+            # prevent IDOR enumeration.
             if document_id:
                 document_pk = from_global_id(document_id)[1]
                 try:
-                    document = Document.objects.get(pk=document_pk)
-                except Document.DoesNotExist:
-                    return CreateThreadMutation(
-                        ok=False,
-                        message="You do not have permission to create threads for this document",
-                        obj=None,
+                    document = Document.objects.visible_to_user(user).get(
+                        pk=document_pk
                     )
-
-                # Check if user has permission to access the document
-                if not user_has_permission_for_obj(
-                    user, document, PermissionTypes.READ
-                ):
+                except Document.DoesNotExist:
                     return CreateThreadMutation(
                         ok=False,
                         message="You do not have permission to create threads for this document",
@@ -224,14 +210,12 @@ class CreateThreadMessageMutation(graphene.Mutation):
         try:
             user = info.context.user
             conversation_pk = from_global_id(conversation_id)[1]
-            conversation = Conversation.objects.get(pk=conversation_pk)
-
-            # SECURITY: Check permissions FIRST to prevent information disclosure
-            # about locked thread status via different error messages (IDOR prevention).
-            # Uses same generic message for both permission denied and locked states.
-            if not user_has_permission_for_obj(
-                user, conversation, PermissionTypes.READ
-            ):
+            # Use visible_to_user() to prevent IDOR enumeration
+            try:
+                conversation = Conversation.objects.visible_to_user(user).get(
+                    pk=conversation_pk
+                )
+            except Conversation.DoesNotExist:
                 return CreateThreadMessageMutation(
                     ok=False,
                     message="Cannot post in this thread",

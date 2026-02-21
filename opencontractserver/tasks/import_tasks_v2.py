@@ -2,22 +2,24 @@
 Import tasks for corpus import with V2 format support.
 
 Handles backward compatibility with V1 format while supporting all V2 features.
+Uses shared helpers from utils/importing.py for DRY document/label/annotation
+creation, and corpus.add_document() for proper corpus isolation.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import zipfile
 
 from django.contrib.auth import get_user_model
-from django.core.files.base import ContentFile, File
 
 from config import celery_app
 from opencontractserver.annotations.models import (
-    TOKEN_LABEL,
     Annotation,
+    AnnotationLabel,
+    Relationship,
+    StructuralAnnotationSet,
 )
 from opencontractserver.corpuses.models import TemporaryFileHandle
 from opencontractserver.documents.models import Document
@@ -26,12 +28,14 @@ from opencontractserver.utils.import_v2 import (
     import_agent_config,
     import_conversations,
     import_corpus_folders,
-    import_document_paths,
     import_md_description_revisions,
-    import_relationships,
     import_structural_annotation_set,
 )
-from opencontractserver.utils.importing import import_annotations, load_or_create_labels
+from opencontractserver.utils.importing import (
+    create_document_from_export_data,
+    import_doc_annotations,
+    prepare_import_labels,
+)
 from opencontractserver.utils.packaging import (
     unpack_corpus_from_export,
     unpack_label_set_from_export,
@@ -54,6 +58,8 @@ def import_corpus_v2(
     Import corpus with support for both V1 and V2 export formats.
 
     Detects format version from data.json and routes to appropriate handler.
+    Both formats share the same core logic via _import_corpus(); V2 adds
+    structural sets, folders, relationships, agent config, etc.
 
     Args:
         temporary_file_handle_id: ID of TemporaryFileHandle with ZIP
@@ -85,376 +91,282 @@ def import_corpus_v2(
             with import_zip.open("data.json") as corpus_data:
                 data_json = json.loads(corpus_data.read().decode("UTF-8"))
 
-            # Detect version
+            # Detect version - both share the unified import path
             version = data_json.get("version", "1.0")
             logger.info(f"Detected export format version: {version}")
 
-            if version == "2.0":
-                return _import_corpus_v2(
-                    data_json, import_zip, user_obj, seed_corpus_id
-                )
-            else:
-                # V1 format - use original import logic
-                return _import_corpus_v1(
-                    data_json, import_zip, user_obj, seed_corpus_id
-                )
+            return _import_corpus(
+                data_json, import_zip, user_obj, seed_corpus_id, version
+            )
 
     except Exception as e:
         logger.error(f"import_corpus_v2() - Exception: {e}", exc_info=True)
         return None
 
 
-def _import_corpus_v1(
+def _setup_corpus_and_labels(
     data_json: dict,
-    import_zip: zipfile.ZipFile,
-    user_obj: User,
+    user_obj,
     seed_corpus_id: int | None,
-) -> str | None:
+) -> tuple:
     """
-    Import V1 format corpus (original format).
+    Shared setup for both V1 and V2 imports: create labelset, corpus, and labels.
 
-    This is the backward-compatible import path.
+    Returns:
+        Tuple of (corpus_obj, labelset_obj, label_lookup, doc_label_lookup)
     """
-    logger.info("Using V1 import format")
+    label_set_data = {**data_json["label_set"]}
+    label_set_data.pop("id", None)
 
+    labelset_obj = unpack_label_set_from_export(label_set_data, user_obj)
+    logger.info(f"LabelSet created: {labelset_obj}")
+
+    corpus_data = {**data_json["corpus"]}
+    corpus_data.pop("id", None)
+
+    corpus_obj = unpack_corpus_from_export(
+        data=corpus_data,
+        user=user_obj,
+        label_set_id=labelset_obj.id,
+        corpus_id=seed_corpus_id if seed_corpus_id else None,
+    )
+    logger.info(f"Created corpus: {corpus_obj}")
+
+    label_lookup, doc_label_lookup = prepare_import_labels(
+        data_json, user_obj.id, labelset_obj
+    )
+
+    return corpus_obj, labelset_obj, label_lookup, doc_label_lookup
+
+
+def _import_document_with_annotations(
+    doc_filename: str,
+    doc_data: dict,
+    import_zip: zipfile.ZipFile,
+    user_obj,
+    corpus_obj,
+    label_lookup: dict[str, AnnotationLabel],
+    doc_label_lookup: dict[str, AnnotationLabel],
+    structural_sets: dict[str, StructuralAnnotationSet] | None = None,
+) -> tuple[Document | None, dict]:
+    """
+    Import a single document into a corpus, handling:
+    - Document creation (standalone) via shared create_document_from_export_data
+    - Adding to corpus via corpus.add_document() (creates corpus-isolated copy)
+    - Importing all annotations onto the corpus copy via shared import_doc_annotations
+
+    Args:
+        doc_filename: The filename of the document in the ZIP.
+        doc_data: The document data dict from the export.
+        import_zip: The open ZIP file.
+        user_obj: The importing user.
+        corpus_obj: The target corpus.
+        label_lookup: Combined label lookup.
+        doc_label_lookup: Doc-type label lookup.
+        structural_sets: Optional mapping of content_hash -> StructuralAnnotationSet
+            (V2 only).
+
+    Returns:
+        Tuple of (corpus_doc, annot_id_map) where corpus_doc is the
+        corpus-isolated document copy and annot_id_map maps old annotation IDs
+        to new PKs. Returns (None, {}) on failure.
+    """
     try:
-        text_labels = data_json["text_labels"]
-        doc_labels = data_json["doc_labels"]
-        label_set_data = {**data_json["label_set"]}
-        label_set_data.pop("id", None)
-        corpus_data_json = {**data_json["corpus"]}
-        corpus_data_json.pop("id", None)
+        with import_zip.open(doc_filename) as pdf_file_handle:
+            # Check for structural annotation set (V2 feature)
+            structural_set = None
+            struct_hash = doc_data.get("structural_set_hash")
+            if structural_sets and struct_hash and struct_hash in structural_sets:
+                structural_set = structural_sets[struct_hash]
 
-        # Create LabelSet
-        labelset_obj = unpack_label_set_from_export(label_set_data, user_obj)
-        logger.info(f"LabelSet created: {labelset_obj}")
+            # Create standalone document using shared helper
+            doc_obj = create_document_from_export_data(
+                doc_data=doc_data,
+                pdf_file_handle=pdf_file_handle,
+                doc_filename=doc_filename,
+                user_obj=user_obj,
+            )
 
-        # Create Corpus
-        corpus_kwargs = {
-            "data": corpus_data_json,
-            "user": user_obj,
-            "label_set_id": labelset_obj.id,
-            "corpus_id": seed_corpus_id if seed_corpus_id else None,
-        }
-        corpus_obj = unpack_corpus_from_export(**corpus_kwargs)
-        logger.info(f"Created corpus_obj: {corpus_obj}")
+            # Attach structural annotation set if present
+            if structural_set:
+                doc_obj.structural_annotation_set = structural_set
+                doc_obj.save(update_fields=["structural_annotation_set"])
 
-        # Load or create labels
-        text_label_data_dict = {
-            label_name: label_info for label_name, label_info in text_labels.items()
-        }
-        doc_label_data_dict = {
-            label_name: label_info for label_name, label_info in doc_labels.items()
-        }
+            # Add to corpus - creates corpus-isolated copy with DocumentPath
+            corpus_doc, _status, _doc_path = corpus_obj.add_document(
+                document=doc_obj, user=user_obj
+            )
 
-        existing_text_labels = load_or_create_labels(
-            user_id=user_obj.id,
-            labelset_obj=labelset_obj,
-            label_data_dict=text_label_data_dict,
-            existing_labels={},
-        )
+            # Import annotations onto the corpus copy using shared helper
+            annot_id_map = import_doc_annotations(
+                doc_data=doc_data,
+                corpus_doc=corpus_doc,
+                corpus_obj=corpus_obj,
+                user_id=user_obj.id,
+                label_lookup=label_lookup,
+                doc_label_lookup=doc_label_lookup,
+            )
 
-        existing_doc_labels = load_or_create_labels(
-            user_id=user_obj.id,
-            labelset_obj=labelset_obj,
-            label_data_dict=doc_label_data_dict,
-            existing_labels={},
-        )
+            # Unlock original document
+            doc_obj.backend_lock = False
+            doc_obj.save(update_fields=["backend_lock"])
 
-        doc_label_lookup = {label.text: label for label in existing_doc_labels.values()}
-        label_lookup = {**existing_text_labels, **existing_doc_labels}
-
-        # Import documents
-        for doc_filename in data_json["annotated_docs"]:
-            logger.info(f"Importing document: {doc_filename}")
-            doc_data = data_json["annotated_docs"][doc_filename]
-
-            try:
-                with import_zip.open(doc_filename) as pdf_file_handle:
-                    pdf_file = File(pdf_file_handle, doc_filename)
-
-                    pawls_parse_file = ContentFile(
-                        json.dumps(doc_data["pawls_file_content"]).encode("utf-8"),
-                        name="pawls_tokens.json",
-                    )
-
-                    txt_extract_file = ContentFile(
-                        doc_data["content"].encode("utf-8"),
-                        name="extracted_text.txt",
-                    )
-
-                    # Create Document
-                    doc_obj = Document.objects.create(
-                        title=doc_data["title"],
-                        description=doc_data.get("description", ""),
-                        pdf_file=pdf_file,
-                        pawls_parse_file=pawls_parse_file,
-                        txt_extract_file=txt_extract_file,
-                        backend_lock=True,
-                        creator=user_obj,
-                        page_count=len(doc_data["pawls_file_content"]),
-                    )
-
-                    set_permissions_for_obj_to_user(
-                        user_obj, doc_obj, [PermissionTypes.ALL]
-                    )
-
-                    # Add to corpus using new versioned system
-                    corpus_obj.add_document(doc_obj, user=user_obj)
-
-                    # Import doc-level annotations
-                    for doc_label_name in doc_data.get("doc_labels", []):
-                        label_obj = doc_label_lookup.get(doc_label_name)
-                        if label_obj:
-                            Annotation.objects.create(
-                                annotation_label=label_obj,
-                                document=doc_obj,
-                                corpus=corpus_obj,
-                                creator=user_obj,
-                            )
-
-                    # Import text annotations
-                    import_annotations(
-                        user_id=user_obj.id,
-                        doc_obj=doc_obj,
-                        corpus_obj=corpus_obj,
-                        annotations_data=doc_data.get("labelled_text", []),
-                        label_lookup=label_lookup,
-                        label_type=TOKEN_LABEL,
-                    )
-
-                    doc_obj.backend_lock = False
-                    doc_obj.save()
-
-            except Exception as e:
-                logger.error(f"Error importing document {doc_filename}: {e}")
-
-        return corpus_obj.id
+            return corpus_doc, annot_id_map
 
     except Exception as e:
-        logger.error(f"V1 import failed: {e}", exc_info=True)
-        return None
+        logger.error(f"Error importing document {doc_filename}: {e}")
+        return None, {}
 
 
-def _import_corpus_v2(
+def _import_corpus(
     data_json: dict,
     import_zip: zipfile.ZipFile,
-    user_obj: User,
+    user_obj,
     seed_corpus_id: int | None,
+    version: str = "1.0",
 ) -> str | None:
     """
-    Import V2 format corpus (new comprehensive format).
+    Unified import handler for both V1 and V2 formats.
+
+    V1 imports: labels, corpus, documents with annotations.
+    V2 imports: all of V1 plus structural sets, folders, relationships,
+    agent config, markdown descriptions, and conversations.
     """
-    logger.info("Using V2 import format")
+    is_v2 = version == "2.0"
+    logger.info(f"Using {'V2' if is_v2 else 'V1'} import format")
 
     try:
-        # ===== PART 1: Import LabelSet and Corpus =====
-        label_set_data = {**data_json["label_set"]}
-        label_set_data.pop("id", None)
-
-        labelset_obj = unpack_label_set_from_export(label_set_data, user_obj)
-        logger.info(f"LabelSet created: {labelset_obj}")
-
-        # Import corpus with V2 fields
-        corpus_data = {**data_json["corpus"]}
-        corpus_data.pop("id", None)
-
-        corpus_obj = unpack_corpus_from_export(
-            data=corpus_data,
-            user=user_obj,
-            label_set_id=labelset_obj.id,
-            corpus_id=seed_corpus_id,
-        )
-        logger.info(f"Created corpus: {corpus_obj}")
-
-        # ===== PART 2: Import Labels =====
-        text_labels = data_json["text_labels"]
-        doc_labels = data_json["doc_labels"]
-
-        text_label_data_dict = {name: info for name, info in text_labels.items()}
-        doc_label_data_dict = {name: info for name, info in doc_labels.items()}
-
-        existing_text_labels = load_or_create_labels(
-            user_id=user_obj.id,
-            labelset_obj=labelset_obj,
-            label_data_dict=text_label_data_dict,
-            existing_labels={},
+        # ===== Shared: Setup corpus, labelset, and labels =====
+        corpus_obj, labelset_obj, label_lookup, doc_label_lookup = (
+            _setup_corpus_and_labels(data_json, user_obj, seed_corpus_id)
         )
 
-        existing_doc_labels = load_or_create_labels(
-            user_id=user_obj.id,
-            labelset_obj=labelset_obj,
-            label_data_dict=doc_label_data_dict,
-            existing_labels={},
-        )
-
-        label_lookup = {**existing_text_labels, **existing_doc_labels}
-        doc_label_lookup = {label.text: label for label in existing_doc_labels.values()}
-
-        # ===== PART 3: Import Structural Annotation Sets =====
+        # ===== V2 only: Import structural annotation sets =====
         structural_sets = {}
-        struct_sets_data = data_json.get("structural_annotation_sets", {})
+        if is_v2:
+            struct_sets_data = data_json.get("structural_annotation_sets", {})
+            for content_hash, struct_data in struct_sets_data.items():
+                struct_set = import_structural_annotation_set(
+                    struct_data, label_lookup, user_obj
+                )
+                if struct_set:
+                    structural_sets[content_hash] = struct_set
+            logger.info(f"Imported {len(structural_sets)} structural annotation sets")
 
-        for content_hash, struct_data in struct_sets_data.items():
-            struct_set = import_structural_annotation_set(
-                struct_data, label_lookup, user_obj
-            )
-            if struct_set:
-                structural_sets[content_hash] = struct_set
-
-        logger.info(f"Imported {len(structural_sets)} structural annotation sets")
-
-        # ===== PART 4: Import Documents =====
-        document_map = {}  # document_ref -> Document
-        annot_id_map = {}  # old_annot_id -> new_annot_id
+        # ===== Shared: Import documents =====
+        all_annot_id_maps = {}  # aggregated old_id -> new_id across all docs
 
         for doc_filename, doc_data in data_json["annotated_docs"].items():
             logger.info(f"Importing document: {doc_filename}")
-
-            try:
-                with import_zip.open(doc_filename) as pdf_file_handle:
-                    pdf_file = File(pdf_file_handle, doc_filename)
-
-                    # Get structural annotation set if referenced
-                    structural_set = None
-                    struct_hash = doc_data.get("structural_set_hash")
-                    if struct_hash and struct_hash in structural_sets:
-                        structural_set = structural_sets[struct_hash]
-                        # Use files from structural set
-                        pawls_parse_file = None
-                        txt_extract_file = None
-                    else:
-                        # Inline files (V1 style)
-                        pawls_parse_file = ContentFile(
-                            json.dumps(doc_data["pawls_file_content"]).encode("utf-8"),
-                            name="pawls_tokens.json",
-                        )
-                        txt_extract_file = ContentFile(
-                            doc_data["content"].encode("utf-8"),
-                            name="extracted_text.txt",
-                        )
-
-                    # Create Document
-                    doc_obj = Document.objects.create(
-                        title=doc_data["title"],
-                        description=doc_data.get("description", ""),
-                        pdf_file=pdf_file,
-                        pawls_parse_file=pawls_parse_file,
-                        txt_extract_file=txt_extract_file,
-                        structural_annotation_set=structural_set,
-                        backend_lock=True,
-                        creator=user_obj,
-                        page_count=doc_data["page_count"],
-                    )
-
-                    # Set PDF hash - use structural set content_hash if available,
-                    # otherwise calculate from PDF content
-                    if not doc_obj.pdf_file_hash:
-                        if structural_set:
-                            # Use structural set's content hash as document hash
-                            doc_obj.pdf_file_hash = structural_set.content_hash
-                        else:
-                            # Calculate from PDF content
-                            doc_obj.pdf_file.open("rb")
-                            pdf_content = doc_obj.pdf_file.read()
-                            doc_obj.pdf_file_hash = hashlib.md5(pdf_content).hexdigest()
-                            doc_obj.pdf_file.close()
-                        doc_obj.save()
-
-                    set_permissions_for_obj_to_user(
-                        user_obj, doc_obj, [PermissionTypes.ALL]
-                    )
-
-                    # Track for DocumentPath import
-                    doc_ref = doc_obj.pdf_file_hash or str(doc_obj.id)
-                    document_map[doc_ref] = doc_obj
-
-                    # Import doc-level annotations
-                    for doc_label_name in doc_data.get("doc_labels", []):
-                        label_obj = doc_label_lookup.get(doc_label_name)
-                        if label_obj:
-                            Annotation.objects.create(
-                                annotation_label=label_obj,
-                                document=doc_obj,
-                                corpus=corpus_obj,
-                                creator=user_obj,
-                            )
-
-                    # Import text annotations
-                    for annot_data in doc_data.get("labelled_text", []):
-                        label_text = label_lookup.get(
-                            str(annot_data.get("annotationLabel", ""))
-                        )
-                        if not label_text:
-                            continue
-
-                        old_id = annot_data.get("id")
-
-                        annot = Annotation.objects.create(
-                            annotation_label=label_text,
-                            document=doc_obj,
-                            corpus=corpus_obj,
-                            raw_text=annot_data.get("rawText", ""),
-                            page=annot_data.get("page", 0),
-                            json=annot_data.get("annotation_json", {}),
-                            annotation_type=annot_data.get("annotation_type", ""),
-                            structural=annot_data.get("structural", False),
-                            creator=user_obj,
-                        )
-
-                        if old_id:
-                            annot_id_map[str(old_id)] = annot.id
-
-                    doc_obj.backend_lock = False
-                    doc_obj.save()
-
-            except Exception as e:
-                logger.error(f"Error importing document {doc_filename}: {e}")
-
-        # ===== PART 5: Import Folders =====
-        folders_data = data_json.get("folders", [])
-        folder_map = import_corpus_folders(folders_data, corpus_obj, user_obj)
-
-        # ===== PART 6: Import DocumentPaths =====
-        paths_data = data_json.get("document_paths", [])
-        import_document_paths(
-            paths_data, corpus_obj, document_map, folder_map, user_obj
-        )
-
-        # ===== PART 7: Import Relationships =====
-        relationships_data = data_json.get("relationships", [])
-        import_relationships(
-            relationships_data,
-            corpus_obj,
-            document_map,
-            annot_id_map,
-            label_lookup,
-            user_obj,
-        )
-
-        # ===== PART 8: Import Agent Config =====
-        agent_config = data_json.get("agent_config", {})
-        if agent_config:
-            import_agent_config(agent_config, corpus_obj)
-
-        # ===== PART 9: Import Markdown Description =====
-        md_description = data_json.get("md_description")
-        md_revisions = data_json.get("md_description_revisions", [])
-        if md_description or md_revisions:
-            import_md_description_revisions(
-                md_description, md_revisions, corpus_obj, user_obj
+            corpus_doc, annot_id_map = _import_document_with_annotations(
+                doc_filename=doc_filename,
+                doc_data=doc_data,
+                import_zip=import_zip,
+                user_obj=user_obj,
+                corpus_obj=corpus_obj,
+                label_lookup=label_lookup,
+                doc_label_lookup=doc_label_lookup,
+                structural_sets=structural_sets if is_v2 else None,
             )
 
-        # ===== PART 10: Import Conversations (if present) =====
-        if "conversations" in data_json:
-            conversations = data_json.get("conversations", [])
-            messages = data_json.get("messages", [])
-            votes = data_json.get("message_votes", [])
-            import_conversations(conversations, messages, votes, corpus_obj, user_obj)
+            if corpus_doc:
+                all_annot_id_maps.update(annot_id_map)
 
-        logger.info(f"V2 import completed successfully for corpus {corpus_obj.id}")
+        # ===== V2 only: Import additional features =====
+        if is_v2:
+            # Import folders
+            folders_data = data_json.get("folders", [])
+            import_corpus_folders(folders_data, corpus_obj, user_obj)
+
+            # Import relationships (corpus-level, non-structural)
+            relationships_data = data_json.get("relationships", [])
+            if relationships_data:
+                _import_v2_relationships(
+                    relationships_data,
+                    corpus_obj,
+                    all_annot_id_maps,
+                    label_lookup,
+                    user_obj,
+                )
+
+            # Import agent config
+            agent_config = data_json.get("agent_config", {})
+            if agent_config:
+                import_agent_config(agent_config, corpus_obj)
+
+            # Import markdown description
+            md_description = data_json.get("md_description")
+            md_revisions = data_json.get("md_description_revisions", [])
+            if md_description or md_revisions:
+                import_md_description_revisions(
+                    md_description, md_revisions, corpus_obj, user_obj
+                )
+
+            # Import conversations (if present)
+            if "conversations" in data_json:
+                conversations = data_json.get("conversations", [])
+                messages = data_json.get("messages", [])
+                votes = data_json.get("message_votes", [])
+                import_conversations(
+                    conversations, messages, votes, corpus_obj, user_obj
+                )
+
+        logger.info(f"Import completed successfully for corpus {corpus_obj.id}")
         return corpus_obj.id
 
     except Exception as e:
-        logger.error(f"V2 import failed: {e}", exc_info=True)
+        logger.error(f"Import failed: {e}", exc_info=True)
         return None
+
+
+def _import_v2_relationships(
+    relationships_data: list[dict],
+    corpus_obj,
+    annot_id_map: dict,
+    label_lookup: dict,
+    user_obj,
+) -> None:
+    """
+    Import V2 corpus-level relationships, skipping structural ones (handled
+    by structural annotation sets).
+
+    Infers the document from the first source annotation for each relationship.
+    """
+    for rel_data in relationships_data:
+        # Skip structural relationships (handled by structural sets)
+        if rel_data.get("structural"):
+            continue
+
+        label_text = rel_data.get("relationshipLabel", "")
+        label_obj = label_lookup.get(label_text)
+        if not label_obj:
+            logger.warning(f"Relationship label '{label_text}' not found")
+            continue
+
+        # Map annotation IDs
+        source_ids = [
+            annot_id_map.get(str(old_id))
+            for old_id in rel_data.get("source_annotation_ids", [])
+            if str(old_id) in annot_id_map
+        ]
+        target_ids = [
+            annot_id_map.get(str(old_id))
+            for old_id in rel_data.get("target_annotation_ids", [])
+            if str(old_id) in annot_id_map
+        ]
+
+        if source_ids and target_ids:
+            # Get document from first source annotation
+            first_source_annot = Annotation.objects.get(id=source_ids[0])
+            document = first_source_annot.document
+
+            rel = Relationship.objects.create(
+                corpus=corpus_obj,
+                document=document,
+                relationship_label=label_obj,
+                structural=False,
+                creator=user_obj,
+            )
+            rel.source_annotations.set(source_ids)
+            rel.target_annotations.set(target_ids)
+            set_permissions_for_obj_to_user(user_obj, rel, [PermissionTypes.ALL])

@@ -11,17 +11,12 @@ This approach is:
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.db.models.signals import post_save
 from django.test import TransactionTestCase
 from pydantic_ai.models.test import TestModel
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
-from opencontractserver.documents.signals import (
-    DOC_CREATE_UID,
-    process_doc_on_create_atomic,
-)
 from opencontractserver.llms.agents.core_agents import AgentConfig
 from opencontractserver.llms.agents.pydantic_ai_agents import (
     PydanticAICorpusAgent,
@@ -39,21 +34,8 @@ def constant_vector(dimension: int = 384, value: float = 0.5) -> list[float]:
 class TestPydanticAIAgentsWithTestModel(TransactionTestCase):
     """Integration tests using TestModel instead of VCR cassettes."""
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        """Disconnect document processing signals to avoid Celery tasks during setup."""
-        super().setUpClass()
-        post_save.disconnect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        """Reconnect document processing signals after tests complete."""
-        post_save.connect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
-        super().tearDownClass()
+    # Note: Signal management is handled globally by conftest.py fixture
+    # `disable_document_processing_signals` - no need to disconnect/reconnect here.
 
     def setUp(self) -> None:
         """Create test data for each integration test."""
@@ -394,9 +376,27 @@ class TestPydanticAIAgentsWithTestModel(TransactionTestCase):
         - SourceEvent is emitted with sources
 
         TestModel executes tools, so we can test the search functionality.
+        Only call read-only tools to avoid ToolConfirmationRequired from
+        approval-gated tools (e.g. update_document_description) which would
+        abort the stream with ApprovalNeededEvent instead of FinalEvent.
         """
+        safe_document_tools = [
+            "similarity_search",
+            "load_document_summary",
+            "get_summary_token_length",
+            "get_document_text_length",
+            "load_document_text",
+            "search_exact_text",
+            "get_document_description",
+            "get_document_notes",
+            "search_document_notes",
+            "get_document_summary",
+            "get_document_summary_versions",
+            "get_document_summary_diff",
+        ]
         test_model = TestModel(
-            custom_output_text="Found the text 'Party A agrees to pay' in the document on page 1."
+            call_tools=safe_document_tools,
+            custom_output_text="Found the text 'Party A agrees to pay' in the document on page 1.",
         )
 
         config = AgentConfig(

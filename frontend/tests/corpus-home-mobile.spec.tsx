@@ -27,8 +27,12 @@ const mockCorpus = {
 const mockStats = {
   totalDocs: 10,
   totalAnnotations: 25,
+  totalComments: 0,
   totalAnalyses: 5,
   totalExtracts: 8,
+  totalThreads: 0,
+  totalChats: 0,
+  totalRelationships: 0,
 };
 
 const mocks = [

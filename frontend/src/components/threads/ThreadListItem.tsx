@@ -4,7 +4,14 @@ import { useNavigate } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import { Eye, MessageCircle } from "lucide-react";
 import { ConversationType } from "../../types/graphql-api";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
 import { ThreadBadge } from "./ThreadBadge";
 import {
   DiscussionTypeBadge,
@@ -31,47 +38,47 @@ const ThreadCard = styled.div<{
   $isDeleted?: boolean;
   $isSelected?: boolean;
 }>`
-  background: ${color.N1};
-  border: 1px solid ${color.N4};
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 24px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   display: flex;
-  gap: 1rem;
+  gap: 16px;
   position: relative;
 
   ${(props) =>
     props.$isSelected &&
     `
-    border-left: 4px solid ${color.G6};
-    background: ${color.G1};
+    border-left: 4px solid #0f766e;
+    background: #f0fdfa;
   `}
 
   ${(props) =>
     props.$isPinned &&
     !props.$isSelected &&
     `
-    border-left: 4px solid ${color.B5};
-    background: ${color.B1};
+    border-left: 4px solid #14b8a6;
+    background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
   `}
 
   ${(props) =>
     props.$isDeleted &&
     `
     opacity: 0.6;
-    background: ${color.N3};
+    background: #f8fafc;
   `}
 
   &:hover {
-    border-color: ${color.G6};
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
   }
 
-  @media (max-width: 640px) {
-    padding: 0.875rem;
-    gap: 0.75rem;
+  ${mediaQuery.mobile} {
+    padding: 16px;
+    gap: 12px;
   }
 `;
 
@@ -79,12 +86,12 @@ const VoteSection = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 40px;
-  padding-top: 4px;
+  gap: 0;
+  min-width: 2.5rem;
+  padding-top: 0.25rem;
 
-  @media (max-width: 640px) {
-    min-width: 32px;
+  ${mediaQuery.mobile} {
+    min-width: 2rem;
   }
 `;
 
@@ -107,52 +114,56 @@ const HeaderRow = styled.div`
 const BadgeGroup = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   flex-wrap: wrap;
 `;
 
 const TagChip = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  background: ${color.N3};
-  border-radius: 4px;
-  font-size: 11px;
+  padding: 0.125rem 0.5rem;
+  background: ${CORPUS_COLORS.slate[100]};
+  border-radius: ${CORPUS_RADII.full};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.6875rem;
   font-weight: 500;
-  color: ${color.N7};
+  color: ${CORPUS_COLORS.slate[600]};
 `;
 
 const Timestamp = styled.span`
-  font-size: 12px;
-  color: ${color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[400]};
   white-space: nowrap;
   flex-shrink: 0;
 `;
 
 const ThreadTitle = styled.h3`
-  font-size: 16px;
-  font-weight: 600;
-  color: ${color.N10};
+  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: #1e293b;
   margin: 0;
   line-height: 1.4;
 
-  @media (max-width: 640px) {
-    font-size: 15px;
+  ${mediaQuery.mobile} {
+    font-size: 18px;
   }
 `;
 
 const ThreadDescription = styled.p`
-  font-size: 14px;
-  color: ${color.N7};
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 15px;
+  color: #475569;
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 
-  @media (max-width: 640px) {
-    font-size: 13px;
+  ${mediaQuery.mobile} {
+    font-size: 14px;
     -webkit-line-clamp: 1;
   }
 `;
@@ -165,7 +176,7 @@ const FooterRow = styled.div`
   margin-top: 0.25rem;
   flex-wrap: wrap;
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     gap: 0.5rem;
   }
 `;
@@ -177,22 +188,27 @@ const AuthorSection = styled.div`
 `;
 
 const AuthorAvatar = styled.div`
-  width: 28px;
-  height: 28px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, ${color.G5} 0%, ${color.G7} 100%);
+  background: linear-gradient(
+    135deg,
+    ${CORPUS_COLORS.teal[600]} 0%,
+    ${CORPUS_COLORS.teal[700]} 100%
+  );
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
   font-weight: 600;
-  font-size: 11px;
+  font-size: 0.625rem;
   flex-shrink: 0;
 
-  @media (max-width: 640px) {
-    width: 24px;
-    height: 24px;
-    font-size: 10px;
+  ${mediaQuery.mobile} {
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 0.5625rem;
   }
 `;
 
@@ -204,21 +220,23 @@ const AuthorInfo = styled.div`
 `;
 
 const AuthorName = styled.span`
-  font-size: 13px;
-  font-weight: 500;
-  color: ${color.N9};
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
 
-  @media (max-width: 640px) {
-    font-size: 12px;
+  ${mediaQuery.mobile} {
+    font-size: 13px;
   }
 `;
 
 const AuthorTime = styled.span`
-  font-size: 12px;
-  color: ${color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[400]};
 
-  @media (max-width: 640px) {
-    font-size: 11px;
+  ${mediaQuery.mobile} {
+    font-size: 0.6875rem;
   }
 `;
 
@@ -227,7 +245,7 @@ const StatsSection = styled.div`
   align-items: center;
   gap: 1rem;
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     gap: 0.75rem;
   }
 `;
@@ -235,21 +253,23 @@ const StatsSection = styled.div`
 const StatItem = styled.span`
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: ${color.N6};
+  gap: 0.25rem;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[500]};
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
+    color: ${CORPUS_COLORS.slate[400]};
   }
 
-  @media (max-width: 640px) {
-    font-size: 12px;
+  ${mediaQuery.mobile} {
+    font-size: 0.75rem;
 
     svg {
-      width: 12px;
-      height: 12px;
+      width: 0.75rem;
+      height: 0.75rem;
     }
   }
 `;
@@ -260,33 +280,35 @@ const ParticipantAvatars = styled.div`
 `;
 
 const ParticipantAvatar = styled.div<{ $index: number }>`
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   border-radius: 50%;
-  background: ${color.N5};
-  border: 2px solid ${color.N1};
+  background: ${CORPUS_COLORS.teal[100]};
+  border: 2px solid ${CORPUS_COLORS.white};
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.5625rem;
   font-weight: 600;
-  color: ${color.N8};
-  margin-left: ${(props) => (props.$index > 0 ? "-8px" : "0")};
+  color: ${CORPUS_COLORS.teal[700]};
+  margin-left: ${(props) => (props.$index > 0 ? "-0.5rem" : "0")};
   position: relative;
   z-index: ${(props) => 10 - props.$index};
 
-  @media (max-width: 640px) {
-    width: 20px;
-    height: 20px;
-    font-size: 8px;
-    margin-left: ${(props) => (props.$index > 0 ? "-6px" : "0")};
+  ${mediaQuery.mobile} {
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 0.5rem;
+    margin-left: ${(props) => (props.$index > 0 ? "-0.375rem" : "0")};
   }
 `;
 
 const MoreParticipants = styled.span`
-  font-size: 11px;
-  color: ${color.N6};
-  margin-left: 4px;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.6875rem;
+  color: ${CORPUS_COLORS.slate[500]};
+  margin-left: 0.25rem;
 `;
 
 /**

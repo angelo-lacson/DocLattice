@@ -10,6 +10,49 @@ from opencontractserver.llms.types import AgentFramework
 logger = logging.getLogger(__name__)
 
 
+def build_inject_params_for_context(
+    tool: "CoreTool",
+    document_id: int | None = None,
+    corpus_id: int | None = None,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Inspect a CoreTool's function signature and build inject_params dict
+    for context-bound parameters that should be hidden from the LLM.
+
+    This function examines a tool's function signature and determines which
+    parameters should be automatically injected from context rather than
+    being provided by the LLM. This prevents the LLM from hallucinating
+    incorrect document_id, corpus_id, or user_id values.
+
+    Args:
+        tool: The CoreTool to inspect
+        document_id: Document ID to inject if the tool accepts it
+        corpus_id: Corpus ID to inject if the tool accepts it
+        user_id: User ID to inject for author_id/creator_id params
+
+    Returns:
+        Dictionary mapping parameter names to values to inject
+    """
+    sig = inspect.signature(tool.function)
+    inject: dict[str, Any] = {}
+
+    for param_name in sig.parameters:
+        if param_name == "document_id" and document_id is not None:
+            inject["document_id"] = document_id
+        elif param_name == "corpus_id" and corpus_id is not None:
+            inject["corpus_id"] = corpus_id
+        elif param_name in ("author_id", "creator_id") and user_id is not None:
+            inject[param_name] = user_id
+
+    if inject:
+        logger.debug(
+            f"Built inject_params for tool '{tool.name}': {list(inject.keys())}"
+        )
+
+    return inject
+
+
 @dataclass
 class ToolMetadata:
     """Metadata for a tool function."""
@@ -139,12 +182,18 @@ class UnifiedToolFactory:
     """Factory that creates tools using different frameworks with a common interface."""
 
     @staticmethod
-    def create_tool(tool: CoreTool, framework: AgentFramework) -> Any:
+    def create_tool(
+        tool: CoreTool,
+        framework: AgentFramework,
+        inject_params: dict[str, Any] | None = None,
+    ) -> Any:
         """Create a framework-specific tool from a CoreTool.
 
         Args:
             tool: CoreTool instance
             framework: Target framework
+            inject_params: Optional dict of params to inject at execution time,
+                          hiding them from the LLM's view of the tool schema
 
         Returns:
             Framework-specific tool instance
@@ -154,7 +203,7 @@ class UnifiedToolFactory:
                 PydanticAIToolFactory,
             )
 
-            return PydanticAIToolFactory.create_tool(tool)
+            return PydanticAIToolFactory.create_tool(tool, inject_params=inject_params)
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
@@ -283,6 +332,11 @@ def create_document_tools() -> list[CoreTool]:
         get_partial_note_content,
         load_document_md_summary,
     )
+    from opencontractserver.llms.tools.image_tools import (
+        aget_annotation_images,
+        aget_document_image,
+        alist_document_images,
+    )
 
     return [
         CoreTool.from_function(
@@ -318,6 +372,29 @@ def create_document_tools() -> list[CoreTool]:
                 "Get a visual image of a specific page from a PDF document. "
                 "Useful for inspecting diagrams, tables, images, and other "
                 "visual content that may not be captured in text."
+            ),
+        ),
+        # Image tools for accessing embedded/extracted images
+        CoreTool.from_function(
+            alist_document_images,
+            description=(
+                "List all images in a document. Returns metadata (position, size, format) "
+                "without the actual image data. Use get_document_image to retrieve specific images."
+            ),
+        ),
+        CoreTool.from_function(
+            aget_document_image,
+            description=(
+                "Get image data (base64) for a specific image in a document. "
+                "Returns data URL suitable for LLM vision input. Use list_document_images first "
+                "to find available images by page and index."
+            ),
+        ),
+        CoreTool.from_function(
+            aget_annotation_images,
+            description=(
+                "Get all images referenced by an annotation. Use for figure, chart, or image "
+                "annotations that have embedded or referenced images in their bounds."
             ),
         ),
     ]

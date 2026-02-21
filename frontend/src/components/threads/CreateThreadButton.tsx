@@ -4,33 +4,55 @@ import { Plus, MessageSquarePlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import { CreateThreadForm } from "./CreateThreadForm";
-import { color } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
-import { openedCorpus } from "../../graphql/cache";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
+import { authToken, openedCorpus } from "../../graphql/cache";
 import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
 const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
   display: flex;
   align-items: center;
-  gap: ${spacing.xs};
-  padding: ${spacing.xs} ${spacing.md};
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
   border: ${(props) =>
-    props.$variant === "primary" ? "none" : `1px solid ${color.B5}`};
-  border-radius: 6px;
+    props.$variant === "primary"
+      ? "none"
+      : `1px solid ${CORPUS_COLORS.teal[500]}`};
+  border-radius: ${CORPUS_RADII.md};
   background: ${(props) =>
-    props.$variant === "primary" ? color.B5 : "transparent"};
-  color: ${(props) => (props.$variant === "primary" ? color.N1 : color.B7)};
-  font-size: 14px;
+    props.$variant === "primary"
+      ? `linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[700]} 100%)`
+      : "transparent"};
+  color: ${(props) =>
+    props.$variant === "primary"
+      ? CORPUS_COLORS.white
+      : CORPUS_COLORS.teal[700]};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.normal};
+  box-shadow: ${(props) =>
+    props.$variant === "primary"
+      ? "0 4px 12px rgba(15, 118, 110, 0.35)"
+      : "none"};
 
   &:hover {
     background: ${(props) =>
-      props.$variant === "primary" ? color.B6 : color.B1};
-    transform: translateY(-1px);
+      props.$variant === "primary"
+        ? `linear-gradient(135deg, ${CORPUS_COLORS.teal[500]} 0%, ${CORPUS_COLORS.teal[600]} 100%)`
+        : CORPUS_COLORS.teal[50]};
+    transform: translateY(-2px);
     box-shadow: ${(props) =>
-      props.$variant === "primary" ? "0 2px 8px rgba(0, 0, 0, 0.15)" : "none"};
+      props.$variant === "primary"
+        ? "0 6px 20px rgba(15, 118, 110, 0.45)"
+        : "none"};
   }
 
   &:active {
@@ -44,33 +66,36 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
   }
 `;
 
 const FloatingActionButton = styled.button`
   position: fixed;
-  bottom: ${spacing.xl};
-  right: ${spacing.xl};
-  width: 56px;
-  height: 56px;
+  bottom: 2rem;
+  right: 2rem;
+  width: 3.5rem;
+  height: 3.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 50%;
-  background: ${color.B5};
-  color: ${color.N1};
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-radius: ${CORPUS_RADII.xl};
+  background: linear-gradient(
+    135deg,
+    ${CORPUS_COLORS.teal[600]} 0%,
+    ${CORPUS_COLORS.teal[700]} 100%
+  );
+  color: ${CORPUS_COLORS.white};
+  box-shadow: 0 8px 24px rgba(15, 118, 110, 0.4);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all ${CORPUS_TRANSITIONS.normal};
   z-index: 50;
 
   &:hover {
-    background: ${color.B6};
     transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 12px 32px rgba(15, 118, 110, 0.5);
   }
 
   &:active {
@@ -78,19 +103,19 @@ const FloatingActionButton = styled.button`
   }
 
   svg {
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
   }
 
-  @media (max-width: 640px) {
-    bottom: ${spacing.lg};
-    right: ${spacing.lg};
-    width: 48px;
-    height: 48px;
+  ${mediaQuery.mobile} {
+    bottom: 1rem;
+    right: 1rem;
+    width: 3rem;
+    height: 3rem;
 
     svg {
-      width: 20px;
-      height: 20px;
+      width: 1.25rem;
+      height: 1.25rem;
     }
   }
 `;
@@ -136,6 +161,13 @@ export function CreateThreadButton({
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
   const corpus = useReactiveVar(openedCorpus);
+  const token = useReactiveVar(authToken);
+
+  // Anonymous users cannot create threads (requires authentication)
+  const isAuthenticated = Boolean(token);
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const handleSuccess = (conversationId: string) => {
     setShowModal(false);

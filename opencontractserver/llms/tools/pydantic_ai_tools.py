@@ -44,7 +44,7 @@ async def _check_user_permissions(
     Raises:
         PermissionError: If user lacks READ permission on document or corpus
     """
-    from channels.db import database_sync_to_async
+    from asgiref.sync import sync_to_async
 
     deps = ctx.deps
     if deps is None:
@@ -59,8 +59,6 @@ async def _check_user_permissions(
 
     from opencontractserver.corpuses.models import Corpus
     from opencontractserver.documents.models import Document
-    from opencontractserver.types.enums import PermissionTypes
-    from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
     User = get_user_model()
 
@@ -97,36 +95,85 @@ async def _check_user_permissions(
         raise PermissionError(f"User {user_id} not found")
 
     if document_id:
-        try:
-            doc = await Document.objects.aget(pk=document_id)
-            has_perm = await database_sync_to_async(user_has_permission_for_obj)(
-                user, doc, PermissionTypes.READ
+        # Use visible_to_user() queryset which properly handles creator access,
+        # public status, and guardian permissions — unlike user_has_permission_for_obj
+        # which misses creator-based access (see its docstring warning).
+        # Use Django's native aexists() to avoid thread-hopping via
+        # database_sync_to_async, which breaks under TestCase transaction isolation.
+        has_perm = await sync_to_async(
+            lambda: Document.objects.visible_to_user(user)
+            .filter(pk=document_id)
+            .exists()
+        )()
+        if not has_perm:
+            logger.warning(
+                f"User {user_id} tool access denied - lacks READ on document {document_id}"
             )
-            if not has_perm:
-                logger.warning(
-                    f"User {user_id} tool access denied - lacks READ on document {document_id}"
-                )
-                raise PermissionError(
-                    f"User {user_id} lacks READ permission on document {document_id}"
-                )
-        except Document.DoesNotExist:
-            raise PermissionError(f"Document {document_id} not found")
+            raise PermissionError(
+                f"User {user_id} lacks READ permission on document {document_id}"
+            )
 
     if corpus_id:
-        try:
-            corpus = await Corpus.objects.aget(pk=corpus_id)
-            has_perm = await database_sync_to_async(user_has_permission_for_obj)(
-                user, corpus, PermissionTypes.READ
+        has_perm = await sync_to_async(
+            lambda: Corpus.objects.visible_to_user(user).filter(pk=corpus_id).exists()
+        )()
+        if not has_perm:
+            logger.warning(
+                f"User {user_id} tool access denied - lacks READ on corpus {corpus_id}"
             )
-            if not has_perm:
-                logger.warning(
-                    f"User {user_id} tool access denied - lacks READ on corpus {corpus_id}"
-                )
-                raise PermissionError(
-                    f"User {user_id} lacks READ permission on corpus {corpus_id}"
-                )
-        except Corpus.DoesNotExist:
-            raise PermissionError(f"Corpus {corpus_id} not found")
+            raise PermissionError(
+                f"User {user_id} lacks READ permission on corpus {corpus_id}"
+            )
+
+
+def _validate_resource_id_params(
+    ctx: "RunContext[PydanticAIDependencies]",
+    **kwargs,
+) -> None:
+    """
+    Validate that any document_id or corpus_id parameters match the context.
+
+    This is a defense-in-depth check that prevents tools from being called
+    with different resource IDs than what the agent has permission for.
+    The LLM could potentially be prompted to access a different document
+    via prompt injection; this check prevents such escalation.
+
+    Args:
+        ctx: The RunContext containing PydanticAIDependencies
+        **kwargs: Tool keyword arguments to validate
+
+    Raises:
+        PermissionError: If document_id or corpus_id params don't match context
+    """
+    deps = ctx.deps
+    if deps is None:
+        return
+
+    # Check document_id parameter
+    param_doc_id = kwargs.get("document_id")
+    if param_doc_id is not None and deps.document_id is not None:
+        if int(param_doc_id) != int(deps.document_id):
+            logger.warning(
+                f"Tool called with document_id={param_doc_id} but context has "
+                f"document_id={deps.document_id} - potential permission bypass attempt"
+            )
+            raise PermissionError(
+                f"document_id parameter ({param_doc_id}) does not match "
+                f"context document ({deps.document_id})"
+            )
+
+    # Check corpus_id parameter
+    param_corpus_id = kwargs.get("corpus_id")
+    if param_corpus_id is not None and deps.corpus_id is not None:
+        if int(param_corpus_id) != int(deps.corpus_id):
+            logger.warning(
+                f"Tool called with corpus_id={param_corpus_id} but context has "
+                f"corpus_id={deps.corpus_id} - potential permission bypass attempt"
+            )
+            raise PermissionError(
+                f"corpus_id parameter ({param_corpus_id}) does not match "
+                f"context corpus ({deps.corpus_id})"
+            )
 
 
 class PydanticAIToolMetadata(BaseModel):
@@ -173,13 +220,24 @@ class PydanticAIDependencies(BaseModel):
 class PydanticAIToolWrapper:
     """Modern Pydantic AI tool wrapper following latest patterns."""
 
-    def __init__(self, core_tool: CoreTool):
+    def __init__(
+        self,
+        core_tool: CoreTool,
+        inject_params: dict[str, Any] | None = None,
+    ):
         """Initialize the wrapper.
 
         Args:
             core_tool: The CoreTool instance to wrap
+            inject_params: Parameters to automatically inject at execution time,
+                hiding them from the LLM's view of the tool schema. This is used
+                for context-bound values like document_id or corpus_id that should
+                be deterministic (set by the system) rather than chosen by the LLM.
+                Maps parameter name -> value to inject.
+                Example: {"document_id": 123, "corpus_id": 456}
         """
         self.core_tool = core_tool
+        self.inject_params = inject_params or {}
         self._metadata = PydanticAIToolMetadata(
             name=core_tool.name,
             description=core_tool.description,
@@ -221,12 +279,17 @@ class PydanticAIToolWrapper:
             )
         ]
 
-        # Add original parameters (excluding 'self' if present)
+        # Add original parameters, EXCLUDING:
+        # - 'self'/'cls' (method artifacts)
+        # - Parameters in inject_params (hidden from LLM, auto-injected at runtime)
         for param_name, param in sig.parameters.items():
-            if param_name not in ["self", "cls"]:
+            if (
+                param_name not in ["self", "cls"]
+                and param_name not in self.inject_params
+            ):
                 new_params.append(param)
 
-        # Create new signature
+        # Create new signature (LLM will only see non-injected params)
         new_sig = sig.replace(parameters=new_params)
 
         # ------------------------------------------------------------------
@@ -278,18 +341,39 @@ class PydanticAIToolWrapper:
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
             ):
                 """Async wrapper for PydanticAI tools."""
+                # Inject context-bound parameters before any other processing.
+                # These params are hidden from the LLM and set deterministically.
+                for param_name, value in self.inject_params.items():
+                    kwargs[param_name] = value
+
                 # Defense-in-depth: validate user permissions BEFORE any tool execution
                 # This prevents permission escalation via agents
                 await _check_user_permissions(ctx)
+
+                # Defense-in-depth: validate resource ID params match context
+                # This prevents prompt injection attacks that try to access other resources
+                # (Also validates injected params match deps as additional safety check)
+                _validate_resource_id_params(ctx, **kwargs)
 
                 # Trigger approval gate *before* attempting execution.
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
                     return await original_func(*args, **kwargs)
-                except Exception as e:
-                    logger.error(f"Error in tool {func_name}: {e}")
+                except (PermissionError, ToolConfirmationRequired):
+                    # Security and approval exceptions must propagate to the
+                    # agent loop so they can be handled at the framework level.
                     raise
+                except Exception as e:
+                    # Operational errors (bad input, missing data, network
+                    # failures, etc.) are caught and returned as a descriptive
+                    # string so the LLM can inform the user gracefully instead
+                    # of crashing the entire agent loop.  See issue #820.
+                    logger.error(f"Error in tool {func_name}: {e}")
+                    return (
+                        f"[Tool error] {func_name} failed: {e}. "
+                        "Please inform the user and suggest alternatives."
+                    )
 
             # Set proper metadata
             async_wrapper.__name__ = func_name
@@ -307,40 +391,45 @@ class PydanticAIToolWrapper:
             async_wrapper.requires_approval = self.core_tool.requires_approval
             return async_wrapper
         else:
-            # Convert sync function to async
+            # Sync tools are called directly (no thread pool).  All
+            # production tools are async; this path exists only for
+            # lightweight helpers and tests.  If a sync tool touches
+            # Django ORM it will raise SynchronousOnlyOperation — the
+            # fix is to make the tool async, not to paper over it.
 
-            async def sync_to_async_wrapper(
+            async def sync_wrapper(
                 ctx: RunContext[PydanticAIDependencies], *args, **kwargs
             ):
-                """Sync to async wrapper for PydanticAI tools."""
-                # Defense-in-depth: validate user permissions BEFORE any tool execution
-                # This prevents permission escalation via agents
-                await _check_user_permissions(ctx)
+                """Wrapper that calls a sync tool from an async context."""
+                for param_name, value in self.inject_params.items():
+                    kwargs[param_name] = value
 
+                await _check_user_permissions(ctx)
+                _validate_resource_id_params(ctx, **kwargs)
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
                     return original_func(*args, **kwargs)
+                except (PermissionError, ToolConfirmationRequired):
+                    raise
                 except Exception as e:
                     logger.error(f"Error in tool {func_name}: {e}")
-                    raise
+                    return (
+                        f"[Tool error] {func_name} failed: {e}. "
+                        "Please inform the user and suggest alternatives."
+                    )
 
-            # Set proper metadata
-            sync_to_async_wrapper.__name__ = func_name
-            sync_to_async_wrapper.__doc__ = (
-                original_func.__doc__ or self._metadata.description
-            )
-            sync_to_async_wrapper.__signature__ = new_sig
+            sync_wrapper.__name__ = func_name
+            sync_wrapper.__doc__ = original_func.__doc__ or self._metadata.description
+            sync_wrapper.__signature__ = new_sig
             _anns_sync = dict(getattr(original_func, "__annotations__", {}))
             _anns_sync.setdefault("ctx", RunContext[PydanticAIDependencies])
-            sync_to_async_wrapper.__annotations__ = _anns_sync
-            # Attach reference to the wrapper for approval checking
-            sync_to_async_wrapper._pydantic_ai_wrapper = self
-            sync_to_async_wrapper.core_tool = self.core_tool
-            # Attach requires_approval directly for easy access by _check_tool_requires_approval
-            sync_to_async_wrapper.requires_approval = self.core_tool.requires_approval
+            sync_wrapper.__annotations__ = _anns_sync
+            sync_wrapper._pydantic_ai_wrapper = self
+            sync_wrapper.core_tool = self.core_tool
+            sync_wrapper.requires_approval = self.core_tool.requires_approval
 
-            return sync_to_async_wrapper
+            return sync_wrapper
 
     @property
     def name(self) -> str:
@@ -394,16 +483,24 @@ class PydanticAIToolFactory:
         return [PydanticAIToolFactory.create_tool(tool) for tool in core_tools]
 
     @staticmethod
-    def create_tool(core_tool: CoreTool) -> Callable:
+    def create_tool(
+        core_tool: CoreTool,
+        inject_params: dict[str, Any] | None = None,
+    ) -> Callable:
         """Convert a single CoreTool to a modern Pydantic AI callable tool.
 
         Args:
             core_tool: CoreTool instance
+            inject_params: Parameters to auto-inject at execution time, hiding them
+                from the LLM. Used for context-bound values like document_id.
+                Example: {"document_id": 123}
 
         Returns:
             PydanticAI-compatible callable function
         """
-        return PydanticAIToolWrapper(core_tool).callable_function
+        return PydanticAIToolWrapper(
+            core_tool, inject_params=inject_params
+        ).callable_function
 
     @staticmethod
     def from_function(
@@ -415,6 +512,7 @@ class PydanticAIToolFactory:
         requires_approval: bool = False,
         requires_corpus: bool = False,
         requires_write_permission: bool = False,
+        inject_params: dict[str, Any] | None = None,
     ) -> Callable:
         """Create a PydanticAI-compatible callable tool directly from a Python function.
 
@@ -426,6 +524,10 @@ class PydanticAIToolFactory:
             requires_approval: Whether the tool requires approval
             requires_corpus: Whether the tool requires a corpus_id to function
             requires_write_permission: Whether the tool performs write operations
+            inject_params: Parameters to auto-inject at execution time, hiding them
+                from the LLM. Used for context-bound values like document_id that
+                should be deterministic. Maps param name -> value to inject.
+                Example: {"document_id": 123}
 
         Returns:
             PydanticAI-compatible callable function
@@ -439,7 +541,9 @@ class PydanticAIToolFactory:
             requires_corpus=requires_corpus,
             requires_write_permission=requires_write_permission,
         )
-        return PydanticAIToolWrapper(core_tool).callable_function
+        return PydanticAIToolWrapper(
+            core_tool, inject_params=inject_params
+        ).callable_function
 
     @staticmethod
     def create_tool_registry(core_tools: list[CoreTool]) -> dict[str, Callable]:

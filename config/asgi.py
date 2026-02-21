@@ -53,15 +53,17 @@ def create_http_router(django_app, mcp_app):
     Create an HTTP router that dispatches to MCP or Django based on path.
 
     Routes MCP endpoints to the MCP ASGI app, everything else to Django.
-    The MCP server supports two transports:
+    The MCP server supports multiple transports:
     - Streamable HTTP at /mcp (recommended, stateless mode)
+    - Corpus-scoped HTTP at /mcp/corpus/{slug}/ (scoped to single corpus)
     - SSE at /sse (deprecated, for backward compatibility)
     """
 
     async def router(scope, receive, send):
         path = scope.get("path", "")
-        # Match MCP Streamable HTTP endpoints: /mcp or /mcp/*
-        # Match MCP SSE endpoints: /sse or /sse/*
+        # Match MCP endpoints:
+        # - /mcp or /mcp/* (global and corpus-scoped)
+        # - /sse or /sse/* (deprecated SSE transport)
         if (
             path == "/mcp"
             or path.startswith("/mcp/")
@@ -113,20 +115,11 @@ websocket_urlpatterns = [
 for pattern in websocket_urlpatterns:
     logger.info(f"Registered WebSocket URL pattern: {pattern.pattern}")
 
-# Choose the appropriate middleware based on USE_AUTH0
-if settings.USE_AUTH0:
-    logger.info("USE_AUTH0 set to True, using WebsocketAuth0TokenMiddleware")
-    from config.websocket.middlewares.websocket_auth0_middleware import (
-        WebsocketAuth0TokenMiddleware,  # type: ignore
-    )
+# Unified JWT auth middleware - handles both Auth0 and non-Auth0 automatically
+# based on USE_AUTH0 setting via the shared jwt_utils module
+from config.websocket.middleware import JWTAuthMiddleware  # noqa: E402
 
-    websocket_auth_middleware = WebsocketAuth0TokenMiddleware
-else:
-    logger.info("USE_AUTH0 set to False, using GraphQLJWTTokenAuthMiddleware")
-    from config.websocket.middleware import GraphQLJWTTokenAuthMiddleware
-
-    websocket_auth_middleware = GraphQLJWTTokenAuthMiddleware
-
+logger.info(f"Using JWTAuthMiddleware (USE_AUTH0={settings.USE_AUTH0})")
 
 # Create the ASGI application with proper middleware order
 # 1. Protocol routing
@@ -137,7 +130,7 @@ application = ProtocolTypeRouter(
     {
         # Routes /mcp/* and /sse/* to MCP, rest to Django
         "http": http_application,
-        "websocket": websocket_auth_middleware(URLRouter(websocket_urlpatterns)),
+        "websocket": JWTAuthMiddleware(URLRouter(websocket_urlpatterns)),
     }
 )
 

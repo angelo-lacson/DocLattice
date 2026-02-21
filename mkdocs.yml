@@ -91,17 +91,12 @@ nav:
       - Frontend Requirements: metadata/metadata_frontend_requirements.md
   - Configuration:
       - Choose Docker Stack: configuration/choose-and-configure-docker-stack.md
-      - Configure Admin Users: configuration/configure-admin-users.md
-      - Authentication Backend: configuration/choose-an-authentication-backend.md
+      - Authentication: configuration/authentication.md
       - Frontend Configuration: configuration/frontend-configuration.md
-      - Add Users: configuration/add-users.md
       - Storage Backend: configuration/choose-storage-backend.md
   - Pipelines:
       - Pipeline Overview: pipelines/pipeline_overview.md
       - Docling Parser: pipelines/docling_parser.md
-  - Embedders:
-      - ModernBERT Embedder: embedders/modernbert_embedder.md
-      - MiniLM ModernBERT Embedder: embedders/minn_modernbert_embedder.md
   - Frontend:
       - Routing System: frontend/routing_system.md
       - Document Rendering: frontend/document_rendering_and_annotation.md

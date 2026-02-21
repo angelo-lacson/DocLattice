@@ -83,6 +83,15 @@ export interface Token {
   height: number;
   width: number;
   text: string;
+  // Image token fields (optional - only present for image tokens)
+  is_image?: boolean;
+  image_path?: string;
+  format?: string;
+  content_hash?: string;
+  original_width?: number;
+  original_height?: number;
+  image_type?: string;
+  token_index?: number;
 }
 
 export interface LabelSet {

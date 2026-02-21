@@ -1,10 +1,12 @@
 # OpenContracts LLM Framework
 
+Last Updated: 2026-01-09
+
 OpenContract's API for creating document and corpus agents.
 
 ## Philosophy
 
-- **Framework Agnostic**: Support multiple LLM frameworks (LlamaIndex, PydanticAI) through unified interfaces
+- **Extensible Framework Design**: Built on PydanticAI with a pluggable architecture for future framework adapters
 - **Rich Responses**: Every interaction returns structured data with sources, metadata, and conversation tracking
 - **Conversation Management**: Persistent conversations with automatic message storage and retrieval
 - **Tool Integration**: Extensible tool system for document analysis and data retrieval
@@ -80,7 +82,7 @@ def my_custom_function(text: str) -> str:
     """A simple custom tool."""
     return f"Processed: {text}"
 
-custom_tool = tools.create_from_function(
+custom_tool = tools.from_function(
     func=my_custom_function,
     name="MyCustomTool",
     description="A demonstration tool."
@@ -112,7 +114,7 @@ Agents are the primary interface for interacting with documents and corpora. The
 
 - **Document Agents**: Work with individual documents (corpus optional; pass None for standalone documents).
 - **Corpus Agents**: Work with collections of documents.
-- **Framework Flexibility**: Choose between LlamaIndex, PydanticAI, or future frameworks.
+- **Framework Flexibility**: Built on PydanticAI with extensible architecture for custom framework adapters.
 - **Conversation Persistence**: Automatic conversation management and message storage.
 - **Structured Data Extraction**: One-shot typed data extraction without conversation persistence.
 - **Nested Streaming**: Real-time visibility into child agent execution through stream observers.
@@ -127,7 +129,7 @@ from opencontractserver.llms.types import AgentFramework
 # corpus_obj = Corpus.objects.get(id=1) # Example corpus
 # document_obj = Document.objects.get(id=123) # Example document
 
-# Document agent with default framework (LlamaIndex)
+# Document agent with default framework (PydanticAI)
 # The `corpus` parameter is optional - can be None for standalone documents
 agent = await agents.for_document(document=123, corpus=1) # Use actual document/corpus IDs or objects
 
@@ -230,8 +232,8 @@ response.metadata             # Additional response metadata (framework-specific
 # Legacy (pre-v0.9) – UnifiedStreamResponse
 # ----------------------------------------
 #
-# Older adapters (e.g. LlamaIndex) still emit the former ``UnifiedStreamResponse``
-# object.  Your code can support both by simply checking ``hasattr(chunk, "type")``
+# Legacy code using ``UnifiedStreamResponse`` can be updated to use the new event-based
+# streaming. Your code can support both by simply checking ``hasattr(chunk, "type")``
 # and falling back to the old attributes when the discriminator is absent.
 
 # SourceNode structure (individual source)
@@ -325,7 +327,7 @@ if result:
   - Uses pydantic_ai's native capabilities to choose the best extraction method
   - Automatically selects between tool calling, JSON mode, or prompted extraction based on the model
   - Simplified system prompts for better reliability and efficiency
-- ⚠️ **LlamaIndex**: Returns `None` (not yet implemented)
+- Note: Custom framework adapters can implement `_structured_response_raw()` to support structured extraction
 
 **Best Practices:**
 
@@ -506,7 +508,7 @@ agent = await agents.for_document(document=123, corpus=1, tools=document_tools) 
 #### Custom Tools
 
 ```python
-from opencontractserver.llms.tools.tool_factory import CoreTool # Can also use opencontractserver.llms.tools.create_from_function
+from opencontractserver.llms.tools.tool_factory import CoreTool
 
 def analyze_contract_risk(contract_text: str) -> str:
     """Analyze contract risk factors."""
@@ -598,27 +600,17 @@ agent = await agents.for_document(
 
 #### Framework-Specific Tools
 
-The framework automatically converts tools to the appropriate format:
+The framework automatically converts tools to the appropriate format. `CoreTool` objects are converted to framework-specific wrappers via `UnifiedToolFactory.create_tool()` in [`tools/tool_factory.py`](../../../opencontractserver/llms/tools/tool_factory.py). For PydanticAI, this produces `PydanticAIToolWrapper` instances (see [`tools/pydantic_ai_tools.py`](../../../opencontractserver/llms/tools/pydantic_ai_tools.py)).
 
 ```python
-# LlamaIndex: CoreTool → FunctionTool
-# PydanticAI: CoreTool → PydanticAIToolWrapper
-
-# Tools work seamlessly across frameworks
-# The `corpus` parameter is optional for document agents.
-llama_agent = await agents.for_document(
-    document=123, # Use actual document ID or object
-    corpus=None,  # Or pass a corpus ID/object when available
-    framework=AgentFramework.LLAMA_INDEX,  # LLAMA_INDEX OOTB wrapper removed but example retained to show how you could switch
+# Tools work seamlessly with the framework
+agent = await agents.for_document(
+    document=123,
+    corpus=None,
+    framework=AgentFramework.PYDANTIC_AI,
     tools=["load_md_summary"]
 )
-
-pydantic_agent = await agents.for_document(
-    document=123, # Use actual document ID or object
-    corpus=None,  # Or pass a corpus ID/object when available
-    framework=AgentFramework.PYDANTIC_AI,
-    tools=["load_md_summary"]  # Same tool, different framework
-)
+```
 
 #### Tool Approval & Human-in-the-Loop
 
@@ -761,148 +753,36 @@ async for event in agent.resume_with_approval(
 
 ##### Implementation Details
 
+The full implementation of approval gating lives in two files:
+- **Veto gate**: [`tools/pydantic_ai_tools.py`](../../../opencontractserver/llms/tools/pydantic_ai_tools.py) — `PydanticAIToolWrapper._maybe_raise()` raises `ToolConfirmationRequired` before tool execution
+- **Pause/resume**: [`agents/pydantic_ai_agents.py`](../../../opencontractserver/llms/agents/pydantic_ai_agents.py) — `PydanticAICoreAgent.resume_with_approval()` handles state validation and continuation
+
 ###### State Validation
 
-The `resume_with_approval()` method performs strict state validation before resuming execution:
+The `resume_with_approval()` method performs strict state validation:
 
-```python
-# Check message state
-current_state = paused_msg.data.get("state")
-if current_state != MessageState.AWAITING_APPROVAL:
-    # Handle edge cases
-    if current_state in [MessageState.COMPLETED, MessageState.CANCELLED]:
-        # Message already processed - likely duplicate request
-        return  # Empty generator, no error
-    else:
-        raise ValueError(f"Message is not awaiting approval (state: {current_state})")
-```
-
-**Validation Steps:**
 1. Loads the paused `ChatMessage` from database by `llm_message_id`
 2. Checks `data['state']` is exactly `AWAITING_APPROVAL`
-3. Handles duplicate requests gracefully (returns empty generator if already processed)
+3. Handles duplicate requests gracefully (returns empty generator if already completed/cancelled)
 4. Raises `ValueError` for invalid states
 
-**Error Scenarios:**
-- Message not found → `ValueError` raised
-- Message not awaiting approval → `ValueError` raised (unless already completed/cancelled)
-- Duplicate approval request → Silently returns (idempotent behavior)
-
-###### Tool Execution Paths
+###### Tool Execution Paths (Approved)
 
 When approved, the framework attempts to execute the tool using two fallback paths:
 
-**Path 1: Agent Config Tools** (lines 909-945)
-```python
-# 1. Search config.tools for matching tool name
-for tool in self.config.tools or []:
-    if getattr(tool, "__name__", None) == tool_name:
-        wrapper_fn = tool
-        break
+1. **Agent Config Tools**: Searches `self.config.tools` for a matching tool name and executes it
+2. **PydanticAI Registry** (fallback): Looks up the tool in `self.pydantic_ai_agent._function_tools` and extracts the underlying callable
 
-# 2. Execute if found
-if wrapper_fn:
-    result = await wrapper_fn(_EmptyCtx(), **tool_args)
-    tool_executed = True
-```
+Both paths use an empty context with `skip_approval_gate=True` to prevent re-triggering the gate, and preserve the original `tool_call_id`.
 
-**Path 2: PydanticAI Registry** (fallback, lines 946-995)
-```python
-# 1. Look up tool in pydantic-ai agent's function registry
-tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
-
-# 2. Extract underlying callable from tool object
-for attr in ("function", "_wrapped_function", "callable_function"):
-    candidate = getattr(tool_obj, attr, None)
-    if callable(candidate):
-        break
-
-# 3. Execute the callable
-result = await candidate(_EmptyCtx(), **tool_args)
-```
-
-**Empty Context Pattern:**
-The framework creates a minimal context object with:
-- `tool_call_id`: Preserved from the paused message
-- `skip_approval_gate`: Set to `True` to prevent re-triggering approval
-
-**Tool Argument Normalization:**
-The method handles various argument formats:
-```python
-# String arguments (JSON or plain)
-if isinstance(tool_args_raw, str):
-    try:
-        tool_args = json.loads(tool_args_raw)  # Try JSON parse
-    except json.JSONDecodeError:
-        # Fallback: wrap as parameter for known tools
-        if tool_name == "update_document_summary":
-            tool_args = {"new_content": tool_args_raw}
-        else:
-            tool_args = {"arg": tool_args_raw}
-
-# Dict arguments (already normalized)
-elif isinstance(tool_args_raw, dict):
-    tool_args = tool_args_raw
-```
-
-###### Continuation Prompt Mechanism
-
-After tool execution (approved path), the framework constructs a continuation prompt:
-
-```python
-# Build prompt with tool result
-continuation_prompt = (
-    f"The tool '{tool_name}' was executed with user approval and returned: "
-    f"{json.dumps(tool_result, indent=2)}. "
-    f"Please continue with your original task based on this result."
-)
-
-# Resume normal streaming
-async for ev in self._stream_core(
-    continuation_prompt,
-    force_llm_id=resumed_llm_id,      # New message for resumed run
-    force_user_msg_id=user_message_id  # Link to original user message
-):
-    yield ev
-```
-
-**Key Implementation Points:**
-1. **New LLM Message**: Creates a fresh `ChatMessage` for the resumed run (`resumed_llm_id`)
-2. **User Message Linking**: Finds the most recent `HUMAN` message in the conversation to link events properly
-3. **Tool Result Injection**: Embeds the tool execution result in the continuation prompt
-4. **History Preservation**: The tool result is also appended to message history as a `ToolReturnPart` (approved path only)
+After execution, a continuation prompt containing the tool result is fed back into `_stream_core()` with a fresh `ChatMessage` for the resumed run, linked to the original user message.
 
 ###### Rejection Path
 
 When `approved=False`:
-
-```python
-# 1. Emit ApprovalResultEvent with decision="rejected"
-yield ApprovalResultEvent(decision="rejected", ...)
-
-# 2. Mark paused message as CANCELLED
-await self.complete_message(
-    paused_msg.id,
-    paused_msg.content,
-    metadata={
-        "state": MessageState.CANCELLED,
-        "approval_decision": "rejected"
-    }
-)
-
-# 3. Emit final event and stop
-yield FinalEvent(
-    accumulated_content="Tool execution rejected by user.",
-    metadata={"approval_decision": "rejected"}
-)
-return  # No further execution
-```
-
-**Rejection Characteristics:**
-- No tool execution occurs
-- Conversation turn ends immediately
-- Paused message marked as `CANCELLED` in database
-- Simple rejection message returned to caller
+1. Emits `ApprovalResultEvent` with `decision="rejected"`
+2. Marks the paused message as `CANCELLED` in the database
+3. Emits a `FinalEvent` with a rejection message and stops
 
 ###### Event Sequence
 
@@ -920,14 +800,97 @@ return  # No further execution
 2. FinalEvent (rejection message, conversation ends)
 ```
 
-**Implementation Notes:**
+**Key Notes:**
 - Approval state persists across server restarts (stored in database)
 - Only PydanticAI agents support approval gating currently
-- LlamaIndex agents ignore the `requires_approval` flag
-- Code paths: `tools/pydantic_ai_tools.py` (veto-gate), `agents/pydantic_ai_agents.py` (pause/resume)
+- Custom framework adapters should implement approval handling in their `_stream_raw()` method
 - All events include `user_message_id` and `llm_message_id` for tracking
-- The method always returns an async generator (even for rejection) for consistent API
+
+##### Nested Approval Gates (Corpus → Document Sub-Agents)
+
+When a corpus agent delegates a question to a document sub-agent via
+`ask_document`, the sub-agent may itself encounter tools that require
+approval. These nested approval events propagate up to the corpus agent
+and ultimately to the user through the following mechanism:
+
+**Propagation Flow:**
+
 ```
+User ──▶ CorpusAgent ──ask_document──▶ DocumentSubAgent
+                                            │
+                        ┌───────────────────┘
+                        ▼
+           Sub-agent tool requires approval
+                        │
+                        ▼
+           ApprovalNeededEvent emitted in sub-agent stream
+                        │
+                        ▼
+           ask_document_tool detects event, raises
+           ToolConfirmationRequired with nested metadata
+                        │
+                        ▼
+           Corpus agent pauses, surfaces to user via WebSocket
+                        │
+                        ▼
+           User approves/rejects via frontend modal
+                        │
+                        ▼
+           resume_with_approval() re-invokes ask_document
+           with config._approval_bypass_allowed = True
+                        │
+                        ▼
+           Sub-agent created with skip_approval_gate=True
+           (tool executes without re-prompting)
+```
+
+**Metadata Preservation:**
+
+The `ToolConfirmationRequired` exception carries sub-agent tool details
+in `_`-prefixed keys for frontend display:
+
+```python
+raise ToolConfirmationRequired(
+    tool_name="ask_document",
+    tool_args={
+        "document_id": document_id,
+        "question": question,
+        # Metadata for UI display (stripped before execution):
+        "_sub_tool_name": "update_document_summary",
+        "_sub_tool_arguments": {"new_content": "..."},
+    },
+)
+```
+
+The frontend (CorpusChat) unwraps these to show the actual sub-tool name
+and arguments in the approval modal, rather than the generic
+`ask_document` wrapper.
+
+**Security: Approval Bypass Protection:**
+
+The `skip_approval` mechanism uses `config._approval_bypass_allowed`
+(a runtime flag on `AgentConfig`) rather than a function parameter, to
+prevent LLM prompt injection from bypassing approval gates:
+
+- Normal execution: `_approval_bypass_allowed` is `False` (default)
+- Post-approval resume: `resume_with_approval()` sets it to `True` in a
+  `try/finally` block, ensuring it is always reset
+- The flag is read inside `ask_document_tool`'s closure and passed to
+  `_agents_api.for_document(skip_approval_gate=bypass)`
+
+**Defensive Handling:**
+
+Malformed `approval_needed` events (missing `name`, non-dict
+`pending_tool_call`, empty strings) are logged and skipped rather than
+crashing the tool. The sub-agent stream continues normally.
+
+**Key Files:**
+- `agents/pydantic_ai_agents.py`: `ask_document_tool()` closure,
+  `resume_with_approval()` bypass flag
+- `frontend/src/components/corpuses/CorpusChat.tsx`: Sub-tool unwrapping
+  in `ASYNC_APPROVAL_NEEDED` handler
+- `tests/test_nested_approval_gates.py`: Comprehensive test suite
+- The method always returns an async generator (even for rejection) for consistent API
 
 ### Nested Agent Streaming
 
@@ -938,8 +901,8 @@ The framework now supports **real-time visibility into nested agent execution** 
 When a parent agent (e.g., corpus agent) calls a child agent (e.g., document agent via `ask_document` tool), the child's stream events can be forwarded to a configured observer:
 
 ```python
-from opencontractserver.llms import agents
-from opencontractserver.llms.types import StreamObserver
+from opencontractserver.llms.agents.core_agents import AgentConfig
+from opencontractserver.llms.agents.pydantic_ai_agents import PydanticAICorpusAgent
 
 # Define your observer
 async def websocket_forwarder(event):
@@ -951,12 +914,13 @@ async def websocket_forwarder(event):
         "sources": [s.to_dict() for s in getattr(event, "sources", [])]
     })
 
-# Create agent with observer
-corpus_agent = await agents.for_corpus(
-    corpus=corpus_id,
+# NOTE: stream_observer is only available via AgentConfig + low-level factory,
+# not the high-level agents.for_corpus() API.
+config = AgentConfig(
     user_id=user_id,
-    stream_observer=websocket_forwarder
+    stream_observer=websocket_forwarder,
 )
+corpus_agent = await PydanticAICorpusAgent.create(corpus=corpus_id, config=config)
 
 # When streaming, nested events bubble up automatically
 async for event in corpus_agent.stream("Analyze payment terms across all contracts"):
@@ -993,11 +957,9 @@ async def handle_corpus_query(websocket, corpus_id, query):
             }
         })
     
-    # Create corpus agent with observer
-    agent = await agents.for_corpus(
-        corpus=corpus_id,
-        stream_observer=forward_to_client
-    )
+    # Create corpus agent with observer (requires low-level factory)
+    config = AgentConfig(stream_observer=forward_to_client)
+    agent = await PydanticAICorpusAgent.create(corpus=corpus_id, config=config)
     
     # Stream response - client sees EVERYTHING including nested calls
     async for event in agent.stream(query):
@@ -1016,25 +978,10 @@ async def handle_corpus_query(websocket, corpus_id, query):
 
 The stream observer is implemented at the framework adapter level:
 
-- **PydanticAI**: `ask_document_tool` explicitly forwards child events
-- **CoreAgentBase**: `_emit_observer_event` helper ensures safe forwarding
-- **Error Handling**: Observer exceptions are caught and logged, never breaking the stream
+- **PydanticAI**: `ask_document_tool` (inline in [`PydanticAICorpusAgent.create()`](../../../opencontractserver/llms/agents/pydantic_ai_agents.py)) explicitly forwards child events
+- **CoreAgentBase**: `_emit_observer_event()` helper (in [`agents/core_agents.py`](../../../opencontractserver/llms/agents/core_agents.py)) ensures safe forwarding — observer exceptions are caught and logged, never breaking the stream
 
-```python
-# Inside ask_document_tool (simplified)
-async for ev in doc_agent.stream(question):
-    # Capture content for final response
-    if ev.type == "content":
-        accumulated_answer += ev.content
-    
-    # Forward ALL events to observer
-    if callable(observer_cb):
-        await observer_cb(ev)  # Real-time forwarding
-    
-    # Process sources, timeline, etc.
-```
-
-This pattern ensures that even deeply nested agent calls remain visible and debuggable, providing unprecedented transparency into complex multi-agent workflows.
+This pattern ensures that even deeply nested agent calls remain visible and debuggable, providing transparency into multi-agent workflows.
 
 ### Streaming
 
@@ -1093,9 +1040,9 @@ Based on the contract analysis, the key terms include...
 ✅ Complete! Usage: {'requests': 2, 'total_tokens': 1247}
 ```
 
-#### Legacy Streaming (LlamaIndex & Backward Compatibility)
+#### Legacy Streaming (Backward Compatibility)
 
-**LlamaIndex agents** and older code use the traditional streaming approach:
+Legacy code using the traditional streaming approach can be updated to use event-based streaming:
 
 ```python
 # Traditional streaming - still supported
@@ -1197,7 +1144,7 @@ The framework follows a layered architecture that separates concerns and enables
 │           API Layer                     │  ← api.py (agents, embeddings, vector_stores, tools)
 ├─────────────────────────────────────────┤
 │        Framework Adapter Layer          │  ← agents/pydantic_ai_agents.py
-│ (Implements CoreAgent for specific SDK) │     (llama_index adapter removed)
+│ (Implements CoreAgent for specific SDK) │     agents/pydantic_ai_agents.py
 ├─────────────────────────────────────────┤
 │         Core Agent Protocol             │  ← agents/core_agents.py (Defines .chat, .stream)
 │         & Unified Tool System           │  ← tools/ (CoreTool, UnifiedToolFactory)
@@ -1225,11 +1172,11 @@ The framework follows a layered architecture that separates concerns and enables
 
 3. **Framework Adapters** (e.g., `agents/pydantic_ai_agents.py`):
    - E.g., `PydanticAIDocumentAgent.create()` builds the actual LLM integration.
-   - Creates vector stores, configures embeddings, sets up the underlying LlamaIndex agent.
+   - Creates vector stores, configures embeddings, sets up the underlying PydanticAI agent.
    - Returns a framework-specific agent that implements the `CoreAgent` protocol.
 
 4. **CoreAgent Protocol (`agents/core_agents.py`)**:
-   - The returned agent object (e.g., an instance of `LlamaIndexDocumentAgent`) inherits from `CoreAgentBase`, which provides universal `chat()`, `stream()`, and `structured_response()` wrappers that handle all database persistence, approval gating, and message lifecycle management.
+   - The returned agent object (e.g., an instance of `PydanticAIDocumentAgent`) inherits from `CoreAgentBase`, which provides universal `chat()`, `stream()`, and `structured_response()` wrappers that handle all database persistence, approval gating, and message lifecycle management.
    - Framework adapters only implement low-level `_chat_raw()`, `_stream_raw()`, and `_structured_response_raw()` methods that return pure content without any database side-effects.
    - When you call `await agent.chat("Your query")`, the `CoreAgentBase` wrapper automatically handles user message storage, LLM placeholder creation, calling the adapter's `_chat_raw()` method, and completing the stored message with results.
    - The `structured_response()` method provides ephemeral, typed data extraction without any database persistence—perfect for one-shot extractions.
@@ -1321,19 +1268,14 @@ Choose your framework based on your needs:
 
 | Framework | Best For | Streaming Type | Structured Response | Visibility |
 |-----------|----------|----------------|---------------------|------------|
-| **LlamaIndex** | *Removed - implement custom adapter* | Traditional (START/CONTENT/FINISH) | ❌ Not implemented | Basic content streaming |
 | **PydanticAI** | Production use, all features | Event-based (thought/content/sources/final) | ✅ Optimized with automatic strategy selection | Full execution graph visibility |
+| **Custom Adapters** | Specialized requirements | Implement in `_stream_raw()` | Implement in `_structured_response_raw()` | Depends on implementation |
 
 ```python
-# Specify framework explicitly
-llama_agent = await agents.for_document(
+# Specify framework explicitly (PydanticAI is the default and recommended framework)
+agent = await agents.for_document(
     document=123, corpus=1,
-    framework=AgentFramework.LLAMA_INDEX
-)
-
-pydantic_agent = await agents.for_document(
-    document=123, corpus=1,
-    framework=AgentFramework.PYDANTIC_AI  # Recommended for new projects
+    framework=AgentFramework.PYDANTIC_AI
 )
 
 # Or set globally via Django settings
@@ -1402,123 +1344,38 @@ if not user_has_permission_for_obj(user, document, "READ"):
 
 #### Layer 2: Agent Factory Filtering (Agent Creation)
 
-**Location**: `opencontractserver/llms/agents/agent_factory.py`
+**Location**: [`opencontractserver/llms/agents/agent_factory.py`](../../../opencontractserver/llms/agents/agent_factory.py)
 
-When creating an agent, the factory filters out tools requiring WRITE permission if the user lacks it:
-
-```python
-# In UnifiedAgentFactory._filter_tools_by_write_permission()
-def _user_has_write_permission(user_id: Optional[int], corpus: Optional[Corpus]) -> bool:
-    """Check if user has WRITE permission for the corpus."""
-    if not user_id or not corpus:
-        return False
-
-    user = User.objects.get(id=user_id)
-    return user_has_permission_for_obj(user, corpus, "WRITE")
-
-# Filter tools based on write permission
-filtered_tools = []
-for tool in tools:
-    if getattr(tool, "requires_write_permission", False):
-        if not _user_has_write_permission(user_id, corpus):
-            logger.info(f"Filtering tool '{tool.name}' - user lacks WRITE permission")
-            continue
-    filtered_tools.append(tool)
-```
+When creating an agent, the `_user_has_write_permission()` helper (line ~29) checks `PermissionTypes.CRUD` on the resource. The filtering logic is inline in `create_document_agent()` and `create_corpus_agent()` — tools with `requires_write_permission=True` are skipped when the user lacks CRUD permission, and tools with `requires_corpus=True` are skipped when `corpus=None`. Tools with `requires_approval=True` are also stripped in public (unauthenticated) contexts.
 
 **Purpose**: Prevent the agent from even seeing tools it shouldn't be allowed to use, reducing attack surface.
 
 #### Layer 3: Runtime Validation (Tool Execution)
 
-**Location**: `opencontractserver/llms/tools/pydantic_ai_tools.py`
+**Location**: [`opencontractserver/llms/tools/pydantic_ai_tools.py`](../../../opencontractserver/llms/tools/pydantic_ai_tools.py)
 
-Even if a tool somehow makes it to execution, the wrapper performs a final permission check:
+Even if a tool somehow makes it to execution, the `PydanticAIToolWrapper` (line ~223) wraps every tool call with two module-level pre-execution checks:
 
-```python
-# In PydanticAIToolWrapper.__call__()
-async def __call__(self, ctx: AgentContext, **kwargs):
-    # Check permissions before execution
-    await self._check_user_permissions(ctx)
+1. **`_check_user_permissions(ctx)`** (line ~20): Validates the user in `RunContext[PydanticAIDependencies]` has READ permission on the bound document/corpus. This is intentionally **not cached** — each tool call triggers fresh DB queries to detect mid-session permission revocations.
+2. **`_validate_resource_id_params(ctx, **kwargs)`** (line ~132): Ensures `document_id`/`corpus_id` arguments match the agent's context, preventing prompt-injection attacks that attempt cross-resource access.
 
-    # Execute tool
-    result = await self.core_tool.function(**kwargs)
-    return result
+These checks run inside the generated `async_wrapper`/`sync_wrapper` functions, not as methods on the wrapper class.
 
-async def _check_user_permissions(self, ctx: AgentContext):
-    """Validate user permissions before tool execution."""
-    if self.core_tool.requires_write_permission:
-        user_id = ctx.config.user_id
-        corpus = ctx.corpus
-
-        if not user_id or not corpus:
-            raise PermissionDenied("Write operation requires authenticated user and corpus")
-
-        user = await User.objects.aget(id=user_id)
-        if not await user_has_permission_for_obj(user, corpus, "WRITE"):
-            raise PermissionDenied(f"User lacks WRITE permission for tool '{self.core_tool.name}'")
-```
-
-**Purpose**: Final safety check that catches any bypass attempts or edge cases, ensuring write operations never execute without proper permissions.
+**Purpose**: Final safety check that catches any bypass attempts or edge cases, ensuring operations never execute without proper permissions.
 
 ### Permission Enforcement by Tool Type
 
-Different tools have different permission requirements based on their operations:
+Different tools have different permission requirements based on their operations. The actual permission flags for each tool are set during agent initialization in [`agents/pydantic_ai_agents.py`](../../../opencontractserver/llms/agents/pydantic_ai_agents.py) (see `PydanticAIDocumentAgent.create()` ~line 1496 and `PydanticAICorpusAgent.create()` ~line 2111).
 
 #### Read-Only Tools (No Special Permissions)
 
-Tools that only read data don't require write permission:
+Tools like `load_document_summary`, `get_summary_token_length`, and `similarity_search` have no special permission flags. These are available to any user with READ permission on the resource.
 
-```python
-# Examples from opencontractserver/llms/tools/tool_registry.py
-tools_registry = [
-    CoreTool.from_function(
-        load_document_md_summary,
-        name="load_md_summary",
-        description="Load markdown summary of the document",
-        requires_corpus=False,
-        requires_approval=False,
-        requires_write_permission=False  # Read-only operation
-    ),
-    CoreTool.from_function(
-        get_notes_for_document_corpus,
-        name="get_notes_for_document_corpus",
-        description="Retrieve notes for document",
-        requires_corpus=True,
-        requires_approval=False,
-        requires_write_permission=False  # Read-only operation
-    ),
-]
-```
+#### Write Tools (Require Approval + Corpus)
 
-These tools are available to users with READ permission.
+Tools that modify data — such as `add_document_note`, `update_document_summary`, and `duplicate_annotations` — are marked with `requires_approval=True` and `requires_corpus=True`. These are automatically filtered out when no corpus is present, and pause for human approval before execution.
 
-#### Write Tools (Require WRITE Permission)
-
-Tools that modify data require explicit write permission:
-
-```python
-# Examples from opencontractserver/llms/tools/tool_registry.py
-tools_registry = [
-    CoreTool.from_function(
-        add_document_note,
-        name="add_document_note",
-        description="Create a new note for the document",
-        requires_corpus=True,
-        requires_approval=True,
-        requires_write_permission=True  # Creates new data
-    ),
-    CoreTool.from_function(
-        update_document_summary,
-        name="update_document_summary",
-        description="Update document summary",
-        requires_corpus=True,
-        requires_approval=True,
-        requires_write_permission=True  # Modifies existing data
-    ),
-]
-```
-
-These tools are automatically filtered out for users with only READ permission.
+> **Note**: The `requires_write_permission` flag exists on `CoreTool` but is not currently set on any built-in tools. It's available for custom tools that need write-permission gating at the factory level.
 
 ### Security Guarantees
 
@@ -1545,14 +1402,7 @@ agent = await agents.for_document(
 
 #### 2. Consistent Permission Checks
 
-All three validation layers check the same permission rules using `user_has_permission_for_obj()` from `opencontractserver.utils.permissioning`:
-
-```python
-from opencontractserver.utils.permissioning import user_has_permission_for_obj
-
-# Same check used at all three layers
-has_write = user_has_permission_for_obj(user, corpus, "WRITE")
-```
+All validation layers use `user_has_permission_for_obj()` from [`opencontractserver/utils/permissioning.py`](../../../opencontractserver/utils/permissioning.py). Layer 2 (factory) checks `PermissionTypes.CRUD` for write-gating, while Layer 3 (runtime) checks `PermissionTypes.READ` on every tool call.
 
 #### 3. Fail-Safe Defaults
 
@@ -1603,12 +1453,13 @@ Understanding the permission model requires familiarity with these key files:
 
 | File | Purpose | Key Functions/Classes |
 |------|---------|----------------------|
-| `opencontractserver/llms/tools/tool_factory.py` | Core tool definition with permission flags | `CoreTool`, `requires_write_permission` flag |
-| `opencontractserver/llms/tools/tool_registry.py` | Registry of all built-in tools with their permissions | `tools_registry` list with flag definitions |
-| `opencontractserver/llms/agents/agent_factory.py` | Agent creation with tool filtering | `_filter_tools_by_write_permission()`, `_user_has_write_permission()` |
-| `opencontractserver/llms/tools/pydantic_ai_tools.py` | Runtime permission validation wrapper | `PydanticAIToolWrapper`, `_check_user_permissions()` |
-| `opencontractserver/utils/permissioning.py` | Core permission checking utilities | `user_has_permission_for_obj()` |
-| `opencontractserver/consumers/unified_agent_consumer.py` | WebSocket consumer with entry validation | Initial READ permission checks |
+| [`tools/tool_factory.py`](../../../opencontractserver/llms/tools/tool_factory.py) | Core tool definition with permission flags | `CoreTool` dataclass with `requires_approval`, `requires_corpus`, `requires_write_permission` flags |
+| [`tools/tool_registry.py`](../../../opencontractserver/llms/tools/tool_registry.py) | Metadata registry of available tools | `AVAILABLE_TOOLS` tuple of `ToolDefinition` entries (metadata-only, not used for tool resolution) |
+| [`agents/agent_factory.py`](../../../opencontractserver/llms/agents/agent_factory.py) | Agent creation with tool filtering | `_user_has_write_permission()`, inline filtering in `create_document_agent()`/`create_corpus_agent()` |
+| [`agents/pydantic_ai_agents.py`](../../../opencontractserver/llms/agents/pydantic_ai_agents.py) | Tool assembly with flag assignment | `PydanticAIDocumentAgent.create()`, `PydanticAICorpusAgent.create()` |
+| [`tools/pydantic_ai_tools.py`](../../../opencontractserver/llms/tools/pydantic_ai_tools.py) | Runtime permission validation | `_check_user_permissions()` (module-level), `_validate_resource_id_params()`, `PydanticAIToolWrapper` |
+| [`utils/permissioning.py`](../../../opencontractserver/utils/permissioning.py) | Core permission checking utilities | `user_has_permission_for_obj()` |
+| `consumers/unified_agent_consumer.py` | WebSocket consumer with entry validation | Initial READ permission checks |
 
 ### Best Practices for Tool Development
 
@@ -1737,9 +1588,9 @@ If you have existing custom tools that perform write operations:
 ```python
 from opencontractserver.llms.agents.core_agents import AgentConfig
 
-# Create custom configuration
+# Create custom configuration (for low-level PydanticAIDocumentAgent.create())
 config = AgentConfig(
-    model="gpt-4-turbo",
+    model_name="gpt-4-turbo",  # Note: field is model_name, not model
     temperature=0.2,
     max_tokens=2000,
     system_prompt="You are an expert legal analyst...",  # Note: Completely replaces any default prompt
@@ -1755,7 +1606,18 @@ config = AgentConfig(
 # - Any custom system_prompt completely replaces these defaults
 
 # The `corpus` parameter is optional for document agents (use None for standalone).
-agent = await agents.for_document(document=123, corpus=None, config=config) # Or pass a corpus ID/object when available
+# Note: agents.for_document() does not accept a `config` object directly.
+# Pass individual parameters instead:
+agent = await agents.for_document(
+    document=123,
+    corpus=None,
+    model="gpt-4-turbo",
+    temperature=0.2,
+    max_tokens=2000,
+    system_prompt="You are an expert legal analyst...",
+    tools=["load_md_summary", "get_notes_for_document_corpus"],
+    verbose=True,
+)
 ```
 
 ### Conversation Patterns
@@ -1883,6 +1745,57 @@ standard_tools = create_document_tools()
 # )
 ```
 
+#### Tool Precedence and Overrides
+
+When you pass tools to an agent, **caller-provided tools take precedence** over built-in defaults if there's a name conflict. This allows you to customize tool behavior without modifying the framework.
+
+**When conflicts occur:**
+- You pass a tool with `__name__` matching a default tool (e.g., `"update_document_description"`)
+- The framework detects the duplicate and uses YOUR tool's configuration
+
+**What gets overridden:**
+- Tool description (affects LLM's understanding of the tool)
+- `requires_approval` flag (enables/disables human-in-the-loop)
+- `parameter_descriptions` (affects LLM parameter usage)
+- The actual function implementation
+
+**Example: Disabling approval for a tool**
+```python
+from opencontractserver.llms.tools.tool_factory import CoreTool
+from opencontractserver.llms.tools.core_tools import update_document_description
+
+# Create a version of update_document_description that doesn't require approval
+no_approval_tool = CoreTool.from_function(
+    update_document_description,
+    name="update_document_description",  # Same name as default
+    description="Update the document description (auto-approved)",
+    requires_approval=False,  # Override the default's requires_approval=True
+)
+
+agent = await agents.for_document(
+    document=123,
+    corpus=1,
+    tools=[no_approval_tool],  # Your tool replaces the default
+)
+# Now update_document_description won't pause for approval
+```
+
+**Precedence rules:**
+1. Per-call `tools` parameter → highest priority
+2. `AgentConfig.tools` → used if no per-call tools
+3. Built-in defaults → lowest priority (replaced by above)
+
+**Logging:** When a caller tool overrides a default, an INFO-level log is emitted:
+```
+Caller tool 'update_document_description' overrides default - using caller's configuration
+```
+
+**Security Considerations:**
+- Only pass **trusted tools** via the `tools` parameter
+- Overriding tools can **bypass `requires_approval` safeguards** that provide human-in-the-loop protection
+- If tools originate from user-controlled configurations (e.g., stored in database), **validate them against an approved registry** before passing to agents
+- The `deduplicate_tools()` utility in `opencontractserver/utils/tools.py` documents these security implications
+
 ### Vector Store Integration
 
 #### Advanced Search
@@ -1934,10 +1847,8 @@ query = VectorSearchQuery(
 #### Framework-Specific Vector Stores
 
 ```python
-# LlamaIndex vector store
-# Note: The LlamaIndex vector store adapter has been removed.
-# For LlamaIndex integration, implement your own adapter following
-# the CoreAnnotationVectorStore interface.
+# Custom vector stores can be implemented by extending CoreAnnotationVectorStore
+# See opencontractserver/llms/vector_stores/core_vector_stores.py for the interface
 
 # PydanticAI vector store
 from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import PydanticAIAnnotationVectorStore
@@ -1954,7 +1865,12 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import Pyda
 
 ### Configuration Reference
 
-The framework uses `AgentConfig` for comprehensive agent configuration. All fields have sensible defaults and can be customized as needed.
+The framework has two levels of configuration:
+
+1. **`AgentConfig`** (in [`agents/core_agents.py`](../../../opencontractserver/llms/agents/core_agents.py)): Low-level dataclass used internally by agent implementations.
+2. **`AgentAPI.for_document()` / `AgentAPI.for_corpus()`** (in [`api.py`](../../../opencontractserver/llms/api.py)): High-level API with individual keyword arguments. This is the recommended entry point.
+
+> **Important**: `agents.for_document()` does **not** accept an `AgentConfig` object. It takes individual parameters (`model`, `temperature`, etc.) and constructs the config internally. Use `AgentConfig` directly only when working with the lower-level `PydanticAIDocumentAgent.create()` factory.
 
 #### AgentConfig Fields
 
@@ -1979,35 +1895,35 @@ The framework uses `AgentConfig` for comprehensive agent configuration. All fiel
 | `store_llm_messages` | `bool` | `True` | Whether to persist LLM responses to database |
 | `tools` | `list[Any]` | `[]` | List of tools available to the agent |
 
+> **Default difference**: `AgentConfig.verbose` defaults to `True`, but `AgentAPI.for_document()` passes `verbose=False` by default. The API-level default takes precedence when using the high-level API.
+
+#### Django Settings
+
+The default framework for agents is configured via Django settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `LLMS_DOCUMENT_AGENT_FRAMEWORK` | `AgentFramework.PYDANTIC_AI` | Framework for document agents |
+| `LLMS_CORPUS_AGENT_FRAMEWORK` | `AgentFramework.PYDANTIC_AI` | Framework for corpus agents |
+
 #### Usage Examples
 
 ```python
-from opencontractserver.llms.agents.core_agents import get_default_config, AgentConfig
+from opencontractserver.llms import agents
 
-# Start with defaults
-config = get_default_config(
-    user_id=123,  # Optional: enables persistence
-    model_name="gpt-4-turbo",
-    temperature=0.1
-)
-
-# Or create custom config from scratch
-config = AgentConfig(
+# High-level API (recommended) — pass config as individual kwargs
+agent = await agents.for_document(
+    document=123,
+    corpus=1,
     user_id=456,
-    model_name="gpt-4",
+    model="gpt-4-turbo",
     temperature=0.2,
     max_tokens=2000,
     system_prompt="You are an expert legal analyst...",
-    embedder_path="sentence-transformers/all-MiniLM-L6-v2",
-    stream_update_freq=100,  # Update DB every 100 tokens
-    tools=["load_md_summary", "similarity_search"],
-    verbose=True
+    verbose=True,
 )
 
-# Use config with agent
-agent = await agents.for_document(document=123, corpus=1, config=config)
-
-# Per-method overrides (don't affect config)
+# Per-method overrides (don't affect the agent's base config)
 response = await agent.structured_response(
     "Extract dates",
     DateInfo,
@@ -2019,24 +1935,28 @@ response = await agent.structured_response(
 #### Advanced Configuration
 
 ```python
-# Anonymous agent (no persistence)
-anon_config = AgentConfig(
-    user_id=None,  # No user = anonymous
-    store_user_messages=False,
-    store_llm_messages=False
-)
+# Anonymous agent (no persistence) — just omit user_id
+agent = await agents.for_document(document=123, corpus=1)
+# conversation_id will be None — nothing persisted
 
 # Stream observer for nested visibility
+# NOTE: stream_observer is only available on AgentConfig, not the high-level API.
+# Use the lower-level PydanticAIDocumentAgent.create() when you need it:
+from opencontractserver.llms.agents.core_agents import AgentConfig
+from opencontractserver.llms.agents.pydantic_ai_agents import PydanticAIDocumentAgent
+
 async def event_forwarder(event):
     await websocket.send_json({"type": event.type, "data": event.content})
 
-nested_config = AgentConfig(
+config = AgentConfig(
     stream_observer=event_forwarder,  # Receives all nested events
     stream_update_freq=25  # More frequent updates
 )
 
-# Resume existing conversation
-resume_config = AgentConfig(
+# Resume existing conversation (via high-level API)
+agent = await agents.for_document(
+    document=123,
+    corpus=1,
     user_id=123,
     conversation_id=789,  # Resume this conversation
     temperature=0.5
@@ -2049,20 +1969,15 @@ The framework provides structured error handling with specific exception types:
 
 ```python
 from opencontractserver.llms import agents
-from opencontractserver.llms.agents.core_agents import AgentError
-# from opencontractserver.documents.models import Document # For Document.DoesNotExist
-# from opencontractserver.corpuses.models import Corpus # For Corpus.DoesNotExist
+from opencontractserver.documents.models import Document
+from opencontractserver.corpuses.models import Corpus
 
 try:
-    # The `corpus` parameter is required for document agents.
-    agent = await agents.for_document(document=999999, corpus=999) # Assuming these don't exist
-    # response = await agent.chat("Analyze this document")
+    agent = await agents.for_document(document=999999, corpus=999)
 except Document.DoesNotExist:
     print("Document not found")
-# except Corpus.DoesNotExist:
-#     print("Corpus not found")
-except AgentError as e:
-    print(f"Agent error: {e}")
+except Corpus.DoesNotExist:
+    print("Corpus not found")
 except Exception as e:
     print(f"Unexpected error: {e}")
 
@@ -2128,6 +2043,56 @@ except Exception as e:
 #             )
 ```
 
+## Additional Modules
+
+### Moderation Tools
+
+The framework includes a set of moderation tools for threaded discussion management in [`tools/moderation_tools.py`](../../../opencontractserver/llms/tools/moderation_tools.py). These are used by moderation agents to manage conversations:
+
+**Read-Only Tools** (no approval required):
+- `get_thread_context` / `aget_thread_context` — Get thread metadata (title, lock/pin status, message count)
+- `get_thread_messages` / `aget_thread_messages` — List messages in a thread (paginated)
+- `get_message_content` / `aget_message_content` — Get a single message's full content
+
+**Write Tools** (require approval):
+- `lock_thread` / `alock_thread` — Lock a thread to prevent new messages
+- `unlock_thread` / `aunlock_thread` — Unlock a locked thread
+- `pin_thread` / `apin_thread` — Pin a thread for visibility
+- `unpin_thread` / `aunpin_thread` — Unpin a pinned thread
+- `delete_message` / `adelete_message` — Soft-delete a message with a reason
+
+**Posting Tools**:
+- `add_thread_message` / `aadd_thread_message` — Post a new message to a thread
+
+Moderation tools can be included by name via the `tools=` parameter (e.g., `tools=["lock_thread", "get_thread_context"]`). The `_resolve_tools()` function in [`api.py`](../../../opencontractserver/llms/api.py) maps these names to their async versions automatically.
+
+### SimpleLLMClient
+
+For use cases that don't need the full agent framework (tool calling, conversation persistence, etc.), [`client.py`](../../../opencontractserver/llms/client.py) provides a lightweight `SimpleLLMClient`:
+
+```python
+from opencontractserver.llms.client import create_client, Provider
+
+client = create_client(provider=Provider.OPENAI, model="gpt-4o-mini")
+response = await client.achat([
+    {"role": "user", "content": "Summarize this text..."}
+])
+print(response.content)
+```
+
+Supports OpenAI, Anthropic, and Google providers. This is used internally for simple LLM calls that don't require agent infrastructure.
+
+### Conversation Vector Stores
+
+In addition to the annotation-based vector stores, the framework includes conversation-specific vector stores for semantic search over chat messages:
+
+- [`vector_stores/core_conversation_vector_stores.py`](../../../opencontractserver/llms/vector_stores/core_conversation_vector_stores.py) — Framework-agnostic conversation search
+- [`vector_stores/pydantic_ai_conversation_vector_stores.py`](../../../opencontractserver/llms/vector_stores/pydantic_ai_conversation_vector_stores.py) — PydanticAI-specific wrapper
+
+These enable agents to search their own conversation history for context, supporting long multi-turn interactions.
+
+---
+
 ## Performance Considerations
 
 The framework is designed for production use with several performance optimizations:
@@ -2152,7 +2117,7 @@ The framework is designed for production use with several performance optimizati
 ### Caching Strategy
 
 - **Embedding Caching**: Vector embeddings can be cached to avoid recomputation (implementation specific, may depend on embedder).
-- **Model Caching**: LLM models are cached and reused across requests (often handled by underlying SDKs like LlamaIndex).
+- **Model Caching**: LLM models are cached and reused across requests (handled by the underlying framework).
 - **Vector Store Caching**: Search results can be cached for repeated queries (application-level or via custom store decorators).
 
 ### Memory Management
@@ -2287,9 +2252,8 @@ The framework is designed for extensibility. Here's how to contribute:
 
 To add support for a new LLM framework (e.g., LangChain, Haystack):
 
-1. **Add Framework Enum**:
+1. **Add Framework Enum** (in [`types.py`](../../../opencontractserver/llms/types.py)):
    ```python
-   # In types.py
    class AgentFramework(Enum):
        PYDANTIC_AI = "pydantic_ai"
        LANGCHAIN = "langchain"  # New framework
@@ -2297,7 +2261,7 @@ To add support for a new LLM framework (e.g., LangChain, Haystack):
 
 2. **Implement Agent Adapters**:
    - Create `agents/langchain_agents.py`
-   - Inside this file, define classes for your document and/or corpus agents. These classes **must** inherit from `CoreAgentBase` (from `opencontractserver.llms.agents.core_agents.py`).
+   - Define classes inheriting from `CoreAgentBase` (from [`agents/core_agents.py`](../../../opencontractserver/llms/agents/core_agents.py)).
    
    ```python
    # agents/langchain_agents.py
@@ -2361,9 +2325,8 @@ To add support for a new LLM framework (e.g., LangChain, Haystack):
             pass
     ```
 
-3. **Integrate into `UnifiedAgentFactory`**:
+3. **Integrate into `UnifiedAgentFactory`** (in [`agents/agent_factory.py`](../../../opencontractserver/llms/agents/agent_factory.py)):
    ```python
-   # In agents/agent_factory.py
    # elif framework == AgentFramework.LANGCHAIN:
    #     from opencontractserver.llms.agents.langchain_agents import LangChainDocumentAgent # Or CorpusAgent
    #     if for_document:
@@ -2383,12 +2346,12 @@ To add support for a new LLM framework (e.g., LangChain, Haystack):
 4. **Add Tool Support**:
    - Create `tools/langchain_tools.py` if needed.
    - Implement tool conversion from `CoreTool` to your framework's tool format.
-   - Update `tools/tool_factory.py` (`UnifiedToolFactory`) to handle the new framework.
+   - Update [`tools/tool_factory.py`](../../../opencontractserver/llms/tools/tool_factory.py) (`UnifiedToolFactory`) to handle the new framework.
 
 5. **Add Vector Store Support**:
    - Create `vector_stores/langchain_vector_stores.py`.
-   - Implement adapter around `CoreAnnotationVectorStore` or a new core store if needed.
-   - Update `vector_stores/vector_store_factory.py`.
+   - Implement adapter around `CoreAnnotationVectorStore` (see [`vector_stores/core_vector_stores.py`](../../../opencontractserver/llms/vector_stores/core_vector_stores.py)).
+   - Update [`vector_stores/vector_store_factory.py`](../../../opencontractserver/llms/vector_stores/vector_store_factory.py).
 
 6. **Testing**:
    - Create comprehensive tests following the patterns in existing test files (e.g., `test_pydantic_ai_agents.py`).
@@ -2559,32 +2522,81 @@ Notes:
 
 ### Default Tool Reference
 
-| Tool Name | Short Description | Requires Approval | Requires Corpus |
-|-----------|------------------|-------------------|-----------------|
-| similarity_search | Semantic vector search for relevant passages in the **current document** | No | No (document-level store) |
-| load_md_summary \| load_document_md_summary | Load markdown summary of the document | No | No |
-| get_md_summary_token_length | Approximate token length of markdown summary | No | No |
-| get_document_text_length | Get total character length of plain-text extract | No | No |
-| load_document_text \| load_document_txt_extract | Load full or partial plain-text extract (params: start, end, refresh) | No | No |
-| get_notes_for_document_corpus | Retrieve notes attached to document *within the active corpus* | No | Yes |
-| get_note_content_token_length | Token length of a single note | No | Yes |
-| get_partial_note_content | Slice a note's content (start/end) | No | Yes |
-| search_document_notes | Search notes for a keyword | No | Yes |
-| add_document_note | Create a new note for the document | **Yes** | Yes |
-| update_document_note | Update an existing note (new revision) | **Yes** | Yes |
-| duplicate_annotations | Duplicate annotations with a new label | **Yes** | Yes |
-| add_exact_string_annotations | Add annotations for exact string matches | **Yes** | Yes |
-| get_document_summary | Get latest markdown summary content | No | Yes |
-| get_document_summary_versions | Version history of document summary | No | Yes |
-| get_document_summary_diff | Unified diff between two summary versions | No | Yes |
-| update_document_summary | Create / update document summary | **Yes** | Yes |
-| get_corpus_description | Retrieve corpus markdown description | No | Yes (corpus agents) |
-| update_corpus_description | Update corpus description | No | Yes |
-| list_documents | List documents in the current corpus | No | Yes |
-| ask_document | Ask a nested question to a document agent | No | Yes |
+Tools are **not** pre-defined as static `CoreTool` instances. They are assembled dynamically during agent creation in [`PydanticAIDocumentAgent.create()`](../../../opencontractserver/llms/agents/pydantic_ai_agents.py) and [`PydanticAICorpusAgent.create()`](../../../opencontractserver/llms/agents/pydantic_ai_agents.py). The table below reflects the tool names as registered by those factory methods.
 
-**Legend**  
-• **Requires Approval**: Tool execution pauses until a human approves the call.  
-• **Requires Corpus**: Tool is automatically filtered when `corpus=None`.
+Additionally, a smaller subset of **static** `CoreTool` instances is available via [`create_document_tools()`](../../../opencontractserver/llms/tools/tool_factory.py) in `tool_factory.py`. These are lower-level tools used when building agents outside the standard factory path.
+
+#### Document Agent Tools
+
+These tools are available on agents created via `agents.for_document()`:
+
+| Tool Name (as registered) | Short Description | Requires Approval | Requires Corpus | Source |
+|---------------------------|------------------|-------------------|-----------------|--------|
+| `similarity_search` | Semantic vector search for relevant passages | No | No | Bound method on `PydanticAIAnnotationVectorStore` |
+| `load_document_summary` | Load markdown summary (optionally truncated) | No | No | Wraps `aload_document_md_summary` |
+| `get_summary_token_length` | Approximate token length of markdown summary | No | No | Wraps `aget_md_summary_token_length` |
+| `get_document_text_length` | Total character length of plain-text extract | No | No | Inline closure in `create()` |
+| `load_document_text` | Load full or partial plain-text extract | No | No | Wraps `aload_document_txt_extract` |
+| `search_exact_text` | Find exact text matches with page/position info | No | No | Wraps `asearch_exact_text_as_sources` |
+| `get_document_description` | Get document's description field | No | No | Wraps `aget_document_description` |
+| `update_document_description` | Update document's description field | **Yes** | No | Wraps `aupdate_document_description` |
+| `get_document_notes` | Retrieve notes for document in corpus | No | **Yes** | Wraps `aget_notes_for_document_corpus` |
+| `search_document_notes` | Search notes by keyword | No | **Yes** | Wraps `asearch_document_notes` |
+| `add_document_note` | Create a new note for the document | **Yes** | **Yes** | Wraps `aadd_document_note` |
+| `update_document_note` | Update an existing note (new revision) | **Yes** | No | Wraps `aupdate_document_note` |
+| `duplicate_annotations` | Duplicate annotations with a new label | **Yes** | **Yes** | Wraps `aduplicate_annotations_with_label` |
+| `add_exact_string_annotations` | Add annotations for exact string matches | **Yes** | **Yes** | Wraps `aadd_annotations_from_exact_strings` |
+| `get_document_summary` | Get latest summary content (falls back to md summary without corpus) | No | **Yes** | Wraps `aget_document_summary` |
+| `get_document_summary_versions` | Version history of document summary | No | **Yes** | Wraps `aget_document_summary_versions` |
+| `get_document_summary_diff` | Unified diff between two summary versions | No | **Yes** | Wraps `aget_document_summary_diff` |
+| `update_document_summary` | Create / update document summary | **Yes** | **Yes** | Wraps `aupdate_document_summary` |
+
+> Tools marked **Requires Corpus** are only included when `corpus` is not `None`. They are automatically filtered out for standalone document agents.
+
+#### Corpus Agent Tools
+
+Corpus agents (via `agents.for_corpus()`) get these **additional** tools on top of the vector search tool:
+
+| Tool Name (as registered) | Short Description | Requires Approval | Source |
+|---------------------------|------------------|-------------------|--------|
+| `get_corpus_description` | Retrieve corpus markdown description | No | Wraps `aget_corpus_description` |
+| `update_corpus_description` | Update corpus description | No | Wraps `aupdate_corpus_description` |
+| `list_documents` | List documents in the current corpus | No | Inline closure in `create()` |
+| `ask_document` | Ask a nested question to a per-document agent | No | Inline closure in `create()` |
+
+#### Image Tools (from `create_document_tools()`)
+
+The static [`create_document_tools()`](../../../opencontractserver/llms/tools/tool_factory.py) function also includes these image tools. They are available when using `create_document_tools()` directly but are **not** currently added by the standard `PydanticAIDocumentAgent.create()` factory:
+
+| Tool Name | Short Description | Source |
+|-----------|------------------|--------|
+| `aget_page_image` | Get a visual image of a specific page from a PDF | `core_tools.py` |
+| `alist_document_images` | List all images in a document (metadata only) | `image_tools.py` |
+| `aget_document_image` | Get image data (base64) for a specific image | `image_tools.py` |
+| `aget_annotation_images` | Get all images referenced by an annotation | `image_tools.py` |
+
+#### String Tool Aliases
+
+When passing tools by name to `agents.for_document()`, the [`_resolve_tools()`](../../../opencontractserver/llms/api.py) function in `api.py` supports these string aliases:
+
+| String Alias | Resolves To |
+|-------------|-------------|
+| `"load_md_summary"`, `"summarize"` | `load_document_md_summary` |
+| `"md_summary_length"` | `get_md_summary_token_length` |
+| `"get_notes"`, `"notes"` | `get_notes_for_document_corpus` |
+| `"note_length"` | `get_note_content_token_length` |
+| `"partial_note"` | `get_partial_note_content` |
+| `"load_document_text"` | `load_document_txt_extract` |
+| `"get_document_summary"` | `get_document_summary` (sync) |
+| `"update_document_summary"` | `update_document_summary` (sync) |
+| `"add_document_note"` | `add_document_note` (sync) |
+| `"search_document_notes"` | `search_document_notes` (sync) |
+| `"get_page_image"` | `get_page_image` (sync) |
+
+> **Note**: String-resolved tools use the **sync** versions from `core_tools.py`. The standard agent factory uses **async** versions wrapped as inline closures. For production use, prefer passing `CoreTool` instances or letting the factory assemble defaults.
+
+**Legend**
+- **Requires Approval**: Tool execution pauses until a human approves the call.
+- **Requires Corpus**: Tool is automatically filtered when `corpus=None`.
 
 > **Note**: You can create your own tools with `CoreTool.from_function(...)` and set `requires_approval=True` or `requires_corpus=True` as needed. The framework will enforce approval gates and automatic corpus filtering for you.

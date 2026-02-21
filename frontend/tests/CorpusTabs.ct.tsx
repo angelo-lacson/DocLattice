@@ -36,6 +36,7 @@ import {
   GET_BADGES,
 } from "../src/graphql/queries";
 import { CorpusType } from "../src/types/graphql-api";
+import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
 
 /* -------------------------------------------------------------------------- */
 /* Mock Data Factories                                                         */
@@ -341,8 +342,12 @@ const createBaseMocks = (corpus: CorpusType): MockedResponse[] => [
         corpusStats: {
           totalDocs: 2,
           totalAnnotations: 5,
+          totalComments: 0,
           totalAnalyses: 1,
           totalExtracts: 1,
+          totalThreads: 0,
+          totalChats: 0,
+          totalRelationships: 0,
           __typename: "CorpusStatsType",
         },
       },
@@ -543,6 +548,35 @@ const createCorpusConversationsMock = (corpusId: string): MockedResponse => ({
   },
 });
 
+const createEngagementMetricsMock = (corpusId: string): MockedResponse => ({
+  request: {
+    query: GET_CORPUS_ENGAGEMENT_METRICS,
+    variables: { corpusId },
+  },
+  result: {
+    data: {
+      corpus: {
+        id: corpusId,
+        title: "Test Corpus for Tab Testing",
+        engagementMetrics: {
+          totalThreads: 12,
+          activeThreads: 5,
+          totalMessages: 87,
+          messagesLast7Days: 23,
+          messagesLast30Days: 65,
+          uniqueContributors: 8,
+          activeContributors30Days: 4,
+          totalUpvotes: 34,
+          avgMessagesPerThread: 7.25,
+          lastUpdated: new Date().toISOString(),
+          __typename: "EngagementMetricsType",
+        },
+        __typename: "CorpusType",
+      },
+    },
+  },
+});
+
 const createCorpusActionsMock = (corpusId: string): MockedResponse => ({
   request: {
     query: GET_CORPUS_ACTIONS,
@@ -602,6 +636,7 @@ const createAllTabMocks = (corpus: CorpusType): MockedResponse[] => [
   createConversationsMock(corpus.id),
   createCorpusConversationsMock(corpus.id),
   createCorpusActionsMock(corpus.id),
+  createEngagementMetricsMock(corpus.id),
   createEmptyDocumentsMock(),
 ];
 
@@ -645,19 +680,19 @@ test.describe("Corpus Tabs - Navigation", () => {
   test.use({ viewport: { width: 1200, height: 800 } });
   test.setTimeout(30000); // Increase timeout for complex component rendering
 
-  test("should render home tab by default with corpus hero", async ({
+  test("should render home tab by default with corpus landing view", async ({
     mount,
     page,
   }) => {
     const corpus = createMockCorpus();
     await mountCorpuses(mount, corpus);
 
-    // Wait for home tab content to render
-    const hero = page.getByTestId("corpus-home-hero");
-    await expect(hero).toBeVisible({ timeout: 10000 });
+    // Wait for home tab content to render (landing view)
+    const landing = page.getByTestId("corpus-home-landing");
+    await expect(landing).toBeVisible({ timeout: 10000 });
 
     // Should show corpus title - use specific testid to avoid strict mode violation
-    const title = page.getByTestId("corpus-home-hero-title");
+    const title = page.getByTestId("corpus-home-landing-title");
     await expect(title).toContainText(corpus.title);
 
     // Sidebar should be visible on desktop
@@ -787,9 +822,9 @@ test.describe("Corpus Tabs - Navigation", () => {
     // Click back button to go home
     await page.locator('[title="Back to Home"]').click();
 
-    // Should be back on home tab
-    const hero = page.getByTestId("corpus-home-hero");
-    await expect(hero).toBeVisible({ timeout: 5000 });
+    // Should be back on home tab (landing view)
+    const landing = page.getByTestId("corpus-home-landing");
+    await expect(landing).toBeVisible({ timeout: 5000 });
   });
 });
 
@@ -1229,9 +1264,9 @@ test.describe("Corpus Tabs - URL State Sync", () => {
     // No tab option = default to home
     await mountCorpuses(mount, corpus);
 
-    // Should show home content (hero)
-    const hero = page.getByTestId("corpus-home-hero");
-    await expect(hero).toBeVisible({ timeout: 10000 });
+    // Should show home content (landing view)
+    const landing = page.getByTestId("corpus-home-landing");
+    await expect(landing).toBeVisible({ timeout: 10000 });
   });
 });
 
@@ -1243,31 +1278,32 @@ test.describe("Corpus Tabs - Home Tab Content", () => {
   test.use({ viewport: { width: 1200, height: 800 } });
   test.setTimeout(30000);
 
-  test("should show corpus hero with title and privacy badge", async ({
+  test("should show corpus landing with title and privacy badge", async ({
     mount,
     page,
   }) => {
     const corpus = createMockCorpus();
     await mountCorpuses(mount, corpus);
 
-    const hero = page.getByTestId("corpus-home-hero");
-    await expect(hero).toBeVisible({ timeout: 10000 });
+    const landing = page.getByTestId("corpus-home-landing");
+    await expect(landing).toBeVisible({ timeout: 10000 });
 
-    // Title should contain corpus name - use testid for specificity
-    const title = page.getByTestId("corpus-home-hero-title");
+    // Title should contain corpus name - use specific testid to avoid strict mode violation
+    const title = page.getByTestId("corpus-home-landing-title");
     await expect(title).toBeVisible();
     await expect(title).toContainText(corpus.title);
 
-    // Privacy badge (Private for our mock) - check within hero
-    await expect(hero.locator("text=Private")).toBeVisible();
+    // Privacy badge (Private for our mock) - check within landing view metadata
+    const metadata = page.getByTestId("corpus-home-landing-metadata");
+    await expect(metadata.locator("text=Private")).toBeVisible();
   });
 
   test("should show inline chat bar on home", async ({ mount, page }) => {
     const corpus = createMockCorpus();
     await mountCorpuses(mount, corpus);
 
-    // Chat bar should be visible
-    const chatBar = page.getByTestId("corpus-home-hero-chat");
+    // Chat bar should be visible (in landing view)
+    const chatBar = page.getByTestId("corpus-home-landing-chat");
     await expect(chatBar).toBeVisible({ timeout: 10000 });
 
     // Quick action chips
@@ -1276,18 +1312,16 @@ test.describe("Corpus Tabs - Home Tab Content", () => {
     await expect(chatBar.locator("text=Analyze")).toBeVisible();
   });
 
-  test("should show About section with description", async ({
-    mount,
-    page,
-  }) => {
+  test("should show description in landing view", async ({ mount, page }) => {
     const corpus = createMockCorpus();
     await mountCorpuses(mount, corpus);
 
-    // Description card should be visible
-    const descCard = page.locator("#corpus-home-description-card");
-    await expect(descCard).toBeVisible({ timeout: 10000 });
+    // Landing view should be visible
+    const landing = page.getByTestId("corpus-home-landing");
+    await expect(landing).toBeVisible({ timeout: 10000 });
 
-    await expect(descCard.locator("text=About this Corpus")).toBeVisible();
+    // CORPUS badge should be visible (exact match to avoid matching "Corpuses" breadcrumb)
+    await expect(page.getByText("CORPUS", { exact: true })).toBeVisible();
   });
 });
 
@@ -1309,8 +1343,12 @@ test.describe("Corpus Tabs - Analytics", () => {
 
     await page.locator('[data-item-id="analytics"]').click();
 
-    // Analytics tab should load (component may show loading or content)
-    // The analytics dashboard renders its own content
-    await page.waitForTimeout(1000);
+    // Wait for engagement metrics to render
+    await expect(page.locator("text=Total Threads").first()).toBeVisible({
+      timeout: 10000,
+    });
+
+    await docScreenshot(page, "corpus--analytics--dashboard");
+    await releaseScreenshot(page, "v3.0.0.b3", "analytics");
   });
 });

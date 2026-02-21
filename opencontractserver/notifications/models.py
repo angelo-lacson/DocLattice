@@ -36,6 +36,10 @@ class NotificationTypeChoices(models.TextChoices):
 
     # Job/processing related (Issue #624)
     DOCUMENT_PROCESSED = "DOCUMENT_PROCESSED", "Document Processing Complete"
+    DOCUMENT_PROCESSING_FAILED = (
+        "DOCUMENT_PROCESSING_FAILED",
+        "Document Processing Failed",
+    )
     EXTRACT_COMPLETE = "EXTRACT_COMPLETE", "Extract Complete"
     ANALYSIS_COMPLETE = "ANALYSIS_COMPLETE", "Analysis Complete"
     ANALYSIS_FAILED = "ANALYSIS_FAILED", "Analysis Failed"
@@ -64,7 +68,7 @@ class Notification(models.Model):
     )
 
     notification_type = models.CharField(
-        max_length=25,
+        max_length=30,
         choices=NotificationTypeChoices.choices,
         help_text="Type of notification",
     )

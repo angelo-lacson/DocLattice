@@ -26,6 +26,7 @@ from opencontractserver.annotations.models import (
     NoteRevision,
     Relationship,
 )
+from opencontractserver.constants import MAX_PROCESSING_ERROR_DISPLAY_LENGTH
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -44,6 +45,7 @@ from opencontractserver.documents.models import (
     Document,
     DocumentAnalysisRow,
     DocumentPath,
+    DocumentProcessingStatus,
     DocumentRelationship,
     DocumentSummaryRevision,
 )
@@ -133,9 +135,16 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         Resolve global reputation for this user.
 
+        Uses pre-attached _reputation_global from resolve_global_leaderboard
+        to avoid N+1 queries. Falls back to database query for single-user
+        lookups.
+
         Epic: #565 - Corpus Engagement Metrics & Analytics
         Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
         """
+        if hasattr(self, "_reputation_global") and self._reputation_global is not None:
+            return self._reputation_global
+
         from opencontractserver.conversations.models import UserReputation
 
         try:
@@ -268,6 +277,14 @@ class AnnotationInputType(AnnotatePermissionsForReadMixin, graphene.InputObjectT
 class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     json = GenericScalar()  # noqa
     feedback_count = graphene.Int(description="Count of user feedback")
+    content_modalities = graphene.List(
+        graphene.String,
+        description="Content modalities present in this annotation: TEXT, IMAGE, etc.",
+    )
+
+    def resolve_content_modalities(self, info):
+        """Return content modalities list from model."""
+        return self.content_modalities or []
 
     all_source_node_in_relationship = graphene.List(lambda: RelationshipType)
 
@@ -466,6 +483,15 @@ class AgentTypeEnum(graphene.Enum):
     CORPUS_AGENT = "corpus_agent"
 
 
+class DocumentProcessingStatusEnum(graphene.Enum):
+    """Enum for document processing status in the parsing pipeline."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 # -------------------- Versioning Types (Phase 1) -------------------- #
 
 
@@ -591,24 +617,43 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
+    _VISIBLE_CORPUS_IDS_CACHE_KEY = "_docpath_visible_corpus_ids"
+
+    @classmethod
+    def _get_visible_corpus_ids(cls, info):
+        """Get visible corpus IDs with request-level caching to prevent N+1 queries."""
+        from opencontractserver.corpuses.models import Corpus
+
+        user = info.context.user
+        user_id = getattr(user, "id", "anonymous")
+        cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user_id}"
+
+        if hasattr(info.context, cache_key):
+            return getattr(info.context, cache_key)
+
+        visible_ids = set(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+        setattr(info.context, cache_key, visible_ids)
+        return visible_ids
+
     @classmethod
     def get_queryset(cls, queryset, info):
-        """Filter paths to only those in corpuses the user can see."""
+        """Filter paths to current, non-deleted paths in visible corpuses."""
+        visible_corpus_ids = cls._get_visible_corpus_ids(info)
+
         if issubclass(type(queryset), QuerySet):
-            # Filter by corpus visibility
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.filter(corpus_id__in=visible_corpus_ids)
+            return queryset.filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         elif "RelatedManager" in str(type(queryset)):
-            from opencontractserver.corpuses.models import Corpus
-
-            visible_corpus_ids = Corpus.objects.visible_to_user(
-                info.context.user
-            ).values_list("id", flat=True)
-            return queryset.all().filter(corpus_id__in=visible_corpus_ids)
+            return queryset.all().filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
         else:
             return queryset
 
@@ -659,12 +704,22 @@ class LabelSetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     token_label_count = graphene.Int(description="Count of token-level labels")
 
     def resolve_doc_label_count(self, info):
+        """Return doc label count from annotation or query."""
+        # Check if parent corpus has passed the annotated value
+        if hasattr(self, "_doc_label_count") and self._doc_label_count is not None:
+            return self._doc_label_count
         return self.annotation_labels.filter(label_type="DOC_TYPE_LABEL").count()
 
     def resolve_span_label_count(self, info):
+        """Return span label count from annotation or query."""
+        if hasattr(self, "_span_label_count") and self._span_label_count is not None:
+            return self._span_label_count
         return self.annotation_labels.filter(label_type="SPAN_LABEL").count()
 
     def resolve_token_label_count(self, info):
+        """Return token label count from annotation or query."""
+        if hasattr(self, "_token_label_count") and self._token_label_count is not None:
+            return self._token_label_count
         return self.annotation_labels.filter(label_type="TOKEN_LABEL").count()
 
     # Count of corpuses using this label set
@@ -1095,18 +1150,34 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_summary_revisions(self, info, corpus_id):
         """Returns all revisions for this document's summary in a specific corpus, ordered by version."""
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
 
         _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning summary data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return DocumentSummaryRevision.objects.none()
         return DocumentSummaryRevision.objects.filter(
             document_id=self.pk, corpus_id=corpus_pk
         ).order_by("version")
 
     def resolve_current_summary_version(self, info, corpus_id):
         """Returns the current summary version number for a specific corpus."""
+        from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
 
         _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning version data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return 0
         latest_revision = (
             DocumentSummaryRevision.objects.filter(
                 document_id=self.pk, corpus_id=corpus_pk
@@ -1123,7 +1194,8 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         _, corpus_pk = from_global_id(corpus_id)
         try:
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Use visible_to_user() to prevent cross-corpus data leakage
+            corpus = Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
             return self.get_summary_for_corpus(corpus)
         except Corpus.DoesNotExist:
             return ""
@@ -1363,6 +1435,66 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         return user_has_permission_for_obj(
             user, self, PermissionTypes.READ, include_group_permissions=True
+        )
+
+    # -------------------- Processing Status Fields (Pipeline Hardening) -------------------- #
+    processing_status = graphene.Field(
+        DocumentProcessingStatusEnum,
+        description="Current processing status of the document in the parsing pipeline",
+    )
+    processing_error = graphene.String(
+        description="Error message if processing failed (truncated for display)",
+    )
+    can_retry = graphene.Boolean(
+        description="Whether the user can retry processing for this document (True if FAILED and user has permission)",
+    )
+
+    def resolve_processing_status(self, info):
+        """Resolve the processing status enum value."""
+        status_value = self.processing_status
+        if status_value:
+            try:
+                return DocumentProcessingStatusEnum.get(status_value)
+            except Exception:
+                return None
+        return None
+
+    def resolve_processing_error(self, info):
+        """Resolve processing error message (truncated for display)."""
+        if self.processing_error:
+            return self.processing_error[:MAX_PROCESSING_ERROR_DISPLAY_LENGTH]
+        return None
+
+    def resolve_can_retry(self, info):
+        """
+        Check if user can retry processing for this document.
+
+        Returns True only if:
+        1. Document is in FAILED state
+        2. User has UPDATE permission (or is creator/superuser)
+
+        Note: This logic must stay aligned with RetryDocumentProcessing mutation.
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        # Must be in failed state to retry
+        if self.processing_status != DocumentProcessingStatus.FAILED:
+            return False
+
+        user = info.context.user
+        if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+            return False
+
+        # Creator and superuser can always retry their documents
+        if self.creator == user or user.is_superuser:
+            return True
+
+        # Others need UPDATE permission
+        return user_has_permission_for_obj(
+            user, self, PermissionTypes.UPDATE, include_group_permissions=True
         )
 
     page_annotations = graphene.List(
@@ -1815,19 +1947,19 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_documents(self, info):
         """
         Custom resolver for documents field that uses DocumentPath.
-        Returns documents with active paths in this corpus.
+        Returns documents with active paths in this corpus, filtered by
+        document-level visibility.
+
+        Document visibility is independent of corpus visibility:
+        Effective Permission = MIN(document_permission, corpus_permission).
+        A private document in a public corpus is still hidden from
+        users without document-level access.
         """
-        user = getattr(info.context, "user", None)
-        # Use the Corpus method that queries via DocumentPath
-        documents = self.get_documents()
-        # Apply visibility filtering
         from opencontractserver.documents.models import Document
 
-        if hasattr(Document.objects, "visible_to_user"):
-            return Document.objects.filter(
-                id__in=documents.values_list("id", flat=True)
-            ).visible_to_user(user)
-        return documents
+        user = getattr(info.context, "user", None)
+        corpus_doc_ids = self.get_documents().values_list("id", flat=True)
+        return Document.objects.filter(id__in=corpus_doc_ids).visible_to_user(user)
 
     def resolve_annotations(self, info):
         """
@@ -1938,6 +2070,64 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     def resolve_categories(self, info):
         """Get all categories assigned to this corpus."""
         return self.categories.all()
+
+    # Efficient document count field - uses annotation from resolver
+    document_count = graphene.Int(
+        description="Count of active documents in this corpus (optimized)"
+    )
+
+    def resolve_document_count(self, info):
+        """
+        Return document count from annotation or fallback to model method.
+
+        For list queries, resolve_corpuses annotates _document_count.
+        For single corpus queries, falls back to model.document_count().
+        """
+        if hasattr(self, "_document_count") and self._document_count is not None:
+            return self._document_count
+        return self.document_count()
+
+    # Efficient annotation count field - uses annotation from resolver
+    annotation_count = graphene.Int(
+        description="Count of annotations in this corpus (optimized)"
+    )
+
+    def resolve_annotation_count(self, info):
+        """
+        Return annotation count from annotation or fallback to database query.
+
+        For list queries, resolve_corpuses annotates _annotation_count.
+        For single corpus queries, falls back to counting via DocumentPath.
+        """
+        if hasattr(self, "_annotation_count") and self._annotation_count is not None:
+            return self._annotation_count
+        from opencontractserver.documents.models import DocumentPath
+
+        doc_ids = DocumentPath.objects.filter(
+            corpus=self, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+        return Annotation.objects.filter(document_id__in=doc_ids).count()
+
+    def resolve_label_set(self, info):
+        """
+        Return label_set with count annotations copied from corpus.
+
+        When resolve_corpuses annotates label counts on the Corpus, we need
+        to copy those annotations to the label_set instance so that its
+        count resolvers can use them instead of hitting the database.
+        """
+        if self.label_set is None:
+            return None
+
+        # Copy annotated counts to the label_set instance
+        if hasattr(self, "_label_doc_count"):
+            self.label_set._doc_label_count = self._label_doc_count
+        if hasattr(self, "_label_span_count"):
+            self.label_set._span_label_count = self._label_span_count
+        if hasattr(self, "_label_token_count"):
+            self.label_set._token_label_count = self._label_token_count
+
+        return self.label_set
 
     class Meta:
         model = Corpus
@@ -2299,6 +2489,8 @@ class CorpusStatsType(graphene.ObjectType):
     total_analyses = graphene.Int()
     total_extracts = graphene.Int()
     total_threads = graphene.Int()
+    total_chats = graphene.Int()
+    total_relationships = graphene.Int()
 
 
 class MentionedResourceType(graphene.ObjectType):
@@ -2466,8 +2658,10 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 )
 
                 if document and corpus:
-                    # Check if document is actually in this corpus
-                    if corpus in document.corpus_set.all():
+                    # Check if document is actually in this corpus via DocumentPath
+                    if DocumentPath.objects.filter(
+                        document=document, corpus=corpus
+                    ).exists():
                         mentions.append(
                             MentionedResourceType(
                                 type="document",
@@ -2515,12 +2709,9 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 document = Document.objects.visible_to_user(user).get(slug=doc_slug)
                 url = f"/d/{document.creator.slug}/{document.slug}"
 
-                # Try to get corpus context (documents can be in multiple corpuses)
-                corpus = (
-                    document.corpus_set.first()
-                    if document.corpus_set.exists()
-                    else None
-                )
+                # Try to get corpus context via DocumentPath
+                doc_path = DocumentPath.objects.filter(document=document).first()
+                corpus = doc_path.corpus if doc_path else None
 
                 mentions.append(
                     MentionedResourceType(
@@ -2697,6 +2888,43 @@ class FileTypeEnum(graphene.Enum):
     # HTML has been removed as we don't support it
 
 
+class ComponentSettingSchemaType(graphene.ObjectType):
+    """
+    Schema for a single pipeline component setting.
+
+    Describes a configuration option that can be set in PipelineSettings
+    for a specific component.
+    """
+
+    name = graphene.String(
+        required=True,
+        description="Setting name (used as key in component_settings dict).",
+    )
+    setting_type = graphene.String(
+        required=True, description="Type: 'required', 'optional', or 'secret'."
+    )
+    python_type = graphene.String(
+        description="Python type hint (e.g., 'str', 'int', 'bool')."
+    )
+    required = graphene.Boolean(
+        required=True,
+        description="Whether this setting must have a value for the component to work.",
+    )
+    description = graphene.String(
+        description="Human-readable description of the setting."
+    )
+    default = GenericScalar(description="Default value if not configured.")
+    env_var = graphene.String(
+        description="Environment variable name used during migration seeding."
+    )
+    has_value = graphene.Boolean(
+        description="Whether this setting currently has a value configured."
+    )
+    current_value = GenericScalar(
+        description="Current value (always null for secrets to avoid exposure)."
+    )
+
+
 class PipelineComponentType(graphene.ObjectType):
     """Graphene type for pipeline components."""
 
@@ -2718,6 +2946,21 @@ class PipelineComponentType(graphene.ObjectType):
     )
     input_schema = GenericScalar(
         description="JSONSchema schema for inputs supported from user (experimental - not fully implemented)."
+    )
+    settings_schema = graphene.List(
+        ComponentSettingSchemaType,
+        description="Schema for component configuration settings stored in PipelineSettings.",
+    )
+    # Multimodal support flags (for embedders)
+    is_multimodal = graphene.Boolean(
+        description="Whether this embedder supports multiple modalities (text + images).",
+        required=False,
+    )
+    supports_text = graphene.Boolean(
+        description="Whether this embedder supports text input.", required=False
+    )
+    supports_images = graphene.Boolean(
+        description="Whether this embedder supports image input.", required=False
     )
 
 
@@ -3254,3 +3497,99 @@ class ModerationMetricsType(graphene.ObjectType):
     time_range_hours = graphene.Int()
     start_time = graphene.DateTime()
     end_time = graphene.DateTime()
+
+
+# ---------------- Semantic Search Types ----------------
+class SemanticSearchResultType(graphene.ObjectType):
+    """
+    Result type for semantic (vector) search across annotations.
+
+    Returns annotation matches with their similarity scores, enabling
+    relevance-ranked search results from the global embeddings.
+
+    PERMISSION MODEL:
+    - Uses Document.objects.visible_to_user() for document access control
+    - Structural annotations visible if document is accessible
+    - Non-structural annotations visible if public OR owned by user
+    """
+
+    annotation = graphene.Field(
+        AnnotationType,
+        required=True,
+        description="The matched annotation",
+    )
+    similarity_score = graphene.Float(
+        required=True,
+        description="Similarity score (0.0-1.0, higher is more similar)",
+    )
+    document = graphene.Field(
+        lambda: DocumentType,
+        description="The document containing this annotation (for convenience)",
+    )
+    corpus = graphene.Field(
+        lambda: CorpusType,
+        description="The corpus containing this annotation, if any",
+    )
+
+    def resolve_document(self, info):
+        """Resolve the document from the annotation."""
+        if self.annotation and self.annotation.document:
+            return self.annotation.document
+        return None
+
+    def resolve_corpus(self, info):
+        """Resolve the corpus from the annotation."""
+        if self.annotation:
+            return self.annotation.corpus
+        return None
+
+
+# ==============================================================================
+# PIPELINE SETTINGS TYPES (Runtime-configurable document processing settings)
+# ==============================================================================
+
+
+class PipelineSettingsType(graphene.ObjectType):
+    """
+    GraphQL type for PipelineSettings singleton.
+
+    Exposes the runtime-configurable document processing pipeline settings.
+    Only superusers can modify these settings via mutation.
+    """
+
+    # Preferred components per MIME type
+    preferred_parsers = GenericScalar(
+        description="Mapping of MIME types to preferred parser class paths"
+    )
+    preferred_embedders = GenericScalar(
+        description="Mapping of MIME types to preferred embedder class paths"
+    )
+    preferred_thumbnailers = GenericScalar(
+        description="Mapping of MIME types to preferred thumbnailer class paths"
+    )
+
+    # Component configuration
+    parser_kwargs = GenericScalar(
+        description="Mapping of parser class paths to their configuration kwargs"
+    )
+    component_settings = GenericScalar(
+        description="Mapping of component class paths to settings overrides"
+    )
+
+    # Default embedder
+    default_embedder = graphene.String(
+        description="Default embedder class path when no MIME-specific embedder is found"
+    )
+
+    # Secrets indicator (actual secrets are never exposed via GraphQL)
+    components_with_secrets = graphene.List(
+        graphene.String,
+        description="List of component paths that have encrypted secrets configured. "
+        "Actual secret values are never exposed via GraphQL.",
+    )
+
+    # Audit fields
+    modified = graphene.DateTime(description="When these settings were last modified")
+    modified_by = graphene.Field(
+        UserType, description="User who last modified these settings"
+    )

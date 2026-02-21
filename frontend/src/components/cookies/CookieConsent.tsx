@@ -2,7 +2,7 @@ import { List, Modal, Header, Icon, Button } from "semantic-ui-react";
 import { useMutation, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 
-import { showCookieAcceptModal, authToken } from "../../graphql/cache";
+import { showCookieAcceptModal, userObj } from "../../graphql/cache";
 import {
   ACCEPT_COOKIE_CONSENT,
   AcceptCookieConsentInputs,
@@ -14,8 +14,9 @@ import {
 } from "../../utils/analytics";
 
 export const CookieConsentDialog = () => {
-  const auth_token = useReactiveVar(authToken);
-  const isAuthenticated = Boolean(auth_token);
+  const currentUser = useReactiveVar(userObj);
+  // Use userObj for auth check - consistent with NavMenu pattern
+  const isAuthenticated = Boolean(currentUser);
   const analyticsEnabled = isPostHogConfigured();
 
   const [acceptCookieConsent, { loading }] = useMutation<

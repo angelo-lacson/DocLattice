@@ -75,12 +75,14 @@ This document provides a complete inventory of all code locations that need to b
 
 ## PART 3: Celery Tasks
 
-### 3.1 Import Tasks (HIGH PRIORITY)
+### 3.1 Import Tasks (COMPLETED)
 
-| # | Task | File | Lines | Current Behavior | Replace With |
-|---|------|------|-------|------------------|--------------|
-| 1 | `import_corpus()` | opencontractserver/tasks/import_tasks.py | 40-227 | Uses legacy `corpus.documents.add()` pattern, direct `Document.objects.create()` | Use `DocumentFolderService.add_document_to_corpus()` |
-| 2 | `import_document_to_corpus()` | opencontractserver/tasks/import_tasks.py | 230-343 | Uses legacy `corpus.documents.add()`, direct `Document.objects.create()` | Use `DocumentFolderService.add_document_to_corpus()` |
+> **Status**: The `corpus.documents` M2M has been removed. These tasks now use `Corpus.add_document()` which creates `DocumentPath` records directly. See [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py) for the implementation.
+
+| # | Task | File | Status | Notes |
+|---|------|------|--------|-------|
+| 1 | `import_corpus()` | opencontractserver/tasks/import_tasks.py | COMPLETED | Uses `corpus.add_document()` |
+| 2 | `import_document_to_corpus()` | opencontractserver/tasks/import_tasks.py | COMPLETED | Uses `corpus.add_document()` |
 | 3 | `process_documents_zip()` | opencontractserver/tasks/import_tasks.py | 346-570 | Direct `Document()` constructor + `.save()` (lines 495-518) | Use `DocumentFolderService.create_document()` then `add_document_to_corpus()` |
 
 ### 3.2 Import Tasks V2 (MEDIUM PRIORITY)
@@ -189,13 +191,14 @@ These implement the core dual-tree versioning logic and are appropriately placed
 - [ ] **3.6** `DocumentType.resolve_folder_in_corpus` (graphene_types.py:1531-1548)
   - Replace with `DocumentFolderService.get_document_folder()`
 
-### Phase 4: Celery Tasks (MEDIUM PRIORITY)
+### Phase 4: Celery Tasks (COMPLETED)
 
-- [ ] **4.1** `import_corpus()` (import_tasks.py:40-227)
-  - Replace `corpus.documents.add()` with `corpus.add_document()` or service
-  - Replace `Document.objects.create()` with service method
+> **Status**: The `corpus.documents` M2M has been removed (issue #835). All tasks now use `Corpus.add_document()` which creates `DocumentPath` records directly.
 
-- [ ] **4.2** `import_document_to_corpus()` (import_tasks.py:230-343)
+- [x] **4.1** `import_corpus()` (import_tasks.py:40-227)
+  - Now uses `corpus.add_document()` - see [`opencontractserver/corpuses/models.py`](../../opencontractserver/corpuses/models.py)
+
+- [x] **4.2** `import_document_to_corpus()` (import_tasks.py:230-343)
   - Same as above
 
 - [ ] **4.3** `process_documents_zip()` (import_tasks.py:346-570)

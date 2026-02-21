@@ -2,20 +2,19 @@
 Comprehensive tests for Issue #654: DocumentPath as single source of truth.
 
 This test file covers:
-1.  utility class
-2. New Corpus methods (add_document, remove_document, get_documents, document_count)
-3. Migration command (sync_m2m_to_documentpath)
+1. New Corpus methods (add_document, remove_document, get_documents, document_count)
+2. DocumentPathType request-level caching
 
 Note: Backward compatibility layer has been removed. All corpus-document
 relationships must now use DocumentPath-based methods.
 """
 
-import io
-
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.files.base import ContentFile
-from django.core.management import call_command
+from django.db import connection
 from django.test import TransactionTestCase
+from django.test.utils import CaptureQueriesContext
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentPath
@@ -182,15 +181,20 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         self.assertEqual(status, "added")
         self.assertEqual(self.corpus.document_count(), initial_count + 1)
 
-        # Add same source document again (should return already_exists)
+        # Add same source document again without explicit path - since no path is
+        # provided, both additions auto-generate the same path from the title,
+        # which triggers upversioning/replacement behavior. The new document
+        # replaces the old one at the same path, so count stays the same.
         corpus_doc2, status2, path2 = self.corpus.add_document(
             document=self.document, user=self.user
         )
-        self.assertEqual(status2, "already_exists")
+        self.assertEqual(status2, "added")
+        # Count stays the same because the second add replaced the first at the
+        # same auto-generated path (upversioning behavior)
         self.assertEqual(self.corpus.document_count(), initial_count + 1)
 
-        # Remove the corpus-isolated document (not the original)
-        self.corpus.remove_document(document=corpus_doc, user=self.user)
+        # Remove the current document at that path
+        self.corpus.remove_document(document=corpus_doc2, user=self.user)
         self.assertEqual(self.corpus.document_count(), initial_count)
 
     def test_add_document_with_folder(self):
@@ -279,43 +283,56 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         self.assertEqual(status1, "added")
         self.assertNotEqual(doc1.id, self.document.id)  # Corpus-isolated copy
 
-        # Add at second path - same source document, but corpus already has this content
+        # Add at second path - no content-based dedup, creates another copy
         doc2, status2, path2 = self.corpus.add_document(
             document=self.document, path="/path/two.pdf", user=self.user
         )
-        # Should return 'already_exists' since content hash already in corpus
-        self.assertEqual(status2, "already_exists")
+        self.assertEqual(status2, "added")
 
-        # Both should return the same corpus-isolated document
-        self.assertEqual(doc1.id, doc2.id)
+        # Each add creates a separate corpus-isolated document
+        self.assertNotEqual(doc1.id, doc2.id)
         self.assertNotEqual(doc1.id, self.document.id)  # Not the original
+        self.assertNotEqual(doc2.id, self.document.id)  # Not the original
 
-        # Same path record returned (content already exists at that hash)
-        self.assertEqual(path1.id, path2.id)
+        # Different path records
+        self.assertNotEqual(path1.id, path2.id)
+        self.assertEqual(path1.path, "/path/one.pdf")
+        self.assertEqual(path2.path, "/path/two.pdf")
 
-        # Document appears once in get_documents() (distinct)
+        # Both documents appear in get_documents()
         docs = list(self.corpus.get_documents())
-        self.assertEqual(len(docs), 1)
-        self.assertEqual(docs[0].id, doc1.id)  # The corpus-isolated copy
+        self.assertEqual(len(docs), 2)
+        doc_ids = {d.id for d in docs}
+        self.assertEqual(doc_ids, {doc1.id, doc2.id})
 
-    def test_add_document_already_exists_at_same_path(self):
-        """Test adding same document at same path returns 'already_exists'."""
+    def test_add_document_at_same_path_creates_new_version(self):
+        """Test adding same document at same path creates a new version."""
         # First add - creates corpus-isolated copy
         doc1, status1, path1 = self.corpus.add_document(
             document=self.document, path="/same/path.pdf", user=self.user
         )
         self.assertEqual(status1, "added")
         self.assertNotEqual(doc1.id, self.document.id)  # Isolated copy
+        self.assertEqual(path1.version_number, 1)
 
-        # Second add at same path - content already exists
+        # Second add at same path - no dedup, creates new version
         doc2, status2, path2 = self.corpus.add_document(
             document=self.document, path="/same/path.pdf", user=self.user
         )
-        self.assertEqual(status2, "already_exists")
+        self.assertEqual(status2, "added")
 
-        # Same corpus-isolated document and path returned
-        self.assertEqual(doc1.id, doc2.id)
-        self.assertEqual(path1.id, path2.id)
+        # Different corpus-isolated documents
+        self.assertNotEqual(doc1.id, doc2.id)
+
+        # New path version created
+        self.assertNotEqual(path1.id, path2.id)
+        self.assertEqual(path2.version_number, 2)
+        self.assertEqual(path2.parent, path1)
+
+        # Old path should no longer be current
+        path1.refresh_from_db()
+        self.assertFalse(path1.is_current)
+        self.assertTrue(path2.is_current)
 
     def test_add_document_replaces_at_occupied_path(self):
         """Test that adding document at occupied path replaces the old one."""
@@ -354,7 +371,7 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         self.assertEqual(docs[0].id, doc2_ret.id)  # The corpus-isolated copy
 
     def test_import_content_creates_new_document(self):
-        """Test import_content creates new document with content deduplication."""
+        """Test import_content creates new document."""
         content = b"Brand new PDF content"
 
         doc, status, path = self.corpus.import_content(
@@ -367,7 +384,7 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         self.assertEqual(path.path, "/imported/doc.pdf")
 
     def test_import_content_corpus_isolation(self):
-        """Test import_content creates corpus-isolated documents with provenance."""
+        """Test import_content creates independent documents (no content-based dedup)."""
         content = b"Same content for deduplication test"
 
         # Import to first corpus
@@ -375,24 +392,24 @@ class TestCorpusDocumentMethods(TransactionTestCase):
             content=content, path="/first.pdf", user=self.user, title="First"
         )
         self.assertEqual(status1, "created")
-        self.assertIsNone(doc1.source_document)  # No provenance for first
+        self.assertIsNone(doc1.source_document)
 
         # Create second corpus
         corpus2 = Corpus.objects.create(title="Second Corpus", creator=self.user)
 
-        # Import same content to second corpus
+        # Import same content to second corpus - no dedup, creates independent doc
         doc2, status2, path2 = corpus2.import_content(
             content=content, path="/second.pdf", user=self.user, title="Second"
         )
 
-        # Should create corpus-isolated document with provenance tracking
+        # No content-based deduplication - each import is independent
         self.assertEqual(status2, "created")
         self.assertNotEqual(doc1.id, doc2.id)  # Different documents
-        self.assertEqual(doc2.source_document, doc1)  # Provenance tracked
-        self.assertEqual(doc1.pdf_file_hash, doc2.pdf_file_hash)  # Same content
+        self.assertIsNone(doc2.source_document)  # No provenance for uploads
+        self.assertEqual(doc1.pdf_file_hash, doc2.pdf_file_hash)  # Same content hash
         self.assertNotEqual(
             doc1.version_tree_id, doc2.version_tree_id
-        )  # Isolated trees
+        )  # Independent version trees
 
     def test_add_document_requires_document_object(self):
         """Test that add_document requires a document object."""
@@ -409,212 +426,79 @@ class TestCorpusDocumentMethods(TransactionTestCase):
         self.assertIn("Content is required", str(cm.exception))
 
 
-class TestMigrationCommand(TransactionTestCase):
-    """Test the sync_m2m_to_documentpath management command."""
+class TestDocumentPathTypeCaching(TransactionTestCase):
+    """Test request-level caching in DocumentPathType._get_visible_corpus_ids."""
 
     def setUp(self):
-        """Set up test data."""
         self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpass123"
+            username="cacheuser", email="cache@example.com", password="testpass123"
         )
 
-        # Create corpus with documents using OLD M2M method
-        # (bypassing DocumentPath for legacy data simulation)
-        self.corpus = Corpus.objects.create(
-            title="Test Corpus", description="Test", creator=self.user
+    def _make_info(self, user):
+        """Create a mock GraphQL info object with a context that supports attr caching."""
+
+        class MockContext:
+            pass
+
+        ctx = MockContext()
+        ctx.user = user
+        info = MockContext()
+        info.context = ctx
+        return info
+
+    def test_cache_returns_same_result_on_repeated_calls(self):
+        """Verify that repeated calls return cached result without re-querying."""
+        from config.graphql.graphene_types import DocumentPathType
+
+        info = self._make_info(self.user)
+
+        result1 = DocumentPathType._get_visible_corpus_ids(info)
+        result2 = DocumentPathType._get_visible_corpus_ids(info)
+
+        self.assertEqual(result1, result2)
+        self.assertIs(result1, result2)  # Same object reference = cache hit
+
+    def test_cache_executes_query_only_once(self):
+        """Verify the visibility query is only executed once per request context."""
+        from config.graphql.graphene_types import DocumentPathType
+
+        info = self._make_info(self.user)
+
+        # First call should execute at least one query
+        with CaptureQueriesContext(connection) as first_call:
+            DocumentPathType._get_visible_corpus_ids(info)
+        self.assertGreater(len(first_call), 0)
+
+        # Subsequent calls should execute zero queries (cached)
+        with CaptureQueriesContext(connection) as cached_calls:
+            DocumentPathType._get_visible_corpus_ids(info)
+            DocumentPathType._get_visible_corpus_ids(info)
+        self.assertEqual(len(cached_calls), 0)
+
+    def test_cache_scoped_per_user(self):
+        """Verify different users get separate cache entries."""
+        from config.graphql.graphene_types import DocumentPathType
+
+        user2 = User.objects.create_user(
+            username="otheruser", email="other@example.com", password="testpass123"
         )
 
-        # Create documents
-        self.doc1 = Document.objects.create(
-            title="Document One", description="First document", creator=self.user
-        )
+        # Shared context simulates two users in same request (e.g., impersonation)
+        info = self._make_info(self.user)
+        result1 = DocumentPathType._get_visible_corpus_ids(info)
 
-        self.doc2 = Document.objects.create(
-            title="Document Two", description="Second document", creator=self.user
-        )
+        info2 = self._make_info(user2)
+        result2 = DocumentPathType._get_visible_corpus_ids(info2)
 
-        # Add documents using direct M2M (simulating legacy data)
-        # This is the old way that doesn't create DocumentPath records
-        self.corpus.documents.add(self.doc1, self.doc2)
+        # Different contexts, different cache entries
+        self.assertIsNot(result1, result2)
 
-    def test_dry_run_mode(self):
-        """Test that dry-run mode doesn't make changes."""
-        # Ensure system user exists
-        system_user, _ = User.objects.get_or_create(
-            id=1, defaults={"username": "system", "email": "system@example.com"}
-        )
+    def test_cache_handles_anonymous_user(self):
+        """Verify anonymous users don't cause cache key collisions."""
+        from config.graphql.graphene_types import DocumentPathType
 
-        # Verify no DocumentPath records exist
-        self.assertEqual(DocumentPath.objects.count(), 0)
+        anon = AnonymousUser()
+        info = self._make_info(anon)
 
-        # Run command in dry-run mode
-        out = io.StringIO()
-        call_command(
-            "sync_m2m_to_documentpath",
-            "--dry-run",
-            "--system-user-id",
-            system_user.id,
-            stdout=out,
-        )
-
-        output = out.getvalue()
-        self.assertIn("DRY-RUN mode", output)
-        self.assertIn("Would create 2 DocumentPath records", output)
-
-        # Verify no DocumentPath records were created
-        self.assertEqual(DocumentPath.objects.count(), 0)
-
-    def test_actual_migration(self):
-        """Test actual migration creates DocumentPath records."""
-        # Ensure system user exists
-        system_user, _ = User.objects.get_or_create(
-            id=1, defaults={"username": "system", "email": "system@example.com"}
-        )
-
-        # Verify no DocumentPath records exist
-        self.assertEqual(DocumentPath.objects.count(), 0)
-
-        # Run command
-        out = io.StringIO()
-        call_command(
-            "sync_m2m_to_documentpath", "--system-user-id", system_user.id, stdout=out
-        )
-
-        output = out.getvalue()
-        self.assertIn("Successfully created 2 DocumentPath records", output)
-
-        # Verify DocumentPath records were created
-        paths = DocumentPath.objects.filter(
-            corpus=self.corpus, is_current=True, is_deleted=False
-        )
-        self.assertEqual(paths.count(), 2)
-
-        # Verify documents are linked correctly
-        doc_ids = set(paths.values_list("document_id", flat=True))
-        self.assertEqual(doc_ids, {self.doc1.id, self.doc2.id})
-
-    def test_migration_with_specific_corpus(self):
-        """Test migration of specific corpus only."""
-        # Ensure system user exists
-        system_user, _ = User.objects.get_or_create(
-            id=1, defaults={"username": "system", "email": "system@example.com"}
-        )
-
-        # Create another corpus
-        corpus2 = Corpus.objects.create(
-            title="Corpus 2", description="Second corpus", creator=self.user
-        )
-        corpus2.documents.add(self.doc1)
-
-        # Migrate only corpus2
-        out = io.StringIO()
-        call_command(
-            "sync_m2m_to_documentpath",
-            "--corpus-id",
-            corpus2.id,
-            "--system-user-id",
-            system_user.id,
-            stdout=out,
-        )
-
-        # Only corpus2 should have DocumentPath records
-        self.assertEqual(DocumentPath.objects.filter(corpus=corpus2).count(), 1)
-        self.assertEqual(DocumentPath.objects.filter(corpus=self.corpus).count(), 0)
-
-    def test_migration_idempotent(self):
-        """Test that running migration twice is safe."""
-        # Ensure system user exists
-        system_user, _ = User.objects.get_or_create(
-            id=1, defaults={"username": "system", "email": "system@example.com"}
-        )
-
-        # Run migration once
-        call_command("sync_m2m_to_documentpath", "--system-user-id", system_user.id)
-        initial_count = DocumentPath.objects.count()
-
-        # Run migration again
-        out = io.StringIO()
-        call_command(
-            "sync_m2m_to_documentpath", "--system-user-id", system_user.id, stdout=out
-        )
-
-        output = out.getvalue()
-        self.assertIn("All documents already have DocumentPath records", output)
-
-        # Count should not change
-        self.assertEqual(DocumentPath.objects.count(), initial_count)
-
-    def test_migration_with_custom_path_prefix(self):
-        """Test migration with custom path prefix."""
-        # Ensure system user exists
-        system_user, _ = User.objects.get_or_create(
-            id=1, defaults={"username": "system", "email": "system@example.com"}
-        )
-
-        out = io.StringIO()
-        call_command(
-            "sync_m2m_to_documentpath",
-            "--path-prefix",
-            "/imported",
-            "--system-user-id",
-            system_user.id,
-            stdout=out,
-        )
-
-        # Check that paths use the custom prefix
-        paths = DocumentPath.objects.filter(corpus=self.corpus)
-        for path in paths:
-            self.assertTrue(path.path.startswith("/imported/"))
-
-    def test_migration_handles_missing_user(self):
-        """Test that migration fails gracefully with invalid user ID."""
-        with self.assertRaises(Exception) as cm:
-            call_command("sync_m2m_to_documentpath", "--system-user-id", 99999)
-
-        self.assertIn("User with ID 99999 not found", str(cm.exception))
-
-    def test_migration_verbose_mode(self):
-        """Test verbose mode provides detailed output."""
-        # Ensure system user exists
-        system_user, _ = User.objects.get_or_create(
-            id=1, defaults={"username": "system", "email": "system@example.com"}
-        )
-
-        out = io.StringIO()
-        call_command(
-            "sync_m2m_to_documentpath",
-            "--verbose",
-            "--system-user-id",
-            system_user.id,
-            stdout=out,
-        )
-
-        output = out.getvalue()
-        # Should show individual document processing
-        self.assertIn("Creating DocumentPath for document", output)
-        self.assertIn("Created DocumentPath:", output)
-
-    def test_migration_handles_duplicate_paths(self):
-        """Test that migration handles path conflicts."""
-        # Ensure system user exists
-        system_user, _ = User.objects.get_or_create(
-            id=1, defaults={"username": "system", "email": "system@example.com"}
-        )
-
-        # Create two documents with same title
-        doc3 = Document.objects.create(
-            title="Document One",  # Same as doc1
-            description="Duplicate title",
-            creator=self.user,
-        )
-        self.corpus.documents.add(doc3)
-
-        # Run migration
-        call_command("sync_m2m_to_documentpath", "--system-user-id", system_user.id)
-
-        # Should create unique paths
-        paths = DocumentPath.objects.filter(corpus=self.corpus)
-        path_values = list(paths.values_list("path", flat=True))
-
-        # All paths should be unique
-        self.assertEqual(len(path_values), len(set(path_values)))
+        result = DocumentPathType._get_visible_corpus_ids(info)
+        self.assertIsInstance(result, set)

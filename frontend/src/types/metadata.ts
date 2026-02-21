@@ -98,8 +98,6 @@ export const validateMetadataValue = (
 ): ValidationResult => {
   const rules = column.validationConfig || column.validationRules;
 
-  console.log(`[validateMetadataValue] - rules: ${rules}`);
-
   // Empty values are valid unless required
   if (value === null || value === undefined || value === "") {
     const valid = !rules?.required;
@@ -108,8 +106,6 @@ export const validateMetadataValue = (
       message: valid ? "" : `${column.name} is required.`,
     };
   }
-
-  console.log(`[validateMetadataValue] - column: ${column}`);
 
   // Handle list validation
   if (column.extractIsList) {
@@ -142,10 +138,6 @@ const validateSingleValue = (
   dataType: MetadataDataType,
   rules: any
 ): ValidationResult => {
-  console.log(
-    `[validateSingleValue] - value ${value} / dataType ${dataType} / rules ${rules}`
-  );
-
   if (value === null || value === undefined)
     return { valid: true, message: "" };
 
@@ -195,11 +187,9 @@ const validateSingleValue = (
         return { valid: false, message: "Invalid date format (YYYY-MM-DD)." };
       }
       if (rules?.min_date) {
-        var min_date = new Date(rules.min_date);
-        console.log(`Min_date, ${min_date}`);
-        var date_value = new Date(value);
-        console.log(`Date value: ${date_value}`);
-        if (date_value < min_date) {
+        const minDate = new Date(rules.min_date);
+        const dateValue = new Date(value);
+        if (dateValue < minDate) {
           return {
             valid: false,
             message: `Date must be after ${rules.min_date}`,
@@ -207,9 +197,9 @@ const validateSingleValue = (
         }
       }
       if (rules?.max_date) {
-        var max_date = new Date(rules.max_date);
-        var date_value = new Date(value);
-        if (date_value > max_date) {
+        const maxDate = new Date(rules.max_date);
+        const dateValue = new Date(value);
+        if (dateValue > maxDate) {
           return {
             valid: false,
             message: `Date must be before ${rules.max_date}`,

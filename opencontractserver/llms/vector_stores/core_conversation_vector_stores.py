@@ -149,7 +149,7 @@ class CoreConversationVectorStore:
             _logger.debug(f"Auto-detected embedder path: {self.embedder_path}")
 
         # Validate or fallback dimension
-        if self.embed_dim not in [384, 768, 1536, 3072]:
+        if self.embed_dim not in [384, 768, 1024, 1536, 2048, 3072, 4096]:
             if embedder_class:
                 self.embed_dim = getattr(embedder_class, "vector_size", 768)
             else:
@@ -367,7 +367,7 @@ class CoreChatMessageVectorStore:
             _logger.debug(f"Auto-detected embedder path: {self.embedder_path}")
 
         # Validate or fallback dimension
-        if self.embed_dim not in [384, 768, 1536, 3072]:
+        if self.embed_dim not in [384, 768, 1024, 1536, 2048, 3072, 4096]:
             if embedder_class:
                 self.embed_dim = getattr(embedder_class, "vector_size", 768)
             else:

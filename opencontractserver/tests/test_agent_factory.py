@@ -35,9 +35,10 @@ class TestUserHasWritePermission(TestCase):
         cls.corpus = Corpus.objects.create(
             title="Write Perm Test Corpus", creator=cls.user
         )
-        cls.doc = Document.objects.create(
-            title="Write Perm Test Doc", corpus=cls.corpus, creator=cls.user
+        original_doc = Document.objects.create(
+            title="Write Perm Test Doc", creator=cls.user
         )
+        cls.doc, _, _ = cls.corpus.add_document(document=original_doc, user=cls.user)
 
     async def test_returns_false_when_resource_is_none(self):
         """Test that _user_has_write_permission returns False when resource is None."""
@@ -68,9 +69,11 @@ class TestAgentFactorySetup(TestCase):
         cls.corpus1 = Corpus.objects.create(
             title="Factory Test Corpus 1", creator=cls.user
         )
-        cls.doc1 = Document.objects.create(
-            title="Factory Test Doc 1", corpus=cls.corpus1, creator=cls.user
+        # Create document and add to corpus - add_document returns corpus-isolated copy
+        original_doc1 = Document.objects.create(
+            title="Factory Test Doc 1", creator=cls.user
         )
+        cls.doc1, _, _ = cls.corpus1.add_document(document=original_doc1, user=cls.user)
 
         def dummy_callable_tool(q: str) -> str:
             return f"called: {q}"
@@ -124,7 +127,11 @@ class TestUnifiedAgentFactory(TestAgentFactorySetup):
             tools=raw_tools,
         )
         mock_convert_tools.assert_called_once_with(
-            raw_tools, AgentFramework.PYDANTIC_AI
+            raw_tools,
+            AgentFramework.PYDANTIC_AI,
+            document_id=self.doc1.id,
+            corpus_id=self.corpus1.id,
+            user_id=None,
         )
         mock_pydantic_agent_class.create.assert_called_once()
         self.assertIs(agent, mock_agent_instance)
@@ -187,9 +194,11 @@ class TestToolFilteringDocumentAgent(TestCase):
         cls.corpus = Corpus.objects.create(
             title="Tool Filter Test Corpus", creator=cls.owner
         )
-        cls.doc = Document.objects.create(
-            title="Tool Filter Test Doc", corpus=cls.corpus, creator=cls.owner
+        # Create document and add to corpus - add_document returns corpus-isolated copy
+        original_doc = Document.objects.create(
+            title="Tool Filter Test Doc", creator=cls.owner
         )
+        cls.doc, _, _ = cls.corpus.add_document(document=original_doc, user=cls.owner)
 
     @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIDocumentAgent")
     @patch(f"{UnifiedAgentFactory.__module__}.get_default_config")

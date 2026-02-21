@@ -2,6 +2,10 @@
 
 This tutorial walks through extracting structured data from documents using OpenContracts' extraction system.
 
+The extraction pipeline is powered by an agent-based architecture using PydanticAI, which enables intelligent
+document retrieval and structured data extraction. For technical implementation details, see the
+[LLM Framework documentation](../../architecture/llms/README.md).
+
 ## Prerequisites
 
 - OpenContracts instance running with Celery workers

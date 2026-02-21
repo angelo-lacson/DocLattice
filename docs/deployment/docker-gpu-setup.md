@@ -58,7 +58,9 @@ The following CUDA-specific environment variables are configured:
 
 ## GitHub Workflows
 
-### 1. Tagged Release Workflow (`docker-build-release.yml`)
+### 1. Tagged Release Workflow
+
+See [`docker-build-release.yml`](../../.github/workflows/docker-build-release.yml) for the full configuration.
 
 Automatically builds and publishes images when a new release is created.
 
@@ -71,7 +73,9 @@ Automatically builds and publishes images when a new release is created.
 - `ghcr.io/[owner]/opencontractserver_postgres:[version]`
 - `ghcr.io/[owner]/opencontractserver_traefik:[version]`
 
-### 2. CUDA Build Workflow (`docker-build-cuda.yml`)
+### 2. CUDA Build Workflow
+
+See [`docker-build-cuda.yml`](../../.github/workflows/docker-build-cuda.yml) for the full configuration.
 
 Builds GPU-enabled images with CUDA support.
 
@@ -82,34 +86,48 @@ Builds GPU-enabled images with CUDA support.
 **Images built:**
 - `ghcr.io/[owner]/opencontractserver_django:cuda-latest` - GPU-enabled image used by django, celeryworker, celerybeat, and flower services
 
-## Using Pre-built Images
+## Docker Compose Files
 
-### Production Deployment with Pre-built Images
+The project includes the following compose files:
 
-Use `production-ghcr.yml` to deploy with pre-built images:
-
-```bash
-# Using latest images
-GITHUB_REPOSITORY_OWNER=yourusername docker-compose -f production-ghcr.yml up -d
-
-# Using specific version
-GITHUB_REPOSITORY_OWNER=yourusername TAG=v1.2.3 docker-compose -f production-ghcr.yml up -d
-
-# Using CUDA-enabled images
-GITHUB_REPOSITORY_OWNER=yourusername TAG=cuda-latest docker-compose -f production-ghcr.yml up -d
-```
+- [`local.yml`](../../local.yml) - Local development with hot reloading
+- [`production.yml`](../../production.yml) - Production deployment (builds images locally)
+- [`test.yml`](../../test.yml) - Test environment
 
 ### Local Development
 
-For local development, continue using the standard compose files:
+For local development, use the standard compose files:
 
 ```bash
 # Build locally
-docker-compose -f local.yml build
+docker compose -f local.yml build
 
 # Run with GPU support
-docker-compose -f local.yml up
+docker compose -f local.yml up
 ```
+
+### Production Deployment
+
+For production, use [`production.yml`](../../production.yml) which builds images locally:
+
+```bash
+# Run migrations first (required before starting services)
+docker compose -f production.yml --profile migrate up migrate
+
+# Start all services
+docker compose -f production.yml up -d
+```
+
+### Using Pre-built GHCR Images
+
+To use pre-built images from GitHub Container Registry, you can override the image references in production.yml or create a custom compose file that pulls from GHCR:
+
+- Release images: `ghcr.io/[owner]/opencontractserver_django:[version]`
+- CUDA images: `ghcr.io/[owner]/opencontractserver_django:cuda-latest`
+
+See the workflow files for available image tags:
+- [docker-build-release.yml](../../.github/workflows/docker-build-release.yml) - Tagged release builds
+- [docker-build-cuda.yml](../../.github/workflows/docker-build-cuda.yml) - CUDA-enabled builds
 
 ## Verifying GPU Support
 
@@ -117,7 +135,7 @@ docker-compose -f local.yml up
 
 ```bash
 # Enter django container
-docker-compose -f local.yml exec django bash
+docker compose -f local.yml exec django bash
 
 # Inside container, run Python
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'GPU count: {torch.cuda.device_count()}')"

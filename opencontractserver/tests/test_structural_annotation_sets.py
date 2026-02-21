@@ -593,3 +593,123 @@ class StructuralSetRequiresStructuralFlagTests(TestCase):
         self.assertIsNotNone(relationship.id)
         self.assertFalse(relationship.structural)
         self.assertIsNone(relationship.structural_set)
+
+
+class StructuralAnnotationSetDuplicateTests(TestCase):
+    """Tests for the StructuralAnnotationSet.duplicate() method."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="test")
+        self.content_hash = hashlib.sha256(b"test duplicate content").hexdigest()
+        self.label = AnnotationLabel.objects.create(text="Section", creator=self.user)
+
+    def test_duplicate_creates_new_set_with_corpus_suffix(self):
+        """Test that duplicate() creates a new set with corpus_id and UUID suffix."""
+        original = StructuralAnnotationSet.objects.create(
+            content_hash=self.content_hash,
+            creator=self.user,
+            parser_name="TestParser",
+            parser_version="1.0",
+            page_count=5,
+            token_count=500,
+        )
+
+        copy = original.duplicate(corpus_id=123)
+
+        self.assertNotEqual(original.id, copy.id)
+        # Content hash format: {original_hash}_{corpus_id}_{uuid8}
+        self.assertTrue(
+            copy.content_hash.startswith(f"{self.content_hash}_123_"),
+            f"Expected hash to start with '{self.content_hash}_123_', "
+            f"got '{copy.content_hash}'",
+        )
+        # Verify UUID suffix is 8 hex chars
+        suffix = copy.content_hash.split("_")[-1]
+        self.assertEqual(len(suffix), 8, "UUID suffix should be 8 characters")
+        self.assertEqual(copy.parser_name, "TestParser")
+        self.assertEqual(copy.parser_version, "1.0")
+        self.assertEqual(copy.page_count, 5)
+        self.assertEqual(copy.token_count, 500)
+        self.assertEqual(copy.creator, self.user)
+
+    def test_duplicate_creates_new_set_with_uuid_suffix(self):
+        """Test that duplicate() creates a new set with UUID suffix when no corpus_id."""
+        original = StructuralAnnotationSet.objects.create(
+            content_hash=self.content_hash,
+            creator=self.user,
+        )
+
+        copy = original.duplicate()
+
+        self.assertNotEqual(original.id, copy.id)
+        self.assertTrue(copy.content_hash.startswith(self.content_hash))
+        self.assertNotEqual(copy.content_hash, self.content_hash)
+        # UUID suffix is 8 chars after underscore
+        suffix = copy.content_hash[len(self.content_hash) + 1 :]
+        self.assertEqual(len(suffix), 8)
+
+    def test_duplicate_copies_annotations(self):
+        """Test that duplicate() copies structural annotations."""
+        original = StructuralAnnotationSet.objects.create(
+            content_hash=self.content_hash,
+            creator=self.user,
+        )
+
+        # Create some annotations
+        for i in range(3):
+            Annotation.objects.create(
+                structural_set=original,
+                annotation_label=self.label,
+                creator=self.user,
+                raw_text=f"Section {i}",
+                page=i,
+                structural=True,
+            )
+
+        copy = original.duplicate(corpus_id=456)
+
+        # Check annotations were copied
+        self.assertEqual(original.annotation_count, 3)
+        self.assertEqual(copy.annotation_count, 3)
+
+        # Annotations should be different objects
+        original_annot_ids = set(
+            original.structural_annotations.values_list("id", flat=True)
+        )
+        copy_annot_ids = set(copy.structural_annotations.values_list("id", flat=True))
+        self.assertEqual(len(original_annot_ids & copy_annot_ids), 0)
+
+        # But content should match
+        original_texts = set(
+            original.structural_annotations.values_list("raw_text", flat=True)
+        )
+        copy_texts = set(copy.structural_annotations.values_list("raw_text", flat=True))
+        self.assertEqual(original_texts, copy_texts)
+
+    def test_duplicate_preserves_annotation_content_modalities(self):
+        """Test that duplicate() preserves content_modalities field."""
+        from opencontractserver.types.enums import ContentModality
+
+        original = StructuralAnnotationSet.objects.create(
+            content_hash=self.content_hash,
+            creator=self.user,
+        )
+
+        # Create annotation with image modality
+        Annotation.objects.create(
+            structural_set=original,
+            annotation_label=self.label,
+            creator=self.user,
+            raw_text="Figure caption",
+            structural=True,
+            content_modalities=[
+                ContentModality.TEXT.value,
+                ContentModality.IMAGE.value,
+            ],
+        )
+
+        copy = original.duplicate(corpus_id=789)
+
+        copy_annot = copy.structural_annotations.first()
+        self.assertIn(ContentModality.TEXT.value, copy_annot.content_modalities)
+        self.assertIn(ContentModality.IMAGE.value, copy_annot.content_modalities)
