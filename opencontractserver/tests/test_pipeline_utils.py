@@ -597,9 +597,14 @@ class TestPostProcessor(BasePostProcessor):
             embedder = get_default_embedder_for_filetype("text/plain")
             self.assertEqual(embedder.title, "Test Embedder 768")
 
-            # Test getting embedder for non-existent mimetype
-            embedder = get_default_embedder_for_filetype("application/json")
-            self.assertIsNone(embedder)
+            # Test getting embedder for non-existent mimetype falls back
+            # to the global default embedder (not None)
+            with patch(
+                "opencontractserver.pipeline.utils.get_default_embedder",
+                return_value=None,
+            ):
+                embedder = get_default_embedder_for_filetype("application/json")
+                self.assertIsNone(embedder)
 
     def test_find_embedder_for_filetype(self) -> None:
         """
@@ -648,17 +653,13 @@ class TestPostProcessor(BasePostProcessor):
         embedder = find_embedder_for_filetype(FileTypeEnum.TXT)
         self.assertEqual(embedder.title, "Test Embedder 768")
 
-        # Test with unknown mimetype (should return None from get_preferred_embedder)
+        # Test with unknown mimetype — falls back to the global default embedder
         embedder = find_embedder_for_filetype("application/unknown")
-        self.assertIsNone(
-            embedder
-        )  # None because no preferred embedder for this mimetype
+        self.assertEqual(embedder.title, "Test Embedder")
 
-        # Test with DOCX FileTypeEnum (which should map to a known mimetype)
+        # Test with DOCX FileTypeEnum — falls back to the global default embedder
         embedder = find_embedder_for_filetype(FileTypeEnum.DOCX)
-        self.assertIsNone(
-            embedder
-        )  # None because no preferred embedder for this mimetype
+        self.assertEqual(embedder.title, "Test Embedder")
 
     def test_find_embedder_for_filetype_error_handling(self) -> None:
         """
@@ -679,9 +680,11 @@ class TestPostProcessor(BasePostProcessor):
         PipelineSettings._invalidate_cache()
         self.addCleanup(PipelineSettings._invalidate_cache)
 
-        # When a preferred embedder can't be loaded, the function should return None
+        # When a preferred embedder can't be loaded, the function falls back
+        # to the global default embedder
         embedder = find_embedder_for_filetype("application/pdf")
-        self.assertIsNone(embedder)
+        self.assertIsNotNone(embedder)
+        self.assertEqual(embedder.title, "Test Embedder")
 
 
 if __name__ == "__main__":
