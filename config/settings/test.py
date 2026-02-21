@@ -125,11 +125,6 @@ TELEMETRY_ENABLED = False
 # Integration tests that need to verify actual service connectivity should
 # explicitly instantiate the real embedder class (e.g., MicroserviceEmbedder).
 DEFAULT_EMBEDDER = "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
-DEFAULT_EMBEDDERS_BY_FILETYPE = {
-    "application/pdf": "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder",
-    "text/plain": "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder",  # noqa: E501
-}
 
 # Auth0 settings for tests
 # ------------------------------------------------------------------------------
