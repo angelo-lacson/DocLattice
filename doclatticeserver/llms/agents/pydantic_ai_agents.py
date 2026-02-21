@@ -1315,10 +1315,10 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             )
 
             # Include prior conversation context if available
-            message_history = await self._get_message_history()
+            history_result = await self._get_message_history()
             run_kwargs = {"deps": self.agent_deps, **kwargs}
-            if message_history:
-                run_kwargs["message_history"] = message_history
+            if history_result.messages:
+                run_kwargs["message_history"] = history_result.messages
 
             # Run the agent with the user's prompt and full dependencies
             run_result = await structured_agent.run(
@@ -1605,7 +1605,8 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         # no risk of re-triggering the approval gate here.
         tool_call_id = pending.get("tool_call_id") or str(uuid4())
         if approved:
-            resume_history = await self._get_message_history() or []
+            history_result = await self._get_message_history()
+            resume_history = list(history_result.messages or [])
 
             # 1) The LLM's original tool call (ModelResponse)
             tool_call_part = ToolCallPart(

@@ -89,14 +89,25 @@ describe("CacheManager", () => {
       expect(result.message).toContain("test_reset");
     });
 
-    it("should refetch active queries by default", async () => {
+    it("should refetch active queries when refetchActive is true", async () => {
       // Act
-      await cacheManager.resetOnAuthChange({ reason: "test_reset" });
+      await cacheManager.resetOnAuthChange({
+        reason: "test_reset",
+        refetchActive: true,
+      });
 
       // Assert
       expect(client.refetchQueries).toHaveBeenCalledWith({
         include: "active",
       });
+    });
+
+    it("should not refetch active queries by default", async () => {
+      // Act
+      await cacheManager.resetOnAuthChange({ reason: "test_reset" });
+
+      // Assert
+      expect(client.refetchQueries).not.toHaveBeenCalled();
     });
 
     it("should skip refetch when refetchActive is false", async () => {

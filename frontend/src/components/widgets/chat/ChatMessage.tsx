@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { isTextFileType } from "../../../utils/files";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -905,7 +906,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
     if (!sourceData) return setLabelMenuOpen(false);
 
     try {
-      if (selectedDocument?.fileType?.startsWith("text/")) {
+      if (isTextFileType(selectedDocument?.fileType)) {
         if (
           sourceData.startIndex === undefined ||
           sourceData.endIndex === undefined
@@ -1828,7 +1829,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const { humanSpanLabels, humanTokenLabels } = useCorpusState();
   const { selectedDocument } = useSelectedDocument();
   const availableLabels = useMemo(() => {
-    if (selectedDocument?.fileType?.startsWith("text/")) return humanSpanLabels;
+    if (isTextFileType(selectedDocument?.fileType)) return humanSpanLabels;
     return humanTokenLabels;
   }, [selectedDocument, humanSpanLabels, humanTokenLabels]);
 

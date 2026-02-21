@@ -69,13 +69,17 @@ export const useNavMenu = () => {
    * We don't await cache clear since logout shouldn't block on it.
    */
   const requestLogout = () => {
-    // Clear auth state FIRST - prevents any new queries from using old credentials
+    // IMPORTANT: Clear auth state BEFORE calling resetOnAuthChange().
+    // The useRefetchOnAuthChange hook (App.tsx) checks authToken() inside its
+    // onClearStore callback — an empty token signals "logout" and skips the
+    // refetch. If this ordering is reversed, the hook would re-issue all
+    // active queries with the still-valid token before it's cleared.
+    // See: useRefetchOnAuthChange.ts lines 31-36.
     authToken("");
     userObj(null);
     authStatusVar("ANONYMOUS");
 
-    // Fire-and-forget cache clear (don't block logout on this)
-    // No refetch needed since we're logging out
+    // Fire-and-forget cache clear (don't block logout on this).
     resetOnAuthChange({ reason: "user_logout", refetchActive: false }).catch(
       (error) =>
         console.warn("[useNavMenu] Cache reset failed on logout:", {
