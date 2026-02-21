@@ -34,7 +34,10 @@ def get_pdf_page_count(pdf_bytes: bytes) -> int:
 
 
 def split_pdf_by_page_range(
-    pdf_bytes: bytes, start_page: int, end_page: int
+    pdf_bytes: bytes,
+    start_page: int,
+    end_page: int,
+    reader: "PdfReader | None" = None,
 ) -> bytes:
     """
     Extract a contiguous range of pages from a PDF and return as new PDF bytes.
@@ -43,6 +46,9 @@ def split_pdf_by_page_range(
         pdf_bytes: Raw PDF file bytes.
         start_page: First page to include (0-based, inclusive).
         end_page: Last page to include (0-based, exclusive).
+        reader: Optional pre-built PdfReader to avoid re-parsing the PDF
+            on every call. When splitting multiple ranges from the same PDF,
+            create one reader and pass it to each call.
 
     Returns:
         Bytes of a new PDF containing only the specified page range.
@@ -57,10 +63,11 @@ def split_pdf_by_page_range(
             f"end_page ({end_page}) must be > start_page ({start_page})"
         )
 
-    try:
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-    except Exception as e:
-        raise ValueError(f"Failed to read PDF: {e}") from e
+    if reader is None:
+        try:
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+        except Exception as e:
+            raise ValueError(f"Failed to read PDF: {e}") from e
 
     total_pages = len(reader.pages)
     if start_page >= total_pages:

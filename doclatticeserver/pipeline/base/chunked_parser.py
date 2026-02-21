@@ -11,11 +11,14 @@ Subclasses implement ``_parse_single_chunk_impl()`` instead of
 ``parse_document``, ``save_parsed_data``) remains unchanged.
 """
 
+import io
 import logging
 import time
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
+
+from pypdf import PdfReader
 
 from django.core.files.storage import default_storage
 
@@ -209,11 +212,15 @@ class BaseChunkedParser(BaseParser):
                 **all_kwargs,
             )
         else:
-            # Concurrent: pre-split all chunks (needed for upfront submission)
+            # Concurrent: pre-split all chunks (needed for upfront submission).
+            # Create a single PdfReader to avoid re-parsing the PDF per chunk.
+            shared_reader = PdfReader(io.BytesIO(pdf_bytes))
             chunk_data: list[tuple[int, bytes, int]] = []
             for idx, (start, end) in enumerate(chunks):
                 try:
-                    chunk_bytes = split_pdf_by_page_range(pdf_bytes, start, end)
+                    chunk_bytes = split_pdf_by_page_range(
+                        pdf_bytes, start, end, reader=shared_reader
+                    )
                 except ValueError as e:
                     raise DocumentParsingError(
                         f"Failed to split PDF for document {doc_id}, "
