@@ -546,7 +546,5 @@ class NoteVisibilityTest(TestCase):
 
     def test_queryset_chain_respects_permissions(self):
         """Chaining .filter().visible_to_user() must still check permissions."""
-        qs = Note.objects.filter(id=self.private_note.id).visible_to_user(
-            self.outsider
-        )
+        qs = Note.objects.filter(id=self.private_note.id).visible_to_user(self.outsider)
         self.assertNotIn(self.private_note, qs)

@@ -390,9 +390,7 @@ class NoteQuerySet(CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixi
         # Authenticated: visible if creator OR (doc visible AND corpus visible)
         doc_visible = Q(document__is_public=True) | Q(document__creator=user)
         corpus_visible = (
-            Q(corpus__isnull=True)
-            | Q(corpus__is_public=True)
-            | Q(corpus__creator=user)
+            Q(corpus__isnull=True) | Q(corpus__is_public=True) | Q(corpus__creator=user)
         )
 
         return self.filter(Q(creator=user) | (doc_visible & corpus_visible)).distinct()
