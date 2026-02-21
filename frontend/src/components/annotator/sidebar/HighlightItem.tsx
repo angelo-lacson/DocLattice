@@ -7,7 +7,10 @@ import { HorizontallyJustifiedDiv } from "./common";
 import { useAnnotationRefs } from "../hooks/useAnnotationRefs";
 import { useAnnotationSelection } from "../context/UISettingsAtom";
 import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
-import { ServerTokenAnnotation } from "../types/annotations";
+import {
+  ServerTokenAnnotation,
+  ServerSpanAnnotation,
+} from "../types/annotations";
 import { PermissionTypes } from "../../types";
 import { ModalityBadge } from "./ModalityBadge";
 import { AnnotationImagePreview } from "./AnnotationImagePreview";
@@ -133,7 +136,7 @@ const LocationText = styled.div`
 `;
 
 interface HighlightItemProps {
-  annotation: ServerTokenAnnotation;
+  annotation: ServerTokenAnnotation | ServerSpanAnnotation;
   className?: string;
   read_only: boolean;
   relations: Array<{ sourceIds: string[]; targetIds: string[] }>;
@@ -173,8 +176,10 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   const my_input_relationships = relations.filter((relation) =>
     relation.targetIds.includes(annotation.id)
   );
+  const isTokenAnnotation = annotation instanceof ServerTokenAnnotation;
+
   const handleClick = () => {
-    // Scroll to annotation in PDF
+    // Scroll to annotation element if a ref is registered (PDF or text)
     annotationElementRefs.current[annotation.id]?.scrollIntoView({
       behavior: "smooth",
       block: "center",
@@ -300,7 +305,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           </RelationshipLabel>
         )}
       </HorizontallyJustifiedDiv>
-      <LocationText>Page {annotation.page}</LocationText>
+      {isTokenAnnotation && <LocationText>Page {annotation.page}</LocationText>}
     </HighlightContainer>
   );
 };

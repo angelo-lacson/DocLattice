@@ -5,7 +5,7 @@
  * of the parent DocumentViewer component.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useCallback } from "react";
 import {
   useApproveAnnotation,
   useCreateAnnotation,
@@ -26,6 +26,7 @@ import {
 } from "../../context/UISettingsAtom";
 import { useCorpusState } from "../../context/CorpusAtom";
 import { useChatSourceState } from "../../context/ChatSourceAtom";
+import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
 
 interface TxtAnnotatorWrapperProps {
   readOnly: boolean;
@@ -56,6 +57,24 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
   const handleUpdateAnnotation = useUpdateAnnotation();
   const handleApproveAnnotation = useApproveAnnotation();
   const handleRejectAnnotation = useRejectAnnotation();
+
+  const { registerRef, unregisterRef } = useAnnotationRefs();
+
+  /**
+   * Callback for TxtAnnotator to register/unregister annotation DOM elements
+   * into the shared annotation refs atom, enabling sidebar scrollIntoView.
+   */
+  const handleAnnotationRefChange = useCallback(
+    (annotationId: string, element: HTMLElement | null) => {
+      if (element) {
+        const ref = { current: element };
+        registerRef("annotation", ref, annotationId);
+      } else {
+        unregisterRef("annotation", annotationId);
+      }
+    },
+    [registerRef, unregisterRef]
+  );
 
   const { messages, selectedMessageId, selectedSourceIndex } =
     useChatSourceState();
@@ -88,8 +107,6 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
 
     return allSources;
   }, [messages]);
-
-  console.log("chatSourceMatches", chatSourceMatches);
 
   // Memoized getSpan callback
   const getSpan = useCallback(
@@ -154,6 +171,7 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
         selectedAnnotations={selectedAnnotations}
         setSelectedAnnotations={setSelectedAnnotations}
         showStructuralAnnotations={showStructural}
+        onAnnotationRefChange={handleAnnotationRefChange}
       />
     </div>
   );

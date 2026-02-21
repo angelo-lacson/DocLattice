@@ -104,6 +104,11 @@ interface TxtAnnotatorProps {
   }[];
   /** Currently selected chat source ID, if any. */
   selectedChatSourceId?: string;
+  /** Callback to register/unregister annotation DOM refs for sidebar scroll-to. */
+  onAnnotationRefChange?: (
+    annotationId: string,
+    element: HTMLElement | null
+  ) => void;
 }
 
 /** Used in the label rendering code to describe each label's bounding box. */
@@ -310,6 +315,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   selectedSearchResultIndex,
   chatSources = [],
   selectedChatSourceId,
+  onAnnotationRefChange,
 }) => {
   const [hoveredSpanIndex, setHoveredSpanIndex] = useState<number | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -320,6 +326,54 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hideLabelsTimeout = useRef<NodeJS.Timeout | null>(null);
+  const registeredAnnotationIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Register annotation DOM refs so the sidebar can scrollIntoView directly.
+   * For each annotation, we find the first span that contains it and register
+   * that element via the onAnnotationRefChange callback.
+   */
+  useEffect(() => {
+    if (!onAnnotationRefChange || !containerRef.current) return;
+
+    const currentIds = new Set<string>();
+
+    for (const ann of annotations) {
+      currentIds.add(ann.id);
+    }
+
+    // Find and register the first DOM span for each annotation
+    for (const ann of annotations) {
+      const spanIndex = spans.findIndex(
+        (span) => ann.json.start >= span.start && ann.json.start < span.end
+      );
+      if (spanIndex < 0) continue;
+
+      const el = containerRef.current.querySelector(
+        `span[data-span-index="${spanIndex}"]`
+      ) as HTMLElement | null;
+      if (el) {
+        onAnnotationRefChange(ann.id, el);
+      }
+    }
+
+    // Unregister annotations that were removed
+    for (const prevId of registeredAnnotationIdsRef.current) {
+      if (!currentIds.has(prevId)) {
+        onAnnotationRefChange(prevId, null);
+      }
+    }
+
+    registeredAnnotationIdsRef.current = currentIds;
+
+    return () => {
+      // Cleanup all refs on unmount
+      for (const id of registeredAnnotationIdsRef.current) {
+        onAnnotationRefChange(id, null);
+      }
+      registeredAnnotationIdsRef.current = new Set();
+    };
+  }, [annotations, spans, onAnnotationRefChange]);
 
   /**
    * Handle mouse enter on a specific span index.
@@ -627,8 +681,6 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
    * to ensure we always find the right span.
    */
   useEffect(() => {
-    console.log("selectedChatSourceId changed to ", selectedChatSourceId);
-
     if (!selectedChatSourceId) return;
     const containerElement = containerRef.current;
     if (!containerElement) return;
