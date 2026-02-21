@@ -156,11 +156,22 @@ class PipelineComponentRegistry:
 
     def _discover_subclasses(self, module_name: str, base_class: type) -> list[type]:
         """
-        Discover all subclasses of base_class in the given module package.
+        Discover all concrete subclasses of base_class in the given module package.
 
-        This is called ONCE during initialization.
+        This is called ONCE during initialization. Deduplicates by class identity
+        so that module-level aliases (e.g. ``Alias = RealClass``) don't cause
+        the same class to appear twice.  Abstract intermediate base classes are
+        also skipped — only concrete (instantiable) components are registered.
+
+        Note: inspect.isabstract() returns True only when a class has unimplemented
+        abstract methods.  An intermediate base class that accidentally implements
+        all parent abstract methods (while intending to remain abstract) will pass
+        through this filter.  If you add intermediate bases, mark them with ABC and
+        leave at least one @abstractmethod unimplemented, or add a dedicated
+        ``_is_abstract = True`` sentinel checked here.
         """
-        subclasses = []
+        seen: set[type] = set()
+        subclasses: list[type] = []
         try:
             package = importlib.import_module(module_name)
             prefix = package.__name__ + "."
@@ -170,7 +181,13 @@ class PipelineComponentRegistry:
                     try:
                         module = importlib.import_module(modname)
                         for name, obj in inspect.getmembers(module, inspect.isclass):
-                            if issubclass(obj, base_class) and obj != base_class:
+                            if (
+                                issubclass(obj, base_class)
+                                and obj is not base_class
+                                and obj not in seen
+                                and not inspect.isabstract(obj)
+                            ):
+                                seen.add(obj)
                                 subclasses.append(obj)
                     except Exception as e:
                         logger.warning(f"Failed to import {modname}: {e}")

@@ -351,7 +351,7 @@ class TestThreadCorpusActionSignals(TransactionTestCase):
             name="Auto Moderate Threads",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review this thread for compliance",
+            task_instructions="Review this thread for compliance",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=self.user,
         )
@@ -375,7 +375,7 @@ class TestThreadCorpusActionSignals(TransactionTestCase):
             name="Auto Moderate Messages",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review this message for compliance",
+            task_instructions="Review this message for compliance",
             trigger=CorpusActionTrigger.NEW_MESSAGE,
             creator=self.user,
         )
@@ -409,7 +409,7 @@ class TestThreadCorpusActionSignals(TransactionTestCase):
             name="Auto Moderate Messages",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review this message",
+            task_instructions="Review this message",
             trigger=CorpusActionTrigger.NEW_MESSAGE,
             creator=self.user,
         )
@@ -452,7 +452,7 @@ class TestThreadCorpusActionSignals(TransactionTestCase):
             name="Auto Moderate",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review",
+            task_instructions="Review",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=self.user,
         )
@@ -499,7 +499,7 @@ class TestCorpusActionExecutionModel(TestCase):
             name="Test Action",
             corpus=cls.corpus,
             agent_config=cls.agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=cls.user,
         )
@@ -621,7 +621,7 @@ class TestAgentActionResultModel(TestCase):
             name="Test Action",
             corpus=cls.corpus,
             agent_config=cls.agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=cls.user,
         )
@@ -809,7 +809,7 @@ class TestProcessThreadCorpusActionTask(TestCase):
             name="Auto Moderate",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review this thread",
+            task_instructions="Review this thread",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=self.user,
         )
@@ -884,7 +884,7 @@ class TestProcessThreadCorpusActionTask(TestCase):
             name="Auto Moderate",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review",
+            task_instructions="Review",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=self.user,
         )
@@ -953,7 +953,7 @@ class TestProcessMessageCorpusActionTask(TestCase):
             name="Auto Moderate Messages",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review this message",
+            task_instructions="Review this message",
             trigger=CorpusActionTrigger.NEW_MESSAGE,
             creator=self.user,
         )
@@ -1002,7 +1002,7 @@ class TestProcessMessageCorpusActionTask(TestCase):
             name="Auto Moderate",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review",
+            task_instructions="Review",
             trigger=CorpusActionTrigger.NEW_MESSAGE,
             creator=self.user,
         )
@@ -1048,7 +1048,7 @@ class TestRunAgentThreadActionTask(TestCase):
             name="Auto Moderate",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review this thread",
+            task_instructions="Review this thread",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=self.user,
         )
@@ -1223,7 +1223,7 @@ class TestRunAgentThreadActionAsync(TransactionTestCase):
             name="Test Thread Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Review this thread for compliance.",
+            task_instructions="Review this thread for compliance.",
             trigger=CorpusActionTrigger.NEW_THREAD,
             creator=self.user,
         )
@@ -1559,15 +1559,15 @@ class TestRunAgentThreadActionAsync(TransactionTestCase):
                 user_id=self.user.id,
             )
 
-            # Verify the prompt included thread context
-            mock_agent.chat.assert_called_once()
-            prompt = mock_agent.chat.call_args[0][0]
+            # Verify the system prompt included thread context
+            mock_for_corpus.assert_called_once()
+            system_prompt = mock_for_corpus.call_args.kwargs["system_prompt"]
 
-            self.assertIn("Thread Information", prompt)
-            self.assertIn(str(self.thread.id), prompt)
-            self.assertIn("Test Discussion Thread", prompt)
-            self.assertIn("Recent Thread Messages", prompt)
-            self.assertIn("Review this thread for compliance", prompt)
+            self.assertIn("Thread Context", system_prompt)
+            self.assertIn(str(self.thread.id), system_prompt)
+            self.assertIn("Test Discussion Thread", system_prompt)
+            self.assertIn("Recent Thread Messages", system_prompt)
+            self.assertIn("Review this thread for compliance", system_prompt)
 
     async def test_async_thread_action_stores_execution_metadata(self):
         """Test that execution metadata is stored correctly."""

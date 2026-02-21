@@ -50,6 +50,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   onChatSubmit,
   onViewChatHistory,
   onNavigateToCorpuses,
+  onOpenMobileMenu,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -74,6 +75,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         corpus={corpus}
         onBack={handleBackToLanding}
         onEditDescription={onEditDescription}
+        onOpenMobileMenu={onOpenMobileMenu}
         testId="corpus-home-details"
       />
     );
@@ -89,6 +91,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       onChatQueryChange={onChatQueryChange}
       onChatSubmit={onChatSubmit}
       onViewChatHistory={onViewChatHistory}
+      onOpenMobileMenu={onOpenMobileMenu}
       testId="corpus-home-landing"
     />
   );
