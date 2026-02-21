@@ -11,7 +11,11 @@ import { useEffect, useRef } from "react";
 import { Token, TokenId } from "../types";
 import { PageTokenMapBuilderProps } from "../../types/ui";
 import { PageTokenMapProps } from "../../types/ui";
-import { RelationGroup, ServerTokenAnnotation } from "./types/annotations";
+import {
+  RelationGroup,
+  ServerTokenAnnotation,
+  ServerSpanAnnotation,
+} from "./types/annotations";
 import { PDFPageInfo } from "./types/pdf";
 
 /**
@@ -46,8 +50,8 @@ export function getRelationImageHref(type: string): string {
 }
 
 export function annotationSelectedViaRelationship(
-  this_annotation: ServerTokenAnnotation,
-  annotations: ServerTokenAnnotation[],
+  this_annotation: ServerTokenAnnotation | ServerSpanAnnotation,
+  annotations: (ServerTokenAnnotation | ServerSpanAnnotation)[],
   relation: RelationGroup
 ): "SOURCE" | "TARGET" | "" {
   // console.log("this_annotation", this_annotation);

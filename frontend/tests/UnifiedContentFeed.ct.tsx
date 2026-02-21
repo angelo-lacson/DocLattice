@@ -5,9 +5,14 @@ import {
   SortOption,
   ContentFilters,
 } from "../src/components/knowledge_base/document/unified_feed/types";
-import { ServerTokenAnnotation } from "../src/components/annotator/types/annotations";
+import {
+  ServerTokenAnnotation,
+  ServerSpanAnnotation,
+  RelationGroup,
+} from "../src/components/annotator/types/annotations";
 import { AnnotationLabelType, LabelType } from "../src/types/graphql-api";
 import { PermissionTypes } from "../src/components/types";
+import { docScreenshot } from "./utils/docScreenshot";
 import React from "react";
 
 // Mock annotation factory
@@ -540,5 +545,235 @@ test.describe("UnifiedContentFeed - Relations in Read-only Mode", () => {
     // Content should be visible
     await expect(page.locator("text=First annotation")).toBeVisible();
     await expect(page.locator("text=Test Note")).toBeVisible();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Span Annotation Relationship Screenshots
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Helper to create mock span annotations (text documents)
+const createMockSpanAnnotation = (
+  id: string,
+  page: number,
+  text: string,
+  label: { text: string; color: string },
+  start: number,
+  end: number
+): ServerSpanAnnotation => {
+  const annotationLabel: AnnotationLabelType = {
+    id: `label-${id}`,
+    text: label.text,
+    color: label.color,
+    description: "",
+    icon: undefined,
+    analyzer: null,
+    labelType: LabelType.SpanLabel,
+    __typename: "AnnotationLabelType",
+  };
+
+  return new ServerSpanAnnotation(
+    page - 1, // Convert to 0-based page index
+    annotationLabel,
+    text,
+    false, // structural
+    { start, end },
+    [PermissionTypes.CAN_READ, PermissionTypes.CAN_REMOVE],
+    false, // approved
+    false, // rejected
+    false, // canComment
+    id
+  );
+};
+
+test.describe("UnifiedContentFeed - Span Annotation Relationships", () => {
+  test("span annotations with relationship badges", async ({ mount, page }) => {
+    const spanAnnotations = [
+      createMockSpanAnnotation(
+        "span-1",
+        1,
+        "Lorem ipsum dolor sit amet",
+        { text: "Important Text", color: "#3B82F6" },
+        0,
+        26
+      ),
+      createMockSpanAnnotation(
+        "span-2",
+        1,
+        "consectetur adipiscing elit",
+        { text: "Key Phrase", color: "#8B5CF6" },
+        28,
+        55
+      ),
+      createMockSpanAnnotation(
+        "span-3",
+        1,
+        "sed do eiusmod tempor",
+        { text: "Reference", color: "#F59E0B" },
+        57,
+        78
+      ),
+    ];
+
+    const relationLabel: AnnotationLabelType = {
+      id: "rel-label-1",
+      text: "References",
+      color: "#10B981",
+      description: "A reference relationship",
+      icon: undefined,
+      analyzer: null,
+      labelType: LabelType.RelationshipLabel,
+      __typename: "AnnotationLabelType",
+    };
+
+    const mockRelations = [
+      new RelationGroup(
+        ["span-1"], // source
+        ["span-2"], // target
+        relationLabel,
+        "rel-1",
+        false
+      ),
+      new RelationGroup(
+        ["span-3"], // source
+        ["span-1"], // target
+        relationLabel,
+        "rel-2",
+        false
+      ),
+    ];
+
+    const component = await mount(
+      <UnifiedContentFeedTestWrapper
+        notes={[]}
+        mockAnnotations={spanAnnotations}
+        mockRelations={mockRelations}
+      />
+    );
+
+    await page.waitForTimeout(500);
+
+    // Verify annotations are visible with their labels
+    await expect(page.locator("text=Important Text").first()).toBeVisible();
+    await expect(page.locator("text=Key Phrase").first()).toBeVisible();
+    await expect(page.locator("text=Reference").first()).toBeVisible();
+
+    // Verify relationship badges are displayed
+    // span-1 is source in rel-1 (Points To 1) and target in rel-2 (1 Referencing)
+    await expect(page.locator("text=Points To").first()).toBeVisible();
+    await expect(page.locator("text=Referencing").first()).toBeVisible();
+
+    // Hide multi-select checkboxes for cleaner screenshot (keep trash icons)
+    await page.evaluate(() => {
+      document
+        .querySelectorAll<HTMLElement>(
+          "i.square.outline.icon, i.check.square.icon"
+        )
+        .forEach((el) => (el.style.display = "none"));
+    });
+
+    // Tight-crop screenshot: clip from feed top to just below last content
+    const componentBox = await component.boundingBox();
+    const lastText = page.locator("text=sed do eiusmod").first();
+    const lastTextBox = await lastText.boundingBox();
+    if (componentBox && lastTextBox) {
+      const pad = 16;
+      await docScreenshot(
+        page,
+        "annotations--txt-sidebar--relationship-badges",
+        {
+          clip: {
+            x: componentBox.x,
+            y: componentBox.y,
+            width: componentBox.width,
+            height: lastTextBox.y + lastTextBox.height - componentBox.y + pad,
+          },
+        }
+      );
+    }
+  });
+
+  test("relationship item between span annotations", async ({
+    mount,
+    page,
+  }) => {
+    const spanAnnotations = [
+      createMockSpanAnnotation(
+        "span-src",
+        1,
+        "The plaintiff filed a motion",
+        { text: "Legal Action", color: "#EF4444" },
+        0,
+        28
+      ),
+      createMockSpanAnnotation(
+        "span-tgt",
+        1,
+        "under Section 12(b)(6)",
+        { text: "Statute", color: "#3B82F6" },
+        29,
+        51
+      ),
+    ];
+
+    const connectsLabel: AnnotationLabelType = {
+      id: "rel-label-connects",
+      text: "Cites",
+      color: "#10B981",
+      description: "Citation relationship",
+      icon: undefined,
+      analyzer: null,
+      labelType: LabelType.RelationshipLabel,
+      __typename: "AnnotationLabelType",
+    };
+
+    const mockRelations = [
+      new RelationGroup(
+        ["span-src"],
+        ["span-tgt"],
+        connectsLabel,
+        "rel-cite-1",
+        false
+      ),
+    ];
+
+    const component = await mount(
+      <UnifiedContentFeedTestWrapper
+        notes={[]}
+        mockAnnotations={spanAnnotations}
+        mockRelations={mockRelations}
+        filters={{
+          contentTypes: ["relationship"],
+          annotationFilters: { showStructural: false },
+          relationshipFilters: { showStructural: false },
+          searchQuery: "",
+        }}
+      />
+    );
+
+    await page.waitForTimeout(500);
+
+    // Verify the relationship item is displayed with its label
+    await expect(page.locator("text=Cites").first()).toBeVisible();
+
+    // Verify source and target annotations are shown within the relationship card
+    await expect(page.locator("text=Legal Action").first()).toBeVisible();
+    await expect(page.locator("text=Statute").first()).toBeVisible();
+
+    // Tight-crop screenshot: clip from feed top to just below the card
+    const componentBox = await component.boundingBox();
+    const lastText = page.locator("text=under Section 12").first();
+    const lastTextBox = await lastText.boundingBox();
+    if (componentBox && lastTextBox) {
+      const pad = 16;
+      await docScreenshot(page, "annotations--txt-sidebar--relation-item", {
+        clip: {
+          x: componentBox.x,
+          y: componentBox.y,
+          width: componentBox.width,
+          height: lastTextBox.y + lastTextBox.height - componentBox.y + pad,
+        },
+      });
+    }
   });
 });
