@@ -32,6 +32,10 @@ from opencontractserver.llms.vector_stores.core_vector_stores import (
     CoreAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
+from opencontractserver.utils.prompt_sanitization import (
+    UNTRUSTED_CONTENT_NOTICE,
+    fence_user_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -976,8 +980,6 @@ class CoreDocumentAgentFactory:
         """
         from django.conf import settings
 
-        from opencontractserver.utils.prompt_sanitization import fence_user_content
-
         # Check for custom instructions on the corpus
         if corpus and corpus.document_agent_instructions:
             base_instructions = corpus.document_agent_instructions
@@ -988,6 +990,7 @@ class CoreDocumentAgentFactory:
         # Document title is user-supplied, so fence it.
         fenced_title = fence_user_content(document.title, label="document title")
         return (
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are analyzing the document titled {fenced_title} (ID: {document.id}).\n\n"
             f"{base_instructions}"
         )
@@ -1051,8 +1054,6 @@ class CoreCorpusAgentFactory:
         """
         from django.conf import settings
 
-        from opencontractserver.utils.prompt_sanitization import fence_user_content
-
         # Check for custom instructions on the corpus
         if corpus.corpus_agent_instructions:
             base_instructions = corpus.corpus_agent_instructions
@@ -1063,6 +1064,7 @@ class CoreCorpusAgentFactory:
         # Corpus title is user-supplied, so fence it.
         fenced_title = fence_user_content(corpus.title, label="corpus title")
         return (
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are analyzing the corpus titled {fenced_title} (ID: {corpus.id}).\n\n"
             f"{base_instructions}"
         )

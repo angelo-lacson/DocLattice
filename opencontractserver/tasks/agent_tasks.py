@@ -564,10 +564,18 @@ def _build_document_action_system_prompt(
     - Execution context (trigger, document, corpus metadata)
     - The user's task_instructions
     - Optional supplementary guidance from agent_config.system_instructions
+
+    SECURITY: All user-generated content (document title, corpus title,
+    document description) is wrapped in <user_content> tags so the LLM can
+    distinguish instructions from untrusted data.  See prompt_sanitization.py.
     """
     from opencontractserver.constants.corpus_actions import (
         MAX_DESCRIPTION_PREVIEW_LENGTH,
         TRIGGER_DESCRIPTIONS,
+    )
+    from opencontractserver.utils.prompt_sanitization import (
+        UNTRUSTED_CONTENT_NOTICE,
+        fence_user_content,
     )
 
     trigger_desc = TRIGGER_DESCRIPTIONS.get(action.trigger, "triggered action in")
@@ -576,11 +584,12 @@ def _build_document_action_system_prompt(
     parts = [
         "You are an automated corpus action agent. You execute tasks on documents "
         "without human interaction.",
+        f"\n{UNTRUSTED_CONTENT_NOTICE}",
         "",
         "## Execution Context",
         f'- Action: "{action.name}"',
-        f'- Document: "{document.title}" (ID: {document.id})',
-        f'- Corpus: "{action.corpus.title}"',
+        f"- Document: {fence_user_content(document.title, label='document title')} (ID: {document.id})",
+        f"- Corpus: {fence_user_content(action.corpus.title, label='corpus title')}",
         f"- Trigger: Document {trigger_desc} the corpus",
         f"- Available tools: {tool_list}",
     ]
@@ -590,7 +599,9 @@ def _build_document_action_system_prompt(
         desc = document.description[:MAX_DESCRIPTION_PREVIEW_LENGTH]
         if len(document.description) > MAX_DESCRIPTION_PREVIEW_LENGTH:
             desc += "..."
-        parts.append(f"- Current description: {desc}")
+        parts.append(
+            f"- Current description: {fence_user_content(desc, label='document description')}"
+        )
 
     parts.extend(
         [
@@ -678,7 +689,9 @@ def _build_thread_action_system_prompt(
     ]
 
     if thread_context.get("corpus_title"):
-        parts.append(f"- Corpus: {thread_context['corpus_title']}")
+        parts.append(
+            f"- Corpus: {fence_user_content(thread_context['corpus_title'], label='corpus title')}"
+        )
 
     parts.append(f"- Available tools: {tool_list}")
 

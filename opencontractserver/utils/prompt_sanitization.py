@@ -27,8 +27,28 @@ UNTRUSTED_CONTENT_NOTICE = (
 )
 
 
+def _escape_fence_tags(text: str) -> str:
+    """Escape ``<user_content>`` / ``</user_content>`` sequences in *text*.
+
+    Prevents user-supplied content from prematurely closing (or opening) the
+    XML fence by replacing the angle brackets with their HTML entity
+    equivalents inside tag-like sequences.
+    """
+    import re
+
+    return re.sub(
+        r"<(/?)user_content(\s|>|$)",
+        r"&lt;\1user_content\2",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
 def fence_user_content(content: str, *, label: str = "") -> str:
     """Wrap *content* in ``<user_content>`` tags.
+
+    Any occurrences of ``<user_content>`` or ``</user_content>`` within
+    *content* are escaped so they cannot break the fence boundary.
 
     Args:
         content: The raw, untrusted string to fence.
@@ -38,9 +58,10 @@ def fence_user_content(content: str, *, label: str = "") -> str:
     Returns:
         The fenced string.
     """
+    escaped = _escape_fence_tags(content)
     if label:
-        return f'<user_content label="{label}">\n{content}\n</user_content>'
-    return f"<user_content>\n{content}\n</user_content>"
+        return f'<user_content label="{label}">\n{escaped}\n</user_content>'
+    return f"<user_content>\n{escaped}\n</user_content>"
 
 
 def warn_if_content_large(content: str, *, context: str = "user content") -> None:

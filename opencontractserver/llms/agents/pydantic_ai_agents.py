@@ -79,6 +79,10 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
+from opencontractserver.utils.prompt_sanitization import (
+    UNTRUSTED_CONTENT_NOTICE,
+    fence_user_content,
+)
 from opencontractserver.utils.tools import deduplicate_tools, get_tool_name
 
 from .timeline_schema import TimelineEntry
@@ -1694,12 +1698,11 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         self, target_type: type[T], user_prompt: str
     ) -> str:
         """Strict extraction prompt with document context and raw-only output."""
-        from opencontractserver.utils.prompt_sanitization import fence_user_content
-
         document_title = self.context.document.title
         document_id = self.context.document.id
         fenced_title = fence_user_content(document_title, label="document title")
         return (
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are a data extraction specialist for document {fenced_title} (ID: {document_id}).\n\n"
             "EXTRACTION PROTOCOL:\n"
             "1. You have access to tools to analyze this document. Use them to find the requested information.\n"
@@ -2178,12 +2181,11 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         self, target_type: type[T], user_prompt: str
     ) -> str:
         """Strict extraction prompt with corpus context and raw-only output."""
-        from opencontractserver.utils.prompt_sanitization import fence_user_content
-
         corpus_id = self.context.corpus.id
         corpus_title = getattr(self.context.corpus, "title", "corpus")
         fenced_title = fence_user_content(corpus_title, label="corpus title")
         return (
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are a data extraction specialist for corpus {fenced_title} (ID: {corpus_id}).\n\n"
             "EXTRACTION PROTOCOL:\n"
             "1. You have access to tools to analyze this corpus. Use them to find the requested information.\n"
