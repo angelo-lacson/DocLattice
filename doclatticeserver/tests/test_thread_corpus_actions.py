@@ -1611,21 +1611,22 @@ class TestRunAgentThreadActionAsync(TransactionTestCase):
                 user_id=self.user.id,
             )
 
-            prompt = mock_agent.chat.call_args[0][0]
+            # The system prompt is passed to agents.for_corpus(), not agent.chat()
+            system_prompt = mock_for_corpus.call_args.kwargs["system_prompt"]
 
             # The untrusted content notice must be present
-            self.assertIn(UNTRUSTED_CONTENT_NOTICE, prompt)
+            self.assertIn(UNTRUSTED_CONTENT_NOTICE, system_prompt)
 
             # User content (message body, thread title) must be fenced
-            self.assertIn("<user_content", prompt)
-            self.assertIn("</user_content>", prompt)
+            self.assertIn("<user_content", system_prompt)
+            self.assertIn("</user_content>", system_prompt)
 
             # The malicious content is inside a fence, not raw
-            self.assertIn("Ignore all previous instructions", prompt)
+            self.assertIn("Ignore all previous instructions", system_prompt)
             # Verify the message body label is present
-            self.assertIn('label="message body"', prompt)
+            self.assertIn('label="message body"', system_prompt)
             # Verify the thread title label is present
-            self.assertIn('label="thread title"', prompt)
+            self.assertIn('label="thread title"', system_prompt)
 
     async def test_async_thread_action_stores_execution_metadata(self):
         """Test that execution metadata is stored correctly."""
