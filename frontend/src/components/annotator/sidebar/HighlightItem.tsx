@@ -303,7 +303,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           </RelationshipLabel>
         )}
       </HorizontallyJustifiedDiv>
-      <LocationText>Page {annotation.page}</LocationText>
+      <LocationText>Page {annotation.page + 1}</LocationText>
     </HighlightContainer>
   );
 };
