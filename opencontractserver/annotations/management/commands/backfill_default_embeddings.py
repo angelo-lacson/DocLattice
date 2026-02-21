@@ -17,11 +17,11 @@ Options:
 
 import logging
 
-from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 from opencontractserver.annotations.models import Annotation, Embedding
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.tasks.embeddings_task import (
     calculate_embedding_for_annotation_text,
 )
@@ -85,7 +85,7 @@ class Command(BaseCommand):
         verbose = options["verbose"]
         sync_mode = options["sync"]
 
-        default_embedder_path = settings.DEFAULT_EMBEDDER
+        default_embedder_path = get_default_embedder_path()
 
         self.stdout.write(
             self.style.NOTICE(

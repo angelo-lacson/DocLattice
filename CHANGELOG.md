@@ -7,12 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-19
 
+### Added
+
+#### Context Guardrails & Conversation Compaction (Closes #898)
+- **Context guardrails constants** (`opencontractserver/constants/context_guardrails.py`): Centralized configuration for model context windows (OpenAI, Anthropic, Google), compaction thresholds, tool output limits, and token estimation parameters. Covers 20+ model variants with sensible defaults.
+- **Token estimation** (`opencontractserver/llms/context_guardrails.py`): Fast heuristic token counter (~3.5 chars/token) for estimating conversation size without importing heavyweight tokeniser libraries. Intentionally over-estimates to trigger compaction conservatively.
+- **Model context window lookup** (`context_guardrails.py`): Resolves model names to context window sizes via exact match then longest-prefix matching, with a 128K default fallback for unknown models.
+- **Conversation compaction** (`context_guardrails.py`): When conversation history approaches the context window limit (default 75%), older messages are replaced by a concise summary while preserving recent turns (4–20 messages) verbatim. Supports pluggable summary functions for LLM-based summarization.
+- **Tool output truncation** (`context_guardrails.py`, `opencontractserver/llms/tools/pydantic_ai_tools.py`): String outputs from tools are automatically truncated to 50K characters with a notice directing the LLM to use range parameters. Applied at the PydanticAI tool wrapper level so all tools benefit transparently.
+- **Per-agent compaction configuration** (`CompactionConfig` dataclass): Added `compaction` field to `AgentConfig` allowing per-conversation overrides of threshold ratio, recent message counts, and tool output limits. Enabled by default.
+- **Automatic compaction in message history retrieval** (`opencontractserver/llms/agents/pydantic_ai_agents.py`): `_get_message_history()` now checks conversation size against model limits and injects a compaction summary as a system message when needed, transparent to the agent framework.
+- **Persisted compaction bookmarks** (`opencontractserver/conversations/models.py`): Added `compaction_summary` and `compacted_before_message_id` fields to the `Conversation` model. Compaction is computed once and persisted — subsequent reads skip old messages at the DB level via `id__gt` filter, making long conversations cheap to load.
+  - Migration: `opencontractserver/conversations/migrations/0015_add_compaction_fields.py`
+  - `CoreConversationManager.persist_compaction()` writes the bookmark with optimistic locking (concurrent requests are safely resolved)
+  - `CoreConversationManager.get_conversation_messages()` honours the cutoff automatically
+- **Comprehensive test suite** (`opencontractserver/tests/test_context_guardrails.py`): 30+ unit tests covering token estimation, model lookup, truncation, compaction triggers, summary generation, message proxy conversion, configuration defaults, and Conversation model field definitions. Uses `SimpleTestCase` for fast parallel execution.
+
 ### Changed
 
 #### Pipeline Registry: Deduplicate and Filter Abstract Components
 - **Removed `MultimodalMicroserviceEmbedder` backwards-compatibility alias**: The module-level alias `MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder` in `opencontractserver/pipeline/embedders/multimodal_microservice.py` has been removed. Use `CLIPMicroserviceEmbedder` directly.
 - **Fixed duplicate embedder entries in pipeline registry**: `_discover_subclasses()` in `opencontractserver/pipeline/registry.py` now deduplicates discovered classes by identity and skips abstract intermediate base classes via `inspect.isabstract()`, preventing aliases and abstract bases from appearing in the get-embedders query endpoint.
+
 ### Fixed
+
+#### Frontend: Most views show legacy corpus.description instead of versioned mdDescription (Closes #892)
+- **Backend description sync**: `Corpus.update_description()` now keeps the plain-text `description` field in sync when `md_description` is updated via the versioned markdown system. A new `_markdown_to_plain_text()` static method strips markdown formatting for the plain-text field.
+  - File: `opencontractserver/corpuses/models.py` (lines 249-272, `update_description` method)
+- **New `useCorpusMdDescription` hook**: Reusable React hook that fetches markdown content from a corpus's `mdDescription` URL and returns the raw text for rendering with `SafeMarkdown`.
+  - File: `frontend/src/hooks/useCorpusMdDescription.ts`
+- **CorpusContextSidebar**: Now fetches and renders the versioned markdown description instead of the stale plain-text `description` field.
+  - File: `frontend/src/components/threads/CorpusContextSidebar.tsx`
+- **DocumentKnowledgeBase**: Corpus info display now fetches `mdDescription` content and renders it as markdown. Added `title`, `description`, and `mdDescription` fields to the `GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS` query's corpus selection.
+  - File: `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`
+  - File: `frontend/src/graphql/queries.ts` (line 3028)
+- **CorpusHeader (settings)**: Now fetches and renders the versioned markdown description via `useCorpusMdDescription` hook with `SafeMarkdown`. Added `mdDescription` to prop chain through `CorpusSettings` and `Corpuses.tsx`.
+  - File: `frontend/src/components/corpuses/settings/CorpusHeader.tsx`
+  - File: `frontend/src/components/corpuses/CorpusSettings.tsx`
+  - File: `frontend/src/views/Corpuses.tsx`
+- **TypeScript type update**: Added `mdDescription` optional field to `RawCorpusType`.
+  - File: `frontend/src/types/graphql-api.ts`
 
 #### Edit Description Modal Does Not Save on Update (Issue #899)
 - **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
@@ -85,12 +119,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-#### Edit Description Modal Does Not Save on Update (Issue #899)
-- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
-  - File: `frontend/src/App.tsx` (lines 128-149, 398)
-- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
-- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
-  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
+#### MCP Telemetry in Async Context
+- **`SynchronousOnlyOperation` in MCP server** (`config/telemetry.py`, `opencontractserver/mcp/telemetry.py`, `opencontractserver/mcp/server.py`): Added async telemetry functions (`arecord_event`, `arecord_mcp_tool_call`, `arecord_mcp_resource_read`, `arecord_mcp_request`) that use `sync_to_async` to safely run Django ORM lookups in a thread pool. Prevents "You cannot call this from an async context" errors on every MCP request.
+- **Installation ID caching** (`config/telemetry.py:91-113`): Added process-lifetime cache for installation UUID to eliminate redundant database queries on every telemetry call, particularly beneficial for high-frequency MCP requests.
 
 #### Security: LLM Prompt Injection Protection for Approval Bypass
 - **Replaced `skip_approval` function parameter with `config._approval_bypass_allowed` flag**: The previous design exposed a `skip_approval` parameter in `ask_document_tool`'s function signature that a malicious LLM could set to `True` to bypass approval gates. Now uses a runtime flag on `AgentConfig` that only `resume_with_approval()` can set, wrapped in a `try/finally` block to guarantee reset
@@ -158,6 +189,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
 
+#### Edge Case Tests for Personal Corpus (Issue #839)
+- **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
+- **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
+- **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
+
+### Fixed
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
 
@@ -174,6 +214,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IDOR prevention in folder mutations** (`config/graphql/corpus_folder_mutations.py`): All folder mutations now verify corpus visibility before operating on folders; folder lookups scoped to validated corpus
 - **IDOR prevention in voting mutations** (`config/graphql/voting_mutations.py`): `VoteMessageMutation` and `RemoveVoteMutation` now use `ChatMessage.objects.visible_to_user()` instead of fetch-then-check
 - **IDOR prevention in badge mutations** (`config/graphql/badge_mutations.py`): `AwardBadgeMutation` now uses `Badge.objects.visible_to_user()` for badge lookup
+
+### Fixed
+
+#### Enable Relationships for Span-Based (Text) Annotations (Closes #281)
+- **File type detection inconsistency**: Multiple frontend components checked for text file types using only `startsWith("text/")`, missing documents with `application/txt` MIME type. Created centralized `isTextFileType()` and `isPdfFileType()` utilities in `frontend/src/utils/files.ts` and updated all callers.
+- **Label initialization race condition**: The `initialized.current` ref in `UISettingsAtom.tsx` (line 288) could be set to `true` after span label initialization, preventing relationship labels from auto-initializing on subsequent effect runs. Replaced with separate `spanLabelInitialized` and `relationLabelInitialized` refs.
+- **Type restrictions blocking span annotations in relationship UI**: `RelationItem`, `RelationHighlightItem`, `HighlightItem`, and `annotationSelectedViaRelationship()` only accepted `ServerTokenAnnotation` (PDF annotations). Updated all to accept `ServerTokenAnnotation | ServerSpanAnnotation` union type, enabling the sidebar relationship display and creation flow for text documents.
+- **Files changed**: `frontend/src/utils/files.ts`, `frontend/src/components/annotator/context/UISettingsAtom.tsx`, `frontend/src/components/annotator/sidebar/RelationItem.tsx`, `frontend/src/components/annotator/sidebar/RelationHighlightItem.tsx`, `frontend/src/components/annotator/sidebar/HighlightItem.tsx`, `frontend/src/components/annotator/utils.ts`, `frontend/src/components/annotator/hooks/AnnotationHooks.tsx`, `frontend/src/components/annotator/labels/EnhancedLabelSelector.tsx`, `frontend/src/components/annotator/labels/UnifiedLabelSelector.tsx`, `frontend/src/components/annotator/labels/label_selector/LabelSelector.tsx`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`, `frontend/src/components/widgets/chat/ChatMessage.tsx`
 
 ## [3.0.0.b4] - 2026-02-08
 

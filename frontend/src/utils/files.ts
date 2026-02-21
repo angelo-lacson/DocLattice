@@ -1,4 +1,19 @@
 import Axios from "axios";
+import { LEGACY_TEXT_MIME_TYPE } from "../assets/configurations/constants";
+
+/**
+ * Check if a file type string represents a text-based document.
+ * Handles both standard MIME types (text/plain) and the legacy
+ * application/txt type used in some parts of the system.
+ */
+export const isTextFileType = (fileType: string | null | undefined): boolean =>
+  fileType?.startsWith("text/") === true || fileType === LEGACY_TEXT_MIME_TYPE;
+
+/**
+ * Check if a file type string represents a PDF document.
+ */
+export const isPdfFileType = (fileType: string | null | undefined): boolean =>
+  fileType === "application/pdf";
 
 export const downloadFile = async (url: string): Promise<void> => {
   try {

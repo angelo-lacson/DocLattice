@@ -704,6 +704,29 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         null=True,
     )
 
+    # Context compaction bookmark — when a conversation grows large enough
+    # to approach the LLM context window, older messages are summarised and
+    # the summary is stored here.  On subsequent loads only messages with
+    # ``id > compacted_before_message_id`` are fetched from the DB; the
+    # summary is prepended as a synthetic system message.
+    compaction_summary = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Summary of compacted (older) messages.  Empty when no "
+            "compaction has occurred."
+        ),
+    )
+    compacted_before_message_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "ID of the last message that was folded into "
+            "compaction_summary.  Messages with id <= this value "
+            "are excluded from LLM context (but kept in the DB)."
+        ),
+    )
+
     # Managers
     objects = ConversationManager()  # Default manager with vector search support
     all_objects = models.Manager()  # Access all objects including soft-deleted

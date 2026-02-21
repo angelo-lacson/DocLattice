@@ -4,22 +4,22 @@
 
 OpenContracts uses a **dual embedding strategy** to enable both global cross-corpus search and corpus-optimized search:
 
-1. **DEFAULT_EMBEDDER Embedding (Always Created)**
-   - Every annotation, document, and note ALWAYS gets an embedding using the platform's `DEFAULT_EMBEDDER`
+1. **Default Embedder Embedding (Always Created)**
+   - Every annotation, document, and note ALWAYS gets an embedding using the platform's default embedder (configured via `PipelineSettings.default_embedder` in the database)
    - This creates a common vector space for global search across all corpuses
    - Enables users to search all their documents regardless of which corpus they belong to
 
 2. **Corpus-Specific Embedding (Created When Different)**
-   - If a corpus has a `preferred_embedder` that differs from `DEFAULT_EMBEDDER`, annotations also get an embedding using the corpus embedder
+   - If a corpus has a `preferred_embedder` that differs from the default embedder, annotations also get an embedding using the corpus embedder
    - Enables optimized search within a corpus using domain-specific models (e.g., legal-bert for legal documents)
 
 **Example Scenarios:**
 
 | Corpus Embedder | Embeddings Created |
 |-----------------|-------------------|
-| None (default) | 1x DEFAULT_EMBEDDER |
-| Same as DEFAULT_EMBEDDER | 1x DEFAULT_EMBEDDER |
-| Different embedder | 2x (DEFAULT_EMBEDDER + corpus embedder) |
+| None (default) | 1x default embedder |
+| Same as default embedder | 1x default embedder |
+| Different embedder | 2x (default embedder + corpus embedder) |
 
 This strategy is implemented in the embedding tasks (`opencontractserver/tasks/embeddings_task.py`) which automatically handle the dual embedding creation.
 
@@ -74,13 +74,13 @@ The embedding system uses a dedicated `Embedding` model that supports multiple v
 
 ### Embedder Configuration
 
-Embedder settings are configured in [`config/settings/base.py`](../../config/settings/base.py):
+Embedder settings are managed via the **`PipelineSettings`** database singleton (see [`opencontractserver/documents/models.py`](../../opencontractserver/documents/models.py)):
 
-- **`PREFERRED_EMBEDDERS`**: Map of MIME types to preferred embedder class paths
-- **`DEFAULT_EMBEDDER`**: Fallback embedder when no preferred embedder is found
-- **`DEFAULT_EMBEDDING_DIMENSION`**: Default dimension (768)
-- **`DEFAULT_EMBEDDERS_BY_FILETYPE`**: Map of MIME types to default embedders
-- **`PIPELINE_SETTINGS`**: Component-specific configuration overrides
+- **`PipelineSettings.preferred_embedders`**: Map of MIME types to preferred embedder class paths
+- **`PipelineSettings.default_embedder`**: Fallback embedder when no preferred embedder is found
+- **`DEFAULT_EMBEDDING_DIMENSION`**: Default dimension (768, in `config/settings/base.py`)
+
+These values are seeded from Django settings on first creation but are managed at runtime via the admin UI or GraphQL mutations. Changes take effect immediately across all processes (cached via Django's cache framework with a 5-minute TTL).
 
 Available embedder implementations in [`opencontractserver/pipeline/embedders/`](../../opencontractserver/pipeline/embedders/):
 
@@ -147,7 +147,7 @@ for result in results:
 ```
 
 **Key Features:**
-- Uses `DEFAULT_EMBEDDER` embeddings for consistent cross-corpus search
+- Uses default embedder embeddings for consistent cross-corpus search
 - Respects user permissions (only searches documents the user can access)
 - Supports modality filtering (TEXT, IMAGE, etc.)
 - Works with both standalone and corpus-bound documents

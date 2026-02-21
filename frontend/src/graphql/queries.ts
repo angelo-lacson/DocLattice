@@ -3027,6 +3027,9 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
     }
     corpus(id: $corpusId) {
       id
+      title
+      description
+      mdDescription
       myPermissions
       labelSet {
         id

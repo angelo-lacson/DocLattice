@@ -2,22 +2,22 @@
 Tests for Issue #437: Embedder Consistency Management.
 
 Covers:
-- Corpus.preferred_embedder auto-population from DEFAULT_EMBEDDER on creation
+- Corpus.preferred_embedder auto-population from default embedder on creation
 - Corpus.created_with_embedder audit field
 - Immutability of preferred_embedder after documents are added
 - ReEmbedCorpus mutation
 - Fork with embedder override
-- Startup system check for DEFAULT_EMBEDDER changes
+- Startup system check for default embedder changes
 """
 
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, TestCase
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 
@@ -34,17 +34,17 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
         self.user = User.objects.create_user(username="embedtest", password="testpass")
 
     def test_preferred_embedder_auto_populated_from_default(self):
-        """Corpus without explicit embedder gets DEFAULT_EMBEDDER frozen."""
+        """Corpus without explicit embedder gets default embedder frozen."""
         corpus = Corpus.objects.create(title="Auto Embed", creator=self.user)
-        self.assertEqual(corpus.preferred_embedder, settings.DEFAULT_EMBEDDER)
+        self.assertEqual(corpus.preferred_embedder, get_default_embedder_path())
 
     def test_created_with_embedder_set_on_creation(self):
         """created_with_embedder is set automatically and matches preferred."""
         corpus = Corpus.objects.create(title="Audit Trail", creator=self.user)
-        self.assertEqual(corpus.created_with_embedder, settings.DEFAULT_EMBEDDER)
+        self.assertEqual(corpus.created_with_embedder, get_default_embedder_path())
 
     def test_explicit_embedder_preserved(self):
-        """Corpus with explicit embedder keeps it, not DEFAULT_EMBEDDER."""
+        """Corpus with explicit embedder keeps it, not the default."""
         custom_path = "my.custom.Embedder"
         corpus = Corpus.objects.create(
             title="Custom Embed",
@@ -54,11 +54,12 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
         self.assertEqual(corpus.preferred_embedder, custom_path)
         self.assertEqual(corpus.created_with_embedder, custom_path)
 
-    @override_settings(
-        DEFAULT_EMBEDDER="opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
+    @patch(
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
+        return_value="opencontractserver.pipeline.embedders.test_embedder.TestEmbedder",
     )
-    def test_auto_population_uses_current_default(self):
-        """Auto-population uses the DEFAULT_EMBEDDER active at creation time."""
+    def test_auto_population_uses_current_default(self, _mock_path):
+        """Auto-population uses the default embedder from PipelineSettings."""
         corpus = Corpus.objects.create(title="Current Default", creator=self.user)
         self.assertEqual(
             corpus.preferred_embedder,
@@ -718,13 +719,13 @@ class TestConcurrentReEmbedRejection(TestCase):
 
 
 class TestEmbedderConsistencyCheck(TestCase):
-    """Test the startup system check for DEFAULT_EMBEDDER changes."""
+    """Test the startup system check for default embedder changes."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="checktest", password="testpass")
 
     def test_no_warning_when_embedders_match(self):
-        """No warning when all corpuses match DEFAULT_EMBEDDER."""
+        """No warning when all corpuses match the default embedder."""
         from opencontractserver.corpuses.checks import (
             check_default_embedder_consistency,
         )
@@ -732,7 +733,7 @@ class TestEmbedderConsistencyCheck(TestCase):
         Corpus.objects.create(
             title="Matching",
             creator=self.user,
-            created_with_embedder=settings.DEFAULT_EMBEDDER,
+            created_with_embedder=get_default_embedder_path(),
         )
         warnings = check_default_embedder_consistency(None)
         # Should not contain W002

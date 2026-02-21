@@ -1,6 +1,7 @@
 import difflib
 import hashlib
 import logging
+import re
 import uuid
 from typing import Optional
 
@@ -246,8 +247,50 @@ class Corpus(TreeNode):
             finally:
                 self.md_description.close()
 
+    @staticmethod
+    def _markdown_to_plain_text(md: str) -> str:
+        """Convert markdown to plain text by stripping formatting syntax.
+
+        Handles the most common markdown constructs. Table cell separators
+        and exotic extensions are not covered — the output is best-effort
+        plain text suitable for card display and search indexing.
+        """
+        text = md
+        # Remove fenced code blocks (keep content)
+        text = re.sub(
+            r"^```[^\n]*\n(.*?)^```", r"\1", text, flags=re.MULTILINE | re.DOTALL
+        )
+        # Remove HTML tags
+        text = re.sub(r"<[^>]+>", "", text)
+        # Remove headings markers
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+        # Remove bold/italic markers (DOTALL for multiline spans)
+        text = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", text, flags=re.DOTALL)
+        text = re.sub(r"_{1,3}(.+?)_{1,3}", r"\1", text, flags=re.DOTALL)
+        # Remove strikethrough
+        text = re.sub(r"~~(.+?)~~", r"\1", text, flags=re.DOTALL)
+        # Remove images ![alt](url) — must run before links
+        text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
+        # Convert links [text](url) → text
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        # Remove inline code backticks
+        text = re.sub(r"`(.+?)`", r"\1", text)
+        # Remove blockquote markers
+        text = re.sub(r"^>\s+", "", text, flags=re.MULTILINE)
+        # Remove horizontal rules
+        text = re.sub(r"^[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)
+        # Remove list markers
+        text = re.sub(r"^[\s]*[-*+]\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^[\s]*\d+\.\s+", "", text, flags=re.MULTILINE)
+        # Collapse multiple blank lines
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
     def update_description(self, *, new_content: str, author):
         """Create a new revision and update md_description.
+
+        Also keeps the plain-text ``description`` field in sync so that
+        list views and card components always reflect the latest content.
 
         Args:
             new_content (str): Markdown content.
@@ -272,6 +315,8 @@ class Corpus(TreeNode):
             self.md_description.save(
                 filename, ContentFile(new_content.encode("utf-8")), save=False
             )
+            # Keep the plain-text description field in sync
+            self.description = self._markdown_to_plain_text(new_content)
             self.modified = timezone.now()
             self.save()
 
@@ -349,7 +394,7 @@ class Corpus(TreeNode):
     # Override save to update modified on save
     def save(self, *args, **kwargs):
         """On save, update timestamps and freeze embedder on creation."""
-        from django.conf import settings
+        from opencontractserver.pipeline.utils import get_default_embedder_path
 
         # Ensure slug exists and is unique within creator scope
         if not self.slug or not isinstance(self.slug, str) or not self.slug.strip():
@@ -372,9 +417,9 @@ class Corpus(TreeNode):
 
             # Freeze embedder at creation time (Issue #437):
             # If no preferred_embedder was explicitly provided, default to the
-            # current DEFAULT_EMBEDDER so the corpus has a stable, immutable
-            # binding that won't change if the global setting is later updated.
-            default_embedder = getattr(settings, "DEFAULT_EMBEDDER", None)
+            # current default embedder from PipelineSettings so the corpus has
+            # a stable, immutable binding.
+            default_embedder = get_default_embedder_path()
             if not self.preferred_embedder and default_embedder:
                 self.preferred_embedder = default_embedder
 
