@@ -116,7 +116,24 @@ describe("useCacheManager", () => {
       expect(client.clearStore).toHaveBeenCalled();
     });
 
-    it("should refetch active queries by default", async () => {
+    it("should refetch active queries when refetchActive is true", async () => {
+      // Arrange
+      const wrapper = createWrapper(client);
+      const { result } = renderHook(() => useCacheManager(), { wrapper });
+
+      // Act
+      await act(async () => {
+        await result.current.resetOnAuthChange({
+          reason: "test",
+          refetchActive: true,
+        });
+      });
+
+      // Assert
+      expect(client.refetchQueries).toHaveBeenCalledWith({ include: "active" });
+    });
+
+    it("should not refetch active queries by default", async () => {
       // Arrange
       const wrapper = createWrapper(client);
       const { result } = renderHook(() => useCacheManager(), { wrapper });
@@ -127,7 +144,7 @@ describe("useCacheManager", () => {
       });
 
       // Assert
-      expect(client.refetchQueries).toHaveBeenCalledWith({ include: "active" });
+      expect(client.refetchQueries).not.toHaveBeenCalled();
     });
 
     it("should skip refetch when refetchActive is false", async () => {

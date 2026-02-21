@@ -6,7 +6,6 @@ from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, override_settings
 from pydantic import BaseModel
@@ -33,6 +32,7 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
 from opencontractserver.llms.vector_stores.vector_store_factory import (
     UnifiedVectorStoreFactory,
 )
+from opencontractserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 
@@ -229,8 +229,8 @@ class TestPydanticAIAgents(TransactionTestCase):
         )
 
         # Add embeddings to annotations
-        # Use settings.DEFAULT_EMBEDDER to match what vector store searches for
-        embedder_path = settings.DEFAULT_EMBEDDER
+        # Use get_default_embedder_path() to match what vector store searches for
+        embedder_path = get_default_embedder_path()
         self.anno1.add_embedding(embedder_path, constant_vector(384, 0.1))
         self.anno2.add_embedding(embedder_path, constant_vector(384, 0.2))
         self.anno3.add_embedding(embedder_path, constant_vector(384, 0.3))

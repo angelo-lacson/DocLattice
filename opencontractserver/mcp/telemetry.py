@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
-from config.telemetry import record_event
+from config.telemetry import arecord_event, record_event
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +220,92 @@ def record_mcp_request(
         properties["error_type"] = error_type
 
     return record_event("mcp_request", properties)
+
+
+async def arecord_mcp_tool_call(
+    tool_name: str,
+    success: bool = True,
+    error_type: str | None = None,
+) -> bool:
+    """
+    Async version of ``record_mcp_tool_call``.
+
+    Safe to call from ASGI / async handlers. Uses ``arecord_event`` to
+    avoid synchronous ORM calls on the event loop.
+    """
+    context = _get_request_context()
+
+    properties: dict[str, Any] = {
+        "tool_name": tool_name,
+        "success": success,
+        "transport": context.get("transport", "unknown"),
+    }
+
+    if context.get("client_ip_hash"):
+        properties["client_ip_hash"] = context["client_ip_hash"]
+
+    if not success and error_type:
+        properties["error_type"] = error_type
+
+    return await arecord_event("mcp_tool_call", properties)
+
+
+async def arecord_mcp_resource_read(
+    resource_type: str,
+    success: bool = True,
+    error_type: str | None = None,
+) -> bool:
+    """
+    Async version of ``record_mcp_resource_read``.
+
+    Safe to call from ASGI / async handlers. Uses ``arecord_event`` to
+    avoid synchronous ORM calls on the event loop.
+    """
+    context = _get_request_context()
+
+    properties: dict[str, Any] = {
+        "resource_type": resource_type,
+        "success": success,
+        "transport": context.get("transport", "unknown"),
+    }
+
+    if context.get("client_ip_hash"):
+        properties["client_ip_hash"] = context["client_ip_hash"]
+
+    if not success and error_type:
+        properties["error_type"] = error_type
+
+    return await arecord_event("mcp_resource_read", properties)
+
+
+async def arecord_mcp_request(
+    endpoint: str,
+    method: str = "POST",
+    success: bool = True,
+    error_type: str | None = None,
+) -> bool:
+    """
+    Async version of ``record_mcp_request``.
+
+    Safe to call from ASGI / async handlers. Uses ``arecord_event`` to
+    avoid synchronous ORM calls on the event loop.
+    """
+    context = _get_request_context()
+
+    properties: dict[str, Any] = {
+        "endpoint": endpoint,
+        "method": method,
+        "success": success,
+        "transport": context.get("transport", "unknown"),
+    }
+
+    if context.get("client_ip_hash"):
+        properties["client_ip_hash"] = context["client_ip_hash"]
+
+    if not success and error_type:
+        properties["error_type"] = error_type
+
+    return await arecord_event("mcp_request", properties)
 
 
 def get_client_ip_from_scope(scope: dict[str, Any]) -> str | None:

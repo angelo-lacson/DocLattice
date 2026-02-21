@@ -269,10 +269,10 @@ class Corpus(TreeNode):
         text = re.sub(r"_{1,3}(.+?)_{1,3}", r"\1", text, flags=re.DOTALL)
         # Remove strikethrough
         text = re.sub(r"~~(.+?)~~", r"\1", text, flags=re.DOTALL)
+        # Remove images ![alt](url) — must run before links
+        text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
         # Convert links [text](url) → text
         text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-        # Remove images ![alt](url)
-        text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"\1", text)
         # Remove inline code backticks
         text = re.sub(r"`(.+?)`", r"\1", text)
         # Remove blockquote markers
@@ -394,7 +394,7 @@ class Corpus(TreeNode):
     # Override save to update modified on save
     def save(self, *args, **kwargs):
         """On save, update timestamps and freeze embedder on creation."""
-        from django.conf import settings
+        from opencontractserver.pipeline.utils import get_default_embedder_path
 
         # Ensure slug exists and is unique within creator scope
         if not self.slug or not isinstance(self.slug, str) or not self.slug.strip():
@@ -417,9 +417,9 @@ class Corpus(TreeNode):
 
             # Freeze embedder at creation time (Issue #437):
             # If no preferred_embedder was explicitly provided, default to the
-            # current DEFAULT_EMBEDDER so the corpus has a stable, immutable
-            # binding that won't change if the global setting is later updated.
-            default_embedder = getattr(settings, "DEFAULT_EMBEDDER", None)
+            # current default embedder from PipelineSettings so the corpus has
+            # a stable, immutable binding.
+            default_embedder = get_default_embedder_path()
             if not self.preferred_embedder and default_embedder:
                 self.preferred_embedder = default_embedder
 

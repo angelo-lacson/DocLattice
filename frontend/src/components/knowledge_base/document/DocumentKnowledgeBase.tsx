@@ -127,6 +127,7 @@ import { useAnnotationSelection } from "../../annotator/context/UISettingsAtom";
 import styled from "styled-components";
 import { Icon } from "semantic-ui-react";
 import { useChatSourceState } from "../../annotator/context/ChatSourceAtom";
+import { isTextFileType, isPdfFileType } from "../../../utils/files";
 import { useCreateAnnotation } from "../../annotator/hooks/AnnotationHooks";
 import { useScrollContainerRef } from "../../annotator/context/DocumentAtom";
 import { useChatPanelWidth } from "../../annotator/context/UISettingsAtom";
@@ -1491,10 +1492,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         processAnnotationsData(data);
       });
 
-      if (
-        data.document.fileType === "application/pdf" &&
-        data.document.pdfFile
-      ) {
+      if (isPdfFileType(data.document.fileType) && data.document.pdfFile) {
         routingLogger.debug("\n=== DOCUMENT LOAD START ===");
         routingLogger.debug("Type: PDF");
         routingLogger.debug("Document ID:", data.document.id);
@@ -1601,8 +1599,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             );
           });
       } else if (
-        (data.document.fileType === "application/txt" ||
-          data.document.fileType === "text/plain") &&
+        isTextFileType(data.document.fileType) &&
         data.document.txtExtractFile
       ) {
         routingLogger.debug("\n=== DOCUMENT LOAD START ===");
@@ -1728,10 +1725,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         });
 
         // Load PDF/TXT content
-        if (
-          data.document.fileType === "application/pdf" &&
-          data.document.pdfFile
-        ) {
+        if (isPdfFileType(data.document.fileType) && data.document.pdfFile) {
           setViewState(ViewState.LOADING);
           const loadingTask: PDFDocumentLoadingTask = getDocument(
             data.document.pdfFile
@@ -2432,7 +2426,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   // The main viewer content:
   let viewerContent: JSX.Element = <></>;
-  if (metadata.fileType === "application/pdf") {
+  if (isPdfFileType(metadata.fileType)) {
     viewerContent = (
       <PDFContainer id="pdf-container" ref={containerRefCallback}>
         {viewState === ViewState.LOADED ? (
@@ -2452,10 +2446,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         )}
       </PDFContainer>
     );
-  } else if (
-    metadata.fileType === "application/txt" ||
-    metadata.fileType === "text/plain"
-  ) {
+  } else if (isTextFileType(metadata.fileType)) {
     viewerContent = (
       <PDFContainer id="pdf-container" ref={containerRefCallback}>
         {viewState === ViewState.LOADED ? (
