@@ -18,7 +18,7 @@ Both layers work together: the manager/queryset produces the base filtered set, 
 | Corpus | `PermissionedTreeQuerySet.visible_to_user` | `opencontractserver/shared/QuerySets.py:30-86` | Guardian via `get_objects_for_user` |
 | Document | `DocumentQuerySet.visible_to_user` | `opencontractserver/shared/QuerySets.py:193-229` | Guardian permission table lookup |
 | Document (manager) | `BaseVisibilityManager.visible_to_user` | `opencontractserver/shared/Managers.py:40-203` | Guardian + model-specific prefetches |
-| Annotation | `AnnotationQuerySet.visible_to_user` | `opencontractserver/shared/QuerySets.py:245-354` | Document + corpus + analysis/extract privacy |
+| Annotation | `AnnotationQuerySet.visible_to_user` | `opencontractserver/shared/QuerySets.py:245-379` | Guardian on doc/corpus + analysis/extract privacy |
 | Note | `NoteQuerySet.visible_to_user` | `opencontractserver/shared/QuerySets.py:368-399` | Document + corpus inheritance |
 | UserFeedback | `UserFeedbackQuerySet.visible_to_user` | `opencontractserver/shared/QuerySets.py:112-133` | Creator + public + annotation visibility |
 | Fallback | `PermissionQuerySet.visible_to_user` | `opencontractserver/shared/QuerySets.py:137-184` | Creator + public only (no guardian) |

@@ -24,9 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### QuerySet Permission Filtering Gaps Fixed
 - `DocumentQuerySet.visible_to_user()` and `NoteQuerySet.visible_to_user()` inherited from `PermissionQuerySet` which had guardian permission checks commented out — only checking `is_public` and `creator`
   - `opencontractserver/shared/QuerySets.py` (classes `DocumentQuerySet`, `NoteQuerySet`)
-- **Bug**: Code calling `Document.objects.filter(...).visible_to_user(user)` hit the QuerySet method instead of the Manager method, bypassing guardian permissions
-- **Impact**: Documents shared via `set_permissions_for_obj_to_user()` were invisible through the QuerySet chain code path; Notes on accessible documents were not visible to users who could see the parent document and corpus
-- **Fix**: Both QuerySets now override `visible_to_user()` with proper permission checks. Documents check guardian tables directly; Notes inherit from document + corpus permissions
+- `AnnotationQuerySet.visible_to_user()` checked document/corpus visibility via `is_public` and `creator` only, missing guardian permission lookups for documents and corpuses
+  - `opencontractserver/shared/QuerySets.py` (class `AnnotationQuerySet`)
+- **Bug**: Code calling `Model.objects.filter(...).visible_to_user(user)` or `Model.objects.visible_to_user(user)` skipped guardian permission checks, making objects invisible to users with explicit share permissions
+- **Impact**: Documents shared via `set_permissions_for_obj_to_user()` were invisible through the QuerySet chain code path; annotations on shared documents/corpuses were invisible; Notes on accessible documents were not visible
+- **Fix**: All three QuerySets now override `visible_to_user()` with proper guardian permission table lookups. Documents and Annotations check guardian tables directly; Notes inherit from document + corpus permissions
 
 ### Added
 
