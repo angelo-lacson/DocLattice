@@ -161,6 +161,8 @@ interface UnifiedContentFeedTestWrapperProps {
   mockRelations?: any[];
   selectedAnnotationIds?: string[];
   mocks?: MockedResponse[];
+  /** Override the default container style (400×600px) */
+  containerStyle?: React.CSSProperties;
 }
 
 // Default filters
@@ -335,6 +337,7 @@ export const UnifiedContentFeedTestWrapper: React.FC<
   mockRelations = [],
   selectedAnnotationIds = [],
   mocks = [],
+  containerStyle,
 }) => {
   // Create a wildcard link that handles all operations
   const link = createWildcardLink(mocks);
@@ -376,6 +379,7 @@ export const UnifiedContentFeedTestWrapper: React.FC<
                   height: "600px",
                   position: "relative",
                   background: "#f5f5f5",
+                  ...containerStyle,
                 }}
               >
                 <UnifiedContentFeed

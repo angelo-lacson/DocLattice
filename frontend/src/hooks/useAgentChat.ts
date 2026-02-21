@@ -112,6 +112,16 @@ export interface PendingApproval {
 }
 
 /**
+ * Context status metadata from the backend (token usage, compaction info).
+ */
+export interface ContextStatus {
+  used_tokens: number;
+  context_window: number;
+  was_compacted: boolean;
+  tokens_before_compaction: number;
+}
+
+/**
  * Context configuration for the agent chat.
  */
 export interface AgentChatContext {
@@ -150,6 +160,7 @@ export interface UseAgentChatReturn {
   error: string | null;
   pendingApproval: PendingApproval | null;
   showApprovalModal: boolean;
+  contextStatus: ContextStatus | null;
 
   // Actions
   sendMessage: (content: string) => void;
@@ -276,6 +287,11 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
   const [pendingApproval, setPendingApproval] =
     useState<PendingApproval | null>(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+
+  // Context status (token usage, compaction info)
+  const [contextStatus, setContextStatus] = useState<ContextStatus | null>(
+    null
+  );
 
   // Chat source state for annotation pinning
   const {
@@ -707,6 +723,9 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
               data?.timeline
             );
             setIsProcessing(false);
+            if (data?.context_status) {
+              setContextStatus(data.context_status as ContextStatus);
+            }
             if (
               pendingApproval &&
               data?.message_id === pendingApproval.messageId
@@ -967,6 +986,7 @@ export function useAgentChat(options: UseAgentChatOptions): UseAgentChatReturn {
     error,
     pendingApproval,
     showApprovalModal,
+    contextStatus,
     sendMessage,
     sendApprovalDecision: sendApprovalDecisionFn,
     setShowApprovalModal,
