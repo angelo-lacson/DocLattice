@@ -2,7 +2,6 @@ import random
 from typing import Optional
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.test import TestCase
@@ -15,6 +14,7 @@ from opencontractserver.llms.vector_stores.core_vector_stores import (
     VectorSearchQuery,
     VectorSearchResult,
 )
+from opencontractserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 
@@ -148,9 +148,9 @@ class TestCoreAnnotationVectorStore(TestCase):
             )
 
         # Add embeddings (384 dimension) to anno1, anno2, anno3; skip anno4 to confirm no-embed.
-        # Use settings.DEFAULT_EMBEDDER so embeddings match what the vector store searches for
+        # Use get_default_embedder_path() so embeddings match what the vector store searches for
         dim = 384
-        embedder_path = settings.DEFAULT_EMBEDDER
+        embedder_path = get_default_embedder_path()
         cls.anno1.add_embedding(
             embedder_path,
             constant_vector(dim, 0.1),
@@ -270,7 +270,7 @@ class TestCoreAnnotationVectorStore(TestCase):
         # Mock the embedding generation to return a known vector
         expected_vector = constant_vector(384, value=0.15)
         mock_gen_embeds.return_value = (
-            settings.DEFAULT_EMBEDDER,
+            get_default_embedder_path(),
             expected_vector,
         )
 
@@ -366,17 +366,17 @@ class TestCoreAnnotationVectorStore(TestCase):
         )
 
         # Add multiple embeddings in a single batch for each annotation
-        # Use settings.DEFAULT_EMBEDDER to match what the vector store searches for
+        # Use get_default_embedder_path() to match what the vector store searches for
         vectors_for_batch = [
             constant_vector(384, 0.45),
             constant_vector(384, 0.55),
         ]
         new_annotation_in_corpus.add_embeddings(
-            settings.DEFAULT_EMBEDDER,
+            get_default_embedder_path(),
             vectors_for_batch,
         )
         annotation_other_corpus.add_embeddings(
-            settings.DEFAULT_EMBEDDER,
+            get_default_embedder_path(),
             vectors_for_batch,
         )
 

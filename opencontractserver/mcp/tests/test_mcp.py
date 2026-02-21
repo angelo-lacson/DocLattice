@@ -2324,7 +2324,7 @@ class MCPTelemetryIntegrationTest(TestCase):
 
             try:
                 with patch(
-                    "opencontractserver.mcp.server.record_mcp_tool_call"
+                    "opencontractserver.mcp.server.arecord_mcp_tool_call"
                 ) as mock_record:
                     mock_record.return_value = True
 
@@ -2364,7 +2364,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.6", transport="sse")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_tool_call"
+                "opencontractserver.mcp.server.arecord_mcp_tool_call"
             ) as mock_record:
                 mock_record.return_value = True
 
@@ -2398,7 +2398,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.7", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_corpus_resource"
             ) as mock_get_corpus:
@@ -2434,7 +2434,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.8", transport="sse")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record:
                 mock_record.return_value = True
 
@@ -2468,7 +2468,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.9", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_document_resource"
             ) as mock_get_doc:
@@ -2505,7 +2505,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.10", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_annotation_resource"
             ) as mock_get_ann:
@@ -2544,7 +2544,7 @@ class MCPTelemetryIntegrationTest(TestCase):
             set_request_context(client_ip="10.0.0.11", transport="streamable_http")
 
             with patch(
-                "opencontractserver.mcp.server.record_mcp_resource_read"
+                "opencontractserver.mcp.server.arecord_mcp_resource_read"
             ) as mock_record, patch(
                 "opencontractserver.mcp.server.get_thread_resource"
             ) as mock_get_thread:
@@ -4497,3 +4497,554 @@ class MCPCleanupLifespanManagerEventLoopRunningTest(TestCase):
             # The argument should be the coroutine from manager.shutdown()
             call_args = mock_loop.create_task.call_args[0][0]
             self.assertIsNotNone(call_args)
+
+
+class AsyncMCPTelemetryFunctionsTest(TestCase):
+    """Direct tests for async MCP telemetry functions in opencontractserver/mcp/telemetry.py.
+
+    These functions are always mocked at the server.py level in integration tests,
+    so this class tests the actual function logic: property construction,
+    context inclusion, and error_type handling.
+    """
+
+    def setUp(self):
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    def tearDown(self):
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    # ── arecord_mcp_tool_call ────────────────────────────────────────────
+
+    def test_arecord_mcp_tool_call_success_no_context(self):
+        """Test async tool call telemetry with no request context."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import arecord_mcp_tool_call
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(arecord_mcp_tool_call("list_documents"))
+
+        self.assertTrue(result)
+        mock_event.assert_called_once()
+        event_name, props = mock_event.call_args[0]
+        self.assertEqual(event_name, "mcp_tool_call")
+        self.assertEqual(props["tool_name"], "list_documents")
+        self.assertTrue(props["success"])
+        self.assertEqual(props["transport"], "unknown")
+        self.assertNotIn("client_ip_hash", props)
+        self.assertNotIn("error_type", props)
+
+    def test_arecord_mcp_tool_call_with_context(self):
+        """Test async tool call telemetry includes client IP hash from context."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import (
+            arecord_mcp_tool_call,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.0.0.1", transport="streamable_http")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(arecord_mcp_tool_call("search_corpus"))
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertEqual(props["transport"], "streamable_http")
+        self.assertIn("client_ip_hash", props)
+        self.assertEqual(len(props["client_ip_hash"]), 16)
+
+    def test_arecord_mcp_tool_call_failure_with_error_type(self):
+        """Test async tool call telemetry records error_type on failure."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import arecord_mcp_tool_call
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(
+                arecord_mcp_tool_call(
+                    "bad_tool", success=False, error_type="ValueError"
+                )
+            )
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertFalse(props["success"])
+        self.assertEqual(props["error_type"], "ValueError")
+
+    def test_arecord_mcp_tool_call_failure_with_context_and_error(self):
+        """Test async tool call telemetry with both context and error."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import (
+            arecord_mcp_tool_call,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="192.168.1.1", transport="sse")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(
+                arecord_mcp_tool_call(
+                    "unknown_tool", success=False, error_type="UnknownTool"
+                )
+            )
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertIn("client_ip_hash", props)
+        self.assertEqual(props["error_type"], "UnknownTool")
+        self.assertEqual(props["transport"], "sse")
+
+    # ── arecord_mcp_resource_read ────────────────────────────────────────
+
+    def test_arecord_mcp_resource_read_success_no_context(self):
+        """Test async resource read telemetry with no request context."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import arecord_mcp_resource_read
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(arecord_mcp_resource_read("corpus"))
+
+        self.assertTrue(result)
+        event_name, props = mock_event.call_args[0]
+        self.assertEqual(event_name, "mcp_resource_read")
+        self.assertEqual(props["resource_type"], "corpus")
+        self.assertTrue(props["success"])
+        self.assertEqual(props["transport"], "unknown")
+        self.assertNotIn("client_ip_hash", props)
+        self.assertNotIn("error_type", props)
+
+    def test_arecord_mcp_resource_read_with_context(self):
+        """Test async resource read telemetry includes client IP hash."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import (
+            arecord_mcp_resource_read,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="172.16.0.5", transport="streamable_http_scoped")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(arecord_mcp_resource_read("document"))
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertIn("client_ip_hash", props)
+        self.assertEqual(props["transport"], "streamable_http_scoped")
+
+    def test_arecord_mcp_resource_read_failure_with_error_type(self):
+        """Test async resource read telemetry records error_type on failure."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import arecord_mcp_resource_read
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(
+                arecord_mcp_resource_read(
+                    "unknown", success=False, error_type="ValueError"
+                )
+            )
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertFalse(props["success"])
+        self.assertEqual(props["error_type"], "ValueError")
+
+    def test_arecord_mcp_resource_read_failure_with_context_and_error(self):
+        """Test async resource read telemetry with both context and error."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import (
+            arecord_mcp_resource_read,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="10.10.10.10", transport="streamable_http")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(
+                arecord_mcp_resource_read(
+                    "annotation", success=False, error_type="DoesNotExist"
+                )
+            )
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertIn("client_ip_hash", props)
+        self.assertEqual(props["error_type"], "DoesNotExist")
+
+    # ── arecord_mcp_request ──────────────────────────────────────────────
+
+    def test_arecord_mcp_request_success_no_context(self):
+        """Test async request telemetry with no request context."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import arecord_mcp_request
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(arecord_mcp_request("/mcp", method="POST"))
+
+        self.assertTrue(result)
+        event_name, props = mock_event.call_args[0]
+        self.assertEqual(event_name, "mcp_request")
+        self.assertEqual(props["endpoint"], "/mcp")
+        self.assertEqual(props["method"], "POST")
+        self.assertTrue(props["success"])
+        self.assertEqual(props["transport"], "unknown")
+        self.assertNotIn("client_ip_hash", props)
+        self.assertNotIn("error_type", props)
+
+    def test_arecord_mcp_request_with_context(self):
+        """Test async request telemetry includes client IP hash."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import (
+            arecord_mcp_request,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="8.8.8.8", transport="sse")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(arecord_mcp_request("/sse", method="GET"))
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertIn("client_ip_hash", props)
+        self.assertEqual(props["transport"], "sse")
+        self.assertEqual(props["method"], "GET")
+
+    def test_arecord_mcp_request_failure_with_error_type(self):
+        """Test async request telemetry records error_type on failure."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import arecord_mcp_request
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(
+                arecord_mcp_request("/mcp", success=False, error_type="ConnectionError")
+            )
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertFalse(props["success"])
+        self.assertEqual(props["error_type"], "ConnectionError")
+
+    def test_arecord_mcp_request_failure_with_context_and_error(self):
+        """Test async request telemetry with both context and error."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        from opencontractserver.mcp.telemetry import (
+            arecord_mcp_request,
+            set_request_context,
+        )
+
+        set_request_context(client_ip="203.0.113.50", transport="streamable_http")
+
+        with patch(
+            "opencontractserver.mcp.telemetry.arecord_event",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_event:
+            result = asyncio.run(
+                arecord_mcp_request(
+                    "/mcp/corpus/test-slug",
+                    method="POST",
+                    success=False,
+                    error_type="TimeoutError",
+                )
+            )
+
+        self.assertTrue(result)
+        _, props = mock_event.call_args[0]
+        self.assertIn("client_ip_hash", props)
+        self.assertEqual(props["error_type"], "TimeoutError")
+        self.assertEqual(props["endpoint"], "/mcp/corpus/test-slug")
+
+
+class MCPServerCallToolExceptionTest(TestCase):
+    """Tests for call_tool_handler exception path in server.py.
+
+    Covers the `except Exception` branch where a tool handler raises
+    and telemetry records the error_type.
+    """
+
+    def setUp(self):
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    def tearDown(self):
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+    def test_call_tool_handler_exception_records_error_type(self):
+        """Test call_tool_handler records error_type when handler raises."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from opencontractserver.mcp.server import TOOL_HANDLERS, call_tool_handler
+
+        async def run_test():
+            # Mock a tool handler that raises
+            mock_handler = MagicMock(side_effect=RuntimeError("handler broke"))
+            original = TOOL_HANDLERS.get("list_public_corpuses")
+            TOOL_HANDLERS["list_public_corpuses"] = mock_handler
+
+            try:
+                with patch(
+                    "opencontractserver.mcp.server.arecord_mcp_tool_call",
+                    new_callable=AsyncMock,
+                    return_value=True,
+                ) as mock_record:
+                    with self.assertRaises(RuntimeError):
+                        await call_tool_handler("list_public_corpuses", {})
+
+                    # Verify failure telemetry with error_type was recorded
+                    mock_record.assert_called_with(
+                        "list_public_corpuses",
+                        success=False,
+                        error_type="RuntimeError",
+                    )
+            finally:
+                if original is not None:
+                    TOOL_HANDLERS["list_public_corpuses"] = original
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+
+class MCPScopedCallToolTelemetryTest(TransactionTestCase):
+    """Tests for telemetry in the scoped server's call_tool handler.
+
+    Uses TransactionTestCase because scoped server uses sync_to_async
+    for corpus validation which requires cross-thread DB visibility.
+    """
+
+    def setUp(self):
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+
+        self.owner = User.objects.create_user(
+            username="scopedtoolowner",
+            email="scopedtool@test.com",
+            password="testpass123",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Scoped Tool Telemetry Corpus",
+            description="Test corpus",
+            creator=self.owner,
+            is_public=True,
+        )
+
+    def tearDown(self):
+        from django import db
+
+        from opencontractserver.mcp.telemetry import clear_request_context
+
+        clear_request_context()
+        db.connections.close_all()
+
+    def test_scoped_asgi_success_records_request_telemetry(self):
+        """Test scoped ASGI success path records arecord_mcp_request."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received.append(message)
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.corpus.slug}/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("192.168.1.100", 54321),
+            }
+
+            # Mock corpus validation to pass
+            mock_qs = MagicMock()
+            mock_qs.filter.return_value.exists.return_value = True
+
+            mock_scoped_manager = AsyncMock()
+            mock_scoped_manager.handle_request = AsyncMock()
+
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock(return_value=mock_scoped_manager)
+
+            with patch(
+                "opencontractserver.corpuses.models.Corpus.objects.visible_to_user",
+                return_value=mock_qs,
+            ), patch(
+                "opencontractserver.mcp.server.get_scoped_lifespan_manager",
+                new_callable=AsyncMock,
+                return_value=mock_lifespan,
+            ), patch(
+                "opencontractserver.mcp.server.arecord_mcp_request",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_record:
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+                # Verify success telemetry was recorded for scoped path
+                mock_record.assert_called_once_with(
+                    f"/mcp/corpus/{self.corpus.slug}",
+                    method="POST",
+                    success=True,
+                )
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+    def test_scoped_asgi_error_records_failure_telemetry(self):
+        """Test scoped ASGI error path records failure telemetry."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from opencontractserver.mcp.server import create_mcp_asgi_app
+
+        async def run_test():
+            received = []
+
+            async def mock_receive():
+                return {"type": "http.request", "body": b"{}"}
+
+            async def mock_send(message):
+                received.append(message)
+
+            scope = {
+                "type": "http",
+                "path": f"/mcp/corpus/{self.corpus.slug}/",
+                "method": "POST",
+                "query_string": b"",
+                "headers": [],
+                "client": ("192.168.1.100", 54321),
+            }
+
+            # Mock corpus validation to pass
+            mock_qs = MagicMock()
+            mock_qs.filter.return_value.exists.return_value = True
+
+            mock_scoped_manager = AsyncMock()
+            mock_scoped_manager.handle_request = AsyncMock(
+                side_effect=Exception("Scoped handler error")
+            )
+
+            mock_lifespan = AsyncMock()
+            mock_lifespan.ensure_started = AsyncMock(return_value=mock_scoped_manager)
+
+            with patch(
+                "opencontractserver.corpuses.models.Corpus.objects.visible_to_user",
+                return_value=mock_qs,
+            ), patch(
+                "opencontractserver.mcp.server.get_scoped_lifespan_manager",
+                new_callable=AsyncMock,
+                return_value=mock_lifespan,
+            ), patch(
+                "opencontractserver.mcp.server.arecord_mcp_request",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_record:
+                app = create_mcp_asgi_app()
+                await app(scope, mock_receive, mock_send)
+
+                # Verify failure telemetry was recorded for scoped path
+                mock_record.assert_called_once_with(
+                    f"/mcp/corpus/{self.corpus.slug}",
+                    method="POST",
+                    success=False,
+                    error_type="Exception",
+                )
+
+            # Should get a 500 error response
+            self.assertTrue(len(received) >= 2)
+            self.assertEqual(received[0]["status"], 500)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()

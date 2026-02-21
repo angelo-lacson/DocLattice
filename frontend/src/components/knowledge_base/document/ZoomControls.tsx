@@ -12,13 +12,13 @@ interface ZoomControlsProps {
 const StyledZoomControls = styled.div`
   position: absolute;
   top: 1.5rem;
-  left: 1.5rem;
+  right: 1.5rem;
   z-index: 900;
 
   @media (max-width: 768px) {
     position: absolute; /* Stay within document container */
     top: 1rem;
-    left: 1rem;
+    right: 1rem;
   }
 
   .zoom-group {
