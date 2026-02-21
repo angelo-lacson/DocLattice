@@ -423,3 +423,32 @@ class PermissionBasedVisibilityTest(TestCase):
             0,
             "Anonymous user should only see structural annotations on public documents",
         )
+
+    def test_document_queryset_visible_to_user_checks_guardian(self):
+        """
+        Regression test: Document.objects.filter(...).visible_to_user(user)
+        must check guardian permissions, not just is_public + creator.
+
+        Previously, chaining .filter().visible_to_user() hit PermissionQuerySet's
+        implementation which skipped guardian checks entirely.
+        """
+        # shared_doc has guardian read permission for collaborator (set in setUpTestData)
+        # Calling via queryset chain should still find it
+        qs = Document.objects.filter(id=self.shared_doc.id).visible_to_user(
+            self.collaborator
+        )
+        self.assertIn(
+            self.shared_doc,
+            qs,
+            "Document shared via guardian permission should be visible through queryset chain",
+        )
+
+        # regular_user has NO permission on shared_doc
+        qs = Document.objects.filter(id=self.shared_doc.id).visible_to_user(
+            self.regular_user
+        )
+        self.assertNotIn(
+            self.shared_doc,
+            qs,
+            "Document NOT shared should be invisible through queryset chain",
+        )
