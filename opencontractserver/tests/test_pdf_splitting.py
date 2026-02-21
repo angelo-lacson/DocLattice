@@ -2,11 +2,9 @@
 Tests for the PDF splitting utility used by chunked document processing.
 """
 
-import io
-
 from django.test import TestCase
-from pypdf import PdfWriter
 
+from opencontractserver.tests.helpers import make_test_pdf
 from opencontractserver.utils.pdf_splitting import (
     calculate_page_chunks,
     get_pdf_page_count,
@@ -14,29 +12,19 @@ from opencontractserver.utils.pdf_splitting import (
 )
 
 
-def _make_pdf(num_pages: int) -> bytes:
-    """Create a minimal valid PDF with the given number of blank pages."""
-    writer = PdfWriter()
-    for _ in range(num_pages):
-        writer.add_blank_page(width=612, height=792)
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
-
-
 class TestGetPdfPageCount(TestCase):
     """Tests for get_pdf_page_count."""
 
     def test_single_page(self):
-        pdf_bytes = _make_pdf(1)
+        pdf_bytes = make_test_pdf(1)
         self.assertEqual(get_pdf_page_count(pdf_bytes), 1)
 
     def test_multi_page(self):
-        pdf_bytes = _make_pdf(10)
+        pdf_bytes = make_test_pdf(10)
         self.assertEqual(get_pdf_page_count(pdf_bytes), 10)
 
     def test_large_document(self):
-        pdf_bytes = _make_pdf(200)
+        pdf_bytes = make_test_pdf(200)
         self.assertEqual(get_pdf_page_count(pdf_bytes), 200)
 
     def test_invalid_pdf_raises(self):
@@ -48,42 +36,42 @@ class TestSplitPdfByPageRange(TestCase):
     """Tests for split_pdf_by_page_range."""
 
     def test_first_chunk(self):
-        pdf_bytes = _make_pdf(10)
+        pdf_bytes = make_test_pdf(10)
         chunk = split_pdf_by_page_range(pdf_bytes, 0, 5)
         self.assertEqual(get_pdf_page_count(chunk), 5)
 
     def test_last_chunk(self):
-        pdf_bytes = _make_pdf(10)
+        pdf_bytes = make_test_pdf(10)
         chunk = split_pdf_by_page_range(pdf_bytes, 5, 10)
         self.assertEqual(get_pdf_page_count(chunk), 5)
 
     def test_single_page_chunk(self):
-        pdf_bytes = _make_pdf(5)
+        pdf_bytes = make_test_pdf(5)
         chunk = split_pdf_by_page_range(pdf_bytes, 2, 3)
         self.assertEqual(get_pdf_page_count(chunk), 1)
 
     def test_end_page_clamped_to_total(self):
-        pdf_bytes = _make_pdf(10)
+        pdf_bytes = make_test_pdf(10)
         chunk = split_pdf_by_page_range(pdf_bytes, 7, 100)
         self.assertEqual(get_pdf_page_count(chunk), 3)
 
     def test_invalid_start_page_negative(self):
-        pdf_bytes = _make_pdf(5)
+        pdf_bytes = make_test_pdf(5)
         with self.assertRaises(ValueError):
             split_pdf_by_page_range(pdf_bytes, -1, 3)
 
     def test_end_before_start(self):
-        pdf_bytes = _make_pdf(5)
+        pdf_bytes = make_test_pdf(5)
         with self.assertRaises(ValueError):
             split_pdf_by_page_range(pdf_bytes, 3, 2)
 
     def test_start_equals_end(self):
-        pdf_bytes = _make_pdf(5)
+        pdf_bytes = make_test_pdf(5)
         with self.assertRaises(ValueError):
             split_pdf_by_page_range(pdf_bytes, 3, 3)
 
     def test_start_beyond_document(self):
-        pdf_bytes = _make_pdf(5)
+        pdf_bytes = make_test_pdf(5)
         with self.assertRaises(ValueError):
             split_pdf_by_page_range(pdf_bytes, 10, 15)
 
@@ -93,7 +81,7 @@ class TestSplitPdfByPageRange(TestCase):
 
     def test_full_document_round_trip(self):
         """Splitting the full range should produce a PDF with same page count."""
-        pdf_bytes = _make_pdf(8)
+        pdf_bytes = make_test_pdf(8)
         chunk = split_pdf_by_page_range(pdf_bytes, 0, 8)
         self.assertEqual(get_pdf_page_count(chunk), 8)
 

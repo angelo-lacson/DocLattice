@@ -2,7 +2,6 @@
 Tests for the BaseChunkedParser reassembly logic and chunk dispatching.
 """
 
-import io
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
@@ -10,7 +9,6 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.test import TestCase
-from pypdf import PdfWriter
 
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.chunked_parser import (
@@ -21,19 +19,10 @@ from opencontractserver.pipeline.base.chunked_parser import (
 )
 from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.tests.helpers import make_test_pdf
 from opencontractserver.types.dicts import OpenContractDocExport
 
 User = get_user_model()
-
-
-def _make_pdf(num_pages: int) -> bytes:
-    """Create a minimal valid PDF with the given number of blank pages."""
-    writer = PdfWriter()
-    for _ in range(num_pages):
-        writer.add_blank_page(width=612, height=792)
-    buf = io.BytesIO()
-    writer.write(buf)
-    return buf.getvalue()
 
 
 def _make_chunk_result(
@@ -299,7 +288,7 @@ class TestBaseChunkedParserIntegration(TestCase):
             )
 
         # Create a multi-page PDF
-        pdf_bytes = _make_pdf(100)
+        pdf_bytes = make_test_pdf(100)
         self.doc = Document.objects.create(
             title="Large Test Doc",
             description="100-page document",
@@ -313,7 +302,7 @@ class TestBaseChunkedParserIntegration(TestCase):
     )
     def test_small_doc_no_chunking(self, mock_open):
         """Documents below threshold should NOT be chunked."""
-        small_pdf = _make_pdf(10)
+        small_pdf = make_test_pdf(10)
         mock_file = MagicMock()
         mock_file.read.return_value = small_pdf
         mock_open.return_value.__enter__.return_value = mock_file
@@ -332,7 +321,7 @@ class TestBaseChunkedParserIntegration(TestCase):
     )
     def test_large_doc_is_chunked(self, mock_open):
         """Documents above threshold should be chunked and reassembled."""
-        large_pdf = _make_pdf(100)
+        large_pdf = make_test_pdf(100)
         mock_file = MagicMock()
         mock_file.read.return_value = large_pdf
         mock_open.return_value.__enter__.return_value = mock_file
@@ -357,7 +346,7 @@ class TestBaseChunkedParserIntegration(TestCase):
     )
     def test_concurrent_dispatch(self, mock_open):
         """Concurrent dispatch should produce same results as sequential."""
-        large_pdf = _make_pdf(100)
+        large_pdf = make_test_pdf(100)
         mock_file = MagicMock()
         mock_file.read.return_value = large_pdf
         mock_open.return_value.__enter__.return_value = mock_file
@@ -378,7 +367,7 @@ class TestBaseChunkedParserIntegration(TestCase):
     )
     def test_chunk_failure_raises(self, mock_open):
         """If a chunk fails, DocumentParsingError should propagate."""
-        large_pdf = _make_pdf(100)
+        large_pdf = make_test_pdf(100)
         mock_file = MagicMock()
         mock_file.read.return_value = large_pdf
         mock_open.return_value.__enter__.return_value = mock_file
@@ -402,7 +391,7 @@ class TestBaseChunkedParserIntegration(TestCase):
     )
     def test_post_reassemble_hook_called(self, mock_open):
         """The post-reassemble hook should be called after chunked parsing."""
-        large_pdf = _make_pdf(100)
+        large_pdf = make_test_pdf(100)
         mock_file = MagicMock()
         mock_file.read.return_value = large_pdf
         mock_open.return_value.__enter__.return_value = mock_file
@@ -431,7 +420,7 @@ class TestBaseChunkedParserIntegration(TestCase):
     @patch("opencontractserver.pipeline.base.chunked_parser.time.sleep")
     def test_chunk_retry_on_transient_error(self, mock_sleep, mock_open):
         """Transient chunk errors should be retried up to chunk_retry_limit."""
-        small_pdf = _make_pdf(10)
+        small_pdf = make_test_pdf(10)
         mock_file = MagicMock()
         mock_file.read.return_value = small_pdf
         mock_open.return_value.__enter__.return_value = mock_file
