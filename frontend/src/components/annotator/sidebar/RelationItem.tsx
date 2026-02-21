@@ -4,7 +4,7 @@ import _ from "lodash";
 
 import "./AnnotatorSidebar.css";
 import { RelationHighlightItem } from "./RelationHighlightItem";
-import { RelationGroup, ServerTokenAnnotation } from "../types/annotations";
+import { RelationGroup, ServerAnnotation } from "../types/annotations";
 
 export function RelationItem({
   relation,
@@ -20,8 +20,8 @@ export function RelationItem({
   relation: RelationGroup;
   read_only: boolean;
   selected: boolean;
-  target_annotations: ServerTokenAnnotation[];
-  source_annotations: ServerTokenAnnotation[];
+  target_annotations: ServerAnnotation[];
+  source_annotations: ServerAnnotation[];
   onSelectRelation: () => void;
   onSelectAnnotation: (annotationId: string) => void;
   onDeleteRelation: (relationId: string) => void;
