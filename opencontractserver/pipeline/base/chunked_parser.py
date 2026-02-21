@@ -197,27 +197,38 @@ class BaseChunkedParser(BaseParser):
             f"{len(chunks)} chunks (max {self.max_pages_per_chunk} pages each)"
         )
 
-        # Split PDF into chunk byte arrays
-        chunk_data: list[tuple[int, bytes, int]] = []
-        for idx, (start, end) in enumerate(chunks):
-            try:
-                chunk_bytes = split_pdf_by_page_range(pdf_bytes, start, end)
-            except ValueError as e:
-                raise DocumentParsingError(
-                    f"Failed to split PDF for document {doc_id}, "
-                    f"chunk {idx} (pages {start}-{end}): {e}",
-                    is_transient=False,
-                )
-            chunk_data.append((idx, chunk_bytes, start))
+        # Parse chunks
+        if self.max_concurrent_chunks <= 1:
+            # Sequential: split lazily to reduce peak memory
+            chunk_results = self._dispatch_sequential(
+                user_id=user_id,
+                doc_id=doc_id,
+                chunks=chunks,
+                pdf_bytes=pdf_bytes,
+                total_chunks=len(chunks),
+                **all_kwargs,
+            )
+        else:
+            # Concurrent: pre-split all chunks (needed for upfront submission)
+            chunk_data: list[tuple[int, bytes, int]] = []
+            for idx, (start, end) in enumerate(chunks):
+                try:
+                    chunk_bytes = split_pdf_by_page_range(pdf_bytes, start, end)
+                except ValueError as e:
+                    raise DocumentParsingError(
+                        f"Failed to split PDF for document {doc_id}, "
+                        f"chunk {idx} (pages {start}-{end}): {e}",
+                        is_transient=False,
+                    )
+                chunk_data.append((idx, chunk_bytes, start))
 
-        # Parse chunks (concurrently if configured)
-        chunk_results = self._dispatch_chunks(
-            user_id=user_id,
-            doc_id=doc_id,
-            chunk_data=chunk_data,
-            total_chunks=len(chunks),
-            **all_kwargs,
-        )
+            chunk_results = self._dispatch_concurrent(
+                user_id=user_id,
+                doc_id=doc_id,
+                chunk_data=chunk_data,
+                total_chunks=len(chunks),
+                **all_kwargs,
+            )
 
         # Reassemble
         page_offsets = [start for (start, _end) in chunks]
@@ -240,52 +251,37 @@ class BaseChunkedParser(BaseParser):
     # Chunk dispatch (sequential or concurrent)
     # ------------------------------------------------------------------
 
-    def _dispatch_chunks(
-        self,
-        user_id: int,
-        doc_id: int,
-        chunk_data: list[tuple[int, bytes, int]],
-        total_chunks: int,
-        **all_kwargs,
-    ) -> list[OpenContractDocExport]:
-        """
-        Parse all chunks, optionally in parallel.
-
-        Args:
-            chunk_data: List of (chunk_index, chunk_pdf_bytes, page_offset).
-            total_chunks: Total number of chunks.
-
-        Returns:
-            Ordered list of ``OpenContractDocExport`` results, one per chunk.
-
-        Raises:
-            DocumentParsingError: If any chunk fails after retries.
-        """
-        if self.max_concurrent_chunks <= 1:
-            return self._dispatch_sequential(
-                user_id, doc_id, chunk_data, total_chunks, **all_kwargs
-            )
-        return self._dispatch_concurrent(
-            user_id, doc_id, chunk_data, total_chunks, **all_kwargs
-        )
-
     def _dispatch_sequential(
         self,
         user_id: int,
         doc_id: int,
-        chunk_data: list[tuple[int, bytes, int]],
+        chunks: list[tuple[int, int]],
+        pdf_bytes: bytes,
         total_chunks: int,
         **all_kwargs,
     ) -> list[OpenContractDocExport]:
+        """
+        Parse chunks one at a time, splitting each from the source PDF lazily
+        to avoid holding all chunk PDFs in memory simultaneously.
+        """
         results: list[OpenContractDocExport] = []
-        for chunk_index, chunk_bytes, page_offset in chunk_data:
+        for chunk_index, (start, end) in enumerate(chunks):
+            try:
+                chunk_bytes = split_pdf_by_page_range(pdf_bytes, start, end)
+            except ValueError as e:
+                raise DocumentParsingError(
+                    f"Failed to split PDF for document {doc_id}, "
+                    f"chunk {chunk_index} (pages {start}-{end}): {e}",
+                    is_transient=False,
+                )
+
             result = self._parse_chunk_with_retry(
                 user_id=user_id,
                 doc_id=doc_id,
                 chunk_pdf_bytes=chunk_bytes,
                 chunk_index=chunk_index,
                 total_chunks=total_chunks,
-                page_offset=page_offset,
+                page_offset=start,
                 **all_kwargs,
             )
             if result is None:
