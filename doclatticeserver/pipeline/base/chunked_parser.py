@@ -54,6 +54,13 @@ class BaseChunkedParser(BaseParser):
 
     For documents below the chunking threshold, the full PDF bytes are passed
     to ``_parse_single_chunk_impl`` as a single chunk (no splitting overhead).
+
+    **Limitation -- cross-chunk parent-child relationships:**
+    Each chunk is parsed independently, so parent-child annotation references
+    that span chunk boundaries will be orphaned after reassembly.  For example,
+    a paragraph in chunk 1 whose section header is in chunk 0 will have a
+    ``parent_id`` that does not match any annotation ID in the final result.
+    A warning is emitted during reassembly when orphaned references are detected.
     """
 
     # ------------------------------------------------------------------
@@ -503,6 +510,21 @@ def _reassemble_chunk_results(
         "labelled_text": combined_annotations,
         "relationships": combined_relationships,
     }
+
+    # Detect and warn about orphaned cross-chunk parent references
+    all_annotation_ids = {a["id"] for a in combined_annotations if a.get("id")}
+    orphaned_count = 0
+    for ann in combined_annotations:
+        pid = ann.get("parent_id")
+        if pid is not None and pid not in all_annotation_ids:
+            orphaned_count += 1
+
+    if orphaned_count > 0:
+        logger.warning(
+            f"Reassembly produced {orphaned_count} orphaned parent_id "
+            f"reference(s). Cross-chunk parent-child relationships cannot "
+            f"be preserved when chunks are parsed independently."
+        )
 
     return result
 

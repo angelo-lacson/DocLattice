@@ -198,6 +198,54 @@ class TestReassembleChunkResults(TestCase):
         self.assertEqual(child["parent_id"], "c0_parent-1")
         self.assertEqual(child["id"], "c0_child-1")
 
+    def test_cross_chunk_parent_id_becomes_orphan(self):
+        """Parent-child references across chunk boundaries become orphaned.
+
+        When a child annotation in chunk 1 references a parent_id that
+        exists in chunk 0, the prefixed IDs won't match because each
+        chunk's IDs are prefixed independently (c0_ vs c1_).
+        """
+        # Chunk 0 has the parent
+        parent_ann = {
+            "id": "section-1",
+            "annotationLabel": "Section",
+            "rawText": "Section Header",
+            "page": 0,
+            "annotation_json": {"0": {"bounds": {}, "tokensJsons": [], "rawText": ""}},
+            "parent_id": None,
+            "annotation_type": "TOKEN_LABEL",
+            "structural": True,
+        }
+        c0 = _make_chunk_result(annotations=[parent_ann], num_pages=2)
+
+        # Chunk 1 has a child referencing chunk 0's parent
+        child_ann = {
+            "id": "para-1",
+            "annotationLabel": "Paragraph",
+            "rawText": "Paragraph text",
+            "page": 0,
+            "annotation_json": {"0": {"bounds": {}, "tokensJsons": [], "rawText": ""}},
+            "parent_id": "section-1",  # References chunk 0's annotation
+            "annotation_type": "TOKEN_LABEL",
+            "structural": True,
+        }
+        c1 = _make_chunk_result(annotations=[child_ann], num_pages=2)
+
+        result = _reassemble_chunk_results([c0, c1], [0, 2])
+
+        parent = result["labelled_text"][0]
+        child = result["labelled_text"][1]
+
+        # Parent gets c0_ prefix
+        self.assertEqual(parent["id"], "c0_section-1")
+        # Child's parent_id gets c1_ prefix (its own chunk), NOT c0_
+        # This is a known limitation: cross-chunk parent refs are orphaned
+        self.assertEqual(child["parent_id"], "c1_section-1")
+
+        # Verify the reference is indeed broken
+        all_ids = {a["id"] for a in result["labelled_text"]}
+        self.assertNotIn(child["parent_id"], all_ids)
+
     def test_empty_raises(self):
         with self.assertRaises(ValueError):
             _reassemble_chunk_results([], [])
