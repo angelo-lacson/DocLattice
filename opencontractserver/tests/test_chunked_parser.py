@@ -1,0 +1,456 @@
+"""
+Tests for the BaseChunkedParser reassembly logic and chunk dispatching.
+"""
+
+import io
+from typing import Optional
+from unittest.mock import MagicMock, patch
+
+from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.db import transaction
+from django.test import TestCase
+from pypdf import PdfWriter
+
+from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.base.chunked_parser import (
+    BaseChunkedParser,
+    _offset_annotation,
+    _offset_relationship,
+    _reassemble_chunk_results,
+)
+from opencontractserver.pipeline.base.exceptions import DocumentParsingError
+from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.types.dicts import OpenContractDocExport
+
+User = get_user_model()
+
+
+def _make_pdf(num_pages: int) -> bytes:
+    """Create a minimal valid PDF with the given number of blank pages."""
+    writer = PdfWriter()
+    for _ in range(num_pages):
+        writer.add_blank_page(width=612, height=792)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def _make_chunk_result(
+    page_offset: int = 0,
+    num_pages: int = 2,
+    annotations: list | None = None,
+    relationships: list | None = None,
+    content: str = "chunk text",
+) -> OpenContractDocExport:
+    """Build a minimal chunk result with local 0-based page indices."""
+    pawls = []
+    for i in range(num_pages):
+        pawls.append(
+            {
+                "page": {"width": 612, "height": 792, "index": i},
+                "tokens": [
+                    {"x": 10, "y": 10, "width": 50, "height": 12, "text": f"tok_{i}"}
+                ],
+            }
+        )
+
+    if annotations is None:
+        annotations = [
+            {
+                "id": "ann-1",
+                "annotationLabel": "Paragraph",
+                "rawText": "sample",
+                "page": 0,
+                "annotation_json": {
+                    "0": {
+                        "bounds": {
+                            "left": 10,
+                            "top": 10,
+                            "right": 60,
+                            "bottom": 22,
+                        },
+                        "tokensJsons": [{"pageIndex": 0, "tokenIndex": 0}],
+                        "rawText": "sample",
+                    }
+                },
+                "parent_id": None,
+                "annotation_type": "TOKEN_LABEL",
+                "structural": True,
+            }
+        ]
+
+    return {
+        "title": "Test Doc",
+        "content": content,
+        "description": "desc",
+        "pawls_file_content": pawls,
+        "page_count": num_pages,
+        "doc_labels": ["Contract"],
+        "labelled_text": annotations,
+        "relationships": relationships or [],
+    }
+
+
+# ======================================================================
+# Reassembly pure-function tests
+# ======================================================================
+
+
+class TestReassembleChunkResults(TestCase):
+    """Tests for _reassemble_chunk_results."""
+
+    def test_single_chunk_passthrough(self):
+        """A single chunk at offset 0 should be returned unchanged."""
+        chunk = _make_chunk_result()
+        result = _reassemble_chunk_results([chunk], [0])
+        self.assertEqual(result["page_count"], 2)
+        self.assertEqual(len(result["pawls_file_content"]), 2)
+        self.assertEqual(len(result["labelled_text"]), 1)
+
+    def test_two_chunks_page_count(self):
+        c0 = _make_chunk_result(num_pages=3, content="first")
+        c1 = _make_chunk_result(num_pages=2, content="second")
+        result = _reassemble_chunk_results([c0, c1], [0, 3])
+        self.assertEqual(result["page_count"], 5)
+        self.assertEqual(len(result["pawls_file_content"]), 5)
+
+    def test_pawls_page_index_offset(self):
+        c0 = _make_chunk_result(num_pages=2)
+        c1 = _make_chunk_result(num_pages=2)
+        result = _reassemble_chunk_results([c0, c1], [0, 2])
+        indices = [p["page"]["index"] for p in result["pawls_file_content"]]
+        self.assertEqual(indices, [0, 1, 2, 3])
+
+    def test_annotation_page_offset(self):
+        c0 = _make_chunk_result(num_pages=3)
+        c1 = _make_chunk_result(num_pages=3)
+        result = _reassemble_chunk_results([c0, c1], [0, 3])
+        pages = [a["page"] for a in result["labelled_text"]]
+        self.assertEqual(pages, [0, 3])
+
+    def test_annotation_id_prefixing(self):
+        c0 = _make_chunk_result()
+        c1 = _make_chunk_result()
+        result = _reassemble_chunk_results([c0, c1], [0, 2])
+        ids = [a["id"] for a in result["labelled_text"]]
+        self.assertEqual(ids, ["c0_ann-1", "c1_ann-1"])
+
+    def test_annotation_json_page_key_offset(self):
+        c1 = _make_chunk_result(num_pages=2)
+        result = _reassemble_chunk_results([c1], [5])
+        ann = result["labelled_text"][0]
+        self.assertIn("5", ann["annotation_json"])
+        self.assertNotIn("0", ann["annotation_json"])
+
+    def test_tokens_json_page_index_offset(self):
+        c1 = _make_chunk_result(num_pages=2)
+        result = _reassemble_chunk_results([c1], [10])
+        ann = result["labelled_text"][0]
+        page_data = ann["annotation_json"]["10"]
+        self.assertEqual(page_data["tokensJsons"][0]["pageIndex"], 10)
+
+    def test_content_concatenation(self):
+        c0 = _make_chunk_result(content="hello")
+        c1 = _make_chunk_result(content="world")
+        result = _reassemble_chunk_results([c0, c1], [0, 2])
+        self.assertEqual(result["content"], "hello\nworld")
+
+    def test_doc_labels_deduplicated(self):
+        c0 = _make_chunk_result()
+        c1 = _make_chunk_result()
+        # Both chunks have doc_labels=["Contract"]
+        result = _reassemble_chunk_results([c0, c1], [0, 2])
+        self.assertEqual(result["doc_labels"], ["Contract"])
+
+    def test_relationship_id_prefixing(self):
+        rels = [
+            {
+                "id": "rel-1",
+                "relationshipLabel": "Contains",
+                "source_annotation_ids": ["ann-1"],
+                "target_annotation_ids": ["ann-2"],
+                "structural": True,
+            }
+        ]
+        c0 = _make_chunk_result(relationships=rels)
+        result = _reassemble_chunk_results([c0], [5])
+        rel = result["relationships"][0]
+        self.assertEqual(rel["id"], "c0_rel-1")
+        self.assertEqual(rel["source_annotation_ids"], ["c0_ann-1"])
+        self.assertEqual(rel["target_annotation_ids"], ["c0_ann-2"])
+
+    def test_parent_id_prefixing(self):
+        annotations = [
+            {
+                "id": "parent-1",
+                "annotationLabel": "Section",
+                "rawText": "section",
+                "page": 0,
+                "annotation_json": {"0": {"bounds": {}, "tokensJsons": [], "rawText": ""}},
+                "parent_id": None,
+                "annotation_type": "TOKEN_LABEL",
+                "structural": True,
+            },
+            {
+                "id": "child-1",
+                "annotationLabel": "Paragraph",
+                "rawText": "para",
+                "page": 1,
+                "annotation_json": {"1": {"bounds": {}, "tokensJsons": [], "rawText": ""}},
+                "parent_id": "parent-1",
+                "annotation_type": "TOKEN_LABEL",
+                "structural": True,
+            },
+        ]
+        c0 = _make_chunk_result(annotations=annotations, num_pages=2)
+        result = _reassemble_chunk_results([c0], [10])
+        child = result["labelled_text"][1]
+        self.assertEqual(child["parent_id"], "c0_parent-1")
+        self.assertEqual(child["id"], "c0_child-1")
+
+    def test_empty_raises(self):
+        with self.assertRaises(ValueError):
+            _reassemble_chunk_results([], [])
+
+
+class TestOffsetAnnotation(TestCase):
+    """Tests for the _offset_annotation helper."""
+
+    def test_basic_offset(self):
+        ann = {
+            "id": "a1",
+            "page": 2,
+            "parent_id": "a0",
+            "annotation_json": {
+                "2": {
+                    "tokensJsons": [{"pageIndex": 2, "tokenIndex": 0}],
+                    "bounds": {},
+                    "rawText": "",
+                }
+            },
+        }
+        _offset_annotation(ann, 10, "c0_")
+        self.assertEqual(ann["id"], "c0_a1")
+        self.assertEqual(ann["page"], 12)
+        self.assertEqual(ann["parent_id"], "c0_a0")
+        self.assertIn("12", ann["annotation_json"])
+        self.assertNotIn("2", ann["annotation_json"])
+        self.assertEqual(
+            ann["annotation_json"]["12"]["tokensJsons"][0]["pageIndex"], 12
+        )
+
+
+class TestOffsetRelationship(TestCase):
+    """Tests for the _offset_relationship helper."""
+
+    def test_basic_offset(self):
+        rel = {
+            "id": "r1",
+            "source_annotation_ids": ["a1", "a2"],
+            "target_annotation_ids": ["a3"],
+        }
+        _offset_relationship(rel, "c1_")
+        self.assertEqual(rel["id"], "c1_r1")
+        self.assertEqual(rel["source_annotation_ids"], ["c1_a1", "c1_a2"])
+        self.assertEqual(rel["target_annotation_ids"], ["c1_a3"])
+
+
+# ======================================================================
+# BaseChunkedParser integration tests
+# ======================================================================
+
+
+class ConcreteChunkedParser(BaseChunkedParser):
+    """Minimal concrete implementation for testing the base class."""
+
+    title = "Test Chunked Parser"
+    description = "Testing only"
+    supported_file_types = [FileTypeEnum.PDF]
+
+    def __init__(self, chunk_results=None, **kwargs):
+        # Skip PipelineComponentBase settings loading during tests
+        self._full_class_path = "test.ConcreteChunkedParser"
+        self._settings = None
+        self._chunk_results = chunk_results or {}
+
+    def _parse_single_chunk_impl(
+        self,
+        user_id,
+        doc_id,
+        chunk_pdf_bytes,
+        chunk_index,
+        total_chunks,
+        page_offset,
+        **all_kwargs,
+    ) -> Optional[OpenContractDocExport]:
+        if chunk_index in self._chunk_results:
+            return self._chunk_results[chunk_index]
+        return _make_chunk_result(num_pages=2, content=f"chunk_{chunk_index}")
+
+
+class TestBaseChunkedParserIntegration(TestCase):
+    """Integration tests for BaseChunkedParser._parse_document_impl."""
+
+    def setUp(self):
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="chunktest", password="12345678"
+            )
+
+        # Create a multi-page PDF
+        pdf_bytes = _make_pdf(100)
+        self.doc = Document.objects.create(
+            title="Large Test Doc",
+            description="100-page document",
+            file_type="application/pdf",
+            creator=self.user,
+        )
+        self.doc.pdf_file.save("large_test.pdf", ContentFile(pdf_bytes))
+
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
+    )
+    def test_small_doc_no_chunking(self, mock_open):
+        """Documents below threshold should NOT be chunked."""
+        small_pdf = _make_pdf(10)
+        mock_file = MagicMock()
+        mock_file.read.return_value = small_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        parser = ConcreteChunkedParser()
+        parser.min_pages_for_chunking = 75
+
+        result = parser._parse_document_impl(
+            user_id=self.user.id, doc_id=self.doc.id
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["page_count"], 2)  # From default _make_chunk_result
+
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
+    )
+    def test_large_doc_is_chunked(self, mock_open):
+        """Documents above threshold should be chunked and reassembled."""
+        large_pdf = _make_pdf(100)
+        mock_file = MagicMock()
+        mock_file.read.return_value = large_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        parser = ConcreteChunkedParser()
+        parser.max_pages_per_chunk = 50
+        parser.min_pages_for_chunking = 75
+        parser.max_concurrent_chunks = 1  # Sequential for determinism
+
+        result = parser._parse_document_impl(
+            user_id=self.user.id, doc_id=self.doc.id
+        )
+        self.assertIsNotNone(result)
+        # 2 chunks x 2 pages each from _make_chunk_result default
+        self.assertEqual(result["page_count"], 4)
+        # PAWLs pages should have correct indices
+        indices = [p["page"]["index"] for p in result["pawls_file_content"]]
+        self.assertEqual(indices, [0, 1, 50, 51])
+
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
+    )
+    def test_concurrent_dispatch(self, mock_open):
+        """Concurrent dispatch should produce same results as sequential."""
+        large_pdf = _make_pdf(100)
+        mock_file = MagicMock()
+        mock_file.read.return_value = large_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        parser = ConcreteChunkedParser()
+        parser.max_pages_per_chunk = 50
+        parser.min_pages_for_chunking = 75
+        parser.max_concurrent_chunks = 3
+
+        result = parser._parse_document_impl(
+            user_id=self.user.id, doc_id=self.doc.id
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["page_count"], 4)
+
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
+    )
+    def test_chunk_failure_raises(self, mock_open):
+        """If a chunk fails, DocumentParsingError should propagate."""
+        large_pdf = _make_pdf(100)
+        mock_file = MagicMock()
+        mock_file.read.return_value = large_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        class FailingParser(ConcreteChunkedParser):
+            def _parse_single_chunk_impl(self, *args, **kwargs):
+                raise DocumentParsingError("boom", is_transient=False)
+
+        parser = FailingParser()
+        parser.max_pages_per_chunk = 50
+        parser.min_pages_for_chunking = 75
+        parser.chunk_retry_limit = 0
+
+        with self.assertRaises(DocumentParsingError):
+            parser._parse_document_impl(
+                user_id=self.user.id, doc_id=self.doc.id
+            )
+
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
+    )
+    def test_post_reassemble_hook_called(self, mock_open):
+        """The post-reassemble hook should be called after chunked parsing."""
+        large_pdf = _make_pdf(100)
+        mock_file = MagicMock()
+        mock_file.read.return_value = large_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        hook_called = {"value": False}
+
+        class HookParser(ConcreteChunkedParser):
+            def _post_reassemble_hook(self, user_id, doc_id, reassembled, pdf_bytes, **kw):
+                hook_called["value"] = True
+                reassembled["title"] = "HOOKED"
+                return reassembled
+
+        parser = HookParser()
+        parser.max_pages_per_chunk = 50
+        parser.min_pages_for_chunking = 75
+
+        result = parser._parse_document_impl(
+            user_id=self.user.id, doc_id=self.doc.id
+        )
+        self.assertTrue(hook_called["value"])
+        self.assertEqual(result["title"], "HOOKED")
+
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
+    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.time.sleep")
+    def test_chunk_retry_on_transient_error(self, mock_sleep, mock_open):
+        """Transient chunk errors should be retried up to chunk_retry_limit."""
+        small_pdf = _make_pdf(10)
+        mock_file = MagicMock()
+        mock_file.read.return_value = small_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        call_count = {"value": 0}
+
+        class RetryParser(ConcreteChunkedParser):
+            def _parse_single_chunk_impl(self, *args, **kwargs):
+                call_count["value"] += 1
+                if call_count["value"] == 1:
+                    raise DocumentParsingError("transient", is_transient=True)
+                return _make_chunk_result()
+
+        parser = RetryParser()
+        parser.chunk_retry_limit = 1
+
+        result = parser._parse_document_impl(
+            user_id=self.user.id, doc_id=self.doc.id
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(call_count["value"], 2)
+        mock_sleep.assert_called_once()

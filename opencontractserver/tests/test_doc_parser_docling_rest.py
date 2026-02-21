@@ -101,9 +101,7 @@ class TestDoclingParser(TestCase):
         }
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_success(self, mock_open, mock_post):
         """Test successful document parsing."""
         # Mock the file reading
@@ -145,9 +143,7 @@ class TestDoclingParser(TestCase):
         self.assertFalse(payload["llm_enhanced_hierarchy"])
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_service_error(self, mock_open, mock_post):
         """Test handling of service errors raises DocumentParsingError."""
         # Mock the file reading
@@ -218,9 +214,7 @@ class TestDoclingParser(TestCase):
         self.assertEqual(normalized["pawls_file_content"][0]["page"]["width"], 100)
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_timeout_error(self, mock_open, mock_post):
         """Parser raises DocumentParsingError when the Docling service call times out."""
         mock_file = MagicMock()
@@ -239,9 +233,7 @@ class TestDoclingParser(TestCase):
         mock_post.assert_called_once()  # Ensure we attempted a single request
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_connection_error(self, mock_open, mock_post):
         """Parser raises DocumentParsingError when the Docling service is unreachable."""
         mock_file = MagicMock()
@@ -260,9 +252,7 @@ class TestDoclingParser(TestCase):
         mock_post.assert_called_once()
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_generic_request_exception(self, mock_open, mock_post):
         """
         Parser raises DocumentParsingError when an unexpected RequestException is raised.
@@ -698,9 +688,7 @@ class TestDoclingParserImageExtraction(TestCase):
         "opencontractserver.pipeline.parsers.docling_parser_rest.extract_images_from_pdf"
     )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_with_extract_images(
         self, mock_open, mock_post, mock_extract_images
     ):
@@ -948,9 +936,7 @@ class TestDoclingParser4xxErrors(TestCase):
         self.parser = DoclingParser()
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_400_error_not_transient(self, mock_open, mock_post):
         """Test that 400 Bad Request is treated as non-transient error."""
         mock_file = MagicMock()
@@ -973,9 +959,7 @@ class TestDoclingParser4xxErrors(TestCase):
         self.assertFalse(ctx.exception.is_transient)
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_403_error_not_transient(self, mock_open, mock_post):
         """Test that 403 Forbidden is treated as non-transient error."""
         mock_file = MagicMock()
@@ -996,9 +980,7 @@ class TestDoclingParser4xxErrors(TestCase):
         self.assertFalse(ctx.exception.is_transient)
 
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch(
-        "opencontractserver.pipeline.parsers.docling_parser_rest.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_503_error_is_transient(self, mock_open, mock_post):
         """Test that 503 Service Unavailable is treated as transient error."""
         mock_file = MagicMock()

@@ -5,7 +5,20 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-19
+## [Unreleased] - 2026-02-21
+
+### Added
+
+#### Chunked Document Processing for Large PDFs
+- **New `BaseChunkedParser` abstract class** (`opencontractserver/pipeline/base/chunked_parser.py`): Extends `BaseParser` to transparently split large PDF documents into page-range chunks for independent parsing and reassembly. Documents below a configurable page threshold are processed as a single request (zero overhead). Features:
+  - Automatic PDF splitting via pypdf with configurable `max_pages_per_chunk` (default: 50) and `min_pages_for_chunking` (default: 75)
+  - Optional concurrent chunk dispatch via `ThreadPoolExecutor` (`max_concurrent_chunks`, default: 3)
+  - Per-chunk retry with exponential back-off before escalating to Celery-level retry
+  - Correct reassembly of PAWLs page indices, annotation page references, `tokensJsons.pageIndex`, annotation/relationship IDs, and parent-child relationships across chunk boundaries
+  - `_post_reassemble_hook()` for document-wide post-processing (e.g., image extraction on the full PDF)
+- **New PDF splitting utility** (`opencontractserver/utils/pdf_splitting.py`): `get_pdf_page_count()`, `split_pdf_by_page_range()`, `calculate_page_chunks()` — pure functions for PDF page manipulation
+- **New chunking constants** (`opencontractserver/constants/document_processing.py`): `DEFAULT_MAX_PAGES_PER_CHUNK`, `DEFAULT_MIN_PAGES_FOR_CHUNKING`, `DEFAULT_MAX_CONCURRENT_CHUNKS`, `DEFAULT_CHUNK_RETRY_LIMIT`
+- **DoclingParser now extends `BaseChunkedParser`** (`opencontractserver/pipeline/parsers/docling_parser_rest.py`): Large documents are automatically split and parsed in chunks. Configurable via `PipelineSettings` (`DOCLING_MAX_PAGES_PER_CHUNK`, `DOCLING_MIN_PAGES_FOR_CHUNKING`, `DOCLING_MAX_CONCURRENT_CHUNKS`). Image extraction runs once on the full PDF after reassembly via `_post_reassemble_hook`.
 
 ### Changed
 
