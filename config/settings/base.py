@@ -865,12 +865,6 @@ DEFAULT_EMBEDDER = "doclatticeserver.pipeline.embedders.sent_transformer_microse
 # Default embedding dimension to use if no dimension is specified
 DEFAULT_EMBEDDING_DIMENSION = 768
 
-# Map of MIME types to default embedders for different dimensions
-DEFAULT_EMBEDDERS_BY_FILETYPE = {
-    "application/pdf": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder",
-    "text/plain": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doclatticeserver.pipeline.embedders.sent_transformer_microservice.MicroserviceEmbedder",  # noqa
-}
 
 # Default runner
 TEST_RUNNER = "doclatticeserver.tests.runner.TerminateConnectionsTestRunner"

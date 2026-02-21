@@ -3,7 +3,6 @@ from typing import Callable, Optional, Union
 
 from celery import shared_task
 from celery.utils.log import get_task_logger
-from django.conf import settings
 from django.contrib.auth import get_user_model
 
 from doclatticeserver.annotations.models import Annotation, Note
@@ -13,6 +12,7 @@ from doclatticeserver.pipeline.base.embedder import BaseEmbedder
 from doclatticeserver.pipeline.utils import (
     get_component_by_name,
     get_default_embedder,
+    get_default_embedder_path,
 )
 from doclatticeserver.shared.mixins import HasEmbeddingMixin
 from doclatticeserver.types.enums import ContentModality
@@ -200,7 +200,7 @@ def _apply_dual_embedding_strategy(
         return
 
     # 1. Always create DEFAULT_EMBEDDER embedding (for global search)
-    default_embedder_path = settings.DEFAULT_EMBEDDER
+    default_embedder_path = get_default_embedder_path()
     logger.info(
         f"Creating default embedding for {obj_type} {obj_id} "
         f"using {default_embedder_path} (for global search)"
