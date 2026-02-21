@@ -900,7 +900,7 @@ class TestBuildThreadActionSystemPrompt(TestCase):
         )
 
         self.assertIn("## Triggering Message (ID: 99)", prompt)
-        self.assertIn("Author: bob", prompt)
+        self.assertIn('<user_content label="username">\nbob\n</user_content>', prompt)
         self.assertIn("Hello world!", prompt)
 
     def test_no_triggering_message_without_params(self):
@@ -942,9 +942,16 @@ class TestBuildThreadActionSystemPrompt(TestCase):
         )
 
         self.assertIn("## Recent Thread Messages", prompt)
-        self.assertIn("[alice] (ID: 1):", prompt)
+        # Usernames are fenced in <user_content> tags for prompt injection mitigation
+        self.assertIn(
+            '[<user_content label="username">\nalice\n</user_content>] (ID: 1):',
+            prompt,
+        )
         self.assertIn("First message", prompt)
-        self.assertIn("[bob] (ID: 2):", prompt)
+        self.assertIn(
+            '[<user_content label="username">\nbob\n</user_content>] (ID: 2):',
+            prompt,
+        )
         self.assertIn("Second message", prompt)
         self.assertIn('<user_content label="message">', prompt)
 
