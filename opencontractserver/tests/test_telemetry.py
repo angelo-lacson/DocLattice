@@ -65,6 +65,26 @@ class TelemetryTestCase(TestCase):
         timestamp = datetime.fromisoformat(call_args["properties"]["timestamp"])
         self.assertIsNotNone(timestamp.tzinfo)
 
+    def test_posthog_client_initialized_with_geoip_enabled(self):
+        """Test that PostHog client is initialized with disable_geoip=False.
+
+        Server-side PostHog SDKs default to disable_geoip=True, which prevents
+        GeoIP resolution on events. We explicitly set disable_geoip=False so
+        PostHog can resolve geographic data from the server's IP.
+        """
+        with override_settings(
+            MODE="DEV",
+            TELEMETRY_ENABLED=True,
+            POSTHOG_API_KEY="test-key",
+            POSTHOG_HOST="https://test.host",
+        ):
+            record_event("test_event")
+
+        # Verify PostHog client was created with disable_geoip=False
+        init_kwargs = self.mock_posthog_class.call_args[1]
+        self.assertIn("disable_geoip", init_kwargs)
+        self.assertFalse(init_kwargs["disable_geoip"])
+
     def test_record_event_telemetry_disabled(self):
         """Test when telemetry is disabled"""
 
