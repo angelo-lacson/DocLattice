@@ -102,6 +102,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### MCP Telemetry in Async Context
+- **`SynchronousOnlyOperation` in MCP server** (`config/telemetry.py`, `opencontractserver/mcp/telemetry.py`, `opencontractserver/mcp/server.py`): Added async telemetry functions (`arecord_event`, `arecord_mcp_tool_call`, `arecord_mcp_resource_read`, `arecord_mcp_request`) that use `sync_to_async` to safely run Django ORM lookups in a thread pool. Prevents "You cannot call this from an async context" errors on every MCP request.
+- **Installation ID caching** (`config/telemetry.py:91-113`): Added process-lifetime cache for installation UUID to eliminate redundant database queries on every telemetry call, particularly beneficial for high-frequency MCP requests.
+
 #### Edit Description Modal Does Not Save on Update (Issue #899)
 - **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
   - File: `frontend/src/App.tsx` (lines 128-149, 398)
@@ -200,6 +204,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IDOR prevention in folder mutations** (`config/graphql/corpus_folder_mutations.py`): All folder mutations now verify corpus visibility before operating on folders; folder lookups scoped to validated corpus
 - **IDOR prevention in voting mutations** (`config/graphql/voting_mutations.py`): `VoteMessageMutation` and `RemoveVoteMutation` now use `ChatMessage.objects.visible_to_user()` instead of fetch-then-check
 - **IDOR prevention in badge mutations** (`config/graphql/badge_mutations.py`): `AwardBadgeMutation` now uses `Badge.objects.visible_to_user()` for badge lookup
+
+### Fixed
+
+#### Enable Relationships for Span-Based (Text) Annotations (Closes #281)
+- **File type detection inconsistency**: Multiple frontend components checked for text file types using only `startsWith("text/")`, missing documents with `application/txt` MIME type. Created centralized `isTextFileType()` and `isPdfFileType()` utilities in `frontend/src/utils/files.ts` and updated all callers.
+- **Label initialization race condition**: The `initialized.current` ref in `UISettingsAtom.tsx` (line 288) could be set to `true` after span label initialization, preventing relationship labels from auto-initializing on subsequent effect runs. Replaced with separate `spanLabelInitialized` and `relationLabelInitialized` refs.
+- **Type restrictions blocking span annotations in relationship UI**: `RelationItem`, `RelationHighlightItem`, `HighlightItem`, and `annotationSelectedViaRelationship()` only accepted `ServerTokenAnnotation` (PDF annotations). Updated all to accept `ServerTokenAnnotation | ServerSpanAnnotation` union type, enabling the sidebar relationship display and creation flow for text documents.
+- **Files changed**: `frontend/src/utils/files.ts`, `frontend/src/components/annotator/context/UISettingsAtom.tsx`, `frontend/src/components/annotator/sidebar/RelationItem.tsx`, `frontend/src/components/annotator/sidebar/RelationHighlightItem.tsx`, `frontend/src/components/annotator/sidebar/HighlightItem.tsx`, `frontend/src/components/annotator/utils.ts`, `frontend/src/components/annotator/hooks/AnnotationHooks.tsx`, `frontend/src/components/annotator/labels/EnhancedLabelSelector.tsx`, `frontend/src/components/annotator/labels/UnifiedLabelSelector.tsx`, `frontend/src/components/annotator/labels/label_selector/LabelSelector.tsx`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`, `frontend/src/components/widgets/chat/ChatMessage.tsx`
 
 ## [3.0.0.b4] - 2026-02-08
 
