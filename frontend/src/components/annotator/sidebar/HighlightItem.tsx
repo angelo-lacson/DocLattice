@@ -7,10 +7,7 @@ import { HorizontallyJustifiedDiv } from "./common";
 import { useAnnotationRefs } from "../hooks/useAnnotationRefs";
 import { useAnnotationSelection } from "../context/UISettingsAtom";
 import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
-import {
-  ServerTokenAnnotation,
-  ServerSpanAnnotation,
-} from "../types/annotations";
+import { ServerTokenAnnotation, ServerAnnotation } from "../types/annotations";
 import { PermissionTypes } from "../../types";
 import { ModalityBadge } from "./ModalityBadge";
 import { AnnotationImagePreview } from "./AnnotationImagePreview";
@@ -136,7 +133,7 @@ const LocationText = styled.div`
 `;
 
 interface HighlightItemProps {
-  annotation: ServerTokenAnnotation | ServerSpanAnnotation;
+  annotation: ServerAnnotation;
   className?: string;
   read_only: boolean;
   relations: Array<{ sourceIds: string[]; targetIds: string[] }>;
@@ -176,12 +173,18 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   const my_input_relationships = relations.filter((relation) =>
     relation.targetIds.includes(annotation.id)
   );
+  const isTokenAnnotation = annotation instanceof ServerTokenAnnotation;
+
   const handleClick = () => {
-    // Scroll to annotation in PDF
-    annotationElementRefs.current[annotation.id]?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    // Only use scrollIntoView for PDF token annotations. Text annotations
+    // are scrolled by TxtAnnotator's own selectedAnnotations useEffect,
+    // so calling scrollIntoView here would cause two competing scroll animations.
+    if (isTokenAnnotation) {
+      annotationElementRefs.current[annotation.id]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
 
     // Update selection via URL - CentralRouteManager Phase 2 will set reactive var
     // Toggle behavior: if already selected, deselect; otherwise select
@@ -303,7 +306,9 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           </RelationshipLabel>
         )}
       </HorizontallyJustifiedDiv>
-      <LocationText>Page {annotation.page + 1}</LocationText>
+      {isTokenAnnotation && (
+        <LocationText>Page {annotation.page + 1}</LocationText>
+      )}
     </HighlightContainer>
   );
 };

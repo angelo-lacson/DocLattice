@@ -5,7 +5,8 @@
  * of the parent DocumentViewer component.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useCallback } from "react";
+import { useSetAtom } from "jotai";
 import {
   useApproveAnnotation,
   useCreateAnnotation,
@@ -26,6 +27,10 @@ import {
 } from "../../context/UISettingsAtom";
 import { useCorpusState } from "../../context/CorpusAtom";
 import { useChatSourceState } from "../../context/ChatSourceAtom";
+import {
+  registerRefAtom,
+  unregisterRefAtom,
+} from "../../context/AnnotationRefsAtoms";
 
 interface TxtAnnotatorWrapperProps {
   readOnly: boolean;
@@ -56,6 +61,28 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
   const handleUpdateAnnotation = useUpdateAnnotation();
   const handleApproveAnnotation = useApproveAnnotation();
   const handleRejectAnnotation = useRejectAnnotation();
+
+  // Use write-only atoms directly to avoid subscribing to the combined read
+  // atom, which would cause rerenders on every ref change — contradicting
+  // this wrapper's purpose of minimizing rerenders.
+  const dispatchRegister = useSetAtom(registerRefAtom);
+  const dispatchUnregister = useSetAtom(unregisterRefAtom);
+
+  /**
+   * Callback for TxtAnnotator to register/unregister annotation DOM elements
+   * into the shared annotation refs atom, enabling sidebar scrollIntoView.
+   */
+  const handleAnnotationRefChange = useCallback(
+    (annotationId: string, element: HTMLElement | null) => {
+      if (element) {
+        const ref = { current: element };
+        dispatchRegister({ type: "annotation", ref, id: annotationId });
+      } else {
+        dispatchUnregister({ type: "annotation", id: annotationId });
+      }
+    },
+    [dispatchRegister, dispatchUnregister]
+  );
 
   const { messages, selectedMessageId, selectedSourceIndex } =
     useChatSourceState();
@@ -88,8 +115,6 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
 
     return allSources;
   }, [messages]);
-
-  console.log("chatSourceMatches", chatSourceMatches);
 
   // Memoized getSpan callback
   const getSpan = useCallback(
@@ -154,6 +179,7 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
         selectedAnnotations={selectedAnnotations}
         setSelectedAnnotations={setSelectedAnnotations}
         showStructuralAnnotations={showStructural}
+        onAnnotationRefChange={handleAnnotationRefChange}
       />
     </div>
   );
