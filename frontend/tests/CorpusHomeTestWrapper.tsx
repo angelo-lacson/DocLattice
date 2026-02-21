@@ -7,6 +7,8 @@ import { CorpusHome } from "../src/components/corpuses/CorpusHome";
 import { CorpusType } from "../src/types/graphql-api";
 import { relayStylePagination } from "@apollo/client/utilities";
 import {
+  corpusDetailView,
+  CorpusDetailViewType,
   corpusHomeView,
   CorpusHomeViewType,
   tocExpandAll,
@@ -45,23 +47,41 @@ const createTestCache = () =>
 interface Props {
   mocks: ReadonlyArray<MockedResponse>;
   corpus: CorpusType;
+  /** Initial view for landing/details switch */
+  initialView?: CorpusDetailViewType;
+  /** Initial home view for About/TOC switch (within details view) */
   initialHomeView?: CorpusHomeViewType | null;
   initialTocExpanded?: boolean;
 }
 
 /**
  * Helper component that simulates CentralRouteManager Phase 2 behavior
- * by setting the corpusHomeView and tocExpandAll reactive vars from URL params
+ * by setting the reactive vars from URL params
  */
 const RouteParamInitializer: React.FC<{
   children: React.ReactNode;
+  initialView?: CorpusDetailViewType;
   initialHomeView?: CorpusHomeViewType | null;
   initialTocExpanded?: boolean;
-}> = ({ children, initialHomeView, initialTocExpanded }) => {
+}> = ({ children, initialView, initialHomeView, initialTocExpanded }) => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Simulate CentralRouteManager Phase 2: parse homeView from URL
+    // Simulate CentralRouteManager Phase 2: parse view from URL
+    // URL param takes precedence to support navigation
+    // When URL has no view param, that means "landing" (the default)
+    // initialView is only used for initial mount, not subsequent changes
+    const viewParam = searchParams.get("view");
+    let newView: CorpusDetailViewType;
+    if (viewParam === "details") {
+      newView = "details";
+    } else {
+      // "landing" param, no param, or any other value = landing
+      newView = "landing";
+    }
+    corpusDetailView(newView);
+
+    // Parse homeView from URL (for details view About/TOC tabs)
     const homeViewParam = searchParams.get("homeView");
     const newHomeView: CorpusHomeViewType | null =
       homeViewParam === "toc" || homeViewParam === "about"
@@ -75,10 +95,11 @@ const RouteParamInitializer: React.FC<{
 
     // Cleanup on unmount
     return () => {
+      corpusDetailView("landing");
       corpusHomeView(null);
       tocExpandAll(false);
     };
-  }, [searchParams, initialHomeView, initialTocExpanded]);
+  }, [searchParams, initialView, initialHomeView, initialTocExpanded]);
 
   return <>{children}</>;
 };
@@ -86,9 +107,17 @@ const RouteParamInitializer: React.FC<{
 export const CorpusHomeTestWrapper: React.FC<Props> = ({
   mocks,
   corpus,
+  initialView,
   initialHomeView,
   initialTocExpanded,
 }) => {
+  // CRITICAL: Initialize reactive vars synchronously BEFORE render
+  // This ensures the component sees the correct values on first paint
+  // (useEffect in RouteParamInitializer runs AFTER render, which is too late)
+  corpusDetailView(initialView ?? "landing");
+  corpusHomeView(initialHomeView ?? null);
+  tocExpandAll(initialTocExpanded ?? false);
+
   // Default stats matching the mock data in CorpusHome.ct.tsx
   const stats = {
     totalDocs: 3,
@@ -97,8 +126,11 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
     totalExtracts: 0,
   };
 
-  // Build initial route with homeView and tocExpanded query params if specified
+  // Build initial route with query params if specified
   const params: string[] = [];
+  if (initialView === "details") {
+    params.push("view=details");
+  }
   if (initialHomeView) {
     params.push(`homeView=${initialHomeView}`);
   }
@@ -113,6 +145,7 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
       <MemoryRouter initialEntries={[initialRoute]}>
         <MockedProvider mocks={mocks} cache={createTestCache()} addTypename>
           <RouteParamInitializer
+            initialView={initialView}
             initialHomeView={initialHomeView}
             initialTocExpanded={initialTocExpanded}
           >

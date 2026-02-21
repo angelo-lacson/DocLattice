@@ -20,7 +20,7 @@ The component chooses between two renderers based on the document's `fileType`:
 - **Component**: `TxtAnnotator` (wrapped by `TxtAnnotatorWrapper`)
 - **When selected**: When `document.fileType === "application/txt"` or `"text/plain"` and a text extract file is available
 
-The selection logic can be found in `DocumentKnowledgeBase.tsx` around lines 1003-1064:
+The selection logic can be found in [`DocumentKnowledgeBase.tsx`](../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx) (search for `metadata.fileType`):
 
 ```typescript
 if (metadata.fileType === "application/pdf") {
@@ -443,21 +443,21 @@ The zoom system implements a sophisticated multi-layer architecture for efficien
 - **Initial Value**: Calculated to fit page width to container width
 - **Range Enforcement**: Clamped between 0.5 (50%) and 4.0 (400%)
 
-#### 2. Input Handling (`DocumentKnowledgeBase.tsx`)
+#### 2. Input Handling ([`DocumentKnowledgeBase.tsx`](../../frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx))
 All zoom inputs converge through a single `setZoomLevel()` call:
 ```typescript
-// Keyboard: handleKeyboardZoom (lines 600-635)
-// Mouse wheel: handleWheelZoom (lines 580-598)
+// Keyboard: handleKeyboardZoom
+// Mouse wheel: handleWheelZoom
 // UI buttons: ZoomControls component
 setZoomLevel(newZoom);
 showZoomFeedback(); // Shows temporary zoom indicator
 ```
 
-#### 3. Zoom Propagation (`PDF.tsx`)
+#### 3. Zoom Propagation ([`PDF.tsx`](../../frontend/src/components/annotator/renderers/pdf/PDF.tsx))
 
 When zoom changes, a cascade of updates occurs:
 
-##### Page Height Recalculation (lines 220-234)
+##### Page Height Recalculation
 ```typescript
 useEffect(() => {
   // Recalculate all page heights at new zoom
@@ -470,7 +470,7 @@ useEffect(() => {
 }, [pdfDoc, zoomLevel]);
 ```
 
-##### Cumulative Heights Update (lines 237-248)
+##### Cumulative Heights Update
 - Recomputes prefix sums for absolute page positioning
 - Critical for virtual scrolling calculations
 - Enables O(log n) page visibility checks via binary search
@@ -480,7 +480,7 @@ useEffect(() => {
 - Accounts for overscan buffer (2 pages above/below)
 - Forces mounting of pages with selections/search results
 
-#### 4. Coordinated Rendering System (`PDF.tsx` lines 352-438)
+#### 4. Coordinated Rendering System ([`PDF.tsx`](../../frontend/src/components/annotator/renderers/pdf/PDF.tsx))
 
 The system uses a sophisticated debounced rendering queue:
 
@@ -499,7 +499,7 @@ requestPageRender(
 - **Cancellation**: All in-progress renders cancelled before new zoom
 - **Coordination**: All visible pages re-render together
 
-#### 5. Individual Page Rendering (`PDFPage.tsx`)
+#### 5. Individual Page Rendering ([`PDFPage.tsx`](../../frontend/src/components/annotator/renderers/pdf/PDFPage.tsx))
 
 Each page component:
 1. Receives zoom change notification
@@ -542,7 +542,7 @@ ctx.clearRect(0, 0, canvas.width, canvas.height);
 The system maintains user context during zoom:
 
 ```typescript
-// Annotation scroll preservation (lines 450-471)
+// Annotation scroll preservation
 if (selectedAnnotations.length > 0) {
   const topOffset = cumulative[selectedPageIdx] - 32;
   scrollTo({ top: topOffset, behavior: "smooth" });
@@ -551,8 +551,8 @@ if (selectedAnnotations.length > 0) {
 ```
 
 Similar logic applies for:
-- Search result positions (lines 474-493)
-- Chat source highlights (lines 496-516)
+- Search result positions
+- Chat source highlights
 
 ### Zoom Performance Characteristics
 
@@ -657,3 +657,7 @@ Both renderers support:
 - Hover effects showing annotation labels
 - Context menus for editing/deleting annotations
 - Smart label management system
+
+---
+
+*Last Updated: 2026-01-09*

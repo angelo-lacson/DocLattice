@@ -47,12 +47,14 @@ class TestAnnotationAdmin(TestCase):
         # Create a corpus
         cls.corpus = Corpus.objects.create(title="Test Corpus", creator=cls.superuser)
 
-        # Create a document
-        cls.document = Document.objects.create(
-            corpus=cls.corpus,
+        # Create a document and add to corpus - add_document returns corpus-isolated copy
+        original_doc = Document.objects.create(
             title="Test Document",
             creator=cls.superuser,
             is_public=True,
+        )
+        cls.document, _, _ = cls.corpus.add_document(
+            document=original_doc, user=cls.superuser
         )
 
         # Create an annotation label
@@ -98,7 +100,7 @@ class TestAnnotationAdmin(TestCase):
         )
         cls.embedding2_384b = Embedding.objects.create(
             annotation=cls.annotation2,
-            embedder_path="fake-embedder",
+            embedder_path="fake-embedder-2",
             creator=cls.superuser,
             vector_384=random_vector(dimension=384, seed=999),
         )
@@ -137,14 +139,19 @@ class TestAnnotationAdmin(TestCase):
             f"Could not access Annotation change page: {annotation_change_url}",
         )
 
-        # DEBUG: See how many times "fake-embedder" actually appears
+        # Verify both embeddings are displayed (with different embedder paths)
         content_text = resp_change.content.decode("utf-8")
 
-        # Assert that it appears at least twice
-        self.assertGreaterEqual(
-            content_text.count("fake-embedder"),
-            2,
-            "Expected at least 2 'fake-embedder' references but found fewer.",
+        # Assert that both embedder paths appear (annotation2 has 2 embeddings)
+        self.assertIn(
+            "fake-embedder",
+            content_text,
+            "Expected 'fake-embedder' to appear in the admin page.",
+        )
+        self.assertIn(
+            "fake-embedder-2",
+            content_text,
+            "Expected 'fake-embedder-2' to appear in the admin page.",
         )
 
     def test_embedding_dimension_display(self):

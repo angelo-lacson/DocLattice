@@ -396,7 +396,6 @@ export const CorpusItem: React.FC<CorpusItemProps> = ({
     description,
     icon,
     labelSet,
-    documents,
     backendLock,
     isPublic,
     myPermissions,
@@ -601,9 +600,7 @@ export const CorpusItem: React.FC<CorpusItemProps> = ({
         <StyledCardExtra>
           <Statistic.Group size="mini" widths={3}>
             <Statistic>
-              <Statistic.Value>
-                {documents?.edges?.length ? documents.edges.length : 0}
-              </Statistic.Value>
+              <Statistic.Value>{item.documentCount ?? 0}</Statistic.Value>
               <Statistic.Label>Docs</Statistic.Label>
             </Statistic>
             <MyPermissionsIndicator

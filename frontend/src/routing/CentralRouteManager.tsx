@@ -31,6 +31,7 @@ import {
   selectedMessageId,
   corpusHomeView,
   tocExpandAll,
+  corpusDetailView,
   routeLoading,
   routeError,
   authStatusVar,
@@ -40,6 +41,7 @@ import {
   showAnnotationBoundingBoxes,
   showAnnotationLabels,
   CorpusHomeViewType,
+  CorpusDetailViewType,
 } from "../graphql/cache";
 import {
   RESOLVE_CORPUS_BY_SLUGS_FULL,
@@ -783,6 +785,7 @@ export function CentralRouteManager() {
     const messageId = searchParams.get("message");
     const homeViewParam = searchParams.get("homeView");
     const tocExpandedParam = searchParams.get("tocExpanded") === "true";
+    const detailViewParam = searchParams.get("view");
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -800,6 +803,7 @@ export function CentralRouteManager() {
       messageId,
       homeView: homeViewParam,
       tocExpanded: tocExpandedParam,
+      detailView: detailViewParam,
       structural,
       selectedOnly,
       boundingBoxes,
@@ -817,6 +821,7 @@ export function CentralRouteManager() {
     const currentMessageId = selectedMessageId();
     const currentHomeView = corpusHomeView();
     const currentTocExpandAll = tocExpandAll();
+    const currentDetailView = corpusDetailView();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -835,6 +840,10 @@ export function CentralRouteManager() {
       homeViewParam === "toc" || homeViewParam === "about"
         ? homeViewParam
         : null;
+
+    // Parse detailView param (only valid value is "details", defaults to "landing")
+    const newDetailView: CorpusDetailViewType =
+      detailViewParam === "details" ? "details" : "landing";
 
     // Collect all reactive var updates into a batch
     // This prevents cascading re-renders - all updates happen in one React tick
@@ -866,6 +875,9 @@ export function CentralRouteManager() {
     }
     if (currentTocExpandAll !== tocExpandedParam) {
       updates.push(() => tocExpandAll(tocExpandedParam));
+    }
+    if (currentDetailView !== newDetailView) {
+      updates.push(() => corpusDetailView(newDetailView));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -1032,6 +1044,7 @@ export function CentralRouteManager() {
   const messageId = useReactiveVar(selectedMessageId);
   const homeView = useReactiveVar(corpusHomeView);
   const tocExpanded = useReactiveVar(tocExpandAll);
+  const detailView = useReactiveVar(corpusDetailView);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -1096,6 +1109,7 @@ export function CentralRouteManager() {
         messageId,
         homeView,
         tocExpanded,
+        detailView,
         structural,
         selectedOnly,
         boundingBoxes,
@@ -1113,6 +1127,7 @@ export function CentralRouteManager() {
       messageId,
       homeView,
       tocExpanded,
+      view: detailView,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -1146,6 +1161,7 @@ export function CentralRouteManager() {
     messageId,
     homeView,
     tocExpanded,
+    detailView,
     structural,
     selectedOnly,
     boundingBoxes,

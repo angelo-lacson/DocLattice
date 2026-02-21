@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "react-toastify";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +20,8 @@ import {
   openedCorpus,
   selectedFolderId,
   linkDocumentsModalState,
+  currentViewDocumentIds,
+  documentsLoading as documentsLoadingVar,
 } from "../../graphql/cache";
 import {
   GET_CORPUS_FOLDERS,
@@ -55,8 +57,6 @@ export const CorpusDocumentCards = ({
    * If the corpus_id is passed in, it will query and display the documents for
    * that corpus and let you browse them.
    */
-  console.log("[CorpusDocumentCards] Rendering with viewMode:", viewMode);
-
   const selected_document_ids = useReactiveVar(selectedDocumentIds);
   const document_search_term = useReactiveVar(documentSearchTerm);
   const selected_metadata_id_to_filter_on = useReactiveVar(
@@ -94,8 +94,6 @@ export const CorpusDocumentCards = ({
     ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
     ...(document_search_term ? { textSearch: document_search_term } : {}),
   };
-
-  console.log("[QUERY] GET_DOCUMENTS variables:", queryVariables);
 
   const {
     refetch: refetchDocuments,
@@ -170,12 +168,26 @@ export const CorpusDocumentCards = ({
     .map((edge) => (edge?.node ? edge.node : undefined))
     .filter((item): item is DocumentType => !!item);
 
-  console.log(
-    "[QUERY] GET_DOCUMENTS returned",
-    document_items.length,
-    "documents for folderId:",
-    selected_folder_id
-  );
+  // Update the global reactive var with current view document IDs for toolbar's Select All functionality
+  useEffect(() => {
+    const ids = document_items.map((doc) => doc.id);
+    currentViewDocumentIds(ids);
+
+    // Clear on unmount
+    return () => {
+      currentViewDocumentIds([]);
+    };
+  }, [document_items]);
+
+  // Sync loading state to reactive var for toolbar to disable Select All while loading
+  useEffect(() => {
+    documentsLoadingVar(documents_loading);
+
+    // Clear on unmount
+    return () => {
+      documentsLoadingVar(false);
+    };
+  }, [documents_loading]);
 
   const handleRemoveContracts = (delete_ids: string[]) => {
     removeDocumentsFromCorpus({

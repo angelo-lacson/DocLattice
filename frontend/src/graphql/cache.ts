@@ -116,7 +116,7 @@ export const cache = new InMemoryCache({
         // Without these, Apollo creates new object references on every query,
         // triggering cache updates and infinite re-renders
         assignmentSet: relayStylePagination(),
-        corpusSet: relayStylePagination(),
+        pathRecords: relayStylePagination(),
         annotationSet: relayStylePagination(),
         docLabelAnnotations: relayStylePagination(),
         metadataAnnotations: relayStylePagination(),
@@ -369,6 +369,19 @@ export const openedDocument = makeVar<DocumentType | null>(null);
 export const selectedDocumentIds = makeVar<string[]>([]);
 export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
+/**
+ * Tracks document IDs currently visible in the folder/corpus view.
+ * Used by FolderToolbar to enable Select All functionality.
+ * Set by CorpusDocumentCards when documents load.
+ */
+export const currentViewDocumentIds = makeVar<string[]>([]);
+
+/**
+ * Tracks whether documents are currently loading in the folder/corpus view.
+ * Used by FolderToolbar to disable Select All while loading.
+ * Set by CorpusDocumentCards during query loading state.
+ */
+export const documentsLoading = makeVar<boolean>(false);
 
 /**
  * Document relationship modal state.
@@ -575,6 +588,20 @@ export const corpusHomeView = makeVar<CorpusHomeViewType | null>(null);
  *   /c/user/corpus?homeView=toc&tocExpanded=true   → tocExpandAll(true) = all nodes expanded
  */
 export const tocExpandAll = makeVar<boolean>(false);
+
+/**
+ * Corpus detail view selection (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Controls whether the corpus home page shows the landing view (centered, focused)
+ * or the details view (two-column with TOC and About).
+ * Defaults to "landing" when not specified in URL.
+ *
+ * URL Examples:
+ *   /c/user/corpus                    → corpusDetailView("landing") = default landing
+ *   /c/user/corpus?view=details       → corpusDetailView("details")
+ */
+export type CorpusDetailViewType = "landing" | "details";
+export const corpusDetailView = makeVar<CorpusDetailViewType>("landing");
 
 /**
  * Auth-related global variables

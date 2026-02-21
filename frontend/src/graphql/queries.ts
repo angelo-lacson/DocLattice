@@ -71,6 +71,9 @@ export const GET_DOCUMENTS = gql`
           title
           description
           backendLock
+          processingStatus
+          processingError
+          canRetry
           pdfFile
           txtExtractFile
           fileType
@@ -205,15 +208,8 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
         id
         title
       }
-      documents {
-        totalCount
-      }
-      annotations {
-        totalCount
-      }
-      analyses {
-        totalCount
-      }
+      documentCount
+      annotationCount
     }
   }
 `;
@@ -396,26 +392,6 @@ export const GET_CORPUS_METADATA = gql`
         username
         slug
       }
-      descriptionRevisions {
-        id
-        version
-        author {
-          id
-          email
-        }
-        created
-        diff
-        snapshot
-      }
-      allAnnotationSummaries {
-        id
-        rawText
-        json
-        annotationLabel {
-          id
-          text
-        }
-      }
     }
   }
 `;
@@ -432,6 +408,7 @@ export const GET_CORPUS_WITH_HISTORY = gql`
       modified
       isPublic
       myPermissions
+      documentCount
       creator {
         id
         email
@@ -517,6 +494,8 @@ export interface CorpusStats {
   totalExtracts: number;
   totalAnnotations: number;
   totalThreads?: number; // Optional for backward compatibility with backend
+  totalChats?: number;
+  totalRelationships?: number;
 }
 
 export interface GetCorpusStatsOutputType {
@@ -532,6 +511,8 @@ export const GET_CORPUS_STATS = gql`
       totalExtracts
       totalAnnotations
       totalThreads
+      totalChats
+      totalRelationships
     }
   }
 `;
@@ -626,31 +607,17 @@ export const GET_CORPUSES = gql`
             slug
           }
           description
-          preferredEmbedder
-          appliedAnalyzerIds
           isPublic
+          isPersonal
           is_selected @client
           is_open @client
           myPermissions
+          documentCount
           parent {
             id
             icon
             title
             description
-          }
-          annotations {
-            totalCount
-          }
-          documents {
-            totalCount
-            edges {
-              node {
-                id
-                fileType
-                backendLock
-                description
-              }
-            }
           }
           labelSet {
             id
@@ -788,6 +755,7 @@ export const REQUEST_LABELSETS_WITH_ALL_LABELS = gql`
 export interface GetAnnotationsInputs {
   annotationLabelId?: string;
   corpusId?: string;
+  usesLabelFromLabelsetId?: string;
   rawText_Contains?: string;
   analysis_Isnull?: boolean;
   annotationLabel_description_search_string?: string;
@@ -796,6 +764,8 @@ export interface GetAnnotationsInputs {
   createdWithAnalyzerId?: string;
   createdByAnalysisIds?: string;
   structural?: boolean;
+  limit?: number;
+  cursor?: string;
 }
 
 export interface GetAnnotationsOutputs {
@@ -908,6 +878,7 @@ export const GET_ANNOTATIONS = gql`
           rawText
           isPublic
           myPermissions
+          contentModalities
           __typename
         }
         __typename
@@ -920,6 +891,246 @@ export const GET_ANNOTATIONS = gql`
         __typename
       }
       __typename
+    }
+  }
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LIGHTWEIGHT ANNOTATIONS QUERY FOR CARD DISPLAY
+// ═══════════════════════════════════════════════════════════════════════════════
+// This query fetches only the fields needed for ModernAnnotationCard display.
+// It excludes heavy fields like tokensJsons, json, and unnecessary nested objects.
+// Use this for annotation list/grid views where performance is critical.
+
+export const GET_ANNOTATIONS_FOR_CARDS = gql`
+  query GetAnnotationsForCards(
+    $annotationLabelId: ID
+    $corpusId: ID
+    $usesLabelFromLabelsetId: ID
+    $rawText_Contains: String
+    $annotationLabel_description_search_string: String
+    $annotationLabel_title_search_string: String
+    $annotationLabel_Type: String
+    $createdWithAnalyzerId: String
+    $createdByAnalysisIds: String
+    $analysis_Isnull: Boolean
+    $structural: Boolean
+    $cursor: String
+    $limit: Int
+  ) {
+    annotations(
+      corpusId: $corpusId
+      annotationLabelId: $annotationLabelId
+      usesLabelFromLabelsetId: $usesLabelFromLabelsetId
+      rawTextContains: $rawText_Contains
+      annotationLabel_TextContains: $annotationLabel_title_search_string
+      annotationLabel_DescriptionContains: $annotationLabel_description_search_string
+      annotationLabel_LabelType: $annotationLabel_Type
+      createdWithAnalyzerId: $createdWithAnalyzerId
+      createdByAnalysisIds: $createdByAnalysisIds
+      analysisIsnull: $analysis_Isnull
+      structural: $structural
+      first: $limit
+      after: $cursor
+    ) {
+      totalCount
+      edges {
+        node {
+          id
+          created
+          creator {
+            id
+            email
+            username
+            __typename
+          }
+          corpus {
+            id
+            slug
+            labelSet {
+              id
+              title
+              __typename
+            }
+            __typename
+          }
+          document {
+            id
+            slug
+            title
+            __typename
+          }
+          analysis {
+            id
+            analyzer {
+              analyzerId
+              __typename
+            }
+            __typename
+          }
+          annotationLabel {
+            id
+            text
+            color
+            labelType
+            __typename
+          }
+          annotationType
+          structural
+          rawText
+          isPublic
+          contentModalities
+          __typename
+        }
+        __typename
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+        __typename
+      }
+      __typename
+    }
+  }
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEMANTIC SEARCH QUERY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface SemanticSearchInput {
+  query: string;
+  corpusId?: string;
+  documentId?: string;
+  modalities?: string[];
+  labelText?: string;
+  rawTextContains?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SemanticSearchResult {
+  annotation: ServerAnnotationType;
+  similarityScore: number;
+  document: DocumentType | null;
+  corpus: RawCorpusType | null;
+}
+
+export interface SemanticSearchOutput {
+  semanticSearch: SemanticSearchResult[];
+}
+
+export const SEMANTIC_SEARCH_ANNOTATIONS = gql`
+  query SemanticSearchAnnotations(
+    $query: String!
+    $corpusId: ID
+    $documentId: ID
+    $modalities: [String]
+    $labelText: String
+    $rawTextContains: String
+    $limit: Int
+    $offset: Int
+  ) {
+    semanticSearch(
+      query: $query
+      corpusId: $corpusId
+      documentId: $documentId
+      modalities: $modalities
+      labelText: $labelText
+      rawTextContains: $rawTextContains
+      limit: $limit
+      offset: $offset
+    ) {
+      annotation {
+        id
+        tokensJsons
+        json
+        page
+        created
+        creator {
+          id
+          email
+          username
+          slug
+          __typename
+        }
+        corpus {
+          id
+          slug
+          icon
+          title
+          description
+          preferredEmbedder
+          creator {
+            id
+            slug
+            __typename
+          }
+          labelSet {
+            id
+            title
+            __typename
+          }
+          __typename
+        }
+        document {
+          id
+          slug
+          title
+          description
+          backendLock
+          pdfFile
+          txtExtractFile
+          pawlsParseFile
+          icon
+          fileType
+          creator {
+            id
+            slug
+            __typename
+          }
+          __typename
+        }
+        analysis {
+          id
+          analyzer {
+            analyzerId
+            __typename
+          }
+          __typename
+        }
+        annotationLabel {
+          id
+          text
+          color
+          icon
+          description
+          labelType
+          __typename
+        }
+        annotationType
+        structural
+        rawText
+        isPublic
+        myPermissions
+        contentModalities
+        __typename
+      }
+      similarityScore
+      document {
+        id
+        slug
+        title
+        __typename
+      }
+      corpus {
+        id
+        slug
+        title
+        __typename
+      }
     }
   }
 `;
@@ -1232,6 +1443,7 @@ export const REQUEST_PAGE_ANNOTATION_DATA = gql`
         rawText
         tokensJsons
         json
+        contentModalities
         sourceNodeInRelationships {
           edges {
             node {
@@ -1987,6 +2199,7 @@ export const GET_DOCUMENT_ANNOTATIONS_AND_RELATIONSHIPS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2017,6 +2230,7 @@ export const GET_DOCUMENT_ANNOTATIONS_AND_RELATIONSHIPS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2446,14 +2660,16 @@ export interface SearchDocumentsForMentionOutput {
         creator: {
           slug: string;
         };
-        corpusSet: {
+        pathRecords: {
           edges: Array<{
             node: {
-              id: string;
-              slug: string;
-              title: string;
-              creator: {
+              corpus: {
+                id: string;
                 slug: string;
+                title: string;
+                creator: {
+                  slug: string;
+                };
               };
             };
           }>;
@@ -2478,14 +2694,16 @@ export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
           creator {
             slug
           }
-          corpusSet(first: 1) {
+          pathRecords(first: 1) {
             edges {
               node {
-                id
-                slug
-                title
-                creator {
+                corpus {
+                  id
                   slug
+                  title
+                  creator {
+                    slug
+                  }
                 }
               }
             }
@@ -2748,6 +2966,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2778,6 +2997,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2869,6 +3089,7 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2899,6 +3120,7 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       allRelationships(corpusId: $corpusId, analysisId: $analysisId) {
         id
@@ -2950,11 +3172,13 @@ export interface GetDocumentWithStructureOutput {
       };
       created: string;
     }>;
-    corpusSet?: {
+    pathRecords?: {
       edges: Array<{
         node: {
-          id: string;
-          title: string;
+          corpus: {
+            id: string;
+            title: string;
+          };
         };
       }>;
     };
@@ -2997,6 +3221,7 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
         json
         myPermissions
         structural
+        contentModalities
       }
       # Structural relationships (no corpus required)
       allRelationships {
@@ -3036,11 +3261,13 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
         created
       }
       # Check if document is in any corpus (for UI hints)
-      corpusSet {
+      pathRecords {
         edges {
           node {
-            id
-            title
+            corpus {
+              id
+              title
+            }
           }
         }
       }
@@ -3108,9 +3335,7 @@ export const GET_MY_CORPUSES = gql`
         node {
           id
           title
-          documents {
-            totalCount
-          }
+          documentCount
           myPermissions
         }
       }
@@ -3263,6 +3488,7 @@ export const GET_CORPUS_CONVERSATIONS = gql`
     $createdAt_Lte: DateTime
     $cursor: String
     $limit: Int
+    $conversationType: ConversationTypeEnum
   ) {
     conversations(
       corpusId: $corpusId
@@ -3271,6 +3497,7 @@ export const GET_CORPUS_CONVERSATIONS = gql`
       createdAt_Lte: $createdAt_Lte
       first: $limit
       after: $cursor
+      conversationType: $conversationType
     ) {
       pageInfo {
         hasNextPage
@@ -3328,6 +3555,7 @@ export interface GetCorpusConversationsInputs {
   createdAt_Lte?: string;
   cursor?: string;
   limit?: number;
+  conversationType?: ConversationTypeEnum;
 }
 
 export interface GetCorpusConversationsOutputs {
@@ -3390,6 +3618,7 @@ export const GET_ME = gql`
       firstName
       lastName
       phone
+      isSuperuser
       isUsageCapped # Crucially, fetch this field
       isProfilePublic # Issue #611
     }
@@ -4147,10 +4376,14 @@ export const SEARCH_AGENTS_FOR_MENTION = gql`
 /**
  * GET_AGENT_CONFIGURATIONS - Get available agent configurations for corpus actions
  * Used in CreateCorpusActionModal to allow selecting an agent for automated actions
+ *
+ * Supports server-side search via name_Contains and pagination via first parameter.
  */
 export interface GetAgentConfigurationsInput {
   corpusId?: string;
   isActive?: boolean;
+  name_Contains?: string;
+  first?: number;
 }
 
 export interface GetAgentConfigurationsOutput {
@@ -4175,8 +4408,18 @@ export interface GetAgentConfigurationsOutput {
 }
 
 export const GET_AGENT_CONFIGURATIONS = gql`
-  query GetAgentConfigurations($corpusId: String, $isActive: Boolean) {
-    agentConfigurations(corpusId: $corpusId, isActive: $isActive) {
+  query GetAgentConfigurations(
+    $corpusId: String
+    $isActive: Boolean
+    $name_Contains: String
+    $first: Int
+  ) {
+    agentConfigurations(
+      corpusId: $corpusId
+      isActive: $isActive
+      name_Contains: $name_Contains
+      first: $first
+    ) {
       edges {
         node {
           id

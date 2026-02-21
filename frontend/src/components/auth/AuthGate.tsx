@@ -118,12 +118,11 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             );
 
             // Clear any stale anonymous/previous-user cache data.
-            // TRADEOFF: We await this to ensure cache is clean before showing authenticated UI.
-            // This may delay render by ~50-100ms, but prevents flash of stale data.
-            // Unlike logout (fire-and-forget), login benefits from clean cache before render
-            // since users expect to see their own data immediately.
-            // refetchActive: false because auth state is already set and component mount
-            // will trigger necessary queries with correct credentials.
+            // We MUST await this because clearStore() aborts in-flight queries.
+            // If we set authInitCompleteVar(true) before clearStore() finishes,
+            // GET_ME fires immediately and gets aborted (NS_BINDING_ABORTED).
+            // refetchActive is false because no children are mounted yet —
+            // there are zero active queries to refetch.
             try {
               await resetOnAuthChange({
                 reason: "auth0_login",
@@ -139,8 +138,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             }
 
             // Signal that auth initialization (including cache clear) is complete.
-            // This MUST be set AFTER cache operations to prevent queries like GET_ME
-            // from being aborted by clearStore().
+            // This MUST be set AFTER clearStore() to prevent GET_ME from being aborted.
             authInitCompleteVar(true);
             setAuthInitialized(true);
           } else {

@@ -1,9 +1,11 @@
 import React from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { MemoryRouter } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
 import { GlobalSettingsPanel } from "../src/components/admin/GlobalSettingsPanel";
 import { GlobalAgentManagement } from "../src/components/admin/GlobalAgentManagement";
 import { CorpusAgentManagement } from "../src/components/corpuses/CorpusAgentManagement";
+import { SystemSettings } from "../src/components/admin/SystemSettings";
 
 // Wrapper for GlobalSettingsPanel with routing context
 export const GlobalSettingsPanelWrapper: React.FC = () => (
@@ -37,5 +39,21 @@ export const CorpusAgentManagementWrapper: React.FC<
 > = ({ corpusId, canUpdate, mocks = [] }) => (
   <MockedProvider mocks={mocks} addTypename={false}>
     <CorpusAgentManagement corpusId={corpusId} canUpdate={canUpdate} />
+  </MockedProvider>
+);
+
+// Wrapper for SystemSettings with Apollo mocking and routing
+interface SystemSettingsWrapperProps {
+  mocks?: MockedResponse[];
+}
+
+export const SystemSettingsWrapper: React.FC<SystemSettingsWrapperProps> = ({
+  mocks = [],
+}) => (
+  <MockedProvider mocks={mocks} addTypename={false}>
+    <MemoryRouter>
+      <SystemSettings />
+      <ToastContainer />
+    </MemoryRouter>
   </MockedProvider>
 );

@@ -81,7 +81,7 @@ class PermissionedTreeQuerySet(TreeQuerySet):
                 "creator",
                 "label_set",
                 "user_lock",
-            ).prefetch_related("documents")
+            )
 
         return queryset.with_tree_fields()
 
@@ -234,11 +234,20 @@ class AnnotationQuerySet(
 
         # For anonymous users, only show public structural annotations
         if user.is_anonymous:
+            # Handle both document-attached and structural_set-linked annotations
+            doc_attached_public = Q(document__isnull=False) & Q(
+                document__is_public=True
+            )
+            structural_set_public = (
+                Q(document__isnull=True)
+                & Q(structural_set__isnull=False)
+                & Q(structural_set__documents__is_public=True)
+            )
             return qs.filter(
                 Q(structural=True)
-                & Q(document__is_public=True)
+                & (doc_attached_public | structural_set_public)
                 & (Q(corpus__isnull=True) | Q(corpus__is_public=True))
-            )
+            ).distinct()
 
         # Build visibility filters for analyses
         visible_analyses = Analysis.objects.filter(Q(is_public=True) | Q(creator=user))
@@ -282,13 +291,35 @@ class AnnotationQuerySet(
         )
 
         # Also need document/corpus visibility
-        doc_corpus_filter = (
+        # Handle TWO types of annotations:
+        # 1. Document-attached: have document FK set, check document visibility
+        # 2. Structural via structural_set: have document=NULL, check via structural_set__documents
+        doc_attached_filter = Q(document__isnull=False) & (
             Q(document__is_public=True) | Q(document__creator=user)
-        ) & (
+        )
+
+        # Structural annotations linked via structural_set (document FK is NULL)
+        # These are visible if ANY document using that structural_set is visible to user
+        structural_set_filter = (
+            Q(document__isnull=True)
+            & Q(structural_set__isnull=False)
+            & Q(structural=True)
+            & (
+                Q(structural_set__documents__is_public=True)
+                | Q(structural_set__documents__creator=user)
+            )
+        )
+
+        doc_visibility_filter = doc_attached_filter | structural_set_filter
+
+        # Corpus visibility (for document-attached annotations with corpus)
+        corpus_filter = (
             Q(corpus__isnull=True) | Q(corpus__is_public=True) | Q(corpus__creator=user)
         )
 
-        return qs.filter(visibility_filter & doc_corpus_filter).distinct()
+        return qs.filter(
+            visibility_filter & doc_visibility_filter & corpus_filter
+        ).distinct()
 
 
 class NoteQuerySet(CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixin):

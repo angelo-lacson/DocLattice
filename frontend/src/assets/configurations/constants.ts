@@ -1,4 +1,4 @@
-export const VERSION_TAG = "v3.0.0.b3";
+export const VERSION_TAG = "v3.0.0.b4";
 export const MOBILE_VIEW_BREAKPOINT = 600;
 // Tablet breakpoint - used for sidebar collapse behavior (larger than mobile)
 export const TABLET_BREAKPOINT = 768;
@@ -14,6 +14,8 @@ export const MENTION_PREVIEW_LENGTH = 24;
 export const DEFAULT_LABEL_COLOR = "94a3b8";
 // Primary teal color used for new label creation
 export const PRIMARY_LABEL_COLOR = "0F766E";
+// Default color for agent messages when no badge color is configured
+export const DEFAULT_AGENT_COLOR = "#4A90E2";
 
 // File size constants for formatting
 export const FILE_SIZE = {
@@ -56,6 +58,32 @@ export const DEBOUNCE = {
   SEARCH_MS: 1000,
   EXTRACT_SEARCH_MS: 500,
   CLICK_OUTSIDE_DELAY_MS: 100,
+  CORPUS_SEARCH_MS: 400,
+  CORPUS_SEARCH_MAX_WAIT_MS: 1000,
+  /** Debounce time for metadata cell auto-save */
+  METADATA_SAVE_MS: 1500,
+} as const;
+
+// Upload constraints
+export const UPLOAD = {
+  /** Maximum file size in bytes (100MB) */
+  MAX_FILE_SIZE_BYTES: 100 * 1024 * 1024,
+  /** Maximum file size display string */
+  MAX_FILE_SIZE_DISPLAY: "100MB",
+  /** Progress percentage shown while bulk upload is in flight (before completion) */
+  BULK_PROGRESS_INITIAL: 50,
+  /** Maximum number of corpuses to show in the inline selector preview */
+  CORPUS_PREVIEW_LIMIT: 5,
+} as const;
+
+// Document metadata constraints
+export const DOCUMENT_METADATA = {
+  /** Maximum title length in characters */
+  MAX_TITLE_LENGTH: 255,
+  /** Maximum description length in characters */
+  MAX_DESCRIPTION_LENGTH: 2000,
+  /** Maximum slug length in characters */
+  MAX_SLUG_LENGTH: 100,
 } as const;
 
 // Polling constants (legacy - most polling replaced by WebSocket notifications)
@@ -83,6 +111,18 @@ export const EXTRACT_STATUS_COLORS = {
   [EXTRACT_STATUS.NOT_STARTED]: "default",
 } as const;
 
+// Tool usage UI constants (used by chat ToolUsageIndicator)
+export const TOOL_UNKNOWN_LABEL = "Unknown Tool";
+
+// Conversation type constants (matches backend ConversationTypeChoices)
+export const CONVERSATION_TYPE = {
+  CHAT: "CHAT",
+  THREAD: "THREAD",
+} as const;
+
+export type ConversationType =
+  (typeof CONVERSATION_TYPE)[keyof typeof CONVERSATION_TYPE];
+
 // Document relationship pagination limits
 export const DOCUMENT_RELATIONSHIP_PAGINATION_LIMIT = 50;
 export const DOCUMENT_RELATIONSHIP_TOC_LIMIT = 500;
@@ -95,3 +135,117 @@ export const DOCUMENT_PICKER_SEARCH_LIMIT = 20;
 
 // Mutation batching
 export const MUTATION_BATCH_SIZE = 10;
+
+// Annotation pagination constants
+export const ANNOTATION_PAGINATION = {
+  /** Number of annotations to load per page in browse mode */
+  PAGE_SIZE: 20,
+  /** Number of results per semantic search request */
+  SEMANTIC_SEARCH_LIMIT: 20,
+  /** Maximum accumulated semantic search results before capping */
+  MAX_SEMANTIC_RESULTS: 500,
+} as const;
+
+// Mention type configuration
+// Defines which mention types have active navigation routes
+// When a route is added for a type, set navigable: true
+export const MENTION_TYPES = {
+  user: {
+    navigable: true,
+    label: "User",
+  },
+  corpus: {
+    navigable: true,
+    label: "Corpus",
+  },
+  document: {
+    navigable: true,
+    label: "Document",
+  },
+  annotation: {
+    navigable: true,
+    label: "Annotation",
+  },
+  agent: {
+    navigable: false, // No agent detail page yet
+    label: "AI Agent",
+  },
+} as const;
+
+export type MentionType = keyof typeof MENTION_TYPES;
+
+// Pipeline configuration UI constants
+export const PIPELINE_UI = {
+  /** Default icon size for pipeline component icons (in pixels) */
+  ICON_SIZE: 48,
+  /** Minimum width for component cards in grid layout (in pixels) */
+  COMPONENT_GRID_MIN_WIDTH: 140,
+  /** Primary accent color used in pipeline configuration UI */
+  PRIMARY_ACCENT_COLOR: "#6366f1",
+  /** Height for pipeline connector line (in pixels) */
+  CONNECTOR_HEIGHT_PX: 24,
+  /** Minimum height for component cards (in pixels) */
+  COMPONENT_CARD_MIN_HEIGHT_PX: 120,
+  /** Maximum allowed secrets payload size (in bytes) */
+  MAX_SECRET_SIZE_BYTES: 10240,
+  /** Width of the left-side flow channel in the pipeline view (in pixels) */
+  CHANNEL_WIDTH_PX: 36,
+  /** Width of the horizontal connector arm from channel to stage card (in pixels) */
+  CONNECTOR_ARM_WIDTH_PX: 28,
+  /** Diameter of the junction node circles on the channel (in pixels) */
+  JUNCTION_SIZE_PX: 16,
+  /** Vertical spacing between stage rows in the pipeline view (in pixels) */
+  STAGE_SPACING_PX: 48,
+  /** Number of flow particles in the channel animation */
+  FLOW_PARTICLE_COUNT: 8,
+} as const;
+
+// Supported MIME types for pipeline configuration
+export const SUPPORTED_MIME_TYPES = [
+  { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
+  { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
+  {
+    value:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    label: "Word Document",
+    shortLabel: "DOCX",
+  },
+] as const;
+
+/**
+ * Lookup map from full MIME type to short label (e.g., "text/plain" → "TXT").
+ * Used for matching component supportedFileTypes which use short forms.
+ */
+export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
+);
+
+// Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
+export const FAILURE_COLORS = {
+  ICON_BG: "#dc2626",
+  BORDER: "#ef4444",
+  BORDER_LIGHT: "#fca5a5",
+  BORDER_LIGHTER: "#fecaca",
+  BG: "#fef2f2",
+  BG_OVERLAY: "rgba(254, 226, 226, 0.8)",
+  TEXT: "#dc2626",
+  TEXT_DARK: "#b91c1c",
+  SHADOW: "rgba(220, 38, 38, 0.3)",
+} as const;
+
+/**
+ * Known acronyms that should be preserved in display names.
+ * Used by getComponentDisplayName to properly capitalize technology names.
+ */
+export const KNOWN_ACRONYMS: Record<string, string> = {
+  openai: "OpenAI",
+  modernbert: "ModernBERT",
+  bert: "BERT",
+  gpt: "GPT",
+  llm: "LLM",
+  api: "API",
+  pdf: "PDF",
+  ocr: "OCR",
+  nlp: "NLP",
+  nlm: "NLM",
+};

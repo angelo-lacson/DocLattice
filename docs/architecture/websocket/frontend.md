@@ -1,13 +1,19 @@
 # Frontend WebSocket Implementation
 
+**Last Updated:** 2026-01-09
+
 ## Overview
 
-The frontend WebSocket implementation consists of two main React components that handle real-time chat interactions:
+The frontend WebSocket implementation consists of React components and hooks that handle real-time interactions:
 
-- **ChatTray**: Document-specific conversations (in right sidebar)
-- **CorpusChat**: Corpus-wide conversations (full-screen interface)
+| Component/Hook | Purpose | Location |
+|----------------|---------|----------|
+| **ChatTray** | Document-specific conversations (in right sidebar) | `frontend/src/components/knowledge_base/document/right_tray/ChatTray.tsx` |
+| **CorpusChat** | Corpus-wide conversations (full-screen interface) | `frontend/src/components/corpuses/CorpusChat.tsx` |
+| **useThreadWebSocket** | Hook for thread updates subscription | `frontend/src/hooks/useThreadWebSocket.ts` |
+| **Thread Components** | Discussion thread UI components | `frontend/src/components/threads/` |
 
-Both components share similar patterns for WebSocket communication, state management, and UI rendering.
+All components share similar patterns for WebSocket communication, state management, and UI rendering.
 
 ## Architecture
 
@@ -777,9 +783,134 @@ test('handles streaming response correctly', async () => {
 });
 ```
 
+## Thread Conversation UI Patterns
+
+### useThreadWebSocket Hook
+
+**Source:** [`frontend/src/hooks/useThreadWebSocket.ts`](../../../frontend/src/hooks/useThreadWebSocket.ts)
+
+This hook connects to the `ThreadUpdatesConsumer` (`ws/thread-updates/`) to receive real-time streaming updates when agents respond to @mentions in a conversation.
+
+#### Features
+
+- Automatic WebSocket connection management
+- Agent response streaming (AGENT_STREAM_START, AGENT_STREAM_TOKEN, etc.)
+- Tool call notifications
+- Error handling with reconnection
+- Heartbeat/ping-pong for connection health
+- Automatic reconnection on page visibility change (Issue #697)
+
+#### Usage
+
+```typescript
+import { useThreadWebSocket } from "../hooks/useThreadWebSocket";
+
+const {
+  connectionState,      // "disconnected" | "connecting" | "connected" | "error"
+  sessionId,            // Session ID from server
+  streamingResponses,   // Map<messageId, StreamingAgentResponse>
+  connect,              // Manual connect function
+  disconnect,           // Manual disconnect function
+  sendPing,             // Connection health check
+} = useThreadWebSocket({
+  conversationId: "Q29udmVyc2F0aW9uOjE=",
+  onStreamStart: (response) => { /* Agent started */ },
+  onStreamToken: (messageId, token, accumulated) => { /* Token received */ },
+  onToolCall: (messageId, tool, args) => { /* Tool invoked */ },
+  onStreamComplete: (response) => { /* Response finished */ },
+  onError: (messageId, error) => { /* Error occurred */ },
+  autoReconnect: true,          // Default: true
+  reconnectDelay: 3000,         // Default: 3000ms
+  heartbeatInterval: 30000,     // Default: 30000ms
+});
+```
+
+#### Message Types
+
+The hook handles these message types from the server:
+
+| Type | Description |
+|------|-------------|
+| `CONNECTED` | Connection established |
+| `AGENT_STREAM_START` | Agent started generating response |
+| `AGENT_STREAM_TOKEN` | Individual token from streaming |
+| `AGENT_TOOL_CALL` | Agent invoked a tool |
+| `AGENT_STREAM_COMPLETE` | Full response with sources/timeline |
+| `AGENT_STREAM_ERROR` | Error during generation |
+| `pong` | Response to ping |
+| `heartbeat_ack` | Response to heartbeat |
+
+#### Streaming Response State
+
+```typescript
+interface StreamingAgentResponse {
+  messageId: string;
+  agentId: string;
+  agentName: string;
+  agentSlug: string;
+  content: string;          // Accumulated content
+  sources: Source[];        // Citation sources
+  timeline: TimelineEntry[];// Tool call history
+  isComplete: boolean;
+  error?: string;
+}
+```
+
+### Thread UI Components
+
+**Location:** [`frontend/src/components/threads/`](../../../frontend/src/components/threads/)
+
+The thread system provides a rich discussion interface with the following key components:
+
+| Component | Purpose |
+|-----------|---------|
+| `ThreadList.tsx` | Lists all threads for a context |
+| `ThreadDetail.tsx` | Full thread view with messages |
+| `ThreadListItem.tsx` | Individual thread in list |
+| `MessageTree.tsx` | Nested message display |
+| `MessageItem.tsx` | Individual message with actions |
+| `MessageComposer.tsx` | Rich text input with mentions |
+| `ReplyForm.tsx` | Reply input for messages |
+| `CreateThreadForm.tsx` | New thread creation |
+| `MentionPicker.tsx` | User @mention autocomplete |
+| `UnifiedMentionPicker.tsx` | Combined user/agent mentions |
+| `VoteButtons.tsx` | Upvote/downvote controls |
+| `ModerationControls.tsx` | Admin moderation actions |
+
+#### Thread Features
+
+- **Nested Replies**: Full message tree with reply threading
+- **@Mentions**: Mention users and agents (triggers agent responses)
+- **Voting**: Stack Overflow-style voting on messages
+- **Moderation**: Lock threads, delete messages, accept answers
+- **Badges**: User reputation and achievement display
+- **Real-time Updates**: Via `useThreadWebSocket` hook
+- **Markdown Support**: Full markdown rendering in messages
+
+### WebSocket URL Utilities
+
+**Source:** [`frontend/src/components/chat/get_websockets.ts`](../../../frontend/src/components/chat/get_websockets.ts)
+
+Provides URL generation functions for all WebSocket endpoints:
+
+```typescript
+// Document chat WebSocket (with corpus context)
+getWebSocketUrl(documentId, authToken, conversationId?, corpusId?)
+
+// Corpus chat WebSocket
+getCorpusQueryWebSocket(corpusId, authToken, conversationId?)
+
+// Thread updates WebSocket
+getThreadUpdatesWebSocket(conversationId, authToken?)
+```
+
+---
+
 ## Related Files
 
-- `frontend/src/components/widgets/chat/ChatMessage.tsx`: Message rendering component
-- `frontend/src/components/annotator/context/ChatSourceAtom.ts`: Source state management
-- `frontend/src/components/chat/get_websockets.ts`: WebSocket URL utilities
-- `frontend/src/graphql/queries.ts`: GraphQL conversation queries
+- [`frontend/src/components/widgets/chat/ChatMessage.tsx`](../../../frontend/src/components/widgets/chat/ChatMessage.tsx): Message rendering component
+- [`frontend/src/components/annotator/context/ChatSourceAtom.ts`](../../../frontend/src/components/annotator/context/ChatSourceAtom.ts): Source state management
+- [`frontend/src/components/chat/get_websockets.ts`](../../../frontend/src/components/chat/get_websockets.ts): WebSocket URL utilities
+- [`frontend/src/graphql/queries.ts`](../../../frontend/src/graphql/queries.ts): GraphQL conversation queries
+- [`frontend/src/hooks/useThreadWebSocket.ts`](../../../frontend/src/hooks/useThreadWebSocket.ts): Thread updates hook
+- [`frontend/src/hooks/useNetworkStatus.ts`](../../../frontend/src/hooks/useNetworkStatus.ts): Network/visibility status for reconnection

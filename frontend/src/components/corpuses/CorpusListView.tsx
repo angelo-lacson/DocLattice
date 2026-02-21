@@ -24,7 +24,6 @@ import {
   deletingCorpus,
   exportingCorpus,
   showAnalyzerSelectionForCorpus,
-  authToken,
   userObj,
 } from "../../graphql/cache";
 import {
@@ -37,6 +36,7 @@ import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { MCPShareButton } from "../common/MCPShareButton";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS - Following DiscoveryLanding patterns
@@ -120,6 +120,12 @@ const SectionHeader = styled.div`
   margin-bottom: 20px;
   gap: 16px;
   flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
 `;
 
 const SectionTitle = styled.h2`
@@ -134,6 +140,22 @@ const ActionButtons = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  /* Make buttons full-width on very small screens */
+  @media (max-width: 480px) {
+    flex-direction: column;
+    gap: 8px;
+
+    button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 `;
 
 const CorpusListContainer = styled.section`
@@ -173,6 +195,25 @@ const EmptyStateWrapper = styled.div`
 // Wrapper to handle right-click context menu on cards
 const CardWrapper = styled.div`
   position: relative;
+`;
+
+// MCP button overlay for public corpus cards
+const MCPButtonOverlay = styled.div`
+  position: absolute;
+  top: 12px;
+  right: 48px; /* Position left of the kebab menu */
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  ${CardWrapper}:hover & {
+    opacity: 1;
+  }
+
+  /* Always visible on touch devices */
+  @media (hover: none) {
+    opacity: 1;
+  }
 `;
 
 // Floating context menu (similar to old CorpusItem)
@@ -261,18 +302,10 @@ function getVisibilityStatus(
 
 function formatStats(corpus: CorpusType): string[] {
   const stats: string[] = [];
-  const docCount =
-    corpus.documents?.totalCount || corpus.documents?.edges?.length || 0;
-  const annCount = corpus.annotations?.totalCount || 0;
+  const docCount = corpus.documentCount ?? 0;
 
   if (docCount > 0)
     stats.push(`${docCount} ${docCount === 1 ? "doc" : "docs"}`);
-  if (annCount > 0)
-    stats.push(
-      `${annCount.toLocaleString()} ${
-        annCount === 1 ? "annotation" : "annotations"
-      }`
-    );
 
   // Add labelset name + label count together
   if (corpus.labelSet) {
@@ -338,9 +371,10 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
   allowImport = false,
 }) => {
   const navigate = useNavigate();
-  const auth_token = useReactiveVar(authToken);
   const currentUser = useReactiveVar(userObj);
-  const isAuthenticated = Boolean(auth_token);
+  // Use userObj for auth check - consistent with NavMenu which gates protected items on user object
+  // Note: authToken can be out of sync with userObj in some edge cases
+  const isAuthenticated = Boolean(currentUser);
   const currentUserEmail = currentUser?.email;
 
   // Filter state
@@ -418,11 +452,7 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
     const list = corpuses || [];
     return {
       totalCorpuses: list.length,
-      totalDocuments: list.reduce(
-        (sum, c) =>
-          sum + (c.documents?.totalCount || c.documents?.edges?.length || 0),
-        0
-      ),
+      totalDocuments: list.reduce((sum, c) => sum + (c.documentCount || 0), 0),
       totalAnnotations: list.reduce(
         (sum, c) => sum + (c.annotations?.totalCount || 0),
         0
@@ -629,6 +659,17 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
                       key={corpus.id}
                       onContextMenu={(e) => handleOpenContextMenu(e, corpus.id)}
                     >
+                      {/* MCP Share button overlay for public corpuses */}
+                      {corpus.isPublic && corpus.slug && (
+                        <MCPButtonOverlay>
+                          <MCPShareButton
+                            corpusSlug={corpus.slug}
+                            size="sm"
+                            showLabel={false}
+                            testId={`mcp-share-${corpus.id}`}
+                          />
+                        </MCPButtonOverlay>
+                      )}
                       <CollectionCard
                         type={mapCategoryToType(corpus)}
                         badge={getCategoryBadge(corpus)}
@@ -720,7 +761,23 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
                             handleCloseMenu();
                           }}
                         />
-                        {canRemove && (
+                        {corpus.isPublic && corpus.slug && (
+                          <Menu.Item
+                            icon="linkify"
+                            content="MCP Endpoint"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const mcpUrl = `${window.location.origin}/mcp/corpus/${corpus.slug}`;
+                              navigator.clipboard.writeText(mcpUrl).then(() => {
+                                toast.success(
+                                  "MCP endpoint URL copied to clipboard"
+                                );
+                              });
+                              handleCloseMenu();
+                            }}
+                          />
+                        )}
+                        {canRemove && !corpus.isPersonal && (
                           <Menu.Item
                             className="danger"
                             icon="trash"

@@ -56,7 +56,7 @@ import {
   editingCorpus,
   viewingCorpus,
   documentSearchTerm,
-  authToken,
+  userObj,
   annotationContentSearchTerm,
   openedDocument,
   selectedMetaAnnotationId,
@@ -620,7 +620,7 @@ const CorpusViewContainer = styled.div`
 
 const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
   position: relative;
-  width: ${(props) => (props.$isExpanded ? "280px" : "72px")};
+  width: ${(props) => (props.$isExpanded ? "280px" : "80px")};
   background: linear-gradient(180deg, #ffffff 0%, #fafbfc 50%, #f8f9fa 100%);
   backdrop-filter: blur(10px);
   border-right: 1px solid #e2e8f0;
@@ -871,7 +871,7 @@ const NavigationItems = styled.div`
 `;
 
 // Badge for count display on navigation items
-const NavItemBadge = styled.span<{ isActive: boolean }>`
+const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -883,13 +883,19 @@ const NavItemBadge = styled.span<{ isActive: boolean }>`
   font-weight: 600;
   margin-left: auto;
   background: ${(props) =>
-    props.isActive
+    props.$isZero
+      ? "transparent"
+      : props.isActive
       ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
       : "#e2e8f0"};
-  color: ${(props) => (props.isActive ? "white" : "#64748b")};
+  color: ${(props) =>
+    props.$isZero ? "#94a3b8" : props.isActive ? "white" : "#64748b"};
+  border: ${(props) => (props.$isZero ? "1px dashed #cbd5e1" : "none")};
   transition: all 0.2s ease;
   box-shadow: ${(props) =>
-    props.isActive
+    props.$isZero
+      ? "none"
+      : props.isActive
       ? "0 2px 4px rgba(74, 144, 226, 0.3)"
       : "0 1px 2px rgba(0, 0, 0, 0.05)"};
 `;
@@ -1305,6 +1311,29 @@ const NotificationBadge = styled.div`
   }
 `;
 
+// Compact badge for collapsed sidebar - slight overlap at corner
+const CollapsedBadge = styled.div<{ $isZero: boolean }>`
+  position: absolute;
+  top: -4px;
+  right: -12px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: ${(props) =>
+    props.$isZero
+      ? "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)"
+      : "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"};
+  color: white;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+`;
+
 // Split view container for extracts tab
 const ExtractsSplitView = styled.div`
   display: flex;
@@ -1509,7 +1538,7 @@ export const Corpuses = () => {
   const opened_document = useReactiveVar(openedDocument);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
 
-  const auth_token = useReactiveVar(authToken);
+  const currentUser = useReactiveVar(userObj);
   const annotation_search_term = useReactiveVar(annotationContentSearchTerm);
   const show_query_view_state = useReactiveVar(showQueryViewState);
 
@@ -1526,9 +1555,7 @@ export const Corpuses = () => {
   const urlTab = useReactiveVar(selectedTab);
   const [showDescriptionEditor, setShowDescriptionEditor] =
     useState<boolean>(false);
-  const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(
-    () => width > MOBILE_VIEW_BREAKPOINT
-  ); // Expanded by default on desktop
+  const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false); // Collapsed by default, opens on hover
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const { REACT_APP_ALLOW_IMPORTS } = useEnv();
 
@@ -1545,6 +1572,15 @@ export const Corpuses = () => {
   // View mode state for the Documents tab
   const [documentsViewMode, setDocumentsViewMode] =
     useState<ViewMode>("modern-list");
+
+  // Track whether CorpusChat is showing a conversation (vs the list view)
+  // Used to hide parent navigation header when CorpusChat handles its own
+  const [chatInConversation, setChatInConversation] = useState<boolean>(false);
+
+  // Track whether CorpusDiscussionsView is showing a thread detail (vs the list view)
+  // Used to hide parent navigation header when viewing inline thread detail
+  const [discussionInThreadView, setDiscussionInThreadView] =
+    useState<boolean>(false);
 
   // Debug: Log state changes
   console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
@@ -1743,7 +1779,7 @@ export const Corpuses = () => {
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Handle metadata refetch when auth changes and corpus is open
   useEffect(() => {
-    if (auth_token && metadata_called && opened_corpus?.id) {
+    if (currentUser && metadata_called && opened_corpus?.id) {
       // Only refetch if we have previously called the query successfully
       if (metadata_data || metadata_loading) {
         refetchMetadata();
@@ -1755,7 +1791,7 @@ export const Corpuses = () => {
         }
       }
     }
-  }, [auth_token]); // Re-run when auth token changes
+  }, [currentUser]); // Re-run when user changes
 
   // Search term effect - needed because fetchPolicy is "network-only"
   useEffect(() => {
@@ -1858,6 +1894,8 @@ export const Corpuses = () => {
         totalAnalyses: 0,
         totalExtracts: 0,
         totalThreads: 0,
+        totalChats: 0,
+        totalRelationships: 0,
       }
     );
   }, [
@@ -1866,6 +1904,8 @@ export const Corpuses = () => {
     statsData?.corpusStats?.totalAnalyses,
     statsData?.corpusStats?.totalExtracts,
     statsData?.corpusStats?.totalThreads,
+    statsData?.corpusStats?.totalChats,
+    statsData?.corpusStats?.totalRelationships,
   ]);
 
   // When query is skipped (no valid corpus ID), treat as not loading
@@ -2062,7 +2102,7 @@ export const Corpuses = () => {
   };
 
   let corpus_actions: DropdownActionProps[] = [];
-  if (auth_token) {
+  if (currentUser) {
     corpus_actions = [
       ...corpus_actions,
       {
@@ -2076,7 +2116,7 @@ export const Corpuses = () => {
 
     // Currently the import capability is enabled via an env variable in case we want it disabled
     // (which we'll probably do for the public demo to cut down on attack surface and load on server)
-    if (REACT_APP_ALLOW_IMPORTS && auth_token) {
+    if (REACT_APP_ALLOW_IMPORTS) {
       corpus_actions.push({
         icon: "cloud upload",
         title: "Import Corpus",
@@ -2088,7 +2128,7 @@ export const Corpuses = () => {
   }
 
   let contract_actions: DropdownActionProps[] = [];
-  if (selected_document_ids.length > 0 && auth_token) {
+  if (selected_document_ids.length > 0 && currentUser) {
     contract_actions.push({
       icon: "remove circle",
       title: "Remove Contract(s)",
@@ -2100,7 +2140,7 @@ export const Corpuses = () => {
 
   // Actions for analyzer pane (if user is signed in)
   if (
-    auth_token &&
+    currentUser &&
     raw_permissions?.includes(PermissionTypes.CAN_UPDATE) &&
     raw_permissions?.includes(PermissionTypes.CAN_READ)
   ) {
@@ -2137,6 +2177,10 @@ export const Corpuses = () => {
       typeof tabIndexOrId === "number" ? TAB_IDS[tabIndexOrId] : tabIndexOrId;
     // Use null for "home" to keep URLs clean (home is default)
     updateTabParam(location, navigate, tabId === "home" ? null : tabId);
+    // Refresh stats on tab switch to ensure counts are up to date
+    if (validCorpusId) {
+      refetchStats();
+    }
   };
 
   // Derive active tab index from URL
@@ -2298,6 +2342,7 @@ export const Corpuses = () => {
         id: "relationships",
         label: "Relationships",
         icon: <Link2 />,
+        badge: stats.totalRelationships,
         component: opened_corpus?.id ? (
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
@@ -2334,25 +2379,33 @@ export const Corpuses = () => {
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
           >
-            <TabNavigationHeader>
-              <BackNavButton
-                onClick={() => setActiveTab(0)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Back to Home"
-              >
-                <ArrowLeft />
-              </BackNavButton>
-              <TabTitle>Discussions</TabTitle>
-              <MobileKebabButton
-                onClick={() => setMobileSidebarOpen(true)}
-                aria-label="Open navigation menu"
-              >
-                <MoreVertical />
-              </MobileKebabButton>
-            </TabNavigationHeader>
+            {/* Only show parent header when viewing thread list */}
+            {/* When viewing inline thread detail, CorpusDiscussionsView handles its own */}
+            {!discussionInThreadView && (
+              <TabNavigationHeader>
+                <BackNavButton
+                  onClick={() => setActiveTab(0)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  title="Back to Home"
+                >
+                  <ArrowLeft />
+                </BackNavButton>
+                <TabTitle>Discussions</TabTitle>
+                <MobileKebabButton
+                  onClick={() => setMobileSidebarOpen(true)}
+                  aria-label="Open navigation menu"
+                >
+                  <MoreVertical />
+                </MobileKebabButton>
+              </TabNavigationHeader>
+            )}
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <CorpusDiscussionsView corpusId={opened_corpus.id} hideHeader />
+              <CorpusDiscussionsView
+                corpusId={opened_corpus.id}
+                hideHeader
+                onViewModeChange={setDiscussionInThreadView}
+              />
             </div>
           </div>
         ) : null,
@@ -2361,33 +2414,40 @@ export const Corpuses = () => {
         id: "chats",
         label: "Chats",
         icon: <Brain />,
+        badge: stats.totalChats,
         component: opened_corpus?.id ? (
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
           >
-            <TabNavigationHeader>
-              <BackNavButton
-                onClick={() => setActiveTab(0)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="Back to Home"
-              >
-                <ArrowLeft />
-              </BackNavButton>
-              <TabTitle>Chat History</TabTitle>
-              <MobileKebabButton
-                onClick={() => setMobileSidebarOpen(true)}
-                aria-label="Open navigation menu"
-              >
-                <MoreVertical />
-              </MobileKebabButton>
-            </TabNavigationHeader>
+            {/* Only show parent header when CorpusChat is in list view */}
+            {/* When in conversation view, CorpusChat renders its own navigation */}
+            {!chatInConversation && (
+              <TabNavigationHeader>
+                <BackNavButton
+                  onClick={() => setActiveTab(0)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  title="Back to Home"
+                >
+                  <ArrowLeft />
+                </BackNavButton>
+                <TabTitle>Chat History</TabTitle>
+                <MobileKebabButton
+                  onClick={() => setMobileSidebarOpen(true)}
+                  aria-label="Open navigation menu"
+                >
+                  <MoreVertical />
+                </MobileKebabButton>
+              </TabNavigationHeader>
+            )}
             <div style={{ flex: 1, overflow: "hidden" }}>
               <CorpusChat
                 corpusId={opened_corpus.id}
                 showLoad={true}
                 onMessageSelect={() => {}}
                 setShowLoad={() => {}}
+                onViewModeChange={setChatInConversation}
+                onClose={() => setActiveTab(0)}
               />
             </div>
           </div>
@@ -2497,8 +2557,13 @@ export const Corpuses = () => {
     stats.totalAnnotations,
     stats.totalAnalyses,
     stats.totalExtracts,
+    stats.totalThreads,
+    stats.totalChats,
+    stats.totalRelationships,
     canUpdateCorpus,
     documentsViewMode, // Required for view mode toggle to work
+    chatInConversation, // Required for chat tab header visibility
+    discussionInThreadView, // Required for discussions tab header visibility
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);
@@ -2525,7 +2590,7 @@ export const Corpuses = () => {
         onImportCorpus={() => corpusUploadRef.current.click()}
         searchValue={corpusSearchCache}
         onSearchChange={handleCorpusSearchChange}
-        allowImport={REACT_APP_ALLOW_IMPORTS && Boolean(auth_token)}
+        allowImport={REACT_APP_ALLOW_IMPORTS && Boolean(currentUser)}
       />
     );
   } else if (
@@ -2551,7 +2616,7 @@ export const Corpuses = () => {
           data-testid="navigation-sidebar"
           $isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
           initial={{
-            width: use_mobile_layout ? "0" : sidebarExpanded ? "280px" : "72px",
+            width: use_mobile_layout ? "0" : sidebarExpanded ? "280px" : "80px",
           }}
           animate={{
             width: use_mobile_layout
@@ -2560,9 +2625,11 @@ export const Corpuses = () => {
                 : "0"
               : sidebarExpanded
               ? "280px"
-              : "72px",
+              : "80px",
           }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
+          onMouseEnter={() => !use_mobile_layout && setSidebarExpanded(true)}
+          onMouseLeave={() => !use_mobile_layout && setSidebarExpanded(false)}
         >
           <BottomSheetHandle
             onClick={() => use_mobile_layout && setMobileSidebarOpen(false)}
@@ -2648,11 +2715,12 @@ export const Corpuses = () => {
               >
                 <div style={{ position: "relative" }}>
                   {item.icon}
-                  {item.badge &&
-                    item.badge > 0 &&
+                  {item.badge !== undefined &&
                     !sidebarExpanded &&
                     !use_mobile_layout && (
-                      <NotificationBadge>{item.badge}</NotificationBadge>
+                      <CollapsedBadge $isZero={item.badge === 0}>
+                        {item.badge > 0 ? item.badge : "–"}
+                      </CollapsedBadge>
                     )}
                 </div>
                 {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
@@ -2660,9 +2728,12 @@ export const Corpuses = () => {
                     <span style={{ flex: "1", textAlign: "left" }}>
                       {item.label}
                     </span>
-                    {item.badge !== undefined && item.badge > 0 && (
-                      <NavItemBadge isActive={active_tab === index}>
-                        {item.badge}
+                    {item.badge !== undefined && (
+                      <NavItemBadge
+                        isActive={active_tab === index}
+                        $isZero={item.badge === 0}
+                      >
+                        {item.badge > 0 ? item.badge : "–"}
                       </NavItemBadge>
                     )}
                   </>

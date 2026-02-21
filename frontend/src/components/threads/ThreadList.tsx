@@ -8,7 +8,13 @@ import {
   GetConversationsOutputs,
 } from "../../graphql/queries";
 import { ConversationType } from "../../types/graphql-api";
-import { color } from "../../theme/colors";
+import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  mediaQuery,
+} from "./styles/discussionStyles";
 import { threadSortAtom, threadFiltersAtom } from "../../atoms/threadAtoms";
 import { ThreadListItem } from "./ThreadListItem";
 import { ThreadSortDropdown } from "./ThreadSortDropdown";
@@ -46,30 +52,31 @@ interface ThreadListProps {
 const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: ${(props) => (props.$embedded ? "1rem" : "1.5rem")};
-  max-width: ${(props) => (props.$embedded ? "100%" : "1200px")};
+  gap: 20px;
+  padding: ${(props) => (props.$embedded ? "16px 24px" : "32px 24px")};
+  max-width: ${(props) => (props.$embedded ? "100%" : "900px")};
   margin: 0 auto;
   width: 100%;
+  background: #fafafa;
 
   @media (max-width: 768px) {
-    padding: ${(props) => (props.$embedded ? "0.75rem" : "1rem")};
-    gap: 0.75rem;
+    padding: ${(props) => (props.$embedded ? "12px 16px" : "24px 16px")};
+    gap: 16px;
   }
 
-  @media (max-width: 480px) {
-    padding: 0.75rem;
-    gap: 0.625rem;
+  ${mediaQuery.mobile} {
+    padding: 16px;
+    gap: 12px;
   }
 `;
 
 const ThreadGrid = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 16px;
 
-  @media (max-width: 480px) {
-    gap: 0.5rem;
+  ${mediaQuery.mobile} {
+    gap: 12px;
   }
 `;
 
@@ -87,12 +94,13 @@ const ThreadListHeader = styled.div`
 `;
 
 const Title = styled.h2`
+  font-family: "Georgia", "Times New Roman", serif;
   font-size: 24px;
-  font-weight: 700;
-  color: ${color.N10};
+  font-weight: 400;
+  color: #0f766e;
   margin: 0;
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     font-size: 20px;
   }
 `;
@@ -107,7 +115,7 @@ const HeaderActions = styled.div`
     gap: 0.75rem;
   }
 
-  @media (max-width: 640px) {
+  ${mediaQuery.mobile} {
     flex-direction: column;
     align-items: stretch;
     width: 100%;
@@ -142,7 +150,7 @@ export function ThreadList({
     variables: {
       corpusId,
       documentId,
-      conversationType: "THREAD",
+      conversationType: CONVERSATION_TYPE.THREAD,
       limit: 20,
       title_Contains: searchQuery || undefined,
     },

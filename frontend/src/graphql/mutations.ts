@@ -795,8 +795,10 @@ export interface RemoveDocumentsFromCorpusInputs {
 }
 
 export interface RemoveDocumentsFromCorpusOutputs {
-  ok?: boolean;
-  message?: string;
+  removeDocumentsFromCorpus: {
+    ok?: boolean;
+    message?: string;
+  };
 }
 
 export const REMOVE_DOCUMENTS_FROM_CORPUS = gql`
@@ -1017,6 +1019,34 @@ export const DELETE_MULTIPLE_DOCUMENTS = gql`
     deleteMultipleDocuments(documentIdsToDelete: $documentIdsToDelete) {
       ok
       message
+    }
+  }
+`;
+
+export interface RetryDocumentProcessingOutputType {
+  retryDocumentProcessing: {
+    ok: boolean;
+    message: string;
+    document: DocumentType | null;
+  };
+}
+
+export interface RetryDocumentProcessingInputType {
+  documentId: string;
+}
+
+export const RETRY_DOCUMENT_PROCESSING = gql`
+  mutation ($documentId: String!) {
+    retryDocumentProcessing(documentId: $documentId) {
+      ok
+      message
+      document {
+        id
+        backendLock
+        processingStatus
+        processingError
+        canRetry
+      }
     }
   }
 `;

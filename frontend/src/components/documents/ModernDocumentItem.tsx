@@ -1,19 +1,31 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Icon } from "semantic-ui-react";
 import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Link2, ArrowRight, FileText } from "lucide-react";
+import { Link2, ArrowRight, FileText, RotateCcw } from "lucide-react";
+import { useMutation } from "@apollo/client";
+import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { FAILURE_COLORS } from "../../assets/configurations/constants";
 
 import {
   editingDocument,
   viewingDocument,
   openedCorpus,
 } from "../../graphql/cache";
-import { AnnotationLabelType, DocumentType } from "../../types/graphql-api";
+import {
+  AnnotationLabelType,
+  DocumentType,
+  DocumentProcessingStatus,
+} from "../../types/graphql-api";
+import {
+  RETRY_DOCUMENT_PROCESSING,
+  RetryDocumentProcessingOutputType,
+  RetryDocumentProcessingInputType,
+} from "../../graphql/mutations";
 import { downloadFile } from "../../utils/files";
 import fallback_doc_icon from "../../assets/images/defaults/default_doc_icon.jpg";
 import { getPermissions } from "../../utils/transform";
@@ -61,6 +73,10 @@ const CardContainer = styled.div<{ isLongPressing?: boolean }>`
   &.backend-locked {
     pointer-events: none;
     opacity: 0.6;
+  }
+
+  &.failed {
+    border-color: ${FAILURE_COLORS.BORDER_LIGHT};
   }
 
   &.long-pressing {
@@ -472,6 +488,16 @@ const ListContainer = styled.div<{ isLongPressing?: boolean }>`
     opacity: 0.6;
   }
 
+  &.failed {
+    border-left: 3px solid ${FAILURE_COLORS.BORDER};
+    background: ${FAILURE_COLORS.BG};
+
+    &:hover {
+      border-left: 3px solid ${FAILURE_COLORS.BORDER};
+      background: ${FAILURE_COLORS.BG};
+    }
+  }
+
   &.long-pressing {
     transform: scale(0.99);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
@@ -586,6 +612,91 @@ const ListCheckbox = styled.div`
 `;
 
 // ===============================================
+// PROCESSING FAILURE COMPONENTS
+// ===============================================
+const ThumbnailFailureOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${FAILURE_COLORS.BG_OVERLAY};
+  z-index: 5;
+  border-radius: inherit;
+`;
+
+const FailureIconCircle = styled.div<{ $size?: "small" | "large" }>`
+  width: ${(props) => (props.$size === "small" ? "28px" : "40px")};
+  height: ${(props) => (props.$size === "small" ? "28px" : "40px")};
+  border-radius: 50%;
+  background: ${FAILURE_COLORS.ICON_BG};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 2px 8px ${FAILURE_COLORS.SHADOW};
+
+  .icon {
+    margin: 0 !important;
+    font-size: ${(props) => (props.$size === "small" ? "12px" : "18px")};
+  }
+`;
+
+const FailureBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: ${FAILURE_COLORS.BG};
+  color: ${FAILURE_COLORS.TEXT};
+  border: 1px solid ${FAILURE_COLORS.BORDER_LIGHTER};
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+`;
+
+const FailureDescription = styled.div`
+  font-size: 0.75rem;
+  color: ${FAILURE_COLORS.TEXT_DARK};
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const RetryButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid ${FAILURE_COLORS.BORDER};
+  border-radius: 6px;
+  background: white;
+  color: ${FAILURE_COLORS.TEXT};
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: ${FAILURE_COLORS.BORDER};
+    color: white;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+// ===============================================
 // SHARED COMPONENTS
 // ===============================================
 const ActionButton = styled.button`
@@ -668,6 +779,27 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const longPressStartPos = useRef<{ x: number; y: number } | null>(null);
 
+  const [retryProcessing, { loading: retryLoading }] = useMutation<
+    RetryDocumentProcessingOutputType,
+    RetryDocumentProcessingInputType
+  >(RETRY_DOCUMENT_PROCESSING, {
+    update: (cache, { data }) => {
+      if (data?.retryDocumentProcessing?.ok) {
+        // Optimistically set processing state — the Celery task updates the DB
+        // asynchronously, so the mutation response still has the old values.
+        cache.modify({
+          id: cache.identify({ __typename: "DocumentType", id }),
+          fields: {
+            backendLock: () => true,
+            processingStatus: () => "PENDING",
+            processingError: () => null,
+            canRetry: () => false,
+          },
+        });
+      }
+    },
+  });
+
   // Draggable setup (documents can be dragged to folders)
   const {
     attributes,
@@ -728,6 +860,9 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     description,
     pdfFile,
     backendLock,
+    processingStatus,
+    processingError,
+    canRetry,
     isPublic,
     myPermissions,
     fileType,
@@ -742,11 +877,44 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     allDocRelationships,
   } = item;
 
+  const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
+  const isProcessing =
+    processingStatus != null &&
+    processingStatus !== DocumentProcessingStatus.FAILED &&
+    backendLock;
+
+  const handleRetry = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        const result = await retryProcessing({
+          variables: { documentId: id },
+        });
+        if (result.data?.retryDocumentProcessing?.ok) {
+          toast.success("Document reprocessing has been queued");
+        } else {
+          toast.error(
+            result.data?.retryDocumentProcessing?.message ||
+              "Failed to retry processing"
+          );
+        }
+      } catch (err) {
+        console.error("Failed to retry document processing:", err);
+        toast.error("Failed to retry document processing");
+      }
+    },
+    [id, retryProcessing]
+  );
+
   const handleClick = (event: React.MouseEvent) => {
     if (
       (event.target as HTMLElement).closest(".action-button") ||
       (event.target as HTMLElement).closest(".checkbox")
     ) {
+      return;
+    }
+
+    if (isFailed) {
       return;
     }
 
@@ -867,7 +1035,8 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const my_permissions = getPermissions(myPermissions ?? []);
   const canEdit = my_permissions.includes(PermissionTypes.CAN_UPDATE);
 
-  // Build context menu items
+  // Build context menu items. Order: primary action (Open) → view/download/edit
+  // → linking/versioning → retry (failed only) → destructive (remove) → select.
   const contextMenuItems: ContextMenuItem[] = [
     {
       label: "Open Document",
@@ -926,6 +1095,16 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
         setVersionHistoryOpen(true);
       },
       disabled: backendLock,
+      dividerAfter: true,
+    });
+  }
+
+  if (isFailed && canRetry) {
+    contextMenuItems.push({
+      label: retryLoading ? "Retrying..." : "Retry Processing",
+      icon: "redo",
+      onClick: handleRetry,
+      disabled: retryLoading,
       dividerAfter: true,
     });
   }
@@ -1043,8 +1222,10 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
         <CardContainer
           ref={setNodeRef}
           className={`${is_selected ? "is-selected" : ""} ${
-            backendLock ? "backend-locked" : ""
-          } ${isLongPressing ? "long-pressing" : ""}`}
+            isProcessing ? "backend-locked" : ""
+          } ${isFailed ? "failed" : ""} ${
+            isLongPressing ? "long-pressing" : ""
+          }`}
           onClick={handleClick}
           onContextMenu={handleContextMenu}
           onTouchStart={handleTouchStart}
@@ -1054,7 +1235,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           {...attributes}
           {...listeners}
         >
-          {backendLock && (
+          {isProcessing && (
             <LoadingOverlay
               active={true}
               inverted
@@ -1072,7 +1253,17 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
 
           <CardPreview>
             {renderThumbnail()}
-            {fileType && <FileTypeBadge>{fileType}</FileTypeBadge>}
+            {isFailed && (
+              <ThumbnailFailureOverlay
+                role="alert"
+                aria-label="Processing failed"
+              >
+                <FailureIconCircle $size="large" aria-hidden="true">
+                  <Icon name="warning sign" />
+                </FailureIconCircle>
+              </ThumbnailFailureOverlay>
+            )}
+            {fileType && !isFailed && <FileTypeBadge>{fileType}</FileTypeBadge>}
             {(hasVersionHistory || (versionCount && versionCount > 1)) && (
               <VersionBadgeWrapper>
                 <VersionBadge
@@ -1150,31 +1341,50 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           <CardContent>
             <CardTitle>{title || "Untitled Document"}</CardTitle>
 
-            <CardMeta>
-              {pageCount && (
-                <div className="meta-item">
-                  <Icon name="file outline" />
-                  {pageCount}p
-                </div>
-              )}
-              {isPublic && (
-                <div className="meta-item">
-                  <Icon name="globe" />
-                  Public
-                </div>
-              )}
-              {doc_label_objs.length > 0 && (
-                <div className="meta-item">
-                  <Icon name="tag" />
-                  {doc_label_objs.length}
-                </div>
-              )}
-            </CardMeta>
+            {isFailed ? (
+              <CardMeta>
+                <FailureBadge>Processing Failed</FailureBadge>
+                {canRetry && (
+                  <RetryButton
+                    className="action-button"
+                    onClick={handleRetry}
+                    disabled={retryLoading}
+                    aria-label="Retry processing this document"
+                  >
+                    <RotateCcw aria-hidden="true" />
+                    {retryLoading ? "Retrying..." : "Retry"}
+                  </RetryButton>
+                )}
+              </CardMeta>
+            ) : (
+              <CardMeta>
+                {pageCount && (
+                  <div className="meta-item">
+                    <Icon name="file outline" />
+                    {pageCount}p
+                  </div>
+                )}
+                {isPublic && (
+                  <div className="meta-item">
+                    <Icon name="globe" />
+                    Public
+                  </div>
+                )}
+                {doc_label_objs.length > 0 && (
+                  <div className="meta-item">
+                    <Icon name="tag" />
+                    {doc_label_objs.length}
+                  </div>
+                )}
+              </CardMeta>
+            )}
           </CardContent>
 
-          <ActionOverlay className="action-overlay">
-            {renderActions(true)}
-          </ActionOverlay>
+          {!isFailed && (
+            <ActionOverlay className="action-overlay">
+              {renderActions(true)}
+            </ActionOverlay>
+          )}
         </CardContainer>
 
         {contextMenu && (
@@ -1208,8 +1418,8 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
       <ListContainer
         ref={setNodeRef}
         className={`${is_selected ? "is-selected" : ""} ${
-          backendLock ? "backend-locked" : ""
-        } ${isLongPressing ? "long-pressing" : ""}`}
+          isProcessing ? "backend-locked" : ""
+        } ${isFailed ? "failed" : ""} ${isLongPressing ? "long-pressing" : ""}`}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         onTouchStart={handleTouchStart}
@@ -1219,7 +1429,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
         {...attributes}
         {...listeners}
       >
-        {backendLock && (
+        {isProcessing && (
           <LoadingOverlay
             active={true}
             inverted
@@ -1235,12 +1445,28 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           {is_selected && <Icon name="check" />}
         </ListCheckbox>
 
-        <ListThumbnail>{renderThumbnail()}</ListThumbnail>
+        <ListThumbnail>
+          {renderThumbnail()}
+          {isFailed && (
+            <ThumbnailFailureOverlay>
+              <FailureIconCircle $size="small" aria-hidden="true">
+                <Icon name="warning sign" />
+              </FailureIconCircle>
+            </ThumbnailFailureOverlay>
+          )}
+        </ListThumbnail>
 
         <ListContent>
           <ListTitle>{title || "Untitled Document"}</ListTitle>
-          {description && <ListDescription>{description}</ListDescription>}
+          {isFailed ? (
+            <FailureDescription>
+              {processingError || "Document processing failed"}
+            </FailureDescription>
+          ) : (
+            description && <ListDescription>{description}</ListDescription>
+          )}
           <ListMeta>
+            {isFailed && <FailureBadge>Failed</FailureBadge>}
             {fileType && (
               <div className="meta-item">{fileType.toUpperCase()}</div>
             )}
@@ -1333,7 +1559,20 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           </ListMeta>
         </ListContent>
 
-        <ListActions>{renderActions()}</ListActions>
+        <ListActions>
+          {isFailed && canRetry ? (
+            <RetryButton
+              onClick={handleRetry}
+              disabled={retryLoading}
+              aria-label="Retry processing this document"
+            >
+              <RotateCcw aria-hidden="true" />
+              {retryLoading ? "Retrying..." : "Retry"}
+            </RetryButton>
+          ) : !isFailed ? (
+            renderActions()
+          ) : null}
+        </ListActions>
       </ListContainer>
 
       {contextMenu && (

@@ -9,7 +9,14 @@ import { ReactRenderer } from "@tiptap/react";
 import { computePosition, flip, shift, offset } from "@floating-ui/dom";
 import styled from "styled-components";
 import { Send, Bold, Italic, List, ListOrdered } from "lucide-react";
-import { color } from "../../theme/colors";
+import {
+  CORPUS_COLORS,
+  CORPUS_FONTS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery,
+} from "./styles/discussionStyles";
 import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
 import {
   UnifiedMentionPicker,
@@ -25,32 +32,31 @@ import type { MarkdownStorage } from "tiptap-markdown";
 const ComposerContainer = styled.div`
   display: flex;
   flex-direction: column;
-  border: 2px solid rgba(0, 0, 0, 0.08);
-  border-radius: 16px;
-  background: white;
+  border: 2px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.xl};
+  background: ${CORPUS_COLORS.white};
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease;
+  box-shadow: ${CORPUS_SHADOWS.sm};
+  transition: all ${CORPUS_TRANSITIONS.normal};
 
   &:focus-within {
-    border-color: ${color.B5};
-    box-shadow: 0 6px 24px rgba(74, 144, 226, 0.15),
-      0 2px 8px rgba(74, 144, 226, 0.1);
+    border-color: ${CORPUS_COLORS.teal[500]};
+    box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]}, ${CORPUS_SHADOWS.md};
   }
 `;
 
 const Toolbar = styled.div`
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px;
-  border-bottom: 1px solid ${({ theme }) => color.N4};
-  background: ${({ theme }) => color.N2};
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
+  background: ${CORPUS_COLORS.slate[50]};
 
-  /* Mobile: Larger touch targets - Part of Issue #686 */
-  @media (max-width: 600px) {
-    padding: 8px 12px;
-    gap: 8px;
+  /* Mobile: Larger touch targets */
+  ${mediaQuery.mobile} {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
   }
 `;
 
@@ -58,18 +64,20 @@ const ToolbarButton = styled.button<{ $isActive?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   border: none;
-  border-radius: 4px;
-  background: ${({ $isActive, theme }) =>
-    $isActive ? color.N3 : "transparent"};
-  color: ${({ theme }) => color.N10};
+  border-radius: ${CORPUS_RADII.sm};
+  background: ${({ $isActive }) =>
+    $isActive ? CORPUS_COLORS.teal[100] : "transparent"};
+  color: ${({ $isActive }) =>
+    $isActive ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.slate[600]};
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all ${CORPUS_TRANSITIONS.fast};
 
   &:hover:not(:disabled) {
-    background: ${({ theme }) => color.N3};
+    background: ${CORPUS_COLORS.teal[50]};
+    color: ${CORPUS_COLORS.teal[700]};
   }
 
   &:disabled {
@@ -78,44 +86,48 @@ const ToolbarButton = styled.button<{ $isActive?: boolean }>`
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
   }
 
-  /* Mobile: Larger touch targets - Part of Issue #686 */
-  @media (max-width: 600px) {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+  /* Mobile: Larger touch targets */
+  ${mediaQuery.mobile} {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: ${CORPUS_RADII.md};
 
     svg {
-      width: 18px;
-      height: 18px;
+      width: 1.125rem;
+      height: 1.125rem;
     }
   }
 `;
 
 const EditorContainer = styled.div`
   flex: 1;
-  padding: 12px;
-  min-height: 120px;
-  max-height: 400px;
+  padding: 0.875rem;
+  min-height: 7.5rem;
+  max-height: 25rem;
   overflow-y: auto;
 
   .ProseMirror {
     outline: none;
-    min-height: 96px;
+    min-height: 6rem;
+    font-family: ${CORPUS_FONTS.sans};
+    font-size: 0.9375rem;
+    color: ${CORPUS_COLORS.slate[800]};
+    line-height: 1.6;
 
     p.is-editor-empty:first-child::before {
       content: attr(data-placeholder);
       float: left;
-      color: ${({ theme }) => color.N6};
+      color: ${CORPUS_COLORS.slate[400]};
       pointer-events: none;
       height: 0;
     }
 
     p {
-      margin: 0 0 8px 0;
+      margin: 0 0 0.5rem 0;
 
       &:last-child {
         margin-bottom: 0;
@@ -124,8 +136,8 @@ const EditorContainer = styled.div`
 
     ul,
     ol {
-      padding-left: 24px;
-      margin: 8px 0;
+      padding-left: 1.5rem;
+      margin: 0.5rem 0;
     }
 
     strong {
@@ -138,36 +150,44 @@ const EditorContainer = styled.div`
 
     /* Mention styling */
     .mention {
-      padding: 2px 6px;
-      border-radius: 4px;
+      padding: 0.125rem 0.375rem;
+      border-radius: ${CORPUS_RADII.sm};
       font-weight: 500;
-      font-size: 0.95em;
+      font-size: 0.9em;
     }
 
     .mention-user {
-      background-color: ${({ theme }) => color.B2};
-      color: ${({ theme }) => color.B8};
+      background-color: ${CORPUS_COLORS.teal[50]};
+      color: ${CORPUS_COLORS.teal[700]};
     }
 
     .mention-resource {
-      background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
-      color: ${({ theme }) => color.P8};
-      border: 1px solid ${({ theme }) => color.P4};
+      background: linear-gradient(
+        135deg,
+        ${CORPUS_COLORS.teal[50]} 0%,
+        #f0fdfa 100%
+      );
+      color: ${CORPUS_COLORS.teal[700]};
+      border: 1px solid ${CORPUS_COLORS.teal[200]};
     }
 
     /* Agent mention link styling */
     a[href^="/agents/"],
     a[href*="/agents/"] {
-      background: linear-gradient(135deg, #3b82f620 0%, #8b5cf620 100%);
-      color: #6366f1;
-      padding: 2px 6px;
-      border-radius: 4px;
+      background: linear-gradient(
+        135deg,
+        ${CORPUS_COLORS.teal[50]} 0%,
+        #f0fdfa 100%
+      );
+      color: ${CORPUS_COLORS.teal[700]};
+      padding: 0.125rem 0.375rem;
+      border-radius: ${CORPUS_RADII.sm};
       font-weight: 500;
       text-decoration: none;
-      border: 1px solid #8b5cf640;
+      border: 1px solid ${CORPUS_COLORS.teal[200]};
 
       &:hover {
-        background: linear-gradient(135deg, #3b82f630 0%, #8b5cf630 100%);
+        background: ${CORPUS_COLORS.teal[100]};
       }
     }
   }
@@ -177,62 +197,73 @@ const Footer = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  border-top: 1px solid ${({ theme }) => color.N4};
-  background: ${({ theme }) => color.N2};
+  padding: 0.5rem 0.875rem;
+  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
+  background: ${CORPUS_COLORS.slate[50]};
 `;
 
 const CharacterCount = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => color.N6};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.75rem;
+  color: ${CORPUS_COLORS.slate[400]};
 `;
 
 const SendButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
   border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, ${color.B6} 0%, ${color.B5} 100%);
-  color: white;
-  font-size: 15px;
-  font-weight: 700;
+  border-radius: ${CORPUS_RADII.lg};
+  background: linear-gradient(
+    135deg,
+    ${CORPUS_COLORS.teal[600]} 0%,
+    ${CORPUS_COLORS.teal[700]} 100%
+  );
+  color: ${CORPUS_COLORS.white};
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.9375rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.35);
+  transition: all ${CORPUS_TRANSITIONS.normal};
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
   letter-spacing: -0.01em;
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(74, 144, 226, 0.45);
-    background: linear-gradient(135deg, #5a7ee2 0%, #4a90e2 100%);
+    box-shadow: 0 6px 20px rgba(15, 118, 110, 0.45);
+    background: linear-gradient(
+      135deg,
+      ${CORPUS_COLORS.teal[500]} 0%,
+      ${CORPUS_COLORS.teal[600]} 100%
+    );
   }
 
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
   }
 
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
     transform: none;
-    box-shadow: 0 2px 6px rgba(74, 144, 226, 0.2);
+    box-shadow: 0 2px 6px rgba(15, 118, 110, 0.2);
   }
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
   }
 `;
 
 const ErrorMessage = styled.div`
-  padding: 8px 12px;
-  background: ${({ theme }) => color.R7}15;
-  color: ${({ theme }) => color.R7};
-  font-size: 13px;
-  border-top: 1px solid ${({ theme }) => color.R7}40;
+  padding: 0.5rem 0.75rem;
+  background: #fee2e2;
+  color: #dc2626;
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.8125rem;
+  border-top: 1px solid #fca5a5;
 `;
 
 export interface MessageComposerProps {
@@ -434,12 +465,15 @@ export function MessageComposer({
                         const agentLabel =
                           agent.mentionFormat || `@agent:${agent.slug}`;
                         // Agent URL - global agents at /agents/{slug}, corpus agents at corpus path
+                        // URL-encode the corpus title to handle spaces and special characters
                         const agentHref =
                           agent.scope === "GLOBAL"
-                            ? `/agents/${agent.slug}`
+                            ? `/agents/${encodeURIComponent(agent.slug)}`
                             : agent.corpus
-                            ? `/c/${agent.corpus.id}/${agent.corpus.title}/agents/${agent.slug}`
-                            : `/agents/${agent.slug}`;
+                            ? `/c/${agent.corpus.id}/${encodeURIComponent(
+                                agent.corpus.title
+                              )}/agents/${encodeURIComponent(agent.slug)}`
+                            : `/agents/${encodeURIComponent(agent.slug)}`;
                         return {
                           label: agentLabel,
                           href: agentHref,

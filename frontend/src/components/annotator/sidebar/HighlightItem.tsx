@@ -9,6 +9,9 @@ import { useAnnotationSelection } from "../context/UISettingsAtom";
 import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
 import { ServerTokenAnnotation } from "../types/annotations";
 import { PermissionTypes } from "../../types";
+import { ModalityBadge } from "./ModalityBadge";
+import { AnnotationImagePreview } from "./AnnotationImagePreview";
+import { useAnnotationImages } from "../hooks/useAnnotationImages";
 
 interface HighlightContainerProps {
   color?: string;
@@ -138,6 +141,7 @@ interface HighlightItemProps {
   onSelect: (annotationId: string) => void;
   onToggleMultiSelect?: () => void;
   isMultiSelected?: boolean;
+  contentModalities?: string[];
 }
 
 export const HighlightItem: React.FC<HighlightItemProps> = ({
@@ -149,11 +153,18 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   onSelect,
   onToggleMultiSelect,
   isMultiSelected = false,
+  contentModalities,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { selectedAnnotations } = useAnnotationSelection();
   const { annotationElementRefs } = useAnnotationRefs();
+
+  // Fetch images if annotation has IMAGE modality
+  const { images, loading, error } = useAnnotationImages(
+    annotation.id,
+    contentModalities
+  );
   const selected = selectedAnnotations.includes(annotation.id);
 
   const my_output_relationships = relations.filter((relation) =>
@@ -211,6 +222,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           )}
           {annotation.annotationLabel.text}
         </AnnotationLabel>
+        <ModalityBadge modalities={contentModalities || []} />
         {!read_only &&
           !annotation.structural &&
           annotation.myPermissions.includes(PermissionTypes.CAN_REMOVE) &&
@@ -226,14 +238,54 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
             />
           )}
       </div>
-      {annotation?.rawText && (
-        <Popup
-          content={annotation.rawText}
-          trigger={
-            <BlockQuote>{`${annotation.rawText.slice(0, 90)}…`}</BlockQuote>
-          }
-        />
-      )}
+      {/* Show content based on modality:
+          - IMAGE only: Featured image, no text
+          - TEXT only: Text only, no images
+          - MIXED/both: Featured image + text below */}
+      {(() => {
+        const hasImageModality = contentModalities?.includes("IMAGE");
+        const hasTextModality = contentModalities?.includes("TEXT");
+        const hasText = annotation?.rawText && annotation.rawText.trim() !== "";
+
+        // IMAGE modality (with or without text) - show featured image first
+        if (hasImageModality) {
+          return (
+            <>
+              <AnnotationImagePreview
+                images={images}
+                loading={loading}
+                error={error}
+                compact={false}
+              />
+              {/* Show text below image if it's mixed content */}
+              {hasTextModality && hasText && (
+                <Popup
+                  content={annotation.rawText}
+                  trigger={
+                    <BlockQuote style={{ marginTop: "0.5rem" }}>
+                      {`${annotation.rawText.slice(0, 90)}…`}
+                    </BlockQuote>
+                  }
+                />
+              )}
+            </>
+          );
+        }
+
+        // TEXT only modality - just show text
+        if (hasText) {
+          return (
+            <Popup
+              content={annotation.rawText}
+              trigger={
+                <BlockQuote>{`${annotation.rawText.slice(0, 90)}…`}</BlockQuote>
+              }
+            />
+          );
+        }
+
+        return null;
+      })()}
       <HorizontallyJustifiedDiv>
         {my_output_relationships.length > 0 && (
           <RelationshipLabel pointing="right" basic color="blue">
