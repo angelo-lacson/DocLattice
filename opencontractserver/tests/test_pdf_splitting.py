@@ -2,7 +2,10 @@
 Tests for the PDF splitting utility used by chunked document processing.
 """
 
+import io
+
 from django.test import TestCase
+from pypdf import PdfReader
 
 from opencontractserver.tests.helpers import make_test_pdf
 from opencontractserver.utils.pdf_splitting import (
@@ -84,6 +87,14 @@ class TestSplitPdfByPageRange(TestCase):
         pdf_bytes = make_test_pdf(8)
         chunk = split_pdf_by_page_range(pdf_bytes, 0, 8)
         self.assertEqual(get_pdf_page_count(chunk), 8)
+
+    def test_accepts_prebuilt_reader(self):
+        """Passing a pre-built PdfReader avoids re-parsing the full PDF."""
+        pdf_bytes = make_test_pdf(10)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        chunk = split_pdf_by_page_range(pdf_bytes, 2, 5, reader=reader)
+        self.assertEqual(get_pdf_page_count(chunk), 3)
 
 
 class TestCalculatePageChunks(TestCase):
