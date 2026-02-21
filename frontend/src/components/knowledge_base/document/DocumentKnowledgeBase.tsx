@@ -148,6 +148,7 @@ import {
   selectedThreadId,
 } from "../../../graphql/cache";
 import { useAuthReady } from "../../../hooks/useAuthReady";
+import { useCorpusMdDescription } from "../../../hooks/useCorpusMdDescription";
 import { DocumentDiscussionsContent } from "../../discussions/DocumentDiscussionsContent";
 
 // New imports for unified feed
@@ -1934,6 +1935,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const combinedData = corpusId ? corpusData : documentOnlyData;
   const refetch = corpusId ? refetchWithCorpus : refetchDocumentOnly;
 
+  // Fetch versioned markdown description for corpus info display
+  const corpusMdContent = useCorpusMdDescription(
+    corpusData?.corpus?.mdDescription
+  );
+
   // Process lightweight annotations data (used when switching analyses)
   const processAnnotationsOnlyData = (
     data: GetDocumentAnnotationsOnlyOutput
@@ -2745,8 +2751,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           {showCorpusInfo && corpusData?.corpus && (
             <Message info>
               <Message.Header>Corpus: {corpusData.corpus.title}</Message.Header>
-              {corpusData.corpus.description && (
-                <p>{corpusData.corpus.description}</p>
+              {(corpusMdContent || corpusData.corpus.description) && (
+                <SafeMarkdown>
+                  {corpusMdContent || corpusData.corpus.description || ""}
+                </SafeMarkdown>
               )}
             </Message>
           )}
