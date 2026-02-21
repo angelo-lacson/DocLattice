@@ -49,6 +49,39 @@ const graphqlMocksWithChat = [...graphqlMocks, ...chatTrayMocks];
 
 const LONG_TIMEOUT = 60_000;
 
+/**
+ * Hide floating UI controls (FABs, settings buttons, etc.) so they
+ * don't clutter documentation screenshots.
+ */
+async function hideFloatingControls(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    // Hide FABs and floating action buttons by data-testid
+    const testIds = [
+      "speed-dial-main-fab",
+      "settings-button",
+      "analyses-button",
+      "extracts-button",
+      "summary-button",
+      "create-analysis-button",
+      "width-button",
+    ];
+    for (const id of testIds) {
+      const el = document.querySelector(`[data-testid="${id}"]`);
+      if (el) (el as HTMLElement).style.display = "none";
+    }
+    // Hide position:fixed containers (FloatingDocumentControls wrapper)
+    document.querySelectorAll("*").forEach((el) => {
+      const style = window.getComputedStyle(el);
+      if (
+        style.position === "fixed" &&
+        el.querySelector('[data-testid="speed-dial-main-fab"]')
+      ) {
+        (el as HTMLElement).style.display = "none";
+      }
+    });
+  });
+}
+
 let mockPawlsDataContent: any;
 try {
   const rawContent = fs.readFileSync(TEST_PAWLS_PATH, "utf-8");
@@ -657,6 +690,12 @@ test("TXT document displays existing annotations", async ({ mount, page }) => {
   console.log(
     "[TEST] Skipping hover label test - annotations are correctly displayed"
   );
+
+  // Hide floating controls for a clean documentation screenshot
+  await hideFloatingControls(page);
+
+  // Capture screenshot of TXT annotator with highlighted span annotations
+  await docScreenshot(page, "annotations--txt-document--with-spans");
 });
 
 test("TXT annotations appear in unified feed when clicked", async ({
@@ -710,6 +749,22 @@ test("TXT annotations appear in unified feed when clicked", async ({
   console.log(
     `[TEST SUCCESS] Found ${count1 + count2} annotations in unified feed`
   );
+
+  // Hide floating controls and multi-select checkboxes for a clean screenshot
+  await hideFloatingControls(page);
+  await page.evaluate(() => {
+    document
+      .querySelectorAll<HTMLElement>(
+        "i.square.outline.icon, i.check.square.icon"
+      )
+      .forEach((el) => (el.style.display = "none"));
+  });
+
+  // Capture screenshot of the sidebar panel showing span annotations in the feed
+  const slidingPanel = page.locator("#sliding-panel");
+  await docScreenshot(page, "annotations--txt-sidebar--span-annotations", {
+    element: slidingPanel,
+  });
 });
 
 test("TXT document allows creating annotations via text selection", async ({
