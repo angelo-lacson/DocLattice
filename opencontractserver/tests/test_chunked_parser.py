@@ -361,6 +361,9 @@ class TestBaseChunkedParserIntegration(TestCase):
         )
         self.assertIsNotNone(result)
         self.assertEqual(result["page_count"], 4)
+        # Verify PAWLs pages are in correct global order (not completion order)
+        indices = [p["page"]["index"] for p in result["pawls_file_content"]]
+        self.assertEqual(indices, [0, 1, 50, 51])
 
     @patch(
         "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
