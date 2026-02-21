@@ -59,9 +59,7 @@ def split_pdf_by_page_range(
     if start_page < 0:
         raise ValueError(f"start_page must be >= 0, got {start_page}")
     if end_page <= start_page:
-        raise ValueError(
-            f"end_page ({end_page}) must be > start_page ({start_page})"
-        )
+        raise ValueError(f"end_page ({end_page}) must be > start_page ({start_page})")
 
     if reader is None:
         try:
@@ -71,9 +69,7 @@ def split_pdf_by_page_range(
 
     total_pages = len(reader.pages)
     if start_page >= total_pages:
-        raise ValueError(
-            f"start_page ({start_page}) >= total pages ({total_pages})"
-        )
+        raise ValueError(f"start_page ({start_page}) >= total pages ({total_pages})")
 
     # Clamp end_page to total pages
     actual_end = min(end_page, total_pages)

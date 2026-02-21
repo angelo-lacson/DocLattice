@@ -176,7 +176,9 @@ class TestReassembleChunkResults(TestCase):
                 "annotationLabel": "Section",
                 "rawText": "section",
                 "page": 0,
-                "annotation_json": {"0": {"bounds": {}, "tokensJsons": [], "rawText": ""}},
+                "annotation_json": {
+                    "0": {"bounds": {}, "tokensJsons": [], "rawText": ""}
+                },
                 "parent_id": None,
                 "annotation_type": "TOKEN_LABEL",
                 "structural": True,
@@ -186,7 +188,9 @@ class TestReassembleChunkResults(TestCase):
                 "annotationLabel": "Paragraph",
                 "rawText": "para",
                 "page": 1,
-                "annotation_json": {"1": {"bounds": {}, "tokensJsons": [], "rawText": ""}},
+                "annotation_json": {
+                    "1": {"bounds": {}, "tokensJsons": [], "rawText": ""}
+                },
                 "parent_id": "parent-1",
                 "annotation_type": "TOKEN_LABEL",
                 "structural": True,
@@ -345,9 +349,7 @@ class TestBaseChunkedParserIntegration(TestCase):
         )
         self.doc.pdf_file.save("large_test.pdf", ContentFile(pdf_bytes))
 
-    @patch(
-        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_small_doc_no_chunking(self, mock_open):
         """Documents below threshold should NOT be chunked."""
         small_pdf = make_test_pdf(10)
@@ -358,15 +360,11 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser = ConcreteChunkedParser()
         parser.min_pages_for_chunking = 75
 
-        result = parser._parse_document_impl(
-            user_id=self.user.id, doc_id=self.doc.id
-        )
+        result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
         self.assertIsNotNone(result)
         self.assertEqual(result["page_count"], 2)  # From default _make_chunk_result
 
-    @patch(
-        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_large_doc_is_chunked(self, mock_open):
         """Documents above threshold should be chunked and reassembled."""
         large_pdf = make_test_pdf(100)
@@ -379,9 +377,7 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser.min_pages_for_chunking = 75
         parser.max_concurrent_chunks = 1  # Sequential for determinism
 
-        result = parser._parse_document_impl(
-            user_id=self.user.id, doc_id=self.doc.id
-        )
+        result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
         self.assertIsNotNone(result)
         # 2 chunks x 2 pages each from _make_chunk_result default
         self.assertEqual(result["page_count"], 4)
@@ -389,9 +385,7 @@ class TestBaseChunkedParserIntegration(TestCase):
         indices = [p["page"]["index"] for p in result["pawls_file_content"]]
         self.assertEqual(indices, [0, 1, 50, 51])
 
-    @patch(
-        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_concurrent_dispatch(self, mock_open):
         """Concurrent dispatch should produce same results as sequential."""
         large_pdf = make_test_pdf(100)
@@ -404,18 +398,14 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser.min_pages_for_chunking = 75
         parser.max_concurrent_chunks = 3
 
-        result = parser._parse_document_impl(
-            user_id=self.user.id, doc_id=self.doc.id
-        )
+        result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
         self.assertIsNotNone(result)
         self.assertEqual(result["page_count"], 4)
         # Verify PAWLs pages are in correct global order (not completion order)
         indices = [p["page"]["index"] for p in result["pawls_file_content"]]
         self.assertEqual(indices, [0, 1, 50, 51])
 
-    @patch(
-        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_chunk_failure_raises(self, mock_open):
         """If a chunk fails, DocumentParsingError should propagate."""
         large_pdf = make_test_pdf(100)
@@ -433,13 +423,9 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser.chunk_retry_limit = 0
 
         with self.assertRaises(DocumentParsingError):
-            parser._parse_document_impl(
-                user_id=self.user.id, doc_id=self.doc.id
-            )
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
 
-    @patch(
-        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_post_reassemble_hook_called(self, mock_open):
         """The post-reassemble hook should be called after chunked parsing."""
         large_pdf = make_test_pdf(100)
@@ -450,7 +436,9 @@ class TestBaseChunkedParserIntegration(TestCase):
         hook_called = {"value": False}
 
         class HookParser(ConcreteChunkedParser):
-            def _post_reassemble_hook(self, user_id, doc_id, reassembled, pdf_bytes, **kw):
+            def _post_reassemble_hook(
+                self, user_id, doc_id, reassembled, pdf_bytes, **kw
+            ):
                 hook_called["value"] = True
                 reassembled["title"] = "HOOKED"
                 return reassembled
@@ -459,15 +447,11 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser.max_pages_per_chunk = 50
         parser.min_pages_for_chunking = 75
 
-        result = parser._parse_document_impl(
-            user_id=self.user.id, doc_id=self.doc.id
-        )
+        result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
         self.assertTrue(hook_called["value"])
         self.assertEqual(result["title"], "HOOKED")
 
-    @patch(
-        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     @patch("opencontractserver.pipeline.base.chunked_parser.time.sleep")
     def test_chunk_retry_on_transient_error(self, mock_sleep, mock_open):
         """Transient chunk errors should be retried up to chunk_retry_limit."""
@@ -488,16 +472,12 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser = RetryParser()
         parser.chunk_retry_limit = 1
 
-        result = parser._parse_document_impl(
-            user_id=self.user.id, doc_id=self.doc.id
-        )
+        result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
         self.assertIsNotNone(result)
         self.assertEqual(call_count["value"], 2)
         mock_sleep.assert_called_once()
 
-    @patch(
-        "opencontractserver.pipeline.base.chunked_parser.default_storage.open"
-    )
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_concurrent_failure_cancels_remaining(self, mock_open):
         """When one chunk fails concurrently, remaining futures should be cancelled."""
         large_pdf = make_test_pdf(200)
@@ -514,6 +494,7 @@ class TestBaseChunkedParserIntegration(TestCase):
                 if chunk_index == 0:
                     raise DocumentParsingError("chunk 0 boom", is_transient=False)
                 import time
+
                 time.sleep(5)
                 return _make_chunk_result()
 
@@ -524,10 +505,9 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser.chunk_retry_limit = 0
 
         import time
+
         start = time.monotonic()
         with self.assertRaises(DocumentParsingError):
-            parser._parse_document_impl(
-                user_id=self.user.id, doc_id=self.doc.id
-            )
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
         elapsed = time.monotonic() - start
         self.assertLess(elapsed, 3.0, "Failure should not wait for remaining chunks")

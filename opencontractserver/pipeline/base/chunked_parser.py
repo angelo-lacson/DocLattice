@@ -18,9 +18,8 @@ from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
-from pypdf import PdfReader
-
 from django.core.files.storage import default_storage
+from pypdf import PdfReader
 
 from opencontractserver.constants import (
     DEFAULT_CHUNK_RETRY_LIMIT,
@@ -470,9 +469,7 @@ def _reassemble_chunk_results(
 
     seen_doc_labels: set[str] = set()
 
-    for chunk_idx, (chunk, offset) in enumerate(
-        zip(chunk_results, page_offsets)
-    ):
+    for chunk_idx, (chunk, offset) in enumerate(zip(chunk_results, page_offsets)):
         prefix = f"c{chunk_idx}_"
 
         # -- PAWLs pages --
@@ -580,10 +577,8 @@ def _offset_relationship(relationship: dict, id_prefix: str) -> None:
         relationship["id"] = f"{id_prefix}{old_id}"
 
     relationship["source_annotation_ids"] = [
-        f"{id_prefix}{sid}"
-        for sid in relationship.get("source_annotation_ids", [])
+        f"{id_prefix}{sid}" for sid in relationship.get("source_annotation_ids", [])
     ]
     relationship["target_annotation_ids"] = [
-        f"{id_prefix}{tid}"
-        for tid in relationship.get("target_annotation_ids", [])
+        f"{id_prefix}{tid}" for tid in relationship.get("target_annotation_ids", [])
     ]
