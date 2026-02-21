@@ -668,6 +668,11 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                         if isinstance(event.metadata, dict)
                         else []
                     ),
+                    "context_status": (
+                        event.metadata.get("context_status")
+                        if isinstance(event.metadata, dict)
+                        else None
+                    ),
                 },
             )
             if hasattr(self, "_sent_start"):

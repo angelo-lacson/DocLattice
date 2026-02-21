@@ -17,6 +17,7 @@ import {
   Plus,
   XCircle,
   AlertCircle,
+  Minimize2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -47,7 +48,8 @@ export interface TimelineEntry {
     | "tool_call"
     | "tool_result"
     | "sources"
-    | "status";
+    | "status"
+    | "compaction";
   text?: string;
   tool?: string;
   args?: Record<string, unknown>;
@@ -631,6 +633,8 @@ const TimelineIcon = styled.div<{ $type: TimelineEntry["type"] }>`
         return "#5c7c9d";
       case "status":
         return "#9ca3af";
+      case "compaction":
+        return "#2563eb";
       default:
         return "#9ca3af";
     }
@@ -1095,6 +1099,8 @@ const getTimelineIcon = (type: TimelineEntry["type"]) => {
       return <Pin />;
     case "status":
       return <Activity />;
+    case "compaction":
+      return <Minimize2 />;
     default:
       return <Clock />;
   }
@@ -1115,6 +1121,8 @@ const getTimelineTitle = (entry: TimelineEntry) => {
       return "Found Sources";
     case "status":
       return entry.msg || "Status Update";
+    case "compaction":
+      return "Context Compacted";
     default:
       return "Timeline Entry";
   }

@@ -7,11 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-19
 
+### Added
+
+#### Context Guardrails & Conversation Compaction (Closes #898)
+- **Context guardrails constants** (`opencontractserver/constants/context_guardrails.py`): Centralized configuration for model context windows (OpenAI, Anthropic, Google), compaction thresholds, tool output limits, and token estimation parameters. Covers 20+ model variants with sensible defaults.
+- **Token estimation** (`opencontractserver/llms/context_guardrails.py`): Fast heuristic token counter (~3.5 chars/token) for estimating conversation size without importing heavyweight tokeniser libraries. Intentionally over-estimates to trigger compaction conservatively.
+- **Model context window lookup** (`context_guardrails.py`): Resolves model names to context window sizes via exact match then longest-prefix matching, with a 128K default fallback for unknown models.
+- **Conversation compaction** (`context_guardrails.py`): When conversation history approaches the context window limit (default 75%), older messages are replaced by a concise summary while preserving recent turns (4–20 messages) verbatim. Supports pluggable summary functions for LLM-based summarization.
+- **Tool output truncation** (`context_guardrails.py`, `opencontractserver/llms/tools/pydantic_ai_tools.py`): String outputs from tools are automatically truncated to 50K characters with a notice directing the LLM to use range parameters. Applied at the PydanticAI tool wrapper level so all tools benefit transparently.
+- **Per-agent compaction configuration** (`CompactionConfig` dataclass): Added `compaction` field to `AgentConfig` allowing per-conversation overrides of threshold ratio, recent message counts, and tool output limits. Enabled by default.
+- **Automatic compaction in message history retrieval** (`opencontractserver/llms/agents/pydantic_ai_agents.py`): `_get_message_history()` now checks conversation size against model limits and injects a compaction summary as a system message when needed, transparent to the agent framework.
+- **Persisted compaction bookmarks** (`opencontractserver/conversations/models.py`): Added `compaction_summary` and `compacted_before_message_id` fields to the `Conversation` model. Compaction is computed once and persisted — subsequent reads skip old messages at the DB level via `id__gt` filter, making long conversations cheap to load.
+  - Migration: `opencontractserver/conversations/migrations/0015_add_compaction_fields.py`
+  - `CoreConversationManager.persist_compaction()` writes the bookmark with optimistic locking (concurrent requests are safely resolved)
+  - `CoreConversationManager.get_conversation_messages()` honours the cutoff automatically
+- **Comprehensive test suite** (`opencontractserver/tests/test_context_guardrails.py`): 30+ unit tests covering token estimation, model lookup, truncation, compaction triggers, summary generation, message proxy conversion, configuration defaults, and Conversation model field definitions. Uses `SimpleTestCase` for fast parallel execution.
+
 ### Changed
 
 #### Pipeline Registry: Deduplicate and Filter Abstract Components
 - **Removed `MultimodalMicroserviceEmbedder` backwards-compatibility alias**: The module-level alias `MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder` in `opencontractserver/pipeline/embedders/multimodal_microservice.py` has been removed. Use `CLIPMicroserviceEmbedder` directly.
 - **Fixed duplicate embedder entries in pipeline registry**: `_discover_subclasses()` in `opencontractserver/pipeline/registry.py` now deduplicates discovered classes by identity and skips abstract intermediate base classes via `inspect.isabstract()`, preventing aliases and abstract bases from appearing in the get-embedders query endpoint.
+
 ### Fixed
 
 #### Edit Description Modal Does Not Save on Update (Issue #899)
@@ -161,6 +178,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known Limitations
 
 - **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
+
+#### Edge Case Tests for Personal Corpus (Issue #839)
+- **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
+- **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
+- **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
+
+### Fixed
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
 
