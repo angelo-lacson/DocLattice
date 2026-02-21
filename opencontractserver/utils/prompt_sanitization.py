@@ -9,6 +9,7 @@ warning is injected into instruction sections to reinforce the boundary.
 """
 
 import logging
+import re
 
 from opencontractserver.constants.moderation import (
     UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD,
@@ -34,8 +35,6 @@ def _escape_fence_tags(text: str) -> str:
     XML fence by replacing the angle brackets with their HTML entity
     equivalents inside tag-like sequences.
     """
-    import re
-
     return re.sub(
         r"<(/?)user_content(\s|>|$)",
         r"&lt;\1user_content\2",

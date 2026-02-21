@@ -576,10 +576,16 @@ def _build_document_action_system_prompt(
     from opencontractserver.utils.prompt_sanitization import (
         UNTRUSTED_CONTENT_NOTICE,
         fence_user_content,
+        warn_if_content_large,
     )
 
     trigger_desc = TRIGGER_DESCRIPTIONS.get(action.trigger, "triggered action in")
     tool_list = ", ".join(tools) if tools else "none"
+
+    warn_if_content_large(document.title, context="document title")
+    warn_if_content_large(action.corpus.title, context="corpus title")
+    if document.description:
+        warn_if_content_large(document.description, context="document description")
 
     parts = [
         "You are an automated corpus action agent. You execute tasks on documents "
@@ -674,6 +680,12 @@ def _build_thread_action_system_prompt(
 
     tool_list = ", ".join(tools) if tools else "none"
 
+    warn_if_content_large(
+        thread_context.get("title", "untitled"), context="thread title"
+    )
+    if thread_context.get("corpus_title"):
+        warn_if_content_large(thread_context["corpus_title"], context="corpus title")
+
     parts = [
         "You are an automated corpus action agent. You execute moderation and "
         "response tasks on discussion threads without human interaction.",
@@ -682,7 +694,7 @@ def _build_thread_action_system_prompt(
         "## Thread Context",
         f"- Thread ID: {thread_context.get('id', 'unknown')}",
         f"- Title: {fence_user_content(thread_context.get('title', 'untitled'), label='thread title')}",
-        f"- Creator: {thread_context.get('creator_username', 'unknown')}",
+        f"- Creator: {fence_user_content(thread_context.get('creator_username', 'unknown'), label='username')}",
         f"- Message count: {thread_context.get('message_count', 0)}",
         f"- Is locked: {thread_context.get('is_locked', False)}",
         f"- Is pinned: {thread_context.get('is_pinned', False)}",
@@ -703,7 +715,7 @@ def _build_thread_action_system_prompt(
             [
                 "",
                 f"## Triggering Message (ID: {message_id})",
-                f"- Author: {message_content.get('creator_username', 'unknown')}",
+                f"- Author: {fence_user_content(message_content.get('creator_username', 'unknown'), label='username')}",
                 f"- Content:\n{fence_user_content(raw_content, label='message body')}",
             ]
         )
@@ -722,8 +734,9 @@ def _build_thread_action_system_prompt(
                 if len(msg["content"]) > MAX_MESSAGE_PREVIEW_LENGTH
                 else msg["content"]
             )
+            warn_if_content_large(content_preview, context="recent message")
             parts.append(
-                f"- [{msg['creator_username']}] (ID: {msg['id']}): "
+                f"- [{fence_user_content(msg['creator_username'], label='username')}] (ID: {msg['id']}): "
                 f"{fence_user_content(content_preview, label='message')}"
             )
 
