@@ -7,7 +7,7 @@ run quickly and reliably.
 
 For tests that need to verify actual embedder service connectivity (integration
 tests), explicitly instantiate the real embedder class (e.g., MicroserviceEmbedder
-or MultimodalMicroserviceEmbedder) rather than relying on the default.
+or CLIPMicroserviceEmbedder) rather than relying on the default.
 """
 
 import hashlib
@@ -89,14 +89,14 @@ class TestMultimodalEmbedder(BaseEmbedder):
     A fast, deterministic multimodal embedder for testing.
 
     Supports both text and image embeddings with deterministic outputs.
-    Vector size is 768 to match MultimodalMicroserviceEmbedder (CLIP ViT-L-14).
+    Vector size is 768 to match CLIPMicroserviceEmbedder (CLIP ViT-L-14).
     """
 
     title = "Test Multimodal Embedder"
     description = "Fast deterministic multimodal embedder for testing."
     author = "OpenContracts"
     dependencies = []
-    vector_size = 768  # Match MultimodalMicroserviceEmbedder dimension
+    vector_size = 768  # Match CLIPMicroserviceEmbedder dimension
     supported_file_types = [
         FileTypeEnum.PDF,
         FileTypeEnum.TXT,

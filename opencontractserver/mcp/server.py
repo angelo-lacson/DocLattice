@@ -39,11 +39,11 @@ from .resources import (
     get_thread_resource,
 )
 from .telemetry import (
+    arecord_mcp_request,
+    arecord_mcp_resource_read,
+    arecord_mcp_tool_call,
     clear_request_context,
     get_client_ip_from_scope,
-    record_mcp_request,
-    record_mcp_resource_read,
-    record_mcp_tool_call,
     set_request_context,
 )
 from .tools import (
@@ -128,7 +128,7 @@ async def read_resource_handler(uri: str) -> str:
         if corpus_slug:
             resource_type = "corpus"
             result = await sync_to_async(get_corpus_resource)(corpus_slug)
-            record_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(resource_type, success=True)
             return result
 
         # Try document URI
@@ -139,7 +139,7 @@ async def read_resource_handler(uri: str) -> str:
             result = await sync_to_async(get_document_resource)(
                 corpus_slug, document_slug
             )
-            record_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(resource_type, success=True)
             return result
 
         # Try annotation URI
@@ -150,7 +150,7 @@ async def read_resource_handler(uri: str) -> str:
             result = await sync_to_async(get_annotation_resource)(
                 corpus_slug, document_slug, annotation_id
             )
-            record_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(resource_type, success=True)
             return result
 
         # Try thread URI
@@ -159,12 +159,12 @@ async def read_resource_handler(uri: str) -> str:
             resource_type = "thread"
             corpus_slug, thread_id = thread_parts
             result = await sync_to_async(get_thread_resource)(corpus_slug, thread_id)
-            record_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(resource_type, success=True)
             return result
 
         raise ValueError(f"Invalid or unrecognized resource URI: {uri_str}")
     except Exception as e:
-        record_mcp_resource_read(
+        await arecord_mcp_resource_read(
             resource_type, success=False, error_type=type(e).__name__
         )
         raise
@@ -179,16 +179,16 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
     """
     handler = TOOL_HANDLERS.get(name)
     if not handler:
-        record_mcp_tool_call(name, success=False, error_type="UnknownTool")
+        await arecord_mcp_tool_call(name, success=False, error_type="UnknownTool")
         raise ValueError(f"Unknown tool: {name}")
 
     try:
         # Run synchronous Django ORM handlers in thread pool
         result = await sync_to_async(handler)(**arguments)
-        record_mcp_tool_call(name, success=True)
+        await arecord_mcp_tool_call(name, success=True)
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
-        record_mcp_tool_call(name, success=False, error_type=type(e).__name__)
+        await arecord_mcp_tool_call(name, success=False, error_type=type(e).__name__)
         raise
 
 
@@ -685,23 +685,27 @@ def create_scoped_mcp_server(corpus_slug: str) -> Server:
         # This prevents race condition where corpus becomes private after manager cached
         is_valid = await sync_to_async(_validate_corpus_sync)()
         if not is_valid:
-            record_mcp_tool_call(name, success=False, error_type="CorpusNotAccessible")
+            await arecord_mcp_tool_call(
+                name, success=False, error_type="CorpusNotAccessible"
+            )
             raise PermissionError(
                 f"Corpus '{corpus_slug}' is no longer publicly accessible"
             )
 
         handler = scoped_handlers.get(name)
         if not handler:
-            record_mcp_tool_call(name, success=False, error_type="UnknownTool")
+            await arecord_mcp_tool_call(name, success=False, error_type="UnknownTool")
             raise ValueError(f"Unknown tool: {name}")
 
         try:
             # Run synchronous Django ORM handlers in thread pool
             result = await sync_to_async(handler)(**arguments)
-            record_mcp_tool_call(name, success=True)
+            await arecord_mcp_tool_call(name, success=True)
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except Exception as e:
-            record_mcp_tool_call(name, success=False, error_type=type(e).__name__)
+            await arecord_mcp_tool_call(
+                name, success=False, error_type=type(e).__name__
+            )
             raise
 
     return scoped_server
@@ -1120,14 +1124,14 @@ def create_mcp_asgi_app():
 
             try:
                 await scoped_manager.handle_request(scope, receive, send)
-                record_mcp_request(
+                await arecord_mcp_request(
                     f"/mcp/corpus/{corpus_slug}",
                     method=scope.get("method", "POST"),
                     success=True,
                 )
             except Exception as e:
                 logger.error(f"MCP Scoped Streamable HTTP request error: {e}")
-                record_mcp_request(
+                await arecord_mcp_request(
                     f"/mcp/corpus/{corpus_slug}",
                     method=scope.get("method", "POST"),
                     success=False,
@@ -1169,13 +1173,13 @@ def create_mcp_asgi_app():
             try:
                 await manager.handle_request(scope, receive, send)
                 # Record successful request telemetry
-                record_mcp_request(
+                await arecord_mcp_request(
                     "/mcp", method=scope.get("method", "POST"), success=True
                 )
             except Exception as e:
                 logger.error(f"MCP Streamable HTTP request error: {e}")
                 # Record error telemetry before clearing context
-                record_mcp_request(
+                await arecord_mcp_request(
                     "/mcp",
                     method=scope.get("method", "POST"),
                     success=False,
@@ -1212,13 +1216,13 @@ def create_mcp_asgi_app():
             try:
                 await sse_starlette_app(scope, receive, send)
                 # Record successful request telemetry
-                record_mcp_request(
+                await arecord_mcp_request(
                     "/sse", method=scope.get("method", "GET"), success=True
                 )
             except Exception as e:
                 logger.error(f"MCP SSE request error: {e}")
                 # Record error telemetry before clearing context
-                record_mcp_request(
+                await arecord_mcp_request(
                     "/sse",
                     method=scope.get("method", "GET"),
                     success=False,

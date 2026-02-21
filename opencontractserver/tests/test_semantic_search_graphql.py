@@ -12,7 +12,6 @@ This test suite covers:
 
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from graphene.test import Client
@@ -22,6 +21,7 @@ from config.graphql.schema import schema
 from opencontractserver.annotations.models import Annotation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
+from opencontractserver.pipeline.utils import get_default_embedder_path
 from opencontractserver.utils.permissioning import (
     PermissionTypes,
     set_permissions_for_obj_to_user,
@@ -66,7 +66,7 @@ class SemanticSearchQueryTest(TestCase):
         self.corpus = Corpus.objects.create(
             title="Test Corpus",
             creator=self.user,
-            preferred_embedder=settings.DEFAULT_EMBEDDER,
+            preferred_embedder=get_default_embedder_path(),
         )
         set_permissions_for_obj_to_user(
             user_val=self.user,

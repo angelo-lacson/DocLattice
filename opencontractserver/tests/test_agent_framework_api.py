@@ -166,8 +166,8 @@ class TestAgentAPIHypermodern(TestAPISetup):
         # Names might be auto-generated for built-ins/callables if not directly CoreTool
         tool_names = [t.name for t in resolved_tools_arg]
         self.assertIn(
-            "load_document_md_summary", tool_names
-        )  # "summarize" resolves to this
+            "load_document_summary", tool_names
+        )  # "summarize" resolves via alias to canonical "load_document_summary"
         self.assertIn("dummy_tool_func", tool_names)
         self.assertIn("dummy_core_tool", tool_names)
 

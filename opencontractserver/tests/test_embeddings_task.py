@@ -484,10 +484,10 @@ class TestEmbeddingTask(unittest.TestCase):
     @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder_path")
     def test_calculate_embedding_for_annotation_text_fallback_to_annotation_corpus(
         self,
-        mock_settings,
+        mock_get_path,
         mock_annotation_model,
         mock_get_default,
         mock_get_component,
@@ -502,7 +502,7 @@ class TestEmbeddingTask(unittest.TestCase):
         )
 
         # Set up settings mock
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_path.return_value = "default.embedder.path"
 
         # Create mock annotation with corpus reference
         mock_annot = MagicMock()
@@ -574,9 +574,9 @@ class TestEmbeddingTask(unittest.TestCase):
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder_path")
     def test_calculate_embedding_for_annotation_text_fallback_to_default(
-        self, mock_settings, mock_annotation_model, mock_get_default
+        self, mock_get_path, mock_annotation_model, mock_get_default
     ):
         """
         Test that calculate_embedding_for_annotation_text creates only the default embedding
@@ -587,7 +587,7 @@ class TestEmbeddingTask(unittest.TestCase):
         )
 
         # Set up settings mock
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_path.return_value = "default.embedder.path"
 
         # Create mock annotation with no corpus
         mock_annot = MagicMock()
@@ -926,9 +926,9 @@ class TestEmbeddingGenerationError(unittest.TestCase):
     """
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder_path")
     def test_embedding_generation_error_raised_when_default_embedder_returns_none(
-        self, mock_settings, mock_get_default
+        self, mock_get_path, mock_get_default
     ):
         """
         Test that EmbeddingGenerationError is raised when the default embedder
@@ -939,7 +939,7 @@ class TestEmbeddingGenerationError(unittest.TestCase):
             _apply_dual_embedding_strategy,
         )
 
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_path.return_value = "default.embedder.path"
 
         # Create mock embedder that returns None (failure)
         mock_embedder_instance = MagicMock()
@@ -970,9 +970,9 @@ class TestEmbeddingGenerationError(unittest.TestCase):
         )
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder_path")
     def test_embedding_generation_error_raised_when_default_embedder_class_none(
-        self, mock_settings, mock_get_default
+        self, mock_get_path, mock_get_default
     ):
         """
         Test that EmbeddingGenerationError is raised when get_default_embedder
@@ -983,7 +983,7 @@ class TestEmbeddingGenerationError(unittest.TestCase):
             _apply_dual_embedding_strategy,
         )
 
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_path.return_value = "default.embedder.path"
         mock_get_default.return_value = None  # No default embedder
 
         mock_obj = MagicMock()
@@ -1004,9 +1004,9 @@ class TestEmbeddingGenerationError(unittest.TestCase):
         self.assertIn("Could not get default embedder class", str(context.exception))
 
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder_path")
     def test_embedding_generation_error_raised_when_default_embedder_throws(
-        self, mock_settings, mock_get_default
+        self, mock_get_path, mock_get_default
     ):
         """
         Test that EmbeddingGenerationError is raised when the default embedder
@@ -1017,7 +1017,7 @@ class TestEmbeddingGenerationError(unittest.TestCase):
             _apply_dual_embedding_strategy,
         )
 
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_path.return_value = "default.embedder.path"
 
         # Make get_default_embedder raise an exception
         mock_get_default.side_effect = Exception("Connection refused")
@@ -1084,9 +1084,9 @@ class TestEmbeddingGenerationError(unittest.TestCase):
     @patch("opencontractserver.tasks.embeddings_task.Corpus")
     @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder_path")
     def test_corpus_embedding_failure_does_not_raise_error(
-        self, mock_settings, mock_get_default, mock_get_component, mock_corpus_model
+        self, mock_get_path, mock_get_default, mock_get_component, mock_corpus_model
     ):
         """
         Test that corpus-specific embedding failures are logged but don't fail the task.
@@ -1096,7 +1096,7 @@ class TestEmbeddingGenerationError(unittest.TestCase):
             _apply_dual_embedding_strategy,
         )
 
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_path.return_value = "default.embedder.path"
 
         # Create successful default embedder
         mock_default_embedder = MagicMock()
@@ -1141,9 +1141,9 @@ class TestEmbeddingGenerationError(unittest.TestCase):
     @patch("opencontractserver.tasks.embeddings_task.Corpus")
     @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
     @patch("opencontractserver.tasks.embeddings_task.get_default_embedder")
-    @patch("opencontractserver.tasks.embeddings_task.settings")
+    @patch("opencontractserver.tasks.embeddings_task.get_default_embedder_path")
     def test_corpus_embedding_exception_does_not_raise_error(
-        self, mock_settings, mock_get_default, mock_get_component, mock_corpus_model
+        self, mock_get_path, mock_get_default, mock_get_component, mock_corpus_model
     ):
         """
         Test that corpus-specific embedding exceptions are caught and logged,
@@ -1153,7 +1153,7 @@ class TestEmbeddingGenerationError(unittest.TestCase):
             _apply_dual_embedding_strategy,
         )
 
-        mock_settings.DEFAULT_EMBEDDER = "default.embedder.path"
+        mock_get_path.return_value = "default.embedder.path"
 
         # Create successful default embedder
         mock_default_embedder = MagicMock()
@@ -1325,12 +1325,12 @@ class TestArrayFormatHandling(unittest.TestCase):
             self.assertIsInstance(result, list)
 
     def test_multimodal_embedder_handles_1d_array(self):
-        """Test that MultimodalMicroserviceEmbedder correctly handles 1D array responses."""
+        """Test that CLIPMicroserviceEmbedder correctly handles 1D array responses."""
         from opencontractserver.pipeline.embedders.multimodal_microservice import (
-            MultimodalMicroserviceEmbedder,
+            CLIPMicroserviceEmbedder,
         )
 
-        embedder = MultimodalMicroserviceEmbedder()
+        embedder = CLIPMicroserviceEmbedder()
 
         with patch("requests.post") as mock_post:
             mock_response = MagicMock()
@@ -1346,12 +1346,12 @@ class TestArrayFormatHandling(unittest.TestCase):
             self.assertEqual(result, [0.4, 0.5, 0.6])
 
     def test_multimodal_embedder_handles_2d_array(self):
-        """Test that MultimodalMicroserviceEmbedder correctly handles 2D array responses."""
+        """Test that CLIPMicroserviceEmbedder correctly handles 2D array responses."""
         from opencontractserver.pipeline.embedders.multimodal_microservice import (
-            MultimodalMicroserviceEmbedder,
+            CLIPMicroserviceEmbedder,
         )
 
-        embedder = MultimodalMicroserviceEmbedder()
+        embedder = CLIPMicroserviceEmbedder()
 
         with patch("requests.post") as mock_post:
             mock_response = MagicMock()

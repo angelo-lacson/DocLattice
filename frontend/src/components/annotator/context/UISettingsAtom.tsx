@@ -21,6 +21,7 @@ import {
 } from "./AnnotationControlAtoms";
 import { useCorpusState } from "./CorpusAtom";
 import { useSelectedDocument } from "./DocumentAtom";
+import { isTextFileType, isPdfFileType } from "../../../utils/files";
 import {
   showStructuralAnnotations,
   showSelectedAnnotationOnly,
@@ -285,36 +286,41 @@ export function useAnnotationControls() {
     relationModalVisibleAtom
   );
 
-  const initialized = useRef(false);
+  const spanLabelInitialized = useRef(false);
+  const relationLabelInitialized = useRef(false);
 
-  // Initialize default values only once
+  // Initialize default values - use separate refs per label type to avoid
+  // early cutoff when one label type loads before another.
+  // Deps intentionally exclude activeSpanLabel/activeRelationLabel: the refs
+  // already gate initialization, so the effect only needs to re-run when the
+  // data sources (labels, document) change, not when the values it sets change.
   useEffect(() => {
-    if (!initialized.current && selectedDocument) {
-      const isTextFile =
-        selectedDocument.fileType?.startsWith("text/") ?? false;
-      const isPdfFile = selectedDocument.fileType === "application/pdf";
+    if (!selectedDocument) return;
 
-      if (isTextFile && humanSpanLabelChoices.length > 0 && !activeSpanLabel) {
+    const isTextFile = isTextFileType(selectedDocument.fileType);
+    const isPdfFile = isPdfFileType(selectedDocument.fileType);
+
+    if (!spanLabelInitialized.current) {
+      if (isTextFile && humanSpanLabelChoices.length > 0) {
         setActiveSpanLabel(humanSpanLabelChoices[0]);
-        initialized.current = true;
-      } else if (isPdfFile && humanTokenLabels.length > 0 && !activeSpanLabel) {
+        spanLabelInitialized.current = true;
+      } else if (isPdfFile && humanTokenLabels.length > 0) {
         setActiveSpanLabel(humanTokenLabels[0]);
-        initialized.current = true;
-      }
-
-      if (relationLabels.length > 0 && !activeRelationLabel) {
-        setActiveRelationLabel(relationLabels[0]);
-        initialized.current = true;
+        spanLabelInitialized.current = true;
       }
     }
+
+    if (!relationLabelInitialized.current) {
+      if (relationLabels.length > 0) {
+        setActiveRelationLabel(relationLabels[0]);
+        relationLabelInitialized.current = true;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     humanSpanLabelChoices,
     humanTokenLabels,
     relationLabels,
-    activeSpanLabel,
-    activeRelationLabel,
-    setActiveSpanLabel,
-    setActiveRelationLabel,
     selectedDocument,
   ]);
 

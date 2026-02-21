@@ -8,8 +8,10 @@ import {
   GET_FIELDSETS,
   GET_ANALYZERS,
   GET_AGENT_CONFIGURATIONS,
+  GET_AVAILABLE_DOCUMENT_TOOLS,
 } from "../src/graphql/queries";
 import { CREATE_CORPUS_ACTION } from "../src/graphql/mutations";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // Mock data
 const mockFieldset = {
@@ -113,11 +115,37 @@ const getAgentConfigsMock = {
   },
 };
 
+const getAvailableDocumentToolsMock = {
+  request: {
+    query: GET_AVAILABLE_DOCUMENT_TOOLS,
+    variables: {},
+  },
+  result: {
+    data: {
+      availableTools: [
+        {
+          name: "load_document_text",
+          description: "Load the document text",
+          category: "document",
+          requiresApproval: false,
+        },
+        {
+          name: "update_document_description",
+          description: "Update document description",
+          category: "document",
+          requiresApproval: true,
+        },
+      ],
+    },
+  },
+};
+
 // Helper to create all standard mocks
 const createStandardMocks = () => [
   getFieldsetsMock,
   getAnalyzersMock,
   getAgentConfigsMock,
+  getAvailableDocumentToolsMock,
 ];
 
 test.describe("CreateCorpusActionModal - Trigger Options", () => {
@@ -182,6 +210,10 @@ test.describe("CreateCorpusActionModal - Trigger Options", () => {
       '.field:has(label:text("Trigger")) div.ui.dropdown'
     );
     await expect(triggerDropdown).toContainText("On Document Add");
+
+    await docScreenshot(page, "corpus-actions--create-modal--initial", {
+      fullPage: true,
+    });
 
     await component.unmount();
   });
@@ -306,6 +338,12 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
       page.locator("text=Lock thread to prevent").first()
     ).toBeVisible();
 
+    await docScreenshot(
+      page,
+      "corpus-actions--create-modal--agent-thread-quick",
+      { fullPage: true }
+    );
+
     await component.unmount();
   });
 
@@ -338,6 +376,54 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
     await expect(
       page.locator("text=a new message is posted to a thread")
     ).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should show existing agent mode for thread triggers", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <MockedProvider mocks={createStandardMocks()} addTypename={false}>
+        <CreateCorpusActionModal
+          corpusId="Q29ycHVzVHlwZTox"
+          open={true}
+          onClose={() => {}}
+          onSuccess={() => {}}
+        />
+      </MockedProvider>
+    );
+
+    // Select "On New Thread" trigger
+    const triggerDropdown = page.locator(
+      '.field:has(label:text("Trigger")) div.ui.dropdown'
+    );
+    await triggerDropdown.click();
+    await page.locator('[role="option"]:has-text("On New Thread")').click();
+
+    await page.waitForTimeout(500);
+
+    // Verify Quick Create inline form is visible before switching
+    await expect(page.locator("label:has-text('Agent Name')")).toBeVisible();
+
+    // Switch to "Use Existing Agent" mode
+    await page.locator("text=Use Existing Agent").click();
+    await page.waitForTimeout(300);
+
+    // Should show existing agent selection UI
+    await expect(page.locator("text=Select agent configuration")).toBeVisible();
+
+    // Inline agent form fields should no longer be visible
+    await expect(
+      page.locator("label:has-text('Agent Name')")
+    ).not.toBeVisible();
+
+    await docScreenshot(
+      page,
+      "corpus-actions--create-modal--agent-thread-existing",
+      { fullPage: true }
+    );
 
     await component.unmount();
   });
@@ -457,6 +543,11 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     await expect(
       page.locator("h4:has-text('Agent Configuration')")
     ).toBeVisible();
+
+    // Default mode is Quick Create — switch to Use Existing Agent
+    await page.locator('a:has-text("Use Existing Agent")').click();
+    await page.waitForTimeout(200);
+
     await expect(page.locator("text=Select agent configuration")).toBeVisible();
 
     await component.unmount();
@@ -489,6 +580,10 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     // Wait for data to load
     await page.waitForTimeout(500);
 
+    // Switch to Use Existing Agent tab (Quick Create is default in create mode)
+    await page.locator('a:has-text("Use Existing Agent")').click();
+    await page.waitForTimeout(200);
+
     // Select the agent config
     const agentDropdown = page.locator(
       '.field:has(label:text("Agent")) div.ui.dropdown'
@@ -502,7 +597,7 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     await page.waitForTimeout(300);
 
     // Agent prompt field should be visible
-    await expect(page.locator("text=Agent Prompt")).toBeVisible();
+    await expect(page.locator("text=Task Instructions")).toBeVisible();
     await expect(
       page.locator('textarea[placeholder*="Enter the task prompt"]')
     ).toBeVisible();
@@ -537,6 +632,10 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     // Wait for data to load
     await page.waitForTimeout(500);
 
+    // Switch to Use Existing Agent tab (Quick Create is default in create mode)
+    await page.locator('a:has-text("Use Existing Agent")').click();
+    await page.waitForTimeout(200);
+
     // Select the agent config
     const agentDropdown = page.locator(
       '.field:has(label:text("Agent")) div.ui.dropdown'
@@ -553,9 +652,16 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
     await expect(
       page.locator("label:has-text('Pre-authorized Tools')")
     ).toBeVisible();
+    // Verify the dropdown placeholder is present
     await expect(
-      page.locator("small:has-text('Pre-authorized tools will execute')")
+      page.locator("text=Select tools to pre-authorize (optional)")
     ).toBeVisible();
+
+    await docScreenshot(
+      page,
+      "corpus-actions--create-modal--existing-agent-document",
+      { fullPage: true }
+    );
 
     await component.unmount();
   });
@@ -601,7 +707,7 @@ test.describe("CreateCorpusActionModal - Form Submission", () => {
           fieldsetId: undefined,
           analyzerId: undefined,
           agentConfigId: "QWdlbnRDb25maWdUeXBlOjE=",
-          agentPrompt: "Moderate new threads for inappropriate content",
+          taskInstructions: "Moderate new threads for inappropriate content",
           preAuthorizedTools: undefined,
           disabled: false,
           runOnAllCorpuses: false,
@@ -751,6 +857,10 @@ test.describe("CreateCorpusActionModal - Fieldset Configuration", () => {
       page.locator("text=Select a fieldset to automatically extract data")
     ).toBeVisible();
 
+    await docScreenshot(page, "corpus-actions--create-modal--fieldset-config", {
+      fullPage: true,
+    });
+
     await component.unmount();
   });
 });
@@ -788,6 +898,10 @@ test.describe("CreateCorpusActionModal - Analyzer Configuration", () => {
     await expect(
       page.locator("text=Select an analyzer to automatically run analysis")
     ).toBeVisible();
+
+    await docScreenshot(page, "corpus-actions--create-modal--analyzer-config", {
+      fullPage: true,
+    });
 
     await component.unmount();
   });
