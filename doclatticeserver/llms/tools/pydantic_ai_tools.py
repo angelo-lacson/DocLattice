@@ -381,7 +381,11 @@ class PydanticAIToolWrapper:
             async_wrapper.__signature__ = new_sig
             # Ensure the injected ``ctx`` parameter has a proper annotation so
             # that Pydantic-AI's `_takes_ctx` helper can detect it.
-            _anns = dict(getattr(original_func, "__annotations__", {}))
+            _anns = {
+                k: v
+                for k, v in getattr(original_func, "__annotations__", {}).items()
+                if k not in self.inject_params
+            }
             _anns.setdefault("ctx", RunContext[PydanticAIDependencies])
             async_wrapper.__annotations__ = _anns
             # Attach reference to the wrapper for approval checking
@@ -422,7 +426,11 @@ class PydanticAIToolWrapper:
             sync_wrapper.__name__ = func_name
             sync_wrapper.__doc__ = original_func.__doc__ or self._metadata.description
             sync_wrapper.__signature__ = new_sig
-            _anns_sync = dict(getattr(original_func, "__annotations__", {}))
+            _anns_sync = {
+                k: v
+                for k, v in getattr(original_func, "__annotations__", {}).items()
+                if k not in self.inject_params
+            }
             _anns_sync.setdefault("ctx", RunContext[PydanticAIDependencies])
             sync_wrapper.__annotations__ = _anns_sync
             sync_wrapper._pydantic_ai_wrapper = self
