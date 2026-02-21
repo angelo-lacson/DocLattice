@@ -360,6 +360,39 @@ class NoteQuerySet(CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixi
       - CTEQuerySet
       - PermissionQuerySet
       - VectorSearchViaEmbeddingMixin
+
+    Notes inherit permissions from their parent document and corpus
+    following the MIN(document_permission, corpus_permission) pattern.
     """
 
-    pass
+    def visible_to_user(self, user, perm=None):
+        """
+        Notes inherit visibility from document + corpus.
+        A note is visible if:
+        1. User created it, OR
+        2. Document is visible AND corpus is visible (or null)
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        if user is None:
+            user = AnonymousUser()
+
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return self.all()
+
+        if user.is_anonymous:
+            return self.filter(
+                Q(document__is_public=True)
+                & (Q(corpus__isnull=True) | Q(corpus__is_public=True))
+                & Q(is_public=True)
+            ).distinct()
+
+        # Authenticated: visible if creator OR (doc visible AND corpus visible)
+        doc_visible = Q(document__is_public=True) | Q(document__creator=user)
+        corpus_visible = (
+            Q(corpus__isnull=True)
+            | Q(corpus__is_public=True)
+            | Q(corpus__creator=user)
+        )
+
+        return self.filter(Q(creator=user) | (doc_visible & corpus_visible)).distinct()
