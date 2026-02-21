@@ -889,7 +889,7 @@ class CorpusActionExport(TypedDict):
     fieldset_id: str | None
     analyzer_id: str | None
     agent_config_id: str | None
-    agent_prompt: str
+    task_instructions: str
     pre_authorized_tools: list[str]
 
 
@@ -941,7 +941,7 @@ def package_action_trail(
             "fieldset_id": str(action.fieldset_id) if action.fieldset_id else None,
             "analyzer_id": str(action.analyzer_id) if action.analyzer_id else None,
             "agent_config_id": str(action.agent_config_id) if action.agent_config_id else None,
-            "agent_prompt": action.agent_prompt,
+            "task_instructions": action.task_instructions,
             "pre_authorized_tools": action.pre_authorized_tools or [],
         })
 
@@ -1499,7 +1499,7 @@ class TestCorpusActionExecutionBulkOps(TestCase):
             name="Agent Action",
             corpus=self.corpus,
             agent_config=agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -2178,7 +2178,7 @@ class TestCorpusActionExecutionIntegration(TransactionTestCase):
             name="Agent Action",
             corpus=self.corpus,
             agent_config=agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )

@@ -29,33 +29,21 @@ import {
 import { sanitizeForMention } from "../../utils/textSanitization";
 import type { MarkdownStorage } from "tiptap-markdown";
 
-const ComposerContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  border: 2px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.xl};
-  background: ${CORPUS_COLORS.white};
-  overflow: hidden;
-  box-shadow: ${CORPUS_SHADOWS.sm};
-  transition: all ${CORPUS_TRANSITIONS.normal};
-
-  &:focus-within {
-    border-color: ${CORPUS_COLORS.teal[500]};
-    box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]}, ${CORPUS_SHADOWS.md};
-  }
-`;
-
 const Toolbar = styled.div`
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.5rem;
-  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
   background: ${CORPUS_COLORS.slate[50]};
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 0.5rem;
+  border-bottom: none;
+  transition: max-height ${CORPUS_TRANSITIONS.normal},
+    padding ${CORPUS_TRANSITIONS.normal},
+    border-bottom ${CORPUS_TRANSITIONS.normal};
 
   /* Mobile: Larger touch targets */
   ${mediaQuery.mobile} {
-    padding: 0.5rem 0.75rem;
     gap: 0.5rem;
   }
 `;
@@ -105,14 +93,15 @@ const ToolbarButton = styled.button<{ $isActive?: boolean }>`
 
 const EditorContainer = styled.div`
   flex: 1;
-  padding: 0.875rem;
-  min-height: 7.5rem;
+  padding: 0.5rem 0.875rem;
+  min-height: 2.5rem;
   max-height: 25rem;
   overflow-y: auto;
+  transition: min-height ${CORPUS_TRANSITIONS.normal};
 
   .ProseMirror {
     outline: none;
-    min-height: 6rem;
+    min-height: 1.25rem;
     font-family: ${CORPUS_FONTS.sans};
     font-size: 0.9375rem;
     color: ${CORPUS_COLORS.slate[800]};
@@ -196,23 +185,66 @@ const EditorContainer = styled.div`
 const Footer = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.875rem;
-  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
-  background: ${CORPUS_COLORS.slate[50]};
+  justify-content: flex-end;
+  padding: 0.375rem 0.5rem;
+  border-top: 1px solid ${CORPUS_COLORS.slate[100]};
+  background: transparent;
+  transition: padding ${CORPUS_TRANSITIONS.normal},
+    background ${CORPUS_TRANSITIONS.normal};
 `;
 
 const CharacterCount = styled.span`
+  display: none;
   font-family: ${CORPUS_FONTS.sans};
   font-size: 0.75rem;
   color: ${CORPUS_COLORS.slate[400]};
 `;
 
+const ComposerContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  border: 2px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.xl};
+  background: ${CORPUS_COLORS.white};
+  overflow: hidden;
+  box-shadow: ${CORPUS_SHADOWS.sm};
+  transition: all ${CORPUS_TRANSITIONS.normal};
+
+  &:focus-within {
+    border-color: ${CORPUS_COLORS.teal[500]};
+    box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]}, ${CORPUS_SHADOWS.md};
+
+    ${Toolbar} {
+      max-height: 3rem;
+      padding: 0.5rem;
+      border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
+    }
+
+    ${EditorContainer} {
+      min-height: 5rem;
+    }
+
+    ${EditorContainer} .ProseMirror {
+      min-height: 3.5rem;
+    }
+
+    ${Footer} {
+      padding: 0.5rem 0.875rem;
+      background: ${CORPUS_COLORS.slate[50]};
+      justify-content: space-between;
+    }
+
+    ${CharacterCount} {
+      display: inline;
+    }
+  }
+`;
+
 const SendButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
+  gap: 0.375rem;
+  padding: 0.4rem 0.875rem;
   border: none;
   border-radius: ${CORPUS_RADII.lg};
   background: linear-gradient(
@@ -222,11 +254,11 @@ const SendButton = styled.button`
   );
   color: ${CORPUS_COLORS.white};
   font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   transition: all ${CORPUS_TRANSITIONS.normal};
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.25);
   letter-spacing: -0.01em;
 
   &:hover:not(:disabled) {

@@ -7,7 +7,7 @@ Follows the least-privilege permission model.
 
 from typing import TYPE_CHECKING, Optional
 
-from django.db.models import QuerySet
+from django.db.models import BooleanField, Case, QuerySet, Value, When
 
 if TYPE_CHECKING:
     from opencontractserver.documents.models import DocumentRelationship
@@ -338,18 +338,19 @@ class DocumentRelationshipQueryOptimizer:
     _VISIBLE_CORPUS_IDS_CACHE_KEY = "_doc_rel_visible_corpus_ids"
 
     @classmethod
-    def _get_visible_document_ids(cls, user, context=None) -> set:
+    def _get_visible_document_ids(cls, user, context=None) -> QuerySet:
         """
-        Get IDs of all documents visible to user.
+        Get a queryset of document IDs visible to user, suitable for use as
+        a SQL subquery via ``__in``.
 
         Args:
             user: The requesting user
             context: Optional GraphQL context for request-level caching.
-                     When provided, results are cached on the context to prevent
-                     N+1 queries when called multiple times in the same request.
+                     When provided, the queryset is cached on the context to
+                     avoid rebuilding it multiple times in the same request.
 
         Returns:
-            Set of document IDs visible to the user
+            QuerySet of visible document IDs (values queryset)
         """
         from opencontractserver.documents.models import Document
 
@@ -359,31 +360,32 @@ class DocumentRelationshipQueryOptimizer:
             if hasattr(context, cache_key):
                 return getattr(context, cache_key)
 
-        # Compute visible document IDs
-        visible_ids = set(
-            Document.objects.visible_to_user(user).values_list("id", flat=True)
-        )
+        # Return a lazy values queryset — Django will embed this as a SQL
+        # subquery when used with ``__in``, avoiding materialisation into
+        # Python memory.
+        visible_qs = Document.objects.visible_to_user(user).values("id")
 
         # Cache on context if available
         if context is not None:
             cache_key = f"{cls._VISIBLE_DOC_IDS_CACHE_KEY}_{user.id}"
-            setattr(context, cache_key, visible_ids)
+            setattr(context, cache_key, visible_qs)
 
-        return visible_ids
+        return visible_qs
 
     @classmethod
-    def _get_visible_corpus_ids(cls, user, context=None) -> set:
+    def _get_visible_corpus_ids(cls, user, context=None) -> QuerySet:
         """
-        Get IDs of all corpuses visible to user.
+        Get a queryset of corpus IDs visible to user, suitable for use as
+        a SQL subquery via ``__in``.
 
         Args:
             user: The requesting user
             context: Optional GraphQL context for request-level caching.
-                     When provided, results are cached on the context to prevent
-                     N+1 queries when called multiple times in the same request.
+                     When provided, the queryset is cached on the context to
+                     avoid rebuilding it multiple times in the same request.
 
         Returns:
-            Set of corpus IDs visible to the user
+            QuerySet of visible corpus IDs (values queryset)
         """
         from opencontractserver.corpuses.models import Corpus
 
@@ -393,17 +395,15 @@ class DocumentRelationshipQueryOptimizer:
             if hasattr(context, cache_key):
                 return getattr(context, cache_key)
 
-        # Compute visible corpus IDs
-        visible_ids = set(
-            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
-        )
+        # Return a lazy values queryset for SQL subquery usage
+        visible_qs = Corpus.objects.visible_to_user(user).values("id")
 
         # Cache on context if available
         if context is not None:
             cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user.id}"
-            setattr(context, cache_key, visible_ids)
+            setattr(context, cache_key, visible_qs)
 
-        return visible_ids
+        return visible_qs
 
     @classmethod
     def _check_corpus_permission(cls, user, corpus) -> bool:
@@ -452,10 +452,11 @@ class DocumentRelationshipQueryOptimizer:
         from opencontractserver.documents.models import DocumentRelationship
 
         # Superusers see everything
-        if user.is_superuser:
+        is_superuser = user.is_superuser
+        if is_superuser:
             queryset = DocumentRelationship.objects.all()
         else:
-            # Get IDs of documents and corpuses user can see
+            # Get subqueries for documents and corpuses user can see
             # Pass context for request-level caching to prevent N+1 queries
             visible_doc_ids = cls._get_visible_document_ids(user, context=context)
             visible_corpus_ids = cls._get_visible_corpus_ids(user, context=context)
@@ -477,12 +478,46 @@ class DocumentRelationshipQueryOptimizer:
         if relationship_type:
             queryset = queryset.filter(relationship_type=relationship_type)
 
-        # Eager load related objects
+        # Pre-compute permission flags so AnnotatePermissionsForReadMixin
+        # can use them instead of querying non-existent guardian tables.
+        # All returned results passed the visibility filter → _can_read=True.
+        # Superusers get all perms; creators get CRUD; others get read only.
+        if is_superuser:
+            queryset = queryset.annotate(
+                _can_read=Value(True, output_field=BooleanField()),
+                _can_create=Value(True, output_field=BooleanField()),
+                _can_update=Value(True, output_field=BooleanField()),
+                _can_delete=Value(True, output_field=BooleanField()),
+                _can_publish=Value(True, output_field=BooleanField()),
+            )
+        else:
+            is_creator = Q(creator_id=user.id)
+            queryset = queryset.annotate(
+                _can_read=Value(True, output_field=BooleanField()),
+                _can_create=Case(
+                    When(is_creator, then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+                _can_update=Case(
+                    When(is_creator, then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+                _can_delete=Case(
+                    When(is_creator, then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+                _can_publish=Value(False, output_field=BooleanField()),
+            )
+
+        # Eager load related objects (including nested creator FKs to avoid N+1)
         return queryset.select_related(
-            "source_document",
-            "target_document",
+            "source_document__creator",
+            "target_document__creator",
             "annotation_label",
-            "corpus",
+            "corpus__creator",
             "creator",
         )
 

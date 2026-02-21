@@ -202,7 +202,7 @@ Configure multimodal embedder at corpus level:
 ```python
 corpus.preferred_embedder = (
     "opencontractserver.pipeline.embedders."
-    "multimodal_microservice.MultimodalMicroserviceEmbedder"
+    "multimodal_microservice.CLIPMicroserviceEmbedder"
 )
 corpus.save()
 ```
