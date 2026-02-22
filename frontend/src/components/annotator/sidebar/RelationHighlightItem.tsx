@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import source_icon from "../../../assets/icons/noun-bow-and-arrow-559923.png";
 import target_icon from "../../../assets/icons/noun-target-746597.png";
 
-import { ServerAnnotation } from "../types/annotations";
+import { ServerAnnotation, ServerTokenAnnotation } from "../types/annotations";
 import { TruncatedText } from "../../widgets/data-display/TruncatedText";
 
 const ItemRow = styled.div`
@@ -135,7 +135,10 @@ export const RelationHighlightItem = ({
             )}
             {annotation.annotationLabel.text}
           </AnnotationPill>
-          <PageLabel>Page {annotation.page + 1}</PageLabel>
+          {(annotation instanceof ServerTokenAnnotation ||
+            annotation.page > 0) && (
+            <PageLabel>Page {annotation.page + 1}</PageLabel>
+          )}
         </div>
         {annotation?.rawText ? (
           <TruncatedText
