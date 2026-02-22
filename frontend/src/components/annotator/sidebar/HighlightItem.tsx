@@ -304,7 +304,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           </RelationshipLabel>
         )}
       </HorizontallyJustifiedDiv>
-      {annotation.page > 0 && (
+      {(annotation instanceof ServerTokenAnnotation || annotation.page > 0) && (
         <LocationText>Page {annotation.page + 1}</LocationText>
       )}
     </HighlightContainer>
