@@ -11,7 +11,6 @@ from asgiref.sync import sync_to_async
 from pydantic_ai.agent import Agent as PydanticAIAgent
 from pydantic_ai.agent import (
     CallToolsNode,
-    End,
     ModelRequestNode,
     UserPromptNode,
 )
@@ -29,6 +28,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_graph import End
 
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.corpuses.models import Corpus

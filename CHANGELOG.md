@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+#### Resolve Dependabot Security Advisories (pydantic-ai + ajv)
+- **pydantic-ai 0.2.x → 1.x migration**: Upgraded from pydantic-ai 0.2.20 to >=1.56.0,<2 to resolve CVE in older version. Migration includes:
+  - `End` import moved from `pydantic_ai.agent` to `pydantic_graph` (`opencontractserver/llms/agents/pydantic_ai_agents.py`)
+  - All 3 `PydanticAIAgent` creation sites migrated from `system_prompt=` to `instructions=` to use the 1.x-recommended parameter that is always included in model requests regardless of message history
+  - `griffe>=1.3.2,<2` pin removed (was a transitive workaround only needed for pydantic-ai 0.2.x)
+  - Test file updated: `result.data` → `result.output`, `result_type` → `output_type`, `system_prompt` → `instructions` (`opencontractserver/tests/test_pydantic_ai_agents.py`)
+  - `openai` bumped from ==1.102.0 to >=2.11.0,<3 (pydantic-ai 1.x requires openai >=2.11.0)
+  - `pdf2image` pinned to >=1.16.0 (ancient 0.1.x versions have broken setup.py, caused cascading build failures in CI)
+- **ajv ReDoS fix (CVE in ajv <8.17.1)**: Added scoped Yarn resolutions for `@rjsf/validator-ajv8/ajv` and `ajv-formats/ajv` to pin ajv 8.18.0, avoiding conflict with schema-utils which requires ajv 6.x (`frontend/package.json`)
+
 #### IDOR Vulnerabilities Fixed in 4 GraphQL Mutations
 - **HIGH**: Fixed information leakage allowing object ID enumeration via different error messages
   - `RemoveAnnotation` (`config/graphql/mutations.py`)
