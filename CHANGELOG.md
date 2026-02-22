@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Validation checks**: ZIP↔data.json file consistency, label definitions and type constraints, annotation token/page index bounds, annotation bounds non-negativity, structural set hash consistency, folder hierarchy (circular reference detection, path consistency), document path references, relationship label type enforcement (including structural relationships), V2 required top-level fields, conversation/message/vote cross-references, unknown version warnings
 - **Test suite**: `opencontractserver/tests/test_validate_export.py` — 48 pure-Python tests covering all validation paths including CLI entry point
 
+### Security
+
+#### Dependency Security Updates
+- **Django 4.2.24 → 4.2.28**: Fixes 11 CVEs including multiple SQL injection vectors (CVE-2025-59681, CVE-2025-64459, CVE-2025-13372, CVE-2026-1312, CVE-2026-1287, CVE-2026-1207), directory traversal (CVE-2025-59682), DoS attacks (CVE-2025-64458, CVE-2025-64460), and user enumeration timing attack (CVE-2025-13473)
+  - Updated in `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
+- **cryptography 46.0.3 → 46.0.5**: Fixes CVE-2026-26007 — missing subgroup validation in ECDSA/ECDH public key loading for SECT curves, enabling signature forgery and private key leakage
+  - Updated in `requirements/base.txt`
+- **axios ^1.12.0 → ^1.13.5**: Fixes DoS vulnerability via `__proto__` key in `mergeConfig`
+  - Updated in `frontend/package.json`
+- **Removed unused `worker-loader`**: Webpack-specific package unused in Vite project; removal eliminates transitive `ajv@6.12.6` ReDoS vulnerability (via `worker-loader > schema-utils > ajv`)
+  - Removed from `frontend/package.json`
+
 ### Fixed
 
 #### BaseChunkedParser Robustness and Consistency (Closes #926)
