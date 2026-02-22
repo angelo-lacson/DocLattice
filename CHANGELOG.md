@@ -5,6 +5,22 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-22
+
+### Fixed
+
+#### BaseChunkedParser Cleanup (Closes #914)
+- **Duplicate test line**: Removed redundant `PdfReader` assignment in `test_pdf_splitting.py:95`
+- **Infinite loop guard**: Added input validation for `max_pages_per_chunk` and `min_pages_for_chunking` in `calculate_page_chunks()` (`opencontractserver/utils/pdf_splitting.py`); added `max_concurrent_chunks` validation in `_parse_document_impl` (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Dead code / ID inconsistency**: Removed single-chunk fast-path short-circuit in `_reassemble_chunk_results()` that returned unprefixed IDs, creating inconsistency with multi-chunk results
+- **Flaky test**: Replaced wall-clock timing assertion in `test_concurrent_failure_cancels_remaining` with a shorter sleep to reduce CI flakiness
+- **Type safety**: Replaced `type: ignore[return-value]` in `_dispatch_concurrent` with explicit `cast()` call
+- **Noisy logging**: Downgraded orphaned parent-child reference log from `warning` to `debug` level — these are expected on virtually every large hierarchical document
+- **Backoff cap**: Added `MAX_CHUNK_RETRY_BACKOFF_SECONDS` constant (30s) to cap exponential backoff in per-chunk retries (`opencontractserver/constants/document_processing.py`)
+- **Missing boundary test**: Added test for exact `min_pages_for_chunking` threshold (75 pages) and clarified docstring semantics
+- **Memory trade-off documented**: Added comment explaining concurrent dispatch memory implications
+- **Cross-chunk limitation documented**: Enhanced class docstring with follow-up improvement suggestion for section-aware chunk boundaries
+
 ## [Unreleased] - 2026-02-21
 
 ### Security
