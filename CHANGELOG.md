@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-22
 
+### Security
+
+#### Dependency Security Updates
+- **Django 4.2.24 → 4.2.28**: Fixes 11 CVEs including multiple SQL injection vectors (CVE-2025-59681, CVE-2025-64459, CVE-2025-13372, CVE-2026-1312, CVE-2026-1287, CVE-2026-1207), directory traversal (CVE-2025-59682), DoS attacks (CVE-2025-64458, CVE-2025-64460), and user enumeration timing attack (CVE-2025-13473)
+  - Updated in `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
+- **cryptography 46.0.3 → 46.0.5**: Fixes CVE-2026-26007 — missing subgroup validation in ECDSA/ECDH public key loading for SECT curves, enabling signature forgery and private key leakage
+  - Updated in `requirements/base.txt`
+- **axios ^1.12.0 → ^1.13.5**: Fixes DoS vulnerability via `__proto__` key in `mergeConfig`
+  - Updated in `frontend/package.json`
+- **Removed unused `worker-loader`**: Webpack-specific package unused in Vite project; removal eliminates transitive `ajv@6.12.6` ReDoS vulnerability (via `worker-loader > schema-utils > ajv`)
+  - Removed from `frontend/package.json`
+
 ### Fixed
 
 #### Follow-up Text Annotation Fixes (Closes #911)
@@ -14,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phantom ID tracking**: `TxtAnnotator.tsx:366` built `currentIds` from all visible annotations before verifying DOM elements existed. Annotations without rendered spans became "ghost" IDs tracked in `registeredAnnotationIdsRef` but never actually registered. Fixed by only adding IDs to the tracking set after confirming a DOM element was found and registered.
 - **Page number display regression**: `HighlightItem.tsx` and `RelationHighlightItem.tsx` now use `(annotation instanceof ServerTokenAnnotation || annotation.page > 0)` to show page labels. PDF token annotations always display page labels (page is always meaningful), while span annotations only display them when `page > 0` (since `page=0` is a sentinel for "no page concept applies").
 - **TypeScript type narrowing**: `HighlightItem.tsx:176` stored `instanceof` check in an intermediate boolean variable, preventing TypeScript's control-flow narrowing. Inlined the `instanceof` check directly in the conditional.
+
+#### BaseChunkedParser Robustness and Consistency (Closes #926)
+- **Config ValueError not wrapped**: `calculate_page_chunks` raises `ValueError` for invalid `max_pages_per_chunk`/`min_pages_for_chunking`, but the call in `_parse_document_impl` was unwrapped. Now caught and re-raised as `DocumentParsingError(is_transient=False)` (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Small-document annotations unprefixed**: Single-chunk documents returned directly from `_parse_chunk_with_retry` without passing through `_reassemble_chunk_results`, resulting in unprefixed annotation/relationship IDs. Now all results consistently receive `c0_` prefixed IDs (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Uncovered backoff cap branch**: `MAX_CHUNK_RETRY_BACKOFF_SECONDS` cap was never exercised by tests. Added test with `chunk_retry_limit=4` that verifies backoff values `[5, 10, 20, 30]` where the 4th retry hits the 30s cap (`opencontractserver/tests/test_chunked_parser.py`)
+- **Theoretical race in concurrent test**: `slow_chunks_started.is_set()` assertion could fail on heavily loaded CI. Added `slow_chunks_started.wait(timeout=2)` before the assertion (`opencontractserver/tests/test_chunked_parser.py`)
 
 #### Context Guardrails for LLM Conversation Management (Closes #907)
 

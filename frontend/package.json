@@ -39,7 +39,7 @@
     "@uiw/react-color": "^2.3.2",
     "@uiw/react-json-view": "^2.0.0-alpha.30",
     "@vitejs/plugin-react-swc": "^3.9.0",
-    "axios": "^1.12.0",
+    "axios": "^1.13.5",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "framer-motion": "6.*",
@@ -89,8 +89,7 @@
     "vite": "^6.4.1",
     "vite-plugin-svgr": "^4.3.0",
     "vite-tsconfig-paths": "^5.1.4",
-    "web-vitals": "^2.1.2",
-    "worker-loader": "^3.0.8"
+    "web-vitals": "^2.1.2"
   },
   "scripts": {
     "start": "vite",
@@ -139,6 +138,7 @@
     "@playwright/test": "^1.52.0",
     "@testing-library/react-hooks": "^8.0.1",
     "@types/d3": "^7.4.3",
+    "@types/json-schema": "^7.0.15",
     "@types/lodash.uniqueid": "^4.0.9",
     "@types/react-helmet-async": "^1.0.3",
     "@types/uuid": "^8.3.4",
