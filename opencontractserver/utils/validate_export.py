@@ -14,6 +14,7 @@ All warnings and errors are printed to stderr.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import zipfile
 from dataclasses import dataclass, field
@@ -194,7 +195,13 @@ def _check_documents(data: dict, result: ValidationResult) -> set[str]:
         prefix = f"annotated_docs['{filename}']"
 
         # Required fields
-        for f in ("title", "content", "pawls_file_content", "page_count"):
+        for f in (
+            "title",
+            "content",
+            "description",
+            "pawls_file_content",
+            "page_count",
+        ):
             if f not in doc:
                 result.error(f"{prefix}: missing required field '{f}'")
 
@@ -452,9 +459,10 @@ def _check_relationship_refs(
         result.error(f"{prefix}[{rel_id}]: missing relationshipLabel")
 
     for direction in ("source_annotation_ids", "target_annotation_ids"):
-        ids = rel.get(direction, [])
+        ids = rel.get(direction) or []
         if not ids:
             result.error(f"{prefix}[{rel_id}]: empty {direction}")
+            continue
         for ref_id in ids:
             if str(ref_id) not in valid_ids:
                 # Unresolvable annotation references will cause import failure
@@ -499,6 +507,10 @@ def _check_structural_sets(data: dict, result: ValidationResult) -> set[str]:
             raw_id = annot.get("id")
             annot_id = str(raw_id) if raw_id is not None else ""
             if annot_id:
+                if annot_id in local_ids:
+                    result.error(
+                        f"{prefix}: duplicate structural annotation id '{annot_id}'"
+                    )
                 local_ids.add(annot_id)
                 all_struct_annot_ids.add(annot_id)
 
@@ -543,6 +555,7 @@ def _check_folders(data: dict, result: ValidationResult) -> set[str]:
 
         if fid in folder_ids:
             result.error(f"folders: duplicate id '{fid}'")
+            continue
 
         folder_ids.add(fid)
         folder_by_id[fid] = folder
@@ -800,7 +813,7 @@ def _validate_parsed_data(data: dict, result: ValidationResult) -> None:
 # ---------------------------------------------------------------------------
 
 
-def validate_export(zip_path: str) -> ValidationResult:
+def validate_export(zip_path: str | os.PathLike[str]) -> ValidationResult:
     """
     Validate an OpenContracts corpus export ZIP file.
 
@@ -832,6 +845,9 @@ def validate_export(zip_path: str) -> ValidationResult:
                         )
                         return result
                     data = json.loads(raw.decode("utf-8"))
+            except UnicodeDecodeError as e:
+                result.error(f"data.json is not valid UTF-8: {e}")
+                return result
             except json.JSONDecodeError as e:
                 result.error(f"data.json is not valid JSON: {e}")
                 return result
