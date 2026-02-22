@@ -5,6 +5,19 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-22
+
+### Fixed
+
+#### Follow-up Text Annotation Fixes (Closes #911)
+- **Double-scroll bug**: `toggleSelectedAnnotation` in `AnnotatorSidebar.tsx:758` and `RelationshipList.tsx:106` called `scrollIntoView` for all annotation types, including text span annotations which already scroll via `TxtAnnotator`'s own `selectedAnnotations` useEffect. This caused two competing scroll animations. Fixed by guarding with `instanceof ServerTokenAnnotation` check.
+- **Phantom ID tracking**: `TxtAnnotator.tsx:366` built `currentIds` from all visible annotations before verifying DOM elements existed. Annotations without rendered spans became "ghost" IDs tracked in `registeredAnnotationIdsRef` but never actually registered. Fixed by only adding IDs to the tracking set after confirming a DOM element was found and registered.
+- **Page number display regression**: `HighlightItem.tsx:309` unconditionally hid page labels for `ServerSpanAnnotation`, even when they carried valid page info. `RelationHighlightItem.tsx:138` unconditionally showed `Page 1` for span annotations with `page=0`. Both now use `annotation.page > 0` to show page labels only when meaningful.
+- **TypeScript type narrowing**: `HighlightItem.tsx:176` stored `instanceof` check in an intermediate boolean variable, preventing TypeScript's control-flow narrowing. Inlined the `instanceof` check directly in the conditional.
+
+### Added
+- Unit tests for `HighlightItem` scroll behavior and page label display (`frontend/src/components/annotator/sidebar/__tests__/HighlightItem.scroll.test.tsx`)
+
 ## [Unreleased] - 2026-02-21
 
 ### Security

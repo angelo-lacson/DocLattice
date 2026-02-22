@@ -363,12 +363,10 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
         ann.annotationLabel?.text && isLabelVisible(ann.annotationLabel.text)
     );
 
+    // Find and register the first DOM span for each visible annotation.
+    // Only track IDs that were actually registered with a DOM element,
+    // preventing "ghost" IDs from persisting in the tracking set.
     const currentIds = new Set<string>();
-    for (const ann of visibleAnnotations) {
-      currentIds.add(ann.id);
-    }
-
-    // Find and register the first DOM span for each visible annotation
     for (const ann of visibleAnnotations) {
       const spanIndex = spans.findIndex(
         (span) => ann.json.start >= span.start && ann.json.start < span.end
@@ -380,10 +378,12 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       ) as HTMLElement | null;
       if (el) {
         onAnnotationRefChange(ann.id, el);
+        currentIds.add(ann.id);
       }
     }
 
-    // Unregister annotations that were removed or became hidden
+    // Unregister annotations that were removed, became hidden, or
+    // no longer have a corresponding DOM element
     for (const prevId of registeredAnnotationIdsRef.current) {
       if (!currentIds.has(prevId)) {
         onAnnotationRefChange(prevId, null);

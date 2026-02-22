@@ -1,0 +1,150 @@
+/**
+ * Focused tests for HighlightItem scroll-to-annotation behavior and page display.
+ *
+ * Verifies:
+ * 1. scrollIntoView is only called for PDF token annotations, not text span annotations.
+ * 2. Page labels appear when annotation.page > 0 and are hidden when page === 0.
+ */
+import React from "react";
+import { render, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { HighlightItem } from "../HighlightItem";
+import {
+  ServerTokenAnnotation,
+  ServerSpanAnnotation,
+} from "../../types/annotations";
+import { PermissionTypes } from "../../../types";
+import { LabelType } from "../../../../types/graphql-api";
+
+// ---------- Mocks ----------
+
+const mockScrollIntoView = vi.fn();
+
+vi.mock("../../hooks/useAnnotationRefs", () => ({
+  useAnnotationRefs: () => ({
+    annotationElementRefs: {
+      current: {
+        "token-annot-1": { scrollIntoView: mockScrollIntoView },
+        "span-annot-1": { scrollIntoView: mockScrollIntoView },
+      },
+    },
+  }),
+}));
+
+vi.mock("../../context/UISettingsAtom", () => ({
+  useAnnotationSelection: () => ({
+    selectedAnnotations: [],
+  }),
+}));
+
+vi.mock("../../hooks/useAnnotationImages", () => ({
+  useAnnotationImages: () => ({
+    images: [],
+    loading: false,
+    error: null,
+  }),
+}));
+
+// ---------- Helpers ----------
+
+const mockLabel = {
+  id: "label-1",
+  text: "Test Label",
+  color: "#3B82F6",
+  icon: "tag" as any,
+  description: "Test label",
+  labelType: LabelType.SpanLabel,
+};
+
+function makeTokenAnnotation(page: number) {
+  return new ServerTokenAnnotation(
+    page,
+    mockLabel,
+    "Token text",
+    false,
+    {},
+    [PermissionTypes.CAN_READ],
+    false,
+    false,
+    false,
+    "token-annot-1"
+  );
+}
+
+function makeSpanAnnotation(page: number) {
+  return new ServerSpanAnnotation(
+    page,
+    mockLabel,
+    "Span text",
+    false,
+    { start: 0, end: 9 },
+    [PermissionTypes.CAN_READ],
+    false,
+    false,
+    false,
+    "span-annot-1"
+  );
+}
+
+function renderHighlightItem(
+  annotation: ServerTokenAnnotation | ServerSpanAnnotation
+) {
+  return render(
+    <MemoryRouter>
+      <HighlightItem
+        annotation={annotation}
+        read_only
+        relations={[]}
+        onSelect={vi.fn()}
+      />
+    </MemoryRouter>
+  );
+}
+
+// ---------- Tests ----------
+
+describe("HighlightItem scroll behaviour", () => {
+  beforeEach(() => {
+    mockScrollIntoView.mockClear();
+  });
+
+  it("calls scrollIntoView when clicking a PDF token annotation", () => {
+    const { container } = renderHighlightItem(makeTokenAnnotation(2));
+    const card = container.querySelector(".sidebar__annotation")!;
+    fireEvent.click(card);
+    expect(mockScrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "center",
+    });
+  });
+
+  it("does NOT call scrollIntoView when clicking a text span annotation", () => {
+    const { container } = renderHighlightItem(makeSpanAnnotation(0));
+    const card = container.querySelector(".sidebar__annotation")!;
+    fireEvent.click(card);
+    expect(mockScrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe("HighlightItem page label display", () => {
+  it("shows page label when annotation.page > 0", () => {
+    const { getByText } = renderHighlightItem(makeTokenAnnotation(2));
+    expect(getByText("Page 3")).toBeTruthy();
+  });
+
+  it("hides page label when annotation.page is 0 (token annotation)", () => {
+    const { queryByText } = renderHighlightItem(makeTokenAnnotation(0));
+    expect(queryByText(/^Page/)).toBeNull();
+  });
+
+  it("shows page label for span annotation when page > 0", () => {
+    const { getByText } = renderHighlightItem(makeSpanAnnotation(5));
+    expect(getByText("Page 6")).toBeTruthy();
+  });
+
+  it("hides page label for span annotation when page is 0", () => {
+    const { queryByText } = renderHighlightItem(makeSpanAnnotation(0));
+    expect(queryByText(/^Page/)).toBeNull();
+  });
+});
