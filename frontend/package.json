@@ -126,6 +126,8 @@
     "**/*": "prettier --write --ignore-unknown"
   },
   "resolutions": {
+    "@rjsf/validator-ajv8/ajv": "8.18.0",
+    "ajv-formats/ajv": "8.18.0",
     "glob": "10.5.0",
     "js-yaml": "4.1.1",
     "lodash-es": "4.17.23",

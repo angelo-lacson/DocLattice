@@ -31,3 +31,21 @@ MAX_PROCESSING_TRACEBACK_LENGTH = 10000
 
 # Maximum length for error message in GraphQL display (UI truncation)
 MAX_PROCESSING_ERROR_DISPLAY_LENGTH = 500
+
+# ---------------------------------------------------------------------------
+# Chunked document processing constants
+# ---------------------------------------------------------------------------
+
+# Maximum number of pages per chunk when splitting large documents for parsing.
+# Each chunk is sent as an independent parsing request.
+DEFAULT_MAX_PAGES_PER_CHUNK = 50
+
+# Documents with fewer pages than this threshold are parsed as a single request.
+DEFAULT_MIN_PAGES_FOR_CHUNKING = 75
+
+# Maximum number of chunks to process concurrently via thread pool.
+# Controls parallelism of HTTP requests to the parsing microservice.
+DEFAULT_MAX_CONCURRENT_CHUNKS = 3
+
+# Per-chunk retry limit (within the parser, before raising to Celery).
+DEFAULT_CHUNK_RETRY_LIMIT = 1

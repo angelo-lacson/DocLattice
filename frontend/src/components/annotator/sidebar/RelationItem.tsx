@@ -4,11 +4,7 @@ import { Trash2 } from "lucide-react";
 
 import "./AnnotatorSidebar.css";
 import { RelationHighlightItem } from "./RelationHighlightItem";
-import {
-  RelationGroup,
-  ServerTokenAnnotation,
-  ServerSpanAnnotation,
-} from "../types/annotations";
+import { RelationGroup, ServerAnnotation } from "../types/annotations";
 
 interface RelationContainerProps {
   $color?: string;
@@ -120,8 +116,8 @@ export function RelationItem({
   relation: RelationGroup;
   read_only: boolean;
   selected: boolean;
-  target_annotations: (ServerTokenAnnotation | ServerSpanAnnotation)[];
-  source_annotations: (ServerTokenAnnotation | ServerSpanAnnotation)[];
+  target_annotations: ServerAnnotation[];
+  source_annotations: ServerAnnotation[];
   onSelectRelation: () => void;
   onSelectAnnotation: (annotationId: string) => void;
   onDeleteRelation: (relationId: string) => void;

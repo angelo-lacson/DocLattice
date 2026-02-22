@@ -5,10 +5,7 @@ import { X } from "lucide-react";
 import source_icon from "../../../assets/icons/noun-bow-and-arrow-559923.png";
 import target_icon from "../../../assets/icons/noun-target-746597.png";
 
-import {
-  ServerTokenAnnotation,
-  ServerSpanAnnotation,
-} from "../types/annotations";
+import { ServerAnnotation } from "../types/annotations";
 import { TruncatedText } from "../../widgets/data-display/TruncatedText";
 
 const ItemRow = styled.div`
@@ -90,7 +87,7 @@ const RemoveButton = styled(Button)`
 `;
 
 interface RelationHighlightItemProps {
-  annotation: ServerTokenAnnotation | ServerSpanAnnotation;
+  annotation: ServerAnnotation;
   className?: string;
   type: "SOURCE" | "TARGET";
   read_only: boolean;
