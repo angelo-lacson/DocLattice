@@ -106,7 +106,7 @@ class TestCalculatePageChunks(TestCase):
         chunks = calculate_page_chunks(50, 50, 75)
         self.assertEqual(chunks, [(0, 50)])
 
-    def test_at_threshold_returns_single(self):
+    def test_one_below_threshold_returns_single(self):
         chunks = calculate_page_chunks(74, 50, 75)
         self.assertEqual(chunks, [(0, 74)])
 

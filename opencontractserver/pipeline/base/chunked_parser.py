@@ -176,6 +176,14 @@ class BaseChunkedParser(BaseParser):
                 is_transient=False,
             )
 
+        # Validate config eagerly — a misconfigured parser should fail
+        # consistently regardless of document size.
+        if self.max_concurrent_chunks <= 0:
+            raise DocumentParsingError(
+                f"max_concurrent_chunks must be > 0, got {self.max_concurrent_chunks}",
+                is_transient=False,
+            )
+
         chunks = calculate_page_chunks(
             page_count, self.max_pages_per_chunk, self.min_pages_for_chunking
         )
@@ -206,12 +214,6 @@ class BaseChunkedParser(BaseParser):
             f"Document {doc_id} has {page_count} pages – splitting into "
             f"{len(chunks)} chunks (max {self.max_pages_per_chunk} pages each)"
         )
-
-        if self.max_concurrent_chunks <= 0:
-            raise DocumentParsingError(
-                f"max_concurrent_chunks must be > 0, got {self.max_concurrent_chunks}",
-                is_transient=False,
-            )
 
         # Parse chunks
         if self.max_concurrent_chunks <= 1:
