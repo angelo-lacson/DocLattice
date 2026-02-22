@@ -582,8 +582,10 @@ def _build_document_action_system_prompt(
     trigger_desc = TRIGGER_DESCRIPTIONS.get(action.trigger, "triggered action in")
     tool_list = ", ".join(tools) if tools else "none"
 
-    warn_if_content_large(document.title, context="document title")
-    warn_if_content_large(action.corpus.title, context="corpus title")
+    doc_title = document.title or "untitled"
+    corpus_title = action.corpus.title or "untitled"
+    warn_if_content_large(doc_title, context="document title")
+    warn_if_content_large(corpus_title, context="corpus title")
     if document.description:
         warn_if_content_large(document.description, context="document description")
 
@@ -594,8 +596,8 @@ def _build_document_action_system_prompt(
         "",
         "## Execution Context",
         f'- Action: "{action.name}"',
-        f"- Document: {fence_user_content(document.title, label='document title')} (ID: {document.id})",
-        f"- Corpus: {fence_user_content(action.corpus.title, label='corpus title')}",
+        f"- Document: {fence_user_content(doc_title, label='document title')} (ID: {document.id})",
+        f"- Corpus: {fence_user_content(corpus_title, label='corpus title')}",
         f"- Trigger: Document {trigger_desc} the corpus",
         f"- Available tools: {tool_list}",
     ]
@@ -729,12 +731,12 @@ def _build_thread_action_system_prompt(
         parts.append("")
         parts.append("## Recent Thread Messages (most recent first)")
         for msg in recent_messages[:5]:
+            warn_if_content_large(msg["content"], context="recent message")
             content_preview = (
                 msg["content"][:MAX_MESSAGE_PREVIEW_LENGTH] + "..."
                 if len(msg["content"]) > MAX_MESSAGE_PREVIEW_LENGTH
                 else msg["content"]
             )
-            warn_if_content_large(content_preview, context="recent message")
             parts.append(
                 f"- [{fence_user_content(msg['creator_username'], label='username')}] (ID: {msg['id']}): "
                 f"{fence_user_content(content_preview, label='message')}"
