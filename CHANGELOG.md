@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unstable default parameter**: `chatSources = []` in `TxtAnnotator` component props created a new array reference on every render, triggering infinite re-renders via `useEffect` dependency arrays when the prop was not explicitly passed (`frontend/src/components/annotator/renderers/txt/TxtAnnotator.tsx:335`)
 - Extracted `ChatSourceHighlight` interface and defined module-level `EMPTY_CHAT_SOURCES` constant as the default value, ensuring referential stability across renders
 
+#### Follow-up Text Annotation Fixes (Closes #911)
+- **Double-scroll bug**: `toggleSelectedAnnotation` in `AnnotatorSidebar.tsx:758` and `RelationshipList.tsx:106` called `scrollIntoView` for all annotation types, including text span annotations which already scroll via `TxtAnnotator`'s own `selectedAnnotations` useEffect. This caused two competing scroll animations. Fixed by guarding with `instanceof ServerTokenAnnotation` check.
+- **Phantom ID tracking**: `TxtAnnotator.tsx:366` built `currentIds` from all visible annotations before verifying DOM elements existed. Annotations without rendered spans became "ghost" IDs tracked in `registeredAnnotationIdsRef` but never actually registered. Fixed by only adding IDs to the tracking set after confirming a DOM element was found and registered.
+- **Page number display regression**: `HighlightItem.tsx` and `RelationHighlightItem.tsx` now use `(annotation instanceof ServerTokenAnnotation || annotation.page > 0)` to show page labels. PDF token annotations always display page labels (page is always meaningful), while span annotations only display them when `page > 0` (since `page=0` is a sentinel for "no page concept applies").
+- **TypeScript type narrowing**: `HighlightItem.tsx:176` stored `instanceof` check in an intermediate boolean variable, preventing TypeScript's control-flow narrowing. Inlined the `instanceof` check directly in the conditional.
+
 #### BaseChunkedParser Robustness and Consistency (Closes #926)
 - **Config ValueError not wrapped**: `calculate_page_chunks` raises `ValueError` for invalid `max_pages_per_chunk`/`min_pages_for_chunking`, but the call in `_parse_document_impl` was unwrapped. Now caught and re-raised as `DocumentParsingError(is_transient=False)` (`opencontractserver/pipeline/base/chunked_parser.py`)
 - **Small-document annotations unprefixed**: Single-chunk documents returned directly from `_parse_chunk_with_retry` without passing through `_reassemble_chunk_results`, resulting in unprefixed annotation/relationship IDs. Now all results consistently receive `c0_` prefixed IDs (`opencontractserver/pipeline/base/chunked_parser.py`)
@@ -62,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Missing boundary test**: Added test for exact `min_pages_for_chunking` threshold (75 pages) and clarified docstring semantics
 - **Memory trade-off documented**: Added comment explaining concurrent dispatch memory implications
 - **Cross-chunk limitation documented**: Enhanced class docstring with follow-up improvement suggestion for section-aware chunk boundaries
+
+### Added
+- Unit tests for `HighlightItem` scroll behavior and page label display (`frontend/src/components/annotator/sidebar/__tests__/HighlightItem.scroll.test.tsx`)
 
 ### Security
 
