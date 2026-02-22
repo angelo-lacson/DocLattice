@@ -91,18 +91,29 @@ def calculate_page_chunks(
     """
     Calculate page-range chunks for a document.
 
-    If the document has fewer pages than ``min_pages_for_chunking``, returns
-    a single chunk spanning all pages (no splitting).
+    If the document has *strictly fewer* pages than ``min_pages_for_chunking``,
+    returns a single chunk spanning all pages (no splitting).  A document with
+    exactly ``min_pages_for_chunking`` pages **will** be split.
 
     Args:
         total_pages: Total number of pages in the document.
-        max_pages_per_chunk: Maximum pages per chunk.
-        min_pages_for_chunking: Minimum page count before chunking activates.
+        max_pages_per_chunk: Maximum pages per chunk (must be > 0).
+        min_pages_for_chunking: Page count at which chunking activates (must be > 0).
 
     Returns:
         List of (start_page, end_page) tuples where start is inclusive
         and end is exclusive (0-based).
+
+    Raises:
+        ValueError: If ``max_pages_per_chunk`` or ``min_pages_for_chunking`` is <= 0.
     """
+    if max_pages_per_chunk <= 0:
+        raise ValueError(f"max_pages_per_chunk must be > 0, got {max_pages_per_chunk}")
+    if min_pages_for_chunking <= 0:
+        raise ValueError(
+            f"min_pages_for_chunking must be > 0, got {min_pages_for_chunking}"
+        )
+
     if total_pages <= 0:
         return []
 
