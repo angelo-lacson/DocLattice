@@ -11,6 +11,7 @@ import io
 import json
 import os
 import tempfile
+import unittest
 import zipfile
 
 from opencontractserver.utils.validate_export import (
@@ -99,7 +100,15 @@ def _minimal_v1_data() -> dict:
                 "color": "#0000FF",
                 "description": "A clause",
                 "icon": "tag",
-            }
+            },
+            "RelatesTo": {
+                "id": "3",
+                "text": "RelatesTo",
+                "label_type": "RELATIONSHIP_LABEL",
+                "color": "#00FF00",
+                "description": "A relationship",
+                "icon": "link",
+            },
         },
         "corpus": {
             "id": 1,
@@ -175,7 +184,7 @@ def _write_and_validate(
 # ---------------------------------------------------------------------------
 
 
-class TestValidationResult:
+class TestValidationResult(unittest.TestCase):
     def test_empty_is_ok(self):
         r = ValidationResult()
         assert r.ok is True
@@ -200,7 +209,7 @@ class TestValidationResult:
         assert "INVALID" in s
 
 
-class TestMinimalValidExport:
+class TestMinimalValidExport(unittest.TestCase):
     def test_v1_valid(self):
         data = _minimal_v1_data()
         result = _write_and_validate(data, {"sample.pdf": b"%PDF-fake"})
@@ -222,7 +231,7 @@ class TestMinimalValidExport:
         assert result.ok, result.summary()
 
 
-class TestZipStructure:
+class TestZipStructure(unittest.TestCase):
     def test_missing_file_in_zip(self):
         data = _minimal_v1_data()
         # Don't include sample.pdf in the ZIP
@@ -238,8 +247,26 @@ class TestZipStructure:
         assert result.ok  # extra files are warnings, not errors
         assert any("unreferenced" in w for w in result.warnings)
 
+    def test_directory_entries_not_flagged_as_unreferenced(self):
+        """ZIP directory entries (e.g. 'documents/') should not warn."""
+        data = _minimal_v1_data()
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("data.json", json.dumps(data))
+            zf.writestr("sample.pdf", b"pdf")
+            zf.mkdir("documents")
+        fd, path = tempfile.mkstemp(suffix=".zip")
+        try:
+            os.write(fd, buf.getvalue())
+            os.close(fd)
+            result = validate_export(path)
+        finally:
+            os.unlink(path)
+        assert result.ok, result.summary()
+        assert not any("documents/" in w for w in result.warnings)
 
-class TestLabelValidation:
+
+class TestLabelValidation(unittest.TestCase):
     def test_missing_label_fields(self):
         data = _minimal_v1_data()
         del data["doc_labels"]["Contract"]["color"]
@@ -261,8 +288,23 @@ class TestLabelValidation:
         assert not result.ok
         assert any("BOGUS" in e for e in result.errors)
 
+    def test_doc_type_label_in_text_labels_is_error(self):
+        """DOC_TYPE_LABEL is not allowed in text_labels."""
+        data = _minimal_v1_data()
+        data["text_labels"]["BadLabel"] = {
+            "id": "99",
+            "text": "BadLabel",
+            "label_type": "DOC_TYPE_LABEL",
+            "color": "#FF0000",
+            "description": "Wrong type",
+            "icon": "x",
+        }
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("DOC_TYPE_LABEL" in e and "text_labels" in e for e in result.errors)
 
-class TestDocumentValidation:
+
+class TestDocumentValidation(unittest.TestCase):
     def test_missing_required_doc_field(self):
         data = _minimal_v1_data()
         del data["annotated_docs"]["sample.pdf"]["title"]
@@ -284,7 +326,36 @@ class TestDocumentValidation:
         assert any("Nonexistent" in e for e in result.errors)
 
 
-class TestAnnotationValidation:
+class TestAnnotationValidation(unittest.TestCase):
+    def test_null_annotation_id_not_treated_as_valid(self):
+        """An annotation with id=None should not add 'None' to the ID set."""
+        data = _minimal_v1_data()
+        data["annotated_docs"]["sample.pdf"]["labelled_text"].append(
+            {
+                "id": None,
+                "annotationLabel": "Clause",
+                "rawText": "world",
+                "page": 0,
+                "annotation_json": {},
+                "parent_id": None,
+                "annotation_type": "TOKEN_LABEL",
+                "structural": False,
+            }
+        )
+        # Add a relationship referencing "None" — should be unresolvable
+        data["annotated_docs"]["sample.pdf"]["relationships"] = [
+            {
+                "id": "r1",
+                "relationshipLabel": "RelatesTo",
+                "source_annotation_ids": ["None"],
+                "target_annotation_ids": ["annot_1"],
+                "structural": False,
+            }
+        ]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("None" in e and "not found" in e for e in result.errors)
+
     def test_bad_text_label_reference(self):
         data = _minimal_v1_data()
         data["annotated_docs"]["sample.pdf"]["labelled_text"][0][
@@ -340,7 +411,7 @@ class TestAnnotationValidation:
         assert any("empty PAWLs" in e for e in result.errors)
 
 
-class TestPawlsValidation:
+class TestPawlsValidation(unittest.TestCase):
     def test_nonsequential_page_index_is_error(self):
         data = _minimal_v1_data()
         # Set page.index to 5 instead of 0
@@ -352,7 +423,7 @@ class TestPawlsValidation:
         assert any("sequential" in e for e in result.errors)
 
 
-class TestStructuralSetValidation:
+class TestStructuralSetValidation(unittest.TestCase):
     def test_missing_structural_set_reference(self):
         data = _minimal_v2_data()
         data["annotated_docs"]["sample.pdf"]["structural_set_hash"] = "missing_hash"
@@ -421,7 +492,7 @@ class TestStructuralSetValidation:
         assert any("RELATIONSHIP_LABEL" in e for e in result.errors)
 
 
-class TestFolderValidation:
+class TestFolderValidation(unittest.TestCase):
     def test_folder_missing_parent(self):
         data = _minimal_v2_data()
         data["folders"] = [
@@ -521,7 +592,7 @@ class TestFolderValidation:
         assert len(cycle_errors) == 1
 
 
-class TestDocumentPathValidation:
+class TestDocumentPathValidation(unittest.TestCase):
     def test_bad_folder_path_reference(self):
         data = _minimal_v2_data()
         data["document_paths"] = [
@@ -541,7 +612,7 @@ class TestDocumentPathValidation:
         assert any("NoSuchFolder" in e for e in result.errors)
 
 
-class TestRelationshipValidation:
+class TestRelationshipValidation(unittest.TestCase):
     def test_corpus_level_relationship_label_missing(self):
         data = _minimal_v2_data()
         data["relationships"] = [
@@ -579,7 +650,7 @@ class TestRelationshipValidation:
         data["relationships"] = [
             {
                 "id": "r1",
-                "relationshipLabel": "Clause",
+                "relationshipLabel": "RelatesTo",
                 "source_annotation_ids": ["nonexistent_annot"],
                 "target_annotation_ids": ["annot_1"],
                 "structural": False,
@@ -588,9 +659,39 @@ class TestRelationshipValidation:
         result = validate_data_json(data)
         assert not result.ok
         assert any("nonexistent_annot" in e for e in result.errors)
+        # Should NOT also produce a label-type error
+        assert not any("RELATIONSHIP_LABEL" in e for e in result.errors)
+
+    def test_doc_level_relationship_wrong_label_type(self):
+        """Document-level relationship with wrong label type should error."""
+        data = _minimal_v1_data()
+        data["annotated_docs"]["sample.pdf"]["labelled_text"].append(
+            {
+                "id": "annot_2",
+                "annotationLabel": "Clause",
+                "rawText": "world",
+                "page": 0,
+                "annotation_json": {},
+                "parent_id": None,
+                "annotation_type": "TOKEN_LABEL",
+                "structural": False,
+            }
+        )
+        data["annotated_docs"]["sample.pdf"]["relationships"] = [
+            {
+                "id": "r1",
+                "relationshipLabel": "Clause",
+                "source_annotation_ids": ["annot_1"],
+                "target_annotation_ids": ["annot_2"],
+                "structural": False,
+            }
+        ]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("RELATIONSHIP_LABEL" in e for e in result.errors)
 
 
-class TestVersionValidation:
+class TestVersionValidation(unittest.TestCase):
     def test_unknown_version_warns(self):
         data = _minimal_v1_data()
         data["version"] = "banana"
@@ -605,7 +706,7 @@ class TestVersionValidation:
         assert any("3.0" in w for w in result.warnings)
 
 
-class TestV2RequiredFields:
+class TestV2RequiredFields(unittest.TestCase):
     def test_missing_v2_required_field(self):
         data = _minimal_v2_data()
         del data["folders"]
@@ -623,7 +724,7 @@ class TestV2RequiredFields:
         assert any("relationships" in e for e in result.errors)
 
 
-class TestConversationValidation:
+class TestConversationValidation(unittest.TestCase):
     def test_message_bad_conversation_ref(self):
         data = _minimal_v2_data()
         data["conversations"] = [
@@ -691,7 +792,7 @@ class TestConversationValidation:
         assert result.ok, result.summary()
 
 
-class TestBadZipInput:
+class TestBadZipInput(unittest.TestCase):
     def test_not_a_zip(self):
         fd, path = tempfile.mkstemp(suffix=".zip")
         try:
@@ -724,7 +825,7 @@ class TestBadZipInput:
         assert any("data.json" in e for e in result.errors)
 
 
-class TestCLI:
+class TestCLI(unittest.TestCase):
     def test_help_returns_zero(self):
         assert main(["--help"]) == 0
 

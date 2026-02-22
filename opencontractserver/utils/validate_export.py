@@ -31,9 +31,14 @@ VALID_LABEL_TYPES = {
 
 VALID_ANNOTATION_TYPES = {"TOKEN_LABEL", "SPAN_LABEL"}
 
+VALID_TEXT_LABEL_TYPES = {"TOKEN_LABEL", "SPAN_LABEL", "RELATIONSHIP_LABEL"}
+
 VALID_CONTENT_MODALITIES = {"TEXT", "IMAGE", "AUDIO", "TABLE", "VIDEO"}
 
 KNOWN_VERSIONS = {"1.0", "2.0"}
+
+# Maximum data.json size to load into memory (500 MB)
+MAX_DATA_JSON_SIZE = 500 * 1024 * 1024
 
 V2_REQUIRED_FIELDS = {
     "structural_annotation_sets",
@@ -92,12 +97,8 @@ class ValidationResult:
 def _check_zip_structure(
     zip_file: zipfile.ZipFile, data: dict, result: ValidationResult
 ) -> None:
-    """Verify data.json exists and every annotated_docs key has a matching file."""
+    """Verify every annotated_docs key has a matching file in the ZIP."""
     zip_names = set(zip_file.namelist())
-
-    if "data.json" not in zip_names:
-        result.error("ZIP missing data.json")
-        return
 
     annotated_docs = data.get("annotated_docs", {})
     for filename in annotated_docs:
@@ -106,10 +107,10 @@ def _check_zip_structure(
                 f"annotated_docs references '{filename}' but it is not in the ZIP"
             )
 
-    # Warn about extra files that aren't referenced
+    # Warn about extra files that aren't referenced (skip directory entries)
     known_files = set(annotated_docs.keys()) | {"data.json"}
     for name in zip_names:
-        if name not in known_files:
+        if name not in known_files and not name.endswith("/"):
             result.warn(f"ZIP contains unreferenced file: '{name}'")
 
 
@@ -117,9 +118,9 @@ def _check_label_definitions(data: dict, result: ValidationResult) -> None:
     """Validate label definitions have required fields and consistent types."""
     required_fields = {"id", "text", "label_type", "color", "description", "icon"}
 
-    for section, expected_type in [
-        ("doc_labels", "DOC_TYPE_LABEL"),
-        ("text_labels", None),
+    for section, allowed_types in [
+        ("doc_labels", {"DOC_TYPE_LABEL"}),
+        ("text_labels", VALID_TEXT_LABEL_TYPES),
     ]:
         labels = data.get(section, {})
         for name, label in labels.items():
@@ -133,11 +134,10 @@ def _check_label_definitions(data: dict, result: ValidationResult) -> None:
                     f"{section}.{name}: invalid label_type '{lt}' "
                     f"(must be one of {VALID_LABEL_TYPES})"
                 )
-
-            if expected_type and lt != expected_type:
+            elif lt not in allowed_types:
                 result.error(
-                    f"{section}.{name}: expected label_type '{expected_type}', "
-                    f"got '{lt}'"
+                    f"{section}.{name}: label_type '{lt}' not allowed in "
+                    f"{section} (must be one of {sorted(allowed_types)})"
                 )
 
             if label.get("text") != name:
@@ -211,10 +211,14 @@ def _check_documents(data: dict, result: ValidationResult) -> set[str]:
                     f"defined in top-level doc_labels"
                 )
 
-        # Validate annotations
+        # Validate annotations (single pass, defer parent_id checks)
         local_annot_ids: set[str] = set()
+        deferred_parent_checks: list[tuple[str | None, str | None]] = []
+        if "labelled_text" not in doc:
+            result.warn(f"{prefix}: missing 'labelled_text' field")
         for annot in doc.get("labelled_text", []):
-            annot_id = str(annot.get("id", ""))
+            raw_id = annot.get("id")
+            annot_id = str(raw_id) if raw_id is not None else ""
             if annot_id:
                 local_annot_ids.add(annot_id)
                 all_annotation_ids.add(annot_id)
@@ -226,19 +230,25 @@ def _check_documents(data: dict, result: ValidationResult) -> set[str]:
                     f"'{label_name}' not in text_labels"
                 )
 
+            parent_id = annot.get("parent_id")
+            if parent_id is not None:
+                deferred_parent_checks.append((annot.get("id"), parent_id))
+
             _check_annotation(annot, pawls, prefix, result)
 
-        # Validate annotation parent references
-        for annot in doc.get("labelled_text", []):
-            parent_id = annot.get("parent_id")
-            if parent_id is not None and str(parent_id) not in local_annot_ids:
+        # Validate parent references (deferred until local_annot_ids is complete)
+        for annot_id_raw, parent_id in deferred_parent_checks:
+            if str(parent_id) not in local_annot_ids:
                 result.warn(
-                    f"{prefix}: annotation {annot.get('id')} references "
+                    f"{prefix}: annotation {annot_id_raw} references "
                     f"parent_id '{parent_id}' not found in this document"
                 )
 
         # Validate document-level relationships
         for rel in doc.get("relationships", []):
+            _check_relationship_label_type(
+                rel, text_labels_map, f"{prefix}.relationships", result
+            )
             _check_relationship_refs(
                 rel, local_annot_ids, f"{prefix}.relationships", result
             )
@@ -365,6 +375,28 @@ def _check_annotation(
                     )
 
 
+def _check_relationship_label_type(
+    rel: dict,
+    text_labels_map: dict,
+    prefix: str,
+    result: ValidationResult,
+) -> None:
+    """Check that a relationship's label exists and has RELATIONSHIP_LABEL type."""
+    rel_id = rel.get("id", "?")
+    label = rel.get("relationshipLabel", "")
+    if label and label not in text_labels_map:
+        result.error(
+            f"{prefix}[{rel_id}]: relationshipLabel '{label}' not in text_labels"
+        )
+    elif label:
+        lt = text_labels_map[label].get("label_type", "")
+        if lt != "RELATIONSHIP_LABEL":
+            result.error(
+                f"{prefix}[{rel_id}]: label '{label}' has type '{lt}', "
+                f"expected 'RELATIONSHIP_LABEL'"
+            )
+
+
 def _check_relationship_refs(
     rel: dict,
     valid_ids: set[str],
@@ -422,7 +454,8 @@ def _check_structural_sets(data: dict, result: ValidationResult) -> set[str]:
         # Validate structural annotations
         local_ids: set[str] = set()
         for annot in sset.get("structural_annotations", []):
-            annot_id = str(annot.get("id", ""))
+            raw_id = annot.get("id")
+            annot_id = str(raw_id) if raw_id is not None else ""
             if annot_id:
                 local_ids.add(annot_id)
                 all_struct_annot_ids.add(annot_id)
@@ -444,23 +477,11 @@ def _check_structural_sets(data: dict, result: ValidationResult) -> set[str]:
 
         # Validate structural relationships
         for rel in sset.get("structural_relationships", []):
-            label_name = rel.get("relationshipLabel", "")
-            if label_name and label_name not in text_labels_map:
-                result.error(
-                    f"{prefix}: structural relationship references label "
-                    f"'{label_name}' not in text_labels"
-                )
-            elif label_name:
-                lt = text_labels_map[label_name].get("label_type", "")
-                if lt != "RELATIONSHIP_LABEL":
-                    result.error(
-                        f"{prefix}: structural relationship label '{label_name}' "
-                        f"has type '{lt}', expected 'RELATIONSHIP_LABEL'"
-                    )
-
-            _check_relationship_refs(
-                rel, local_ids, f"{prefix}.structural_relationships", result
+            struct_rel_prefix = f"{prefix}.structural_relationships"
+            _check_relationship_label_type(
+                rel, text_labels_map, struct_rel_prefix, result
             )
+            _check_relationship_refs(rel, local_ids, struct_rel_prefix, result)
 
     return all_struct_annot_ids
 
@@ -579,20 +600,10 @@ def _check_corpus_level_relationships(
     relationships = data.get("relationships", [])
     text_labels_map = data.get("text_labels", {})
 
-    for i, rel in enumerate(relationships):
-        prefix = f"relationships[{i}]"
-        label = rel.get("relationshipLabel", "")
-        if label and label not in text_labels_map:
-            result.error(f"{prefix}: relationshipLabel '{label}' not in text_labels")
-        elif label:
-            lt = text_labels_map[label].get("label_type", "")
-            if lt != "RELATIONSHIP_LABEL":
-                result.error(
-                    f"{prefix}: label '{label}' has type '{lt}', "
-                    f"expected 'RELATIONSHIP_LABEL'"
-                )
-
-        _check_relationship_refs(rel, all_annot_ids, "relationships", result)
+    for rel in relationships:
+        prefix = "relationships"
+        _check_relationship_label_type(rel, text_labels_map, prefix, result)
+        _check_relationship_refs(rel, all_annot_ids, prefix, result)
 
 
 def _check_conversations(data: dict, result: ValidationResult) -> None:
@@ -754,6 +765,14 @@ def validate_export(zip_path: str) -> ValidationResult:
                 result.error("ZIP does not contain data.json")
                 return result
 
+            data_size = zf.getinfo("data.json").file_size
+            if data_size > MAX_DATA_JSON_SIZE:
+                result.error(
+                    f"data.json is too large ({data_size} bytes, "
+                    f"max {MAX_DATA_JSON_SIZE})"
+                )
+                return result
+
             try:
                 with zf.open("data.json") as f:
                     data = json.loads(f.read().decode("utf-8"))
@@ -806,7 +825,6 @@ def main(argv: list[str] | None = None) -> int:
             "<export.zip> [export2.zip ...]\n\n"
             "Validates OpenContracts corpus export ZIP files.\n"
             "Exit code 0 = all valid, 1 = errors found.",
-            file=sys.stderr,
         )
         return 0
 
