@@ -18,7 +18,7 @@ from django.test import TestCase
 from guardian.shortcuts import assign_perm
 
 # Models to test
-from opencontractserver.annotations.models import Annotation, AnnotationLabel
+from opencontractserver.annotations.models import Annotation, AnnotationLabel, Note
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 
@@ -423,3 +423,128 @@ class PermissionBasedVisibilityTest(TestCase):
             0,
             "Anonymous user should only see structural annotations on public documents",
         )
+
+    def test_document_queryset_visible_to_user_checks_guardian(self):
+        """
+        Regression test: Document.objects.filter(...).visible_to_user(user)
+        must check guardian permissions, not just is_public + creator.
+
+        Previously, chaining .filter().visible_to_user() hit PermissionQuerySet's
+        implementation which skipped guardian checks entirely.
+        """
+        # shared_doc has guardian read permission for collaborator (set in setUpTestData)
+        # Calling via queryset chain should still find it
+        qs = Document.objects.filter(id=self.shared_doc.id).visible_to_user(
+            self.collaborator
+        )
+        self.assertIn(
+            self.shared_doc,
+            qs,
+            "Document shared via guardian permission should be visible through queryset chain",
+        )
+
+        # regular_user has NO permission on shared_doc
+        qs = Document.objects.filter(id=self.shared_doc.id).visible_to_user(
+            self.regular_user
+        )
+        self.assertNotIn(
+            self.shared_doc,
+            qs,
+            "Document NOT shared should be invisible through queryset chain",
+        )
+
+
+class NoteVisibilityTest(TestCase):
+    """Tests that Note visibility inherits from document + corpus permissions."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username="note_owner", password="test")
+        cls.reader = User.objects.create_user(username="note_reader", password="test")
+        cls.outsider = User.objects.create_user(
+            username="note_outsider", password="test"
+        )
+        cls.anon = AnonymousUser()
+
+        # Private corpus + private document
+        cls.corpus = Corpus.objects.create(
+            title="Note Test Corpus", creator=cls.owner, is_public=False
+        )
+        cls.doc = Document.objects.create(
+            title="Note Test Doc", creator=cls.owner, is_public=False
+        )
+        cls.doc, _, _ = cls.corpus.add_document(document=cls.doc, user=cls.owner)
+
+        # Public corpus + public document
+        cls.public_corpus = Corpus.objects.create(
+            title="Public Corpus", creator=cls.owner, is_public=True
+        )
+        cls.public_doc = Document.objects.create(
+            title="Public Doc", creator=cls.owner, is_public=True
+        )
+        cls.public_doc, _, _ = cls.public_corpus.add_document(
+            document=cls.public_doc, user=cls.owner
+        )
+
+        # Notes
+        cls.private_note = Note.objects.create(
+            title="Private Note",
+            content="test",
+            document=cls.doc,
+            corpus=cls.corpus,
+            creator=cls.owner,
+            is_public=False,
+        )
+        cls.public_note = Note.objects.create(
+            title="Public Note",
+            content="test",
+            document=cls.public_doc,
+            corpus=cls.public_corpus,
+            creator=cls.owner,
+            is_public=True,
+        )
+
+    def test_owner_sees_own_notes(self):
+        qs = Note.objects.visible_to_user(self.owner)
+        self.assertIn(self.private_note, qs)
+        self.assertIn(self.public_note, qs)
+
+    def test_outsider_cannot_see_private_corpus_notes(self):
+        """Notes in private corpus+doc should be invisible to outsiders."""
+        qs = Note.objects.visible_to_user(self.outsider)
+        self.assertNotIn(self.private_note, qs)
+
+    def test_anonymous_sees_only_public_notes(self):
+        qs = Note.objects.visible_to_user(self.anon)
+        self.assertIn(self.public_note, qs)
+        self.assertNotIn(self.private_note, qs)
+
+    def test_note_visible_when_doc_and_corpus_are_public(self):
+        """
+        Regression test: A note with is_public=False should still be visible
+        to authenticated users if the parent document and corpus are both public.
+
+        PermissionQuerySet.visible_to_user only checks note.is_public and
+        note.creator, missing the document/corpus inheritance model entirely.
+        """
+        # Create a non-public note on a public doc in a public corpus
+        inherited_note = Note.objects.create(
+            title="Inherited Visibility Note",
+            content="should be visible via doc+corpus",
+            document=self.public_doc,
+            corpus=self.public_corpus,
+            creator=self.owner,
+            is_public=False,
+        )
+        # Outsider should see it because doc and corpus are both public
+        qs = Note.objects.visible_to_user(self.outsider)
+        self.assertIn(
+            inherited_note,
+            qs,
+            "Note on public doc+corpus should be visible to authenticated users",
+        )
+
+    def test_queryset_chain_respects_permissions(self):
+        """Chaining .filter().visible_to_user() must still check permissions."""
+        qs = Note.objects.filter(id=self.private_note.id).visible_to_user(self.outsider)
+        self.assertNotIn(self.private_note, qs)

@@ -5,7 +5,30 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-19
+## [Unreleased] - 2026-02-21
+
+### Security
+
+#### IDOR Vulnerabilities Fixed in 4 GraphQL Mutations
+- **HIGH**: Fixed information leakage allowing object ID enumeration via different error messages
+  - `RemoveAnnotation` (`config/graphql/mutations.py`)
+  - `RejectAnnotation` (`config/graphql/mutations.py`)
+  - `ApproveAnnotation` (`config/graphql/mutations.py`)
+  - `RemoveRelationship` (`config/graphql/mutations.py`)
+- **Attack Vector**: Unauthorized users could distinguish between "object doesn't exist" and "object exists but you can't access it" by observing different error responses
+- **Impact**: Allowed enumeration of valid annotation/relationship IDs
+- **Solution**: All mutations now use `visible_to_user()` pattern with unified error messages; secondary permission checks also return the same unified message
+- **Information leakage fix**: Outer exception handlers no longer return `str(e)` to clients; errors are logged server-side only
+- **Test Coverage**: Added IDOR protection tests in `test_permission_fixes.py` and `test_voting_mutations_graphql.py`
+
+#### QuerySet Permission Filtering Gaps Fixed
+- `DocumentQuerySet.visible_to_user()` and `NoteQuerySet.visible_to_user()` inherited from `PermissionQuerySet` which had guardian permission checks commented out — only checking `is_public` and `creator`
+  - `opencontractserver/shared/QuerySets.py` (classes `DocumentQuerySet`, `NoteQuerySet`)
+- `AnnotationQuerySet.visible_to_user()` checked document/corpus visibility via `is_public` and `creator` only, missing guardian permission lookups for documents and corpuses
+  - `opencontractserver/shared/QuerySets.py` (class `AnnotationQuerySet`)
+- **Bug**: Code calling `Model.objects.filter(...).visible_to_user(user)` or `Model.objects.visible_to_user(user)` skipped guardian permission checks, making objects invisible to users with explicit share permissions
+- **Impact**: Documents shared via `set_permissions_for_obj_to_user()` were invisible through the QuerySet chain code path; annotations on shared documents/corpuses were invisible; Notes on accessible documents were not visible
+- **Fix**: All three QuerySets now override `visible_to_user()` with proper guardian permission table lookups. Documents and Annotations check guardian tables directly; Notes inherit from document + corpus permissions
 
 ### Added
 
