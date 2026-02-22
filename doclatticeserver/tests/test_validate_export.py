@@ -419,6 +419,14 @@ class TestAnnotationValidation(unittest.TestCase):
         assert not result.ok
         assert any("empty PAWLs" in e for e in result.errors)
 
+    def test_missing_page_field_is_error(self):
+        """The 'page' field is required on annotations per the spec."""
+        data = _minimal_v1_data()
+        del data["annotated_docs"]["sample.pdf"]["labelled_text"][0]["page"]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("page" in e for e in result.errors)
+
 
 class TestPawlsValidation(unittest.TestCase):
     def test_nonsequential_page_index_is_error(self):
@@ -731,6 +739,14 @@ class TestV2RequiredFields(unittest.TestCase):
         assert not result.ok
         assert any("structural_annotation_sets" in e for e in result.errors)
         assert any("relationships" in e for e in result.errors)
+
+    def test_missing_md_description_is_error(self):
+        """md_description is required in V2 exports (value can be null)."""
+        data = _minimal_v2_data()
+        del data["md_description"]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("md_description" in e for e in result.errors)
 
 
 class TestConversationValidation(unittest.TestCase):
