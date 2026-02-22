@@ -12,7 +12,13 @@ from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError, create_model
 from typing_extensions import TypedDict
 
-from opencontractserver.annotations.models import Annotation, AnnotationLabel
+from opencontractserver.annotations.models import (
+    DOC_TYPE_LABEL,
+    SPAN_LABEL,
+    TOKEN_LABEL,
+    Annotation,
+    AnnotationLabel,
+)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.types.dicts import (
@@ -100,8 +106,8 @@ def build_label_lookups(
     doc_labels = {}
 
     # Split them into text labels vs. doc labels
-    text_label_queryset = labels.filter(label_type="TOKEN_LABEL")
-    doc_type_labels_queryset = labels.filter(label_type="DOC_TYPE_LABEL")
+    text_label_queryset = labels.filter(label_type=TOKEN_LABEL)
+    doc_type_labels_queryset = labels.filter(label_type=DOC_TYPE_LABEL)
 
     for tl in text_label_queryset:
         hex_color = getattr(tl, "color", "#9ACD32")
@@ -111,7 +117,7 @@ def build_label_lookups(
             "description": tl.description,
             "icon": tl.icon,
             "text": tl.text,
-            "label_type": "TOKEN_LABEL",
+            "label_type": TOKEN_LABEL,
         }
 
     for dl in doc_type_labels_queryset:
@@ -122,7 +128,7 @@ def build_label_lookups(
             "description": dl.description,
             "icon": dl.icon,
             "text": dl.text,
-            "label_type": "DOC_TYPE_LABEL",
+            "label_type": DOC_TYPE_LABEL,
         }
 
     return {
@@ -256,10 +262,10 @@ def build_document_export(
         labels_for_doc = []
 
         for annot in doc_annotations:
-            if annot.annotation_label.label_type == "DOC_TYPE_LABEL":
+            if annot.annotation_label.label_type == DOC_TYPE_LABEL:
                 labels_for_doc.append(f"{annot.annotation_label.text}")
 
-            if annot.annotation_label.label_type in ["TOKEN_LABEL", "SPAN_LABEL"]:
+            if annot.annotation_label.label_type in [TOKEN_LABEL, SPAN_LABEL]:
                 annot_export = {
                     "id": f"{annot.id}",
                     "annotationLabel": f"{annot.annotation_label.id}",
