@@ -427,6 +427,56 @@ class TestAnnotationValidation(unittest.TestCase):
         assert not result.ok
         assert any("page" in e for e in result.errors)
 
+    def test_non_integer_page_key_is_error(self):
+        """annotation_json keys must be valid integers."""
+        data = _minimal_v1_data()
+        annot = data["annotated_docs"]["sample.pdf"]["labelled_text"][0]
+        annot["annotation_json"] = {
+            "abc": {
+                "bounds": {"top": 0, "bottom": 10, "left": 0, "right": 10},
+                "tokensJsons": [],
+                "rawText": "Hello",
+            }
+        }
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("non-integer page key" in e for e in result.errors)
+
+    def test_page_key_out_of_range_is_error(self):
+        """annotation_json page key must be within 0..page_count-1."""
+        data = _minimal_v1_data()
+        annot = data["annotated_docs"]["sample.pdf"]["labelled_text"][0]
+        annot["annotation_json"] = {
+            "999": {
+                "bounds": {"top": 0, "bottom": 10, "left": 0, "right": 10},
+                "tokensJsons": [],
+                "rawText": "Hello",
+            }
+        }
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("out of range" in e and "999" in e for e in result.errors)
+
+    def test_page_index_mismatches_page_key(self):
+        """pageIndex in tokensJsons must match the containing page key."""
+        data = _minimal_v1_data()
+        # Add a second page so pageIndex=1 is valid range-wise
+        data["annotated_docs"]["sample.pdf"]["pawls_file_content"].append(
+            {
+                "page": {"width": 612.0, "height": 792.0, "index": 1},
+                "tokens": [{"x": 0, "y": 0, "width": 10, "height": 10, "text": "foo"}],
+            }
+        )
+        data["annotated_docs"]["sample.pdf"]["page_count"] = 2
+        annot = data["annotated_docs"]["sample.pdf"]["labelled_text"][0]
+        # annotation_json key is "0" but token ref has pageIndex 1
+        annot["annotation_json"]["0"]["tokensJsons"] = [
+            {"pageIndex": 1, "tokenIndex": 0}
+        ]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("does not match page key" in e for e in result.errors)
+
 
 class TestPawlsValidation(unittest.TestCase):
     def test_nonsequential_page_index_is_error(self):

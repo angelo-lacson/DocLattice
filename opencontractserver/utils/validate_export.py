@@ -335,6 +335,23 @@ def _check_annotation(
             if not isinstance(page_data, dict):
                 continue
 
+            # Validate page key is a valid integer
+            try:
+                page_key_int = int(page_key)
+            except (ValueError, TypeError):
+                result.error(
+                    f"{ann_prefix}: annotation_json has non-integer "
+                    f"page key '{page_key}'"
+                )
+                continue
+
+            # Validate page key is within document range
+            if pawls and (page_key_int < 0 or page_key_int >= len(pawls)):
+                result.error(
+                    f"{ann_prefix}: annotation_json page key '{page_key}' "
+                    f"out of range (document has {len(pawls)} page(s))"
+                )
+
             # Validate bounds are non-negative
             bounds = page_data.get("bounds", {})
             if isinstance(bounds, dict):
@@ -355,6 +372,13 @@ def _check_annotation(
                         f"{ann_prefix}: token ref missing pageIndex or tokenIndex"
                     )
                     continue
+
+                # Check pageIndex matches the containing page key
+                if page_idx != page_key_int:
+                    result.error(
+                        f"{ann_prefix}: token ref pageIndex {page_idx} "
+                        f"does not match page key '{page_key}'"
+                    )
 
                 if not pawls:
                     result.error(
