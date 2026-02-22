@@ -373,7 +373,9 @@ def import_conversations(
             creator = User.objects.filter(email=creator_email).first() or user_obj
 
             # Determine corpus vs document linkage
-            chat_with_corpus = corpus if conv_data.get("chat_with_corpus", True) else None
+            chat_with_corpus = (
+                corpus if conv_data.get("chat_with_corpus", True) else None
+            )
             chat_with_document = None
             doc_hash = conv_data.get("chat_with_document_hash")
             if doc_hash_to_doc and doc_hash:
@@ -473,7 +475,9 @@ def import_conversations(
                 creator=creator,
             )
 
-            # Patch auto_now_add timestamp
+            # Patch auto_now_add timestamp.
+            # Note: MessageVote uses .objects (not .all_objects) because it has
+            # no soft-delete support — its default manager is unfiltered.
             if "created" in vote_data:
                 created_ts = datetime.fromisoformat(
                     vote_data["created"].replace("Z", "+00:00")

@@ -12,7 +12,11 @@ from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError, create_model
 from typing_extensions import TypedDict
 
-from opencontractserver.annotations.models import Annotation, AnnotationLabel, Relationship
+from opencontractserver.annotations.models import (
+    Annotation,
+    AnnotationLabel,
+    Relationship,
+)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.types.dicts import (
@@ -130,11 +134,13 @@ def build_label_lookups(
             .distinct()
         )
 
-    # Merge annotation label IDs with relationship label IDs
+    # Merge annotation label IDs with relationship label IDs.
+    # Materialize to a list so len() and filter(pk__in=) don't each
+    # trigger separate DB evaluations of a union queryset.
     if isinstance(label_ids, list):
         all_label_ids = list(label_ids) + list(relationship_label_ids)
     else:
-        all_label_ids = label_ids.union(relationship_label_ids)
+        all_label_ids = list(label_ids.union(relationship_label_ids))
 
     logger.info(f"Found {len(all_label_ids)} labels in corpus label set")
 

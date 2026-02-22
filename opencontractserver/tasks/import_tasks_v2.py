@@ -243,9 +243,7 @@ def _import_corpus(
 
         # Build a text-keyed label lookup for structural annotations and
         # relationships, which reference labels by text rather than PK.
-        label_lookup_by_text = {
-            label.text: label for label in label_lookup.values()
-        }
+        label_lookup_by_text = {label.text: label for label in label_lookup.values()}
 
         # ===== V2 only: Import structural annotation sets =====
         structural_sets = {}
@@ -284,8 +282,10 @@ def _import_corpus(
                 # Build hash mapping for DocumentPath reconstruction
                 if corpus_doc.pdf_file_hash:
                     doc_hash_to_corpus_doc[corpus_doc.pdf_file_hash] = corpus_doc
-                # Also map by old ID (fallback if hash is not available)
-                doc_hash_to_corpus_doc[str(corpus_doc.id)] = corpus_doc
+                # Also map by filename (fallback when hash is unavailable).
+                # The export side uses the same filename as its fallback
+                # document_ref in package_document_paths().
+                doc_hash_to_corpus_doc[doc_filename] = corpus_doc
                 doc_filename_to_id[doc_filename] = corpus_doc.id
 
         # ===== V2 only: Import additional features =====
@@ -424,6 +424,11 @@ def _reconstruct_document_paths(
     from opencontractserver.corpuses.models import CorpusFolder
     from opencontractserver.documents.models import DocumentPath
 
+    # Pre-build a folder path lookup to avoid repeated DB queries + linear
+    # scans inside the loop.
+    all_folders = CorpusFolder.objects.filter(corpus=corpus_obj)
+    folder_path_map = {f.get_path(): f for f in all_folders}
+
     for path_data in document_paths_data:
         # Only reconstruct current, non-deleted paths
         if not path_data.get("is_current", True) or path_data.get("is_deleted", False):
@@ -457,18 +462,12 @@ def _reconstruct_document_paths(
         # Update folder assignment if folder_path is specified
         folder_path = path_data.get("folder_path")
         if folder_path:
-            folder = CorpusFolder.objects.filter(
-                corpus=corpus_obj
-            ).all()
-            for f in folder:
-                if f.get_path() == folder_path:
-                    updates["folder"] = f
-                    break
+            folder = folder_path_map.get(folder_path)
+            if folder:
+                updates["folder"] = folder
 
         if updates:
             for key, value in updates.items():
                 setattr(existing_path, key, value)
             existing_path.save(update_fields=list(updates.keys()))
-            logger.debug(
-                f"Updated DocumentPath for doc {corpus_doc.id}: {updates}"
-            )
+            logger.debug(f"Updated DocumentPath for doc {corpus_doc.id}: {updates}")

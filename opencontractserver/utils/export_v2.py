@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -206,12 +207,16 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             if doc_path.parent:
                 parent_version_number = doc_path.parent.version_number
 
-            # Use document hash as reference (more stable than ID)
-            document_ref = (
-                doc_path.document.pdf_file_hash
-                if doc_path.document.pdf_file_hash
-                else str(doc_path.document.id)
-            )
+            # Use document hash as primary reference (stable across systems).
+            # Fall back to the filename (basename of pdf_file), which matches
+            # the key used in annotated_docs and is available on both the
+            # export and import sides.
+            if doc_path.document.pdf_file_hash:
+                document_ref = doc_path.document.pdf_file_hash
+            elif doc_path.document.pdf_file:
+                document_ref = os.path.basename(doc_path.document.pdf_file.name)
+            else:
+                document_ref = str(doc_path.document.id)
 
             paths_export.append(
                 {
@@ -438,9 +443,9 @@ def package_conversations(
             )
 
         # Get all messages for these conversations, ordered chronologically
-        messages = ChatMessage.objects.filter(
-            conversation__in=conversations
-        ).order_by("created_at")
+        messages = ChatMessage.objects.filter(conversation__in=conversations).order_by(
+            "created_at"
+        )
 
         # Apply permission filtering for messages if user is provided
         if user is not None:
@@ -466,9 +471,7 @@ def package_conversations(
                     "agent_type": msg.agent_type or None,
                     "data": msg.data,
                     "parent_message_id": (
-                        str(msg.parent_message_id)
-                        if msg.parent_message_id
-                        else None
+                        str(msg.parent_message_id) if msg.parent_message_id else None
                     ),
                     "creator_email": msg.creator.email if msg.creator else "",
                     "created": msg.created_at.isoformat(),
