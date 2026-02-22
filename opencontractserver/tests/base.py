@@ -98,10 +98,13 @@ class BaseFixtureTestCase(TransactionTestCase):
 
         super().setUpClass()
 
-    def _pre_setup(self):
+    @classmethod
+    def _pre_setup(cls):
         """
-        Additional setup before each test method, which includes ensuring
+        Additional setup before each test, which includes ensuring
         no stale database connections remain.
+
+        In Django 5.2 this became a classmethod called from setUpClass().
         """
         for conn in connections.all():
             conn.close()
