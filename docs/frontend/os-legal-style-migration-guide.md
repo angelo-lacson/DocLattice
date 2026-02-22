@@ -87,9 +87,34 @@ Section titles use Georgia serif at 24px in teal. This pattern repeats identical
 - `#f8fafc` — off-white backgrounds
 - `#fafafa` — page background
 
-**Semantic colors**: green `#059669` (success), red `#dc2626` (danger), orange `#f59e0b` (warning), blue `#2563eb` (info).
+**Semantic colors**: green `#16a34a` (success), red `#dc2626` (danger), orange `#f59e0b` (warning), blue `#2563eb` (info).
 
-**Project theme tokens** (`frontend/src/theme/colors.ts`): Use the `color.N*` neutral scale and `color.O*`, `color.B*` etc. for themed contexts (leaderboard badges, charts). For new refactored views, prefer the hex values above directly — they match the design system and avoid an extra import.
+### Design Token Constants
+
+`frontend/src/assets/configurations/osLegalStyles.ts` exports three typed constant objects that centralize the design system:
+
+- **`OS_LEGAL_COLORS`** — accent, text scale, surface/border, selection states, drag-and-drop feedback, folder theming, danger/success. Includes WCAG contrast notes (accent on white = 4.57:1 AA-compliant; `textMuted` on white = 2.78:1, large text only).
+- **`OS_LEGAL_TYPOGRAPHY`** — `fontFamilySerif` (Georgia) and `fontFamilySans` (Inter) stacks.
+- **`OS_LEGAL_SPACING`** — `borderRadiusCard` (12px), `borderRadiusButton` (8px), `shadowCard`, `shadowCardHover`.
+
+Use these tokens in new styled-components for consistency. Example:
+
+```typescript
+import { OS_LEGAL_COLORS, OS_LEGAL_SPACING } from "../../assets/configurations/osLegalStyles";
+
+const Card = styled.div<{ $isSelected?: boolean }>`
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${(props) => props.$isSelected ? OS_LEGAL_COLORS.selectedBorder : OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+
+  &:hover {
+    box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  }
+`;
+```
+
+**Project theme tokens** (`frontend/src/theme/colors.ts`): The `color.N*` neutral scale and `color.O*`, `color.B*` etc. are used for themed contexts (leaderboard badges, charts). For new refactored views, prefer `OS_LEGAL_COLORS` or the `--oc-*` CSS variables.
 
 ## Component Replacement Map
 
