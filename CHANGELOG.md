@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-21
 
+### Security
+
+#### IDOR Vulnerabilities Fixed in 4 GraphQL Mutations
+- **HIGH**: Fixed information leakage allowing object ID enumeration via different error messages
+  - `RemoveAnnotation` (`config/graphql/mutations.py`)
+  - `RejectAnnotation` (`config/graphql/mutations.py`)
+  - `ApproveAnnotation` (`config/graphql/mutations.py`)
+  - `RemoveRelationship` (`config/graphql/mutations.py`)
+- **Attack Vector**: Unauthorized users could distinguish between "object doesn't exist" and "object exists but you can't access it" by observing different error responses
+- **Impact**: Allowed enumeration of valid annotation/relationship IDs
+- **Solution**: All mutations now use `visible_to_user()` pattern with unified error messages; secondary permission checks also return the same unified message
+- **Information leakage fix**: Outer exception handlers no longer return `str(e)` to clients; errors are logged server-side only
+- **Test Coverage**: Added IDOR protection tests in `test_permission_fixes.py` and `test_voting_mutations_graphql.py`
+
+#### QuerySet Permission Filtering Gaps Fixed
+- `DocumentQuerySet.visible_to_user()` and `NoteQuerySet.visible_to_user()` inherited from `PermissionQuerySet` which had guardian permission checks commented out — only checking `is_public` and `creator`
+  - `opencontractserver/shared/QuerySets.py` (classes `DocumentQuerySet`, `NoteQuerySet`)
+- `AnnotationQuerySet.visible_to_user()` checked document/corpus visibility via `is_public` and `creator` only, missing guardian permission lookups for documents and corpuses
+  - `opencontractserver/shared/QuerySets.py` (class `AnnotationQuerySet`)
+- **Bug**: Code calling `Model.objects.filter(...).visible_to_user(user)` or `Model.objects.visible_to_user(user)` skipped guardian permission checks, making objects invisible to users with explicit share permissions
+- **Impact**: Documents shared via `set_permissions_for_obj_to_user()` were invisible through the QuerySet chain code path; annotations on shared documents/corpuses were invisible; Notes on accessible documents were not visible
+- **Fix**: All three QuerySets now override `visible_to_user()` with proper guardian permission table lookups. Documents and Annotations check guardian tables directly; Notes inherit from document + corpus permissions
+
 ### Added
 
 #### Chunked Document Processing for Large PDFs
@@ -20,12 +43,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New chunking constants** (`opencontractserver/constants/document_processing.py`): `DEFAULT_MAX_PAGES_PER_CHUNK`, `DEFAULT_MIN_PAGES_FOR_CHUNKING`, `DEFAULT_MAX_CONCURRENT_CHUNKS`, `DEFAULT_CHUNK_RETRY_LIMIT`
 - **DoclingParser now extends `BaseChunkedParser`** (`opencontractserver/pipeline/parsers/docling_parser_rest.py`): Large documents are automatically split and parsed in chunks. Configurable via `PipelineSettings` (`DOCLING_MAX_PAGES_PER_CHUNK`, `DOCLING_MIN_PAGES_FOR_CHUNKING`, `DOCLING_MAX_CONCURRENT_CHUNKS`). Image extraction runs once on the full PDF after reassembly via `_post_reassemble_hook`.
 
+#### Context Guardrails & Conversation Compaction (Closes #898)
+- **Context guardrails constants** (`opencontractserver/constants/context_guardrails.py`): Centralized configuration for model context windows (OpenAI, Anthropic, Google), compaction thresholds, tool output limits, and token estimation parameters. Covers 20+ model variants with sensible defaults.
+- **Token estimation** (`opencontractserver/llms/context_guardrails.py`): Fast heuristic token counter (~3.5 chars/token) for estimating conversation size without importing heavyweight tokeniser libraries. Intentionally over-estimates to trigger compaction conservatively.
+- **Model context window lookup** (`context_guardrails.py`): Resolves model names to context window sizes via exact match then longest-prefix matching, with a 128K default fallback for unknown models.
+- **Conversation compaction** (`context_guardrails.py`): When conversation history approaches the context window limit (default 75%), older messages are replaced by a concise summary while preserving recent turns (4–20 messages) verbatim. Supports pluggable summary functions for LLM-based summarization.
+- **Tool output truncation** (`context_guardrails.py`, `opencontractserver/llms/tools/pydantic_ai_tools.py`): String outputs from tools are automatically truncated to 50K characters with a notice directing the LLM to use range parameters. Applied at the PydanticAI tool wrapper level so all tools benefit transparently.
+- **Per-agent compaction configuration** (`CompactionConfig` dataclass): Added `compaction` field to `AgentConfig` allowing per-conversation overrides of threshold ratio, recent message counts, and tool output limits. Enabled by default.
+- **Automatic compaction in message history retrieval** (`opencontractserver/llms/agents/pydantic_ai_agents.py`): `_get_message_history()` now checks conversation size against model limits and injects a compaction summary as a system message when needed, transparent to the agent framework.
+- **Persisted compaction bookmarks** (`opencontractserver/conversations/models.py`): Added `compaction_summary` and `compacted_before_message_id` fields to the `Conversation` model. Compaction is computed once and persisted — subsequent reads skip old messages at the DB level via `id__gt` filter, making long conversations cheap to load.
+  - Migration: `opencontractserver/conversations/migrations/0015_add_compaction_fields.py`
+  - `CoreConversationManager.persist_compaction()` writes the bookmark with optimistic locking (concurrent requests are safely resolved)
+  - `CoreConversationManager.get_conversation_messages()` honours the cutoff automatically
+- **Comprehensive test suite** (`opencontractserver/tests/test_context_guardrails.py`): 30+ unit tests covering token estimation, model lookup, truncation, compaction triggers, summary generation, message proxy conversion, configuration defaults, and Conversation model field definitions. Uses `SimpleTestCase` for fast parallel execution.
+
 ### Changed
 
 #### Pipeline Registry: Deduplicate and Filter Abstract Components
 - **Removed `MultimodalMicroserviceEmbedder` backwards-compatibility alias**: The module-level alias `MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder` in `opencontractserver/pipeline/embedders/multimodal_microservice.py` has been removed. Use `CLIPMicroserviceEmbedder` directly.
 - **Fixed duplicate embedder entries in pipeline registry**: `_discover_subclasses()` in `opencontractserver/pipeline/registry.py` now deduplicates discovered classes by identity and skips abstract intermediate base classes via `inspect.isabstract()`, preventing aliases and abstract bases from appearing in the get-embedders query endpoint.
+
 ### Fixed
+
+#### Prompt Injection via User-Controlled Content in Agent Prompts
+- **Root cause**: Thread and document action prompt builders injected user-controlled content (message bodies, thread titles, document titles) directly into Markdown-structured LLM prompts without any sanitisation boundary. A user who can post a message to a moderated thread could craft content that overrides agent instructions.
+  - File: `opencontractserver/tasks/agent_tasks.py` (lines 808-848)
+  - File: `opencontractserver/llms/agents/core_agents.py` (lines 963-983, 1036-1054)
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py` (lines 1655-1669, 2301-2315)
+- **Fix**: All user-generated content injected into agent prompts is now wrapped in `<user_content>` / `</user_content>` XML fence tags. An explicit `UNTRUSTED_CONTENT_NOTICE` instruction block is added to thread moderation prompts telling the LLM to treat fenced content as raw data and ignore any embedded directives. A size-threshold warning (`UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD = 1000 chars`) logs a `[PromptInjection]` warning for abnormally large user content.
+  - New file: `opencontractserver/utils/prompt_sanitization.py` — `fence_user_content()`, `warn_if_content_large()`, `UNTRUSTED_CONTENT_NOTICE`
+  - New constant: `opencontractserver/constants/moderation.py` — `UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD`
+  - New tests: `opencontractserver/tests/test_prompt_sanitization.py`
+  - Updated tests: `opencontractserver/tests/test_thread_corpus_actions.py` — added `test_async_thread_action_prompt_fences_user_content`
+
+#### Frontend: Most views show legacy corpus.description instead of versioned mdDescription (Closes #892)
+- **Backend description sync**: `Corpus.update_description()` now keeps the plain-text `description` field in sync when `md_description` is updated via the versioned markdown system. A new `_markdown_to_plain_text()` static method strips markdown formatting for the plain-text field.
+  - File: `opencontractserver/corpuses/models.py` (lines 249-272, `update_description` method)
+- **New `useCorpusMdDescription` hook**: Reusable React hook that fetches markdown content from a corpus's `mdDescription` URL and returns the raw text for rendering with `SafeMarkdown`.
+  - File: `frontend/src/hooks/useCorpusMdDescription.ts`
+- **CorpusContextSidebar**: Now fetches and renders the versioned markdown description instead of the stale plain-text `description` field.
+  - File: `frontend/src/components/threads/CorpusContextSidebar.tsx`
+- **DocumentKnowledgeBase**: Corpus info display now fetches `mdDescription` content and renders it as markdown. Added `title`, `description`, and `mdDescription` fields to the `GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS` query's corpus selection.
+  - File: `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`
+  - File: `frontend/src/graphql/queries.ts` (line 3028)
+- **CorpusHeader (settings)**: Now fetches and renders the versioned markdown description via `useCorpusMdDescription` hook with `SafeMarkdown`. Added `mdDescription` to prop chain through `CorpusSettings` and `Corpuses.tsx`.
+  - File: `frontend/src/components/corpuses/settings/CorpusHeader.tsx`
+  - File: `frontend/src/components/corpuses/CorpusSettings.tsx`
+  - File: `frontend/src/views/Corpuses.tsx`
+- **TypeScript type update**: Added `mdDescription` optional field to `RawCorpusType`.
+  - File: `frontend/src/types/graphql-api.ts`
 
 #### Edit Description Modal Does Not Save on Update (Issue #899)
 - **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
@@ -102,13 +168,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`SynchronousOnlyOperation` in MCP server** (`config/telemetry.py`, `opencontractserver/mcp/telemetry.py`, `opencontractserver/mcp/server.py`): Added async telemetry functions (`arecord_event`, `arecord_mcp_tool_call`, `arecord_mcp_resource_read`, `arecord_mcp_request`) that use `sync_to_async` to safely run Django ORM lookups in a thread pool. Prevents "You cannot call this from an async context" errors on every MCP request.
 - **Installation ID caching** (`config/telemetry.py:91-113`): Added process-lifetime cache for installation UUID to eliminate redundant database queries on every telemetry call, particularly beneficial for high-frequency MCP requests.
 
-#### Edit Description Modal Does Not Save on Update (Issue #899)
-- **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
-  - File: `frontend/src/App.tsx` (lines 128-149, 398)
-- **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
-- **Removed duplicate modals**: `Documents.tsx` rendered its own edit/view CRUDModals controlled by the same `editingDocument` reactive var as `App.tsx`, causing potential double-modal rendering. Removed the duplicates from `Documents.tsx` and consolidated into the global `App.tsx` handler
-  - File: `frontend/src/views/Documents.tsx` (removed ~45 lines of duplicate modal + mutation code)
-
 #### Security: LLM Prompt Injection Protection for Approval Bypass
 - **Replaced `skip_approval` function parameter with `config._approval_bypass_allowed` flag**: The previous design exposed a `skip_approval` parameter in `ask_document_tool`'s function signature that a malicious LLM could set to `True` to bypass approval gates. Now uses a runtime flag on `AgentConfig` that only `resume_with_approval()` can set, wrapped in a `try/finally` block to guarantee reset
   - File: `opencontractserver/llms/agents/pydantic_ai_agents.py`
@@ -174,6 +233,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known Limitations
 
 - **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
+
+#### Edge Case Tests for Personal Corpus (Issue #839)
+- **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
+- **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestDeleteAndRecreatePersonalCorpus`)
+- **Embedding task queue failure tests**: Verifies graceful degradation when Redis/Celery is unavailable during embedding task queuing, including partial batch failure scenarios
+  - File: `opencontractserver/tests/test_personal_corpus.py` (`TestEmbeddingTaskQueueFailure`)
+
+### Fixed
 
 #### Security Hardening: Authentication & Permissioning Audit Remediation
 

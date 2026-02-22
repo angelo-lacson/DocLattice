@@ -130,6 +130,22 @@ interface MessageData {
 }
 
 /**
+ * Context status metadata from the backend (token usage, compaction info).
+ */
+interface ContextStatus {
+  used_tokens: number;
+  context_window: number;
+  was_compacted: boolean;
+  tokens_before_compaction: number;
+}
+
+interface CompactionNotice {
+  tokensBefore: number;
+  tokensAfter: number;
+  contextWindow: number;
+}
+
+/**
  * CorpusChat props definition.
  */
 interface CorpusChatProps {
@@ -831,6 +847,13 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
 
+  // Context status (token usage, compaction info)
+  const [contextStatus, setContextStatus] = useState<ContextStatus | null>(
+    null
+  );
+  const [compactionNotice, setCompactionNotice] =
+    useState<CompactionNotice | null>(null);
+
   // Approval gate state (mirrors ChatTray)
   const [pendingApproval, setPendingApproval] = useState<{
     messageId: string;
@@ -1101,6 +1124,10 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               data?.timeline
             );
             setIsProcessing(false);
+            setCompactionNotice(null);
+            if (data?.context_status) {
+              setContextStatus(data.context_status as ContextStatus);
+            }
             if (
               pendingApproval &&
               data?.message_id === pendingApproval.messageId
@@ -1453,7 +1480,14 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     if (!messageId || !thoughtText) return;
 
     let entryType: TimelineEntry["type"] = "thought";
-    if (data?.tool_name && data?.args) entryType = "tool_call";
+    if (data?.compaction) {
+      entryType = "compaction";
+      setCompactionNotice({
+        tokensBefore: data.compaction.tokens_before,
+        tokensAfter: data.compaction.tokens_after,
+        contextWindow: data.compaction.context_window,
+      });
+    } else if (data?.tool_name && data?.args) entryType = "tool_call";
     else if (data?.tool_name && !data?.args) entryType = "tool_result";
 
     const newEntry: TimelineEntry = {
@@ -1784,6 +1818,131 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 )}
               </MessagesArea>
 
+              {/* Compaction banner (visible while compaction is underway) */}
+              {compactionNotice && (
+                <div
+                  data-testid="compaction-banner"
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderTop: "1px solid #bfdbfe",
+                    background:
+                      "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.8125rem",
+                    color: "#1e40af",
+                    flexShrink: 0,
+                    animation: "compaction-pulse 2s ease-in-out infinite",
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#2563eb"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="4 14 10 14 10 20" />
+                    <polyline points="20 10 14 10 14 4" />
+                    <line x1="14" y1="10" x2="21" y2="3" />
+                    <line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                  <span style={{ fontWeight: 600 }}>Compacting context</span>
+                  <span style={{ opacity: 0.75 }}>
+                    {compactionNotice.tokensBefore.toLocaleString()} →{" "}
+                    {compactionNotice.tokensAfter.toLocaleString()} tokens
+                  </span>
+                  <style>{`
+                    @keyframes compaction-pulse {
+                      0%, 100% { opacity: 1; }
+                      50% { opacity: 0.7; }
+                    }
+                  `}</style>
+                </div>
+              )}
+              {/* Context usage meter */}
+              {contextStatus && contextStatus.context_window > 0 && (
+                <div
+                  data-testid="context-meter"
+                  style={{
+                    padding: "0.25rem 1.5rem",
+                    borderTop: "1px solid rgba(0, 0, 0, 0.06)",
+                    background: "rgba(255, 255, 255, 0.95)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.75rem",
+                    color: "#64748b",
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    data-testid="context-meter-track"
+                    style={{
+                      flex: 1,
+                      height: 4,
+                      borderRadius: 2,
+                      background: "#e2e8f0",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      data-testid="context-meter-fill"
+                      style={{
+                        height: "100%",
+                        borderRadius: 2,
+                        width: `${Math.min(
+                          100,
+                          (contextStatus.used_tokens /
+                            contextStatus.context_window) *
+                            100
+                        )}%`,
+                        background:
+                          contextStatus.used_tokens /
+                            contextStatus.context_window >
+                          0.85
+                            ? "#ef4444"
+                            : contextStatus.used_tokens /
+                                contextStatus.context_window >
+                              0.6
+                            ? "#f59e0b"
+                            : "#22c55e",
+                        transition: "width 0.3s ease, background 0.3s ease",
+                      }}
+                    />
+                  </div>
+                  <span
+                    data-testid="context-meter-percentage"
+                    title={`~${contextStatus.used_tokens.toLocaleString()} / ${contextStatus.context_window.toLocaleString()} tokens used`}
+                  >
+                    {Math.round(
+                      (contextStatus.used_tokens /
+                        contextStatus.context_window) *
+                        100
+                    )}
+                    %
+                  </span>
+                  {contextStatus.was_compacted && (
+                    <span
+                      data-testid="context-meter-compacted"
+                      style={{
+                        background: "#dbeafe",
+                        color: "#2563eb",
+                        padding: "0.125rem 0.375rem",
+                        borderRadius: 4,
+                        fontSize: "0.6875rem",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Compacted
+                    </span>
+                  )}
+                </div>
+              )}
               {/* Input */}
               <ChatInputWrapper>
                 <EnhancedChatInputContainer

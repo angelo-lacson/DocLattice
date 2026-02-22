@@ -8,6 +8,8 @@ from typing import Any, Callable, Optional, get_type_hints
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai.tools import RunContext
 
+from opencontractserver.constants.context_guardrails import MAX_TOOL_OUTPUT_CHARS
+from opencontractserver.llms.context_guardrails import truncate_tool_output
 from opencontractserver.llms.exceptions import ToolConfirmationRequired
 from opencontractserver.llms.tools.tool_factory import CoreTool
 from opencontractserver.llms.vector_stores.core_vector_stores import (
@@ -216,6 +218,17 @@ class PydanticAIDependencies(BaseModel):
         description="If True, skip approval prompts for all tools in this agent",
     )
 
+    # Per-agent tool output truncation limit.  Populated from
+    # CompactionConfig.max_tool_output_chars at agent construction time.
+    # TODO: Only two agent construction sites (PydanticAIDocumentAgent,
+    # PydanticAICorpusAgent) propagate config.compaction.max_tool_output_chars
+    # here. Other construction sites rely on this default. If per-agent
+    # override is needed elsewhere, wire it through AgentConfig.compaction.
+    max_tool_output_chars: int = Field(
+        default=MAX_TOOL_OUTPUT_CHARS,
+        description="Maximum characters for tool output before truncation",
+    )
+
 
 class PydanticAIToolWrapper:
     """Modern Pydantic AI tool wrapper following latest patterns."""
@@ -359,7 +372,13 @@ class PydanticAIToolWrapper:
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
-                    return await original_func(*args, **kwargs)
+                    result = await original_func(*args, **kwargs)
+                    # Apply tool output truncation to prevent oversized
+                    # returns from bloating the conversation context.
+                    if isinstance(result, str):
+                        max_chars = ctx.deps.max_tool_output_chars
+                        result = truncate_tool_output(result, max_chars=max_chars)
+                    return result
                 except (PermissionError, ToolConfirmationRequired):
                     # Security and approval exceptions must propagate to the
                     # agent loop so they can be handled at the framework level.
@@ -413,7 +432,11 @@ class PydanticAIToolWrapper:
                 _maybe_raise(ctx, *args, **kwargs)
 
                 try:
-                    return original_func(*args, **kwargs)
+                    result = original_func(*args, **kwargs)
+                    if isinstance(result, str):
+                        max_chars = ctx.deps.max_tool_output_chars
+                        result = truncate_tool_output(result, max_chars=max_chars)
+                    return result
                 except (PermissionError, ToolConfirmationRequired):
                     raise
                 except Exception as e:

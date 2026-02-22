@@ -480,10 +480,12 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             )
             return paths[0]
         else:
+            from opencontractserver.pipeline.utils import get_default_embedder_path
+
             logger.debug(
                 f"[Session {self.session_id}] No existing embedder found, using default"
             )
-            return settings.DEFAULT_EMBEDDER
+            return await database_sync_to_async(get_default_embedder_path)()
 
     # -------------------------------------------------------------------------
     #  Conversation title generation
@@ -665,6 +667,11 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                         event.metadata.get("timeline", [])
                         if isinstance(event.metadata, dict)
                         else []
+                    ),
+                    "context_status": (
+                        event.metadata.get("context_status")
+                        if isinstance(event.metadata, dict)
+                        else None
                     ),
                 },
             )

@@ -4,8 +4,6 @@ import logging
 import pkgutil
 from typing import Any, Optional, Union
 
-from django.conf import settings
-
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
@@ -304,7 +302,7 @@ def get_preferred_embedder(mimetype: str) -> Optional[type[BaseEmbedder]]:
     """
     Get the preferred embedder class for a given mimetype.
 
-    First checks the database PipelineSettings, then falls back to Django settings.
+    Reads from the database PipelineSettings singleton.
 
     Args:
         mimetype (str): The mimetype of the file.
@@ -332,20 +330,29 @@ def get_preferred_embedder(mimetype: str) -> Optional[type[BaseEmbedder]]:
         return None
 
 
-def get_default_embedder() -> Optional[type[BaseEmbedder]]:
+def get_default_embedder_path() -> str:
     """
-    Get the default embedder class.
-
-    First checks the database PipelineSettings, then falls back to Django settings.
+    Get the default embedder class path from the database PipelineSettings singleton.
 
     Returns:
-        Optional[Type[BaseEmbedder]]: The default embedder class, or None if not found.
+        str: The default embedder class path, or empty string if not configured.
     """
     # Import here to avoid circular imports
     from opencontractserver.documents.models import PipelineSettings
 
-    pipeline_settings = PipelineSettings.get_instance()
-    embedder_path = pipeline_settings.get_default_embedder()
+    return PipelineSettings.get_instance().get_default_embedder()
+
+
+def get_default_embedder() -> Optional[type[BaseEmbedder]]:
+    """
+    Get the default embedder class.
+
+    Reads from the database PipelineSettings singleton.
+
+    Returns:
+        Optional[Type[BaseEmbedder]]: The default embedder class, or None if not found.
+    """
+    embedder_path = get_default_embedder_path()
 
     if embedder_path:
         try:
@@ -357,7 +364,7 @@ def get_default_embedder() -> Optional[type[BaseEmbedder]]:
             logger.error(f"Error loading default embedder '{embedder_path}': {e}")
             return None
     else:
-        logger.error("No default embedder specified in settings")
+        logger.error("No default embedder configured in PipelineSettings")
         return None
 
 
@@ -365,32 +372,21 @@ def get_default_embedder_for_filetype(mimetype: str) -> Optional[type[BaseEmbedd
     """
     Get the default embedder for a specific filetype.
 
+    Reads from the database PipelineSettings singleton's preferred_embedders,
+    falling back to the global default embedder if no MIME-specific embedder
+    is configured.
+
     Args:
         mimetype: The MIME type of the file
 
     Returns:
-        Optional[Type[BaseEmbedder]]: The default embedder for the specified filetype and dimension,
+        Optional[Type[BaseEmbedder]]: The default embedder for the specified filetype,
         or None if not found
     """
-    # Get the default embedders for the mimetype
-    embedder_path = settings.DEFAULT_EMBEDDERS_BY_FILETYPE.get(mimetype, {})
-
-    logger.info(
-        f"get_default_embedder_for_filetype - Default embedder path: {embedder_path}"
-    )
-
-    if embedder_path:
-        try:
-            module_path, class_name = embedder_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            embedder_class = getattr(module, class_name)
-            return embedder_class
-        except (ModuleNotFoundError, AttributeError) as e:
-            logger.error(f"Error loading embedder '{embedder_path}': {e}")
-            return None
-    else:
-        logger.warning(f"No default embedder found for mimetype '{mimetype}'")
-        return None
+    embedder = get_preferred_embedder(mimetype)
+    if embedder is not None:
+        return embedder
+    return get_default_embedder()
 
 
 def get_dimension_from_embedder(
@@ -457,7 +453,10 @@ def find_embedder_for_filetype(
     else:
         mimetype = mimetype_or_enum
 
-    return get_preferred_embedder(mimetype)
+    embedder = get_preferred_embedder(mimetype)
+    if embedder is not None:
+        return embedder
+    return get_default_embedder()
 
 
 def run_post_processors(
