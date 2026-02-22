@@ -49,3 +49,8 @@ DEFAULT_MAX_CONCURRENT_CHUNKS = 3
 
 # Per-chunk retry limit (within the parser, before raising to Celery).
 DEFAULT_CHUNK_RETRY_LIMIT = 1
+
+# Maximum backoff sleep (seconds) between per-chunk retries.
+# Caps the exponential backoff (5s * 2^attempt) so that increasing
+# chunk_retry_limit doesn't block Celery workers excessively.
+MAX_CHUNK_RETRY_BACKOFF_SECONDS = 30

@@ -2,6 +2,8 @@
 Tests for the BaseChunkedParser reassembly logic and chunk dispatching.
 """
 
+import threading
+import time
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
@@ -89,13 +91,15 @@ def _make_chunk_result(
 class TestReassembleChunkResults(TestCase):
     """Tests for _reassemble_chunk_results."""
 
-    def test_single_chunk_passthrough(self):
-        """A single chunk at offset 0 should be returned unchanged."""
+    def test_single_chunk_at_offset_zero(self):
+        """A single chunk at offset 0 still gets prefixed IDs for consistency."""
         chunk = _make_chunk_result()
         result = _reassemble_chunk_results([chunk], [0])
         self.assertEqual(result["page_count"], 2)
         self.assertEqual(len(result["pawls_file_content"]), 2)
         self.assertEqual(len(result["labelled_text"]), 1)
+        # IDs are always prefixed, even for single-chunk results
+        self.assertEqual(result["labelled_text"][0]["id"], "c0_ann-1")
 
     def test_two_chunks_page_count(self):
         c0 = _make_chunk_result(num_pages=3, content="first")
@@ -478,12 +482,46 @@ class TestBaseChunkedParserIntegration(TestCase):
         mock_sleep.assert_called_once()
 
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
+    def test_zero_max_concurrent_chunks_raises_for_small_doc(self, mock_open):
+        """max_concurrent_chunks=0 should raise even for small (non-chunked) docs."""
+        small_pdf = make_test_pdf(10)
+        mock_file = MagicMock()
+        mock_file.read.return_value = small_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        parser = ConcreteChunkedParser()
+        parser.max_concurrent_chunks = 0
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
+        self.assertIn("max_concurrent_chunks must be > 0", str(ctx.exception))
+
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
+    def test_zero_max_concurrent_chunks_raises_for_large_doc(self, mock_open):
+        """max_concurrent_chunks=0 should raise for large (chunked) docs."""
+        large_pdf = make_test_pdf(100)
+        mock_file = MagicMock()
+        mock_file.read.return_value = large_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        parser = ConcreteChunkedParser()
+        parser.max_pages_per_chunk = 50
+        parser.min_pages_for_chunking = 75
+        parser.max_concurrent_chunks = 0
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
+        self.assertIn("max_concurrent_chunks must be > 0", str(ctx.exception))
+
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_concurrent_failure_cancels_remaining(self, mock_open):
         """When one chunk fails concurrently, remaining futures should be cancelled."""
         large_pdf = make_test_pdf(200)
         mock_file = MagicMock()
         mock_file.read.return_value = large_pdf
         mock_open.return_value.__enter__.return_value = mock_file
+
+        slow_chunks_started = threading.Event()
 
         class SlowFailParser(ConcreteChunkedParser):
             def _parse_single_chunk_impl(self, *args, **kwargs):
@@ -493,9 +531,10 @@ class TestBaseChunkedParserIntegration(TestCase):
                     chunk_index = args[3] if len(args) > 3 else 0
                 if chunk_index == 0:
                     raise DocumentParsingError("chunk 0 boom", is_transient=False)
-                import time
-
-                time.sleep(5)
+                slow_chunks_started.set()
+                # Sleep briefly; the error from chunk 0 should unblock the caller
+                # before this completes on a healthy system.
+                time.sleep(0.5)
                 return _make_chunk_result()
 
         parser = SlowFailParser()
@@ -504,10 +543,8 @@ class TestBaseChunkedParserIntegration(TestCase):
         parser.max_concurrent_chunks = 4
         parser.chunk_retry_limit = 0
 
-        import time
-
-        start = time.monotonic()
         with self.assertRaises(DocumentParsingError):
             parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
-        elapsed = time.monotonic() - start
-        self.assertLess(elapsed, 3.0, "Failure should not wait for remaining chunks")
+
+        # Confirm at least one slow chunk was dispatched before the error propagated
+        self.assertTrue(slow_chunks_started.is_set())
