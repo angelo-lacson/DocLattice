@@ -771,7 +771,7 @@ The `resume_with_approval()` method performs strict state validation:
 When approved, the framework attempts to execute the tool using two fallback paths:
 
 1. **Agent Config Tools**: Searches `self.config.tools` for a matching tool name and executes it
-2. **PydanticAI Registry** (fallback): Looks up the tool in `self.pydantic_ai_agent._function_tools` and extracts the underlying callable
+2. **PydanticAI Registry** (fallback): Looks up the tool via `_get_function_tools(self.pydantic_ai_agent)` and extracts the underlying callable
 
 Both paths use an empty context with `skip_approval_gate=True` to prevent re-triggering the gate, and preserve the original `tool_call_id`.
 
