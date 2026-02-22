@@ -30,6 +30,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_graph import End
 
+from opencontractserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -338,14 +339,16 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             and len(raw_messages) > compaction_cfg.min_recent_messages
         ):
             proxies = messages_to_proxies(raw_messages)
-            system_prompt_tokens = estimate_token_count(
-                (self.config.system_prompt or "") + stored_summary
+            system_prompt_tokens = estimate_token_count(self.config.system_prompt or "")
+            stored_summary_tokens = (
+                estimate_token_count(stored_summary) if stored_summary else 0
             )
 
             result = compact_message_history(
                 proxies,
                 self.config.model_name,
                 system_prompt_tokens=system_prompt_tokens,
+                stored_summary_tokens=stored_summary_tokens,
                 threshold_ratio=compaction_cfg.threshold_ratio,
                 min_recent=compaction_cfg.min_recent_messages,
                 max_recent=compaction_cfg.max_recent_messages,
@@ -362,9 +365,19 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
                 # Merge old stored summary with the new compaction summary,
                 # capping the result to prevent unbounded growth across cycles.
+                # Strip the prefix from both sides before merging and re-add
+                # it once to prevent duplicate prefixes accumulating across
+                # successive compaction cycles.
+                def _strip_prefix(text: str) -> str:
+                    if text.startswith(COMPACTION_SUMMARY_PREFIX):
+                        return text[len(COMPACTION_SUMMARY_PREFIX) :]
+                    return text
+
                 if stored_summary:
+                    old_body = _strip_prefix(stored_summary).rstrip()
+                    new_body = _strip_prefix(result.summary)
                     merged_summary = cap_summary_length(
-                        stored_summary.rstrip() + "\n\n" + result.summary
+                        COMPACTION_SUMMARY_PREFIX + old_body + "\n\n" + new_body
                     )
                 else:
                     merged_summary = cap_summary_length(result.summary)

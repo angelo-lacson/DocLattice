@@ -6,7 +6,6 @@ fast and can be parallelised trivially.  They exercise the public API of
 constants in :mod:`opencontractserver.constants.context_guardrails`.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -128,19 +127,37 @@ class TestTruncateToolOutput(SimpleTestCase):
     def test_custom_max_chars(self):
         text = "x" * 200
         result = truncate_tool_output(text, max_chars=100)
-        self.assertLess(len(result), 200)
+        self.assertLessEqual(len(result), 100)
         self.assertIn("truncated", result)
+        # Content must start from the beginning of the original text
+        self.assertTrue(result.startswith("x"))
 
     def test_truncation_notice_contains_limit(self):
         text = "y" * 500
         result = truncate_tool_output(text, max_chars=200)
         self.assertIn("200", result)
+        self.assertLessEqual(len(result), 200)
+        # Content must start from the beginning of the original text
+        self.assertTrue(result.startswith("y"))
 
     def test_very_small_max_chars_does_not_exceed_limit(self):
         """When max_chars is smaller than the notice, result must not exceed max_chars."""
         text = "x" * 200
         result = truncate_tool_output(text, max_chars=10)
         self.assertLessEqual(len(result), 10)
+        # Content must start from the beginning of the original text
+        self.assertTrue(result.startswith("x"))
+
+    def test_truncated_content_from_beginning_not_end(self):
+        """Verify truncation takes from the start of the string, not the end."""
+        text = "A" * 100 + "B" * 100
+        result = truncate_tool_output(text, max_chars=150)
+        self.assertLessEqual(len(result), 150)
+        self.assertTrue(result.startswith("A"))
+        # The result should NOT contain the "B" content from the end
+        # (beyond what the truncation notice might contain)
+        content_part = result.split("\n\n[")[0] if "\n\n[" in result else result
+        self.assertNotIn("B", content_part)
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +364,33 @@ class TestDeterministicSummary(SimpleTestCase):
         ]
         summary = _deterministic_summary(messages)
         self.assertIn("Version 1.5", summary)
+
+    def test_markdown_bullet_list_split(self):
+        """Markdown bullet lists should be split at the first list item boundary."""
+        messages = [
+            _MessageProxy(role="human", content="What does the contract cover?"),
+            _MessageProxy(
+                role="llm",
+                content="The contract covers:\n- Indemnification\n- Liability\n- Termination",
+            ),
+        ]
+        summary = _deterministic_summary(messages)
+        self.assertIn("The contract covers:", summary)
+        # Should NOT include subsequent list items as part of the "sentence"
+        self.assertNotIn("Liability", summary)
+
+    def test_double_newline_paragraph_split(self):
+        """Double newlines (paragraph boundaries) should act as split points."""
+        messages = [
+            _MessageProxy(role="human", content="Explain the terms."),
+            _MessageProxy(
+                role="llm",
+                content="The first paragraph explains terms\n\nThe second paragraph adds details.",
+            ),
+        ]
+        summary = _deterministic_summary(messages)
+        self.assertIn("The first paragraph explains terms", summary)
+        self.assertNotIn("The second paragraph", summary)
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +649,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
     """Verify that persist_compaction uses optimistic locking to avoid
     overwriting a concurrently-advanced bookmark."""
 
-    def test_concurrent_persist_second_write_is_noop(self):
+    async def test_concurrent_persist_second_write_is_noop(self):
         """If the bookmark moves between read and write, the write is skipped."""
         from opencontractserver.llms.agents.core_agents import (
             CoreConversationManager,
@@ -629,9 +673,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
             mock_qs.aupdate = AsyncMock(return_value=1)
             MockConv.objects.filter.return_value = mock_qs
 
-            asyncio.run(
-                manager.persist_compaction(summary="Summary A", cutoff_message_id=100)
-            )
+            await manager.persist_compaction(summary="Summary A", cutoff_message_id=100)
 
             # Verify the in-memory state was updated
             self.assertEqual(mock_conv.compaction_summary, "Summary A")
@@ -648,9 +690,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
             mock_qs.aupdate = AsyncMock(return_value=0)
             MockConv.objects.filter.return_value = mock_qs
 
-            asyncio.run(
-                manager.persist_compaction(summary="Summary B", cutoff_message_id=90)
-            )
+            await manager.persist_compaction(summary="Summary B", cutoff_message_id=90)
 
             # In-memory state should NOT be updated (stale write was skipped)
             self.assertEqual(mock_conv.compaction_summary, "Summary A")
@@ -803,3 +843,125 @@ class TestHistoryResult(SimpleTestCase):
         self.assertEqual(context_status["context_window"], 128000)
         self.assertTrue(context_status["was_compacted"])
         self.assertEqual(context_status["tokens_before_compaction"], 95000)
+
+
+# ---------------------------------------------------------------------------
+# DB-level compaction bookmark filtering
+# ---------------------------------------------------------------------------
+
+
+class TestCompactionBookmarkDatabaseFilter(SimpleTestCase):
+    """Verify that get_conversation_messages filters by id__gt when a
+    compaction bookmark is set.
+
+    Uses mocked ORM querysets to avoid requiring a real database while
+    still validating that the correct filter is applied.
+    """
+
+    async def test_messages_filtered_by_compaction_bookmark(self):
+        """When compacted_before_message_id is set, only messages with
+        id > that value should be returned."""
+        from opencontractserver.llms.agents.core_agents import (
+            CoreConversationManager,
+        )
+
+        # Create a mock conversation with a compaction bookmark
+        mock_conv = MagicMock()
+        mock_conv.compacted_before_message_id = 50
+
+        # Build mock messages: IDs 10, 20, 30, 40, 50, 60, 70, 80
+        all_messages = []
+        for msg_id in [10, 20, 30, 40, 50, 60, 70, 80]:
+            m = MagicMock()
+            m.id = msg_id
+            m.content = f"Message {msg_id}"
+            m.msg_type = "HUMAN"
+            all_messages.append(m)
+
+        # Messages that should be returned: id > 50 → [60, 70, 80]
+        expected_messages = [m for m in all_messages if m.id > 50]
+
+        manager = CoreConversationManager.__new__(CoreConversationManager)
+        manager.conversation = mock_conv
+
+        # Patch ChatMessage.objects to track filter calls
+        with patch(
+            "opencontractserver.llms.agents.core_agents.ChatMessage"
+        ) as MockChatMessage:
+            # Build chainable queryset mock
+            mock_qs = MagicMock()
+            mock_qs.filter.return_value = mock_qs
+            mock_qs.order_by.return_value = mock_qs
+
+            # Make the queryset async-iterable
+            async def aiter_messages():
+                for m in expected_messages:
+                    yield m
+
+            mock_qs.__aiter__ = lambda self: aiter_messages()
+
+            MockChatMessage.objects.filter.return_value = mock_qs
+
+            result = await manager.get_conversation_messages()
+
+            # Verify the filter was called with the bookmark cutoff
+            filter_calls = (
+                MockChatMessage.objects.filter.return_value.filter.call_args_list
+            )
+            self.assertTrue(
+                any(call.kwargs.get("id__gt") == 50 for call in filter_calls),
+                "get_conversation_messages must filter with id__gt=compacted_before_message_id",
+            )
+
+            # Verify only post-cutoff messages were returned
+            self.assertEqual(len(result), 3)
+
+    async def test_no_filter_when_bookmark_is_none(self):
+        """When compacted_before_message_id is None, no id__gt filter
+        should be applied."""
+        from opencontractserver.llms.agents.core_agents import (
+            CoreConversationManager,
+        )
+
+        mock_conv = MagicMock()
+        mock_conv.compacted_before_message_id = None
+
+        all_messages = []
+        for msg_id in [10, 20, 30]:
+            m = MagicMock()
+            m.id = msg_id
+            m.content = f"Message {msg_id}"
+            m.msg_type = "HUMAN"
+            all_messages.append(m)
+
+        manager = CoreConversationManager.__new__(CoreConversationManager)
+        manager.conversation = mock_conv
+
+        with patch(
+            "opencontractserver.llms.agents.core_agents.ChatMessage"
+        ) as MockChatMessage:
+            mock_qs = MagicMock()
+            mock_qs.filter.return_value = mock_qs
+            mock_qs.order_by.return_value = mock_qs
+
+            async def aiter_messages():
+                for m in all_messages:
+                    yield m
+
+            mock_qs.__aiter__ = lambda self: aiter_messages()
+
+            MockChatMessage.objects.filter.return_value = mock_qs
+
+            result = await manager.get_conversation_messages()
+
+            # The id__gt filter should NOT have been called
+            if mock_qs.filter.called:
+                for call in mock_qs.filter.call_args_list:
+                    self.assertNotIn(
+                        "id__gt",
+                        call.kwargs,
+                        "id__gt filter should not be applied when bookmark is None",
+                    )
+
+            # All messages should be returned
+            self.assertEqual(len(result), 3)

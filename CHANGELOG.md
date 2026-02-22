@@ -5,7 +5,23 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-21
+## [Unreleased] - 2026-02-22
+
+### Fixed
+
+#### Context Guardrails for LLM Conversation Management (Closes #907)
+
+- **`truncate_tool_output` negative slice defense** (`opencontractserver/llms/context_guardrails.py`): Replaced fragile guard clause with explicit `char_budget = max(0, max_chars - len(notice))` to prevent negative slice indices when `max_chars` is smaller than the truncation notice length
+- **Token double-counting across compaction cycles** (`opencontractserver/llms/context_guardrails.py`, `opencontractserver/llms/agents/pydantic_ai_agents.py`): Added `stored_summary_tokens` parameter to `compact_message_history()` so the stored summary is counted in `total_before` (threshold check) but not double-counted in `total_after` (the new summary replaces the old one)
+- **Repeating prefix in compaction summaries** (`opencontractserver/llms/agents/pydantic_ai_agents.py`): Successive compaction cycles no longer accumulate duplicate `COMPACTION_SUMMARY_PREFIX` headers — the merge logic now strips the prefix from both old and new summaries before re-adding it once
+- **Fragile sentence extraction in deterministic summary** (`opencontractserver/llms/context_guardrails.py`): Extended the first-sentence regex to split on double-newlines (paragraph boundaries) and newlines before markdown list markers (`-`, `*`, `•`, numbered lists), preventing entire bullet-list responses from being treated as a single sentence
+- **Deprecated asyncio pattern in tests** (`opencontractserver/tests/test_context_guardrails.py`): Converted `TestPersistCompactionOptimisticLock` from `asyncio.run()` wrapper calls to native `async def` test methods, removing the unused `asyncio` import
+- **Weak truncation test assertions** (`opencontractserver/tests/test_context_guardrails.py`): Strengthened `test_custom_max_chars` and `test_truncation_notice_contains_limit` to assert exact upper-bound length (`<= max_chars`) and verify content starts from the beginning of the input string; added `test_truncated_content_from_beginning_not_end` test
+- **CHARS_PER_TOKEN_ESTIMATE docstring inconsistency** (`opencontractserver/constants/context_guardrails.py`): Clarified that the constant is intentionally 3.5 (not 4) to over-count tokens slightly for conservative compaction triggering
+- **Missing integrity constraint documentation** (`opencontractserver/conversations/models.py`): Added comment and expanded `help_text` on `compacted_before_message_id` explaining why `BigIntegerField` (not `ForeignKey`) is safe — the `id__gt` filter remains correct even if the cutoff message is deleted
+- **Unreachable defensive code** (`opencontractserver/llms/context_guardrails.py`): Added clarifying comment on the `recent_count < 1` guard explaining it is unreachable with default `MIN_RECENT_MESSAGES` but protects against callers passing `min_recent=0`
+- **Missing compaction bookmark filter tests** (`opencontractserver/tests/test_context_guardrails.py`): Added `TestCompactionBookmarkDatabaseFilter` with two async tests verifying `get_conversation_messages()` applies `id__gt` filtering when a bookmark is set and skips it when `None`
+- **New sentence extraction tests** (`opencontractserver/tests/test_context_guardrails.py`): Added `test_markdown_bullet_list_split` and `test_double_newline_paragraph_split` covering the improved regex
 
 ### Security
 
