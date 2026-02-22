@@ -1031,6 +1031,109 @@ class TestAgentConfigValidation(unittest.TestCase):
         assert any("document_agent_instructions" in w for w in result.warnings)
 
 
+class TestCrashPaths(unittest.TestCase):
+    def test_unicode_decode_error(self):
+        """Non-UTF-8 data.json should produce a clear error, not crash."""
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            # Write raw bytes that are invalid UTF-8
+            zf.writestr("data.json", b"\xff\xfe" + b"\x00" * 20)
+
+        fd, path = tempfile.mkstemp(suffix=".zip")
+        try:
+            os.write(fd, buf.getvalue())
+            os.close(fd)
+            result = validate_export(path)
+        finally:
+            os.unlink(path)
+        assert not result.ok
+        # Should be caught as either UTF-8 or JSON error, not crash
+        assert any("UTF-8" in e or "JSON" in e for e in result.errors), result.summary()
+
+    def test_none_annotation_ids_no_crash(self):
+        """None-valued source/target_annotation_ids should not TypeError."""
+        data = _minimal_v1_data()
+        data["annotated_docs"]["sample.pdf"]["relationships"] = [
+            {
+                "id": "r1",
+                "relationshipLabel": "RelatesTo",
+                "source_annotation_ids": None,
+                "target_annotation_ids": None,
+            }
+        ]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("empty" in e for e in result.errors)
+
+    def test_duplicate_folder_id_no_overwrite(self):
+        """Duplicate folder ID should error and not overwrite the first entry."""
+        data = _minimal_v2_data()
+        data["folders"] = [
+            {
+                "id": "f1",
+                "name": "First",
+                "description": "",
+                "color": "#000",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": None,
+                "path": "First",
+            },
+            {
+                "id": "f1",
+                "name": "Second",
+                "description": "",
+                "color": "#000",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": None,
+                "path": "Second",
+            },
+        ]
+        result = validate_data_json(data)
+        assert any("duplicate" in e for e in result.errors)
+
+    def test_duplicate_structural_annotation_id(self):
+        """Duplicate structural annotation IDs should produce an error."""
+        data = _minimal_v2_data()
+        data["structural_annotation_sets"]["hash_a"] = {
+            "content_hash": "hash_a",
+            "pawls_file_content": [
+                {
+                    "page": {"width": 612, "height": 792, "index": 0},
+                    "tokens": [
+                        {"x": 0, "y": 0, "width": 10, "height": 10, "text": "A"}
+                    ],
+                }
+            ],
+            "txt_content": "A",
+            "structural_annotations": [
+                {
+                    "id": "sa1",
+                    "annotationLabel": "Clause",
+                    "rawText": "A",
+                    "page": 0,
+                    "annotation_json": {},
+                    "structural": True,
+                },
+                {
+                    "id": "sa1",
+                    "annotationLabel": "Clause",
+                    "rawText": "A",
+                    "page": 0,
+                    "annotation_json": {},
+                    "structural": True,
+                },
+            ],
+            "structural_relationships": [],
+        }
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("duplicate structural annotation" in e for e in result.errors)
+
+
 class TestBadZipInput(unittest.TestCase):
     def test_not_a_zip(self):
         fd, path = tempfile.mkstemp(suffix=".zip")
