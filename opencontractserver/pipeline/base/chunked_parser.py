@@ -16,7 +16,7 @@ import logging
 import time
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
+from typing import Optional, cast
 
 from django.core.files.storage import default_storage
 from pypdf import PdfReader
@@ -26,6 +26,7 @@ from opencontractserver.constants import (
     DEFAULT_MAX_CONCURRENT_CHUNKS,
     DEFAULT_MAX_PAGES_PER_CHUNK,
     DEFAULT_MIN_PAGES_FOR_CHUNKING,
+    MAX_CHUNK_RETRY_BACKOFF_SECONDS,
 )
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.exceptions import DocumentParsingError
@@ -62,7 +63,12 @@ class BaseChunkedParser(BaseParser):
     that span chunk boundaries will be orphaned after reassembly.  For example,
     a paragraph in chunk 1 whose section header is in chunk 0 will have a
     ``parent_id`` that does not match any annotation ID in the final result.
-    A warning is emitted during reassembly when orphaned references are detected.
+    A debug-level message is emitted during reassembly when orphaned references
+    are detected.
+
+    A future improvement could snap chunk boundaries to section headers rather
+    than arbitrary page limits, reducing orphaned references in hierarchical
+    documents.  See GitHub issue #914 item 4 for discussion.
     """
 
     # ------------------------------------------------------------------
@@ -170,6 +176,14 @@ class BaseChunkedParser(BaseParser):
                 is_transient=False,
             )
 
+        # Validate config eagerly — a misconfigured parser should fail
+        # consistently regardless of document size.
+        if self.max_concurrent_chunks <= 0:
+            raise DocumentParsingError(
+                f"max_concurrent_chunks must be > 0, got {self.max_concurrent_chunks}",
+                is_transient=False,
+            )
+
         chunks = calculate_page_chunks(
             page_count, self.max_pages_per_chunk, self.min_pages_for_chunking
         )
@@ -214,6 +228,10 @@ class BaseChunkedParser(BaseParser):
             )
         else:
             # Concurrent: pre-split all chunks (needed for upfront submission).
+            # NOTE: This loads all chunk PDFs into memory simultaneously, unlike
+            # sequential dispatch which splits lazily one at a time.  For very
+            # large documents (e.g. 500 pages / 10 chunks) this is a meaningful
+            # memory trade-off in exchange for parallel processing throughput.
             # Create a single PdfReader to avoid re-parsing the PDF per chunk.
             shared_reader = PdfReader(io.BytesIO(pdf_bytes))
             chunk_data: list[tuple[int, bytes, int]] = []
@@ -358,7 +376,8 @@ class BaseChunkedParser(BaseParser):
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
 
-        return results  # type: ignore[return-value]  # None slots would have raised above
+        # All None slots would have raised above; cast for type checkers.
+        return cast(list[OpenContractDocExport], results)
 
     # ------------------------------------------------------------------
     # Per-chunk retry logic
@@ -386,7 +405,9 @@ class BaseChunkedParser(BaseParser):
         for attempt in range(1 + self.chunk_retry_limit):
             try:
                 if attempt > 0:
-                    backoff = 5 * (2 ** (attempt - 1))
+                    backoff = min(
+                        5 * (2 ** (attempt - 1)), MAX_CHUNK_RETRY_BACKOFF_SECONDS
+                    )
                     logger.info(
                         f"Retrying chunk {chunk_index} for document {doc_id} "
                         f"(attempt {attempt + 1}, backoff {backoff}s)"
@@ -455,9 +476,6 @@ def _reassemble_chunk_results(
     if not chunk_results:
         raise ValueError("Cannot reassemble empty chunk_results list")
 
-    if len(chunk_results) == 1 and page_offsets[0] == 0:
-        return chunk_results[0]
-
     first = chunk_results[0]
 
     combined_pawls: list[dict] = []
@@ -522,7 +540,7 @@ def _reassemble_chunk_results(
             orphaned_count += 1
 
     if orphaned_count > 0:
-        logger.warning(
+        logger.debug(
             f"Reassembly produced {orphaned_count} orphaned parent_id "
             f"reference(s). Cross-chunk parent-child relationships cannot "
             f"be preserved when chunks are parsed independently."

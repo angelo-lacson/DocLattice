@@ -352,6 +352,9 @@ class OpenContractDocExport(OpenContractsDocAnnotations):
     # We need to have a page count for certain analyses
     page_count: int
 
+    # V2: MIME type of original file (e.g., "application/pdf", "text/plain")
+    file_type: NotRequired[Optional[str]]
+
     # V2: Reference to structural annotation set (if any)
     structural_set_hash: NotRequired[Optional[str]]
 

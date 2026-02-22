@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-22
 
+### Fixed
+
+#### BaseChunkedParser Cleanup (Closes #914)
+- **Duplicate test line**: Removed redundant `PdfReader` assignment in `test_pdf_splitting.py:95`
+- **Infinite loop guard**: Added input validation for `max_pages_per_chunk` and `min_pages_for_chunking` in `calculate_page_chunks()` (`opencontractserver/utils/pdf_splitting.py`); added `max_concurrent_chunks` validation in `_parse_document_impl` (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Dead code / ID inconsistency**: Removed single-chunk fast-path short-circuit in `_reassemble_chunk_results()` that returned unprefixed IDs, creating inconsistency with multi-chunk results
+- **Flaky test**: Replaced wall-clock timing assertion in `test_concurrent_failure_cancels_remaining` with a shorter sleep to reduce CI flakiness
+- **Type safety**: Replaced `type: ignore[return-value]` in `_dispatch_concurrent` with explicit `cast()` call
+- **Noisy logging**: Downgraded orphaned parent-child reference log from `warning` to `debug` level — these are expected on virtually every large hierarchical document
+- **Backoff cap**: Added `MAX_CHUNK_RETRY_BACKOFF_SECONDS` constant (30s) to cap exponential backoff in per-chunk retries (`opencontractserver/constants/document_processing.py`)
+- **Missing boundary test**: Added test for exact `min_pages_for_chunking` threshold (75 pages) and clarified docstring semantics
+- **Memory trade-off documented**: Added comment explaining concurrent dispatch memory implications
+- **Cross-chunk limitation documented**: Enhanced class docstring with follow-up improvement suggestion for section-aware chunk boundaries
+
 ### Security
 
 #### Resolve Dependabot Security Advisories (pydantic-ai + ajv)
@@ -39,6 +53,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bug**: Code calling `Model.objects.filter(...).visible_to_user(user)` or `Model.objects.visible_to_user(user)` skipped guardian permission checks, making objects invisible to users with explicit share permissions
 - **Impact**: Documents shared via `set_permissions_for_obj_to_user()` were invisible through the QuerySet chain code path; annotations on shared documents/corpuses were invisible; Notes on accessible documents were not visible
 - **Fix**: All three QuerySets now override `visible_to_user()` with proper guardian permission table lookups. Documents and Annotations check guardian tables directly; Notes inherit from document + corpus permissions
+
+### Fixed
+
+#### Corpus Export/Import V2: Audit and Roundtrip Fixes
+- **SPAN_LABEL and RELATIONSHIP_LABEL missing from label export**: `build_label_lookups()` in `opencontractserver/utils/etl.py` only exported TOKEN_LABEL and DOC_TYPE_LABEL labels. SPAN_LABEL and RELATIONSHIP_LABEL labels were silently dropped, causing annotation and relationship import to fail. Now all four label types are exported.
+- **Relationship labels not gathered from Relationship model**: `build_label_lookups()` only queried labels from `Annotation` objects. Labels used exclusively on `Relationship` objects (RELATIONSHIP_LABEL type) were never collected. Added Relationship model queries to capture these labels.
+- **Label lookup key mismatch for structural annotations and relationships**: Structural annotations and relationships reference labels by TEXT in exports, but the import label_lookup was keyed by PK strings. Created a text-keyed label lookup (`label_lookup_by_text`) in `_import_corpus()` for use by `import_structural_annotation_set()` and `_import_v2_relationships()`.
+  - File: `opencontractserver/tasks/import_tasks_v2.py`
+- **Document file_type not preserved**: Non-PDF documents (text/plain, etc.) lost their MIME type during export/import since `file_type` was not included in `OpenContractDocExport`. Added `file_type` to export data and import logic.
+  - Files: `opencontractserver/types/dicts.py`, `opencontractserver/utils/etl.py`, `opencontractserver/utils/importing.py`
+- **Document-level conversations not exported**: `package_conversations()` only exported corpus-level conversations (`chat_with_corpus=corpus`). Document-level conversations (`chat_with_document`) were completely missed. Now both types are exported.
+  - File: `opencontractserver/utils/export_v2.py`
+- **Conversation export missing permission filtering**: `package_conversations()` exported ALL conversations regardless of the exporting user's permissions. Added `visible_to_user()` filtering for both conversations and messages.
+  - File: `opencontractserver/utils/export_v2.py`
+- **Conversation fields missing from export/import**: `description`, `is_locked`, `is_pinned` were not exported or imported. Added to both export and import.
+- **Message fields missing from export/import**: `parent_message` (threaded replies), `data` (JSON metadata) were not exported or imported. Added to both export and import with two-pass parent re-linking.
+- **Timestamps silently discarded on conversation/message import**: Django's `auto_now_add=True` on `created_at` and `auto_now=True` on `updated_at` fields ignored values passed to `create()`. Fixed by using `QuerySet.update()` after creation to patch timestamps.
+  - File: `opencontractserver/utils/import_v2.py`
+- **include_conversations/include_action_trail not exposed in export mutation**: The V2 export task accepted these parameters but the GraphQL mutation never passed them, hardcoding `False`. Added both as optional mutation arguments.
+  - File: `config/graphql/mutations.py`
+- **DocumentPath version trees not reconstructed on import**: Exported DocumentPath data (paths, version numbers, folder assignments) was never used during import. Added `_reconstruct_document_paths()` to update auto-created DocumentPaths to match exported path structure.
+  - File: `opencontractserver/tasks/import_tasks_v2.py`
+
+### Technical Details
+- All label types (TOKEN_LABEL, SPAN_LABEL, RELATIONSHIP_LABEL) are now exported in the `text_labels` dict with their actual `label_type` preserved for correct deserialization
+- Conversation document hash (`chat_with_document_hash`) is exported alongside the document ID for cross-system re-linking
+- Timestamp patching uses `Model.all_objects.filter(pk=obj.pk).update()` to bypass `auto_now`/`auto_now_add` behavior
+- Comprehensive test coverage added: `TestLabelTypeExportCompleteness`, `TestDocumentFileTypeRoundTrip`, `TestConversationExportEnhancements`
 
 ### Added
 
