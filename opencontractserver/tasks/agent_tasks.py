@@ -8,8 +8,11 @@ When a user @mentions an agent in a chat message, these tasks handle:
 4. Updating the message with final content
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from asgiref.sync import async_to_sync
 from celery import shared_task
@@ -19,6 +22,10 @@ from opencontractserver.conversations.models import (
     MessageStateChoices,
     MessageTypeChoices,
 )
+
+if TYPE_CHECKING:
+    from opencontractserver.corpuses.models import CorpusAction
+    from opencontractserver.documents.models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -405,6 +412,7 @@ def run_agent_corpus_action(
     document_id: int,
     user_id: int,
     execution_id: int | None = None,
+    force: bool = False,
 ) -> dict:
     """
     Execute an agent-based corpus action on a single document.
@@ -418,6 +426,7 @@ def run_agent_corpus_action(
         document_id: ID of the Document to process
         user_id: ID of the User triggering the action
         execution_id: Optional ID of CorpusActionExecution record for tracking
+        force: If True, re-run even if a completed result already exists
 
     Returns:
         dict with status information and result_id
@@ -449,6 +458,7 @@ def run_agent_corpus_action(
                 corpus_action_id=corpus_action_id,
                 document_id=document_id,
                 user_id=user_id,
+                force=force,
             )
         )
 
@@ -506,10 +516,268 @@ def run_agent_corpus_action(
         raise self.retry(exc=exc)
 
 
+def _resolve_action_tools(action: CorpusAction, trigger: str) -> list[str]:
+    """Resolve the tool list for an agent corpus action.
+
+    Priority order:
+    1. ``action.agent_config.available_tools`` (from linked agent config)
+    2. Trigger-appropriate defaults from constants
+
+    Note: ``action.pre_authorized_tools`` controls which tools skip approval
+    gates — it does NOT restrict which tools are available to the agent.
+    """
+    from opencontractserver.constants.corpus_actions import DEFAULT_TOOLS_BY_TRIGGER
+
+    tools: list[str] = []
+    if action.agent_config:
+        tools = action.agent_config.available_tools or []
+    if not tools:
+        tools = list(DEFAULT_TOOLS_BY_TRIGGER.get(trigger, []))
+
+    # Warn when pre_authorized_tools references tools outside the resolved set.
+    # This catches stale configs from before the semantics change where
+    # pre_authorized_tools also controlled tool availability.
+    if action.pre_authorized_tools:
+        extra = set(action.pre_authorized_tools) - set(tools)
+        if extra:
+            logger.warning(
+                "CorpusAction %s (id=%s) has pre_authorized_tools %s that are "
+                "not in the resolved tool set. pre_authorized_tools now only "
+                "controls approval gates, not tool availability.",
+                action.name,
+                action.id,
+                sorted(extra),
+            )
+
+    return tools
+
+
+def _build_document_action_system_prompt(
+    action: CorpusAction,
+    document: Document,
+    tools: list[str],
+) -> str:
+    """Build a goal-oriented system prompt for automated document corpus actions.
+
+    Combines:
+    - Automation guardrails (MUST use tools, no conversation)
+    - Execution context (trigger, document, corpus metadata)
+    - The user's task_instructions
+    - Optional supplementary guidance from agent_config.system_instructions
+
+    SECURITY: All user-generated content (document title, corpus title,
+    document description) is wrapped in <user_content> tags so the LLM can
+    distinguish instructions from untrusted data.  See prompt_sanitization.py.
+    """
+    from opencontractserver.constants.corpus_actions import (
+        MAX_DESCRIPTION_PREVIEW_LENGTH,
+        TRIGGER_DESCRIPTIONS,
+    )
+    from opencontractserver.utils.prompt_sanitization import (
+        UNTRUSTED_CONTENT_NOTICE,
+        fence_user_content,
+        warn_if_content_large,
+    )
+
+    trigger_desc = TRIGGER_DESCRIPTIONS.get(action.trigger, "triggered action in")
+    tool_list = ", ".join(tools) if tools else "none"
+
+    warn_if_content_large(document.title, context="document title")
+    warn_if_content_large(action.corpus.title, context="corpus title")
+    if document.description:
+        warn_if_content_large(document.description, context="document description")
+
+    parts = [
+        "You are an automated corpus action agent. You execute tasks on documents "
+        "without human interaction.",
+        f"\n{UNTRUSTED_CONTENT_NOTICE}",
+        "",
+        "## Execution Context",
+        f'- Action: "{action.name}"',
+        f"- Document: {fence_user_content(document.title, label='document title')} (ID: {document.id})",
+        f"- Corpus: {fence_user_content(action.corpus.title, label='corpus title')}",
+        f"- Trigger: Document {trigger_desc} the corpus",
+        f"- Available tools: {tool_list}",
+    ]
+
+    # Inject current document metadata so the agent doesn't waste tool calls
+    if document.description:
+        desc = document.description[:MAX_DESCRIPTION_PREVIEW_LENGTH]
+        if len(document.description) > MAX_DESCRIPTION_PREVIEW_LENGTH:
+            desc += "..."
+        parts.append(
+            f"- Current description: {fence_user_content(desc, label='document description')}"
+        )
+
+    parts.extend(
+        [
+            "",
+            "## Rules",
+            "1. You MUST use tools to accomplish your task. Describing what you "
+            "would do is NOT sufficient — call the tools.",
+            "2. Do NOT ask clarifying questions. Execute the task as described.",
+            "3. Ground all answers and outputs in actual document content "
+            "loaded via tools. NEVER guess or fabricate document content.",
+            "4. When the task requires writing or updating something, use the "
+            "appropriate tool (e.g., update_document_description, "
+            "update_document_summary, add_document_note).",
+            "5. After completing your task, respond with a brief summary of "
+            "actions taken.",
+            "",
+            "## Guidelines",
+            "- Start by loading the document text so you have real content "
+            "to work with. Use chunked reads for large documents.",
+            "- Be responsive to what the task instructions ask for — whether "
+            "that is summarization, analysis, annotation, classification, "
+            "or any other document operation.",
+            "- Use only the tools available to you. If the task requires a "
+            "capability you lack, say so rather than improvising.",
+            "",
+            "## Task Instructions",
+            action.task_instructions,
+        ]
+    )
+
+    # Append supplementary guidance from agent config if present
+    if action.agent_config and action.agent_config.system_instructions:
+        parts.extend(
+            [
+                "",
+                "## Additional Agent Guidance",
+                action.agent_config.system_instructions,
+            ]
+        )
+
+    return "\n".join(parts)
+
+
+def _build_thread_action_system_prompt(
+    action: CorpusAction,
+    thread_context: dict,
+    recent_messages: list[dict],
+    tools: list[str],
+    *,
+    message_id: int | None = None,
+    message_content: dict | None = None,
+) -> str:
+    """Build a goal-oriented system prompt for automated thread corpus actions.
+
+    Combines:
+    - Automation guardrails
+    - Thread context (title, messages, triggering message)
+    - The user's task_instructions
+    - Optional supplementary guidance from agent_config.system_instructions
+
+    SECURITY: All user-generated content (message bodies, titles, etc.)
+    is wrapped in <user_content> tags so the LLM can distinguish
+    instructions from untrusted data.  See prompt_sanitization.py.
+    """
+    from opencontractserver.utils.prompt_sanitization import (
+        UNTRUSTED_CONTENT_NOTICE,
+        fence_user_content,
+        warn_if_content_large,
+    )
+
+    tool_list = ", ".join(tools) if tools else "none"
+
+    warn_if_content_large(
+        thread_context.get("title", "untitled"), context="thread title"
+    )
+    if thread_context.get("corpus_title"):
+        warn_if_content_large(thread_context["corpus_title"], context="corpus title")
+
+    parts = [
+        "You are an automated corpus action agent. You execute moderation and "
+        "response tasks on discussion threads without human interaction.",
+        f"\n{UNTRUSTED_CONTENT_NOTICE}",
+        "",
+        "## Thread Context",
+        f"- Thread ID: {thread_context.get('id', 'unknown')}",
+        f"- Title: {fence_user_content(thread_context.get('title', 'untitled'), label='thread title')}",
+        f"- Creator: {fence_user_content(thread_context.get('creator_username', 'unknown'), label='username')}",
+        f"- Message count: {thread_context.get('message_count', 0)}",
+        f"- Is locked: {thread_context.get('is_locked', False)}",
+        f"- Is pinned: {thread_context.get('is_pinned', False)}",
+    ]
+
+    if thread_context.get("corpus_title"):
+        parts.append(
+            f"- Corpus: {fence_user_content(thread_context['corpus_title'], label='corpus title')}"
+        )
+
+    parts.append(f"- Available tools: {tool_list}")
+
+    # Inject triggering message for NEW_MESSAGE triggers
+    if message_id and message_content:
+        raw_content = message_content.get("content", "")
+        warn_if_content_large(raw_content, context="triggering message")
+        parts.extend(
+            [
+                "",
+                f"## Triggering Message (ID: {message_id})",
+                f"- Author: {fence_user_content(message_content.get('creator_username', 'unknown'), label='username')}",
+                f"- Content:\n{fence_user_content(raw_content, label='message body')}",
+            ]
+        )
+
+    # Inject recent thread messages for context
+    if recent_messages:
+        from opencontractserver.constants.corpus_actions import (
+            MAX_MESSAGE_PREVIEW_LENGTH,
+        )
+
+        parts.append("")
+        parts.append("## Recent Thread Messages (most recent first)")
+        for msg in recent_messages[:5]:
+            content_preview = (
+                msg["content"][:MAX_MESSAGE_PREVIEW_LENGTH] + "..."
+                if len(msg["content"]) > MAX_MESSAGE_PREVIEW_LENGTH
+                else msg["content"]
+            )
+            warn_if_content_large(content_preview, context="recent message")
+            parts.append(
+                f"- [{fence_user_content(msg['creator_username'], label='username')}] (ID: {msg['id']}): "
+                f"{fence_user_content(content_preview, label='message')}"
+            )
+
+    parts.extend(
+        [
+            "",
+            "## Rules",
+            "1. You MUST use tools to accomplish your task. Describing what you "
+            "would do is NOT sufficient — call the tools.",
+            "2. Do NOT ask clarifying questions. Execute the task as described.",
+            "3. Ground your actions in the actual thread content provided above. "
+            "Do not fabricate messages or user identities.",
+            "4. Be responsive to the task instructions — whether that is "
+            "moderation, summarization, automated replies, or other thread "
+            "operations.",
+            "5. After completing your task, respond with a brief summary of "
+            "actions taken.",
+            "",
+            "## Task Instructions",
+            action.task_instructions,
+        ]
+    )
+
+    # Append supplementary guidance from agent config if present
+    if action.agent_config and action.agent_config.system_instructions:
+        parts.extend(
+            [
+                "",
+                "## Additional Agent Guidance",
+                action.agent_config.system_instructions,
+            ]
+        )
+
+    return "\n".join(parts)
+
+
 async def _run_agent_corpus_action_async(
     corpus_action_id: int,
     document_id: int,
     user_id: int,
+    force: bool = False,
 ) -> dict:
     """Async implementation of agent corpus action execution."""
     from channels.db import database_sync_to_async
@@ -563,7 +831,7 @@ async def _run_agent_corpus_action_async(
                 return result, "created"
 
             # Record exists and we hold the lock - try to claim it
-            if existing.status not in [
+            if force or existing.status not in [
                 AgentActionResult.Status.RUNNING,
                 AgentActionResult.Status.COMPLETED,
             ]:
@@ -571,7 +839,7 @@ async def _run_agent_corpus_action_async(
                 existing.started_at = timezone.now()
                 existing.error_message = ""
                 existing.save(update_fields=["status", "started_at", "error_message"])
-                return existing, "claimed"
+                return existing, "forced" if force else "claimed"
 
             return existing, f"already_{existing.status}"
 
@@ -583,22 +851,20 @@ async def _run_agent_corpus_action_async(
         return {"status": status, "result_id": result.id}
 
     try:
-        # Determine which tools to use
-        tools = action.pre_authorized_tools or []
-        if not tools and action.agent_config:
-            tools = action.agent_config.available_tools or []
+        # Resolve tools (Suggestion 5: defaults when none specified)
+        tools = _resolve_action_tools(action, action.trigger)
 
-        # Build system prompt
-        system_prompt = None
-        if action.agent_config and action.agent_config.system_instructions:
-            system_prompt = action.agent_config.system_instructions
+        # Build goal-oriented system prompt (Suggestions 1 & 4)
+        system_prompt = _build_document_action_system_prompt(action, document, tools)
 
         logger.debug(
             f"[AgentCorpusAction] Creating agent with tools={tools}, "
-            f"prompt_length={len(action.agent_prompt)}"
+            f"instructions_length={len(action.task_instructions)}"
         )
 
-        # Create agent with pre-authorization (skip approval gate)
+        # Create agent with pre-authorization (skip approval gate).
+        # restrict_tool_names limits the agent to ONLY the resolved tool
+        # set, preventing tool overload from the ~17 default tools.
         agent = await agents.for_document(
             document=document,
             corpus=action.corpus,
@@ -606,13 +872,14 @@ async def _run_agent_corpus_action_async(
             system_prompt=system_prompt,
             tools=tools,
             streaming=False,
-            # Pre-authorize all tools for automated execution
             skip_approval_gate=True,
+            restrict_tool_names=tools,
         )
 
-        # Execute the task prompt
+        # Execute — the system prompt already contains task_instructions,
+        # so we send a concise activation message rather than repeating them.
         logger.info(f"[AgentCorpusAction] Executing prompt for doc {document_id}")
-        response = await agent.chat(action.agent_prompt)
+        response = await agent.chat("Execute the task described in your instructions.")
 
         # Build execution metadata
         execution_metadata = {
@@ -801,51 +1068,38 @@ async def _run_agent_thread_action_async(
         f"'{conversation.title}' (id={conversation_id})"
     )
 
-    # Build context for the agent
+    # Gather thread context for prompt assembly
     thread_context = await aget_thread_context(conversation_id)
+    thread_context["id"] = conversation_id
     recent_messages = await aget_thread_messages(conversation_id, limit=10)
 
-    # Build the prompt with context
-    context_parts = [
-        "You are reviewing a discussion thread for moderation.",
-        "\n## Thread Information:",
-        f"- Thread ID: {conversation_id}",
-        f"- Title: {thread_context['title']}",
-        f"- Creator: {thread_context['creator_username']}",
-        f"- Message count: {thread_context['message_count']}",
-        f"- Is locked: {thread_context['is_locked']}",
-        f"- Is pinned: {thread_context['is_pinned']}",
-    ]
-
-    if thread_context.get("corpus_title"):
-        context_parts.append(f"- Corpus: {thread_context['corpus_title']}")
-
+    # Resolve message content if this is a NEW_MESSAGE trigger
+    msg_content = None
     if message_id and message:
-        message_content = await aget_message_content(message_id)
-        context_parts.extend(
-            [
-                f"\n## Triggering Message (ID: {message_id}):",
-                f"- Author: {message_content['creator_username']}",
-                f"- Content:\n{message_content['content']}",
-            ]
-        )
+        msg_content = await aget_message_content(message_id)
 
-    context_parts.append("\n## Recent Thread Messages (most recent first):")
+    # Resolve tools (Suggestion 5: defaults when none specified)
+    tools = _resolve_action_tools(action, action.trigger)
 
-    for msg in recent_messages[:5]:
-        content_preview = (
-            msg["content"][:200] + "..."
-            if len(msg["content"]) > 200
-            else msg["content"]
-        )
-        context_parts.append(
-            f"- [{msg['creator_username']}] (ID: {msg['id']}): {content_preview}"
-        )
+    # Ensure moderation tools are always available for thread actions
+    from opencontractserver.llms.tools.tool_registry import (
+        get_moderation_tool_names,
+    )
 
-    context_parts.append("\n## Your Task:")
-    context_parts.append(action.agent_prompt)
+    moderation_tools = get_moderation_tool_names()
+    for tool in moderation_tools:
+        if tool not in tools:
+            tools.append(tool)
 
-    full_prompt = "\n".join(context_parts)
+    # Build goal-oriented system prompt (Suggestions 1 & 4)
+    system_prompt = _build_thread_action_system_prompt(
+        action,
+        thread_context,
+        recent_messages,
+        tools,
+        message_id=message_id,
+        message_content=msg_content,
+    )
 
     # Create or claim result record
     @database_sync_to_async
@@ -900,29 +1154,9 @@ async def _run_agent_thread_action_async(
         return {"status": status, "result_id": result.id}
 
     try:
-        # Determine tools - add moderation tools by default for thread actions
-        tools = action.pre_authorized_tools or []
-        if not tools and action.agent_config:
-            tools = action.agent_config.available_tools or []
-
-        # Ensure moderation tools are available for thread actions
-        # Use registry to get all moderation tools dynamically
-        from opencontractserver.llms.tools.tool_registry import (
-            get_moderation_tool_names,
-        )
-
-        moderation_tools = get_moderation_tool_names()
-        for tool in moderation_tools:
-            if tool not in tools:
-                tools.append(tool)
-
-        system_prompt = None
-        if action.agent_config and action.agent_config.system_instructions:
-            system_prompt = action.agent_config.system_instructions
-
         logger.debug(
             f"[AgentThreadAction] Creating agent with tools={tools}, "
-            f"prompt_length={len(full_prompt)}"
+            f"instructions_length={len(action.task_instructions)}"
         )
 
         # Create agent with corpus context and moderation tools
@@ -936,11 +1170,12 @@ async def _run_agent_thread_action_async(
             skip_approval_gate=True,
         )
 
-        # Execute the task prompt
+        # Execute — the system prompt already contains task_instructions
+        # and full thread context, so we send an activation message.
         logger.info(
             f"[AgentThreadAction] Executing prompt for thread {conversation_id}"
         )
-        response = await agent.chat(full_prompt)
+        response = await agent.chat("Execute the task described in your instructions.")
 
         # Build execution metadata
         execution_metadata = {

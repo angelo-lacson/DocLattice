@@ -4,13 +4,16 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import requests
-from django.core.files.storage import default_storage
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
-from opencontractserver.documents.models import Document
+from opencontractserver.constants import (
+    DEFAULT_MAX_CONCURRENT_CHUNKS,
+    DEFAULT_MAX_PAGES_PER_CHUNK,
+    DEFAULT_MIN_PAGES_FOR_CHUNKING,
+)
+from opencontractserver.pipeline.base.chunked_parser import BaseChunkedParser
 from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
-from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.pipeline.base.settings_schema import (
     PipelineSetting,
     SettingType,
@@ -30,11 +33,16 @@ from opencontractserver.utils.pdf_token_extraction import (
 logger = logging.getLogger(__name__)
 
 
-class DoclingParser(BaseParser):
+class DoclingParser(BaseChunkedParser):
     """
     A parser that delegates PDF document parsing to a Docling microservice via REST API
     instead of running the processing locally. This helps isolate complex dependencies
     and improves performance by offloading processing to a dedicated container.
+
+    For large documents (above ``min_pages_for_chunking`` pages), the PDF is
+    automatically split into page-range chunks that are parsed independently
+    and reassembled.  Image extraction runs once on the full PDF after
+    reassembly via :meth:`_post_reassemble_hook`.
     """
 
     title = "Docling Parser (REST)"
@@ -137,6 +145,39 @@ class DoclingParser(BaseParser):
                 )
             },
         )
+        max_pages_per_chunk: int = field(
+            default=DEFAULT_MAX_PAGES_PER_CHUNK,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Maximum pages per parsing chunk for large documents",
+                    env_var="DOCLING_MAX_PAGES_PER_CHUNK",
+                )
+            },
+        )
+        min_pages_for_chunking: int = field(
+            default=DEFAULT_MIN_PAGES_FOR_CHUNKING,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description=(
+                        "Page count threshold above which documents are "
+                        "split into chunks for parsing"
+                    ),
+                    env_var="DOCLING_MIN_PAGES_FOR_CHUNKING",
+                )
+            },
+        )
+        max_concurrent_chunks: int = field(
+            default=DEFAULT_MAX_CONCURRENT_CHUNKS,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Maximum concurrent chunk parsing requests",
+                    env_var="DOCLING_MAX_CONCURRENT_CHUNKS",
+                )
+            },
+        )
 
     def __init__(self):
         """Initialize the Docling REST parser with settings from PipelineSettings."""
@@ -156,9 +197,17 @@ class DoclingParser(BaseParser):
         self.min_image_width = s.min_image_width
         self.min_image_height = s.min_image_height
 
+        # Chunking settings (propagated to BaseChunkedParser attributes)
+        self.max_pages_per_chunk = s.max_pages_per_chunk
+        self.min_pages_for_chunking = s.min_pages_for_chunking
+        self.max_concurrent_chunks = s.max_concurrent_chunks
+
         logger.info(
             f"DoclingParser initialized with service URL: {self.service_url}, "
-            f"extract_images: {self.extract_images}"
+            f"extract_images: {self.extract_images}, "
+            f"chunking: {self.min_pages_for_chunking}+ pages -> "
+            f"{self.max_pages_per_chunk} pages/chunk, "
+            f"max_concurrent: {self.max_concurrent_chunks}"
         )
 
     @staticmethod
@@ -207,31 +256,46 @@ class DoclingParser(BaseParser):
             logger.warning(f"Docling Cloud Run IAM auth header not added: {e}")
         return headers
 
-    def _parse_document_impl(
-        self, user_id: int, doc_id: int, **all_kwargs
+    def _parse_single_chunk_impl(
+        self,
+        user_id: int,
+        doc_id: int,
+        chunk_pdf_bytes: bytes,
+        chunk_index: int,
+        total_chunks: int,
+        page_offset: int,
+        **all_kwargs,
     ) -> Optional[OpenContractDocExport]:
         """
-        Delegates document parsing to the Docling microservice.
+        Send a single PDF chunk to the Docling microservice and return the result.
+
+        When processing a large document, :class:`BaseChunkedParser` splits the
+        PDF and calls this method once per chunk.  For small documents the full
+        PDF bytes are passed as a single chunk (``chunk_index=0``).
+
+        Image extraction is intentionally **not** performed here — it runs
+        once on the full PDF in :meth:`_post_reassemble_hook` so that page
+        indices are globally consistent.
 
         Args:
-            user_id (int): The ID of the user parsing the document.
-            doc_id (int): The ID of the target Document in the database.
-            **all_kwargs: Additional optional arguments (e.g. "force_ocr", "llm_enhanced_hierarchy", etc.)
-                These can come from PIPELINE_SETTINGS or be passed directly.
-                - force_ocr (bool): Force OCR processing even if text is detectable
-                - roll_up_groups (bool): Roll up items under the same heading into single relationships
-                - llm_enhanced_hierarchy (bool): Apply experimental LLM-based hierarchy enhancement
+            user_id: The ID of the user parsing the document.
+            doc_id: The ID of the target Document in the database.
+            chunk_pdf_bytes: Raw PDF bytes for this chunk.
+            chunk_index: 0-based index of this chunk.
+            total_chunks: Total number of chunks.
+            page_offset: Global page offset for this chunk.
+            **all_kwargs: Additional optional arguments (force_ocr, etc.).
 
         Returns:
-            Optional[OpenContractDocExport]: A dictionary containing the doc metadata,
-            annotations ("labelled_text"), and relationships (including grouped relationships).
+            ``OpenContractDocExport`` with page indices local to the chunk.
         """
-        logger.info(
-            f"DoclingParser - Parsing doc {doc_id} for user {user_id} with effective kwargs: {all_kwargs}"
+        chunk_label = (
+            f"chunk {chunk_index + 1}/{total_chunks}" if total_chunks > 1 else "full"
         )
-
-        document = Document.objects.get(pk=doc_id)
-        doc_path = document.pdf_file.name
+        logger.info(
+            f"DoclingParser - Parsing doc {doc_id} ({chunk_label}) "
+            f"for user {user_id} with effective kwargs: {all_kwargs}"
+        )
 
         # Get settings from all_kwargs (which includes PIPELINE_SETTINGS and direct_kwargs)
         force_ocr = all_kwargs.get("force_ocr", False)
@@ -246,16 +310,12 @@ class DoclingParser(BaseParser):
                 "We normally try to intelligently determine if OCR is needed."
             )
 
-        # Read the PDF file from storage
         try:
-            with default_storage.open(doc_path, "rb") as pdf_file:
-                pdf_bytes = pdf_file.read()
-
             # Convert PDF bytes to base64 for JSON request
-            pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+            pdf_base64 = base64.b64encode(chunk_pdf_bytes).decode("utf-8")
 
-            # Extract filename from path
-            filename = doc_path.split("/")[-1]
+            # Use a descriptive filename for chunk logging on the microservice side
+            filename = f"doc_{doc_id}_chunk{chunk_index}.pdf"
 
             # Prepare the request payload
             payload = {
@@ -267,7 +327,10 @@ class DoclingParser(BaseParser):
             }
 
             # Send request to the microservice
-            logger.info(f"Sending PDF to Docling parser service: {self.service_url}")
+            logger.info(
+                f"Sending PDF ({chunk_label}) to Docling parser service: "
+                f"{self.service_url}"
+            )
             try:
                 headers: dict[str, str] = {"Content-Type": "application/json"}
                 # Attach Cloud Run IAM id_token if applicable/forced
@@ -285,14 +348,15 @@ class DoclingParser(BaseParser):
             except Timeout:
                 msg = (
                     f"Request to Docling parser service timed out after "
-                    f"{self.request_timeout} seconds for document {doc_id}"
+                    f"{self.request_timeout} seconds for document {doc_id} "
+                    f"({chunk_label})"
                 )
                 logger.error(msg)
                 raise DocumentParsingError(msg, is_transient=True)
             except ConnectionError:
                 msg = (
                     f"Failed to connect to Docling parser service at "
-                    f"{self.service_url} for document {doc_id}"
+                    f"{self.service_url} for document {doc_id} ({chunk_label})"
                 )
                 logger.error(msg)
                 raise DocumentParsingError(msg, is_transient=True)
@@ -311,8 +375,8 @@ class DoclingParser(BaseParser):
                         is_transient = False
 
                 msg = (
-                    f"Request to Docling parser service failed for document {doc_id}: "
-                    f"{e}"
+                    f"Request to Docling parser service failed for document {doc_id} "
+                    f"({chunk_label}): {e}"
                 )
                 if status_code:
                     msg += f" (status={status_code})"
@@ -328,17 +392,9 @@ class DoclingParser(BaseParser):
             # Handle potential differences in field names (snake_case vs camelCase)
             normalized_result = self._normalize_response(result)
 
-            # Extract images if enabled
-            extract_images_flag = all_kwargs.get("extract_images", self.extract_images)
-            if extract_images_flag:
-                # Construct storage path for images based on document ID
-                image_storage_path = f"documents/{doc_id}/images"
-                normalized_result = self._add_images_to_result(
-                    normalized_result, pdf_bytes, storage_path=image_storage_path
-                )
-
             logger.info(
-                f"Successfully processed document {doc_id} through Docling parser service"
+                f"Successfully processed document {doc_id} ({chunk_label}) "
+                "through Docling parser service"
             )
             return normalized_result
 
@@ -349,10 +405,35 @@ class DoclingParser(BaseParser):
             import traceback
 
             stacktrace = traceback.format_exc()
-            msg = f"Docling REST parser failed unexpectedly for document {doc_id}: {e}"
+            msg = (
+                f"Docling REST parser failed unexpectedly for document {doc_id} "
+                f"({chunk_label}): {e}"
+            )
             logger.error(f"{msg}\n{stacktrace}")
             # Unexpected errors default to transient (might be temporary issue)
             raise DocumentParsingError(msg, is_transient=True)
+
+    def _post_reassemble_hook(
+        self,
+        user_id: int,
+        doc_id: int,
+        reassembled: OpenContractDocExport,
+        pdf_bytes: bytes,
+        **all_kwargs,
+    ) -> OpenContractDocExport:
+        """
+        Run image extraction on the full PDF after chunk reassembly.
+
+        This ensures image page indices are globally consistent regardless
+        of whether the document was chunked.
+        """
+        extract_images_flag = all_kwargs.get("extract_images", self.extract_images)
+        if extract_images_flag:
+            image_storage_path = f"documents/{doc_id}/images"
+            reassembled = self._add_images_to_result(
+                reassembled, pdf_bytes, storage_path=image_storage_path
+            )
+        return reassembled
 
     def _normalize_response(self, response_data: dict[str, Any]) -> dict[str, Any]:
         """

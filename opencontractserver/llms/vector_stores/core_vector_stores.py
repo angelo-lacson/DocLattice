@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Optional, Union
 
 from asgiref.sync import async_to_sync, sync_to_async
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Q, QuerySet
 
@@ -632,12 +631,15 @@ class CoreAnnotationVectorStore:
             List of VectorSearchResult with annotations and similarity scores
         """
         from opencontractserver.documents.models import Document
-        from opencontractserver.pipeline.utils import get_default_embedder
+        from opencontractserver.pipeline.utils import (
+            get_default_embedder,
+            get_default_embedder_path,
+        )
 
         _logger.info(f"Global search for user {user_id}: '{query_text[:50]}...'")
 
         # Get default embedder configuration
-        default_embedder_path = settings.DEFAULT_EMBEDDER
+        default_embedder_path = get_default_embedder_path()
         default_embedder_class = get_default_embedder()
 
         if not default_embedder_class:

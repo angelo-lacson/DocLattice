@@ -18,6 +18,7 @@ class UsersConfig(AppConfig):
         if settings.TELEMETRY_ENABLED:
             posthog.api_key = settings.POSTHOG_API_KEY
             posthog.host = settings.POSTHOG_HOST
+            posthog.disable_geoip = False
 
         try:
             import opencontractserver.users.signals  # noqa F401

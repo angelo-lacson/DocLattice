@@ -36,7 +36,9 @@ describe("NoteEditor", () => {
   const mockOnClose = vi.fn();
   const mockOnUpdate = vi.fn();
 
-  const mockNote: GetNoteWithHistoryQuery["note"] = {
+  // Apollo returns null for nullable GraphQL fields; cast to satisfy TS
+  // while matching real Apollo response shape.
+  const mockNote = {
     id: mockNoteId,
     title: "Test Note Title",
     content: "Test note content",
@@ -62,10 +64,10 @@ describe("NoteEditor", () => {
           username: "testuser",
         },
         created: "2024-01-02T00:00:00Z",
-        diff: undefined,
+        diff: null,
         snapshot: "Test note content",
-        checksumBase: undefined,
-        checksumFull: undefined,
+        checksumBase: null,
+        checksumFull: null,
       },
       {
         id: "rev-1",
@@ -76,10 +78,10 @@ describe("NoteEditor", () => {
           username: "testuser",
         },
         created: "2024-01-01T00:00:00Z",
-        diff: undefined,
+        diff: null,
         snapshot: "Original content",
-        checksumBase: undefined,
-        checksumFull: undefined,
+        checksumBase: null,
+        checksumFull: null,
       },
     ],
   };
@@ -394,6 +396,11 @@ describe("NoteEditor", () => {
 
       await userEvent.click(screen.getByText("Show History"));
 
+      // Wait for version list to render
+      await waitFor(() => {
+        expect(screen.getByText("Version 1")).toBeInTheDocument();
+      });
+
       // Click on version 1
       const version1Button = screen.getByText("Version 1").closest("button");
       await userEvent.click(version1Button!);
@@ -451,10 +458,10 @@ describe("NoteEditor", () => {
                     username: "testuser",
                   },
                   created: "2024-01-03T00:00:00Z",
-                  diff: undefined,
+                  diff: null,
                   snapshot: "Original content",
-                  checksumBase: undefined,
-                  checksumFull: undefined,
+                  checksumBase: null,
+                  checksumFull: null,
                 },
                 ...(mockNote.revisions || []),
               ],
@@ -471,6 +478,12 @@ describe("NoteEditor", () => {
 
       // Open history and select version 1
       await userEvent.click(screen.getByText("Show History"));
+
+      // Wait for version list to render
+      await waitFor(() => {
+        expect(screen.getByText("Version 1")).toBeInTheDocument();
+      });
+
       const version1Button = screen.getByText("Version 1").closest("button");
       await userEvent.click(version1Button!);
 
@@ -498,6 +511,12 @@ describe("NoteEditor", () => {
 
       // Open history and select version 1
       await userEvent.click(screen.getByText("Show History"));
+
+      // Wait for version list to render
+      await waitFor(() => {
+        expect(screen.getByText("Version 1")).toBeInTheDocument();
+      });
+
       const version1Button = screen.getByText("Version 1").closest("button");
       await userEvent.click(version1Button!);
 
@@ -537,10 +556,9 @@ describe("NoteEditor", () => {
 
       renderComponent();
 
+      // Wait for mock data to load (document title comes from query result)
       await waitFor(() => {
-        expect(
-          screen.getByPlaceholderText("Note title...")
-        ).toBeInTheDocument();
+        expect(screen.getByText("Test Document")).toBeInTheDocument();
       });
 
       // Make changes
@@ -548,6 +566,11 @@ describe("NoteEditor", () => {
         "Write your note in Markdown..."
       );
       await userEvent.type(contentField, " additional text");
+
+      // Wait for the hasChanges useEffect to propagate
+      await waitFor(() => {
+        expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      });
 
       // Try to close
       await userEvent.click(screen.getByText("Close"));
@@ -563,10 +586,9 @@ describe("NoteEditor", () => {
 
       renderComponent();
 
+      // Wait for mock data to load (document title comes from query result)
       await waitFor(() => {
-        expect(
-          screen.getByPlaceholderText("Note title...")
-        ).toBeInTheDocument();
+        expect(screen.getByText("Test Document")).toBeInTheDocument();
       });
 
       // Make changes
@@ -574,6 +596,11 @@ describe("NoteEditor", () => {
         "Write your note in Markdown..."
       );
       await userEvent.type(contentField, " additional text");
+
+      // Wait for the hasChanges useEffect to propagate
+      await waitFor(() => {
+        expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      });
 
       // Try to close
       await userEvent.click(screen.getByText("Close"));

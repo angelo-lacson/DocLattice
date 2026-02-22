@@ -61,7 +61,7 @@ class TestRunAgentCorpusActionAsync(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Summarize this document",
+            task_instructions="Summarize this document",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -216,6 +216,7 @@ class TestRunAgentCorpusActionAsync(TestCase):
             corpus_action_id=self.corpus_action.id,
             document_id=self.document.id,
             user_id=self.user.id,
+            force=False,
         )
 
     @patch(ASYNC_FUNC_PATH)
@@ -258,7 +259,7 @@ class TestRunAgentCorpusActionTask(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -281,6 +282,7 @@ class TestRunAgentCorpusActionTask(TestCase):
             corpus_action_id=self.corpus_action.id,
             document_id=self.document.id,
             user_id=self.user.id,
+            force=False,
         )
 
     @patch(ASYNC_FUNC_PATH)
@@ -356,7 +358,7 @@ class TestAgentCorpusActionEdgeCases(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -392,7 +394,7 @@ class TestAgentCorpusActionEdgeCases(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -446,7 +448,7 @@ class TestCorpusActionExecutionTracking(TestCase):
             name="Test Action",
             corpus=self.corpus,
             agent_config=self.agent_config,
-            agent_prompt="Test prompt",
+            task_instructions="Test prompt",
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
@@ -552,3 +554,506 @@ class TestCorpusActionExecutionTracking(TestCase):
 
         self.assertEqual(result.result["status"], "completed")
         mock_async_func.assert_called_once()
+
+
+class TestResolveActionTools(TestCase):
+    """Tests for _resolve_action_tools helper function."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser2", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Test Agent",
+            system_instructions="Test",
+            available_tools=["tool_from_config_a", "tool_from_config_b"],
+            is_active=True,
+            creator=self.user,
+        )
+
+    def test_pre_authorized_tools_does_not_override_available_tools(self):
+        """pre_authorized_tools controls approval gates, not tool availability."""
+        from opencontractserver.tasks.agent_tasks import _resolve_action_tools
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Test",
+            pre_authorized_tools=["explicit_tool_1", "explicit_tool_2"],
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        # Should use agent_config.available_tools, not pre_authorized_tools
+        result = _resolve_action_tools(action, "add_document")
+        self.assertEqual(result, ["tool_from_config_a", "tool_from_config_b"])
+
+    def test_falls_back_to_agent_config_tools(self):
+        """When no pre_authorized_tools, use agent_config.available_tools."""
+        from opencontractserver.tasks.agent_tasks import _resolve_action_tools
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Test",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        result = _resolve_action_tools(action, "add_document")
+        self.assertEqual(result, ["tool_from_config_a", "tool_from_config_b"])
+
+    def test_falls_back_to_trigger_defaults(self):
+        """When no tools on action or config, use trigger-appropriate defaults."""
+        from opencontractserver.constants.corpus_actions import (
+            DEFAULT_DOCUMENT_ACTION_TOOLS,
+            DEFAULT_THREAD_ACTION_TOOLS,
+        )
+        from opencontractserver.tasks.agent_tasks import _resolve_action_tools
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Test lightweight",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        result = _resolve_action_tools(action, "add_document")
+        self.assertEqual(result, DEFAULT_DOCUMENT_ACTION_TOOLS)
+
+        result_thread = _resolve_action_tools(action, "new_thread")
+        self.assertEqual(result_thread, DEFAULT_THREAD_ACTION_TOOLS)
+
+    def test_unknown_trigger_returns_empty_list(self):
+        """Unknown trigger type returns empty list from defaults."""
+        from opencontractserver.tasks.agent_tasks import _resolve_action_tools
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Test",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        result = _resolve_action_tools(action, "unknown_trigger")
+        self.assertEqual(result, [])
+
+    def test_empty_pre_authorized_tools_falls_through(self):
+        """Explicit empty list for pre_authorized_tools falls to next priority."""
+        from opencontractserver.tasks.agent_tasks import _resolve_action_tools
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Test",
+            pre_authorized_tools=[],
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        result = _resolve_action_tools(action, "add_document")
+        self.assertEqual(result, ["tool_from_config_a", "tool_from_config_b"])
+
+
+class TestBuildDocumentActionSystemPrompt(TestCase):
+    """Tests for _build_document_action_system_prompt helper function."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser3", password="testpass")
+        self.corpus = Corpus.objects.create(title="My Test Corpus", creator=self.user)
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Test Agent",
+            system_instructions="Be extra careful with legal docs.",
+            is_active=True,
+            creator=self.user,
+        )
+
+    def test_basic_prompt_structure(self):
+        """Prompt includes action name, document title, corpus, trigger, tools, and task."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_document_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Summarize this document.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            name="Summarizer",
+            creator=self.user,
+        )
+        doc = Document.objects.create(title="Contract.pdf", creator=self.user)
+        prompt = _build_document_action_system_prompt(action, doc, ["tool_a", "tool_b"])
+
+        self.assertIn("automated corpus action agent", prompt)
+        self.assertIn('"Summarizer"', prompt)
+        # Document and corpus titles are fenced with <user_content> tags
+        self.assertIn("Contract.pdf", prompt)
+        self.assertIn("<user_content", prompt)
+        self.assertIn("My Test Corpus", prompt)
+        self.assertIn("was just added to", prompt)
+        self.assertIn("tool_a, tool_b", prompt)
+        self.assertIn("## Task Instructions", prompt)
+        self.assertIn("Summarize this document.", prompt)
+
+    def test_includes_agent_config_supplementary_guidance(self):
+        """When agent_config has system_instructions, they appear as Additional Agent Guidance."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_document_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Do something.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        doc = Document.objects.create(title="Doc", creator=self.user)
+        prompt = _build_document_action_system_prompt(action, doc, [])
+
+        self.assertIn("## Additional Agent Guidance", prompt)
+        self.assertIn("Be extra careful with legal docs.", prompt)
+
+    def test_no_supplementary_guidance_without_agent_config(self):
+        """Lightweight agent (no agent_config) omits Additional Agent Guidance section."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_document_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Summarize.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        doc = Document.objects.create(title="Doc", creator=self.user)
+        prompt = _build_document_action_system_prompt(action, doc, [])
+
+        self.assertNotIn("## Additional Agent Guidance", prompt)
+
+    def test_document_description_included_when_present(self):
+        """Document description is injected into the prompt when present."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_document_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Update it.",
+            trigger=CorpusActionTrigger.EDIT_DOCUMENT,
+            creator=self.user,
+        )
+        doc = Document.objects.create(
+            title="Doc",
+            description="A short description.",
+            creator=self.user,
+        )
+        prompt = _build_document_action_system_prompt(action, doc, [])
+
+        self.assertIn("A short description.", prompt)
+        self.assertIn("Current description:", prompt)
+        self.assertIn('<user_content label="document description">', prompt)
+        self.assertIn("was just edited in", prompt)
+
+    def test_long_document_description_truncated(self):
+        """Descriptions longer than MAX_DESCRIPTION_PREVIEW_LENGTH are truncated."""
+        from opencontractserver.constants.corpus_actions import (
+            MAX_DESCRIPTION_PREVIEW_LENGTH,
+        )
+        from opencontractserver.tasks.agent_tasks import (
+            _build_document_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Check it.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        long_desc = "x" * (MAX_DESCRIPTION_PREVIEW_LENGTH + 100)
+        doc = Document.objects.create(
+            title="Doc", description=long_desc, creator=self.user
+        )
+        prompt = _build_document_action_system_prompt(action, doc, [])
+
+        self.assertIn("...", prompt)
+        # The truncated desc should be exactly MAX_DESCRIPTION_PREVIEW_LENGTH chars + "..."
+        self.assertNotIn(long_desc, prompt)
+
+    def test_no_description_omits_line(self):
+        """When document has no description, the description line is not present."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_document_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Summarize.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        doc = Document.objects.create(title="Doc", creator=self.user)
+        prompt = _build_document_action_system_prompt(action, doc, [])
+
+        self.assertNotIn("Current description:", prompt)
+
+    def test_empty_tools_shows_none(self):
+        """When tools list is empty, prompt shows 'none'."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_document_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Check.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        doc = Document.objects.create(title="Doc", creator=self.user)
+        prompt = _build_document_action_system_prompt(action, doc, [])
+
+        self.assertIn("Available tools: none", prompt)
+
+
+class TestBuildThreadActionSystemPrompt(TestCase):
+    """Tests for _build_thread_action_system_prompt helper function."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser4", password="testpass")
+        self.corpus = Corpus.objects.create(title="Thread Corpus", creator=self.user)
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Moderator Agent",
+            system_instructions="Be fair and consistent.",
+            is_active=True,
+            creator=self.user,
+        )
+        self.base_thread_context = {
+            "id": 42,
+            "title": "Discussion about policy",
+            "creator_username": "alice",
+            "message_count": 5,
+            "is_locked": False,
+            "is_pinned": True,
+            "corpus_title": "Thread Corpus",
+        }
+
+    def test_basic_prompt_structure(self):
+        """Prompt includes thread context, rules, and task instructions."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Moderate this thread.",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, [], ["tool_x"]
+        )
+
+        self.assertIn("automated corpus action agent", prompt)
+        self.assertIn("Thread ID: 42", prompt)
+        self.assertIn("Discussion about policy", prompt)
+        self.assertIn("alice", prompt)
+        self.assertIn("Is pinned: True", prompt)
+        self.assertIn("Thread Corpus", prompt)
+        self.assertIn('<user_content label="corpus title">', prompt)
+        self.assertIn("tool_x", prompt)
+        self.assertIn("## Task Instructions", prompt)
+        self.assertIn("Moderate this thread.", prompt)
+
+    def test_no_corpus_title_omitted(self):
+        """When corpus_title is absent from context, line is omitted."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Moderate.",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        ctx = {**self.base_thread_context}
+        del ctx["corpus_title"]
+        prompt = _build_thread_action_system_prompt(action, ctx, [], [])
+
+        self.assertNotIn("- Corpus:", prompt)
+
+    def test_triggering_message_included(self):
+        """When message_id and message_content are provided, triggering message section appears."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Check.",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+        prompt = _build_thread_action_system_prompt(
+            action,
+            self.base_thread_context,
+            [],
+            [],
+            message_id=99,
+            message_content={"creator_username": "bob", "content": "Hello world!"},
+        )
+
+        self.assertIn("## Triggering Message (ID: 99)", prompt)
+        self.assertIn('<user_content label="username">\nbob\n</user_content>', prompt)
+        self.assertIn("Hello world!", prompt)
+
+    def test_no_triggering_message_without_params(self):
+        """When message_id/message_content are None, section is omitted."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Moderate.",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, [], []
+        )
+
+        self.assertNotIn("## Triggering Message", prompt)
+
+    def test_recent_messages_included(self):
+        """Recent messages are included in the prompt."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Review.",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+        messages = [
+            {"id": 1, "creator_username": "alice", "content": "First message"},
+            {"id": 2, "creator_username": "bob", "content": "Second message"},
+        ]
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, messages, []
+        )
+
+        self.assertIn("## Recent Thread Messages", prompt)
+        # Usernames are fenced in <user_content> tags for prompt injection mitigation
+        self.assertIn(
+            '[<user_content label="username">\nalice\n</user_content>] (ID: 1):',
+            prompt,
+        )
+        self.assertIn("First message", prompt)
+        self.assertIn(
+            '[<user_content label="username">\nbob\n</user_content>] (ID: 2):',
+            prompt,
+        )
+        self.assertIn("Second message", prompt)
+        self.assertIn('<user_content label="message">', prompt)
+
+    def test_long_message_content_truncated(self):
+        """Messages longer than MAX_MESSAGE_PREVIEW_LENGTH are truncated."""
+        from opencontractserver.constants.corpus_actions import (
+            MAX_MESSAGE_PREVIEW_LENGTH,
+        )
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Check.",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+        long_content = "y" * (MAX_MESSAGE_PREVIEW_LENGTH + 50)
+        messages = [{"id": 1, "creator_username": "alice", "content": long_content}]
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, messages, []
+        )
+
+        self.assertIn("...", prompt)
+        self.assertNotIn(long_content, prompt)
+
+    def test_messages_capped_at_five(self):
+        """Only the first 5 messages are included even if more are provided."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Check.",
+            trigger=CorpusActionTrigger.NEW_MESSAGE,
+            creator=self.user,
+        )
+        messages = [
+            {"id": i, "creator_username": f"user{i}", "content": f"msg {i}"}
+            for i in range(8)
+        ]
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, messages, []
+        )
+
+        self.assertIn("user4", prompt)
+        self.assertNotIn("user5", prompt)
+
+    def test_includes_agent_config_supplementary_guidance(self):
+        """Agent config system_instructions appear as Additional Agent Guidance."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            agent_config=self.agent_config,
+            task_instructions="Moderate.",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, [], []
+        )
+
+        self.assertIn("## Additional Agent Guidance", prompt)
+        self.assertIn("Be fair and consistent.", prompt)
+
+    def test_no_supplementary_guidance_without_agent_config(self):
+        """Lightweight agent omits Additional Agent Guidance."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Moderate.",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, [], []
+        )
+
+        self.assertNotIn("## Additional Agent Guidance", prompt)
+
+    def test_empty_tools_shows_none(self):
+        """When tools list is empty, prompt shows 'none'."""
+        from opencontractserver.tasks.agent_tasks import (
+            _build_thread_action_system_prompt,
+        )
+
+        action = CorpusAction.objects.create(
+            corpus=self.corpus,
+            task_instructions="Moderate.",
+            trigger=CorpusActionTrigger.NEW_THREAD,
+            creator=self.user,
+        )
+        prompt = _build_thread_action_system_prompt(
+            action, self.base_thread_context, [], []
+        )
+
+        self.assertIn("Available tools: none", prompt)

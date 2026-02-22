@@ -58,6 +58,7 @@ import { getPermissions } from "../../../utils/transform";
 import { SpanAnnotationJson } from "../../types";
 import { AnnotationLabelType } from "../../../types/graphql-api";
 import { useCorpusState } from "../context/CorpusAtom";
+import { isTextFileType } from "../../../utils/files";
 
 /**
  * Hook to manage PdfAnnotations state.
@@ -402,7 +403,7 @@ export function useCreateAnnotation() {
 
         let newAnnotation: ServerTokenAnnotation | ServerSpanAnnotation;
 
-        if (selectedDocument.fileType?.startsWith("text/")) {
+        if (isTextFileType(selectedDocument.fileType)) {
           console.log(
             "[handleCreateAnnotation] Creating ServerSpanAnnotation instance"
           );
@@ -524,7 +525,7 @@ export function useUpdateAnnotation() {
         if (data?.updateAnnotation?.ok) {
           let updatedAnnotation: ServerTokenAnnotation | ServerSpanAnnotation;
 
-          if (selectedDocument.fileType === "application/txt") {
+          if (isTextFileType(selectedDocument.fileType)) {
             updatedAnnotation = new ServerSpanAnnotation(
               annotation.page,
               annotation.annotationLabel,

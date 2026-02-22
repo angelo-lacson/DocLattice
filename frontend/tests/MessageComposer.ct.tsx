@@ -92,6 +92,10 @@ test.describe("MessageComposer", () => {
       />
     );
 
+    // Focus editor to activate the composer's :focus-within state
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+
     const sendButton = page.getByRole("button", { name: /send/i });
     await sendButton.click();
 
@@ -235,6 +239,10 @@ test.describe("MessageComposer", () => {
       />
     );
 
+    // Focus the editor to activate :focus-within which reveals CharacterCount
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+
     await expect(page.getByText(/too long/)).toBeVisible();
 
     const sendButton = page.getByRole("button", { name: /send/i });
@@ -253,12 +261,19 @@ test.describe("MessageComposer", () => {
       />
     );
 
+    // Focus editor to activate the composer's :focus-within state
+    const editor = page.locator(".ProseMirror");
+    await editor.click();
+
     const sendButton = page.getByRole("button", { name: /send/i });
     await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
     // Wait for async handling and editor to clear
     await page.waitForTimeout(200);
+
+    // Re-focus editor after submit to ensure :focus-within is active
+    await editor.click();
 
     // Editor should be cleared (placeholder class should be back)
     await expect(page.locator(".ProseMirror p.is-editor-empty")).toBeVisible();

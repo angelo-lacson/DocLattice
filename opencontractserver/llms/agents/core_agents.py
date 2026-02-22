@@ -27,11 +27,16 @@ from opencontractserver.conversations.models import (
 )
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
+from opencontractserver.llms.context_guardrails import CompactionConfig
 from opencontractserver.llms.tools.tool_factory import CoreTool
 from opencontractserver.llms.vector_stores.core_vector_stores import (
     CoreAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
+from opencontractserver.utils.prompt_sanitization import (
+    UNTRUSTED_CONTENT_NOTICE,
+    fence_user_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +256,7 @@ class AgentConfig:
 
     # Basic configuration
     user_id: Optional[int] = None
-    model_name: str = "gpt-4o-mini"
+    model_name: str = "gpt-4o"
     api_key: Optional[str] = None
     embedder_path: Optional[str] = None
     similarity_top_k: int = 10
@@ -277,6 +282,16 @@ class AgentConfig:
 
     # Tool configuration
     tools: list[Any] = field(default_factory=list)
+
+    # Context guardrails — controls conversation compaction and tool output
+    # truncation.  Defaults are sourced from the constants module.
+    compaction: CompactionConfig = field(default_factory=CompactionConfig)
+
+    # Transient flag set by resume_with_approval() so that sub-agent closures
+    # (e.g. ask_document_tool) can bypass nested approval gates after the user
+    # has already approved.  Safe to mutate: AgentConfig is instantiated
+    # per-request via UnifiedAgentFactory, never shared across sessions.
+    _approval_bypass_allowed: bool = False
 
 
 @dataclass
@@ -976,9 +991,12 @@ class CoreDocumentAgentFactory:
         else:
             base_instructions = settings.DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS
 
-        # Prepend document context to the instructions
+        # Prepend document context to the instructions.
+        # Document title is user-supplied, so fence it.
+        fenced_title = fence_user_content(document.title, label="document title")
         return (
-            f"You are analyzing the document titled '{document.title}' (ID: {document.id}).\n\n"
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
+            f"You are analyzing the document titled {fenced_title} (ID: {document.id}).\n\n"
             f"{base_instructions}"
         )
 
@@ -1047,9 +1065,12 @@ class CoreCorpusAgentFactory:
         else:
             base_instructions = settings.DEFAULT_CORPUS_AGENT_INSTRUCTIONS
 
-        # Prepend corpus context to the instructions
+        # Prepend corpus context to the instructions.
+        # Corpus title is user-supplied, so fence it.
+        fenced_title = fence_user_content(corpus.title, label="corpus title")
         return (
-            f"You are analyzing the corpus titled '{corpus.title}' (ID: {corpus.id}).\n\n"
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
+            f"You are analyzing the corpus titled {fenced_title} (ID: {corpus.id}).\n\n"
             f"{base_instructions}"
         )
 
@@ -1220,17 +1241,71 @@ class CoreConversationManager:
         return manager
 
     async def get_conversation_messages(self) -> list[ChatMessage]:
-        """Get all messages in the conversation."""
+        """Get messages in the conversation, honouring compaction cutoff.
+
+        If the conversation has a ``compacted_before_message_id`` set, only
+        messages *after* that ID are returned — the older portion is
+        represented by ``conversation.compaction_summary`` which callers
+        should prepend as a system message.
+        """
         # For anonymous conversations, return empty list since nothing is stored
         if not self.conversation:
             return []
 
-        return [
-            msg
-            async for msg in ChatMessage.objects.filter(
-                conversation=self.conversation
-            ).order_by("created")
-        ]
+        qs = ChatMessage.objects.filter(conversation=self.conversation)
+
+        # When a compaction bookmark exists, skip already-summarised messages.
+        cutoff = self.conversation.compacted_before_message_id
+        if cutoff is not None:
+            qs = qs.filter(id__gt=cutoff)
+
+        return [msg async for msg in qs.order_by("created")]
+
+    async def persist_compaction(
+        self,
+        summary: str,
+        cutoff_message_id: int,
+    ) -> None:
+        """Write the compaction bookmark to the Conversation row.
+
+        Uses an optimistic-lock pattern: the ``UPDATE`` only touches
+        rows whose ``compacted_before_message_id`` hasn't moved since
+        we read it.  If a concurrent request already advanced the
+        bookmark past *cutoff_message_id*, this call is a harmless
+        no-op (the other request's compaction wins).
+
+        After a successful call, :meth:`get_conversation_messages` will
+        only return messages newer than *cutoff_message_id*.
+        """
+        if not self.conversation:
+            return
+
+        old_cutoff = self.conversation.compacted_before_message_id
+
+        # Build a filter that matches the row only when the bookmark
+        # hasn't been moved by a concurrent request.
+        filters: dict = {"pk": self.conversation.pk}
+        if old_cutoff is None:
+            filters["compacted_before_message_id__isnull"] = True
+        else:
+            filters["compacted_before_message_id"] = old_cutoff
+
+        updated = await Conversation.objects.filter(**filters).aupdate(
+            compaction_summary=summary,
+            compacted_before_message_id=cutoff_message_id,
+        )
+
+        if updated:
+            # Keep the in-memory object consistent.
+            self.conversation.compaction_summary = summary
+            self.conversation.compacted_before_message_id = cutoff_message_id
+        else:
+            logger.info(
+                "Compaction bookmark already advanced (expected cutoff=%s, "
+                "target=%s) — skipping stale write",
+                old_cutoff,
+                cutoff_message_id,
+            )
 
     async def create_placeholder_message(self, msg_type: str = "LLM") -> int:
         """Create a placeholder message with state tracking."""
@@ -1250,6 +1325,7 @@ class CoreConversationManager:
             data={
                 "state": MessageState.IN_PROGRESS,
                 "created_at": timezone.now().isoformat(),
+                "model_name": self.config.model_name,
             },
             state=MessageState.IN_PROGRESS,
         )
@@ -1286,6 +1362,7 @@ class CoreConversationManager:
 
         data = message.data or {}
         data["completed_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
@@ -1348,6 +1425,7 @@ class CoreConversationManager:
         data = {
             "state": MessageState.COMPLETED,
             "created_at": timezone.now().isoformat(),
+            "model_name": self.config.model_name,
         }
 
         if sources:
@@ -1383,6 +1461,7 @@ class CoreConversationManager:
 
         data = message.data or {}
         data["updated_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
 
         if sources:
             data["sources"] = [source.to_dict() for source in sources]
@@ -1414,6 +1493,7 @@ class CoreConversationManager:
         data = message.data or {}
         data["error"] = error
         data["errored_at"] = timezone.now().isoformat()
+        data.setdefault("model_name", self.config.model_name)
         message.data = data
 
         await message.asave()
@@ -1422,14 +1502,15 @@ class CoreConversationManager:
 def get_default_config(**overrides) -> AgentConfig:
     """Get default agent configuration with optional overrides."""
     defaults = {
-        "model_name": "gpt-4o-mini",
+        "model_name": getattr(settings, "OPENAI_MODEL", "gpt-4o"),
         "api_key": getattr(settings, "OPENAI_API_KEY", None),
         "similarity_top_k": 10,
         "streaming": True,
         "verbose": True,
         "temperature": 0.7,
     }
-    defaults.update(overrides)
+    # Filter out None values so callers can't accidentally clobber defaults
+    defaults.update({k: v for k, v in overrides.items() if v is not None})
     return AgentConfig(**defaults)
 
 

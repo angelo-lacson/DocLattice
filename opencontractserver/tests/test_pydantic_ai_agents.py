@@ -6,7 +6,6 @@ from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase, override_settings
 from pydantic import BaseModel
@@ -33,6 +32,7 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
 from opencontractserver.llms.vector_stores.vector_store_factory import (
     UnifiedVectorStoreFactory,
 )
+from opencontractserver.pipeline.utils import get_default_embedder_path
 
 User = get_user_model()
 
@@ -229,8 +229,8 @@ class TestPydanticAIAgents(TransactionTestCase):
         )
 
         # Add embeddings to annotations
-        # Use settings.DEFAULT_EMBEDDER to match what vector store searches for
-        embedder_path = settings.DEFAULT_EMBEDDER
+        # Use get_default_embedder_path() to match what vector store searches for
+        embedder_path = get_default_embedder_path()
         self.anno1.add_embedding(embedder_path, constant_vector(384, 0.1))
         self.anno2.add_embedding(embedder_path, constant_vector(384, 0.2))
         self.anno3.add_embedding(embedder_path, constant_vector(384, 0.3))
@@ -525,10 +525,12 @@ class TestPydanticAIAgents(TransactionTestCase):
             CoreConversationManager,
             DocumentAgentContext,
         )
+        from opencontractserver.llms.context_guardrails import CompactionConfig
 
         cfg = MagicMock(spec=AgentConfig)
         cfg.store_user_messages = cfg.store_llm_messages = True
         cfg.user_id = self.user.id
+        cfg.compaction = CompactionConfig()
 
         ctx = MagicMock(spec=DocumentAgentContext)
         ctx.document = self.doc1
@@ -590,10 +592,14 @@ class TestPydanticAIAgents(TransactionTestCase):
             CoreConversationManager,
             DocumentAgentContext,
         )
+        from opencontractserver.llms.context_guardrails import CompactionConfig
 
         cfg = MagicMock(spec=AgentConfig)
         cfg.store_user_messages = cfg.store_llm_messages = False  # simplify
         cfg.user_id = self.user.id
+        # Provide a real CompactionConfig so _get_message_history doesn't
+        # try arithmetic with MagicMock values.
+        cfg.compaction = CompactionConfig()
 
         ctx = MagicMock(spec=DocumentAgentContext)
         ctx.document = self.doc1
@@ -602,6 +608,9 @@ class TestPydanticAIAgents(TransactionTestCase):
         conv_mgr = MagicMock(spec=CoreConversationManager)
         conv_mgr.conversation = None
         conv_mgr.config = cfg
+        # Stub async helpers that _get_message_history calls so the code
+        # path reaches the LLM call (which is what we're testing).
+        conv_mgr.get_conversation_messages = AsyncMock(return_value=[])
 
         agent = PydanticAIDocumentAgent(
             context=ctx,

@@ -7,6 +7,7 @@ import { PermissionTypes } from "../../types";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { useCorpusState } from "../context/CorpusAtom";
 import { useSelectedDocument } from "../context/DocumentAtom";
+import { isTextFileType, isPdfFileType } from "../../../utils/files";
 import { DocTypeAnnotation } from "../types/annotations";
 import {
   useAddDocTypeAnnotation,
@@ -64,13 +65,13 @@ export const UnifiedLabelSelector: React.FC<UnifiedLabelSelectorProps> = ({
 
   // Compute annotation label choices based on document type
   const filteredLabelChoices = useMemo<AnnotationLabelType[]>(() => {
-    const isTextFile = selectedDocument?.fileType?.startsWith("text/") ?? false;
-    const isPdfFile = selectedDocument?.fileType === "application/pdf";
+    const isText = isTextFileType(selectedDocument?.fileType);
+    const isPdf = isPdfFileType(selectedDocument?.fileType);
     let availableLabels: AnnotationLabelType[] = [];
 
-    if (isTextFile) {
+    if (isText) {
       availableLabels = [...humanSpanLabels];
-    } else if (isPdfFile) {
+    } else if (isPdf) {
       availableLabels = [...humanTokenLabels];
     }
 

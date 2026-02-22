@@ -1368,7 +1368,10 @@ class Query(graphene.ObjectType):
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_documents(self, info, **kwargs):
-        return Document.objects.visible_to_user(info.context.user)
+        # Use lightweight mode to skip heavy prefetches (doc_annotations,
+        # rows, relationships, notes) that are unnecessary for list/TOC
+        # queries requesting only basic document fields.
+        return Document.objects.visible_to_user(info.context.user, lightweight=True)
 
     document = graphene.Field(DocumentType, id=graphene.String())
 
@@ -2194,7 +2197,7 @@ class Query(graphene.ObjectType):
         ),
         description=(
             "Hybrid search combining vector similarity with text filters. "
-            "Uses DEFAULT_EMBEDDER for global cross-corpus search. "
+            "Uses the default embedder for global cross-corpus search. "
             "Results are first filtered by text criteria, then ranked by similarity."
         ),
     )
@@ -2216,7 +2219,7 @@ class Query(graphene.ObjectType):
         Hybrid search combining vector similarity with text filters.
 
         This query enables semantic (meaning-based) search across all annotations
-        the user has access to, using the DEFAULT_EMBEDDER embeddings that are
+        the user has access to, using the default embedder embeddings that are
         created for every annotation as part of the dual embedding strategy.
 
         HYBRID SEARCH:
@@ -2292,15 +2295,18 @@ class Query(graphene.ObjectType):
 
         # If document_id or corpus_id provided, use the instance-based search
         # which respects corpus-specific embedders
+        # Import here to avoid circular imports
+        from opencontractserver.pipeline.utils import get_default_embedder_path
+
         if document_pk or corpus_pk:
             # Issue #437: Use corpus.preferred_embedder for corpus-scoped search
-            # instead of the global DEFAULT_EMBEDDER. Each corpus has a frozen
+            # instead of the global default embedder. Each corpus has a frozen
             # embedder binding set at creation, and all annotations in the corpus
             # have embeddings for that embedder. This ensures consistent search
-            # even if DEFAULT_EMBEDDER changes after the corpus was created.
+            # even if the default embedder changes after the corpus was created.
             # When no corpus_id is provided (document-only search), fall back to
-            # DEFAULT_EMBEDDER for backward compatibility.
-            scoped_embedder_path = settings.DEFAULT_EMBEDDER
+            # the PipelineSettings default embedder.
+            scoped_embedder_path = get_default_embedder_path()
             if corpus_pk:
                 # Fetch the corpus's frozen embedder directly to avoid a
                 # redundant DB lookup inside CoreAnnotationVectorStore.
@@ -2643,6 +2649,7 @@ class Query(graphene.ObjectType):
         doc_pk = int(from_global_id(document_id)[1]) if document_id else None
 
         # Use optimizer for visibility and eager loading
+        # Pass context for request-level caching of visible IDs
         if doc_pk:
             # Get relationships for specific document
             queryset = (
@@ -2650,6 +2657,7 @@ class Query(graphene.ObjectType):
                     user=user,
                     document_id=doc_pk,
                     corpus_id=corpus_pk,
+                    context=info.context,
                 )
             )
         else:
@@ -2657,6 +2665,7 @@ class Query(graphene.ObjectType):
             queryset = DocumentRelationshipQueryOptimizer.get_visible_relationships(
                 user=user,
                 corpus_id=corpus_pk,
+                context=info.context,
             )
 
         return queryset.distinct().order_by("-created")
