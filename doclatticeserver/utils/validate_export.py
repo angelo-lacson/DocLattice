@@ -571,25 +571,37 @@ def _check_folders(data: dict, result: ValidationResult) -> set[str]:
                         f"subpath of parent path '{parent_path}'"
                     )
 
-    # Detect circular references — track globally so each cycle is only
-    # reported once (via the lexicographically smallest node in the cycle).
-    reported_cycles: set[frozenset[str]] = set()
+    # Detect circular references using a global resolved set.
+    # Once a node's full ancestor chain is verified acyclic, it's added to
+    # `resolved` so subsequent walks skip it. Cycles are identified when
+    # we revisit a node that is on the current walk stack (not yet resolved).
+    resolved: set[str] = set()
     for folder in folders:
-        visited: set[str] = set()
-        current = folder.get("id")
-        while current:
-            if current in visited:
-                cycle_members = frozenset(visited)
-                if cycle_members not in reported_cycles:
-                    reported_cycles.add(cycle_members)
-                    result.error(
-                        f"folders: circular parent reference involving "
-                        f"'{min(cycle_members)}'"
-                    )
+        start = folder.get("id")
+        if not start or start in resolved:
+            continue
+
+        # Nodes visited in THIS walk, in order
+        walk: list[str] = []
+        walk_set: set[str] = set()
+        current: str | None = start
+        while current and current not in resolved:
+            if current in walk_set:
+                # Found a cycle — extract only the cycle members
+                cycle_start = walk.index(current)
+                cycle = walk[cycle_start:]
+                result.error(
+                    f"folders: circular parent reference involving " f"'{min(cycle)}'"
+                )
+                # Mark cycle members as resolved (cycle already reported)
+                resolved.update(cycle)
                 break
-            visited.add(current)
-            parent = folder_by_id.get(current, {}).get("parent_id")
-            current = parent
+            walk.append(current)
+            walk_set.add(current)
+            current = folder_by_id.get(current, {}).get("parent_id")
+        else:
+            # No cycle found — all nodes in this walk are safe
+            resolved.update(walk)
 
     return folder_paths
 

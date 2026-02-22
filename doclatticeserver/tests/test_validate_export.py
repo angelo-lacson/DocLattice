@@ -668,6 +668,51 @@ class TestFolderValidation(unittest.TestCase):
         cycle_errors = [e for e in result.errors if "circular" in e]
         assert len(cycle_errors) == 1
 
+    def test_indirect_cycle_single_error(self):
+        """A non-cycle node leading into a cycle should produce exactly one error."""
+        data = _minimal_v2_data()
+        # root -> f1 -> f2 -> f1 (cycle is f1<->f2, root just leads into it)
+        data["folders"] = [
+            {
+                "id": "root",
+                "name": "Root",
+                "description": "",
+                "color": "#000",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": None,
+                "path": "Root",
+            },
+            {
+                "id": "f1",
+                "name": "F1",
+                "description": "",
+                "color": "#000",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": "f2",
+                "path": "Root/F1",
+            },
+            {
+                "id": "f2",
+                "name": "F2",
+                "description": "",
+                "color": "#000",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": "f1",
+                "path": "Root/F1/F2",
+            },
+        ]
+        result = validate_data_json(data)
+        cycle_errors = [e for e in result.errors if "circular" in e]
+        assert (
+            len(cycle_errors) == 1
+        ), f"Expected exactly 1 circular error, got {len(cycle_errors)}: {cycle_errors}"
+
 
 class TestDocumentPathValidation(unittest.TestCase):
     def test_bad_folder_path_reference(self):
