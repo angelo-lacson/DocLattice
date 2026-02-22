@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-22
 
+### Changed
+
+#### Django 4.2 → 5.2 LTS Upgrade
+- **Django version**: Upgraded from Django 4.2.24 to 5.2.11 (LTS)
+  - `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
+- **STORAGES migration**: Replaced deprecated `STATICFILES_STORAGE` and `DEFAULT_FILE_STORAGE` settings with the unified `STORAGES` dict (required since Django 5.1)
+  - `config/settings/base.py` — LOCAL, AWS, and GCP storage backends all migrated
+  - `config/settings/test.py` — test storage configuration migrated
+  - `opencontractserver/tests/base.py` — test `@override_settings` migrated
+  - `opencontractserver/tests/test_agent_search_tools.py` — all `@override_settings` decorators migrated
+  - `opencontractserver/tests/test_storage_backends.py` — assertions updated to check `STORAGES` dict
+- **Removed `USE_L10N` setting**: This setting was removed in Django 5.0 (localization is always enabled)
+  - `config/settings/base.py:78`
+- **Removed `SECURE_BROWSER_XSS_FILTER` setting**: This setting was removed in Django 5.0 (modern browsers handle XSS filtering natively)
+  - `config/settings/base.py:503-504`
+- **Replaced `pytz` with `datetime.timezone`**: Django 5.0+ uses `zoneinfo` instead of `pytz`
+  - `opencontractserver/users/tasks.py` — replaced `pytz.utc.localize()` with `datetime.datetime.now(datetime.timezone.utc)`
+  - Removed `pytz` from direct requirements in `requirements/base.txt`
+- **Updated third-party packages for Django 5.2 compatibility**:
+  - `graphene-django`: 3.2.2 → 3.2.3 (adds Django 5.1+ support)
+  - `django-stubs`: 4.2.7 → 5.2.0
+  - `djangorestframework-stubs`: 1.8.0 → 3.15.4
+
 ### Fixed
 
 #### MCP Documentation Accuracy (Closes #924)
