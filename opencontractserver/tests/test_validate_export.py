@@ -921,6 +921,34 @@ class TestConversationValidation(unittest.TestCase):
         result = validate_data_json(data)
         assert result.ok, result.summary()
 
+    def test_messages_validated_without_conversations_key(self):
+        """Messages and votes should be validated even without a conversations key."""
+        data = _minimal_v2_data()
+        # No "conversations" key, but messages and votes are present
+        data["messages"] = [
+            {
+                "id": "m1",
+                "conversation_id": "orphan_conv",
+                "content": "Hello",
+                "msg_type": "HUMAN",
+                "state": "completed",
+                "creator_email": "test@example.com",
+                "created": "2025-01-01T00:00:00+00:00",
+            }
+        ]
+        data["message_votes"] = [
+            {
+                "message_id": "orphan_msg",
+                "vote_type": "upvote",
+                "creator_email": "test@example.com",
+                "created": "2025-01-01T00:00:00+00:00",
+            }
+        ]
+        result = validate_data_json(data)
+        assert not result.ok
+        # Should catch the orphan vote referencing a non-existent message
+        assert any("orphan_msg" in e for e in result.errors)
+
 
 class TestBadZipInput(unittest.TestCase):
     def test_not_a_zip(self):

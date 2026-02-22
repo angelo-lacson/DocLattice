@@ -779,7 +779,7 @@ def _validate_parsed_data(data: dict, result: ValidationResult) -> None:
         _check_agent_config(data, result)
         _check_action_trail(data, result)
 
-        if "conversations" in data:
+        if any(k in data for k in ("conversations", "messages", "message_votes")):
             _check_conversations(data, result)
     else:
         # V1 may still have inline relationships in docs — already checked
