@@ -1873,11 +1873,10 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     if core_tool and hasattr(core_tool, "requires_approval"):
                         return core_tool.requires_approval
 
-                # Check if the tool object itself has requires_approval
-                if hasattr(tool_obj, "requires_approval"):
-                    return tool_obj.requires_approval
-
-                # Check the wrapped function
+                # Check the wrapped function (must come before the native
+                # tool_obj.requires_approval check because pydantic-ai 1.x
+                # Tool has a native requires_approval field that defaults to
+                # False, shadowing the custom attribute on the function).
                 for attr in ("function", "_wrapped_function", "callable_function"):
                     func = getattr(tool_obj, attr, None)
                     if func:
@@ -1889,6 +1888,10 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         # Check if the function itself has requires_approval
                         if hasattr(func, "requires_approval"):
                             return func.requires_approval
+
+                # Fall back to the tool object's own requires_approval
+                if hasattr(tool_obj, "requires_approval"):
+                    return tool_obj.requires_approval
 
         # Default to not requiring approval
         return False
