@@ -50,6 +50,8 @@ V2_REQUIRED_FIELDS = {
     "post_processors",
 }
 
+__all__ = ["validate_export", "validate_data_json", "ValidationResult", "main"]
+
 
 # ---------------------------------------------------------------------------
 # Validation result
@@ -75,10 +77,11 @@ class ValidationResult:
 
     def summary(self) -> str:
         lines = []
-        for w in self.warnings:
-            lines.append(f"  WARN: {w}")
         for e in self.errors:
             lines.append(f"  ERROR: {e}")
+        for w in self.warnings:
+            lines.append(f"  WARN: {w}")
+
         if self.ok:
             lines.append(f"  VALID ({len(self.warnings)} warning(s))")
         else:
