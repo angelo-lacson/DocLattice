@@ -57,6 +57,8 @@ class BaseChunkedParser(BaseParser):
 
     For documents below the chunking threshold, the full PDF bytes are passed
     to ``_parse_single_chunk_impl`` as a single chunk (no splitting overhead).
+    All results consistently receive chunk-prefixed IDs (``c0_``), including
+    single-chunk documents, to ensure downstream consumers see a uniform format.
 
     **Limitation -- cross-chunk parent-child relationships:**
     Each chunk is parsed independently, so parent-child annotation references
@@ -184,9 +186,12 @@ class BaseChunkedParser(BaseParser):
                 is_transient=False,
             )
 
-        chunks = calculate_page_chunks(
-            page_count, self.max_pages_per_chunk, self.min_pages_for_chunking
-        )
+        try:
+            chunks = calculate_page_chunks(
+                page_count, self.max_pages_per_chunk, self.min_pages_for_chunking
+            )
+        except ValueError as e:
+            raise DocumentParsingError(str(e), is_transient=False)
 
         if len(chunks) <= 1:
             # No chunking needed – parse the whole document in one shot
@@ -204,6 +209,9 @@ class BaseChunkedParser(BaseParser):
                 **all_kwargs,
             )
             if result is not None:
+                # Route through reassembly for consistent chunk-prefixed IDs,
+                # even for single-chunk documents.
+                result = _reassemble_chunk_results([result], [0])
                 result = self._post_reassemble_hook(
                     user_id, doc_id, result, pdf_bytes, **all_kwargs
                 )
