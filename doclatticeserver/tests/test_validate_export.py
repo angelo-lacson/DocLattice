@@ -208,6 +208,15 @@ class TestValidationResult(unittest.TestCase):
         assert "ERROR" in s
         assert "INVALID" in s
 
+    def test_summary_errors_before_warnings(self):
+        r = ValidationResult()
+        r.warn("w1")
+        r.error("e1")
+        s = r.summary()
+        error_pos = s.index("ERROR")
+        warn_pos = s.index("WARN")
+        assert error_pos < warn_pos, "Errors should appear before warnings in summary"
+
 
 class TestMinimalValidExport(unittest.TestCase):
     def test_v1_valid(self):
