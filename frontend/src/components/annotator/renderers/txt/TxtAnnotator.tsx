@@ -113,7 +113,7 @@ interface TxtAnnotatorProps {
   /** Callback to register/unregister annotation DOM refs for sidebar scroll-to. */
   onAnnotationRefChange?: (
     annotationId: string,
-    element: HTMLElement | null,
+    element: HTMLElement | null
   ) => void;
 }
 
@@ -165,9 +165,7 @@ const AnnotatedSpan = styled.span<{
   cursor: text;
   user-select: text;
   white-space: pre-wrap;
-  transition:
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
   ${(props) =>
     props.$hasAnnotation &&
@@ -267,7 +265,7 @@ const ChatSourceIcon = styled.div<{ isSelected: boolean }>`
 function getGlobalOffsetFromNode(
   node: Node | null,
   localOffset: number,
-  spans: TextSpan[],
+  spans: TextSpan[]
 ): number | null {
   if (!node) return null;
 
@@ -296,7 +294,7 @@ function getGlobalOffsetFromNode(
  * @returns A style object with background styling covering the highlights.
  */
 function buildCombinedBackgroundStyle(
-  highlightColors: string[],
+  highlightColors: string[]
 ): React.CSSProperties {
   if (highlightColors.length === 0) {
     return {};
@@ -308,7 +306,7 @@ function buildCombinedBackgroundStyle(
     // Combine them into a linear gradient to show multiple highlights.
     return {
       backgroundImage: `linear-gradient(to right, ${highlightColors.join(
-        ", ",
+        ", "
       )})`,
     };
   }
@@ -368,7 +366,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
     const visibleAnnotations = annotations.filter(
       (ann) =>
-        ann.annotationLabel?.text && isLabelVisible(ann.annotationLabel.text),
+        ann.annotationLabel?.text && isLabelVisible(ann.annotationLabel.text)
     );
 
     // Find and register the first DOM span for each visible annotation.
@@ -377,12 +375,12 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     const currentIds = new Set<string>();
     for (const ann of visibleAnnotations) {
       const spanIndex = spans.findIndex(
-        (span) => ann.json.start >= span.start && ann.json.start < span.end,
+        (span) => ann.json.start >= span.start && ann.json.start < span.end
       );
       if (spanIndex < 0) continue;
 
       const el = containerRef.current.querySelector(
-        `span[data-span-index="${spanIndex}"]`,
+        `span[data-span-index="${spanIndex}"]`
       ) as HTMLElement | null;
       if (el) {
         onAnnotationRefChange(ann.id, el);
@@ -464,7 +462,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
         setSelectedAnnotations([annotation.id]);
       }
     },
-    [selectedAnnotations, setSelectedAnnotations],
+    [selectedAnnotations, setSelectedAnnotations]
   );
 
   /**
@@ -481,7 +479,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     const validAnnotations = annotations
       .filter(
         (ann) =>
-          ann.annotationLabel?.text && isLabelVisible(ann.annotationLabel.text),
+          ann.annotationLabel?.text && isLabelVisible(ann.annotationLabel.text)
       )
       .sort((a, b) => a.json.start - b.json.start);
 
@@ -515,12 +513,12 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
       const sliceText = text.slice(spanStart, spanEnd);
       const spanAnnotations = validAnnotations.filter(
-        (ann) => ann.json.start < spanEnd && ann.json.end > spanStart,
+        (ann) => ann.json.start < spanEnd && ann.json.end > spanStart
       );
 
       // check search highlight info
       const matchedSearchResult = searchResults.find(
-        (sr) => sr.start_index <= spanStart && sr.end_index >= spanEnd,
+        (sr) => sr.start_index <= spanStart && sr.end_index >= spanEnd
       );
       const isSearchResult = Boolean(matchedSearchResult);
       const isSelectedSearchResult =
@@ -531,7 +529,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
       // check chat source info
       const matchingChatSource = chatSources.find(
-        (cs) => cs.start_index <= spanStart && cs.end_index >= spanEnd,
+        (cs) => cs.start_index <= spanStart && cs.end_index >= spanEnd
       );
       const isChatSource = Boolean(matchingChatSource);
       const isSelectedChatSource =
@@ -582,20 +580,20 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       const annToRender =
         chatSources.length > 0
           ? hoveredSpan.annotations.filter((ann) =>
-              selectedAnnotations.includes(ann.id),
+              selectedAnnotations.includes(ann.id)
             )
           : selectedAnnotations.length > 0
-            ? hoveredSpan.annotations.filter((ann) =>
-                selectedAnnotations.includes(ann.id),
-              )
-            : hoveredSpan.annotations;
+          ? hoveredSpan.annotations.filter((ann) =>
+              selectedAnnotations.includes(ann.id)
+            )
+          : hoveredSpan.annotations;
 
       // Possibly filter out structural if not shown, unless it's selected
       const finalAnnotations = annToRender.filter(
         (ann) =>
           showStructuralAnnotations ||
           !ann.structural ||
-          selectedAnnotations.includes(ann.id),
+          selectedAnnotations.includes(ann.id)
       );
 
       if (finalAnnotations.length === 0) {
@@ -605,7 +603,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
       const containerElement = containerRef.current;
       const spanElement = containerElement?.querySelector(
-        `span[data-span-index="${hoveredSpanIndex}"]`,
+        `span[data-span-index="${hoveredSpanIndex}"]`
       ) as HTMLElement;
 
       if (!containerElement || !spanElement) {
@@ -650,7 +648,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           width: 100,
           height: labelHeight,
           labelIndex: index,
-        }),
+        })
       );
       setLabelsToRender(newPositions);
     };
@@ -671,17 +669,17 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     if (selectedAnnotations.length === 0) return;
 
     const selectedAnns = annotations.filter((ann) =>
-      selectedAnnotations.includes(ann.id),
+      selectedAnnotations.includes(ann.id)
     );
     if (selectedAnns.length === 0) return;
 
     const earliest = selectedAnns.reduce((acc, ann) =>
-      ann.json.start < acc.json.start ? ann : acc,
+      ann.json.start < acc.json.start ? ann : acc
     );
 
     const targetIndex = spans.findIndex(
       (span) =>
-        earliest.json.start >= span.start && earliest.json.start < span.end,
+        earliest.json.start >= span.start && earliest.json.start < span.end
     );
     if (targetIndex < 0) return;
 
@@ -689,7 +687,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     if (!containerElement) return;
 
     const targetEl = containerElement.querySelector(
-      `span[data-span-index="${targetIndex}"]`,
+      `span[data-span-index="${targetIndex}"]`
     ) as HTMLElement | null;
 
     if (!targetEl) return;
@@ -726,12 +724,12 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
     // Find the first span whose sourceId matches the selectedChatSourceId
     const targetIndex = spans.findIndex(
-      (s) => s.sourceId === selectedChatSourceId,
+      (s) => s.sourceId === selectedChatSourceId
     );
     if (targetIndex === -1) return;
 
     const targetEl = containerElement.querySelector(
-      `span[data-span-index="${targetIndex}"]`,
+      `span[data-span-index="${targetIndex}"]`
     ) as HTMLElement | null;
     if (!targetEl) return;
 
@@ -766,12 +764,12 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     const anchorGlobalOffset = getGlobalOffsetFromNode(
       anchorNode,
       selection.anchorOffset,
-      spans,
+      spans
     );
     const focusGlobalOffset = getGlobalOffsetFromNode(
       focusNode,
       selection.focusOffset,
-      spans,
+      spans
     );
 
     if (anchorGlobalOffset === null || focusGlobalOffset === null) {
@@ -819,19 +817,19 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           const usedAnn =
             chatSources.length > 0
               ? spanAnnotations.filter((ann) =>
-                  selectedAnnotations.includes(ann.id),
+                  selectedAnnotations.includes(ann.id)
                 )
               : selectedAnnotations.length > 0
-                ? spanAnnotations.filter((ann) =>
-                    selectedAnnotations.includes(ann.id),
-                  )
-                : spanAnnotations;
+              ? spanAnnotations.filter((ann) =>
+                  selectedAnnotations.includes(ann.id)
+                )
+              : spanAnnotations;
 
           const finalAnnotations = usedAnn.filter(
             (ann) =>
               showStructuralAnnotations ||
               !ann.structural ||
-              selectedAnnotations.includes(ann.id),
+              selectedAnnotations.includes(ann.id)
           );
 
           // Evaluate approval/rejected status.
@@ -849,7 +847,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
             } else {
               // multiple annotation colors
               const colors = finalAnnotations.map((ann) =>
-                hexToRgba(ann.annotationLabel.color ?? "#cccccc", 0.3),
+                hexToRgba(ann.annotationLabel.color ?? "#cccccc", 0.3)
               );
               highlightColors.push(...colors);
             }
@@ -858,7 +856,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           // If we have a search highlight (but not when chat sources are displayed)
           if (isSearchResult && chatSources.length === 0) {
             highlightColors.push(
-              isSelectedSearchResult ? "#FFFF00" : "#FFFF99",
+              isSelectedSearchResult ? "#FFFF00" : "#FFFF99"
             );
           }
 
@@ -1010,7 +1008,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
                 />
               </LabelContainer>
             );
-          },
+          }
         )}
       </PaperContainer>
 
@@ -1034,7 +1032,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
               value={annotationToEdit.annotationLabel.id}
               onChange={(e, { value }) => {
                 const newLabel = availableLabels.find(
-                  (lbl) => lbl.id === value,
+                  (lbl) => lbl.id === value
                 );
                 if (newLabel) {
                   const updatedAnnotation = annotationToEdit.update({
