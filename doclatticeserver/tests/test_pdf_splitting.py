@@ -92,7 +92,6 @@ class TestSplitPdfByPageRange(TestCase):
         """Passing a pre-built PdfReader avoids re-parsing the full PDF."""
         pdf_bytes = make_test_pdf(10)
         reader = PdfReader(io.BytesIO(pdf_bytes))
-        reader = PdfReader(io.BytesIO(pdf_bytes))
         chunk = split_pdf_by_page_range(pdf_bytes, 2, 5, reader=reader)
         self.assertEqual(get_pdf_page_count(chunk), 3)
 
@@ -110,6 +109,11 @@ class TestCalculatePageChunks(TestCase):
     def test_at_threshold_returns_single(self):
         chunks = calculate_page_chunks(74, 50, 75)
         self.assertEqual(chunks, [(0, 74)])
+
+    def test_at_exact_threshold_splits(self):
+        """Exactly min_pages_for_chunking pages should trigger splitting."""
+        chunks = calculate_page_chunks(75, 50, 75)
+        self.assertEqual(chunks, [(0, 50), (50, 75)])
 
     def test_above_threshold_splits(self):
         chunks = calculate_page_chunks(100, 50, 75)
@@ -137,3 +141,19 @@ class TestCalculatePageChunks(TestCase):
     def test_single_page_document(self):
         chunks = calculate_page_chunks(1, 50, 75)
         self.assertEqual(chunks, [(0, 1)])
+
+    def test_zero_max_pages_per_chunk_raises(self):
+        with self.assertRaises(ValueError):
+            calculate_page_chunks(100, 0, 75)
+
+    def test_negative_max_pages_per_chunk_raises(self):
+        with self.assertRaises(ValueError):
+            calculate_page_chunks(100, -1, 75)
+
+    def test_zero_min_pages_for_chunking_raises(self):
+        with self.assertRaises(ValueError):
+            calculate_page_chunks(100, 50, 0)
+
+    def test_negative_min_pages_for_chunking_raises(self):
+        with self.assertRaises(ValueError):
+            calculate_page_chunks(100, 50, -1)
