@@ -89,11 +89,13 @@ Section titles use Georgia serif at 24px in teal. This pattern repeats identical
 
 **Semantic colors**: green `#16a34a` (success), red `#dc2626` (danger), orange `#f59e0b` (warning), blue `#2563eb` (info).
 
+> **Note**: The hex values above are for quick visual reference. The canonical source of truth is `OS_LEGAL_COLORS` in `frontend/src/assets/configurations/osLegalStyles.ts` — always check that file for current values.
+
 ### Design Token Constants
 
 `frontend/src/assets/configurations/osLegalStyles.ts` exports three typed constant objects that centralize the design system:
 
-- **`OS_LEGAL_COLORS`** — accent, text scale, surface/border, selection states, drag-and-drop feedback, folder theming, danger/success. Includes WCAG contrast notes (accent on white = 4.57:1 AA-compliant; `textMuted` on white = 2.78:1, large text only).
+- **`OS_LEGAL_COLORS`** — accent, text scale, surface/border, selection states, drag-and-drop feedback, folder theming, danger/success. Includes WCAG contrast notes (accent on white = 4.57:1 AA-compliant; `textMuted` on white = 2.78:1, large text only). **Accessibility warning**: `textMuted` (2.78:1) fails WCAG AA for normal text — do not use it for normal-weight text below 24px or bold text below 19px.
 - **`OS_LEGAL_TYPOGRAPHY`** — `fontFamilySerif` (Georgia) and `fontFamilySans` (Inter) stacks.
 - **`OS_LEGAL_SPACING`** — `borderRadiusCard` (12px), `borderRadiusButton` (8px), `shadowCard`, `shadowCardHover`.
 
@@ -178,6 +180,8 @@ const StatsWrapper = styled.div`
 
 **When to use**: When the component's built-in sizing/spacing doesn't match the design, but behavior is correct.
 
+**Fragility note**: The `[class*="StatBlock"]` partial-match selector is brittle — if `@os-legal/ui` changes its class naming scheme (e.g., CSS Modules → hashed names), it silently breaks with no compiler error. Prefer `data-testid` attributes or exposed CSS custom properties from the library when available. Use partial class selectors only as a fallback.
+
 ### 3. Hybrid Composition (OS-Legal atoms + custom layout)
 
 Use OS-Legal for atomic elements (Avatar, Chip, Button) inside a custom styled-component layout.
@@ -231,7 +235,7 @@ For each file being refactored:
    - `semantic-ui-react` → `@os-legal/ui` for available components (Button, Modal, Input, etc.)
    - `Icon name="..."` → named import from `lucide-react` (e.g., `<Icon name="plus" />` → `<Plus size={16} />`)
 3. **Flatten compound components** — `Card.Content`, `Modal.Actions` etc. become plain styled divs.
-4. **Remove `!important` overrides from Semantic UI component targets** — if you need `!important` to fight Semantic UI defaults, you're still using Semantic UI. The only acceptable use is in wrapper overrides targeting `.oc-*` CSS classes (see Wrapper Override and Adapter patterns above).
+4. **Remove `!important` when targeting Semantic UI classes (`.ui.*`)** — if you need `!important` to fight Semantic UI defaults, you're still using Semantic UI. Acceptable uses: overriding OS-Legal internals (`.oc-*` classes) in a Wrapper Override or Adapter pattern, and `z-index` on `.ui.dropdown .menu` during the transition period (see Common Pitfalls).
 5. **Use transient props** — styled-components that receive boolean/enum props should use the `$` prefix (`$isSelected`, `$variant`, `$active`) to prevent DOM warnings.
 6. **Apply the canonical layout** — `PageContainer` → `ContentContainer` → `Section` blocks. Copy from `DiscoveryLanding.tsx`.
 7. **Add loading skeletons** — replace `<Loader>` / `<Dimmer>` with shimmer skeletons that match the shape of real content. Reuse the shimmer keyframe pattern from `FeaturedCollections.tsx`.
@@ -249,7 +253,13 @@ For each file being refactored:
 
 ## Remaining Migration Surface
 
-As of this writing, ~180 files still import from `semantic-ui-react`. Priority targets:
+To check the current count of files still importing Semantic UI:
+
+```bash
+grep -rl "semantic-ui-react" frontend/src --include="*.tsx" --include="*.ts" | wc -l
+```
+
+Priority targets:
 
 | Area | Key Components | Difficulty |
 |---|---|---|
@@ -267,12 +277,12 @@ These files represent the best examples of completed migration:
 
 | File | Pattern Demonstrated |
 |---|---|
-| `src/views/DiscoveryLanding.tsx` | Full page layout, section composition, data orchestration |
-| `src/components/landing/CategoryFilter.tsx` | Direct composition (zero custom CSS) |
-| `src/components/landing/StatsSection.tsx` | Wrapper override pattern |
-| `src/components/landing/FeaturedCollections.tsx` | Hybrid composition (CollectionCard + custom layout) |
-| `src/components/landing/CompactLeaderboard.tsx` | Hybrid composition (Avatar + Chip in custom list) |
-| `src/components/landing/NewHeroSection.tsx` | SearchBox + FilterTabs integration, styled hero layout |
-| `src/components/corpuses/CorpusModal.tsx` | Adapter pattern (Modal with CSS variable theming) |
-| `src/components/layout/NavMenu.tsx` | NavBar integration with custom login actions |
-| `src/views/Documents.tsx` | Full view migration with mixed old/new (context menu still Semantic) |
+| `frontend/src/views/DiscoveryLanding.tsx` | Full page layout, section composition, data orchestration |
+| `frontend/src/components/landing/CategoryFilter.tsx` | Direct composition (zero custom CSS) |
+| `frontend/src/components/landing/StatsSection.tsx` | Wrapper override pattern |
+| `frontend/src/components/landing/FeaturedCollections.tsx` | Hybrid composition (CollectionCard + custom layout) |
+| `frontend/src/components/landing/CompactLeaderboard.tsx` | Hybrid composition (Avatar + Chip in custom list) |
+| `frontend/src/components/landing/NewHeroSection.tsx` | SearchBox + FilterTabs integration, styled hero layout |
+| `frontend/src/components/corpuses/CorpusModal.tsx` | Adapter pattern (Modal with CSS variable theming) |
+| `frontend/src/components/layout/NavMenu.tsx` | NavBar integration with custom login actions |
+| `frontend/src/views/Documents.tsx` | Full view migration with mixed old/new (context menu still Semantic) |
