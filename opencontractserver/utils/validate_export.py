@@ -1,0 +1,781 @@
+"""
+Standalone validation utility for OpenContracts corpus export ZIPs.
+
+Checks structural and referential integrity of a corpus export archive
+*without* requiring Django or a running database. Can be used as a library
+or run directly from the command line::
+
+    python -m opencontractserver.utils.validate_export corpus_export.zip
+
+Exit code 0 means the export is valid; non-zero means errors were found.
+All warnings and errors are printed to stderr.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import zipfile
+from dataclasses import dataclass, field
+
+# ---------------------------------------------------------------------------
+# Validation result types
+# ---------------------------------------------------------------------------
+
+VALID_LABEL_TYPES = {
+    "DOC_TYPE_LABEL",
+    "TOKEN_LABEL",
+    "RELATIONSHIP_LABEL",
+    "SPAN_LABEL",
+}
+
+VALID_ANNOTATION_TYPES = {"TOKEN_LABEL", "SPAN_LABEL"}
+
+VALID_CONTENT_MODALITIES = {"TEXT", "IMAGE", "AUDIO", "TABLE", "VIDEO"}
+
+
+@dataclass
+class ValidationResult:
+    """Accumulated errors and warnings from validation."""
+
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return len(self.errors) == 0
+
+    def error(self, msg: str) -> None:
+        self.errors.append(msg)
+
+    def warn(self, msg: str) -> None:
+        self.warnings.append(msg)
+
+    def summary(self) -> str:
+        lines = []
+        for w in self.warnings:
+            lines.append(f"  WARN: {w}")
+        for e in self.errors:
+            lines.append(f"  ERROR: {e}")
+        if self.ok:
+            lines.append(f"  VALID ({len(self.warnings)} warning(s))")
+        else:
+            lines.append(
+                f"  INVALID — {len(self.errors)} error(s), "
+                f"{len(self.warnings)} warning(s)"
+            )
+        return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Individual validators
+# ---------------------------------------------------------------------------
+
+
+def _check_zip_structure(
+    zip_file: zipfile.ZipFile, data: dict, result: ValidationResult
+) -> None:
+    """Verify data.json exists and every annotated_docs key has a matching file."""
+    zip_names = set(zip_file.namelist())
+
+    if "data.json" not in zip_names:
+        result.error("ZIP missing data.json")
+        return
+
+    annotated_docs = data.get("annotated_docs", {})
+    for filename in annotated_docs:
+        if filename not in zip_names:
+            result.error(
+                f"annotated_docs references '{filename}' but it is not in the ZIP"
+            )
+
+    # Warn about extra files that aren't referenced
+    known_files = set(annotated_docs.keys()) | {"data.json"}
+    for name in zip_names:
+        if name not in known_files:
+            result.warn(f"ZIP contains unreferenced file: '{name}'")
+
+
+def _check_label_definitions(data: dict, result: ValidationResult) -> None:
+    """Validate label definitions have required fields and consistent types."""
+    required_fields = {"id", "text", "label_type", "color", "description", "icon"}
+
+    for section, expected_type in [
+        ("doc_labels", "DOC_TYPE_LABEL"),
+        ("text_labels", None),
+    ]:
+        labels = data.get(section, {})
+        for name, label in labels.items():
+            for f in required_fields:
+                if f not in label:
+                    result.error(f"{section}.{name}: missing required field '{f}'")
+
+            lt = label.get("label_type", "")
+            if lt not in VALID_LABEL_TYPES:
+                result.error(
+                    f"{section}.{name}: invalid label_type '{lt}' "
+                    f"(must be one of {VALID_LABEL_TYPES})"
+                )
+
+            if expected_type and lt != expected_type:
+                result.error(
+                    f"{section}.{name}: expected label_type '{expected_type}', "
+                    f"got '{lt}'"
+                )
+
+            if label.get("text") != name:
+                result.warn(
+                    f"{section}.{name}: label 'text' field ('{label.get('text')}') "
+                    f"does not match map key ('{name}')"
+                )
+
+
+def _check_corpus_metadata(data: dict, result: ValidationResult) -> None:
+    """Validate corpus metadata."""
+    corpus = data.get("corpus")
+    if corpus is None:
+        result.error("Missing 'corpus' field")
+        return
+
+    for f in ("title", "description", "creator"):
+        if f not in corpus:
+            result.error(f"corpus: missing required field '{f}'")
+
+
+def _check_label_set_metadata(data: dict, result: ValidationResult) -> None:
+    """Validate label_set metadata."""
+    label_set = data.get("label_set")
+    if label_set is None:
+        result.error("Missing 'label_set' field")
+        return
+
+    for f in ("title", "description", "creator", "icon_name"):
+        if f not in label_set:
+            result.error(f"label_set: missing required field '{f}'")
+
+
+def _check_documents(data: dict, result: ValidationResult) -> set[str]:
+    """
+    Validate each document in annotated_docs.
+
+    Returns the set of all annotation IDs across all documents for
+    relationship validation.
+    """
+    all_annotation_ids: set[str] = set()
+    doc_labels_map = data.get("doc_labels", {})
+    text_labels_map = data.get("text_labels", {})
+
+    annotated_docs = data.get("annotated_docs", {})
+    for filename, doc in annotated_docs.items():
+        prefix = f"annotated_docs['{filename}']"
+
+        # Required fields
+        for f in ("title", "content", "pawls_file_content", "page_count"):
+            if f not in doc:
+                result.error(f"{prefix}: missing required field '{f}'")
+
+        # Validate page count vs PAWLs length
+        pawls = doc.get("pawls_file_content", [])
+        page_count = doc.get("page_count", 0)
+        if len(pawls) != page_count:
+            result.warn(
+                f"{prefix}: page_count ({page_count}) != "
+                f"pawls_file_content length ({len(pawls)})"
+            )
+
+        # Validate PAWLs pages
+        _check_pawls_pages(pawls, prefix, result)
+
+        # Validate doc_labels references
+        for dl in doc.get("doc_labels", []):
+            if dl not in doc_labels_map:
+                result.error(
+                    f"{prefix}: doc_labels references '{dl}' which is not "
+                    f"defined in top-level doc_labels"
+                )
+
+        # Validate annotations
+        local_annot_ids: set[str] = set()
+        for annot in doc.get("labelled_text", []):
+            annot_id = str(annot.get("id", ""))
+            if annot_id:
+                local_annot_ids.add(annot_id)
+                all_annotation_ids.add(annot_id)
+
+            label_name = annot.get("annotationLabel", "")
+            if label_name not in text_labels_map:
+                result.error(
+                    f"{prefix}: annotation {annot_id} references label "
+                    f"'{label_name}' not in text_labels"
+                )
+
+            _check_annotation(annot, pawls, prefix, result)
+
+        # Validate annotation parent references
+        for annot in doc.get("labelled_text", []):
+            parent_id = annot.get("parent_id")
+            if parent_id is not None and str(parent_id) not in local_annot_ids:
+                result.warn(
+                    f"{prefix}: annotation {annot.get('id')} references "
+                    f"parent_id '{parent_id}' not found in this document"
+                )
+
+        # Validate document-level relationships
+        for rel in doc.get("relationships", []):
+            _check_relationship_refs(
+                rel, local_annot_ids, f"{prefix}.relationships", result
+            )
+
+        # Validate structural_set_hash reference
+        struct_hash = doc.get("structural_set_hash")
+        if struct_hash:
+            struct_sets = data.get("structural_annotation_sets", {})
+            if struct_hash not in struct_sets:
+                result.error(
+                    f"{prefix}: structural_set_hash '{struct_hash}' not found "
+                    f"in structural_annotation_sets"
+                )
+
+    return all_annotation_ids
+
+
+def _check_pawls_pages(pawls: list, prefix: str, result: ValidationResult) -> None:
+    """Validate PAWLs page structure."""
+    for i, page_obj in enumerate(pawls):
+        page_prefix = f"{prefix}.pawls[{i}]"
+
+        page = page_obj.get("page", {})
+        if "width" not in page or "height" not in page or "index" not in page:
+            result.error(f"{page_prefix}: page missing width/height/index")
+
+        if page.get("index") != i:
+            result.warn(
+                f"{page_prefix}: page.index ({page.get('index')}) != "
+                f"array position ({i})"
+            )
+
+        tokens = page_obj.get("tokens")
+        if tokens is None:
+            result.error(f"{page_prefix}: missing 'tokens' array")
+            continue
+
+        for j, token in enumerate(tokens):
+            for f in ("x", "y", "width", "height", "text"):
+                if f not in token:
+                    result.error(f"{page_prefix}.tokens[{j}]: missing '{f}'")
+
+
+def _check_annotation(
+    annot: dict, pawls: list, prefix: str, result: ValidationResult
+) -> None:
+    """Validate a single annotation's structure and token references."""
+    annot_id = annot.get("id", "?")
+    ann_prefix = f"{prefix}.annotation[{annot_id}]"
+
+    # Required fields
+    for f in ("annotationLabel", "rawText", "annotation_json"):
+        if f not in annot:
+            result.error(f"{ann_prefix}: missing required field '{f}'")
+
+    if "structural" not in annot:
+        result.warn(f"{ann_prefix}: missing 'structural' field (defaults to false)")
+
+    # Validate annotation_type
+    ann_type = annot.get("annotation_type")
+    if ann_type and ann_type not in VALID_ANNOTATION_TYPES:
+        result.warn(
+            f"{ann_prefix}: unexpected annotation_type '{ann_type}' "
+            f"(expected one of {VALID_ANNOTATION_TYPES})"
+        )
+
+    # Validate content_modalities
+    modalities = annot.get("content_modalities", [])
+    for mod in modalities:
+        if mod not in VALID_CONTENT_MODALITIES:
+            result.error(
+                f"{ann_prefix}: invalid content_modality '{mod}' "
+                f"(must be one of {VALID_CONTENT_MODALITIES})"
+            )
+
+    # Validate annotation_json token references
+    ann_json = annot.get("annotation_json", {})
+    if isinstance(ann_json, dict):
+        for page_key, page_data in ann_json.items():
+            if not isinstance(page_data, dict):
+                continue
+
+            tokens_jsons = page_data.get("tokensJsons", [])
+            for tok_ref in tokens_jsons:
+                page_idx = tok_ref.get("pageIndex")
+                token_idx = tok_ref.get("tokenIndex")
+
+                if page_idx is None or token_idx is None:
+                    result.error(
+                        f"{ann_prefix}: token ref missing pageIndex or tokenIndex"
+                    )
+                    continue
+
+                if page_idx < 0 or page_idx >= len(pawls):
+                    result.error(
+                        f"{ann_prefix}: pageIndex {page_idx} out of range "
+                        f"(0..{len(pawls) - 1})"
+                    )
+                    continue
+
+                page_tokens = pawls[page_idx].get("tokens", [])
+                if token_idx < 0 or token_idx >= len(page_tokens):
+                    result.error(
+                        f"{ann_prefix}: tokenIndex {token_idx} out of range "
+                        f"for page {page_idx} (0..{len(page_tokens) - 1})"
+                    )
+
+
+def _check_relationship_refs(
+    rel: dict,
+    valid_ids: set[str],
+    prefix: str,
+    result: ValidationResult,
+) -> None:
+    """Check that relationship source/target IDs exist in the given set."""
+    rel_id = rel.get("id", "?")
+    label = rel.get("relationshipLabel")
+    if not label:
+        result.error(f"{prefix}[{rel_id}]: missing relationshipLabel")
+
+    for direction in ("source_annotation_ids", "target_annotation_ids"):
+        ids = rel.get(direction, [])
+        if not ids:
+            result.error(f"{prefix}[{rel_id}]: empty {direction}")
+        for ref_id in ids:
+            if str(ref_id) not in valid_ids:
+                result.warn(
+                    f"{prefix}[{rel_id}]: {direction} references "
+                    f"annotation '{ref_id}' not found in scope"
+                )
+
+
+def _check_structural_sets(data: dict, result: ValidationResult) -> set[str]:
+    """Validate structural annotation sets and return all structural annotation IDs."""
+    struct_sets = data.get("structural_annotation_sets", {})
+    text_labels_map = data.get("text_labels", {})
+    all_struct_annot_ids: set[str] = set()
+
+    for content_hash, sset in struct_sets.items():
+        prefix = f"structural_annotation_sets['{content_hash}']"
+
+        if sset.get("content_hash") != content_hash:
+            result.error(
+                f"{prefix}: content_hash field ('{sset.get('content_hash')}') "
+                f"does not match map key ('{content_hash}')"
+            )
+
+        # Required fields
+        for f in (
+            "pawls_file_content",
+            "txt_content",
+            "structural_annotations",
+            "structural_relationships",
+        ):
+            if f not in sset:
+                result.error(f"{prefix}: missing required field '{f}'")
+
+        pawls = sset.get("pawls_file_content", [])
+        _check_pawls_pages(pawls, prefix, result)
+
+        # Validate structural annotations
+        local_ids: set[str] = set()
+        for annot in sset.get("structural_annotations", []):
+            annot_id = str(annot.get("id", ""))
+            if annot_id:
+                local_ids.add(annot_id)
+                all_struct_annot_ids.add(annot_id)
+
+            label_name = annot.get("annotationLabel", "")
+            if label_name and label_name not in text_labels_map:
+                result.error(
+                    f"{prefix}: structural annotation {annot_id} references "
+                    f"label '{label_name}' not in text_labels"
+                )
+
+            if not annot.get("structural"):
+                result.warn(
+                    f"{prefix}: structural annotation {annot_id} has "
+                    f"structural=false (expected true)"
+                )
+
+            _check_annotation(annot, pawls, prefix, result)
+
+        # Validate structural relationships
+        for rel in sset.get("structural_relationships", []):
+            label_name = rel.get("relationshipLabel", "")
+            if label_name and label_name not in text_labels_map:
+                result.error(
+                    f"{prefix}: structural relationship references label "
+                    f"'{label_name}' not in text_labels"
+                )
+
+            _check_relationship_refs(
+                rel, local_ids, f"{prefix}.structural_relationships", result
+            )
+
+    return all_struct_annot_ids
+
+
+def _check_folders(data: dict, result: ValidationResult) -> set[str]:
+    """Validate folder hierarchy and return the set of folder paths."""
+    folders = data.get("folders", [])
+    folder_ids: set[str] = set()
+    folder_paths: set[str] = set()
+    folder_by_id: dict[str, dict] = {}
+
+    for folder in folders:
+        fid = folder.get("id")
+        if not fid:
+            result.error("folders: entry missing 'id'")
+            continue
+
+        if fid in folder_ids:
+            result.error(f"folders: duplicate id '{fid}'")
+
+        folder_ids.add(fid)
+        folder_by_id[fid] = folder
+
+        for f in ("name", "path"):
+            if f not in folder:
+                result.error(f"folders['{fid}']: missing required field '{f}'")
+
+        path = folder.get("path", "")
+        if "/" in folder.get("name", ""):
+            result.error(f"folders['{fid}']: name '{folder.get('name')}' contains '/'")
+
+        folder_paths.add(path)
+
+    # Validate parent references and path consistency
+    for folder in folders:
+        fid = folder.get("id", "?")
+        parent_id = folder.get("parent_id")
+
+        if parent_id is not None:
+            if parent_id not in folder_ids:
+                result.error(f"folders['{fid}']: parent_id '{parent_id}' not found")
+            else:
+                # Check path consistency
+                parent_path = folder_by_id[parent_id].get("path", "")
+                child_path = folder.get("path", "")
+                expected_prefix = parent_path + "/"
+                if not child_path.startswith(expected_prefix):
+                    result.warn(
+                        f"folders['{fid}']: path '{child_path}' is not a "
+                        f"subpath of parent path '{parent_path}'"
+                    )
+
+    # Detect circular references
+    for folder in folders:
+        visited: set[str] = set()
+        current = folder.get("id")
+        while current:
+            if current in visited:
+                result.error(
+                    f"folders: circular parent reference involving '{current}'"
+                )
+                break
+            visited.add(current)
+            parent = folder_by_id.get(current, {}).get("parent_id")
+            current = parent
+
+    return folder_paths
+
+
+def _check_document_paths(
+    data: dict, folder_paths: set[str], result: ValidationResult
+) -> None:
+    """Validate document_paths references."""
+    doc_paths = data.get("document_paths", [])
+    annotated_docs_keys = set(data.get("annotated_docs", {}).keys())
+
+    for i, dp in enumerate(doc_paths):
+        prefix = f"document_paths[{i}]"
+
+        doc_ref = dp.get("document_ref")
+        if not doc_ref:
+            result.error(f"{prefix}: missing document_ref")
+            continue
+
+        # document_ref should match either a filename or could be a hash.
+        # We can only validate filename matches; hashes are opaque.
+        # Warn if it doesn't match any known filename (it might be a hash).
+        if doc_ref not in annotated_docs_keys:
+            result.warn(
+                f"{prefix}: document_ref '{doc_ref}' does not match any "
+                f"annotated_docs key (may be a file hash — OK if so)"
+            )
+
+        folder_path = dp.get("folder_path")
+        if folder_path and folder_path not in folder_paths:
+            result.error(
+                f"{prefix}: folder_path '{folder_path}' does not match "
+                f"any known folder path"
+            )
+
+        for f in ("path", "version_number", "is_current", "is_deleted", "created"):
+            if f not in dp:
+                result.error(f"{prefix}: missing required field '{f}'")
+
+
+def _check_corpus_level_relationships(
+    data: dict, all_annot_ids: set[str], result: ValidationResult
+) -> None:
+    """Validate top-level (corpus-scope) relationships."""
+    relationships = data.get("relationships", [])
+    text_labels_map = data.get("text_labels", {})
+
+    for i, rel in enumerate(relationships):
+        prefix = f"relationships[{i}]"
+        label = rel.get("relationshipLabel", "")
+        if label and label not in text_labels_map:
+            result.error(f"{prefix}: relationshipLabel '{label}' not in text_labels")
+        elif label:
+            lt = text_labels_map[label].get("label_type", "")
+            if lt != "RELATIONSHIP_LABEL":
+                result.error(
+                    f"{prefix}: label '{label}' has type '{lt}', "
+                    f"expected 'RELATIONSHIP_LABEL'"
+                )
+
+        _check_relationship_refs(rel, all_annot_ids, "relationships", result)
+
+
+def _check_conversations(data: dict, result: ValidationResult) -> None:
+    """Validate conversations, messages, and votes cross-references."""
+    conversations = data.get("conversations", [])
+    messages = data.get("messages", [])
+    votes = data.get("message_votes", [])
+
+    conv_ids: set[str] = set()
+    for conv in conversations:
+        cid = conv.get("id")
+        if not cid:
+            result.error("conversations: entry missing 'id'")
+            continue
+        if cid in conv_ids:
+            result.error(f"conversations: duplicate id '{cid}'")
+        conv_ids.add(cid)
+
+    msg_ids: set[str] = set()
+    for msg in messages:
+        mid = msg.get("id")
+        if not mid:
+            result.error("messages: entry missing 'id'")
+            continue
+        if mid in msg_ids:
+            result.error(f"messages: duplicate id '{mid}'")
+        msg_ids.add(mid)
+
+        conv_ref = msg.get("conversation_id")
+        if conv_ref and conv_ref not in conv_ids:
+            result.error(
+                f"messages['{mid}']: conversation_id '{conv_ref}' "
+                f"not found in conversations"
+            )
+
+    # Second pass for parent_message references
+    for msg in messages:
+        mid = msg.get("id", "?")
+        parent = msg.get("parent_message_id")
+        if parent and parent not in msg_ids:
+            result.error(
+                f"messages['{mid}']: parent_message_id '{parent}' "
+                f"not found in messages"
+            )
+
+    for i, vote in enumerate(votes):
+        msg_ref = vote.get("message_id")
+        if msg_ref and msg_ref not in msg_ids:
+            result.error(
+                f"message_votes[{i}]: message_id '{msg_ref}' " f"not found in messages"
+            )
+
+
+def _check_agent_config(data: dict, result: ValidationResult) -> None:
+    """Validate agent_config structure."""
+    config = data.get("agent_config")
+    if config is None:
+        return  # Optional in V1
+
+    if not isinstance(config, dict):
+        result.error("agent_config: expected an object")
+        return
+
+    for f in ("corpus_agent_instructions", "document_agent_instructions"):
+        if f not in config:
+            result.warn(f"agent_config: missing field '{f}'")
+
+
+def _check_action_trail(data: dict, result: ValidationResult) -> None:
+    """Validate action_trail structure."""
+    trail = data.get("action_trail")
+    if trail is None:
+        return  # Optional
+
+    if not isinstance(trail, dict):
+        result.error("action_trail: expected an object")
+        return
+
+    for f in ("actions", "executions", "stats"):
+        if f not in trail:
+            result.error(f"action_trail: missing required field '{f}'")
+
+    stats = trail.get("stats", {})
+    for f in ("total_executions", "completed", "failed", "exported_count"):
+        if f not in stats:
+            result.error(f"action_trail.stats: missing field '{f}'")
+
+
+# ---------------------------------------------------------------------------
+# Main validation entry point
+# ---------------------------------------------------------------------------
+
+
+def validate_export(zip_path: str) -> ValidationResult:
+    """
+    Validate an OpenContracts corpus export ZIP file.
+
+    Checks structural integrity, referential consistency, and format
+    compliance without requiring Django or a running database.
+
+    Args:
+        zip_path: Path to the ZIP file.
+
+    Returns:
+        ValidationResult with all errors and warnings.
+    """
+    result = ValidationResult()
+
+    try:
+        zf = zipfile.ZipFile(zip_path, "r")
+    except zipfile.BadZipFile:
+        result.error(f"Not a valid ZIP file: {zip_path}")
+        return result
+    except FileNotFoundError:
+        result.error(f"File not found: {zip_path}")
+        return result
+
+    with zf:
+        if "data.json" not in zf.namelist():
+            result.error("ZIP does not contain data.json")
+            return result
+
+        try:
+            with zf.open("data.json") as f:
+                data = json.loads(f.read().decode("utf-8"))
+        except json.JSONDecodeError as e:
+            result.error(f"data.json is not valid JSON: {e}")
+            return result
+
+        version = data.get("version", "1.0")
+        is_v2 = version == "2.0"
+
+        # Core checks (V1 + V2)
+        _check_zip_structure(zf, data, result)
+        _check_label_definitions(data, result)
+        _check_corpus_metadata(data, result)
+        _check_label_set_metadata(data, result)
+        all_annot_ids = _check_documents(data, result)
+
+        # V2 checks
+        if is_v2:
+            struct_annot_ids = _check_structural_sets(data, result)
+            all_annot_ids |= struct_annot_ids
+            folder_paths = _check_folders(data, result)
+            _check_document_paths(data, folder_paths, result)
+            _check_corpus_level_relationships(data, all_annot_ids, result)
+            _check_agent_config(data, result)
+            _check_action_trail(data, result)
+
+            if "conversations" in data:
+                _check_conversations(data, result)
+        else:
+            # V1 may still have inline relationships in docs — already checked
+            # in _check_documents. Check top-level if present.
+            if data.get("relationships"):
+                _check_corpus_level_relationships(data, all_annot_ids, result)
+
+    return result
+
+
+def validate_data_json(data: dict) -> ValidationResult:
+    """
+    Validate an already-parsed data.json dict (no ZIP required).
+
+    This is useful when building an export programmatically and you want to
+    check the data structure before writing the ZIP. Note that ZIP-level
+    checks (file presence) are skipped.
+
+    Args:
+        data: The parsed data.json dictionary.
+
+    Returns:
+        ValidationResult with all errors and warnings.
+    """
+    result = ValidationResult()
+
+    version = data.get("version", "1.0")
+    is_v2 = version == "2.0"
+
+    _check_label_definitions(data, result)
+    _check_corpus_metadata(data, result)
+    _check_label_set_metadata(data, result)
+    all_annot_ids = _check_documents(data, result)
+
+    if is_v2:
+        struct_annot_ids = _check_structural_sets(data, result)
+        all_annot_ids |= struct_annot_ids
+        folder_paths = _check_folders(data, result)
+        _check_document_paths(data, folder_paths, result)
+        _check_corpus_level_relationships(data, all_annot_ids, result)
+        _check_agent_config(data, result)
+        _check_action_trail(data, result)
+
+        if "conversations" in data:
+            _check_conversations(data, result)
+    else:
+        if data.get("relationships"):
+            _check_corpus_level_relationships(data, all_annot_ids, result)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point. Returns 0 on success, 1 on validation failure."""
+    args = argv if argv is not None else sys.argv[1:]
+
+    if not args or args[0] in ("-h", "--help"):
+        print(
+            "Usage: python -m opencontractserver.utils.validate_export "
+            "<export.zip> [export2.zip ...]\n\n"
+            "Validates OpenContracts corpus export ZIP files.\n"
+            "Exit code 0 = all valid, 1 = errors found.",
+            file=sys.stderr,
+        )
+        return 0
+
+    any_errors = False
+
+    for path in args:
+        print(f"Validating: {path}", file=sys.stderr)
+        result = validate_export(path)
+        print(result.summary(), file=sys.stderr)
+        if not result.ok:
+            any_errors = True
+        print(file=sys.stderr)
+
+    return 1 if any_errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
