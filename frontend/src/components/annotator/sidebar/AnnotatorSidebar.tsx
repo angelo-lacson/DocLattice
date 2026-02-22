@@ -29,7 +29,7 @@ import { PermissionTypes } from "../../types";
 import { getPermissions } from "../../../utils/transform";
 import { PlaceholderCard } from "../../placeholders/PlaceholderCard";
 import styled from "styled-components";
-import { RelationGroup } from "../types/annotations";
+import { RelationGroup, ServerTokenAnnotation } from "../types/annotations";
 import { useAnnotationRefs } from "../hooks/useAnnotationRefs";
 import { useUISettings } from "../hooks/useUISettings";
 import {
@@ -763,19 +763,21 @@ export const AnnotatorSidebar = ({
     }
     // If the toggle is flipping us over to SELECTED
     else {
-      let annotation = pdfAnnotations.annotations.filter(
+      const annotation = pdfAnnotations.annotations.find(
         (annotation_obj) => annotation_obj.id === toggledId
-      )[0];
-      // Check the proposed id is actually in the annotation store
-      if (annotation) {
-        // If it is, and we have a reference to it in our annotation reference obj
-        if (annotationElementRefs?.current[annotation.id]) {
-          // Scroll annotation into view.
-          annotationElementRefs?.current[annotation.id]?.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-        }
+      );
+      // Only scroll via annotationElementRefs for PDF token annotations.
+      // Text span annotations are scrolled by TxtAnnotator's own
+      // selectedAnnotations useEffect — calling scrollIntoView here too
+      // would cause two competing scroll animations.
+      if (
+        annotation instanceof ServerTokenAnnotation &&
+        annotationElementRefs?.current[annotation.id]
+      ) {
+        annotationElementRefs.current[annotation.id]?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
       }
       setSelectedAnnotations([toggledId]);
     }
