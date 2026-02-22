@@ -81,7 +81,7 @@ class TelemetryTestCase(TestCase):
             record_event("test_event")
 
         # Verify PostHog client was created with disable_geoip=False
-        init_kwargs = self.mock_posthog_class.call_args[1]
+        init_kwargs = self.mock_posthog_class.call_args.kwargs
         self.assertIn("disable_geoip", init_kwargs)
         self.assertFalse(init_kwargs["disable_geoip"])
 
@@ -126,6 +126,32 @@ class TelemetryTestCase(TestCase):
         self.assertEqual(
             set(properties.keys()), {"package", "timestamp", "installation_id"}
         )
+
+
+class UsersAppGeoIPTestCase(TestCase):
+    """Tests that the UsersConfig.ready() method configures GeoIP on the
+    module-level posthog instance (the official Django integration path)."""
+
+    def test_ready_sets_geoip_enabled(self):
+        """Test that UsersConfig.ready() sets posthog.disable_geoip = False."""
+        import posthog
+
+        from opencontractserver.users.apps import UsersConfig
+
+        # Set a known bad state so we can verify the ready() method changes it
+        posthog.disable_geoip = True
+
+        app_config = UsersConfig(
+            "opencontractserver.users", __import__("opencontractserver.users")
+        )
+        with override_settings(
+            TELEMETRY_ENABLED=True,
+            POSTHOG_API_KEY="test-key",
+            POSTHOG_HOST="https://test.host",
+        ):
+            app_config.ready()
+
+        self.assertFalse(posthog.disable_geoip)
 
 
 class UsageHeartbeatTestCase(TestCase):
