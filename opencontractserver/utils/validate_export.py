@@ -46,6 +46,7 @@ V2_REQUIRED_FIELDS = {
     "document_paths",
     "relationships",
     "agent_config",
+    "md_description",
     "md_description_revisions",
     "post_processors",
 }
@@ -303,7 +304,7 @@ def _check_annotation(
     ann_prefix = f"{prefix}.annotation[{annot_id}]"
 
     # Required fields
-    for f in ("annotationLabel", "rawText", "annotation_json"):
+    for f in ("annotationLabel", "rawText", "page", "annotation_json"):
         if f not in annot:
             result.error(f"{ann_prefix}: missing required field '{f}'")
 
