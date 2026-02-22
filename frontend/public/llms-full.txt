@@ -66,7 +66,7 @@ Parameters:
 - offset (int, default 0): Pagination offset
 - search (string, optional): Filter by title or description
 
-Returns: { total_count, corpuses: [{ slug, title, description, document_count }] }
+Returns: { total_count, corpuses: [{ slug, title, description, document_count, created }] }
 
 Example request:
 ```json
@@ -91,7 +91,7 @@ Parameters:
 - offset (int, default 0): Pagination offset
 - search (string, optional): Filter by title or description
 
-Returns: { total_count, documents: [{ slug, title, description, file_type, page_count }] }
+Returns: { total_count, documents: [{ slug, title, description, file_type, page_count, created }] }
 
 ### get_document_text
 
@@ -115,7 +115,7 @@ Parameters:
 - limit (int, default 100, max 100): Number of results
 - offset (int, default 0): Pagination offset
 
-Returns: { total_count, annotations: [{ id, page, raw_text, label, bounding_box, structural }] }
+Returns: { total_count, annotations: [{ id, page, raw_text, annotation_label: { text, color, label_type }, structural, created }] }
 
 ### search_corpus
 
@@ -161,11 +161,11 @@ Corpus metadata including title, description, document count, label set, and tim
 
 ### document://{corpus_slug}/{document_slug}
 
-Document metadata and full extracted text.
+Document metadata and full extracted text. Returns JSON with fields: slug, title, description, file_type, page_count, text_preview (first 500 characters of extracted text), full_text (complete extracted text), created (ISO 8601 timestamp), corpus (corpus slug). The text_preview field is useful for quick inspection without consuming the full text, which can be large.
 
 ### annotation://{corpus_slug}/{document_slug}/{annotation_id}
 
-Annotation details including raw text, label, page number, and bounding box coordinates.
+Annotation details including raw text, label, page number, bounding box coordinates, and created timestamp.
 
 ### thread://{corpus_slug}/threads/{thread_id}
 
