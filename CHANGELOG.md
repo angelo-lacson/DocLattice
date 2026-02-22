@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Uncovered backoff cap branch**: `MAX_CHUNK_RETRY_BACKOFF_SECONDS` cap was never exercised by tests. Added test with `chunk_retry_limit=4` that verifies backoff values `[5, 10, 20, 30]` where the 4th retry hits the 30s cap (`opencontractserver/tests/test_chunked_parser.py`)
 - **Theoretical race in concurrent test**: `slow_chunks_started.is_set()` assertion could fail on heavily loaded CI. Added `slow_chunks_started.wait(timeout=2)` before the assertion (`opencontractserver/tests/test_chunked_parser.py`)
 
+#### MCP Documentation Accuracy (Closes #924)
+- **Missing `created` field in tool return docs**: `list_public_corpuses`, `list_documents`, and `list_annotations` all return a `created` ISO 8601 timestamp, but `llms-full.txt` omitted it from the documented return shapes
+- **Incorrect annotation label shape**: `list_annotations` return docs showed `label` (string) but the actual response uses `annotation_label: { text, color, label_type }` (object) — updated to match `format_annotation()` in `opencontractserver/mcp/formatters.py`
+- **Underdocumented `document://` resource**: The resource description only said "Document metadata and full extracted text" without listing the actual fields. Added field inventory including `text_preview` (first 500 chars), `full_text`, `corpus`, and `created` — critical for agents choosing between preview and full text under context window constraints
+- **File**: `frontend/public/llms-full.txt`
+
 #### BaseChunkedParser Cleanup (Closes #914)
 - **Duplicate test line**: Removed redundant `PdfReader` assignment in `test_pdf_splitting.py:95`
 - **Infinite loop guard**: Added input validation for `max_pages_per_chunk` and `min_pages_for_chunking` in `calculate_page_chunks()` (`opencontractserver/utils/pdf_splitting.py`); added `max_concurrent_chunks` validation in `_parse_document_impl` (`opencontractserver/pipeline/base/chunked_parser.py`)
