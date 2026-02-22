@@ -9,12 +9,12 @@ ipdb==0.13.13  # https://github.com/gotcha/ipdb
 # ------------------------------------------------------------------------------
 
 mypy==1.18.2  # https://github.com/python/mypy
-django-stubs==4.2.7  # https://github.com/typeddjango/django-stubs
+django-stubs==5.2.0  # https://github.com/typeddjango/django-stubs
 pytest==8.4.2  # https://github.com/pytest-dev/pytest
 pytest-cov==7.0.0  # https://github.com/pytest-dev/pytest-cov
 pytest-sugar==1.1.1  # https://github.com/Frozenball/pytest-sugar
 pytest-xdist==3.8.0  # https://github.com/pytest-dev/pytest-xdist (parallel test execution)
-djangorestframework-stubs==1.8.0  # https://github.com/typeddjango/djangorestframework-stubs
+djangorestframework-stubs==3.15.4  # https://github.com/typeddjango/djangorestframework-stubs
 responses==0.25.8  # https://github.com/getsentry/responses
 vcrpy==7.0.0
 
@@ -53,7 +53,7 @@ python-pptx
 
 # Not directly required, pinned by Snyk to avoid a vulnerability
 # ------------------------------------------------------------------------------
-django==4.2.24  # pyup: < 4.0  # https://www.djangoproject.com/
+django==5.2.11  # https://www.djangoproject.com/
 twisted>=24.7.0rc1 # not directly required, pinned by Snyk to avoid a vulnerability
 ipython>=8.10.0 # not directly required, pinned by Snyk to avoid a vulnerability
 requests>=2.32.2 # not directly required, pinned by Snyk to avoid a vulnerability
