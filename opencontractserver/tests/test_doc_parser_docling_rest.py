@@ -52,6 +52,7 @@ class TestDoclingParser(TestCase):
 
         # Create an instance of DoclingParser
         self.parser = DoclingParser()
+        self.parser.chunk_retry_limit = 0  # Disable per-chunk retries for unit tests
 
         # Sample response from the docling service
         self.sample_response = {
@@ -100,9 +101,13 @@ class TestDoclingParser(TestCase):
             "relationships": [],
         }
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_success(self, mock_open, mock_post):
+    def test_parse_document_success(self, mock_open, mock_post, _mock_page_count):
         """Test successful document parsing."""
         # Mock the file reading
         mock_file = MagicMock()
@@ -142,9 +147,13 @@ class TestDoclingParser(TestCase):
         self.assertTrue(payload["roll_up_groups"])
         self.assertFalse(payload["llm_enhanced_hierarchy"])
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_service_error(self, mock_open, mock_post):
+    def test_parse_document_service_error(self, mock_open, mock_post, _mock_page_count):
         """Test handling of service errors raises DocumentParsingError."""
         # Mock the file reading
         mock_file = MagicMock()
@@ -213,9 +222,13 @@ class TestDoclingParser(TestCase):
         self.assertEqual(normalized["page_count"], 2)
         self.assertEqual(normalized["pawls_file_content"][0]["page"]["width"], 100)
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_timeout_error(self, mock_open, mock_post):
+    def test_parse_document_timeout_error(self, mock_open, mock_post, _mock_page_count):
         """Parser raises DocumentParsingError when the Docling service call times out."""
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
@@ -232,9 +245,15 @@ class TestDoclingParser(TestCase):
         self.assertIn("timed out", str(ctx.exception))
         mock_post.assert_called_once()  # Ensure we attempted a single request
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_connection_error(self, mock_open, mock_post):
+    def test_parse_document_connection_error(
+        self, mock_open, mock_post, _mock_page_count
+    ):
         """Parser raises DocumentParsingError when the Docling service is unreachable."""
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
@@ -251,9 +270,15 @@ class TestDoclingParser(TestCase):
         self.assertIn("Failed to connect", str(ctx.exception))
         mock_post.assert_called_once()
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_generic_request_exception(self, mock_open, mock_post):
+    def test_parse_document_generic_request_exception(
+        self, mock_open, mock_post, _mock_page_count
+    ):
         """
         Parser raises DocumentParsingError when an unexpected RequestException is raised.
         Also verify that a response object attached to the exception is handled.
@@ -410,6 +435,7 @@ class TestDoclingParserImageExtraction(TestCase):
         self.doc.pdf_file.save("test_img.pdf", ContentFile(pdf_content))
 
         self.parser = DoclingParser()
+        self.parser.chunk_retry_limit = 0  # Disable per-chunk retries for unit tests
 
     def test_find_images_in_bounds_overlapping(self):
         """Test that _find_images_in_bounds finds overlapping image tokens."""
@@ -685,12 +711,16 @@ class TestDoclingParserImageExtraction(TestCase):
         self.assertEqual(token_refs[0]["tokenIndex"], 1)
 
     @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
+    @patch(
         "opencontractserver.pipeline.parsers.docling_parser_rest.extract_images_from_pdf"
     )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_parse_document_with_extract_images(
-        self, mock_open, mock_post, mock_extract_images
+        self, mock_open, mock_post, mock_extract_images, _mock_page_count
     ):
         """Test parse_document with extract_images=True."""
         mock_file = MagicMock()
@@ -934,10 +964,17 @@ class TestDoclingParser4xxErrors(TestCase):
         self.doc.pdf_file.save("test_4xx.pdf", ContentFile(pdf_content))
 
         self.parser = DoclingParser()
+        self.parser.chunk_retry_limit = 0  # Disable per-chunk retries for unit tests
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_400_error_not_transient(self, mock_open, mock_post):
+    def test_parse_document_400_error_not_transient(
+        self, mock_open, mock_post, _mock_page_count
+    ):
         """Test that 400 Bad Request is treated as non-transient error."""
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
@@ -958,9 +995,15 @@ class TestDoclingParser4xxErrors(TestCase):
         # 4xx errors should NOT be transient
         self.assertFalse(ctx.exception.is_transient)
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_403_error_not_transient(self, mock_open, mock_post):
+    def test_parse_document_403_error_not_transient(
+        self, mock_open, mock_post, _mock_page_count
+    ):
         """Test that 403 Forbidden is treated as non-transient error."""
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
@@ -979,9 +1022,15 @@ class TestDoclingParser4xxErrors(TestCase):
 
         self.assertFalse(ctx.exception.is_transient)
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
-    def test_parse_document_503_error_is_transient(self, mock_open, mock_post):
+    def test_parse_document_503_error_is_transient(
+        self, mock_open, mock_post, _mock_page_count
+    ):
         """Test that 503 Service Unavailable is treated as transient error."""
         mock_file = MagicMock()
         mock_file.read.return_value = b"mock pdf content"
