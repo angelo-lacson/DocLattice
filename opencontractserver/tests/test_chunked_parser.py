@@ -355,7 +355,7 @@ class TestBaseChunkedParserIntegration(TestCase):
 
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_small_doc_no_chunking(self, mock_open):
-        """Documents below threshold should NOT be chunked."""
+        """Documents below threshold should NOT be chunked but still get prefixed IDs."""
         small_pdf = make_test_pdf(10)
         mock_file = MagicMock()
         mock_file.read.return_value = small_pdf
@@ -367,6 +367,8 @@ class TestBaseChunkedParserIntegration(TestCase):
         result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
         self.assertIsNotNone(result)
         self.assertEqual(result["page_count"], 2)  # From default _make_chunk_result
+        # Even single-chunk documents now get consistent c0_ prefixed IDs
+        self.assertEqual(result["labelled_text"][0]["id"], "c0_ann-1")
 
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_large_doc_is_chunked(self, mock_open):
@@ -482,6 +484,71 @@ class TestBaseChunkedParserIntegration(TestCase):
         mock_sleep.assert_called_once()
 
     @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
+    @patch("opencontractserver.pipeline.base.chunked_parser.time.sleep")
+    def test_retry_backoff_capped_at_max(self, mock_sleep, mock_open):
+        """Backoff should be capped at MAX_CHUNK_RETRY_BACKOFF_SECONDS for high retry counts."""
+        small_pdf = make_test_pdf(10)
+        mock_file = MagicMock()
+        mock_file.read.return_value = small_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        call_count = {"value": 0}
+
+        class PersistentRetryParser(ConcreteChunkedParser):
+            def _parse_single_chunk_impl(self, *args, **kwargs):
+                call_count["value"] += 1
+                # Fail on attempts 1-4, succeed on attempt 5
+                if call_count["value"] < 5:
+                    raise DocumentParsingError("transient", is_transient=True)
+                return _make_chunk_result()
+
+        parser = PersistentRetryParser()
+        parser.chunk_retry_limit = 4  # 1 initial + 4 retries = 5 attempts
+
+        result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
+        self.assertIsNotNone(result)
+        self.assertEqual(call_count["value"], 5)
+
+        # Verify backoff values: 5*2^0=5, 5*2^1=10, 5*2^2=20, 5*2^3=40->capped to 30
+        self.assertEqual(mock_sleep.call_count, 4)
+        backoff_values = [call.args[0] for call in mock_sleep.call_args_list]
+        self.assertEqual(backoff_values, [5, 10, 20, 30])
+
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
+    def test_invalid_max_pages_per_chunk_raises_document_parsing_error(self, mock_open):
+        """max_pages_per_chunk=0 should raise DocumentParsingError, not bare ValueError."""
+        small_pdf = make_test_pdf(10)
+        mock_file = MagicMock()
+        mock_file.read.return_value = small_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        parser = ConcreteChunkedParser()
+        parser.max_pages_per_chunk = 0
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
+        self.assertIn("max_pages_per_chunk must be > 0", str(ctx.exception))
+        self.assertFalse(ctx.exception.is_transient)
+
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
+    def test_invalid_min_pages_for_chunking_raises_document_parsing_error(
+        self, mock_open
+    ):
+        """min_pages_for_chunking=0 should raise DocumentParsingError, not bare ValueError."""
+        small_pdf = make_test_pdf(10)
+        mock_file = MagicMock()
+        mock_file.read.return_value = small_pdf
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        parser = ConcreteChunkedParser()
+        parser.min_pages_for_chunking = 0
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
+        self.assertIn("min_pages_for_chunking must be > 0", str(ctx.exception))
+        self.assertFalse(ctx.exception.is_transient)
+
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage.open")
     def test_zero_max_concurrent_chunks_raises_for_small_doc(self, mock_open):
         """max_concurrent_chunks=0 should raise even for small (non-chunked) docs."""
         small_pdf = make_test_pdf(10)
@@ -546,5 +613,8 @@ class TestBaseChunkedParserIntegration(TestCase):
         with self.assertRaises(DocumentParsingError):
             parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
 
+        # Wait briefly for slow chunks to signal (eliminates theoretical race on
+        # heavily loaded CI machines where the event might not be set yet).
+        slow_chunks_started.wait(timeout=2)
         # Confirm at least one slow chunk was dispatched before the error propagated
         self.assertTrue(slow_chunks_started.is_set())

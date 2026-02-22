@@ -43,7 +43,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `config/settings/production.py` — updated INSTALLED_APPS reference
   - `config/settings/base.py` — updated COLLECTFAST_STRATEGY paths from `collectfast.strategies.*` to `collectfasta.strategies.*`
 
+### Security
+
+#### Dependency Security Updates
+- **Django 4.2.24 → 4.2.28 (now 5.2.11)**: CVEs fixed by the 5.2.11 LTS release include multiple SQL injection vectors (CVE-2025-59681, CVE-2025-64459, CVE-2025-13372, CVE-2026-1312, CVE-2026-1287, CVE-2026-1207), directory traversal (CVE-2025-59682), DoS attacks (CVE-2025-64458, CVE-2025-64460), and user enumeration timing attack (CVE-2025-13473)
+  - Updated in `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
+- **cryptography 46.0.3 → 46.0.5**: Fixes CVE-2026-26007 — missing subgroup validation in ECDSA/ECDH public key loading for SECT curves, enabling signature forgery and private key leakage
+  - Updated in `requirements/base.txt`
+- **axios ^1.12.0 → ^1.13.5**: Fixes DoS vulnerability via `__proto__` key in `mergeConfig`
+  - Updated in `frontend/package.json`
+- **Removed unused `worker-loader`**: Webpack-specific package unused in Vite project; removal eliminates transitive `ajv@6.12.6` ReDoS vulnerability (via `worker-loader > schema-utils > ajv`)
+  - Removed from `frontend/package.json`
+
 ### Fixed
+
+#### Follow-up Text Annotation Fixes (Closes #911)
+- **Double-scroll bug**: `toggleSelectedAnnotation` in `AnnotatorSidebar.tsx:758` and `RelationshipList.tsx:106` called `scrollIntoView` for all annotation types, including text span annotations which already scroll via `TxtAnnotator`'s own `selectedAnnotations` useEffect. This caused two competing scroll animations. Fixed by guarding with `instanceof ServerTokenAnnotation` check.
+- **Phantom ID tracking**: `TxtAnnotator.tsx:366` built `currentIds` from all visible annotations before verifying DOM elements existed. Annotations without rendered spans became "ghost" IDs tracked in `registeredAnnotationIdsRef` but never actually registered. Fixed by only adding IDs to the tracking set after confirming a DOM element was found and registered.
+- **Page number display regression**: `HighlightItem.tsx` and `RelationHighlightItem.tsx` now use `(annotation instanceof ServerTokenAnnotation || annotation.page > 0)` to show page labels. PDF token annotations always display page labels (page is always meaningful), while span annotations only display them when `page > 0` (since `page=0` is a sentinel for "no page concept applies").
+- **TypeScript type narrowing**: `HighlightItem.tsx:176` stored `instanceof` check in an intermediate boolean variable, preventing TypeScript's control-flow narrowing. Inlined the `instanceof` check directly in the conditional.
+
+#### BaseChunkedParser Robustness and Consistency (Closes #926)
+- **Config ValueError not wrapped**: `calculate_page_chunks` raises `ValueError` for invalid `max_pages_per_chunk`/`min_pages_for_chunking`, but the call in `_parse_document_impl` was unwrapped. Now caught and re-raised as `DocumentParsingError(is_transient=False)` (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Small-document annotations unprefixed**: Single-chunk documents returned directly from `_parse_chunk_with_retry` without passing through `_reassemble_chunk_results`, resulting in unprefixed annotation/relationship IDs. Now all results consistently receive `c0_` prefixed IDs (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Uncovered backoff cap branch**: `MAX_CHUNK_RETRY_BACKOFF_SECONDS` cap was never exercised by tests. Added test with `chunk_retry_limit=4` that verifies backoff values `[5, 10, 20, 30]` where the 4th retry hits the 30s cap (`opencontractserver/tests/test_chunked_parser.py`)
+- **Theoretical race in concurrent test**: `slow_chunks_started.is_set()` assertion could fail on heavily loaded CI. Added `slow_chunks_started.wait(timeout=2)` before the assertion (`opencontractserver/tests/test_chunked_parser.py`)
+
+#### Context Guardrails for LLM Conversation Management (Closes #907)
+
+- **`truncate_tool_output` negative slice defense** (`opencontractserver/llms/context_guardrails.py`): Replaced fragile guard clause with explicit `char_budget = max(0, max_chars - len(notice))` to prevent negative slice indices when `max_chars` is smaller than the truncation notice length
+- **Token double-counting across compaction cycles** (`opencontractserver/llms/context_guardrails.py`, `opencontractserver/llms/agents/pydantic_ai_agents.py`): Added `stored_summary_tokens` parameter to `compact_message_history()` so the stored summary is counted in `total_before` (threshold check) but not double-counted in `total_after` (the new summary replaces the old one)
+- **Repeating prefix in compaction summaries** (`opencontractserver/llms/agents/pydantic_ai_agents.py`): Successive compaction cycles no longer accumulate duplicate `COMPACTION_SUMMARY_PREFIX` headers — the merge logic now strips the prefix from both old and new summaries before re-adding it once
+- **Fragile sentence extraction in deterministic summary** (`opencontractserver/llms/context_guardrails.py`): Extended the first-sentence regex to split on double-newlines (paragraph boundaries) and newlines before markdown list markers (`-`, `*`, `•`, numbered lists), preventing entire bullet-list responses from being treated as a single sentence
+- **Deprecated asyncio pattern in tests** (`opencontractserver/tests/test_context_guardrails.py`): Converted `TestPersistCompactionOptimisticLock` from `asyncio.run()` wrapper calls to native `async def` test methods, removing the unused `asyncio` import
+- **Weak truncation test assertions** (`opencontractserver/tests/test_context_guardrails.py`): Strengthened `test_custom_max_chars` and `test_truncation_notice_contains_limit` to assert exact upper-bound length (`<= max_chars`) and verify content starts from the beginning of the input string; added `test_truncated_content_from_beginning_not_end` test
+- **CHARS_PER_TOKEN_ESTIMATE docstring inconsistency** (`opencontractserver/constants/context_guardrails.py`): Clarified that the constant is intentionally 3.5 (not 4) to over-count tokens slightly for conservative compaction triggering
+- **Missing integrity constraint documentation** (`opencontractserver/conversations/models.py`): Added comment and expanded `help_text` on `compacted_before_message_id` explaining why `BigIntegerField` (not `ForeignKey`) is safe — the `id__gt` filter remains correct even if the cutoff message is deleted
+- **Unreachable defensive code** (`opencontractserver/llms/context_guardrails.py`): Added clarifying comment on the `recent_count < 1` guard explaining it is unreachable with default `MIN_RECENT_MESSAGES` but protects against callers passing `min_recent=0`
+- **Missing compaction bookmark filter tests** (`opencontractserver/tests/test_context_guardrails.py`): Added `TestCompactionBookmarkDatabaseFilter` with two async tests verifying `get_conversation_messages()` applies `id__gt` filtering when a bookmark is set and skips it when `None`
+- **New sentence extraction tests** (`opencontractserver/tests/test_context_guardrails.py`): Added `test_markdown_bullet_list_split` and `test_double_newline_paragraph_split` covering the improved regex
 
 #### MCP Documentation Accuracy (Closes #924)
 - **Missing `created` field in tool return docs**: `list_public_corpuses`, `list_documents`, and `list_annotations` all return a `created` ISO 8601 timestamp, but `llms-full.txt` omitted it from the documented return shapes
@@ -62,6 +100,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Missing boundary test**: Added test for exact `min_pages_for_chunking` threshold (75 pages) and clarified docstring semantics
 - **Memory trade-off documented**: Added comment explaining concurrent dispatch memory implications
 - **Cross-chunk limitation documented**: Enhanced class docstring with follow-up improvement suggestion for section-aware chunk boundaries
+
+### Added
+- Unit tests for `HighlightItem` scroll behavior and page label display (`frontend/src/components/annotator/sidebar/__tests__/HighlightItem.scroll.test.tsx`)
 
 ### Security
 
