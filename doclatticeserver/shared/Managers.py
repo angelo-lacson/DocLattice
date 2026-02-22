@@ -81,7 +81,7 @@ class BaseVisibilityManager(Manager):
                 f"(app: {app_label}, model: {model_name})"
             )
 
-            logger.warning(
+            logger.debug(
                 f"Consider implementing tuned visible_to_user method on {model_name} manager"
             )
 
