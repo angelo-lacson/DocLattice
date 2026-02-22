@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `graphene-django`: 3.2.2 → 3.2.3 (adds Django 5.1+ support)
   - `django-stubs`: 4.2.7 → 5.2.0
   - `djangorestframework-stubs`: 1.8.0 → 3.15.4
+  - `django-celery-beat`: 2.6.0 → 2.8.1 (adds Django 5.2 support)
+  - `django-filter`: 24.3 → 25.1 (adds Django 5.2 support)
+  - `django-model-utils`: 4.3.1 → 5.0.0 (adds Django 5.x support)
+  - `django-crispy-forms`: 2.4 → 2.5 (adds Django 5.2 support)
+  - `django-cte`: 2.0.0 → 3.0.0 (adds Django 5.2 support, fixes ambiguous column names)
+  - `django-environ`: 0.12.0 → 0.13.0 (adds Django 5.2 support)
+  - `django-debug-toolbar`: 4.4.6 → 5.0.0 (adds Django 5.2 support)
 
 ### Fixed
 
