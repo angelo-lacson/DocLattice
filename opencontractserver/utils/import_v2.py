@@ -24,6 +24,9 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 
 from opencontractserver.annotations.models import (
+    RELATIONSHIP_LABEL,
+    SPAN_LABEL,
+    TOKEN_LABEL,
     Annotation,
     Relationship,
     StructuralAnnotationSet,
@@ -110,7 +113,9 @@ def import_structural_annotation_set(
         # Create structural annotations
         for annot_data in struct_data.get("structural_annotations", []):
             label_text = annot_data.get("annotationLabel", "")
-            label_obj = label_lookup.get(label_text)
+            label_obj = label_lookup.get((label_text, TOKEN_LABEL)) or label_lookup.get(
+                (label_text, SPAN_LABEL)
+            )
 
             if not label_obj:
                 logger.warning(
@@ -150,7 +155,7 @@ def import_structural_annotation_set(
         # Create structural relationships
         for rel_data in struct_data.get("structural_relationships", []):
             label_text = rel_data.get("relationshipLabel", "")
-            label_obj = label_lookup.get(label_text)
+            label_obj = label_lookup.get((label_text, RELATIONSHIP_LABEL))
 
             if not label_obj:
                 logger.warning(f"Relationship label '{label_text}' not found, skipping")
@@ -449,6 +454,7 @@ def import_conversations(
             msg_map[msg_data["id"]] = message
 
         # Pass 2: Re-link parent_message references
+        messages_to_update = []
         for msg_data in messages_data:
             parent_id = msg_data.get("parent_message_id")
             if parent_id:
@@ -456,7 +462,9 @@ def import_conversations(
                 parent = msg_map.get(parent_id)
                 if message and parent:
                     message.parent_message = parent
-                    message.save(update_fields=["parent_message"])
+                    messages_to_update.append(message)
+        if messages_to_update:
+            ChatMessage.objects.bulk_update(messages_to_update, ["parent_message"])
 
         # Import votes
         for vote_data in votes_data:

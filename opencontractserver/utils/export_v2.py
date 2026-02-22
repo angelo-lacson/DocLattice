@@ -447,12 +447,8 @@ def package_conversations(
             "created_at"
         )
 
-        # Apply permission filtering for messages if user is provided
-        if user is not None:
-            visible_msg_ids = ChatMessage.objects.visible_to_user(user).values_list(
-                "id", flat=True
-            )
-            messages = messages.filter(id__in=visible_msg_ids)
+        # No additional permission filter needed for messages — they are
+        # already scoped to permission-filtered conversations above.
 
         # Build message ID mapping
         msg_id_map = {}

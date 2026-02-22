@@ -353,7 +353,7 @@ class TestV2ImportUtilities(TransactionTestCase):
             "structural_relationships": [],
         }
 
-        label_lookup = {"Test Label": self.text_label}
+        label_lookup = {("Test Label", TOKEN_LABEL): self.text_label}
 
         # Import
         result = import_structural_annotation_set(struct_data, label_lookup, self.user)
@@ -500,7 +500,7 @@ class TestV2ImportUtilities(TransactionTestCase):
 
         # Create annotation ID map and label lookup
         annot_id_map = {str(annot1.id): annot1.id, str(annot2.id): annot2.id}
-        label_lookup = {"Relates To": rel_label}
+        label_lookup = {("Relates To", RELATIONSHIP_LABEL): rel_label}
 
         # Import using _import_v2_relationships
         _import_v2_relationships(
@@ -607,7 +607,7 @@ class TestV2ImportUtilities(TransactionTestCase):
             ],
         }
 
-        label_lookup = {"Test Label": self.text_label}
+        label_lookup = {("Test Label", TOKEN_LABEL): self.text_label}
 
         # Import - should CREATE new since hash doesn't exist
         result = import_structural_annotation_set(struct_data, label_lookup, self.user)
@@ -660,7 +660,7 @@ class TestV2ImportUtilities(TransactionTestCase):
         ]
 
         annot_id_map = {str(annot1.id): annot1.id, str(annot2.id): annot2.id}
-        label_lookup = {"Structural Rel": rel_label}
+        label_lookup = {("Structural Rel", RELATIONSHIP_LABEL): rel_label}
 
         # Import using _import_v2_relationships
         _import_v2_relationships(
@@ -705,7 +705,7 @@ class TestV2ImportUtilities(TransactionTestCase):
             ],
         }
 
-        label_lookup = {"Test Label": self.text_label}
+        label_lookup = {("Test Label", TOKEN_LABEL): self.text_label}
         result = import_structural_annotation_set(struct_data, label_lookup, self.user)
 
         self.assertIsNotNone(result)
@@ -768,7 +768,10 @@ class TestV2ImportUtilities(TransactionTestCase):
             ],
         }
 
-        label_lookup = {"Test Label": self.text_label, "Causes": rel_label}
+        label_lookup = {
+            ("Test Label", TOKEN_LABEL): self.text_label,
+            ("Causes", RELATIONSHIP_LABEL): rel_label,
+        }
         result = import_structural_annotation_set(struct_data, label_lookup, self.user)
 
         self.assertIsNotNone(result)
@@ -813,7 +816,9 @@ class TestV2ImportUtilities(TransactionTestCase):
             ],
         }
 
-        label_lookup = {"Test Label": self.text_label}  # Missing "NonexistentLabel"
+        label_lookup = {
+            ("Test Label", TOKEN_LABEL): self.text_label
+        }  # Missing "NonexistentLabel"
         result = import_structural_annotation_set(struct_data, label_lookup, self.user)
 
         self.assertIsNotNone(result)
@@ -852,7 +857,9 @@ class TestV2ImportUtilities(TransactionTestCase):
         ]
 
         annot_id_map = {str(annot1.id): annot1.id, str(annot2.id): annot2.id}
-        label_lookup = {"Test Label": self.text_label}  # Missing "NonexistentRelLabel"
+        label_lookup = {
+            ("Test Label", TOKEN_LABEL): self.text_label
+        }  # Missing "NonexistentRelLabel"
 
         # Should not raise error, just log warning and skip
         _import_v2_relationships(
@@ -902,7 +909,9 @@ class TestV2ImportUtilities(TransactionTestCase):
             ],
         }
 
-        label_lookup = {"Test Label": self.text_label}  # Missing "MissingRelLabel"
+        label_lookup = {
+            ("Test Label", TOKEN_LABEL): self.text_label
+        }  # Missing "MissingRelLabel"
         result = import_structural_annotation_set(struct_data, label_lookup, self.user)
 
         self.assertIsNotNone(result)
@@ -1000,13 +1009,20 @@ class TestV2ImportExceptionHandling(TransactionTestCase):
             creator=self.user,
         )
 
+        # Create a relationship label for the lookup
+        rel_label = AnnotationLabel.objects.create(
+            text="Test Rel Label",
+            label_type=RELATIONSHIP_LABEL,
+            creator=self.user,
+        )
+
         # Force an exception when creating Relationship
         mock_create.side_effect = Exception("Database error")
 
         relationships_data = [
             {
                 "id": "rel1",
-                "relationshipLabel": "Test Label",
+                "relationshipLabel": "Test Rel Label",
                 "source_annotation_ids": [str(annot.id)],
                 "target_annotation_ids": [str(annot.id)],
                 "structural": False,
@@ -1014,7 +1030,7 @@ class TestV2ImportExceptionHandling(TransactionTestCase):
         ]
 
         annot_id_map = {str(annot.id): annot.id}
-        label_lookup = {"Test Label": self.text_label}
+        label_lookup = {("Test Rel Label", RELATIONSHIP_LABEL): rel_label}
 
         # Should raise the exception (function doesn't have try/except)
         with self.assertRaises(Exception):

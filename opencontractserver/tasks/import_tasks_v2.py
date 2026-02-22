@@ -16,6 +16,7 @@ from django.contrib.auth import get_user_model
 
 from config import celery_app
 from opencontractserver.annotations.models import (
+    RELATIONSHIP_LABEL,
     Annotation,
     AnnotationLabel,
     Relationship,
@@ -241,9 +242,13 @@ def _import_corpus(
             _setup_corpus_and_labels(data_json, user_obj, seed_corpus_id)
         )
 
-        # Build a text-keyed label lookup for structural annotations and
-        # relationships, which reference labels by text rather than PK.
-        label_lookup_by_text = {label.text: label for label in label_lookup.values()}
+        # Build a (text, label_type)-keyed label lookup for structural
+        # annotations and relationships, which reference labels by text
+        # rather than PK.  The compound key prevents collisions when
+        # different label types share the same text.
+        label_lookup_by_text = {
+            (label.text, label.label_type): label for label in label_lookup.values()
+        }
 
         # ===== V2 only: Import structural annotation sets =====
         structural_sets = {}
@@ -261,8 +266,6 @@ def _import_corpus(
         all_annot_id_maps = {}  # aggregated old_id -> new_id across all docs
         # Track doc_hash -> corpus_doc for DocumentPath reconstruction
         doc_hash_to_corpus_doc: dict[str, Document] = {}
-        # Track doc_filename -> corpus_doc_id for conversation doc linking
-        doc_filename_to_id: dict[str, int] = {}
 
         for doc_filename, doc_data in data_json["annotated_docs"].items():
             logger.info(f"Importing document: {doc_filename}")
@@ -286,7 +289,6 @@ def _import_corpus(
                 # The export side uses the same filename as its fallback
                 # document_ref in package_document_paths().
                 doc_hash_to_corpus_doc[doc_filename] = corpus_doc
-                doc_filename_to_id[doc_filename] = corpus_doc.id
 
         # ===== V2 only: Import additional features =====
         if is_v2:
@@ -368,7 +370,7 @@ def _import_v2_relationships(
             continue
 
         label_text = rel_data.get("relationshipLabel", "")
-        label_obj = label_lookup.get(label_text)
+        label_obj = label_lookup.get((label_text, RELATIONSHIP_LABEL))
         if not label_obj:
             logger.warning(f"Relationship label '{label_text}' not found")
             continue
