@@ -34,8 +34,8 @@ Every refactored view follows the same outer structure. Study `DiscoveryLanding.
 ```typescript
 const PageContainer = styled.div`
   height: 100%;
-  background: #fafafa;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  background: ${OS_LEGAL_COLORS.background};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
   overflow-y: auto;
   overflow-x: hidden;
 `;
@@ -148,7 +148,7 @@ import type { FilterTabItem } from "@os-legal/ui";
 const items: FilterTabItem[] = data.map(({ node }) => ({
   id: node.id,
   label: node.name,
-  count: node.corpusCount > 0 ? node.corpusCount : undefined,
+  count: node.corpusCount > 0 ? String(node.corpusCount) : undefined,
 }));
 
 <FilterTabs items={items} value={selectedCategory || "all"} onChange={handleChange} variant="pill" size="md" />
@@ -231,11 +231,11 @@ For each file being refactored:
    - `semantic-ui-react` → `@os-legal/ui` for available components (Button, Modal, Input, etc.)
    - `Icon name="..."` → named import from `lucide-react` (e.g., `<Icon name="plus" />` → `<Plus size={16} />`)
 3. **Flatten compound components** — `Card.Content`, `Modal.Actions` etc. become plain styled divs.
-4. **Remove `!important` overrides** — if you need `!important` to fight Semantic UI defaults, you're still using Semantic UI. Pure styled-components don't need it (exception: wrapper overrides on `.oc-*` classes, which is acceptable).
+4. **Remove `!important` overrides from Semantic UI component targets** — if you need `!important` to fight Semantic UI defaults, you're still using Semantic UI. The only acceptable use is in wrapper overrides targeting `.oc-*` CSS classes (see Wrapper Override and Adapter patterns above).
 5. **Use transient props** — styled-components that receive boolean/enum props should use the `$` prefix (`$isSelected`, `$variant`, `$active`) to prevent DOM warnings.
 6. **Apply the canonical layout** — `PageContainer` → `ContentContainer` → `Section` blocks. Copy from `DiscoveryLanding.tsx`.
 7. **Add loading skeletons** — replace `<Loader>` / `<Dimmer>` with shimmer skeletons that match the shape of real content. Reuse the shimmer keyframe pattern from `FeaturedCollections.tsx`.
-8. **Handle responsive breakpoints** — standard breakpoints are `768px` (mobile) and `1024px` (tablet). The CorpusModal also uses `MOBILE_VIEW_BREAKPOINT` (640px) for bottom-sheet behavior.
+8. **Handle responsive breakpoints** — the project defines three canonical breakpoints in `frontend/src/assets/configurations/constants.ts`: `MOBILE_VIEW_BREAKPOINT` (600px), `TABLET_BREAKPOINT` (768px), and `DESKTOP_BREAKPOINT` (769px). Use `MOBILE_VIEW_BREAKPOINT` for bottom-sheet/compact layouts (modals, filters) and `TABLET_BREAKPOINT` for standard page-level responsive adjustments.
 9. **Use CSS variables** — for anything inside modals or form sections, prefer `var(--oc-spacing-*)`, `var(--oc-radius-*)`, `var(--oc-bg-*)` over hardcoded values.
 10. **Verify** — run `yarn lint`, `yarn build`, and `yarn test:ct --reporter=list` before committing.
 
@@ -272,7 +272,7 @@ These files represent the best examples of completed migration:
 | `src/components/landing/StatsSection.tsx` | Wrapper override pattern |
 | `src/components/landing/FeaturedCollections.tsx` | Hybrid composition (CollectionCard + custom layout) |
 | `src/components/landing/CompactLeaderboard.tsx` | Hybrid composition (Avatar + Chip in custom list) |
-| `src/components/landing/NewHeroSection.tsx` | SearchBox + FilterTabs integration |
+| `src/components/landing/NewHeroSection.tsx` | SearchBox + FilterTabs integration, styled hero layout |
 | `src/components/corpuses/CorpusModal.tsx` | Adapter pattern (Modal with CSS variable theming) |
 | `src/components/layout/NavMenu.tsx` | NavBar integration with custom login actions |
 | `src/views/Documents.tsx` | Full view migration with mixed old/new (context menu still Semantic) |
