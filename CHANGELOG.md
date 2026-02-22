@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### BaseChunkedParser Robustness and Consistency (Closes #926)
+- **Config ValueError not wrapped**: `calculate_page_chunks` raises `ValueError` for invalid `max_pages_per_chunk`/`min_pages_for_chunking`, but the call in `_parse_document_impl` was unwrapped. Now caught and re-raised as `DocumentParsingError(is_transient=False)` (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Small-document annotations unprefixed**: Single-chunk documents returned directly from `_parse_chunk_with_retry` without passing through `_reassemble_chunk_results`, resulting in unprefixed annotation/relationship IDs. Now all results consistently receive `c0_` prefixed IDs (`opencontractserver/pipeline/base/chunked_parser.py`)
+- **Uncovered backoff cap branch**: `MAX_CHUNK_RETRY_BACKOFF_SECONDS` cap was never exercised by tests. Added test with `chunk_retry_limit=4` that verifies backoff values `[5, 10, 20, 30]` where the 4th retry hits the 30s cap (`opencontractserver/tests/test_chunked_parser.py`)
+- **Theoretical race in concurrent test**: `slow_chunks_started.is_set()` assertion could fail on heavily loaded CI. Added `slow_chunks_started.wait(timeout=2)` before the assertion (`opencontractserver/tests/test_chunked_parser.py`)
+
 #### Context Guardrails for LLM Conversation Management (Closes #907)
 
 - **`truncate_tool_output` negative slice defense** (`opencontractserver/llms/context_guardrails.py`): Replaced fragile guard clause with explicit `char_budget = max(0, max_chars - len(notice))` to prevent negative slice indices when `max_chars` is smaller than the truncation notice length
