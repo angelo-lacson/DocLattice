@@ -36,6 +36,7 @@ from opencontractserver.utils.embeddings import aget_embedder
 from opencontractserver.utils.prompt_sanitization import (
     UNTRUSTED_CONTENT_NOTICE,
     fence_user_content,
+    warn_if_content_large,
 )
 
 logger = logging.getLogger(__name__)
@@ -993,7 +994,9 @@ class CoreDocumentAgentFactory:
 
         # Prepend document context to the instructions.
         # Document title is user-supplied, so fence it.
-        fenced_title = fence_user_content(document.title, label="document title")
+        doc_title = document.title or "untitled"
+        warn_if_content_large(doc_title, context="document title")
+        fenced_title = fence_user_content(doc_title, label="document title")
         return (
             f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are analyzing the document titled {fenced_title} (ID: {document.id}).\n\n"
@@ -1067,7 +1070,9 @@ class CoreCorpusAgentFactory:
 
         # Prepend corpus context to the instructions.
         # Corpus title is user-supplied, so fence it.
-        fenced_title = fence_user_content(corpus.title, label="corpus title")
+        corpus_title = corpus.title or "untitled"
+        warn_if_content_large(corpus_title, context="corpus title")
+        fenced_title = fence_user_content(corpus_title, label="corpus title")
         return (
             f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are analyzing the corpus titled {fenced_title} (ID: {corpus.id}).\n\n"

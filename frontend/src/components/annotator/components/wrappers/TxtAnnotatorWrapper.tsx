@@ -158,7 +158,7 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
         searchResults={filteredSearchResults}
         chatSources={chatSourceMatches}
         selectedChatSourceId={
-          selectedMessageId && selectedSourceIndex
+          selectedMessageId && selectedSourceIndex !== null
             ? `${selectedMessageId}.${selectedSourceIndex}`
             : undefined
         }
