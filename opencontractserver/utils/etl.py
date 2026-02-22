@@ -12,7 +12,11 @@ from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError, create_model
 from typing_extensions import TypedDict
 
-from opencontractserver.annotations.models import Annotation, AnnotationLabel
+from opencontractserver.annotations.models import (
+    Annotation,
+    AnnotationLabel,
+    Relationship,
+)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.types.dicts import (
@@ -91,16 +95,67 @@ def build_label_lookups(
         logger.info("Using CORPUS_LABELSET_ONLY mode for label filtering")
         label_ids = corpus_label_ids
 
-    logger.info(f"Found {len(label_ids)} labels in corpus label set")
+    # Also gather labels used on Relationship objects (RELATIONSHIP_LABEL type)
+    # These are not captured by Annotation queries since they live on Relationship
+    if annotation_filter_mode == "ANALYSES_ONLY":
+        if analysis_ids:
+            relationship_label_ids = (
+                Relationship.objects.filter(
+                    corpus_id=corpus_id, analysis_id__in=analysis_ids
+                )
+                .values_list("relationship_label", flat=True)
+                .distinct()
+            )
+        else:
+            relationship_label_ids = Relationship.objects.none().values_list(
+                "relationship_label", flat=True
+            )
+    elif annotation_filter_mode == "CORPUS_LABELSET_PLUS_ANALYSES":
+        corpus_rel_label_ids = (
+            Relationship.objects.filter(corpus_id=corpus_id, analysis__isnull=True)
+            .values_list("relationship_label", flat=True)
+            .distinct()
+        )
+        if analysis_ids:
+            analysis_rel_label_ids = (
+                Relationship.objects.filter(
+                    corpus_id=corpus_id, analysis_id__in=analysis_ids
+                )
+                .values_list("relationship_label", flat=True)
+                .distinct()
+            )
+            relationship_label_ids = corpus_rel_label_ids.union(analysis_rel_label_ids)
+        else:
+            relationship_label_ids = corpus_rel_label_ids
+    else:
+        relationship_label_ids = (
+            Relationship.objects.filter(corpus_id=corpus_id, analysis__isnull=True)
+            .values_list("relationship_label", flat=True)
+            .distinct()
+        )
+
+    # Merge annotation label IDs with relationship label IDs.
+    # Materialize to a list so len() and filter(pk__in=) don't each
+    # trigger separate DB evaluations of a union queryset.
+    if isinstance(label_ids, list):
+        all_label_ids = list(label_ids) + list(relationship_label_ids)
+    else:
+        all_label_ids = list(label_ids.union(relationship_label_ids))
+
+    logger.info(f"Found {len(all_label_ids)} labels in corpus label set")
 
     # Pull the corresponding AnnotationLabel objects
-    labels = AnnotationLabel.objects.filter(pk__in=label_ids)
+    labels = AnnotationLabel.objects.filter(pk__in=all_label_ids)
 
     text_labels = {}
     doc_labels = {}
 
-    # Split them into text labels vs. doc labels
-    text_label_queryset = labels.filter(label_type="TOKEN_LABEL")
+    # Export all label types: TOKEN_LABEL, SPAN_LABEL, and RELATIONSHIP_LABEL
+    # go into text_labels; DOC_TYPE_LABEL goes into doc_labels.
+    # Each entry preserves its actual label_type for correct reconstruction on import.
+    text_label_queryset = labels.filter(
+        label_type__in=["TOKEN_LABEL", "SPAN_LABEL", "RELATIONSHIP_LABEL"]
+    )
     doc_type_labels_queryset = labels.filter(label_type="DOC_TYPE_LABEL")
 
     for tl in text_label_queryset:
@@ -111,7 +166,7 @@ def build_label_lookups(
             "description": tl.description,
             "icon": tl.icon,
             "text": tl.text,
-            "label_type": "TOKEN_LABEL",
+            "label_type": tl.label_type,
         }
 
     for dl in doc_type_labels_queryset:
@@ -241,6 +296,7 @@ def build_document_export(
             "content": extracted_document_content_json,
             "pawls_file_content": pawls_tokens,
             "page_count": doc.page_count,
+            "file_type": doc.file_type,
         }
 
         page_highlights = {}
