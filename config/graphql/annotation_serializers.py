@@ -14,6 +14,7 @@ User = get_user_model()
 # TODO - better solution
 class AnnotationLabelSerializer(serializers.ModelSerializer):
     creator_id = serializers.IntegerField(write_only=True)
+    description = serializers.CharField(allow_blank=True, default="")
 
     class Meta:
         model = AnnotationLabel

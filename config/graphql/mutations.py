@@ -1468,6 +1468,16 @@ class StartCorpusExport(graphene.Mutation):
             default_value=AnnotationFilterMode.CORPUS_LABELSET_ONLY.value,
             description="How to filter annotations - from corpus label set only, plus analyses, or analyses only",
         )
+        include_conversations = graphene.Boolean(
+            required=False,
+            default_value=False,
+            description="Whether to include conversations and messages in the export (V2 format only)",
+        )
+        include_action_trail = graphene.Boolean(
+            required=False,
+            default_value=False,
+            description="Whether to include corpus action execution trail in the export (V2 format only)",
+        )
 
     ok = graphene.Boolean()
     message = graphene.String()
@@ -1484,6 +1494,8 @@ class StartCorpusExport(graphene.Mutation):
         input_kwargs: dict = None,
         analyses_ids: list[str] = None,
         annotation_filter_mode: str = AnnotationFilterMode.CORPUS_LABELSET_ONLY.value,
+        include_conversations: bool = False,
+        include_action_trail: bool = False,
     ) -> "StartCorpusExport":
         """
         Initiates async Celery export tasks. If analyses_ids are supplied,
@@ -1609,6 +1621,8 @@ class StartCorpusExport(graphene.Mutation):
                 package_corpus_export_v2.delay(
                     export_id=export.id,
                     corpus_pk=int(corpus_pk),
+                    include_conversations=include_conversations,
+                    include_action_trail=include_action_trail,
                     analysis_pk_list=analysis_pk_list if analysis_pk_list else None,
                     annotation_filter_mode=annotation_filter_mode,
                 )
