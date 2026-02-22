@@ -41,6 +41,17 @@ interface TextSpan {
   sourceId?: string;
 }
 
+/** Shape of a single chat-source highlight boundary. */
+interface ChatSourceHighlight {
+  start_index: number;
+  end_index: number;
+  sourceId: string;
+  messageId: string;
+}
+
+/** Stable empty array used as default for `chatSources` to avoid re-render loops. */
+const EMPTY_CHAT_SOURCES: ChatSourceHighlight[] = [];
+
 /**
  * Props for the TxtAnnotator component.
  */
@@ -96,12 +107,7 @@ interface TxtAnnotatorProps {
   /** Which search result index is currently "selected." */
   selectedSearchResultIndex?: number;
   /** Array of chat source highlight boundaries. */
-  chatSources?: {
-    start_index: number;
-    end_index: number;
-    sourceId: string;
-    messageId: string;
-  }[];
+  chatSources?: ChatSourceHighlight[];
   /** Currently selected chat source ID, if any. */
   selectedChatSourceId?: string;
   /** Callback to register/unregister annotation DOM refs for sidebar scroll-to. */
@@ -326,7 +332,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   setSelectedAnnotations,
   showStructuralAnnotations,
   selectedSearchResultIndex,
-  chatSources = [],
+  chatSources = EMPTY_CHAT_SOURCES,
   selectedChatSourceId,
   onAnnotationRefChange,
 }) => {
