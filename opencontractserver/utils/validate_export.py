@@ -295,6 +295,15 @@ def _check_pawls_pages(pawls: list, prefix: str, result: ValidationResult) -> No
                 if f not in token:
                     result.error(f"{page_prefix}.tokens[{j}]: missing '{f}'")
 
+            # Validate token coordinates are non-negative
+            for coord in ("x", "y", "width", "height"):
+                val = token.get(coord)
+                if val is not None and isinstance(val, (int, float)) and val < 0:
+                    result.error(
+                        f"{page_prefix}.tokens[{j}]: token {coord} is "
+                        f"negative ({val})"
+                    )
+
 
 def _check_annotation(
     annot: dict, pawls: list, prefix: str, result: ValidationResult

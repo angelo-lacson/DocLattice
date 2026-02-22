@@ -489,6 +489,16 @@ class TestPawlsValidation(unittest.TestCase):
         assert not result.ok
         assert any("sequential" in e for e in result.errors)
 
+    def test_negative_token_coordinates_error(self):
+        """Token x, y, width, height must be non-negative."""
+        data = _minimal_v1_data()
+        data["annotated_docs"]["sample.pdf"]["pawls_file_content"][0]["tokens"][0][
+            "x"
+        ] = -5
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("negative" in e and "token" in e.lower() for e in result.errors)
+
 
 class TestStructuralSetValidation(unittest.TestCase):
     def test_missing_structural_set_reference(self):
