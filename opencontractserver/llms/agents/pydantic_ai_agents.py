@@ -11,7 +11,6 @@ from asgiref.sync import sync_to_async
 from pydantic_ai.agent import Agent as PydanticAIAgent
 from pydantic_ai.agent import (
     CallToolsNode,
-    End,
     ModelRequestNode,
     UserPromptNode,
 )
@@ -29,6 +28,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_graph import End
 
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.corpuses.models import Corpus
@@ -86,6 +86,10 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
+from opencontractserver.utils.prompt_sanitization import (
+    UNTRUSTED_CONTENT_NOTICE,
+    fence_user_content,
+)
 from opencontractserver.utils.tools import deduplicate_tools, get_tool_name
 
 from .timeline_schema import TimelineEntry
@@ -1889,8 +1893,10 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         """Strict extraction prompt with document context and raw-only output."""
         document_title = self.context.document.title
         document_id = self.context.document.id
+        fenced_title = fence_user_content(document_title, label="document title")
         return (
-            f"You are a data extraction specialist for document '{document_title}' (ID: {document_id}).\n\n"
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
+            f"You are a data extraction specialist for document {fenced_title} (ID: {document_id}).\n\n"
             "EXTRACTION PROTOCOL:\n"
             "1. You have access to tools to analyze this document. Use them to find the requested information.\n"
             "2. Use vector search, summary loaders, and note access as needed to locate data.\n"
@@ -2371,8 +2377,10 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
         """Strict extraction prompt with corpus context and raw-only output."""
         corpus_id = self.context.corpus.id
         corpus_title = getattr(self.context.corpus, "title", "corpus")
+        fenced_title = fence_user_content(corpus_title, label="corpus title")
         return (
-            f"You are a data extraction specialist for corpus '{corpus_title}' (ID: {corpus_id}).\n\n"
+            f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
+            f"You are a data extraction specialist for corpus {fenced_title} (ID: {corpus_id}).\n\n"
             "EXTRACTION PROTOCOL:\n"
             "1. You have access to tools to analyze this corpus. Use them to find the requested information.\n"
             "2. Leverage vector search and document coordination tools as needed.\n"

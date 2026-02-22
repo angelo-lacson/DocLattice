@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-21
 
-### Added
+### Security
+
+#### Resolve Dependabot Security Advisories (pydantic-ai + ajv)
+- **pydantic-ai 0.2.x → 1.x migration**: Upgraded from pydantic-ai 0.2.20 to >=1.56.0,<2 to resolve CVE in older version. Migration includes:
+  - `End` import moved from `pydantic_ai.agent` to `pydantic_graph` (`opencontractserver/llms/agents/pydantic_ai_agents.py`)
+  - All 3 `PydanticAIAgent` creation sites migrated from `system_prompt=` to `instructions=` to use the 1.x-recommended parameter that is always included in model requests regardless of message history
+  - `griffe>=1.3.2,<2` pin removed (was a transitive workaround only needed for pydantic-ai 0.2.x)
+  - Test file updated: `result.data` → `result.output`, `result_type` → `output_type`, `system_prompt` → `instructions` (`opencontractserver/tests/test_pydantic_ai_agents.py`)
+  - `openai` bumped from ==1.102.0 to >=2.11.0,<3 (pydantic-ai 1.x requires openai >=2.11.0)
+  - `pdf2image` pinned to >=1.16.0 (ancient 0.1.x versions have broken setup.py, caused cascading build failures in CI)
+- **ajv ReDoS fix (CVE in ajv <8.17.1)**: Added scoped Yarn resolutions for `@rjsf/validator-ajv8/ajv` and `ajv-formats/ajv` to pin ajv 8.18.0, avoiding conflict with schema-utils which requires ajv 6.x (`frontend/package.json`)
+
+#### IDOR Vulnerabilities Fixed in 4 GraphQL Mutations
+- **HIGH**: Fixed information leakage allowing object ID enumeration via different error messages
+  - `RemoveAnnotation` (`config/graphql/mutations.py`)
+  - `RejectAnnotation` (`config/graphql/mutations.py`)
+  - `ApproveAnnotation` (`config/graphql/mutations.py`)
+  - `RemoveRelationship` (`config/graphql/mutations.py`)
+- **Attack Vector**: Unauthorized users could distinguish between "object doesn't exist" and "object exists but you can't access it" by observing different error responses
+- **Impact**: Allowed enumeration of valid annotation/relationship IDs
+- **Solution**: All mutations now use `visible_to_user()` pattern with unified error messages; secondary permission checks also return the same unified message
+- **Information leakage fix**: Outer exception handlers no longer return `str(e)` to clients; errors are logged server-side only
+- **Test Coverage**: Added IDOR protection tests in `test_permission_fixes.py` and `test_voting_mutations_graphql.py`
+
+#### QuerySet Permission Filtering Gaps Fixed
+- `DocumentQuerySet.visible_to_user()` and `NoteQuerySet.visible_to_user()` inherited from `PermissionQuerySet` which had guardian permission checks commented out — only checking `is_public` and `creator`
+  - `opencontractserver/shared/QuerySets.py` (classes `DocumentQuerySet`, `NoteQuerySet`)
+- `AnnotationQuerySet.visible_to_user()` checked document/corpus visibility via `is_public` and `creator` only, missing guardian permission lookups for documents and corpuses
+  - `opencontractserver/shared/QuerySets.py` (class `AnnotationQuerySet`)
+- **Bug**: Code calling `Model.objects.filter(...).visible_to_user(user)` or `Model.objects.visible_to_user(user)` skipped guardian permission checks, making objects invisible to users with explicit share permissions
+- **Impact**: Documents shared via `set_permissions_for_obj_to_user()` were invisible through the QuerySet chain code path; annotations on shared documents/corpuses were invisible; Notes on accessible documents were not visible
+- **Fix**: All three QuerySets now override `visible_to_user()` with proper guardian permission table lookups. Documents and Annotations check guardian tables directly; Notes inherit from document + corpus permissions
 
 ### Fixed
 
@@ -37,9 +68,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timestamp patching uses `Model.all_objects.filter(pk=obj.pk).update()` to bypass `auto_now`/`auto_now_add` behavior
 - Comprehensive test coverage added: `TestLabelTypeExportCompleteness`, `TestDocumentFileTypeRoundTrip`, `TestConversationExportEnhancements`
 
-## [3.0.0.b3] - 2026-02-19
-
 ### Added
+
+#### Chunked Document Processing for Large PDFs
+- **New `BaseChunkedParser` abstract class** (`opencontractserver/pipeline/base/chunked_parser.py`): Extends `BaseParser` to transparently split large PDF documents into page-range chunks for independent parsing and reassembly. Documents below a configurable page threshold are processed as a single request (zero overhead). Features:
+  - Automatic PDF splitting via pypdf with configurable `max_pages_per_chunk` (default: 50) and `min_pages_for_chunking` (default: 75)
+  - Optional concurrent chunk dispatch via `ThreadPoolExecutor` (`max_concurrent_chunks`, default: 3)
+  - Per-chunk retry with exponential back-off before escalating to Celery-level retry
+  - Correct reassembly of PAWLs page indices, annotation page references, `tokensJsons.pageIndex`, annotation/relationship IDs, and parent-child relationships across chunk boundaries
+  - `_post_reassemble_hook()` for document-wide post-processing (e.g., image extraction on the full PDF)
+- **New PDF splitting utility** (`opencontractserver/utils/pdf_splitting.py`): `get_pdf_page_count()`, `split_pdf_by_page_range()`, `calculate_page_chunks()` — pure functions for PDF page manipulation
+- **New chunking constants** (`opencontractserver/constants/document_processing.py`): `DEFAULT_MAX_PAGES_PER_CHUNK`, `DEFAULT_MIN_PAGES_FOR_CHUNKING`, `DEFAULT_MAX_CONCURRENT_CHUNKS`, `DEFAULT_CHUNK_RETRY_LIMIT`
+- **DoclingParser now extends `BaseChunkedParser`** (`opencontractserver/pipeline/parsers/docling_parser_rest.py`): Large documents are automatically split and parsed in chunks. Configurable via `PipelineSettings` (`DOCLING_MAX_PAGES_PER_CHUNK`, `DOCLING_MIN_PAGES_FOR_CHUNKING`, `DOCLING_MAX_CONCURRENT_CHUNKS`). Image extraction runs once on the full PDF after reassembly via `_post_reassemble_hook`.
 
 #### Context Guardrails & Conversation Compaction (Closes #898)
 - **Context guardrails constants** (`opencontractserver/constants/context_guardrails.py`): Centralized configuration for model context windows (OpenAI, Anthropic, Google), compaction thresholds, tool output limits, and token estimation parameters. Covers 20+ model variants with sensible defaults.
@@ -62,6 +102,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed duplicate embedder entries in pipeline registry**: `_discover_subclasses()` in `opencontractserver/pipeline/registry.py` now deduplicates discovered classes by identity and skips abstract intermediate base classes via `inspect.isabstract()`, preventing aliases and abstract bases from appearing in the get-embedders query endpoint.
 
 ### Fixed
+
+#### Prompt Injection via User-Controlled Content in Agent Prompts
+- **Root cause**: Thread and document action prompt builders injected user-controlled content (message bodies, thread titles, document titles) directly into Markdown-structured LLM prompts without any sanitisation boundary. A user who can post a message to a moderated thread could craft content that overrides agent instructions.
+  - File: `opencontractserver/tasks/agent_tasks.py` (lines 808-848)
+  - File: `opencontractserver/llms/agents/core_agents.py` (lines 963-983, 1036-1054)
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py` (lines 1655-1669, 2301-2315)
+- **Fix**: All user-generated content injected into agent prompts is now wrapped in `<user_content>` / `</user_content>` XML fence tags. An explicit `UNTRUSTED_CONTENT_NOTICE` instruction block is added to thread moderation prompts telling the LLM to treat fenced content as raw data and ignore any embedded directives. A size-threshold warning (`UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD = 1000 chars`) logs a `[PromptInjection]` warning for abnormally large user content.
+  - New file: `opencontractserver/utils/prompt_sanitization.py` — `fence_user_content()`, `warn_if_content_large()`, `UNTRUSTED_CONTENT_NOTICE`
+  - New constant: `opencontractserver/constants/moderation.py` — `UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD`
+  - New tests: `opencontractserver/tests/test_prompt_sanitization.py`
+  - Updated tests: `opencontractserver/tests/test_thread_corpus_actions.py` — added `test_async_thread_action_prompt_fences_user_content`
 
 #### Frontend: Most views show legacy corpus.description instead of versioned mdDescription (Closes #892)
 - **Backend description sync**: `Corpus.update_description()` now keeps the plain-text `description` field in sync when `md_description` is updated via the versioned markdown system. A new `_markdown_to_plain_text()` static method strips markdown formatting for the plain-text field.

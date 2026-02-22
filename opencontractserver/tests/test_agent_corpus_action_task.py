@@ -681,8 +681,10 @@ class TestBuildDocumentActionSystemPrompt(TestCase):
 
         self.assertIn("automated corpus action agent", prompt)
         self.assertIn('"Summarizer"', prompt)
-        self.assertIn('"Contract.pdf"', prompt)
-        self.assertIn('"My Test Corpus"', prompt)
+        # Document and corpus titles are fenced with <user_content> tags
+        self.assertIn("Contract.pdf", prompt)
+        self.assertIn("<user_content", prompt)
+        self.assertIn("My Test Corpus", prompt)
         self.assertIn("was just added to", prompt)
         self.assertIn("tool_a, tool_b", prompt)
         self.assertIn("## Task Instructions", prompt)
@@ -743,7 +745,9 @@ class TestBuildDocumentActionSystemPrompt(TestCase):
         )
         prompt = _build_document_action_system_prompt(action, doc, [])
 
-        self.assertIn("Current description: A short description.", prompt)
+        self.assertIn("A short description.", prompt)
+        self.assertIn("Current description:", prompt)
+        self.assertIn('<user_content label="document description">', prompt)
         self.assertIn("was just edited in", prompt)
 
     def test_long_document_description_truncated(self):
@@ -850,7 +854,8 @@ class TestBuildThreadActionSystemPrompt(TestCase):
         self.assertIn("Discussion about policy", prompt)
         self.assertIn("alice", prompt)
         self.assertIn("Is pinned: True", prompt)
-        self.assertIn("Corpus: Thread Corpus", prompt)
+        self.assertIn("Thread Corpus", prompt)
+        self.assertIn('<user_content label="corpus title">', prompt)
         self.assertIn("tool_x", prompt)
         self.assertIn("## Task Instructions", prompt)
         self.assertIn("Moderate this thread.", prompt)
@@ -895,7 +900,7 @@ class TestBuildThreadActionSystemPrompt(TestCase):
         )
 
         self.assertIn("## Triggering Message (ID: 99)", prompt)
-        self.assertIn("Author: bob", prompt)
+        self.assertIn('<user_content label="username">\nbob\n</user_content>', prompt)
         self.assertIn("Hello world!", prompt)
 
     def test_no_triggering_message_without_params(self):
@@ -937,8 +942,18 @@ class TestBuildThreadActionSystemPrompt(TestCase):
         )
 
         self.assertIn("## Recent Thread Messages", prompt)
-        self.assertIn("[alice] (ID: 1): First message", prompt)
-        self.assertIn("[bob] (ID: 2): Second message", prompt)
+        # Usernames are fenced in <user_content> tags for prompt injection mitigation
+        self.assertIn(
+            '[<user_content label="username">\nalice\n</user_content>] (ID: 1):',
+            prompt,
+        )
+        self.assertIn("First message", prompt)
+        self.assertIn(
+            '[<user_content label="username">\nbob\n</user_content>] (ID: 2):',
+            prompt,
+        )
+        self.assertIn("Second message", prompt)
+        self.assertIn('<user_content label="message">', prompt)
 
     def test_long_message_content_truncated(self):
         """Messages longer than MAX_MESSAGE_PREVIEW_LENGTH are truncated."""

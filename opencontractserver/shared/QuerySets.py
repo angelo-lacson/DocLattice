@@ -186,14 +186,46 @@ class PermissionQuerySet(models.QuerySet):
 
 class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
     """
-    Custom QuerySet for Document that includes both permission filtering
-    (PermissionQuerySet) and vector-based search (VectorSearchViaEmbeddingMixin).
+    Custom QuerySet for Document that includes permission filtering
+    with guardian checks and vector-based search.
     """
 
-    # If your Embedding related_name on Document is not "embeddings",
-    # override the Mixin attribute here:
-    # EMBEDDING_RELATED_NAME = "my_custom_related_name"
-    pass
+    def visible_to_user(self, user, perm=None):
+        """
+        Override PermissionQuerySet.visible_to_user to include guardian
+        permission checks. Without this override, chaining
+        .filter().visible_to_user() would skip guardian entirely.
+
+        Follows the same pattern as BaseVisibilityManager.visible_to_user
+        (opencontractserver/shared/Managers.py lines 103-118).
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        if user is None:
+            user = AnonymousUser()
+
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return self.all()
+
+        if user.is_anonymous:
+            return self.filter(is_public=True).distinct()
+
+        # Query guardian permission table directly for performance
+        from django.apps import apps
+
+        try:
+            permission_model = apps.get_model(
+                "documents", "documentuserobjectpermission"
+            )
+            permitted_ids = permission_model.objects.filter(
+                permission__codename="read_document", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+
+            return self.filter(
+                Q(creator=user) | Q(is_public=True) | Q(id__in=permitted_ids)
+            ).distinct()
+        except LookupError:
+            return self.filter(Q(creator=user) | Q(is_public=True)).distinct()
 
 
 class AnnotationQuerySet(
@@ -291,11 +323,32 @@ class AnnotationQuerySet(
         )
 
         # Also need document/corpus visibility
+        # Query guardian permission tables for documents and corpuses
+        from django.apps import apps
+
+        try:
+            doc_perm_model = apps.get_model("documents", "documentuserobjectpermission")
+            doc_permitted_ids = doc_perm_model.objects.filter(
+                permission__codename="read_document", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+        except LookupError:
+            doc_permitted_ids = []
+
+        try:
+            corpus_perm_model = apps.get_model("corpuses", "corpususerobjectpermission")
+            corpus_permitted_ids = corpus_perm_model.objects.filter(
+                permission__codename="read_corpus", user_id=user.id
+            ).values_list("content_object_id", flat=True)
+        except LookupError:
+            corpus_permitted_ids = []
+
         # Handle TWO types of annotations:
         # 1. Document-attached: have document FK set, check document visibility
         # 2. Structural via structural_set: have document=NULL, check via structural_set__documents
         doc_attached_filter = Q(document__isnull=False) & (
-            Q(document__is_public=True) | Q(document__creator=user)
+            Q(document__is_public=True)
+            | Q(document__creator=user)
+            | Q(document_id__in=doc_permitted_ids)
         )
 
         # Structural annotations linked via structural_set (document FK is NULL)
@@ -307,6 +360,7 @@ class AnnotationQuerySet(
             & (
                 Q(structural_set__documents__is_public=True)
                 | Q(structural_set__documents__creator=user)
+                | Q(structural_set__documents__id__in=doc_permitted_ids)
             )
         )
 
@@ -314,7 +368,10 @@ class AnnotationQuerySet(
 
         # Corpus visibility (for document-attached annotations with corpus)
         corpus_filter = (
-            Q(corpus__isnull=True) | Q(corpus__is_public=True) | Q(corpus__creator=user)
+            Q(corpus__isnull=True)
+            | Q(corpus__is_public=True)
+            | Q(corpus__creator=user)
+            | Q(corpus_id__in=corpus_permitted_ids)
         )
 
         return qs.filter(
@@ -328,6 +385,37 @@ class NoteQuerySet(CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixi
       - CTEQuerySet
       - PermissionQuerySet
       - VectorSearchViaEmbeddingMixin
+
+    Notes inherit permissions from their parent document and corpus
+    following the MIN(document_permission, corpus_permission) pattern.
     """
 
-    pass
+    def visible_to_user(self, user, perm=None):
+        """
+        Notes inherit visibility from document + corpus.
+        A note is visible if:
+        1. User created it, OR
+        2. Document is visible AND corpus is visible (or null)
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        if user is None:
+            user = AnonymousUser()
+
+        if hasattr(user, "is_superuser") and user.is_superuser:
+            return self.all()
+
+        if user.is_anonymous:
+            return self.filter(
+                Q(document__is_public=True)
+                & (Q(corpus__isnull=True) | Q(corpus__is_public=True))
+                & Q(is_public=True)
+            ).distinct()
+
+        # Authenticated: visible if creator OR (doc visible AND corpus visible)
+        doc_visible = Q(document__is_public=True) | Q(document__creator=user)
+        corpus_visible = (
+            Q(corpus__isnull=True) | Q(corpus__is_public=True) | Q(corpus__creator=user)
+        )
+
+        return self.filter(Q(creator=user) | (doc_visible & corpus_visible)).distinct()
