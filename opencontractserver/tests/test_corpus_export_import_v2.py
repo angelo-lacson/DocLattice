@@ -1983,3 +1983,352 @@ class TestConversationExportEnhancements(TransactionTestCase):
         self.assertEqual(conv.description, "Important discussion")
         self.assertTrue(conv.is_locked)
         self.assertTrue(conv.is_pinned)
+
+
+class TestReconstructDocumentPaths(TransactionTestCase):
+    """Test _reconstruct_document_paths covers all branches."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            label_set=self.labelset,
+            creator=self.user,
+        )
+
+        # Create a document with a known hash
+        self.doc = Document.objects.create(
+            title="Test Doc",
+            pdf_file_hash="hash_abc",
+            creator=self.user,
+            page_count=1,
+        )
+
+        # Add document to corpus (creates a DocumentPath)
+        self.corpus_doc, _, self.doc_path = self.corpus.add_document(
+            document=self.doc, user=self.user
+        )
+
+        # Create a folder for the corpus
+        self.folder = CorpusFolder.objects.create(
+            corpus=self.corpus,
+            name="MyFolder",
+            creator=self.user,
+        )
+
+    def test_updates_path_version_and_folder(self):
+        """Test that path, version_number, and folder are updated."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        doc_hash_map = {"hash_abc": self.corpus_doc}
+
+        document_paths_data = [
+            {
+                "document_ref": "hash_abc",
+                "path": "/custom/path/doc.pdf",
+                "version_number": 5,
+                "folder_path": "MyFolder",
+                "is_current": True,
+                "is_deleted": False,
+            }
+        ]
+
+        _reconstruct_document_paths(document_paths_data, self.corpus, doc_hash_map)
+
+        # Reload DocumentPath
+        updated_path = DocumentPath.objects.filter(
+            corpus=self.corpus, document=self.corpus_doc
+        ).first()
+        self.assertEqual(updated_path.path, "/custom/path/doc.pdf")
+        self.assertEqual(updated_path.version_number, 5)
+        self.assertEqual(updated_path.folder, self.folder)
+
+    def test_skips_non_current_paths(self):
+        """Test that non-current paths are skipped."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        doc_hash_map = {"hash_abc": self.corpus_doc}
+        original_path = self.doc_path.path
+
+        document_paths_data = [
+            {
+                "document_ref": "hash_abc",
+                "path": "/should/not/apply",
+                "version_number": 99,
+                "is_current": False,
+                "is_deleted": False,
+            }
+        ]
+
+        _reconstruct_document_paths(document_paths_data, self.corpus, doc_hash_map)
+
+        # Path should remain unchanged
+        self.doc_path.refresh_from_db()
+        self.assertEqual(self.doc_path.path, original_path)
+
+    def test_skips_deleted_paths(self):
+        """Test that deleted paths are skipped."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        doc_hash_map = {"hash_abc": self.corpus_doc}
+        original_path = self.doc_path.path
+
+        document_paths_data = [
+            {
+                "document_ref": "hash_abc",
+                "path": "/should/not/apply",
+                "is_current": True,
+                "is_deleted": True,
+            }
+        ]
+
+        _reconstruct_document_paths(document_paths_data, self.corpus, doc_hash_map)
+
+        self.doc_path.refresh_from_db()
+        self.assertEqual(self.doc_path.path, original_path)
+
+    def test_skips_missing_document_ref(self):
+        """Test that paths with unknown document_ref are skipped."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        doc_hash_map = {"hash_abc": self.corpus_doc}
+
+        document_paths_data = [
+            {
+                "document_ref": "unknown_hash",
+                "path": "/should/not/apply",
+                "is_current": True,
+                "is_deleted": False,
+            }
+        ]
+
+        _reconstruct_document_paths(document_paths_data, self.corpus, doc_hash_map)
+
+        # No error, path unchanged
+        self.doc_path.refresh_from_db()
+
+    def test_skips_missing_existing_path(self):
+        """Test that paths are skipped when no DocumentPath exists for the doc."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        # Create a second doc that has no DocumentPath in this corpus
+        other_doc = Document.objects.create(
+            title="Other Doc",
+            pdf_file_hash="hash_other",
+            creator=self.user,
+            page_count=1,
+        )
+
+        doc_hash_map = {"hash_other": other_doc}
+
+        document_paths_data = [
+            {
+                "document_ref": "hash_other",
+                "path": "/some/path",
+                "is_current": True,
+                "is_deleted": False,
+            }
+        ]
+
+        # Should not raise
+        _reconstruct_document_paths(document_paths_data, self.corpus, doc_hash_map)
+
+    def test_no_updates_when_values_match(self):
+        """Test that no save is performed when exported values match existing."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        doc_hash_map = {"hash_abc": self.corpus_doc}
+
+        # Pass the same path and version_number that already exist
+        document_paths_data = [
+            {
+                "document_ref": "hash_abc",
+                "path": self.doc_path.path,
+                "version_number": self.doc_path.version_number,
+                "is_current": True,
+                "is_deleted": False,
+            }
+        ]
+
+        _reconstruct_document_paths(document_paths_data, self.corpus, doc_hash_map)
+
+        # No changes expected
+        self.doc_path.refresh_from_db()
+
+    def test_folder_path_not_found(self):
+        """Test that unmatched folder_path is silently ignored."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        doc_hash_map = {"hash_abc": self.corpus_doc}
+
+        document_paths_data = [
+            {
+                "document_ref": "hash_abc",
+                "path": "/new/path",
+                "folder_path": "NonexistentFolder",
+                "is_current": True,
+                "is_deleted": False,
+            }
+        ]
+
+        _reconstruct_document_paths(document_paths_data, self.corpus, doc_hash_map)
+
+        updated_path = DocumentPath.objects.filter(
+            corpus=self.corpus, document=self.corpus_doc
+        ).first()
+        self.assertEqual(updated_path.path, "/new/path")
+        # folder should not be set
+        self.assertIsNone(updated_path.folder)
+
+
+class TestBuildLabelLookupsEdgeCases(TransactionTestCase):
+    """Test edge cases in build_label_lookups for relationship label gathering."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            label_set=self.labelset,
+            creator=self.user,
+        )
+
+    def test_analyses_only_with_no_analysis_ids(self):
+        """Test ANALYSES_ONLY mode with analysis_ids=None returns empty."""
+        result = build_label_lookups(
+            corpus_id=self.corpus.id,
+            analysis_ids=None,
+            annotation_filter_mode="ANALYSES_ONLY",
+        )
+
+        # Should return empty lookups since no analyses specified
+        self.assertEqual(result["text_labels"], {})
+        self.assertEqual(result["doc_labels"], {})
+
+    def test_corpus_labelset_plus_analyses_with_no_analysis_ids(self):
+        """Test CORPUS_LABELSET_PLUS_ANALYSES mode with no analysis_ids."""
+        # Create a label and annotation in the corpus
+        label = AnnotationLabel.objects.create(
+            text="CorpusLabel",
+            label_type=TOKEN_LABEL,
+            creator=self.user,
+        )
+        self.labelset.annotation_labels.add(label)
+
+        doc = Document.objects.create(title="Test Doc", creator=self.user, page_count=1)
+        Annotation.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            annotation_label=label,
+            raw_text="test",
+            creator=self.user,
+        )
+
+        result = build_label_lookups(
+            corpus_id=self.corpus.id,
+            analysis_ids=None,
+            annotation_filter_mode="CORPUS_LABELSET_PLUS_ANALYSES",
+        )
+
+        # Should include corpus labels only (no analyses to add)
+        self.assertGreater(len(result["text_labels"]), 0)
+
+
+class TestDocumentPathExportFallback(TransactionTestCase):
+    """Test package_document_paths fallback when doc has pdf_file but no hash."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            label_set=self.labelset,
+            creator=self.user,
+        )
+
+    def test_document_ref_uses_filename_when_no_hash(self):
+        """Test document_ref falls back to filename when hash is missing."""
+        doc = Document.objects.create(
+            title="No Hash Doc",
+            pdf_file=ContentFile(b"dummy content", name="my_document.pdf"),
+            pdf_file_hash="",  # Empty hash
+            creator=self.user,
+            page_count=1,
+        )
+
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/docs/my_document.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+
+        result = package_document_paths(self.corpus)
+
+        self.assertEqual(len(result), 1)
+        # Should fall back to the pdf_file basename
+        self.assertIn("my_document.pdf", result[0]["document_ref"])
+
+
+class TestConversationImportDocHashRelinking(TransactionTestCase):
+    """Test import_conversations with document hash re-linking."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testuser", password="testpass", email="test@test.com"
+        )
+        self.labelset = LabelSet.objects.create(
+            title="Test LabelSet", creator=self.user
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus",
+            label_set=self.labelset,
+            creator=self.user,
+        )
+
+        self.doc = Document.objects.create(
+            title="Target Doc",
+            pdf_file_hash="doc_hash_xyz",
+            creator=self.user,
+            page_count=1,
+        )
+
+    def test_doc_level_conversation_relinked_via_hash(self):
+        """Test that doc-level conversations are re-linked using doc hash."""
+        conversations_data = [
+            {
+                "id": "conv_doc",
+                "title": "Doc-level Conversation",
+                "conversation_type": "chat",
+                "is_public": False,
+                "chat_with_corpus": False,
+                "chat_with_document_hash": "doc_hash_xyz",
+                "creator_email": self.user.email,
+                "created": timezone.now().isoformat(),
+                "modified": timezone.now().isoformat(),
+            }
+        ]
+
+        doc_hash_map = {"doc_hash_xyz": self.doc}
+
+        import_conversations(
+            conversations_data,
+            [],
+            [],
+            self.corpus,
+            self.user,
+            doc_hash_to_doc=doc_hash_map,
+        )
+
+        conv = Conversation.objects.filter(title="Doc-level Conversation").first()
+        self.assertIsNotNone(conv)
+        self.assertEqual(conv.chat_with_document, self.doc)
+        self.assertIsNone(conv.chat_with_corpus)
