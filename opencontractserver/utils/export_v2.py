@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -206,12 +207,16 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             if doc_path.parent:
                 parent_version_number = doc_path.parent.version_number
 
-            # Use document hash as reference (more stable than ID)
-            document_ref = (
-                doc_path.document.pdf_file_hash
-                if doc_path.document.pdf_file_hash
-                else str(doc_path.document.id)
-            )
+            # Use document hash as primary reference (stable across systems).
+            # Fall back to the filename (basename of pdf_file), which matches
+            # the key used in annotated_docs and is available on both the
+            # export and import sides.
+            if doc_path.document.pdf_file_hash:
+                document_ref = doc_path.document.pdf_file_hash
+            elif doc_path.document.pdf_file:
+                document_ref = os.path.basename(doc_path.document.pdf_file.name)
+            else:
+                document_ref = str(doc_path.document.id)
 
             paths_export.append(
                 {
@@ -344,16 +349,27 @@ def package_md_description_revisions(
 
 def package_conversations(
     corpus: Corpus,
+    document_ids: list[int] | None = None,
+    user=None,
 ) -> tuple[list, list, list]:
     """
     Package conversations, messages, and votes for export (optional).
 
+    Includes both corpus-level and document-level conversations.
+    Applies permission filtering when a user is provided.
+
     Args:
         corpus: Corpus instance
+        document_ids: List of document IDs in the corpus (for doc-level
+            conversations). If None, will be computed from active DocumentPaths.
+        user: The exporting user for permission filtering. If None, all
+            conversations are included (superuser / system export behavior).
 
     Returns:
         Tuple of (conversations, messages, message_votes)
     """
+    from django.db.models import Q
+
     from opencontractserver.conversations.models import (
         ChatMessage,
         Conversation,
@@ -365,8 +381,29 @@ def package_conversations(
     votes_export = []
 
     try:
-        # Get all conversations for this corpus
-        conversations = Conversation.objects.filter(chat_with_corpus=corpus)
+        # Compute document_ids if not provided
+        if document_ids is None:
+            from opencontractserver.documents.models import DocumentPath
+
+            document_ids = list(
+                DocumentPath.objects.filter(
+                    corpus=corpus, is_current=True, is_deleted=False
+                ).values_list("document_id", flat=True)
+            )
+
+        # Get all conversations for this corpus AND its documents
+        corpus_filter = Q(chat_with_corpus=corpus)
+        doc_filter = Q(chat_with_document_id__in=document_ids)
+        conversations = Conversation.objects.filter(
+            corpus_filter | doc_filter
+        ).select_related("chat_with_document", "creator")
+
+        # Apply permission filtering if user is provided
+        if user is not None:
+            visible_ids = Conversation.objects.visible_to_user(user).values_list(
+                "id", flat=True
+            )
+            conversations = conversations.filter(id__in=visible_ids)
 
         # Build conversation ID mapping
         conv_id_map = {}
@@ -379,16 +416,39 @@ def package_conversations(
                 {
                     "id": conv_export_id,
                     "title": conv.title or "",
+                    "description": conv.description or "",
                     "conversation_type": conv.conversation_type or "chat",
                     "is_public": conv.is_public,
+                    "is_locked": conv.is_locked,
+                    "is_pinned": conv.is_pinned,
                     "creator_email": conv.creator.email if conv.creator else "",
                     "created": conv.created_at.isoformat(),
                     "modified": conv.updated_at.isoformat(),
+                    # Reference to document (if doc-level conversation)
+                    "chat_with_document_id": (
+                        str(conv.chat_with_document_id)
+                        if conv.chat_with_document_id
+                        else None
+                    ),
+                    # Document hash for cross-system re-linking
+                    "chat_with_document_hash": (
+                        conv.chat_with_document.pdf_file_hash
+                        if conv.chat_with_document
+                        and conv.chat_with_document.pdf_file_hash
+                        else None
+                    ),
+                    # Reference to corpus (always present for corpus-level)
+                    "chat_with_corpus": conv.chat_with_corpus_id == corpus.id,
                 }
             )
 
-        # Get all messages for these conversations
-        messages = ChatMessage.objects.filter(conversation__in=conversations)
+        # Get all messages for these conversations, ordered chronologically
+        messages = ChatMessage.objects.filter(conversation__in=conversations).order_by(
+            "created_at"
+        )
+
+        # No additional permission filter needed for messages — they are
+        # already scoped to permission-filtered conversations above.
 
         # Build message ID mapping
         msg_id_map = {}
@@ -405,6 +465,10 @@ def package_conversations(
                     "msg_type": msg.msg_type,
                     "state": msg.state,
                     "agent_type": msg.agent_type or None,
+                    "data": msg.data,
+                    "parent_message_id": (
+                        str(msg.parent_message_id) if msg.parent_message_id else None
+                    ),
                     "creator_email": msg.creator.email if msg.creator else "",
                     "created": msg.created_at.isoformat(),
                 }
