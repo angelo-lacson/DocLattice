@@ -173,13 +173,11 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   const my_input_relationships = relations.filter((relation) =>
     relation.targetIds.includes(annotation.id)
   );
-  const isTokenAnnotation = annotation instanceof ServerTokenAnnotation;
-
   const handleClick = () => {
     // Only use scrollIntoView for PDF token annotations. Text annotations
     // are scrolled by TxtAnnotator's own selectedAnnotations useEffect,
     // so calling scrollIntoView here would cause two competing scroll animations.
-    if (isTokenAnnotation) {
+    if (annotation instanceof ServerTokenAnnotation) {
       annotationElementRefs.current[annotation.id]?.scrollIntoView({
         behavior: "smooth",
         block: "center",
@@ -306,7 +304,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           </RelationshipLabel>
         )}
       </HorizontallyJustifiedDiv>
-      {isTokenAnnotation && (
+      {annotation.page > 0 && (
         <LocationText>Page {annotation.page + 1}</LocationText>
       )}
     </HighlightContainer>

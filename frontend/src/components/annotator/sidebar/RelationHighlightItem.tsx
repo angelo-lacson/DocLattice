@@ -135,7 +135,9 @@ export const RelationHighlightItem = ({
             )}
             {annotation.annotationLabel.text}
           </AnnotationPill>
-          <PageLabel>Page {annotation.page + 1}</PageLabel>
+          {annotation.page > 0 && (
+            <PageLabel>Page {annotation.page + 1}</PageLabel>
+          )}
         </div>
         {annotation?.rawText ? (
           <TruncatedText
