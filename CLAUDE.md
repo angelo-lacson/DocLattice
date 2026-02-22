@@ -385,6 +385,7 @@ await releaseScreenshot(page, "v3.0.0.b3", "landing-page", { fullPage: true });
 - **Auth Pattern (detailed)**: `frontend/src/docs/AUTHENTICATION_PATTERN.md`
 - **Documentation Screenshots**: `docs/development/screenshots.md`
 - **Query Permission Patterns**: `docs/architecture/query_permission_patterns.md`
+- **OS-Legal-Style Migration Guide**: `docs/frontend/os-legal-style-migration-guide.md`
 
 ## Branch Strategy
 
