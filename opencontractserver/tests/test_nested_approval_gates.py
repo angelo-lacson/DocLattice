@@ -915,10 +915,15 @@ class TestNestedApprovalGates(TransactionTestCase):
         )
 
         # Diagnostic: inspect what pydantic-ai stored
-        tool_obj = real_agent._function_tools.get("needs_approval_tool")
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            _get_function_tools,
+        )
+
+        function_tools = _get_function_tools(real_agent)
+        tool_obj = function_tools.get("needs_approval_tool")
         self.assertIsNotNone(
             tool_obj,
-            "pydantic-ai should store the tool in _function_tools",
+            "pydantic-ai should store the tool in function tools registry",
         )
 
         # Check the function attribute chain

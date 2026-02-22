@@ -163,8 +163,11 @@ class TestDuplicateToolRegistration(TransactionTestCase):
         self.assertIsNotNone(agent)
 
         # Verify the caller's tool is used, not the default
-        # Access the internal _function_tools dict from the pydantic_ai agent
-        function_tools = getattr(agent.pydantic_ai_agent, "_function_tools", {})
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            _get_function_tools,
+        )
+
+        function_tools = _get_function_tools(agent.pydantic_ai_agent)
 
         # Count how many times 'update_document_description' appears
         update_desc_count = sum(
