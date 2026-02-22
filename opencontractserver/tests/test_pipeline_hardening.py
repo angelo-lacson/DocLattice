@@ -290,9 +290,15 @@ class TestDoclingParserExceptions(TestCase):
         pdf_content = b"%PDF-1.7\n%%EOF\n"
         self.doc.pdf_file.save("test.pdf", ContentFile(pdf_content))
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch("opencontractserver.pipeline.parsers.docling_parser_rest.default_storage")
-    def test_timeout_raises_transient_error(self, mock_storage, mock_post):
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage")
+    def test_timeout_raises_transient_error(
+        self, mock_storage, mock_post, _mock_page_count
+    ):
         """Test that timeout errors raise transient DocumentParsingError."""
         from requests.exceptions import Timeout
 
@@ -307,15 +313,22 @@ class TestDoclingParserExceptions(TestCase):
         mock_storage.open.return_value.__exit__ = MagicMock(return_value=False)
 
         parser = DoclingParser()
+        parser.chunk_retry_limit = 0
 
         with self.assertRaises(DocumentParsingError) as context:
             parser.parse_document(self.user.id, self.doc.id)
 
         self.assertTrue(context.exception.is_transient)
 
+    @patch(
+        "opencontractserver.pipeline.base.chunked_parser.get_pdf_page_count",
+        return_value=1,
+    )
     @patch("opencontractserver.pipeline.parsers.docling_parser_rest.requests.post")
-    @patch("opencontractserver.pipeline.parsers.docling_parser_rest.default_storage")
-    def test_connection_error_raises_transient_error(self, mock_storage, mock_post):
+    @patch("opencontractserver.pipeline.base.chunked_parser.default_storage")
+    def test_connection_error_raises_transient_error(
+        self, mock_storage, mock_post, _mock_page_count
+    ):
         """Test that connection errors raise transient DocumentParsingError."""
         from requests.exceptions import ConnectionError
 
@@ -330,6 +343,7 @@ class TestDoclingParserExceptions(TestCase):
         mock_storage.open.return_value.__exit__ = MagicMock(return_value=False)
 
         parser = DoclingParser()
+        parser.chunk_retry_limit = 0
 
         with self.assertRaises(DocumentParsingError) as context:
             parser.parse_document(self.user.id, self.doc.id)
