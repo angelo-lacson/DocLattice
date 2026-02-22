@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### TxtAnnotator Infinite Re-render Loop (Closes #933)
+- **Unstable default parameter**: `chatSources = []` in `TxtAnnotator` component props created a new array reference on every render, triggering infinite re-renders via `useEffect` dependency arrays when the prop was not explicitly passed (`frontend/src/components/annotator/renderers/txt/TxtAnnotator.tsx:335`)
+- Extracted `ChatSourceHighlight` interface and defined module-level `EMPTY_CHAT_SOURCES` constant as the default value, ensuring referential stability across renders
+
 #### BaseChunkedParser Robustness and Consistency (Closes #926)
 - **Config ValueError not wrapped**: `calculate_page_chunks` raises `ValueError` for invalid `max_pages_per_chunk`/`min_pages_for_chunking`, but the call in `_parse_document_impl` was unwrapped. Now caught and re-raised as `DocumentParsingError(is_transient=False)` (`opencontractserver/pipeline/base/chunked_parser.py`)
 - **Small-document annotations unprefixed**: Single-chunk documents returned directly from `_parse_chunk_with_retry` without passing through `_reassemble_chunk_results`, resulting in unprefixed annotation/relationship IDs. Now all results consistently receive `c0_` prefixed IDs (`opencontractserver/pipeline/base/chunked_parser.py`)
