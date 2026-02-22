@@ -40,6 +40,7 @@ def _get_posthog_client() -> Posthog | None:
         _posthog_client = Posthog(
             project_api_key=settings.POSTHOG_API_KEY,
             host=settings.POSTHOG_HOST,
+            disable_geoip=False,
         )
 
         # Register shutdown handler to flush events on process exit

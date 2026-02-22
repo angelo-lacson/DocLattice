@@ -65,6 +65,26 @@ class TelemetryTestCase(TestCase):
         timestamp = datetime.fromisoformat(call_args["properties"]["timestamp"])
         self.assertIsNotNone(timestamp.tzinfo)
 
+    def test_posthog_client_initialized_with_geoip_enabled(self):
+        """Test that PostHog client is initialized with disable_geoip=False.
+
+        Server-side PostHog SDKs default to disable_geoip=True, which prevents
+        GeoIP resolution on events. We explicitly set disable_geoip=False so
+        PostHog can resolve geographic data from the server's IP.
+        """
+        with override_settings(
+            MODE="DEV",
+            TELEMETRY_ENABLED=True,
+            POSTHOG_API_KEY="test-key",
+            POSTHOG_HOST="https://test.host",
+        ):
+            record_event("test_event")
+
+        # Verify PostHog client was created with disable_geoip=False
+        init_kwargs = self.mock_posthog_class.call_args.kwargs
+        self.assertIn("disable_geoip", init_kwargs)
+        self.assertFalse(init_kwargs["disable_geoip"])
+
     def test_record_event_telemetry_disabled(self):
         """Test when telemetry is disabled"""
 
@@ -106,6 +126,32 @@ class TelemetryTestCase(TestCase):
         self.assertEqual(
             set(properties.keys()), {"package", "timestamp", "installation_id"}
         )
+
+
+class UsersAppGeoIPTestCase(TestCase):
+    """Tests that the UsersConfig.ready() method configures GeoIP on the
+    module-level posthog instance (the official Django integration path)."""
+
+    def test_ready_sets_geoip_enabled(self):
+        """Test that UsersConfig.ready() sets posthog.disable_geoip = False."""
+        import posthog
+
+        from opencontractserver.users.apps import UsersConfig
+
+        # Set a known bad state so we can verify the ready() method changes it
+        posthog.disable_geoip = True
+
+        app_config = UsersConfig(
+            "opencontractserver.users", __import__("opencontractserver.users")
+        )
+        with override_settings(
+            TELEMETRY_ENABLED=True,
+            POSTHOG_API_KEY="test-key",
+            POSTHOG_HOST="https://test.host",
+        ):
+            app_config.ready()
+
+        self.assertFalse(posthog.disable_geoip)
 
 
 class UsageHeartbeatTestCase(TestCase):
