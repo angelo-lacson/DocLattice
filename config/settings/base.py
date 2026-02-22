@@ -363,7 +363,7 @@ elif STORAGE_BACKEND == "AWS":
             "BACKEND": "opencontractserver.utils.enhanced_storages.PooledStaticRootS3Storage",
         },
     }
-    COLLECTFAST_STRATEGY = "collectfast.strategies.boto3.Boto3Strategy"
+    COLLECTFAST_STRATEGY = "collectfasta.strategies.boto3.Boto3Strategy"
     STATIC_URL = f"https://{aws_s3_domain}/static/"
 
     MEDIA_URL = f"https://{aws_s3_domain}/media/"
@@ -448,7 +448,7 @@ elif STORAGE_BACKEND == "GCP":
             "BACKEND": "opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
         },
     }
-    COLLECTFAST_STRATEGY = "collectfast.strategies.gcloud.GoogleCloudStrategy"
+    COLLECTFAST_STRATEGY = "collectfasta.strategies.gcloud.GoogleCloudStrategy"
     STATIC_URL = f"https://{gcs_domain}/static/"
 
     MEDIA_URL = f"https://{gcs_domain}/media/"

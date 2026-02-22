@@ -26,16 +26,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `opencontractserver/users/tasks.py` — replaced `pytz.utc.localize()` with `datetime.datetime.now(datetime.timezone.utc)`
   - Removed `pytz` from direct requirements in `requirements/base.txt`
 - **Updated third-party packages for Django 5.2 compatibility**:
-  - `graphene-django`: 3.2.2 → 3.2.3 (adds Django 5.1+ support)
+  - `graphene-django`: 3.2.2 → 3.2.3 (adds Django 5.1+ support; Django 5.2 not officially supported — tracked via TODO)
   - `django-stubs`: 4.2.7 → 5.2.0
   - `djangorestframework-stubs`: 1.8.0 → 3.15.4
   - `django-celery-beat`: 2.6.0 → 2.8.1 (adds Django 5.2 support)
   - `django-filter`: 24.3 → 25.1 (adds Django 5.2 support)
-  - `django-model-utils`: 4.3.1 → 5.0.0 (adds Django 5.x support)
+  - `django-model-utils`: 4.3.1 → 5.0.0 (adds Django 5.x support; no direct imports in codebase — transitive dependency)
   - `django-crispy-forms`: 2.4 → 2.5 (adds Django 5.2 support)
-  - `django-cte`: 2.0.0 → 3.0.0 (adds Django 5.2 support, fixes ambiguous column names)
+  - `django-cte`: 2.0.0 → 3.0.0 (adds Django 5.2 support, fixes ambiguous column names; LOUTER breaking change does not affect this project — no `_join_type` usage found)
   - `django-environ`: 0.12.0 → 0.13.0 (adds Django 5.2 support)
-  - `django-debug-toolbar`: 4.4.6 → 5.0.0 (adds Django 5.2 support)
+  - `django-debug-toolbar`: 4.4.6 → 5.0.0 (adds Django 5.2 support; not wired into INSTALLED_APPS/MIDDLEWARE — dev dependency only)
+- **Replaced Collectfast with Collectfasta** (production static file collection):
+  - `Collectfast==2.2.0` was archived/unmaintained (last release 2020), incompatible with Django 5.x `STORAGES` setting
+  - Switched to `collectfasta>=3.2.0`, an actively maintained fork tested with Django 5.2.3
+  - `requirements/production.txt` — package swap
+  - `config/settings/production.py` — updated INSTALLED_APPS reference
+  - `config/settings/base.py` — updated COLLECTFAST_STRATEGY paths from `collectfast.strategies.*` to `collectfasta.strategies.*`
 
 ### Fixed
 
