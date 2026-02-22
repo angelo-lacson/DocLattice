@@ -1,4 +1,4 @@
-export const VERSION_TAG = "v3.0.0.b4";
+export const VERSION_TAG = "v3.0.0.rc1";
 export const MOBILE_VIEW_BREAKPOINT = 600;
 // Tablet breakpoint - used for sidebar collapse behavior (larger than mobile)
 export const TABLET_BREAKPOINT = 768;
