@@ -89,6 +89,7 @@ from opencontractserver.utils.embeddings import aget_embedder
 from opencontractserver.utils.prompt_sanitization import (
     UNTRUSTED_CONTENT_NOTICE,
     fence_user_content,
+    warn_if_content_large,
 )
 from opencontractserver.utils.tools import deduplicate_tools, get_tool_name
 
@@ -1931,8 +1932,9 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         self, target_type: type[T], user_prompt: str
     ) -> str:
         """Strict extraction prompt with document context and raw-only output."""
-        document_title = self.context.document.title
+        document_title = self.context.document.title or "untitled"
         document_id = self.context.document.id
+        warn_if_content_large(document_title, context="document title")
         fenced_title = fence_user_content(document_title, label="document title")
         return (
             f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
@@ -2416,7 +2418,8 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
     ) -> str:
         """Strict extraction prompt with corpus context and raw-only output."""
         corpus_id = self.context.corpus.id
-        corpus_title = getattr(self.context.corpus, "title", "corpus")
+        corpus_title = self.context.corpus.title or "untitled"
+        warn_if_content_large(corpus_title, context="corpus title")
         fenced_title = fence_user_content(corpus_title, label="corpus title")
         return (
             f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
