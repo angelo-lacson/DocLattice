@@ -202,6 +202,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
       color={annotation?.annotationLabel?.color}
       selected={selected}
       className={`sidebar__annotation ${className || ""}`}
+      data-testid="highlight-item"
       data-annotation-id={annotation.id}
       onClick={handleClick}
     >

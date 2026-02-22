@@ -7,7 +7,7 @@
  * 3. Page labels appear for span annotations only when page > 0 (page=0 is a sentinel).
  */
 import React from "react";
-import { render, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { HighlightItem } from "../HighlightItem";
@@ -111,9 +111,8 @@ describe("HighlightItem scroll behaviour", () => {
   });
 
   it("calls scrollIntoView when clicking a PDF token annotation", () => {
-    const { container } = renderHighlightItem(makeTokenAnnotation(2));
-    const card = container.querySelector(".sidebar__annotation")!;
-    fireEvent.click(card);
+    renderHighlightItem(makeTokenAnnotation(2));
+    fireEvent.click(screen.getByTestId("highlight-item"));
     expect(mockScrollIntoView).toHaveBeenCalledWith({
       behavior: "smooth",
       block: "center",
@@ -121,9 +120,8 @@ describe("HighlightItem scroll behaviour", () => {
   });
 
   it("does NOT call scrollIntoView when clicking a text span annotation", () => {
-    const { container } = renderHighlightItem(makeSpanAnnotation(0));
-    const card = container.querySelector(".sidebar__annotation")!;
-    fireEvent.click(card);
+    renderHighlightItem(makeSpanAnnotation(0));
+    fireEvent.click(screen.getByTestId("highlight-item"));
     expect(mockScrollIntoView).not.toHaveBeenCalled();
   });
 });
