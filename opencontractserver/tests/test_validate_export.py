@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import tempfile
 import zipfile
 
 from opencontractserver.utils.validate_export import (
     ValidationResult,
+    main,
     validate_data_json,
     validate_export,
 )
@@ -153,15 +156,18 @@ def _make_zip(data: dict, files: dict[str, bytes] | None = None) -> bytes:
     return buf.getvalue()
 
 
-def _write_and_validate(data: dict, files: dict[str, bytes] | None = None):
-    """Write a ZIP to a temp file and validate it, returning the result."""
-    import tempfile
-
+def _write_and_validate(
+    data: dict, files: dict[str, bytes] | None = None
+) -> ValidationResult:
+    """Write a ZIP to a temp file, validate it, clean up, and return result."""
     zip_bytes = _make_zip(data, files)
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-        tmp.write(zip_bytes)
-        tmp.flush()
-        return validate_export(tmp.name)
+    fd, path = tempfile.mkstemp(suffix=".zip")
+    try:
+        os.write(fd, zip_bytes)
+        os.close(fd)
+        return validate_export(path)
+    finally:
+        os.unlink(path)
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +322,35 @@ class TestAnnotationValidation:
         assert not result.ok
         assert any("BANANA" in e for e in result.errors)
 
+    def test_negative_bounds_error(self):
+        data = _minimal_v1_data()
+        annot = data["annotated_docs"]["sample.pdf"]["labelled_text"][0]
+        annot["annotation_json"]["0"]["bounds"]["top"] = -10
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("negative" in e for e in result.errors)
+
+    def test_empty_pawls_page_index_error(self):
+        """Annotation referencing into empty PAWLs gives clear error."""
+        data = _minimal_v1_data()
+        data["annotated_docs"]["sample.pdf"]["pawls_file_content"] = []
+        data["annotated_docs"]["sample.pdf"]["page_count"] = 0
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("empty PAWLs" in e for e in result.errors)
+
+
+class TestPawlsValidation:
+    def test_nonsequential_page_index_is_error(self):
+        data = _minimal_v1_data()
+        # Set page.index to 5 instead of 0
+        data["annotated_docs"]["sample.pdf"]["pawls_file_content"][0]["page"][
+            "index"
+        ] = 5
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("sequential" in e for e in result.errors)
+
 
 class TestStructuralSetValidation:
     def test_missing_structural_set_reference(self):
@@ -337,6 +372,53 @@ class TestStructuralSetValidation:
         result = validate_data_json(data)
         assert not result.ok
         assert any("does not match" in e for e in result.errors)
+
+    def test_structural_relationship_wrong_label_type(self):
+        """Structural relationship labels must have RELATIONSHIP_LABEL type."""
+        data = _minimal_v2_data()
+        data["structural_annotation_sets"]["hash_a"] = {
+            "content_hash": "hash_a",
+            "pawls_file_content": [
+                {
+                    "page": {"width": 612, "height": 792, "index": 0},
+                    "tokens": [
+                        {"x": 0, "y": 0, "width": 10, "height": 10, "text": "A"}
+                    ],
+                }
+            ],
+            "txt_content": "A",
+            "structural_annotations": [
+                {
+                    "id": "sa1",
+                    "annotationLabel": "Clause",
+                    "rawText": "A",
+                    "page": 0,
+                    "annotation_json": {},
+                    "structural": True,
+                },
+                {
+                    "id": "sa2",
+                    "annotationLabel": "Clause",
+                    "rawText": "A",
+                    "page": 0,
+                    "annotation_json": {},
+                    "structural": True,
+                },
+            ],
+            "structural_relationships": [
+                {
+                    "id": "sr1",
+                    # "Clause" is TOKEN_LABEL, not RELATIONSHIP_LABEL
+                    "relationshipLabel": "Clause",
+                    "source_annotation_ids": ["sa1"],
+                    "target_annotation_ids": ["sa2"],
+                    "structural": True,
+                }
+            ],
+        }
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("RELATIONSHIP_LABEL" in e for e in result.errors)
 
 
 class TestFolderValidation:
@@ -407,6 +489,37 @@ class TestFolderValidation:
         result = validate_data_json(data)
         assert result.ok, result.summary()
 
+    def test_circular_reference_single_error(self):
+        """A circular folder reference should produce exactly one error."""
+        data = _minimal_v2_data()
+        data["folders"] = [
+            {
+                "id": "a",
+                "name": "A",
+                "description": "",
+                "color": "#000",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": "b",
+                "path": "A",
+            },
+            {
+                "id": "b",
+                "name": "B",
+                "description": "",
+                "color": "#000",
+                "icon": "folder",
+                "tags": [],
+                "is_public": False,
+                "parent_id": "a",
+                "path": "B",
+            },
+        ]
+        result = validate_data_json(data)
+        cycle_errors = [e for e in result.errors if "circular" in e]
+        assert len(cycle_errors) == 1
+
 
 class TestDocumentPathValidation:
     def test_bad_folder_path_reference(self):
@@ -459,6 +572,55 @@ class TestRelationshipValidation:
         result = validate_data_json(data)
         assert not result.ok
         assert any("RELATIONSHIP_LABEL" in e for e in result.errors)
+
+    def test_unresolvable_annotation_ref_is_error(self):
+        """Missing annotation ID in a relationship should be an error."""
+        data = _minimal_v2_data()
+        data["relationships"] = [
+            {
+                "id": "r1",
+                "relationshipLabel": "Clause",
+                "source_annotation_ids": ["nonexistent_annot"],
+                "target_annotation_ids": ["annot_1"],
+                "structural": False,
+            }
+        ]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("nonexistent_annot" in e for e in result.errors)
+
+
+class TestVersionValidation:
+    def test_unknown_version_warns(self):
+        data = _minimal_v1_data()
+        data["version"] = "banana"
+        result = validate_data_json(data)
+        # Should warn but still validate as V1
+        assert any("banana" in w for w in result.warnings)
+
+    def test_future_version_warns(self):
+        data = _minimal_v1_data()
+        data["version"] = "3.0"
+        result = validate_data_json(data)
+        assert any("3.0" in w for w in result.warnings)
+
+
+class TestV2RequiredFields:
+    def test_missing_v2_required_field(self):
+        data = _minimal_v2_data()
+        del data["folders"]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("folders" in e for e in result.errors)
+
+    def test_missing_multiple_v2_fields(self):
+        data = _minimal_v2_data()
+        del data["structural_annotation_sets"]
+        del data["relationships"]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("structural_annotation_sets" in e for e in result.errors)
+        assert any("relationships" in e for e in result.errors)
 
 
 class TestConversationValidation:
@@ -531,33 +693,66 @@ class TestConversationValidation:
 
 class TestBadZipInput:
     def test_not_a_zip(self):
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-            tmp.write(b"this is not a zip file")
-            tmp.flush()
-            result = validate_export(tmp.name)
+        fd, path = tempfile.mkstemp(suffix=".zip")
+        try:
+            os.write(fd, b"this is not a zip file")
+            os.close(fd)
+            result = validate_export(path)
+        finally:
+            os.unlink(path)
         assert not result.ok
-        assert any(
-            "not a valid ZIP" in e.lower() or "Not a valid ZIP" in e
-            for e in result.errors
-        )
+        assert any("Not a valid ZIP" in e for e in result.errors)
 
     def test_missing_file(self):
         result = validate_export("/nonexistent/path.zip")
         assert not result.ok
-        assert any("not found" in e.lower() or "Not found" in e for e in result.errors)
+        assert any("File not found" in e for e in result.errors)
 
     def test_zip_without_data_json(self):
-        import tempfile
-
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("other.txt", "hello")
 
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-            tmp.write(buf.getvalue())
-            tmp.flush()
-            result = validate_export(tmp.name)
+        fd, path = tempfile.mkstemp(suffix=".zip")
+        try:
+            os.write(fd, buf.getvalue())
+            os.close(fd)
+            result = validate_export(path)
+        finally:
+            os.unlink(path)
         assert not result.ok
         assert any("data.json" in e for e in result.errors)
+
+
+class TestCLI:
+    def test_help_returns_zero(self):
+        assert main(["--help"]) == 0
+
+    def test_no_args_returns_zero(self):
+        assert main([]) == 0
+
+    def test_valid_zip_returns_zero(self):
+        data = _minimal_v1_data()
+        zip_bytes = _make_zip(data, {"sample.pdf": b"%PDF-fake"})
+        fd, path = tempfile.mkstemp(suffix=".zip")
+        try:
+            os.write(fd, zip_bytes)
+            os.close(fd)
+            assert main([path]) == 0
+        finally:
+            os.unlink(path)
+
+    def test_invalid_zip_returns_one(self):
+        data = _minimal_v1_data()
+        # Missing sample.pdf in zip -> error
+        zip_bytes = _make_zip(data, {})
+        fd, path = tempfile.mkstemp(suffix=".zip")
+        try:
+            os.write(fd, zip_bytes)
+            os.close(fd)
+            assert main([path]) == 1
+        finally:
+            os.unlink(path)
+
+    def test_nonexistent_file_returns_one(self):
+        assert main(["/nonexistent/path.zip"]) == 1

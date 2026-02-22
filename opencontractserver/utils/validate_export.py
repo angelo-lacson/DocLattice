@@ -19,7 +19,7 @@ import zipfile
 from dataclasses import dataclass, field
 
 # ---------------------------------------------------------------------------
-# Validation result types
+# Constants
 # ---------------------------------------------------------------------------
 
 VALID_LABEL_TYPES = {
@@ -32,6 +32,23 @@ VALID_LABEL_TYPES = {
 VALID_ANNOTATION_TYPES = {"TOKEN_LABEL", "SPAN_LABEL"}
 
 VALID_CONTENT_MODALITIES = {"TEXT", "IMAGE", "AUDIO", "TABLE", "VIDEO"}
+
+KNOWN_VERSIONS = {"1.0", "2.0"}
+
+V2_REQUIRED_FIELDS = {
+    "structural_annotation_sets",
+    "folders",
+    "document_paths",
+    "relationships",
+    "agent_config",
+    "md_description_revisions",
+    "post_processors",
+}
+
+
+# ---------------------------------------------------------------------------
+# Validation result
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -249,9 +266,9 @@ def _check_pawls_pages(pawls: list, prefix: str, result: ValidationResult) -> No
             result.error(f"{page_prefix}: page missing width/height/index")
 
         if page.get("index") != i:
-            result.warn(
+            result.error(
                 f"{page_prefix}: page.index ({page.get('index')}) != "
-                f"array position ({i})"
+                f"array position ({i}) — pages must be sequential from 0"
             )
 
         tokens = page_obj.get("tokens")
@@ -297,12 +314,22 @@ def _check_annotation(
                 f"(must be one of {VALID_CONTENT_MODALITIES})"
             )
 
-    # Validate annotation_json token references
+    # Validate annotation_json token references and bounds
     ann_json = annot.get("annotation_json", {})
     if isinstance(ann_json, dict):
         for page_key, page_data in ann_json.items():
             if not isinstance(page_data, dict):
                 continue
+
+            # Validate bounds are non-negative
+            bounds = page_data.get("bounds", {})
+            if isinstance(bounds, dict):
+                for coord in ("top", "bottom", "left", "right"):
+                    val = bounds.get(coord)
+                    if val is not None and isinstance(val, (int, float)) and val < 0:
+                        result.error(
+                            f"{ann_prefix}: bounds.{coord} is negative ({val})"
+                        )
 
             tokens_jsons = page_data.get("tokensJsons", [])
             for tok_ref in tokens_jsons:
@@ -312,6 +339,13 @@ def _check_annotation(
                 if page_idx is None or token_idx is None:
                     result.error(
                         f"{ann_prefix}: token ref missing pageIndex or tokenIndex"
+                    )
+                    continue
+
+                if not pawls:
+                    result.error(
+                        f"{ann_prefix}: pageIndex {page_idx} references "
+                        f"into empty PAWLs data"
                     )
                     continue
 
@@ -326,7 +360,8 @@ def _check_annotation(
                 if token_idx < 0 or token_idx >= len(page_tokens):
                     result.error(
                         f"{ann_prefix}: tokenIndex {token_idx} out of range "
-                        f"for page {page_idx} (0..{len(page_tokens) - 1})"
+                        f"for page {page_idx} "
+                        f"(0..{max(0, len(page_tokens) - 1)})"
                     )
 
 
@@ -348,7 +383,9 @@ def _check_relationship_refs(
             result.error(f"{prefix}[{rel_id}]: empty {direction}")
         for ref_id in ids:
             if str(ref_id) not in valid_ids:
-                result.warn(
+                # Unresolvable annotation references will cause import failure
+                # at the DB layer, so this is an error, not a warning.
+                result.error(
                     f"{prefix}[{rel_id}]: {direction} references "
                     f"annotation '{ref_id}' not found in scope"
                 )
@@ -413,6 +450,13 @@ def _check_structural_sets(data: dict, result: ValidationResult) -> set[str]:
                     f"{prefix}: structural relationship references label "
                     f"'{label_name}' not in text_labels"
                 )
+            elif label_name:
+                lt = text_labels_map[label_name].get("label_type", "")
+                if lt != "RELATIONSHIP_LABEL":
+                    result.error(
+                        f"{prefix}: structural relationship label '{label_name}' "
+                        f"has type '{lt}', expected 'RELATIONSHIP_LABEL'"
+                    )
 
             _check_relationship_refs(
                 rel, local_ids, f"{prefix}.structural_relationships", result
@@ -469,15 +513,21 @@ def _check_folders(data: dict, result: ValidationResult) -> set[str]:
                         f"subpath of parent path '{parent_path}'"
                     )
 
-    # Detect circular references
+    # Detect circular references — track globally so each cycle is only
+    # reported once (via the lexicographically smallest node in the cycle).
+    reported_cycles: set[frozenset[str]] = set()
     for folder in folders:
         visited: set[str] = set()
         current = folder.get("id")
         while current:
             if current in visited:
-                result.error(
-                    f"folders: circular parent reference involving '{current}'"
-                )
+                cycle_members = frozenset(visited)
+                if cycle_members not in reported_cycles:
+                    reported_cycles.add(cycle_members)
+                    result.error(
+                        f"folders: circular parent reference involving "
+                        f"'{min(cycle_members)}'"
+                    )
                 break
             visited.add(current)
             parent = folder_by_id.get(current, {}).get("parent_id")
@@ -631,8 +681,55 @@ def _check_action_trail(data: dict, result: ValidationResult) -> None:
             result.error(f"action_trail.stats: missing field '{f}'")
 
 
+def _check_v2_required_fields(data: dict, result: ValidationResult) -> None:
+    """Verify all V2-required top-level fields are present."""
+    for f in V2_REQUIRED_FIELDS:
+        if f not in data:
+            result.error(f"V2 export missing required field '{f}'")
+
+
 # ---------------------------------------------------------------------------
-# Main validation entry point
+# Shared validation logic (used by both validate_export and validate_data_json)
+# ---------------------------------------------------------------------------
+
+
+def _validate_parsed_data(data: dict, result: ValidationResult) -> None:
+    """Run all data-level validations (everything except ZIP structure)."""
+    version = data.get("version", "1.0")
+    is_v2 = version == "2.0"
+
+    if version not in KNOWN_VERSIONS:
+        result.warn(
+            f"Unrecognised version '{version}'; treating as V1. "
+            f"Known versions: {sorted(KNOWN_VERSIONS)}"
+        )
+
+    _check_label_definitions(data, result)
+    _check_corpus_metadata(data, result)
+    _check_label_set_metadata(data, result)
+    all_annot_ids = _check_documents(data, result)
+
+    if is_v2:
+        _check_v2_required_fields(data, result)
+        struct_annot_ids = _check_structural_sets(data, result)
+        all_annot_ids |= struct_annot_ids
+        folder_paths = _check_folders(data, result)
+        _check_document_paths(data, folder_paths, result)
+        _check_corpus_level_relationships(data, all_annot_ids, result)
+        _check_agent_config(data, result)
+        _check_action_trail(data, result)
+
+        if "conversations" in data:
+            _check_conversations(data, result)
+    else:
+        # V1 may still have inline relationships in docs — already checked
+        # in _check_documents. Check top-level if present.
+        if data.get("relationships"):
+            _check_corpus_level_relationships(data, all_annot_ids, result)
+
+
+# ---------------------------------------------------------------------------
+# Public API
 # ---------------------------------------------------------------------------
 
 
@@ -652,53 +749,25 @@ def validate_export(zip_path: str) -> ValidationResult:
     result = ValidationResult()
 
     try:
-        zf = zipfile.ZipFile(zip_path, "r")
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            if "data.json" not in zf.namelist():
+                result.error("ZIP does not contain data.json")
+                return result
+
+            try:
+                with zf.open("data.json") as f:
+                    data = json.loads(f.read().decode("utf-8"))
+            except json.JSONDecodeError as e:
+                result.error(f"data.json is not valid JSON: {e}")
+                return result
+
+            _check_zip_structure(zf, data, result)
+            _validate_parsed_data(data, result)
+
     except zipfile.BadZipFile:
         result.error(f"Not a valid ZIP file: {zip_path}")
-        return result
     except FileNotFoundError:
         result.error(f"File not found: {zip_path}")
-        return result
-
-    with zf:
-        if "data.json" not in zf.namelist():
-            result.error("ZIP does not contain data.json")
-            return result
-
-        try:
-            with zf.open("data.json") as f:
-                data = json.loads(f.read().decode("utf-8"))
-        except json.JSONDecodeError as e:
-            result.error(f"data.json is not valid JSON: {e}")
-            return result
-
-        version = data.get("version", "1.0")
-        is_v2 = version == "2.0"
-
-        # Core checks (V1 + V2)
-        _check_zip_structure(zf, data, result)
-        _check_label_definitions(data, result)
-        _check_corpus_metadata(data, result)
-        _check_label_set_metadata(data, result)
-        all_annot_ids = _check_documents(data, result)
-
-        # V2 checks
-        if is_v2:
-            struct_annot_ids = _check_structural_sets(data, result)
-            all_annot_ids |= struct_annot_ids
-            folder_paths = _check_folders(data, result)
-            _check_document_paths(data, folder_paths, result)
-            _check_corpus_level_relationships(data, all_annot_ids, result)
-            _check_agent_config(data, result)
-            _check_action_trail(data, result)
-
-            if "conversations" in data:
-                _check_conversations(data, result)
-        else:
-            # V1 may still have inline relationships in docs — already checked
-            # in _check_documents. Check top-level if present.
-            if data.get("relationships"):
-                _check_corpus_level_relationships(data, all_annot_ids, result)
 
     return result
 
@@ -718,30 +787,7 @@ def validate_data_json(data: dict) -> ValidationResult:
         ValidationResult with all errors and warnings.
     """
     result = ValidationResult()
-
-    version = data.get("version", "1.0")
-    is_v2 = version == "2.0"
-
-    _check_label_definitions(data, result)
-    _check_corpus_metadata(data, result)
-    _check_label_set_metadata(data, result)
-    all_annot_ids = _check_documents(data, result)
-
-    if is_v2:
-        struct_annot_ids = _check_structural_sets(data, result)
-        all_annot_ids |= struct_annot_ids
-        folder_paths = _check_folders(data, result)
-        _check_document_paths(data, folder_paths, result)
-        _check_corpus_level_relationships(data, all_annot_ids, result)
-        _check_agent_config(data, result)
-        _check_action_trail(data, result)
-
-        if "conversations" in data:
-            _check_conversations(data, result)
-    else:
-        if data.get("relationships"):
-            _check_corpus_level_relationships(data, all_annot_ids, result)
-
+    _validate_parsed_data(data, result)
     return result
 
 
