@@ -29,6 +29,7 @@ from opencontractserver.llms.context_guardrails import (
     get_context_window_for_model,
     messages_to_proxies,
     should_compact,
+    strip_compaction_prefix,
     truncate_tool_output,
 )
 
@@ -215,6 +216,34 @@ class TestShouldCompact(SimpleTestCase):
         messages = [_MessageProxy(role="human", content="x" * 35000) for _ in range(5)]
         # Very low threshold forces compaction even for small conversations
         self.assertTrue(should_compact(messages, "gpt-4o-mini", threshold_ratio=0.01))
+
+
+class TestShouldCompactWithStoredSummary(SimpleTestCase):
+    """Verify should_compact accounts for stored_summary_tokens."""
+
+    def test_stored_summary_tokens_push_over_threshold(self):
+        """A conversation under threshold without stored summary should
+        cross the threshold when stored_summary_tokens are included."""
+        # 128k window * 0.75 = 96k threshold
+        # Place message tokens just under threshold, then stored summary pushes over
+        msg_tokens = 90_000
+        char_count = int(msg_tokens * CHARS_PER_TOKEN_ESTIMATE)
+        messages = [_MessageProxy(role="human", content="x" * char_count)]
+
+        # Without stored summary → under threshold
+        self.assertFalse(
+            should_compact(messages, "gpt-4o-mini", system_prompt_tokens=0)
+        )
+
+        # With stored summary → over threshold
+        self.assertTrue(
+            should_compact(
+                messages,
+                "gpt-4o-mini",
+                system_prompt_tokens=0,
+                stored_summary_tokens=10_000,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +521,29 @@ class TestCompactionConfig(SimpleTestCase):
     def test_max_tool_output_chars_zero_raises(self):
         with self.assertRaises(ValueError):
             CompactionConfig(max_tool_output_chars=0)
+
+
+# ---------------------------------------------------------------------------
+# strip_compaction_prefix
+# ---------------------------------------------------------------------------
+
+
+class TestStripCompactionPrefix(SimpleTestCase):
+    """Tests for strip_compaction_prefix utility."""
+
+    def test_strips_known_prefix(self):
+        text = COMPACTION_SUMMARY_PREFIX + "Some summary body"
+        result = strip_compaction_prefix(text)
+        self.assertEqual(result, "Some summary body")
+
+    def test_no_prefix_returns_unchanged(self):
+        text = "No prefix here"
+        result = strip_compaction_prefix(text)
+        self.assertEqual(result, "No prefix here")
+
+    def test_empty_string(self):
+        result = strip_compaction_prefix("")
+        self.assertEqual(result, "")
 
 
 # ---------------------------------------------------------------------------
@@ -889,7 +941,11 @@ class TestCompactionBookmarkDatabaseFilter(SimpleTestCase):
             mock_qs.filter.return_value = mock_qs
             mock_qs.order_by.return_value = mock_qs
 
-            # Make the queryset async-iterable
+            # Make the queryset async-iterable.
+            # __aiter__ is defined as a lambda(self) because dunder methods
+            # are looked up on the type, not the instance.  The ``self``
+            # parameter receives the mock; ``aiter_messages()`` returns a
+            # fresh async generator each time the queryset is iterated.
             async def aiter_messages():
                 for m in expected_messages:
                     yield m
@@ -940,6 +996,11 @@ class TestCompactionBookmarkDatabaseFilter(SimpleTestCase):
             mock_qs.filter.return_value = mock_qs
             mock_qs.order_by.return_value = mock_qs
 
+            # Make the queryset async-iterable.
+            # __aiter__ is defined as a lambda(self) because dunder methods
+            # are looked up on the type, not the instance.  The ``self``
+            # parameter receives the mock; ``aiter_messages()`` returns a
+            # fresh async generator each time the queryset is iterated.
             async def aiter_messages():
                 for m in all_messages:
                     yield m
@@ -1097,3 +1158,153 @@ class TestGetMessageHistoryCompactionTokenCounting(SimpleTestCase):
 
             call_kwargs = mock_compact.call_args.kwargs
             self.assertEqual(call_kwargs["stored_summary_tokens"], 0)
+
+
+# ---------------------------------------------------------------------------
+# Two-cycle compaction integration
+# ---------------------------------------------------------------------------
+
+
+class TestTwoCycleCompactionIntegration(SimpleTestCase):
+    """End-to-end test running two successive compaction cycles to verify
+    prefix deduplication, token counting, and summary capping work together."""
+
+    def test_two_cycles_no_duplicate_prefix(self):
+        """Running compaction twice should produce a merged summary with
+        exactly one COMPACTION_SUMMARY_PREFIX, not two."""
+        from opencontractserver.llms.context_guardrails import (
+            cap_summary_length,
+            strip_compaction_prefix,
+        )
+
+        model = "gpt-4o-mini"  # 128k window
+
+        # --- Cycle 1: Generate 15 large messages to trigger compaction ---
+        cycle1_messages = [
+            _MessageProxy(
+                role="human" if i % 2 == 0 else "llm",
+                content=f"Cycle 1 message {i}: " + "x" * 5000,
+            )
+            for i in range(15)
+        ]
+
+        result1 = compact_message_history(
+            cycle1_messages,
+            model,
+            system_prompt_tokens=500,
+            stored_summary_tokens=0,
+            threshold_ratio=0.01,  # Very low to force compaction
+            min_recent=2,
+            max_recent=4,
+        )
+        self.assertTrue(result1.compacted, "Cycle 1 should compact")
+        self.assertTrue(result1.summary.startswith(COMPACTION_SUMMARY_PREFIX))
+        # Only one prefix
+        self.assertEqual(result1.summary.count(COMPACTION_SUMMARY_PREFIX), 1)
+
+        # Simulate what _get_message_history does: store the summary
+        stored_summary = cap_summary_length(result1.summary)
+
+        # --- Cycle 2: New messages arrive, trigger compaction again ---
+        cycle2_messages = [
+            _MessageProxy(
+                role="human" if i % 2 == 0 else "llm",
+                content=f"Cycle 2 message {i}: " + "y" * 5000,
+            )
+            for i in range(15)
+        ]
+
+        stored_summary_tokens = estimate_token_count(stored_summary)
+
+        result2 = compact_message_history(
+            cycle2_messages,
+            model,
+            system_prompt_tokens=500,
+            stored_summary_tokens=stored_summary_tokens,
+            threshold_ratio=0.01,
+            min_recent=2,
+            max_recent=4,
+        )
+        self.assertTrue(result2.compacted, "Cycle 2 should compact")
+
+        # Simulate the merge logic from _get_message_history
+        old_body = strip_compaction_prefix(stored_summary).rstrip()
+        new_body = strip_compaction_prefix(result2.summary)
+        merged = cap_summary_length(
+            COMPACTION_SUMMARY_PREFIX + old_body + "\n\n" + new_body
+        )
+
+        # Assertions: exactly one prefix, no duplicate
+        self.assertTrue(merged.startswith(COMPACTION_SUMMARY_PREFIX))
+        self.assertEqual(
+            merged.count(COMPACTION_SUMMARY_PREFIX),
+            1,
+            "Merged summary must contain exactly one prefix header",
+        )
+
+        # Token count for cycle 2 should include stored_summary_tokens
+        # in total_before but NOT double-count in total_after
+        self.assertGreater(
+            result2.estimated_tokens_before, result2.estimated_tokens_after
+        )
+        self.assertGreater(
+            result2.estimated_tokens_before,
+            sum(m.token_estimate for m in cycle2_messages),
+            "total_before should include stored_summary_tokens beyond just message tokens",
+        )
+
+    def test_two_cycles_summary_stays_capped(self):
+        """After two compaction cycles, the merged summary must not
+        exceed COMPACTION_SUMMARY_MAX_TOKENS."""
+        from opencontractserver.constants.context_guardrails import (
+            COMPACTION_SUMMARY_MAX_TOKENS,
+        )
+        from opencontractserver.llms.context_guardrails import (
+            cap_summary_length,
+            strip_compaction_prefix,
+        )
+
+        model = "gpt-4o-mini"
+        max_chars = int(COMPACTION_SUMMARY_MAX_TOKENS * CHARS_PER_TOKEN_ESTIMATE)
+
+        # Cycle 1 with a very long summary
+        cycle1_messages = [
+            _MessageProxy(role="human", content="q" * 10_000),
+            _MessageProxy(role="llm", content="a" * 10_000),
+        ] * 10  # 20 messages
+
+        result1 = compact_message_history(
+            cycle1_messages,
+            model,
+            threshold_ratio=0.001,
+            min_recent=1,
+            max_recent=2,
+        )
+        stored = cap_summary_length(result1.summary)
+
+        # Cycle 2 with another long summary
+        cycle2_messages = [
+            _MessageProxy(role="human", content="r" * 10_000),
+            _MessageProxy(role="llm", content="s" * 10_000),
+        ] * 10
+
+        result2 = compact_message_history(
+            cycle2_messages,
+            model,
+            stored_summary_tokens=estimate_token_count(stored),
+            threshold_ratio=0.001,
+            min_recent=1,
+            max_recent=2,
+        )
+
+        old_body = strip_compaction_prefix(stored).rstrip()
+        new_body = strip_compaction_prefix(result2.summary)
+        merged = cap_summary_length(
+            COMPACTION_SUMMARY_PREFIX + old_body + "\n\n" + new_body
+        )
+
+        self.assertLessEqual(
+            len(merged),
+            max_chars + 10,  # small slack for ellipsis
+            "Merged summary must respect the cap after two cycles",
+        )

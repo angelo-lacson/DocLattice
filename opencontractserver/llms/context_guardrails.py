@@ -43,6 +43,7 @@ __all__ = [
     "get_context_window_for_model",
     "truncate_tool_output",
     "cap_summary_length",
+    "strip_compaction_prefix",
     "CompactionConfig",
     "CompactionResult",
     "compact_message_history",
@@ -197,16 +198,21 @@ def should_compact(
     model_name: str,
     *,
     system_prompt_tokens: int = 0,
+    stored_summary_tokens: int = 0,
     threshold_ratio: float = COMPACTION_THRESHOLD_RATIO,
 ) -> bool:
     """Return ``True`` if the conversation should be compacted.
 
     The decision is based on whether the estimated token total (system
-    prompt + all messages) exceeds *threshold_ratio* of the model's
-    context window.
+    prompt + stored summary + all messages) exceeds *threshold_ratio*
+    of the model's context window.
     """
     context_window = get_context_window_for_model(model_name)
-    total_tokens = system_prompt_tokens + sum(m.token_estimate for m in messages)
+    total_tokens = (
+        system_prompt_tokens
+        + stored_summary_tokens
+        + sum(m.token_estimate for m in messages)
+    )
     threshold = int(context_window * threshold_ratio)
     return total_tokens > threshold
 
@@ -413,6 +419,18 @@ def cap_summary_length(summary: str) -> str:
     if len(summary) <= max_chars:
         return summary
     return summary[:max_chars] + "\u2026"
+
+
+def strip_compaction_prefix(text: str) -> str:
+    """Remove the :data:`COMPACTION_SUMMARY_PREFIX` header from *text*.
+
+    Returns *text* unchanged if the prefix is not present.  Used during
+    summary merging to prevent duplicate prefixes accumulating across
+    successive compaction cycles.
+    """
+    if text.startswith(COMPACTION_SUMMARY_PREFIX):
+        return text[len(COMPACTION_SUMMARY_PREFIX) :]
+    return text
 
 
 @dataclass

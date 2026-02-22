@@ -62,6 +62,7 @@ from opencontractserver.llms.context_guardrails import (
     estimate_token_count,
     get_context_window_for_model,
     messages_to_proxies,
+    strip_compaction_prefix,
 )
 from opencontractserver.llms.exceptions import ToolConfirmationRequired
 from opencontractserver.llms.tools.core_tools import (
@@ -381,19 +382,11 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 cutoff_idx = len(raw_messages) - result.preserved_count
                 cutoff_msg = raw_messages[cutoff_idx - 1]
 
-                # Merge old stored summary with the new compaction summary,
-                # capping the result to prevent unbounded growth across cycles.
-                # Strip the prefix from both sides before merging and re-add
-                # it once to prevent duplicate prefixes accumulating across
-                # successive compaction cycles.
-                def _strip_prefix(text: str) -> str:
-                    if text.startswith(COMPACTION_SUMMARY_PREFIX):
-                        return text[len(COMPACTION_SUMMARY_PREFIX) :]
-                    return text
-
+                # Merge old + new summary, stripping prefix to avoid
+                # duplication, then re-adding once.
                 if stored_summary:
-                    old_body = _strip_prefix(stored_summary).rstrip()
-                    new_body = _strip_prefix(result.summary)
+                    old_body = strip_compaction_prefix(stored_summary).rstrip()
+                    new_body = strip_compaction_prefix(result.summary)
                     merged_summary = cap_summary_length(
                         COMPACTION_SUMMARY_PREFIX + old_body + "\n\n" + new_body
                     )
@@ -415,13 +408,25 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     # successful persistence.
                     raw_messages = raw_messages[-result.preserved_count :]
 
+                    # Report the actual post-merge token count rather
+                    # than CompactionResult.estimated_tokens_after, which
+                    # only reflects the new summary (not the merged one).
+                    actual_tokens_after = (
+                        estimate_token_count(self.config.system_prompt or "")
+                        + estimate_token_count(merged_summary)
+                        + sum(
+                            estimate_token_count(getattr(m, "content", "") or "")
+                            for m in raw_messages
+                        )
+                    )
+
                     logger.info(
                         "Compacted conversation: removed %d messages, "
                         "keeping %d recent (tokens %d → %d)",
                         result.removed_count,
                         result.preserved_count,
                         result.estimated_tokens_before,
-                        result.estimated_tokens_after,
+                        actual_tokens_after,
                     )
                 except Exception:
                     logger.exception(
