@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -45,6 +45,44 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+
+    <!-- Agent discovery: llms.txt for AI crawlers -->
+    <link
+      rel="alternate"
+      type="text/plain"
+      href="/llms.txt"
+      title="LLM instructions"
+    />
+
+    <!-- Structured data: MCP API for agent discovery -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "OpenContracts",
+        "description": "Open-source document analytics platform for analyzing, annotating, and querying complex documents.",
+        "url": "https://opencontracts.opensource.legal/",
+        "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+        "applicationCategory": "Document Analytics",
+        "operatingSystem": "Web",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "potentialAction": {
+          "@type": "ConsumeAction",
+          "name": "Connect via Model Context Protocol (MCP)",
+          "description": "AI agents can connect to this instance's MCP server for read-only access to public corpuses, documents, annotations, and discussions. Endpoint: /mcp/ (Streamable HTTP, JSON-RPC 2.0). No authentication required. See /llms.txt for full details.",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "/mcp/",
+            "contentType": "application/json",
+            "httpMethod": "POST"
+          }
+        }
+      }
+    </script>
 
     <link rel="apple-touch-icon" href="/logo192.png" />
     <!--
