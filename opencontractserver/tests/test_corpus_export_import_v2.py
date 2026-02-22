@@ -1572,6 +1572,7 @@ class TestLabelTypeExportCompleteness(TransactionTestCase):
             document=self.doc,
             corpus=self.corpus,
             path="/test.pdf",
+            version_number=1,
             creator=self.user,
         )
 
@@ -1719,6 +1720,7 @@ class TestDocumentFileTypeRoundTrip(TransactionTestCase):
             document=doc,
             corpus=self.corpus,
             path="/test.txt",
+            version_number=1,
             creator=self.user,
         )
 
@@ -1768,20 +1770,21 @@ class TestConversationExportEnhancements(TransactionTestCase):
             document=self.doc,
             corpus=self.corpus,
             path="/test.pdf",
+            version_number=1,
             creator=self.user,
         )
 
     def test_doc_level_conversations_exported(self):
         """Verify document-level conversations are included in export."""
         # Create corpus-level conversation
-        corpus_conv = Conversation.objects.create(
+        Conversation.objects.create(
             chat_with_corpus=self.corpus,
             title="Corpus Thread",
             creator=self.user,
         )
 
         # Create document-level conversation
-        doc_conv = Conversation.objects.create(
+        Conversation.objects.create(
             chat_with_document=self.doc,
             title="Doc Thread",
             creator=self.user,
@@ -1797,9 +1800,7 @@ class TestConversationExportEnhancements(TransactionTestCase):
         self.assertIn("Doc Thread", titles)
 
         # Verify doc-level conversation has document reference
-        doc_conv_data = next(
-            c for c in conversations if c["title"] == "Doc Thread"
-        )
+        doc_conv_data = next(c for c in conversations if c["title"] == "Doc Thread")
         self.assertIsNotNone(doc_conv_data["chat_with_document_id"])
 
     def test_conversation_description_exported(self):
@@ -1976,9 +1977,7 @@ class TestConversationExportEnhancements(TransactionTestCase):
             }
         ]
 
-        import_conversations(
-            conversations_data, [], [], self.corpus, self.user
-        )
+        import_conversations(conversations_data, [], [], self.corpus, self.user)
 
         conv = Conversation.objects.filter(chat_with_corpus=self.corpus).first()
         self.assertEqual(conv.description, "Important discussion")
