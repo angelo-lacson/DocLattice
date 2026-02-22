@@ -31,6 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Prompt Injection via User-Controlled Content in Agent Prompts
+- **Root cause**: Thread and document action prompt builders injected user-controlled content (message bodies, thread titles, document titles) directly into Markdown-structured LLM prompts without any sanitisation boundary. A user who can post a message to a moderated thread could craft content that overrides agent instructions.
+  - File: `opencontractserver/tasks/agent_tasks.py` (lines 808-848)
+  - File: `opencontractserver/llms/agents/core_agents.py` (lines 963-983, 1036-1054)
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py` (lines 1655-1669, 2301-2315)
+- **Fix**: All user-generated content injected into agent prompts is now wrapped in `<user_content>` / `</user_content>` XML fence tags. An explicit `UNTRUSTED_CONTENT_NOTICE` instruction block is added to thread moderation prompts telling the LLM to treat fenced content as raw data and ignore any embedded directives. A size-threshold warning (`UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD = 1000 chars`) logs a `[PromptInjection]` warning for abnormally large user content.
+  - New file: `opencontractserver/utils/prompt_sanitization.py` — `fence_user_content()`, `warn_if_content_large()`, `UNTRUSTED_CONTENT_NOTICE`
+  - New constant: `opencontractserver/constants/moderation.py` — `UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD`
+  - New tests: `opencontractserver/tests/test_prompt_sanitization.py`
+  - Updated tests: `opencontractserver/tests/test_thread_corpus_actions.py` — added `test_async_thread_action_prompt_fences_user_content`
+
 #### Frontend: Most views show legacy corpus.description instead of versioned mdDescription (Closes #892)
 - **Backend description sync**: `Corpus.update_description()` now keeps the plain-text `description` field in sync when `md_description` is updated via the versioned markdown system. A new `_markdown_to_plain_text()` static method strips markdown formatting for the plain-text field.
   - File: `opencontractserver/corpuses/models.py` (lines 249-272, `update_description` method)

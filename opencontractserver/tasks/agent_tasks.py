@@ -564,23 +564,38 @@ def _build_document_action_system_prompt(
     - Execution context (trigger, document, corpus metadata)
     - The user's task_instructions
     - Optional supplementary guidance from agent_config.system_instructions
+
+    SECURITY: All user-generated content (document title, corpus title,
+    document description) is wrapped in <user_content> tags so the LLM can
+    distinguish instructions from untrusted data.  See prompt_sanitization.py.
     """
     from opencontractserver.constants.corpus_actions import (
         MAX_DESCRIPTION_PREVIEW_LENGTH,
         TRIGGER_DESCRIPTIONS,
     )
+    from opencontractserver.utils.prompt_sanitization import (
+        UNTRUSTED_CONTENT_NOTICE,
+        fence_user_content,
+        warn_if_content_large,
+    )
 
     trigger_desc = TRIGGER_DESCRIPTIONS.get(action.trigger, "triggered action in")
     tool_list = ", ".join(tools) if tools else "none"
 
+    warn_if_content_large(document.title, context="document title")
+    warn_if_content_large(action.corpus.title, context="corpus title")
+    if document.description:
+        warn_if_content_large(document.description, context="document description")
+
     parts = [
         "You are an automated corpus action agent. You execute tasks on documents "
         "without human interaction.",
+        f"\n{UNTRUSTED_CONTENT_NOTICE}",
         "",
         "## Execution Context",
         f'- Action: "{action.name}"',
-        f'- Document: "{document.title}" (ID: {document.id})',
-        f'- Corpus: "{action.corpus.title}"',
+        f"- Document: {fence_user_content(document.title, label='document title')} (ID: {document.id})",
+        f"- Corpus: {fence_user_content(action.corpus.title, label='corpus title')}",
         f"- Trigger: Document {trigger_desc} the corpus",
         f"- Available tools: {tool_list}",
     ]
@@ -590,7 +605,9 @@ def _build_document_action_system_prompt(
         desc = document.description[:MAX_DESCRIPTION_PREVIEW_LENGTH]
         if len(document.description) > MAX_DESCRIPTION_PREVIEW_LENGTH:
             desc += "..."
-        parts.append(f"- Current description: {desc}")
+        parts.append(
+            f"- Current description: {fence_user_content(desc, label='document description')}"
+        )
 
     parts.extend(
         [
@@ -650,35 +667,56 @@ def _build_thread_action_system_prompt(
     - Thread context (title, messages, triggering message)
     - The user's task_instructions
     - Optional supplementary guidance from agent_config.system_instructions
+
+    SECURITY: All user-generated content (message bodies, titles, etc.)
+    is wrapped in <user_content> tags so the LLM can distinguish
+    instructions from untrusted data.  See prompt_sanitization.py.
     """
+    from opencontractserver.utils.prompt_sanitization import (
+        UNTRUSTED_CONTENT_NOTICE,
+        fence_user_content,
+        warn_if_content_large,
+    )
+
     tool_list = ", ".join(tools) if tools else "none"
+
+    warn_if_content_large(
+        thread_context.get("title", "untitled"), context="thread title"
+    )
+    if thread_context.get("corpus_title"):
+        warn_if_content_large(thread_context["corpus_title"], context="corpus title")
 
     parts = [
         "You are an automated corpus action agent. You execute moderation and "
         "response tasks on discussion threads without human interaction.",
+        f"\n{UNTRUSTED_CONTENT_NOTICE}",
         "",
         "## Thread Context",
         f"- Thread ID: {thread_context.get('id', 'unknown')}",
-        f"- Title: {thread_context.get('title', 'untitled')}",
-        f"- Creator: {thread_context.get('creator_username', 'unknown')}",
+        f"- Title: {fence_user_content(thread_context.get('title', 'untitled'), label='thread title')}",
+        f"- Creator: {fence_user_content(thread_context.get('creator_username', 'unknown'), label='username')}",
         f"- Message count: {thread_context.get('message_count', 0)}",
         f"- Is locked: {thread_context.get('is_locked', False)}",
         f"- Is pinned: {thread_context.get('is_pinned', False)}",
     ]
 
     if thread_context.get("corpus_title"):
-        parts.append(f"- Corpus: {thread_context['corpus_title']}")
+        parts.append(
+            f"- Corpus: {fence_user_content(thread_context['corpus_title'], label='corpus title')}"
+        )
 
     parts.append(f"- Available tools: {tool_list}")
 
     # Inject triggering message for NEW_MESSAGE triggers
     if message_id and message_content:
+        raw_content = message_content.get("content", "")
+        warn_if_content_large(raw_content, context="triggering message")
         parts.extend(
             [
                 "",
                 f"## Triggering Message (ID: {message_id})",
-                f"- Author: {message_content.get('creator_username', 'unknown')}",
-                f"- Content:\n{message_content.get('content', '')}",
+                f"- Author: {fence_user_content(message_content.get('creator_username', 'unknown'), label='username')}",
+                f"- Content:\n{fence_user_content(raw_content, label='message body')}",
             ]
         )
 
@@ -696,8 +734,10 @@ def _build_thread_action_system_prompt(
                 if len(msg["content"]) > MAX_MESSAGE_PREVIEW_LENGTH
                 else msg["content"]
             )
+            warn_if_content_large(content_preview, context="recent message")
             parts.append(
-                f"- [{msg['creator_username']}] (ID: {msg['id']}): {content_preview}"
+                f"- [{fence_user_content(msg['creator_username'], label='username')}] (ID: {msg['id']}): "
+                f"{fence_user_content(content_preview, label='message')}"
             )
 
     parts.extend(
