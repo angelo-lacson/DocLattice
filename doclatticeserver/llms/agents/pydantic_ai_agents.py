@@ -101,6 +101,23 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def _get_function_tools(agent: PydanticAIAgent) -> dict:
+    """Return the function-tools dict from a pydantic-ai Agent.
+
+    Handles both pydantic-ai 0.2.x (``agent._function_tools``) and
+    1.x (``agent._function_toolset.tools``).
+    """
+    # pydantic-ai 0.2.x
+    ft = getattr(agent, "_function_tools", None)
+    if ft is not None:
+        return ft
+    # pydantic-ai 1.x
+    toolset = getattr(agent, "_function_toolset", None)
+    if toolset is not None:
+        return getattr(toolset, "tools", {})
+    return {}
+
+
 @dataclasses.dataclass
 class _HistoryResult:
     """Result of ``_get_message_history()`` with context metadata.
@@ -1279,9 +1296,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 model_settings["max_tokens"] = max_tokens
 
             # Seed tools from the main agent so the structured run has the same capabilities
-            seeded_tools_dict = (
-                getattr(self.pydantic_ai_agent, "_function_tools", {}) or {}
-            )
+            seeded_tools_dict = _get_function_tools(self.pydantic_ai_agent)
             seeded_tools = list(seeded_tools_dict.values())
 
             # Per-call tools take precedence over seeded tools.
@@ -1320,7 +1335,26 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             # Include prior conversation context if available
             history_result = await self._get_message_history()
-            run_kwargs = {"deps": self.agent_deps, **kwargs}
+            # Only pass kwargs that Agent.run() accepts; ignore extras like
+            # similarity_top_k that callers may pass for their own bookkeeping.
+            _run_accepted = {
+                "deps",
+                "model",
+                "model_settings",
+                "usage_limits",
+                "usage",
+                "message_history",
+                "instructions",
+                "output_type",
+                "metadata",
+                "infer_name",
+                "toolsets",
+                "builtin_tools",
+            }
+            run_kwargs = {
+                "deps": self.agent_deps,
+                **{k: v for k, v in kwargs.items() if k in _run_accepted},
+            }
             if history_result.messages:
                 run_kwargs["message_history"] = history_result.messages
 
@@ -1501,7 +1535,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
                 if not tool_executed:
                     # Resort to pydantic-ai registry – may return Tool object.
-                    tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
+                    tool_obj = _get_function_tools(self.pydantic_ai_agent).get(
+                        tool_name
+                    )
                     if tool_obj is None:
                         raise ValueError(f"Tool '{tool_name}' not found for execution")
 
@@ -1827,8 +1863,9 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         return tool.requires_approval
 
         # Check tools registered with pydantic-ai agent
-        if hasattr(self.pydantic_ai_agent, "_function_tools"):
-            tool_obj = self.pydantic_ai_agent._function_tools.get(tool_name)
+        function_tools = _get_function_tools(self.pydantic_ai_agent)
+        if function_tools:
+            tool_obj = function_tools.get(tool_name)
             if tool_obj:
                 # Check various possible attributes where the CoreTool might be stored
                 for attr in ("core_tool", "_core_tool", "wrapped_tool"):
@@ -1836,11 +1873,10 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     if core_tool and hasattr(core_tool, "requires_approval"):
                         return core_tool.requires_approval
 
-                # Check if the tool object itself has requires_approval
-                if hasattr(tool_obj, "requires_approval"):
-                    return tool_obj.requires_approval
-
-                # Check the wrapped function
+                # Check the wrapped function (must come before the native
+                # tool_obj.requires_approval check because pydantic-ai 1.x
+                # Tool has a native requires_approval field that defaults to
+                # False, shadowing the custom attribute on the function).
                 for attr in ("function", "_wrapped_function", "callable_function"):
                     func = getattr(tool_obj, attr, None)
                     if func:
@@ -1852,6 +1888,10 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         # Check if the function itself has requires_approval
                         if hasattr(func, "requires_approval"):
                             return func.requires_approval
+
+                # Fall back to the tool object's own requires_approval
+                if hasattr(tool_obj, "requires_approval"):
+                    return tool_obj.requires_approval
 
         # Default to not requiring approval
         return False
