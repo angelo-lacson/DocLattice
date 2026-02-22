@@ -950,6 +950,69 @@ class TestConversationValidation(unittest.TestCase):
         assert any("orphan_msg" in e for e in result.errors)
 
 
+class TestActionTrailValidation(unittest.TestCase):
+    def test_non_dict_action_trail_is_error(self):
+        data = _minimal_v2_data()
+        data["action_trail"] = "not a dict"
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("action_trail" in e and "object" in e for e in result.errors)
+
+    def test_missing_stats_fields(self):
+        data = _minimal_v2_data()
+        data["action_trail"] = {
+            "actions": [],
+            "executions": [],
+            "stats": {},  # Missing all required stats fields
+        }
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("total_executions" in e for e in result.errors)
+        assert any("completed" in e for e in result.errors)
+        assert any("failed" in e for e in result.errors)
+        assert any("exported_count" in e for e in result.errors)
+
+    def test_missing_action_trail_fields(self):
+        data = _minimal_v2_data()
+        data["action_trail"] = {}  # Missing actions, executions, stats
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("actions" in e for e in result.errors)
+        assert any("executions" in e for e in result.errors)
+        assert any("stats" in e for e in result.errors)
+
+    def test_valid_action_trail(self):
+        data = _minimal_v2_data()
+        data["action_trail"] = {
+            "actions": [],
+            "executions": [],
+            "stats": {
+                "total_executions": 0,
+                "completed": 0,
+                "failed": 0,
+                "exported_count": 0,
+            },
+        }
+        result = validate_data_json(data)
+        assert result.ok, result.summary()
+
+
+class TestAgentConfigValidation(unittest.TestCase):
+    def test_non_dict_agent_config_is_error(self):
+        data = _minimal_v2_data()
+        data["agent_config"] = "not a dict"
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("agent_config" in e and "object" in e for e in result.errors)
+
+    def test_missing_agent_config_fields_warns(self):
+        data = _minimal_v2_data()
+        data["agent_config"] = {}  # Missing both instruction fields
+        result = validate_data_json(data)
+        assert any("corpus_agent_instructions" in w for w in result.warnings)
+        assert any("document_agent_instructions" in w for w in result.warnings)
+
+
 class TestBadZipInput(unittest.TestCase):
     def test_not_a_zip(self):
         fd, path = tempfile.mkstemp(suffix=".zip")
