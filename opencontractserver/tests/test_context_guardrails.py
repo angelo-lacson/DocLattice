@@ -6,7 +6,6 @@ fast and can be parallelised trivially.  They exercise the public API of
 constants in :mod:`opencontractserver.constants.context_guardrails`.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -30,6 +29,7 @@ from opencontractserver.llms.context_guardrails import (
     get_context_window_for_model,
     messages_to_proxies,
     should_compact,
+    strip_compaction_prefix,
     truncate_tool_output,
 )
 
@@ -128,19 +128,37 @@ class TestTruncateToolOutput(SimpleTestCase):
     def test_custom_max_chars(self):
         text = "x" * 200
         result = truncate_tool_output(text, max_chars=100)
-        self.assertLess(len(result), 200)
+        self.assertLessEqual(len(result), 100)
         self.assertIn("truncated", result)
+        # Content must start from the beginning of the original text
+        self.assertTrue(result.startswith("x"))
 
     def test_truncation_notice_contains_limit(self):
         text = "y" * 500
         result = truncate_tool_output(text, max_chars=200)
         self.assertIn("200", result)
+        self.assertLessEqual(len(result), 200)
+        # Content must start from the beginning of the original text
+        self.assertTrue(result.startswith("y"))
 
     def test_very_small_max_chars_does_not_exceed_limit(self):
         """When max_chars is smaller than the notice, result must not exceed max_chars."""
         text = "x" * 200
         result = truncate_tool_output(text, max_chars=10)
         self.assertLessEqual(len(result), 10)
+        # Content must start from the beginning of the original text
+        self.assertTrue(result.startswith("x"))
+
+    def test_truncated_content_from_beginning_not_end(self):
+        """Verify truncation takes from the start of the string, not the end."""
+        text = "A" * 100 + "B" * 100
+        result = truncate_tool_output(text, max_chars=150)
+        self.assertLessEqual(len(result), 150)
+        self.assertTrue(result.startswith("A"))
+        # The result should NOT contain the "B" content from the end
+        # (beyond what the truncation notice might contain)
+        content_part = result.split("\n\n[")[0] if "\n\n[" in result else result
+        self.assertNotIn("B", content_part)
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +216,34 @@ class TestShouldCompact(SimpleTestCase):
         messages = [_MessageProxy(role="human", content="x" * 35000) for _ in range(5)]
         # Very low threshold forces compaction even for small conversations
         self.assertTrue(should_compact(messages, "gpt-4o-mini", threshold_ratio=0.01))
+
+
+class TestShouldCompactWithStoredSummary(SimpleTestCase):
+    """Verify should_compact accounts for stored_summary_tokens."""
+
+    def test_stored_summary_tokens_push_over_threshold(self):
+        """A conversation under threshold without stored summary should
+        cross the threshold when stored_summary_tokens are included."""
+        # 128k window * 0.75 = 96k threshold
+        # Place message tokens just under threshold, then stored summary pushes over
+        msg_tokens = 90_000
+        char_count = int(msg_tokens * CHARS_PER_TOKEN_ESTIMATE)
+        messages = [_MessageProxy(role="human", content="x" * char_count)]
+
+        # Without stored summary → under threshold
+        self.assertFalse(
+            should_compact(messages, "gpt-4o-mini", system_prompt_tokens=0)
+        )
+
+        # With stored summary → over threshold
+        self.assertTrue(
+            should_compact(
+                messages,
+                "gpt-4o-mini",
+                system_prompt_tokens=0,
+                stored_summary_tokens=10_000,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -348,6 +394,33 @@ class TestDeterministicSummary(SimpleTestCase):
         summary = _deterministic_summary(messages)
         self.assertIn("Version 1.5", summary)
 
+    def test_markdown_bullet_list_split(self):
+        """Markdown bullet lists should be split at the first list item boundary."""
+        messages = [
+            _MessageProxy(role="human", content="What does the contract cover?"),
+            _MessageProxy(
+                role="llm",
+                content="The contract covers:\n- Indemnification\n- Liability\n- Termination",
+            ),
+        ]
+        summary = _deterministic_summary(messages)
+        self.assertIn("The contract covers:", summary)
+        # Should NOT include subsequent list items as part of the "sentence"
+        self.assertNotIn("Liability", summary)
+
+    def test_double_newline_paragraph_split(self):
+        """Double newlines (paragraph boundaries) should act as split points."""
+        messages = [
+            _MessageProxy(role="human", content="Explain the terms."),
+            _MessageProxy(
+                role="llm",
+                content="The first paragraph explains terms\n\nThe second paragraph adds details.",
+            ),
+        ]
+        summary = _deterministic_summary(messages)
+        self.assertIn("The first paragraph explains terms", summary)
+        self.assertNotIn("The second paragraph", summary)
+
 
 # ---------------------------------------------------------------------------
 # messages_to_proxies (ORM ↔ proxy bridge)
@@ -451,6 +524,29 @@ class TestCompactionConfig(SimpleTestCase):
 
 
 # ---------------------------------------------------------------------------
+# strip_compaction_prefix
+# ---------------------------------------------------------------------------
+
+
+class TestStripCompactionPrefix(SimpleTestCase):
+    """Tests for strip_compaction_prefix utility."""
+
+    def test_strips_known_prefix(self):
+        text = COMPACTION_SUMMARY_PREFIX + "Some summary body"
+        result = strip_compaction_prefix(text)
+        self.assertEqual(result, "Some summary body")
+
+    def test_no_prefix_returns_unchanged(self):
+        text = "No prefix here"
+        result = strip_compaction_prefix(text)
+        self.assertEqual(result, "No prefix here")
+
+    def test_empty_string(self):
+        result = strip_compaction_prefix("")
+        self.assertEqual(result, "")
+
+
+# ---------------------------------------------------------------------------
 # Constants sanity checks
 # ---------------------------------------------------------------------------
 
@@ -537,18 +633,14 @@ class TestPersistFailurePreservesContext(SimpleTestCase):
         raw_messages = list(messages)
         stored_summary = ""
 
-        merged_summary = result.summary
+        # merged_summary would be assigned result.summary before persistence
+        self.assertTrue(result.summary)  # summary was generated
 
-        persist_failed = False
         try:
             # Simulate a DB failure
             raise RuntimeError("DB write failed")
         except Exception:
-            persist_failed = True
-
-        if not persist_failed:
-            stored_summary = merged_summary
-            raw_messages = raw_messages[-result.preserved_count :]
+            pass  # persist failed — do NOT update stored_summary or trim
 
         # After failure: raw_messages should still have all 20 messages
         self.assertEqual(len(raw_messages), 20)
@@ -605,7 +697,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
     """Verify that persist_compaction uses optimistic locking to avoid
     overwriting a concurrently-advanced bookmark."""
 
-    def test_concurrent_persist_second_write_is_noop(self):
+    async def test_concurrent_persist_second_write_is_noop(self):
         """If the bookmark moves between read and write, the write is skipped."""
         from opencontractserver.llms.agents.core_agents import (
             CoreConversationManager,
@@ -629,9 +721,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
             mock_qs.aupdate = AsyncMock(return_value=1)
             MockConv.objects.filter.return_value = mock_qs
 
-            asyncio.run(
-                manager.persist_compaction(summary="Summary A", cutoff_message_id=100)
-            )
+            await manager.persist_compaction(summary="Summary A", cutoff_message_id=100)
 
             # Verify the in-memory state was updated
             self.assertEqual(mock_conv.compaction_summary, "Summary A")
@@ -648,9 +738,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
             mock_qs.aupdate = AsyncMock(return_value=0)
             MockConv.objects.filter.return_value = mock_qs
 
-            asyncio.run(
-                manager.persist_compaction(summary="Summary B", cutoff_message_id=90)
-            )
+            await manager.persist_compaction(summary="Summary B", cutoff_message_id=90)
 
             # In-memory state should NOT be updated (stale write was skipped)
             self.assertEqual(mock_conv.compaction_summary, "Summary A")
@@ -803,3 +891,420 @@ class TestHistoryResult(SimpleTestCase):
         self.assertEqual(context_status["context_window"], 128000)
         self.assertTrue(context_status["was_compacted"])
         self.assertEqual(context_status["tokens_before_compaction"], 95000)
+
+
+# ---------------------------------------------------------------------------
+# DB-level compaction bookmark filtering
+# ---------------------------------------------------------------------------
+
+
+class TestCompactionBookmarkDatabaseFilter(SimpleTestCase):
+    """Verify that get_conversation_messages filters by id__gt when a
+    compaction bookmark is set.
+
+    Uses mocked ORM querysets to avoid requiring a real database while
+    still validating that the correct filter is applied.
+    """
+
+    async def test_messages_filtered_by_compaction_bookmark(self):
+        """When compacted_before_message_id is set, only messages with
+        id > that value should be returned."""
+        from opencontractserver.llms.agents.core_agents import (
+            CoreConversationManager,
+        )
+
+        # Create a mock conversation with a compaction bookmark
+        mock_conv = MagicMock()
+        mock_conv.compacted_before_message_id = 50
+
+        # Build mock messages: IDs 10, 20, 30, 40, 50, 60, 70, 80
+        all_messages = []
+        for msg_id in [10, 20, 30, 40, 50, 60, 70, 80]:
+            m = MagicMock()
+            m.id = msg_id
+            m.content = f"Message {msg_id}"
+            m.msg_type = "HUMAN"
+            all_messages.append(m)
+
+        # Messages that should be returned: id > 50 → [60, 70, 80]
+        expected_messages = [m for m in all_messages if m.id > 50]
+
+        manager = CoreConversationManager.__new__(CoreConversationManager)
+        manager.conversation = mock_conv
+
+        # Patch ChatMessage.objects to track filter calls
+        with patch(
+            "opencontractserver.llms.agents.core_agents.ChatMessage"
+        ) as MockChatMessage:
+            # Build chainable queryset mock
+            mock_qs = MagicMock()
+            mock_qs.filter.return_value = mock_qs
+            mock_qs.order_by.return_value = mock_qs
+
+            # Make the queryset async-iterable.
+            # __aiter__ is defined as a lambda(self) because dunder methods
+            # are looked up on the type, not the instance.  The ``self``
+            # parameter receives the mock; ``aiter_messages()`` returns a
+            # fresh async generator each time the queryset is iterated.
+            async def aiter_messages():
+                for m in expected_messages:
+                    yield m
+
+            mock_qs.__aiter__ = lambda self: aiter_messages()
+
+            MockChatMessage.objects.filter.return_value = mock_qs
+
+            result = await manager.get_conversation_messages()
+
+            # Verify the filter was called with the bookmark cutoff
+            filter_calls = (
+                MockChatMessage.objects.filter.return_value.filter.call_args_list
+            )
+            self.assertTrue(
+                any(call.kwargs.get("id__gt") == 50 for call in filter_calls),
+                "get_conversation_messages must filter with id__gt=compacted_before_message_id",
+            )
+
+            # Verify only post-cutoff messages were returned
+            self.assertEqual(len(result), 3)
+
+    async def test_no_filter_when_bookmark_is_none(self):
+        """When compacted_before_message_id is None, no id__gt filter
+        should be applied."""
+        from opencontractserver.llms.agents.core_agents import (
+            CoreConversationManager,
+        )
+
+        mock_conv = MagicMock()
+        mock_conv.compacted_before_message_id = None
+
+        all_messages = []
+        for msg_id in [10, 20, 30]:
+            m = MagicMock()
+            m.id = msg_id
+            m.content = f"Message {msg_id}"
+            m.msg_type = "HUMAN"
+            all_messages.append(m)
+
+        manager = CoreConversationManager.__new__(CoreConversationManager)
+        manager.conversation = mock_conv
+
+        with patch(
+            "opencontractserver.llms.agents.core_agents.ChatMessage"
+        ) as MockChatMessage:
+            mock_qs = MagicMock()
+            mock_qs.filter.return_value = mock_qs
+            mock_qs.order_by.return_value = mock_qs
+
+            # Make the queryset async-iterable.
+            # __aiter__ is defined as a lambda(self) because dunder methods
+            # are looked up on the type, not the instance.  The ``self``
+            # parameter receives the mock; ``aiter_messages()`` returns a
+            # fresh async generator each time the queryset is iterated.
+            async def aiter_messages():
+                for m in all_messages:
+                    yield m
+
+            mock_qs.__aiter__ = lambda self: aiter_messages()
+
+            MockChatMessage.objects.filter.return_value = mock_qs
+
+            result = await manager.get_conversation_messages()
+
+            # The id__gt filter should NOT have been called
+            if mock_qs.filter.called:
+                for call in mock_qs.filter.call_args_list:
+                    self.assertNotIn(
+                        "id__gt",
+                        call.kwargs,
+                        "id__gt filter should not be applied when bookmark is None",
+                    )
+
+            # All messages should be returned
+            self.assertEqual(len(result), 3)
+
+
+# ---------------------------------------------------------------------------
+# _get_message_history compaction eligibility path
+# ---------------------------------------------------------------------------
+
+
+class TestGetMessageHistoryCompactionTokenCounting(SimpleTestCase):
+    """Verify that _get_message_history passes correct token counts
+    to compact_message_history when compaction is enabled and enough
+    messages exist to trigger the eligibility check."""
+
+    async def test_compaction_eligibility_passes_stored_summary_tokens(self):
+        """When compaction is enabled and messages exceed min_recent,
+        _get_message_history should compute system_prompt_tokens and
+        stored_summary_tokens and pass them to compact_message_history."""
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Build mock messages exceeding min_recent_messages
+        mock_messages = []
+        for i in range(10):
+            m = MagicMock()
+            m.id = i + 1
+            m.content = f"Message {i}: " + "x" * 200
+            m.msg_type = "HUMAN" if i % 2 == 0 else "LLM"
+            mock_messages.append(m)
+
+        # Create mock conversation with a stored summary
+        mock_conv = MagicMock()
+        mock_conv.compaction_summary = "Previous summary text"
+
+        # Create mock conversation manager
+        mock_manager = MagicMock(spec=CoreConversationManager)
+        mock_manager.get_conversation_messages = AsyncMock(return_value=mock_messages)
+        mock_manager.conversation = mock_conv
+
+        # Create agent bypassing __init__
+        agent = PydanticAICoreAgent.__new__(PydanticAICoreAgent)
+        agent.config = AgentConfig(
+            system_prompt="You are a test assistant",
+            compaction=CompactionConfig(
+                enabled=True,
+                min_recent_messages=2,
+            ),
+        )
+        agent.conversation_manager = mock_manager
+
+        # Patch compact_message_history to return not-compacted
+        with patch(
+            "opencontractserver.llms.agents.pydantic_ai_agents.compact_message_history"
+        ) as mock_compact:
+            mock_compact.return_value = CompactionResult(
+                compacted=False,
+                summary="",
+                preserved_count=len(mock_messages),
+                removed_count=0,
+                estimated_tokens_before=5000,
+                estimated_tokens_after=5000,
+            )
+
+            result = await agent._get_message_history()
+
+            # Verify compact_message_history was called
+            mock_compact.assert_called_once()
+            call_kwargs = mock_compact.call_args.kwargs
+
+            # system_prompt_tokens should reflect "You are a test assistant"
+            self.assertIn("system_prompt_tokens", call_kwargs)
+            self.assertGreater(call_kwargs["system_prompt_tokens"], 0)
+
+            # stored_summary_tokens should reflect "Previous summary text"
+            self.assertIn("stored_summary_tokens", call_kwargs)
+            self.assertGreater(call_kwargs["stored_summary_tokens"], 0)
+
+            # Result should have messages (not compacted, so all returned)
+            self.assertIsNotNone(result.messages)
+
+    async def test_compaction_eligibility_zero_stored_summary_tokens_when_empty(self):
+        """When there is no stored summary, stored_summary_tokens should be 0."""
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Build mock messages
+        mock_messages = []
+        for i in range(10):
+            m = MagicMock()
+            m.id = i + 1
+            m.content = f"Message {i}: " + "x" * 200
+            m.msg_type = "HUMAN" if i % 2 == 0 else "LLM"
+            mock_messages.append(m)
+
+        # No stored summary
+        mock_conv = MagicMock()
+        mock_conv.compaction_summary = ""
+
+        mock_manager = MagicMock(spec=CoreConversationManager)
+        mock_manager.get_conversation_messages = AsyncMock(return_value=mock_messages)
+        mock_manager.conversation = mock_conv
+
+        agent = PydanticAICoreAgent.__new__(PydanticAICoreAgent)
+        agent.config = AgentConfig(
+            system_prompt="You are a test assistant",
+            compaction=CompactionConfig(
+                enabled=True,
+                min_recent_messages=2,
+            ),
+        )
+        agent.conversation_manager = mock_manager
+
+        with patch(
+            "opencontractserver.llms.agents.pydantic_ai_agents.compact_message_history"
+        ) as mock_compact:
+            mock_compact.return_value = CompactionResult(
+                compacted=False,
+                summary="",
+                preserved_count=len(mock_messages),
+                removed_count=0,
+                estimated_tokens_before=5000,
+                estimated_tokens_after=5000,
+            )
+
+            await agent._get_message_history()
+
+            call_kwargs = mock_compact.call_args.kwargs
+            self.assertEqual(call_kwargs["stored_summary_tokens"], 0)
+
+
+# ---------------------------------------------------------------------------
+# Two-cycle compaction integration
+# ---------------------------------------------------------------------------
+
+
+class TestTwoCycleCompactionIntegration(SimpleTestCase):
+    """End-to-end test running two successive compaction cycles to verify
+    prefix deduplication, token counting, and summary capping work together."""
+
+    def test_two_cycles_no_duplicate_prefix(self):
+        """Running compaction twice should produce a merged summary with
+        exactly one COMPACTION_SUMMARY_PREFIX, not two."""
+        from opencontractserver.llms.context_guardrails import (
+            cap_summary_length,
+            strip_compaction_prefix,
+        )
+
+        model = "gpt-4o-mini"  # 128k window
+
+        # --- Cycle 1: Generate 15 large messages to trigger compaction ---
+        cycle1_messages = [
+            _MessageProxy(
+                role="human" if i % 2 == 0 else "llm",
+                content=f"Cycle 1 message {i}: " + "x" * 5000,
+            )
+            for i in range(15)
+        ]
+
+        result1 = compact_message_history(
+            cycle1_messages,
+            model,
+            system_prompt_tokens=500,
+            stored_summary_tokens=0,
+            threshold_ratio=0.01,  # Very low to force compaction
+            min_recent=2,
+            max_recent=4,
+        )
+        self.assertTrue(result1.compacted, "Cycle 1 should compact")
+        self.assertTrue(result1.summary.startswith(COMPACTION_SUMMARY_PREFIX))
+        # Only one prefix
+        self.assertEqual(result1.summary.count(COMPACTION_SUMMARY_PREFIX), 1)
+
+        # Simulate what _get_message_history does: store the summary
+        stored_summary = cap_summary_length(result1.summary)
+
+        # --- Cycle 2: New messages arrive, trigger compaction again ---
+        cycle2_messages = [
+            _MessageProxy(
+                role="human" if i % 2 == 0 else "llm",
+                content=f"Cycle 2 message {i}: " + "y" * 5000,
+            )
+            for i in range(15)
+        ]
+
+        stored_summary_tokens = estimate_token_count(stored_summary)
+
+        result2 = compact_message_history(
+            cycle2_messages,
+            model,
+            system_prompt_tokens=500,
+            stored_summary_tokens=stored_summary_tokens,
+            threshold_ratio=0.01,
+            min_recent=2,
+            max_recent=4,
+        )
+        self.assertTrue(result2.compacted, "Cycle 2 should compact")
+
+        # Simulate the merge logic from _get_message_history
+        old_body = strip_compaction_prefix(stored_summary).rstrip()
+        new_body = strip_compaction_prefix(result2.summary)
+        merged = cap_summary_length(
+            COMPACTION_SUMMARY_PREFIX + old_body + "\n\n" + new_body
+        )
+
+        # Assertions: exactly one prefix, no duplicate
+        self.assertTrue(merged.startswith(COMPACTION_SUMMARY_PREFIX))
+        self.assertEqual(
+            merged.count(COMPACTION_SUMMARY_PREFIX),
+            1,
+            "Merged summary must contain exactly one prefix header",
+        )
+
+        # Token count for cycle 2 should include stored_summary_tokens
+        # in total_before but NOT double-count in total_after
+        self.assertGreater(
+            result2.estimated_tokens_before, result2.estimated_tokens_after
+        )
+        self.assertGreater(
+            result2.estimated_tokens_before,
+            sum(m.token_estimate for m in cycle2_messages),
+            "total_before should include stored_summary_tokens beyond just message tokens",
+        )
+
+    def test_two_cycles_summary_stays_capped(self):
+        """After two compaction cycles, the merged summary must not
+        exceed COMPACTION_SUMMARY_MAX_TOKENS."""
+        from opencontractserver.constants.context_guardrails import (
+            COMPACTION_SUMMARY_MAX_TOKENS,
+        )
+        from opencontractserver.llms.context_guardrails import (
+            cap_summary_length,
+            strip_compaction_prefix,
+        )
+
+        model = "gpt-4o-mini"
+        max_chars = int(COMPACTION_SUMMARY_MAX_TOKENS * CHARS_PER_TOKEN_ESTIMATE)
+
+        # Cycle 1 with a very long summary
+        cycle1_messages = [
+            _MessageProxy(role="human", content="q" * 10_000),
+            _MessageProxy(role="llm", content="a" * 10_000),
+        ] * 10  # 20 messages
+
+        result1 = compact_message_history(
+            cycle1_messages,
+            model,
+            threshold_ratio=0.001,
+            min_recent=1,
+            max_recent=2,
+        )
+        stored = cap_summary_length(result1.summary)
+
+        # Cycle 2 with another long summary
+        cycle2_messages = [
+            _MessageProxy(role="human", content="r" * 10_000),
+            _MessageProxy(role="llm", content="s" * 10_000),
+        ] * 10
+
+        result2 = compact_message_history(
+            cycle2_messages,
+            model,
+            stored_summary_tokens=estimate_token_count(stored),
+            threshold_ratio=0.001,
+            min_recent=1,
+            max_recent=2,
+        )
+
+        old_body = strip_compaction_prefix(stored).rstrip()
+        new_body = strip_compaction_prefix(result2.summary)
+        merged = cap_summary_length(
+            COMPACTION_SUMMARY_PREFIX + old_body + "\n\n" + new_body
+        )
+
+        self.assertLessEqual(
+            len(merged),
+            max_chars + 10,  # small slack for ellipsis
+            "Merged summary must respect the cap after two cycles",
+        )

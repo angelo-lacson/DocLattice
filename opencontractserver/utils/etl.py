@@ -13,6 +13,10 @@ from pydantic import TypeAdapter, ValidationError, create_model
 from typing_extensions import TypedDict
 
 from opencontractserver.annotations.models import (
+    DOC_TYPE_LABEL,
+    RELATIONSHIP_LABEL,
+    SPAN_LABEL,
+    TOKEN_LABEL,
     Annotation,
     AnnotationLabel,
     Relationship,
@@ -154,9 +158,9 @@ def build_label_lookups(
     # go into text_labels; DOC_TYPE_LABEL goes into doc_labels.
     # Each entry preserves its actual label_type for correct reconstruction on import.
     text_label_queryset = labels.filter(
-        label_type__in=["TOKEN_LABEL", "SPAN_LABEL", "RELATIONSHIP_LABEL"]
+        label_type__in=[TOKEN_LABEL, SPAN_LABEL, RELATIONSHIP_LABEL]
     )
-    doc_type_labels_queryset = labels.filter(label_type="DOC_TYPE_LABEL")
+    doc_type_labels_queryset = labels.filter(label_type=DOC_TYPE_LABEL)
 
     for tl in text_label_queryset:
         hex_color = getattr(tl, "color", "#9ACD32")
@@ -177,7 +181,7 @@ def build_label_lookups(
             "description": dl.description,
             "icon": dl.icon,
             "text": dl.text,
-            "label_type": "DOC_TYPE_LABEL",
+            "label_type": DOC_TYPE_LABEL,
         }
 
     return {
@@ -312,10 +316,10 @@ def build_document_export(
         labels_for_doc = []
 
         for annot in doc_annotations:
-            if annot.annotation_label.label_type == "DOC_TYPE_LABEL":
+            if annot.annotation_label.label_type == DOC_TYPE_LABEL:
                 labels_for_doc.append(f"{annot.annotation_label.text}")
 
-            if annot.annotation_label.label_type in ["TOKEN_LABEL", "SPAN_LABEL"]:
+            if annot.annotation_label.label_type in [TOKEN_LABEL, SPAN_LABEL]:
                 annot_export = {
                     "id": f"{annot.id}",
                     "annotationLabel": f"{annot.annotation_label.id}",

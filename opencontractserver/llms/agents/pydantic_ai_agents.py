@@ -30,6 +30,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_graph import End
 
+from opencontractserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -61,6 +62,7 @@ from opencontractserver.llms.context_guardrails import (
     estimate_token_count,
     get_context_window_for_model,
     messages_to_proxies,
+    strip_compaction_prefix,
 )
 from opencontractserver.llms.exceptions import ToolConfirmationRequired
 from opencontractserver.llms.tools.core_tools import (
@@ -356,14 +358,16 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             and len(raw_messages) > compaction_cfg.min_recent_messages
         ):
             proxies = messages_to_proxies(raw_messages)
-            system_prompt_tokens = estimate_token_count(
-                (self.config.system_prompt or "") + stored_summary
+            system_prompt_tokens = estimate_token_count(self.config.system_prompt or "")
+            stored_summary_tokens = (
+                estimate_token_count(stored_summary) if stored_summary else 0
             )
 
             result = compact_message_history(
                 proxies,
                 self.config.model_name,
                 system_prompt_tokens=system_prompt_tokens,
+                stored_summary_tokens=stored_summary_tokens,
                 threshold_ratio=compaction_cfg.threshold_ratio,
                 min_recent=compaction_cfg.min_recent_messages,
                 max_recent=compaction_cfg.max_recent_messages,
@@ -378,11 +382,13 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                 cutoff_idx = len(raw_messages) - result.preserved_count
                 cutoff_msg = raw_messages[cutoff_idx - 1]
 
-                # Merge old stored summary with the new compaction summary,
-                # capping the result to prevent unbounded growth across cycles.
+                # Merge old + new summary, stripping prefix to avoid
+                # duplication, then re-adding once.
                 if stored_summary:
+                    old_body = strip_compaction_prefix(stored_summary).rstrip()
+                    new_body = strip_compaction_prefix(result.summary)
                     merged_summary = cap_summary_length(
-                        stored_summary.rstrip() + "\n\n" + result.summary
+                        COMPACTION_SUMMARY_PREFIX + old_body + "\n\n" + new_body
                     )
                 else:
                     merged_summary = cap_summary_length(result.summary)
@@ -402,13 +408,25 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     # successful persistence.
                     raw_messages = raw_messages[-result.preserved_count :]
 
+                    # Report the actual post-merge token count rather
+                    # than CompactionResult.estimated_tokens_after, which
+                    # only reflects the new summary (not the merged one).
+                    actual_tokens_after = (
+                        estimate_token_count(self.config.system_prompt or "")
+                        + estimate_token_count(merged_summary)
+                        + sum(
+                            estimate_token_count(getattr(m, "content", "") or "")
+                            for m in raw_messages
+                        )
+                    )
+
                     logger.info(
                         "Compacted conversation: removed %d messages, "
                         "keeping %d recent (tokens %d → %d)",
                         result.removed_count,
                         result.preserved_count,
                         result.estimated_tokens_before,
-                        result.estimated_tokens_after,
+                        actual_tokens_after,
                     )
                 except Exception:
                     logger.exception(
