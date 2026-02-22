@@ -3,7 +3,8 @@
  *
  * Verifies:
  * 1. scrollIntoView is only called for PDF token annotations, not text span annotations.
- * 2. Page labels appear when annotation.page > 0 and are hidden when page === 0.
+ * 2. Page labels always appear for PDF token annotations (page is always meaningful).
+ * 3. Page labels appear for span annotations only when page > 0 (page=0 is a sentinel).
  */
 import React from "react";
 import { render, fireEvent } from "@testing-library/react";
@@ -42,7 +43,7 @@ vi.mock("../../hooks/useAnnotationImages", () => ({
   useAnnotationImages: () => ({
     images: [],
     loading: false,
-    error: null,
+    error: false,
   }),
 }));
 
@@ -133,9 +134,9 @@ describe("HighlightItem page label display", () => {
     expect(getByText("Page 3")).toBeTruthy();
   });
 
-  it("hides page label when annotation.page is 0 (token annotation)", () => {
-    const { queryByText } = renderHighlightItem(makeTokenAnnotation(0));
-    expect(queryByText(/^Page/)).toBeNull();
+  it("shows page label for page-0 token annotation (Page 1)", () => {
+    const { getByText } = renderHighlightItem(makeTokenAnnotation(0));
+    expect(getByText("Page 1")).toBeTruthy();
   });
 
   it("shows page label for span annotation when page > 0", () => {
