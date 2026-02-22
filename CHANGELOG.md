@@ -102,6 +102,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New tests: `opencontractserver/tests/test_prompt_sanitization.py`
   - Updated tests: `opencontractserver/tests/test_thread_corpus_actions.py` — added `test_async_thread_action_prompt_fences_user_content`
 
+#### Prompt Injection Mitigation Follow-up (Closes #913)
+- **Dead code fix**: `warn_if_content_large()` was called on truncated message previews (max 203 chars) but checks against a 1000-char threshold, making the warning ineffective. Moved the call to run on full content before truncation.
+  - File: `opencontractserver/tasks/agent_tasks.py` (`_build_thread_action_system_prompt`)
+- **Inconsistent monitoring**: Document and corpus titles embedded in system prompts in `core_agents.py` and `pydantic_ai_agents.py` now have `warn_if_content_large()` calls for consistent size monitoring.
+  - File: `opencontractserver/llms/agents/core_agents.py` (`CoreDocumentAgentFactory`, `CoreCorpusAgentFactory`)
+  - File: `opencontractserver/llms/agents/pydantic_ai_agents.py` (`PydanticAIDocumentAgent`, `PydanticAICorpusAgent`)
+- **Null safety**: All title values passed to `fence_user_content()` and `warn_if_content_large()` now use `or "untitled"` fallback to prevent `TypeError` when `document.title` or `corpus.title` is `None`.
+  - Affected files: `agent_tasks.py`, `core_agents.py`, `pydantic_ai_agents.py`
+- **Documentation mismatch**: `UNTRUSTED_CONTENT_NOTICE` now describes the labeled tag variant (`<user_content label="...">`) matching the actual implementation, and explains that the label attribute does not change handling.
+  - File: `opencontractserver/utils/prompt_sanitization.py`
+
 #### Frontend: Most views show legacy corpus.description instead of versioned mdDescription (Closes #892)
 - **Backend description sync**: `Corpus.update_description()` now keeps the plain-text `description` field in sync when `md_description` is updated via the versioned markdown system. A new `_markdown_to_plain_text()` static method strips markdown formatting for the plain-text field.
   - File: `opencontractserver/corpuses/models.py` (lines 249-272, `update_description` method)

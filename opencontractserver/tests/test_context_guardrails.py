@@ -581,18 +581,14 @@ class TestPersistFailurePreservesContext(SimpleTestCase):
         raw_messages = list(messages)
         stored_summary = ""
 
-        merged_summary = result.summary
+        # merged_summary would be assigned result.summary before persistence
+        self.assertTrue(result.summary)  # summary was generated
 
-        persist_failed = False
         try:
             # Simulate a DB failure
             raise RuntimeError("DB write failed")
         except Exception:
-            persist_failed = True
-
-        if not persist_failed:
-            stored_summary = merged_summary
-            raw_messages = raw_messages[-result.preserved_count :]
+            pass  # persist failed — do NOT update stored_summary or trim
 
         # After failure: raw_messages should still have all 20 messages
         self.assertEqual(len(raw_messages), 20)
@@ -965,3 +961,139 @@ class TestCompactionBookmarkDatabaseFilter(SimpleTestCase):
 
             # All messages should be returned
             self.assertEqual(len(result), 3)
+
+
+# ---------------------------------------------------------------------------
+# _get_message_history compaction eligibility path
+# ---------------------------------------------------------------------------
+
+
+class TestGetMessageHistoryCompactionTokenCounting(SimpleTestCase):
+    """Verify that _get_message_history passes correct token counts
+    to compact_message_history when compaction is enabled and enough
+    messages exist to trigger the eligibility check."""
+
+    async def test_compaction_eligibility_passes_stored_summary_tokens(self):
+        """When compaction is enabled and messages exceed min_recent,
+        _get_message_history should compute system_prompt_tokens and
+        stored_summary_tokens and pass them to compact_message_history."""
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Build mock messages exceeding min_recent_messages
+        mock_messages = []
+        for i in range(10):
+            m = MagicMock()
+            m.id = i + 1
+            m.content = f"Message {i}: " + "x" * 200
+            m.msg_type = "HUMAN" if i % 2 == 0 else "LLM"
+            mock_messages.append(m)
+
+        # Create mock conversation with a stored summary
+        mock_conv = MagicMock()
+        mock_conv.compaction_summary = "Previous summary text"
+
+        # Create mock conversation manager
+        mock_manager = MagicMock(spec=CoreConversationManager)
+        mock_manager.get_conversation_messages = AsyncMock(return_value=mock_messages)
+        mock_manager.conversation = mock_conv
+
+        # Create agent bypassing __init__
+        agent = PydanticAICoreAgent.__new__(PydanticAICoreAgent)
+        agent.config = AgentConfig(
+            system_prompt="You are a test assistant",
+            compaction=CompactionConfig(
+                enabled=True,
+                min_recent_messages=2,
+            ),
+        )
+        agent.conversation_manager = mock_manager
+
+        # Patch compact_message_history to return not-compacted
+        with patch(
+            "opencontractserver.llms.agents.pydantic_ai_agents.compact_message_history"
+        ) as mock_compact:
+            mock_compact.return_value = CompactionResult(
+                compacted=False,
+                summary="",
+                preserved_count=len(mock_messages),
+                removed_count=0,
+                estimated_tokens_before=5000,
+                estimated_tokens_after=5000,
+            )
+
+            result = await agent._get_message_history()
+
+            # Verify compact_message_history was called
+            mock_compact.assert_called_once()
+            call_kwargs = mock_compact.call_args.kwargs
+
+            # system_prompt_tokens should reflect "You are a test assistant"
+            self.assertIn("system_prompt_tokens", call_kwargs)
+            self.assertGreater(call_kwargs["system_prompt_tokens"], 0)
+
+            # stored_summary_tokens should reflect "Previous summary text"
+            self.assertIn("stored_summary_tokens", call_kwargs)
+            self.assertGreater(call_kwargs["stored_summary_tokens"], 0)
+
+            # Result should have messages (not compacted, so all returned)
+            self.assertIsNotNone(result.messages)
+
+    async def test_compaction_eligibility_zero_stored_summary_tokens_when_empty(self):
+        """When there is no stored summary, stored_summary_tokens should be 0."""
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        # Build mock messages
+        mock_messages = []
+        for i in range(10):
+            m = MagicMock()
+            m.id = i + 1
+            m.content = f"Message {i}: " + "x" * 200
+            m.msg_type = "HUMAN" if i % 2 == 0 else "LLM"
+            mock_messages.append(m)
+
+        # No stored summary
+        mock_conv = MagicMock()
+        mock_conv.compaction_summary = ""
+
+        mock_manager = MagicMock(spec=CoreConversationManager)
+        mock_manager.get_conversation_messages = AsyncMock(return_value=mock_messages)
+        mock_manager.conversation = mock_conv
+
+        agent = PydanticAICoreAgent.__new__(PydanticAICoreAgent)
+        agent.config = AgentConfig(
+            system_prompt="You are a test assistant",
+            compaction=CompactionConfig(
+                enabled=True,
+                min_recent_messages=2,
+            ),
+        )
+        agent.conversation_manager = mock_manager
+
+        with patch(
+            "opencontractserver.llms.agents.pydantic_ai_agents.compact_message_history"
+        ) as mock_compact:
+            mock_compact.return_value = CompactionResult(
+                compacted=False,
+                summary="",
+                preserved_count=len(mock_messages),
+                removed_count=0,
+                estimated_tokens_before=5000,
+                estimated_tokens_after=5000,
+            )
+
+            await agent._get_message_history()
+
+            call_kwargs = mock_compact.call_args.kwargs
+            self.assertEqual(call_kwargs["stored_summary_tokens"], 0)
