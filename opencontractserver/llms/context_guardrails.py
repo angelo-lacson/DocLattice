@@ -43,6 +43,7 @@ __all__ = [
     "get_context_window_for_model",
     "truncate_tool_output",
     "cap_summary_length",
+    "strip_compaction_prefix",
     "CompactionConfig",
     "CompactionResult",
     "compact_message_history",
@@ -129,12 +130,18 @@ def truncate_tool_output(
 
     notice = TOOL_OUTPUT_TRUNCATION_NOTICE.format(limit=max_chars)
 
-    # When max_chars is too small to fit any content plus the notice,
-    # just hard-truncate without a notice.
-    if max_chars <= len(notice):
+    # Budget for actual content after reserving space for the notice.
+    # max(0, ...) prevents negative indices when max_chars < len(notice),
+    # which would otherwise cause Python to slice from the *end* of the
+    # string instead of the beginning.
+    char_budget = max(0, max_chars - len(notice))
+
+    if char_budget == 0:
+        # max_chars is too small to fit any content plus the notice —
+        # hard-truncate without a notice.
         return output[:max_chars]
 
-    truncated = output[: max_chars - len(notice)] + notice
+    truncated = output[:char_budget] + notice
     logger.debug(
         "Truncated tool output from %d to %d characters",
         len(output),
@@ -191,16 +198,21 @@ def should_compact(
     model_name: str,
     *,
     system_prompt_tokens: int = 0,
+    stored_summary_tokens: int = 0,
     threshold_ratio: float = COMPACTION_THRESHOLD_RATIO,
 ) -> bool:
     """Return ``True`` if the conversation should be compacted.
 
     The decision is based on whether the estimated token total (system
-    prompt + all messages) exceeds *threshold_ratio* of the model's
-    context window.
+    prompt + stored summary + all messages) exceeds *threshold_ratio*
+    of the model's context window.
     """
     context_window = get_context_window_for_model(model_name)
-    total_tokens = system_prompt_tokens + sum(m.token_estimate for m in messages)
+    total_tokens = (
+        system_prompt_tokens
+        + stored_summary_tokens
+        + sum(m.token_estimate for m in messages)
+    )
     threshold = int(context_window * threshold_ratio)
     return total_tokens > threshold
 
@@ -210,6 +222,7 @@ def compact_message_history(
     model_name: str,
     *,
     system_prompt_tokens: int = 0,
+    stored_summary_tokens: int = 0,
     threshold_ratio: float = COMPACTION_THRESHOLD_RATIO,
     min_recent: int = MIN_RECENT_MESSAGES,
     max_recent: int = MAX_RECENT_MESSAGES,
@@ -232,7 +245,12 @@ def compact_message_history(
     Parameters:
         messages: Full conversation history as lightweight proxies.
         model_name: LLM model identifier for context window lookup.
-        system_prompt_tokens: Estimated tokens for the system prompt.
+        system_prompt_tokens: Estimated tokens for the system prompt
+            (excluding any previously stored compaction summary).
+        stored_summary_tokens: Estimated tokens for the previously
+            stored compaction summary.  Tracked separately so that
+            ``estimated_tokens_after`` correctly reflects the *new*
+            summary replacing the old one rather than double-counting.
         threshold_ratio: Context window fraction that triggers compaction.
         min_recent: Minimum recent messages to keep verbatim.
         max_recent: Maximum recent messages to keep verbatim.
@@ -243,7 +261,8 @@ def compact_message_history(
     Returns:
         A :class:`CompactionResult` describing the compaction outcome.
     """
-    total_before = system_prompt_tokens + sum(m.token_estimate for m in messages)
+    message_tokens = sum(m.token_estimate for m in messages)
+    total_before = system_prompt_tokens + stored_summary_tokens + message_tokens
     context_window = get_context_window_for_model(model_name)
     threshold = int(context_window * threshold_ratio)
 
@@ -270,8 +289,11 @@ def compact_message_history(
             break
         recent_count = candidate
 
-    # Safety net: when min_recent=0 is caller-supplied and even one
-    # message exceeds the threshold, ensure we keep at least one message.
+    # Defensive safety net: unreachable with the default MIN_RECENT_MESSAGES
+    # (which is >= 1), but guards against callers that explicitly pass
+    # min_recent=0.  In that edge case, if even a single message exceeds
+    # the threshold the loop above would set recent_count=0 — keeping at
+    # least one message avoids an empty recent window.
     if recent_count < 1:
         recent_count = 1
 
@@ -330,13 +352,19 @@ def _deterministic_summary(messages: list[_MessageProxy]) -> str:
         parts.append(f'User initially asked: "{first_q}"')
 
     for m in llm_messages:
-        # First sentence heuristic — split on sentence-ending punctuation
-        # followed by whitespace, avoiding false splits on abbreviations
-        # (e.g. "Dr."), decimals (e.g. "1.5"), and URLs.  Requires at
-        # least three word characters before the punctuation mark so
-        # short tokens like "Dr.", "Mr.", "1." are not treated as
-        # sentence boundaries.
-        sentence = re.split(r"(?<=\w{3}[.!?])\s+", m.content, maxsplit=1)[0].strip()
+        # First sentence heuristic — splits on:
+        #   1. Sentence-ending punctuation followed by whitespace, avoiding
+        #      false splits on abbreviations (e.g. "Dr."), decimals (e.g.
+        #      "1.5"), and URLs.  Requires at least three word characters
+        #      before the punctuation mark.
+        #   2. Double-newlines (paragraph boundaries).
+        #   3. A newline followed by a list marker (``-``, ``*``, ``1.``
+        #      etc.) — catches markdown/bullet-list responses.
+        sentence = re.split(
+            r"(?<=\w{3}[.!?])\s+|\n{2,}|\n(?=[-*•]\s|\d+[.)]\s)",
+            m.content,
+            maxsplit=1,
+        )[0].strip()
         if sentence and len(sentence) > 10:
             parts.append(f'Assistant noted: "{sentence[:150]}"')
 
@@ -391,6 +419,18 @@ def cap_summary_length(summary: str) -> str:
     if len(summary) <= max_chars:
         return summary
     return summary[:max_chars] + "\u2026"
+
+
+def strip_compaction_prefix(text: str) -> str:
+    """Remove the :data:`COMPACTION_SUMMARY_PREFIX` header from *text*.
+
+    Returns *text* unchanged if the prefix is not present.  Used during
+    summary merging to prevent duplicate prefixes accumulating across
+    successive compaction cycles.
+    """
+    if text.startswith(COMPACTION_SUMMARY_PREFIX):
+        return text[len(COMPACTION_SUMMARY_PREFIX) :]
+    return text
 
 
 @dataclass

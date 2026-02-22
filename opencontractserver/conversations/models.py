@@ -717,13 +717,22 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
             "compaction has occurred."
         ),
     )
+    # NOTE: This is intentionally a BigIntegerField rather than a ForeignKey
+    # to avoid CASCADE deletion issues — if the referenced ChatMessage is
+    # deleted, the ``id__gt`` filter in ``get_conversation_messages()``
+    # remains correct because it only needs a numeric threshold, not a live
+    # row.  Any message with ``id > compacted_before_message_id`` is
+    # returned regardless of whether the cutoff message itself still exists.
     compacted_before_message_id = models.BigIntegerField(
         null=True,
         blank=True,
         help_text=(
             "ID of the last message that was folded into "
             "compaction_summary.  Messages with id <= this value "
-            "are excluded from LLM context (but kept in the DB)."
+            "are excluded from LLM context (but kept in the DB).  "
+            "Stored as a plain integer (not a ForeignKey) so the "
+            "id__gt filter remains valid even if the cutoff message "
+            "is deleted."
         ),
     )
 

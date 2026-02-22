@@ -2814,11 +2814,10 @@ export const Corpuses = () => {
             onClose={() => editingCorpus(null)}
             loading={update_corpus_loading}
           />
-          {exporting_corpus ? (
-            <SelectExportTypeModal visible={Boolean(exportingCorpus)} />
-          ) : (
-            <></>
-          )}
+          <SelectExportTypeModal
+            open={exporting_corpus !== null}
+            onClose={() => exportingCorpus(null)}
+          />
           {corpus_to_view !== null ? (
             <CorpusModal
               open={corpus_to_view !== null}

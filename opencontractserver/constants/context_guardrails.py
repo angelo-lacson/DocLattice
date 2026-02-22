@@ -95,7 +95,8 @@ COMPACTION_SUMMARY_PREFIX: str = (
 # Token estimation
 # ---------------------------------------------------------------------------
 # Average characters per token used for the fast heuristic estimator.
-# English text averages ~4 chars/token across common tokenisers.  This is
-# intentionally conservative (slightly over-counting) so that the system
-# compacts a little earlier rather than risking a hard overflow.
+# English text averages ~4 chars/token across common tokenisers.  Using
+# 3.5 instead of 4 chars-per-token means we over-estimate the token count
+# for a given string, triggering compaction conservatively rather than
+# risking a hard context-window overflow.
 CHARS_PER_TOKEN_ESTIMATE: float = 3.5
