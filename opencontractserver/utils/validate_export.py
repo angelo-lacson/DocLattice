@@ -37,7 +37,10 @@ VALID_CONTENT_MODALITIES = {"TEXT", "IMAGE", "AUDIO", "TABLE", "VIDEO"}
 
 KNOWN_VERSIONS = {"1.0", "2.0"}
 
-# Maximum data.json size to load into memory (500 MB)
+# Maximum data.json size to load into memory (500 MB).
+# Note: intentionally duplicates ZIP_MAX_TOTAL_SIZE_BYTES from
+# opencontractserver/constants/zip_import.py — that module has a Django
+# dependency and cannot be imported in a standalone context.
 MAX_DATA_JSON_SIZE = 500 * 1024 * 1024
 
 V2_REQUIRED_FIELDS = {
@@ -219,7 +222,7 @@ def _check_documents(data: dict, result: ValidationResult) -> set[str]:
         local_annot_ids: set[str] = set()
         deferred_parent_checks: list[tuple[str | None, str | None]] = []
         if "labelled_text" not in doc:
-            result.warn(f"{prefix}: missing 'labelled_text' field")
+            result.error(f"{prefix}: missing required field 'labelled_text'")
         for annot in doc.get("labelled_text", []):
             raw_id = annot.get("id")
             annot_id = str(raw_id) if raw_id is not None else ""
@@ -337,8 +340,10 @@ def _check_annotation(
                 f"(must be one of {VALID_CONTENT_MODALITIES})"
             )
 
-    # Validate annotation_json token references and bounds
-    ann_json = annot.get("annotation_json", {})
+    # Validate annotation_json token references and bounds.
+    # Use `or {}` instead of a default so that explicit null (common in
+    # exports) is normalised to an empty dict rather than silently skipping.
+    ann_json = annot.get("annotation_json") or {}
     if isinstance(ann_json, dict):
         for page_key, page_data in ann_json.items():
             if not isinstance(page_data, dict):
@@ -661,6 +666,8 @@ def _check_conversations(data: dict, result: ValidationResult) -> None:
     messages = data.get("messages", [])
     votes = data.get("message_votes", [])
 
+    # conv_ids may be empty if "conversations" key is absent; any conversation_id
+    # reference in messages is then legitimately unresolvable (error, not warning).
     conv_ids: set[str] = set()
     for conv in conversations:
         cid = conv.get("id")
@@ -814,17 +821,17 @@ def validate_export(zip_path: str) -> ValidationResult:
                 result.error("ZIP does not contain data.json")
                 return result
 
-            data_size = zf.getinfo("data.json").file_size
-            if data_size > MAX_DATA_JSON_SIZE:
-                result.error(
-                    f"data.json is too large ({data_size} bytes, "
-                    f"max {MAX_DATA_JSON_SIZE})"
-                )
-                return result
-
             try:
                 with zf.open("data.json") as f:
-                    data = json.loads(f.read().decode("utf-8"))
+                    max_read = MAX_DATA_JSON_SIZE + 1
+                    raw = f.read(max_read)
+                    if len(raw) == max_read:
+                        result.error(
+                            f"data.json exceeds maximum size "
+                            f"({MAX_DATA_JSON_SIZE} bytes)"
+                        )
+                        return result
+                    data = json.loads(raw.decode("utf-8"))
             except json.JSONDecodeError as e:
                 result.error(f"data.json is not valid JSON: {e}")
                 return result

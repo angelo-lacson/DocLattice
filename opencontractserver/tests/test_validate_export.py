@@ -457,6 +457,24 @@ class TestAnnotationValidation(unittest.TestCase):
         assert not result.ok
         assert any("out of range" in e and "999" in e for e in result.errors)
 
+    def test_annotation_json_null_not_silently_skipped(self):
+        """Explicit null annotation_json should not silently skip validation."""
+        data = _minimal_v1_data()
+        annot = data["annotated_docs"]["sample.pdf"]["labelled_text"][0]
+        annot["annotation_json"] = None
+        result = validate_data_json(data)
+        # Should still be valid (null is normalised to empty dict, no tokens to check)
+        # but the key point is it must NOT raise or silently skip
+        assert result.ok, result.summary()
+
+    def test_missing_labelled_text_is_error(self):
+        """Missing labelled_text field should be an error, not a warning."""
+        data = _minimal_v1_data()
+        del data["annotated_docs"]["sample.pdf"]["labelled_text"]
+        result = validate_data_json(data)
+        assert not result.ok
+        assert any("labelled_text" in e for e in result.errors)
+
     def test_page_index_mismatches_page_key(self):
         """pageIndex in tokensJsons must match the containing page key."""
         data = _minimal_v1_data()
@@ -1044,6 +1062,38 @@ class TestBadZipInput(unittest.TestCase):
             os.unlink(path)
         assert not result.ok
         assert any("data.json" in e for e in result.errors)
+
+
+class TestSizeGuard(unittest.TestCase):
+    def test_oversized_data_json_rejected(self):
+        """data.json exceeding MAX_DATA_JSON_SIZE should produce an error."""
+        import opencontractserver.utils.validate_export as mod
+
+        original = mod.MAX_DATA_JSON_SIZE
+        try:
+            # Set a tiny limit so we can trigger it with a small payload
+            mod.MAX_DATA_JSON_SIZE = 10
+            data = _minimal_v1_data()
+            result = _write_and_validate(data, {"sample.pdf": b"%PDF-fake"})
+            assert not result.ok
+            assert any("exceeds maximum size" in e for e in result.errors)
+        finally:
+            mod.MAX_DATA_JSON_SIZE = original
+
+    def test_just_under_limit_passes(self):
+        """data.json at exactly the limit should not be rejected."""
+        import opencontractserver.utils.validate_export as mod
+
+        data = _minimal_v1_data()
+        data_bytes = json.dumps(data).encode("utf-8")
+        original = mod.MAX_DATA_JSON_SIZE
+        try:
+            # Set limit to exactly the size of the data
+            mod.MAX_DATA_JSON_SIZE = len(data_bytes)
+            result = _write_and_validate(data, {"sample.pdf": b"%PDF-fake"})
+            assert result.ok, result.summary()
+        finally:
+            mod.MAX_DATA_JSON_SIZE = original
 
 
 class TestCLI(unittest.TestCase):
