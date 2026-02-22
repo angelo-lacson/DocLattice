@@ -174,10 +174,12 @@ test.describe("Selection Menu Positioning Corner Cases", () => {
       timeout: LONG_TIMEOUT,
     });
 
-    // Zoom in to create horizontal scroll scenario
-    await page.keyboard.press("Control++");
-    await page.keyboard.press("Control++");
-    await page.keyboard.press("Control++");
+    // Zoom in via Ctrl++ (intercepted by handleKeyboardZoom in DocumentKnowledgeBase)
+    // Wait between presses so React re-renders and the handler picks up the new zoomLevel
+    for (let i = 0; i < 5; i++) {
+      await page.keyboard.press("Control++");
+      await page.waitForTimeout(200);
+    }
     await page.waitForTimeout(500);
 
     // Scroll horizontally to the right edge
@@ -195,9 +197,14 @@ test.describe("Selection Menu Positioning Corner Cases", () => {
     const layerBox = await selectionLayer.boundingBox();
     expect(layerBox).toBeTruthy();
 
-    // Select text near the right edge
-    const startX = layerBox!.x + layerBox!.width - 100;
-    const startY = layerBox!.y + 50;
+    // Select text near the right edge but well below floating controls
+    // (ZoomControls overlay at z-index 900 sits at top-right of content area)
+    const viewport = page.viewportSize()!;
+    const startX = Math.min(
+      layerBox!.x + layerBox!.width - 100,
+      viewport.width - 60
+    );
+    const startY = layerBox!.y + 250;
 
     await performTextSelection(page, startX, startY, startX + 50, startY + 30);
 
@@ -205,22 +212,18 @@ test.describe("Selection Menu Positioning Corner Cases", () => {
     const actionMenu = page.getByTestId("selection-action-menu");
     await expect(actionMenu).toBeVisible({ timeout: LONG_TIMEOUT });
 
-    // Get menu position and viewport
+    // Get menu position
     const menuBox = await actionMenu.boundingBox();
-    const viewport = page.viewportSize();
 
     expect(menuBox).toBeTruthy();
-    expect(viewport).toBeTruthy();
 
-    // FAILING CASE: Menu should be fully visible within viewport
-    // Currently it will appear off-screen to the right
+    // Menu should be fully visible within viewport
     const menuFullyVisible =
       menuBox!.x >= 0 &&
       menuBox!.y >= 0 &&
-      menuBox!.x + menuBox!.width <= viewport!.width &&
-      menuBox!.y + menuBox!.height <= viewport!.height;
+      menuBox!.x + menuBox!.width <= viewport.width &&
+      menuBox!.y + menuBox!.height <= viewport.height;
 
-    // This test SHOULD fail with current implementation
     expect(menuFullyVisible).toBe(true);
     console.log(
       `[TEST] Menu position: x=${menuBox!.x}, y=${menuBox!.y}, width=${
@@ -228,7 +231,7 @@ test.describe("Selection Menu Positioning Corner Cases", () => {
       }`
     );
     console.log(
-      `[TEST] Viewport: width=${viewport!.width}, height=${viewport!.height}`
+      `[TEST] Viewport: width=${viewport.width}, height=${viewport.height}`
     );
     console.log(`[TEST] Menu fully visible: ${menuFullyVisible}`);
   });
@@ -386,7 +389,7 @@ test.describe("Selection Menu Positioning Corner Cases", () => {
       { timeout: 5000 }
     );
 
-    // Apply moderate zoom (enough to test but not cause issues)
+    // Apply moderate zoom via Ctrl++ (intercepted by handleKeyboardZoom)
     await page.keyboard.press("Control++");
     await page.waitForTimeout(300);
     await page.keyboard.press("Control++");

@@ -88,8 +88,12 @@ class PipelineSettingsModelTestCase(TestCase):
     )
     def test_get_preferred_parser_uses_db(self):
         """Test that get_preferred_parser returns DB values (populated from Django settings on creation)."""
-        # Delete existing instance and create new one to pick up test settings
+        # Delete existing instance and create new one to pick up test settings.
+        # Must invalidate cache because queryset.delete() bypasses model.delete()
+        # and doesn't clear the cached singleton (populated during setUp by
+        # personal corpus creation).
         PipelineSettings.objects.all().delete()
+        PipelineSettings._invalidate_cache()
         instance = PipelineSettings.get_instance()
 
         # Initial DB values populated from Django settings via get_instance()
@@ -118,8 +122,12 @@ class PipelineSettingsModelTestCase(TestCase):
     )
     def test_get_default_embedder_uses_db(self):
         """Test that get_default_embedder returns DB values (populated from Django settings on creation)."""
-        # Delete existing instance to test creation with settings
+        # Delete existing instance to test creation with settings.
+        # Must invalidate cache because queryset.delete() bypasses model.delete()
+        # and doesn't clear the cached singleton (populated during setUp by
+        # personal corpus creation).
         PipelineSettings.objects.all().delete()
+        PipelineSettings._invalidate_cache()
         instance = PipelineSettings.get_instance()
 
         # Initial DB value populated from Django settings via get_instance()

@@ -104,6 +104,11 @@ interface TxtAnnotatorProps {
   }[];
   /** Currently selected chat source ID, if any. */
   selectedChatSourceId?: string;
+  /** Callback to register/unregister annotation DOM refs for sidebar scroll-to. */
+  onAnnotationRefChange?: (
+    annotationId: string,
+    element: HTMLElement | null
+  ) => void;
 }
 
 /** Used in the label rendering code to describe each label's bounding box. */
@@ -147,11 +152,24 @@ const AnnotatedSpan = styled.span<{
   hasBorder?: boolean;
   borderColor?: string;
   zIndex?: number;
+  $hasAnnotation?: boolean;
+  $annotationColor?: string;
 }>`
   position: relative;
   cursor: text;
   user-select: text;
   white-space: pre-wrap;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+
+  ${(props) =>
+    props.$hasAnnotation &&
+    css`
+      padding: 1px 2px;
+      border-radius: 3px;
+      border-bottom: 2px solid ${props.$annotationColor || "#cccccc"};
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    `}
 
   ${(props) =>
     props.approved &&
@@ -310,6 +328,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   selectedSearchResultIndex,
   chatSources = [],
   selectedChatSourceId,
+  onAnnotationRefChange,
 }) => {
   const [hoveredSpanIndex, setHoveredSpanIndex] = useState<number | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -320,6 +339,72 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hideLabelsTimeout = useRef<NodeJS.Timeout | null>(null);
+  const registeredAnnotationIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Register annotation DOM refs so the sidebar can scrollIntoView directly.
+   * For each visible annotation, we find the first span that contains it and
+   * register that element via the onAnnotationRefChange callback.
+   *
+   * Only annotations whose labels pass the visibleLabels filter get registered,
+   * matching the spans-building logic below.
+   */
+  useEffect(() => {
+    if (!onAnnotationRefChange || !containerRef.current) return;
+
+    // Filter to only visible annotations, matching span-building logic
+    const isLabelVisible = (labelText: string) => {
+      if (visibleLabels === null) return true;
+      return visibleLabels.some((label) => label.text === labelText);
+    };
+
+    const visibleAnnotations = annotations.filter(
+      (ann) =>
+        ann.annotationLabel?.text && isLabelVisible(ann.annotationLabel.text)
+    );
+
+    const currentIds = new Set<string>();
+    for (const ann of visibleAnnotations) {
+      currentIds.add(ann.id);
+    }
+
+    // Find and register the first DOM span for each visible annotation
+    for (const ann of visibleAnnotations) {
+      const spanIndex = spans.findIndex(
+        (span) => ann.json.start >= span.start && ann.json.start < span.end
+      );
+      if (spanIndex < 0) continue;
+
+      const el = containerRef.current.querySelector(
+        `span[data-span-index="${spanIndex}"]`
+      ) as HTMLElement | null;
+      if (el) {
+        onAnnotationRefChange(ann.id, el);
+      }
+    }
+
+    // Unregister annotations that were removed or became hidden
+    for (const prevId of registeredAnnotationIdsRef.current) {
+      if (!currentIds.has(prevId)) {
+        onAnnotationRefChange(prevId, null);
+      }
+    }
+
+    registeredAnnotationIdsRef.current = currentIds;
+  }, [annotations, spans, visibleLabels, onAnnotationRefChange]);
+
+  /**
+   * Cleanup all registered refs on unmount only (empty dependency array).
+   */
+  useEffect(() => {
+    return () => {
+      if (!onAnnotationRefChange) return;
+      for (const id of registeredAnnotationIdsRef.current) {
+        onAnnotationRefChange(id, null);
+      }
+      registeredAnnotationIdsRef.current = new Set();
+    };
+  }, [onAnnotationRefChange]);
 
   /**
    * Handle mouse enter on a specific span index.
@@ -627,8 +712,6 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
    * to ensure we always find the right span.
    */
   useEffect(() => {
-    console.log("selectedChatSourceId changed to ", selectedChatSourceId);
-
     if (!selectedChatSourceId) return;
     const containerElement = containerRef.current;
     if (!containerElement) return;
@@ -785,6 +868,12 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           const borderColor =
             finalAnnotations[0]?.annotationLabel?.color || "#000";
 
+          // Determine the primary annotation color for the bottom border
+          const primaryAnnotationColor =
+            finalAnnotations.length > 0
+              ? finalAnnotations[0].annotationLabel.color || "#cccccc"
+              : undefined;
+
           return (
             <AnnotatedSpan
               key={index}
@@ -800,6 +889,8 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
               rejected={rejected}
               hasBorder={hasBorder}
               borderColor={borderColor}
+              $hasAnnotation={finalAnnotations.length > 0}
+              $annotationColor={primaryAnnotationColor}
               style={{
                 ...backgroundStyle,
                 position: "relative",

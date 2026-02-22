@@ -2,11 +2,12 @@
  * CorpusHeader - Header section with title, description, and edit button
  */
 import React from "react";
-import { Icon } from "semantic-ui-react";
 import { Button } from "@os-legal/ui";
 import { Edit } from "lucide-react";
 import { editingCorpus } from "../../../graphql/cache";
 import { CorpusType } from "../../../types/graphql-api";
+import { useCorpusMdDescription } from "../../../hooks/useCorpusMdDescription";
+import { SafeMarkdown } from "../../knowledge_base/markdown/SafeMarkdown";
 import {
   CorpusHeaderContainer,
   TitleArea,
@@ -19,16 +20,24 @@ interface CorpusHeaderProps {
     id: string;
     title: string;
     description: string;
+    mdDescription?: string | null;
   };
 }
 
 export const CorpusHeader: React.FC<CorpusHeaderProps> = ({ corpus }) => {
+  const mdContent = useCorpusMdDescription(corpus.mdDescription);
+  const displayContent = mdContent || corpus.description;
+
   return (
     <CorpusHeaderContainer>
       <TitleArea>
         <CorpusTitle>{corpus.title}</CorpusTitle>
         <CorpusDescription>
-          {corpus.description || "No description provided."}
+          {displayContent ? (
+            <SafeMarkdown>{displayContent}</SafeMarkdown>
+          ) : (
+            "No description provided."
+          )}
         </CorpusDescription>
       </TitleArea>
       <Button

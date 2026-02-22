@@ -9,6 +9,7 @@ import {
   FileText,
   ArrowRight,
   Plus,
+  MoreVertical,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -40,6 +41,8 @@ import {
   AccessBadge,
   ChatSection,
   ViewDetailsButton,
+  HeaderRow,
+  MobileMenuButton,
 } from "./styles";
 
 export interface CorpusLandingViewProps {
@@ -56,6 +59,8 @@ export interface CorpusLandingViewProps {
   onChatQueryChange?: (value: string) => void;
   onChatSubmit?: (query: string) => void;
   onViewChatHistory?: () => void;
+  /** Callback to open mobile navigation menu */
+  onOpenMobileMenu?: () => void;
   /** Test ID for the component */
   testId?: string;
 }
@@ -81,6 +86,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onChatQueryChange,
   onChatSubmit,
   onViewChatHistory,
+  onOpenMobileMenu,
   testId = "corpus-landing",
 }) => {
   const [mdContent, setMdContent] = React.useState<string | null>(null);
@@ -141,25 +147,36 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
     <LandingContainer data-testid={testId}>
       <LandingContent>
         <LandingHero>
-          {/* Centered breadcrumbs */}
-          <CenteredBreadcrumbs
-            aria-label="Breadcrumb navigation"
-            data-testid={`${testId}-breadcrumbs`}
-          >
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigateToCorpuses?.();
-              }}
+          {/* Centered breadcrumbs with mobile menu button as sibling */}
+          <HeaderRow $justify="center">
+            <CenteredBreadcrumbs
+              aria-label="Breadcrumb navigation"
+              data-testid={`${testId}-breadcrumbs`}
             >
-              Corpuses
-            </a>
-            <ChevronRight aria-hidden="true" />
-            <span className="current">
-              {fullCorpus.title || "Untitled Corpus"}
-            </span>
-          </CenteredBreadcrumbs>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigateToCorpuses?.();
+                }}
+              >
+                Corpuses
+              </a>
+              <ChevronRight aria-hidden="true" />
+              <span className="current">
+                {fullCorpus.title || "Untitled Corpus"}
+              </span>
+            </CenteredBreadcrumbs>
+            {onOpenMobileMenu && (
+              <MobileMenuButton
+                onClick={onOpenMobileMenu}
+                aria-label="Open navigation menu"
+                data-testid={`${testId}-mobile-menu`}
+              >
+                <MoreVertical />
+              </MobileMenuButton>
+            )}
+          </HeaderRow>
 
           {/* Corpus badge */}
           <CorpusBadge>CORPUS</CorpusBadge>

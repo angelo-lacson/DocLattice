@@ -67,6 +67,7 @@ import {
   showSelectCorpusAnalyzerOrFieldsetModal,
   selectedTab,
   selectedExtractIds,
+  selectedThreadId,
 } from "../graphql/cache";
 import {
   updateTabParam,
@@ -1577,27 +1578,14 @@ export const Corpuses = () => {
   // Used to hide parent navigation header when CorpusChat handles its own
   const [chatInConversation, setChatInConversation] = useState<boolean>(false);
 
-  // Track whether CorpusDiscussionsView is showing a thread detail (vs the list view)
-  // Used to hide parent navigation header when viewing inline thread detail
-  const [discussionInThreadView, setDiscussionInThreadView] =
-    useState<boolean>(false);
+  // Derive whether the discussions tab is showing a thread detail from URL state.
+  // The ?thread= param is synced to selectedThreadId by CentralRouteManager.
+  const currentSelectedThreadId = useReactiveVar(selectedThreadId);
+  const discussionInThreadView = currentSelectedThreadId !== null;
 
-  // Debug: Log state changes
-  console.log("[Corpuses] Current documentsViewMode:", documentsViewMode);
-
-  // Wrapped setter with logging
-  const handleViewModeChange = useCallback(
-    (mode: ViewMode) => {
-      console.log(
-        "[Corpuses] handleViewModeChange called with:",
-        mode,
-        "from:",
-        documentsViewMode
-      );
-      setDocumentsViewMode(mode);
-    },
-    [documentsViewMode]
-  );
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setDocumentsViewMode(mode);
+  }, []);
 
   const opened_corpus_id = opened_corpus?.id ? opened_corpus.id : null;
   let raw_permissions = opened_corpus?.myPermissions;
@@ -2401,11 +2389,7 @@ export const Corpuses = () => {
               </TabNavigationHeader>
             )}
             <div style={{ flex: 1, overflow: "hidden" }}>
-              <CorpusDiscussionsView
-                corpusId={opened_corpus.id}
-                hideHeader
-                onViewModeChange={setDiscussionInThreadView}
-              />
+              <CorpusDiscussionsView corpusId={opened_corpus.id} hideHeader />
             </div>
           </div>
         ) : null,
@@ -2498,6 +2482,7 @@ export const Corpuses = () => {
                         id: opened_corpus.id,
                         title: opened_corpus.title,
                         description: opened_corpus.description || "",
+                        mdDescription: opened_corpus.mdDescription,
                         allowComments: opened_corpus.allowComments || false,
                         preferredEmbedder: opened_corpus.preferredEmbedder,
                         slug: (opened_corpus as any).slug || null,
@@ -2563,7 +2548,7 @@ export const Corpuses = () => {
     canUpdateCorpus,
     documentsViewMode, // Required for view mode toggle to work
     chatInConversation, // Required for chat tab header visibility
-    discussionInThreadView, // Required for discussions tab header visibility
+    currentSelectedThreadId, // Required for discussions tab header visibility (URL-driven)
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);
