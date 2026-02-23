@@ -26,6 +26,14 @@ from config.graphql.agent_mutations import (
 )
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
 
+# Import worker mutations
+from config.graphql.worker_mutations import (
+    CreateCorpusAccessTokenMutation,
+    CreateWorkerAccount,
+    DeactivateWorkerAccount,
+    RevokeCorpusAccessTokenMutation,
+)
+
 # Import badge mutations
 from config.graphql.badge_mutations import (
     AwardBadgeMutation,
@@ -6213,3 +6221,9 @@ class Mutation(graphene.ObjectType):
     reset_pipeline_settings = ResetPipelineSettingsMutation.Field()
     update_component_secrets = UpdateComponentSecretsMutation.Field()
     delete_component_secrets = DeleteComponentSecretsMutation.Field()
+
+    # WORKER UPLOAD MUTATIONS (Superuser only) ####################################
+    create_worker_account = CreateWorkerAccount.Field()
+    deactivate_worker_account = DeactivateWorkerAccount.Field()
+    create_corpus_access_token = CreateCorpusAccessTokenMutation.Field()
+    revoke_corpus_access_token = RevokeCorpusAccessTokenMutation.Field()

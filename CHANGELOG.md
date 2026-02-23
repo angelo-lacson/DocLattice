@@ -5,9 +5,30 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-22
+## [Unreleased] - 2026-02-23
 
 ### Added
+
+#### Worker Document Upload System
+- **New Django app** `opencontractserver.worker_uploads` — enables external document-processing workers to upload fully ingested, annotated, and embedded documents to a target corpus via REST API
+- **Service account model** (`WorkerAccount`): dedicated machine identity with auto-created Django User for permission compatibility. Created via `createWorkerAccount` GraphQL mutation (superuser only)
+- **Corpus-scoped access tokens** (`CorpusAccessToken`): cryptographically random 256-bit tokens scoped to a single corpus, with configurable expiry and per-token rate limiting. Created via `createCorpusAccessToken` GraphQL mutation
+- **DRF authentication backend** (`WorkerTokenAuthentication`): validates `Authorization: WorkerKey <token>` headers, checks token validity, expiry, and account status (`opencontractserver/worker_uploads/auth.py`)
+- **REST upload endpoint** (`POST /api/worker-uploads/documents/`): accepts multipart form data (file + JSON metadata), stages uploads in database, returns 202 Accepted immediately. Status polling via `GET /api/worker-uploads/documents/<id>/` and listing via `GET /api/worker-uploads/documents/list/`
+- **Upload format** (`WorkerDocumentUploadMetadataType`): extends V2 export format with pre-computed embeddings (`embedder_path` + document/annotation vectors), target path/folder placement, and inline label definitions for auto-creation (`opencontractserver/types/dicts.py`)
+- **Database-backed queue** (`WorkerDocumentUpload`): staging table with PENDING/PROCESSING/COMPLETED/FAILED status tracking, avoids Redis saturation for high-volume uploads (millions of documents)
+- **Batch processor task** (`process_pending_uploads`): Celery task on dedicated `worker_uploads` queue using `SELECT ... FOR UPDATE SKIP LOCKED` for concurrent processing without conflicts. Configurable batch size via `WORKER_UPLOAD_BATCH_SIZE` setting. Self-reschedules when more work exists
+- **Multi-queue architecture**: worker upload processing runs on dedicated `worker_uploads` Celery queue, preserving capacity on the default queue for regular user operations
+- **Pre-computed embedding storage**: workers can include embeddings in upload metadata; stored directly via bulk_create without re-running embedder models. Supports all vector dimensions (384–4096)
+- **Corpus creator ownership**: all documents, annotations, and labels created via worker uploads are owned by the corpus creator (not the service account), ensuring correct permission inheritance
+- **GraphQL management mutations**: `createWorkerAccount`, `deactivateWorkerAccount`, `createCorpusAccessToken`, `revokeCorpusAccessToken` (all superuser-only) in `config/graphql/worker_mutations.py`
+- **Celery task routing**: `CELERY_TASK_ROUTES` configured to route `worker_uploads.tasks.*` to the `worker_uploads` queue (`config/settings/base.py`)
+
+### Technical Details
+- New files: `opencontractserver/worker_uploads/{models,views,auth,serializers,tasks,urls,apps}.py`, `config/graphql/worker_mutations.py`
+- Migration: `opencontractserver/worker_uploads/migrations/0001_initial.py`
+- Settings: `WORKER_UPLOAD_BATCH_SIZE` (default 50), `CELERY_TASK_ROUTES` for queue isolation
+- Tests: `opencontractserver/tests/test_worker_uploads.py` covering models, auth, REST endpoints, batch processor, and GraphQL mutations
 
 #### Corpus Export Format Specification and Validation Utility
 - **Format specification**: `docs/architecture/corpus-export-format-spec.md` — complete reference for V1 and V2 corpus export ZIP format covering all data.json fields, PAWLs structure, referential integrity rules, security limits, and import behavior

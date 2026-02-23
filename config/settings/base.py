@@ -156,6 +156,7 @@ LOCAL_APPS = [
     "opencontractserver.badges",
     "opencontractserver.notifications",
     "opencontractserver.agents",
+    "opencontractserver.worker_uploads",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -584,6 +585,18 @@ CELERY_WORKER_MAX_MEMORY_PER_CHILD = 14240000  # 14 GB (thousands of kilobytes)
 CELERY_MAX_TASKS_PER_CHILD = 4
 CELERY_PREFETCH_MULTIPLIER = 1
 CELERY_RESULT_BACKEND_MAX_RETRIES = 10
+
+# Route worker upload processing to a dedicated queue so it never starves
+# regular user operations (parsing, embedding, export, etc.)
+CELERY_TASK_ROUTES = {
+    "opencontractserver.worker_uploads.tasks.*": {"queue": "worker_uploads"},
+}
+
+# Worker Upload Processing
+# ------------------------------------------------------------------------------
+# Documents per batch when draining the staging table
+WORKER_UPLOAD_BATCH_SIZE = int(env("WORKER_UPLOAD_BATCH_SIZE", default="50"))
+
 # django-rest-framework
 # -------------------------------------------------------------------------------
 # django-rest-framework - https://www.django-rest-framework.org/api-guide/settings/
