@@ -10,10 +10,8 @@ class UserChangeForm(admin_forms.UserChangeForm):
         model = User
 
 
-class UserCreationForm(admin_forms.AdminUserCreationForm):
-    """Admin user creation form with Django 5.2's usable_password support."""
-
-    class Meta(admin_forms.AdminUserCreationForm.Meta):
+class UserCreationForm(admin_forms.UserCreationForm):
+    class Meta(admin_forms.UserCreationForm.Meta):
         model = User
 
         error_messages = {
