@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-22
 
+### Added
+
+#### Corpus Export Format Specification and Validation Utility
+- **Format specification**: `docs/architecture/corpus-export-format-spec.md` — complete reference for V1 and V2 corpus export ZIP format covering all data.json fields, PAWLs structure, referential integrity rules, security limits, and import behavior
+- **Standalone validator**: `opencontractserver/utils/validate_export.py` — checks structural and referential integrity of export ZIPs without requiring Django or a database. Usable as CLI (`python -m opencontractserver.utils.validate_export corpus.zip`) or library (`validate_export()` / `validate_data_json()`)
+- **Validation checks**: ZIP↔data.json file consistency, label definitions and type constraints, annotation token/page index bounds, annotation bounds non-negativity, structural set hash consistency, folder hierarchy (circular reference detection, path consistency), document path references, relationship label type enforcement (including structural relationships), V2 required top-level fields, conversation/message/vote cross-references, unknown version warnings
+- **Test suite**: `opencontractserver/tests/test_validate_export.py` — 48 pure-Python tests covering all validation paths including CLI entry point
+
 ### Changed
 
 #### Django 4.2 → 5.2 LTS Upgrade
@@ -56,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed from `frontend/package.json`
 
 ### Fixed
+
+#### TxtAnnotator Infinite Re-render Loop (Closes #933)
+- **Unstable default parameter**: `chatSources = []` in `TxtAnnotator` component props created a new array reference on every render, triggering infinite re-renders via `useEffect` dependency arrays when the prop was not explicitly passed (`frontend/src/components/annotator/renderers/txt/TxtAnnotator.tsx:335`)
+- Extracted `ChatSourceHighlight` interface and defined module-level `EMPTY_CHAT_SOURCES` constant as the default value, ensuring referential stability across renders
 
 #### Follow-up Text Annotation Fixes (Closes #911)
 - **Double-scroll bug**: `toggleSelectedAnnotation` in `AnnotatorSidebar.tsx:758` and `RelationshipList.tsx:106` called `scrollIntoView` for all annotation types, including text span annotations which already scroll via `TxtAnnotator`'s own `selectedAnnotations` useEffect. This caused two competing scroll animations. Fixed by guarding with `instanceof ServerTokenAnnotation` check.
