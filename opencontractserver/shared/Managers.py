@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Optional
 from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
 from django.db.models import Manager, Prefetch, Q, QuerySet
-from django_cte import CTEManager
 
 from opencontractserver.shared.QuerySets import (
     AnnotationQuerySet,
@@ -224,11 +223,13 @@ class PermissionManager(BaseVisibilityManager):
         return self.get_queryset().visible_to_user(user)
 
 
-class PermissionCTEManager(CTEManager, PermissionManager):
+class PermissionCTEManager(PermissionManager):
     """
-    Helper class for combining CTEManager and PermissionManager in a single MRO.
-    We place CTEManager first so the specialized methods (like from_queryset) work,
-    and then PermissionManager second to ensure we also use PermissionQuerySet.
+    Alias for PermissionManager, retained for backward compatibility.
+
+    Previously combined CTEManager and PermissionManager. Since django-cte 3.0+
+    provides the standalone with_cte() function that works on any queryset,
+    CTEManager inheritance is no longer needed.
     """
 
     pass
@@ -295,8 +296,8 @@ class DocumentManager(BaseVisibilityManager):
 class AnnotationManager(PermissionCTEManager.from_queryset(AnnotationQuerySet)):
     """
     Custom Manager for the Annotation model that uses:
-      - CTEManager (from_queryset)
-      - AnnotationQuerySet (with permission checks, optional vector search, etc.)
+      - PermissionCTEManager (from_queryset)
+      - AnnotationQuerySet (with permission checks, CTE support, vector search)
     """
 
     def get_queryset(self) -> AnnotationQuerySet:
@@ -324,8 +325,8 @@ class AnnotationManager(PermissionCTEManager.from_queryset(AnnotationQuerySet)):
 class NoteManager(PermissionCTEManager.from_queryset(NoteQuerySet)):
     """
     Custom Manager for the Note model that uses:
-      - CTEManager (from_queryset)
-      - NoteQuerySet (with permission checks, optional vector search, etc.)
+      - PermissionCTEManager (from_queryset)
+      - NoteQuerySet (with permission checks, CTE support, vector search)
     """
 
     def get_queryset(self) -> NoteQuerySet:
