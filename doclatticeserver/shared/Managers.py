@@ -223,18 +223,6 @@ class PermissionManager(BaseVisibilityManager):
         return self.get_queryset().visible_to_user(user)
 
 
-class PermissionCTEManager(PermissionManager):
-    """
-    Alias for PermissionManager, retained for backward compatibility.
-
-    Previously combined CTEManager and PermissionManager. Since django-cte 3.0+
-    provides the standalone with_cte() function that works on any queryset,
-    CTEManager inheritance is no longer needed.
-    """
-
-    pass
-
-
 class UserFeedbackManager(BaseVisibilityManager):
     def get_queryset(self):
         return UserFeedbackQuerySet(self.model, using=self._db)
@@ -293,10 +281,10 @@ class DocumentManager(BaseVisibilityManager):
         )
 
 
-class AnnotationManager(PermissionCTEManager.from_queryset(AnnotationQuerySet)):
+class AnnotationManager(PermissionManager.from_queryset(AnnotationQuerySet)):
     """
     Custom Manager for the Annotation model that uses:
-      - PermissionCTEManager (from_queryset)
+      - PermissionManager (from_queryset)
       - AnnotationQuerySet (with permission checks, CTE support, vector search)
     """
 
@@ -322,10 +310,10 @@ class AnnotationManager(PermissionCTEManager.from_queryset(AnnotationQuerySet)):
         )
 
 
-class NoteManager(PermissionCTEManager.from_queryset(NoteQuerySet)):
+class NoteManager(PermissionManager.from_queryset(NoteQuerySet)):
     """
     Custom Manager for the Note model that uses:
-      - PermissionCTEManager (from_queryset)
+      - PermissionManager (from_queryset)
       - NoteQuerySet (with permission checks, CTE support, vector search)
     """
 
