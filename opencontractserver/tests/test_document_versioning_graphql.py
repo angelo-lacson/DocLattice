@@ -1204,3 +1204,337 @@ class TestRestoreDocumentToVersionMutation(TestCase):
         self.assertIn(
             "not found", result["data"]["restoreDocumentToVersion"]["message"]
         )
+
+
+class TestVersionAwareSlugResolution(TestCase):
+    """Test version-aware document resolution via slugs.
+
+    Tests the versionNumber parameter on documentInCorpusBySlugs query,
+    which allows the frontend to resolve a specific historical version
+    of a document via the ?v=N URL parameter.
+    """
+
+    def setUp(self):
+        """Create test data with multiple document versions."""
+        self.client = Client(schema)
+
+        self.user = User.objects.create_user(
+            username="slug_version_tester",
+            password="testpass123",
+            email="slugversion@test.com",
+            slug="slug-version-tester",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Slug Version Test Corpus",
+            creator=self.user,
+            is_public=True,
+            slug="slug-version-test-corpus",
+        )
+
+        # Grant permissions
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+
+        # Create document v1
+        content_v1 = b"Version 1 content"
+        self.doc_v1, _, self.path_v1 = import_document(
+            corpus=self.corpus,
+            path="/versioned_doc.pdf",
+            content=content_v1,
+            user=self.user,
+            title="Versioned Document",
+        )
+        # Grant permissions for v1
+        set_permissions_for_obj_to_user(self.user, self.doc_v1, [PermissionTypes.ALL])
+
+        # Create document v2 at same path
+        content_v2 = b"Version 2 content"
+        self.doc_v2, _, self.path_v2 = import_document(
+            corpus=self.corpus,
+            path="/versioned_doc.pdf",
+            content=content_v2,
+            user=self.user,
+            title="Versioned Document",
+        )
+        # Grant permissions for v2
+        set_permissions_for_obj_to_user(self.user, self.doc_v2, [PermissionTypes.ALL])
+
+        # Create v3
+        content_v3 = b"Version 3 content"
+        self.doc_v3, _, self.path_v3 = import_document(
+            corpus=self.corpus,
+            path="/versioned_doc.pdf",
+            content=content_v3,
+            user=self.user,
+            title="Versioned Document",
+        )
+        set_permissions_for_obj_to_user(self.user, self.doc_v3, [PermissionTypes.ALL])
+
+    def _make_request(self):
+        return type("Request", (), {"user": self.user})()
+
+    def test_resolve_current_version_without_param(self):
+        """When versionNumber is not provided, returns the current (latest) version."""
+        # Use any version's slug - the resolver should find the version tree
+        # and return the current version
+        query = f"""
+            query {{
+                documentInCorpusBySlugs(
+                    userSlug: "{self.user.slug}"
+                    corpusSlug: "{self.corpus.slug}"
+                    documentSlug: "{self.doc_v3.slug}"
+                ) {{
+                    id
+                    title
+                    isLatestVersion
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["documentInCorpusBySlugs"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["id"], to_global_id("DocumentType", self.doc_v3.id))
+        self.assertTrue(data["isLatestVersion"])
+
+    def test_resolve_specific_version(self):
+        """When versionNumber=1, returns the v1 document."""
+        # Use the current slug but request version 1
+        query = f"""
+            query {{
+                documentInCorpusBySlugs(
+                    userSlug: "{self.user.slug}"
+                    corpusSlug: "{self.corpus.slug}"
+                    documentSlug: "{self.doc_v3.slug}"
+                    versionNumber: 1
+                ) {{
+                    id
+                    title
+                    isLatestVersion
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["documentInCorpusBySlugs"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["id"], to_global_id("DocumentType", self.doc_v1.id))
+        self.assertFalse(data["isLatestVersion"])
+
+    def test_resolve_version_2(self):
+        """When versionNumber=2, returns the v2 document."""
+        query = f"""
+            query {{
+                documentInCorpusBySlugs(
+                    userSlug: "{self.user.slug}"
+                    corpusSlug: "{self.corpus.slug}"
+                    documentSlug: "{self.doc_v3.slug}"
+                    versionNumber: 2
+                ) {{
+                    id
+                    title
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["documentInCorpusBySlugs"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["id"], to_global_id("DocumentType", self.doc_v2.id))
+
+    def test_resolve_nonexistent_version(self):
+        """When versionNumber doesn't exist, returns null."""
+        query = f"""
+            query {{
+                documentInCorpusBySlugs(
+                    userSlug: "{self.user.slug}"
+                    corpusSlug: "{self.corpus.slug}"
+                    documentSlug: "{self.doc_v3.slug}"
+                    versionNumber: 999
+                ) {{
+                    id
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+        self.assertIsNone(result["data"]["documentInCorpusBySlugs"])
+
+    def test_resolve_version_using_old_slug(self):
+        """Resolution works even when using an older version's slug."""
+        # v1 has its own slug since each Document is a separate record.
+        # The resolver should still find the version tree via the slug.
+        query = f"""
+            query {{
+                documentInCorpusBySlugs(
+                    userSlug: "{self.user.slug}"
+                    corpusSlug: "{self.corpus.slug}"
+                    documentSlug: "{self.doc_v1.slug}"
+                    versionNumber: 3
+                ) {{
+                    id
+                    title
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["documentInCorpusBySlugs"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["id"], to_global_id("DocumentType", self.doc_v3.id))
+
+
+class TestCorpusVersionsField(TestCase):
+    """Test the corpusVersions field on DocumentType.
+
+    The corpusVersions field returns all versions of a document in a specific
+    corpus, used by the version selector UI dropdown.
+    """
+
+    def setUp(self):
+        self.client = Client(schema)
+
+        self.user = User.objects.create_user(
+            username="corpus_versions_tester",
+            password="testpass123",
+            email="corpusversions@test.com",
+        )
+
+        self.corpus = Corpus.objects.create(
+            title="Corpus Versions Test Corpus",
+            creator=self.user,
+            is_public=True,
+        )
+
+        # Create 3 versions
+        self.doc_v1, _, _ = import_document(
+            corpus=self.corpus,
+            path="/multi_version.pdf",
+            content=b"V1",
+            user=self.user,
+            title="Multi Version Doc",
+        )
+        set_permissions_for_obj_to_user(self.user, self.doc_v1, [PermissionTypes.ALL])
+
+        self.doc_v2, _, _ = import_document(
+            corpus=self.corpus,
+            path="/multi_version.pdf",
+            content=b"V2",
+            user=self.user,
+            title="Multi Version Doc",
+        )
+        set_permissions_for_obj_to_user(self.user, self.doc_v2, [PermissionTypes.ALL])
+
+        self.doc_v3, _, _ = import_document(
+            corpus=self.corpus,
+            path="/multi_version.pdf",
+            content=b"V3",
+            user=self.user,
+            title="Multi Version Doc",
+        )
+        set_permissions_for_obj_to_user(self.user, self.doc_v3, [PermissionTypes.ALL])
+
+    def _make_request(self):
+        return type("Request", (), {"user": self.user})()
+
+    def test_corpus_versions_returns_all_versions(self):
+        """corpusVersions should return all 3 versions."""
+        corpus_id = to_global_id("CorpusType", self.corpus.id)
+        doc_id = to_global_id("DocumentType", self.doc_v3.id)
+
+        query = f"""
+            query {{
+                document(id: "{doc_id}") {{
+                    id
+                    corpusVersions(corpusId: "{corpus_id}") {{
+                        versionNumber
+                        documentId
+                        documentSlug
+                        created
+                        isCurrent
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+
+        versions = result["data"]["document"]["corpusVersions"]
+        self.assertEqual(len(versions), 3)
+
+        # Versions should be sorted by version_number ascending
+        self.assertEqual(versions[0]["versionNumber"], 1)
+        self.assertEqual(versions[1]["versionNumber"], 2)
+        self.assertEqual(versions[2]["versionNumber"], 3)
+
+        # Only the latest should be current
+        self.assertFalse(versions[0]["isCurrent"])
+        self.assertFalse(versions[1]["isCurrent"])
+        self.assertTrue(versions[2]["isCurrent"])
+
+    def test_corpus_versions_document_ids_are_correct(self):
+        """Each version entry should map to the correct Document."""
+        corpus_id = to_global_id("CorpusType", self.corpus.id)
+        doc_id = to_global_id("DocumentType", self.doc_v3.id)
+
+        query = f"""
+            query {{
+                document(id: "{doc_id}") {{
+                    corpusVersions(corpusId: "{corpus_id}") {{
+                        versionNumber
+                        documentId
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+
+        versions = result["data"]["document"]["corpusVersions"]
+        v1_id = to_global_id("DocumentType", self.doc_v1.id)
+        v2_id = to_global_id("DocumentType", self.doc_v2.id)
+        v3_id = to_global_id("DocumentType", self.doc_v3.id)
+
+        self.assertEqual(versions[0]["documentId"], v1_id)
+        self.assertEqual(versions[1]["documentId"], v2_id)
+        self.assertEqual(versions[2]["documentId"], v3_id)
+
+    def test_single_version_document(self):
+        """A document with no version history should return a single entry."""
+        single_doc, _, _ = import_document(
+            corpus=self.corpus,
+            path="/single.pdf",
+            content=b"Single",
+            user=self.user,
+            title="Single Doc",
+        )
+        set_permissions_for_obj_to_user(self.user, single_doc, [PermissionTypes.ALL])
+
+        corpus_id = to_global_id("CorpusType", self.corpus.id)
+        doc_id = to_global_id("DocumentType", single_doc.id)
+
+        query = f"""
+            query {{
+                document(id: "{doc_id}") {{
+                    corpusVersions(corpusId: "{corpus_id}") {{
+                        versionNumber
+                        isCurrent
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+
+        versions = result["data"]["document"]["corpusVersions"]
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0]["versionNumber"], 1)
+        self.assertTrue(versions[0]["isCurrent"])

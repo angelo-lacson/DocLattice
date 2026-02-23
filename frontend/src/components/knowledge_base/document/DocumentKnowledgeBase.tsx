@@ -167,6 +167,7 @@ import UnifiedKnowledgeLayer from "./layers/UnifiedKnowledgeLayer";
 import { AddToCorpusModal } from "../../modals/AddToCorpusModal";
 import { FeatureUnavailable } from "../../common/FeatureUnavailable";
 import { SingleDocumentExtractResults } from "../../annotator/sidebar/SingleDocumentExtractResults";
+import { DocumentVersionSelector } from "../../documents/DocumentVersionSelector";
 
 // Setting worker path to worker bundle.
 GlobalWorkerOptions.workerSrc = workerSrc;
@@ -2643,6 +2644,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               <Calendar size={16} /> Created:{" "}
               {new Date(metadata.created).toLocaleDateString()}
             </span>
+            {hasCorpus && corpusId && (
+              <DocumentVersionSelector
+                documentId={documentId}
+                corpusId={corpusId}
+              />
+            )}
           </MetadataRow>
         </div>
 
