@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Switched to `collectfasta>=3.2.0`, an actively maintained fork tested with Django 5.2.3
   - `requirements/production.txt` — package swap
   - `config/settings/production.py` — updated INSTALLED_APPS reference
-  - `config/settings/base.py` — updated COLLECTFAST_STRATEGY paths from `collectfast.strategies.*` to `collectfasta.strategies.*`
+  - `config/settings/base.py` — renamed `COLLECTFAST_STRATEGY` to `COLLECTFASTA_STRATEGY` and updated paths from `collectfast.strategies.*` to `collectfasta.strategies.*`
 
 ### Security
 
