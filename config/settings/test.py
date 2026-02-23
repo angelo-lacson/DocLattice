@@ -28,7 +28,6 @@ DATABASES["default"]["OPTIONS"] = {
 }
 DATABASES["default"]["TEST"] = {
     **DATABASES["default"].get("TEST", {}),
-    "SERIALIZE": False,  # Required for parallel testing with TransactionTestCase
     # pytest-xdist creates worker-specific databases automatically (test_db_gw0, test_db_gw1, etc.)
 }
 
