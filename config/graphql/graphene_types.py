@@ -592,6 +592,30 @@ class PathHistoryType(graphene.ObjectType):
     )
 
 
+class CorpusVersionInfoType(graphene.ObjectType):
+    """Version information for a document within a specific corpus.
+
+    Used by the version selector UI to show available versions and allow
+    switching between them via the ?v= URL parameter.
+    """
+
+    version_number = graphene.Int(
+        required=True, description="Version number in this corpus"
+    )
+    document_id = graphene.ID(
+        required=True, description="Global ID of the Document at this version"
+    )
+    document_slug = graphene.String(
+        description="Slug of the Document at this version (for URL building)"
+    )
+    created = graphene.DateTime(
+        required=True, description="When this version was created"
+    )
+    is_current = graphene.Boolean(
+        required=True, description="Whether this is the current (latest) version"
+    )
+
+
 class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for DocumentPath model - represents filesystem lifecycle events."""
 
@@ -1232,6 +1256,16 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Path/location history in corpus (lazy-loaded on request)",
     )
 
+    # Corpus-specific version list for version selector UI
+    corpus_versions = graphene.List(
+        graphene.NonNull(CorpusVersionInfoType),
+        corpus_id=graphene.ID(required=True),
+        description=(
+            "All versions of this document in a specific corpus. "
+            "Used by the version selector UI to show available versions."
+        ),
+    )
+
     # Permission helpers for versioning features
     can_restore = graphene.Boolean(
         corpus_id=graphene.ID(required=True),
@@ -1386,6 +1420,53 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "original_path": original_path or "",
             "move_count": move_count,
         }
+
+    def resolve_corpus_versions(self, info, corpus_id):
+        """Return all versions of this document in a specific corpus.
+
+        Uses DocumentPath records to find all versions, ordered by version_number.
+        Each entry maps to a specific Document record, enabling the frontend
+        to navigate to historical versions via the ?v=N URL parameter.
+        """
+        from graphql_relay import to_global_id
+
+        _, corpus_pk = from_global_id(corpus_id)
+
+        # Find all DocumentPath records for this document's version tree in the corpus.
+        # We want one record per version_number (the latest path record for each version).
+        path_records = (
+            DocumentPath.objects.filter(
+                document__version_tree_id=self.version_tree_id,
+                corpus_id=corpus_pk,
+            )
+            .select_related("document")
+            .order_by("version_number", "-created")
+        )
+
+        # Deduplicate by version_number (keep first = most recent due to -created)
+        seen_versions = set()
+        results = []
+        for path_record in path_records:
+            if path_record.version_number in seen_versions:
+                continue
+            seen_versions.add(path_record.version_number)
+            results.append(
+                {
+                    "version_number": path_record.version_number,
+                    "document_id": to_global_id(
+                        "DocumentType", path_record.document_id
+                    ),
+                    "document_slug": path_record.document.slug,
+                    "created": path_record.created,
+                    "is_current": (
+                        path_record.is_current and not path_record.is_deleted
+                    ),
+                }
+            )
+
+        # Sort by version_number ascending
+        results.sort(key=lambda v: v["version_number"])
+        return results
 
     def resolve_can_restore(self, info, corpus_id):
         """Check if user has UPDATE permission for restore operations."""
