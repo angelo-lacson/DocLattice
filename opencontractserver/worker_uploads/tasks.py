@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
 
 from celery import shared_task
 from django.conf import settings
@@ -26,6 +25,7 @@ from opencontractserver.annotations.models import (
     AnnotationLabel,
     Embedding,
 )
+from opencontractserver.documents.models import DocumentProcessingStatus
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.importing import (
     import_annotations,
@@ -40,8 +40,8 @@ from opencontractserver.worker_uploads.models import (
 
 logger = logging.getLogger(__name__)
 
-# Default batch size — overridable via Django settings
-BATCH_SIZE = getattr(settings, "WORKER_UPLOAD_BATCH_SIZE", 50)
+# Default batch size for processing pending uploads
+_DEFAULT_BATCH_SIZE = 50
 
 # Dimension -> field name mapping for the Embedding model
 _VECTOR_FIELD_MAP = {
@@ -80,7 +80,9 @@ def process_pending_uploads(self) -> dict:
             WorkerDocumentUpload.objects.select_for_update(skip_locked=True)
             .filter(status=UploadStatus.PENDING)
             .order_by("created")
-            .values_list("id", flat=True)[:BATCH_SIZE]
+            .values_list("id", flat=True)[
+                : getattr(settings, "WORKER_UPLOAD_BATCH_SIZE", _DEFAULT_BATCH_SIZE)
+            ]
         )
 
         if not pending_ids:
@@ -106,11 +108,7 @@ def process_pending_uploads(self) -> dict:
                 f"process_pending_uploads: upload {upload_id} failed: {e}",
                 exc_info=True,
             )
-            WorkerDocumentUpload.objects.filter(id=upload_id).update(
-                status=UploadStatus.FAILED,
-                error_message=str(e)[:2000],
-                processing_finished=timezone.now(),
-            )
+            _fail_upload(upload_id, str(e)[:2000])
             result["failed"] += 1
 
     # Re-enqueue if there are more pending uploads
@@ -184,7 +182,7 @@ def _process_single_upload(upload_id) -> None:
                 creator=user,
                 # Mark as already processed — worker did the processing
                 processing_started=timezone.now(),
-                processing_status="completed",
+                processing_status=DocumentProcessingStatus.COMPLETED,
             )
         finally:
             upload.file.close()
@@ -254,11 +252,16 @@ def _process_single_upload(upload_id) -> None:
         doc.backend_lock = False
         doc.save(update_fields=["backend_lock"])
 
-        # 10. Mark upload as completed
+        # 10. Mark upload as completed and clean up staging file
         upload.status = UploadStatus.COMPLETED
         upload.result_document = corpus_doc
         upload.processing_finished = timezone.now()
         upload.save(update_fields=["status", "result_document", "processing_finished"])
+
+        # Delete the staging file — the document's pdf_file field now holds
+        # the authoritative copy.
+        if upload.file:
+            upload.file.delete(save=False)
 
     logger.info(
         f"Worker upload {upload_id} processed: doc={corpus_doc.id} "
@@ -293,9 +296,11 @@ def _prepare_labels(
     )
 
     label_lookup = {**existing_text, **existing_doc}
-    doc_label_lookup = {label.text: label for label in existing_doc.values()}
 
-    return label_lookup, doc_label_lookup
+    # existing_doc is already keyed by label name from metadata, so use it
+    # directly. Rebuilding via label.text could mismatch if the stored
+    # AnnotationLabel.text differs from the metadata key.
+    return label_lookup, existing_doc
 
 
 def _store_embeddings(
@@ -364,7 +369,7 @@ def _store_single_embedding(
     embedder_path: str,
     document=None,
     annotation=None,
-) -> Optional[Embedding]:
+) -> Embedding | None:
     """Store a single embedding, determining the correct vector field by dimension."""
     field_name = _get_vector_field(len(vector))
     if not field_name:
@@ -388,9 +393,29 @@ def _store_single_embedding(
     return emb
 
 
-def _get_vector_field(dimension: int) -> Optional[str]:
+def _get_vector_field(dimension: int) -> str | None:
     """Map an embedding dimension to the corresponding Embedding model field."""
     return _VECTOR_FIELD_MAP.get(dimension)
+
+
+def _fail_upload(upload_id, error_message: str) -> None:
+    """Mark an upload as FAILED and clean up its staging file."""
+    upload = WorkerDocumentUpload.objects.filter(id=upload_id).first()
+    if upload is None:
+        return
+    upload.status = UploadStatus.FAILED
+    upload.error_message = error_message
+    upload.processing_finished = timezone.now()
+    upload.save(update_fields=["status", "error_message", "processing_finished"])
+
+    if upload.file:
+        try:
+            upload.file.delete(save=False)
+        except Exception:
+            logger.warning(
+                f"Failed to delete staging file for upload {upload_id}",
+                exc_info=True,
+            )
 
 
 def _assign_to_folder(corpus, corpus_doc, folder_path: str, user) -> None:

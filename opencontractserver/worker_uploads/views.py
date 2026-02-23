@@ -25,6 +25,7 @@ from opencontractserver.worker_uploads.serializers import (
     WorkerDocumentUploadSerializer,
     WorkerDocumentUploadStatusSerializer,
 )
+from opencontractserver.worker_uploads.tasks import process_pending_uploads
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,9 @@ class WorkerDocumentUploadView(APIView):
     The document and metadata are staged in the database for asynchronous
     processing by the batch drain task. Returns 202 Accepted immediately.
 
-    Rate limiting is enforced per-token if configured.
+    Rate limiting is enforced per-token if configured (best-effort; the count
+    check and subsequent create are not atomic, so under high concurrency a few
+    extra requests may slip through before being counted).
     """
 
     authentication_classes = [WorkerTokenAuthentication]
@@ -89,9 +92,8 @@ class WorkerDocumentUploadView(APIView):
         )
 
         # Trigger the batch processor if not already running.
-        # This is a lightweight nudge — the processor is also scheduled via Beat.
-        from opencontractserver.worker_uploads.tasks import process_pending_uploads
-
+        # This is a lightweight nudge — Beat also schedules periodic drains
+        # to catch uploads that arrive during task-worker downtime.
         process_pending_uploads.apply_async(
             queue="worker_uploads",
             ignore_result=True,

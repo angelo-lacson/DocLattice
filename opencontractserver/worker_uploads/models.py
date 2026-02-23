@@ -85,12 +85,10 @@ class WorkerAccount(models.Model):
         user = User.objects.create_user(
             username=username,
             email=f"{username}@workers.internal",
-            password=None,  # unusable password
+            password=None,  # create_user(password=None) sets unusable password
             is_staff=False,
             is_superuser=False,
         )
-        user.set_unusable_password()
-        user.save(update_fields=["password"])
 
         return cls.objects.create(
             name=name,
@@ -109,6 +107,9 @@ class CorpusAccessToken(models.Model):
     multi-corpus access.
     """
 
+    # Stored in plaintext for simplicity. A hashed-token approach (store only
+    # SHA-256, show full key once at creation) would improve defense-in-depth
+    # against database breaches. Tracked as a follow-up improvement.
     key = models.CharField(
         max_length=TOKEN_KEY_LENGTH,
         unique=True,
@@ -159,7 +160,14 @@ class CorpusAccessToken(models.Model):
 
     @property
     def is_valid(self) -> bool:
-        """Check if token is currently valid (active, not expired, account active)."""
+        """
+        Check if token is currently valid (active, not expired, account active).
+
+        Note: accesses self.worker_account.is_active. The auth backend
+        (WorkerTokenAuthentication) uses select_related("worker_account") so
+        this is already cached on the request path. If calling is_valid outside
+        the auth flow, ensure worker_account is prefetched to avoid an extra query.
+        """
         if not self.is_active:
             return False
         if not self.worker_account.is_active:

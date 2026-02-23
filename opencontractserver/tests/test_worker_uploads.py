@@ -537,17 +537,17 @@ class TestBatchProcessor(TransactionTestCase):
 
     @override_settings(WORKER_UPLOAD_BATCH_SIZE=2)
     def test_batch_size_respected(self):
-        """Only BATCH_SIZE uploads are claimed per run."""
+        """Only WORKER_UPLOAD_BATCH_SIZE uploads are claimed per run."""
         from opencontractserver.worker_uploads.tasks import process_pending_uploads
 
-        # Reload batch size after override
-        with patch("opencontractserver.worker_uploads.tasks.BATCH_SIZE", 2):
-            for _ in range(5):
-                self._create_staged_upload()
+        for _ in range(5):
+            self._create_staged_upload()
 
-            result = process_pending_uploads.apply().get()
+        # WORKER_UPLOAD_BATCH_SIZE is read at call time via getattr(settings, ...)
+        # so @override_settings is sufficient — no patching needed.
+        result = process_pending_uploads.apply().get()
 
-            self.assertEqual(result["claimed"], 2)
+        self.assertEqual(result["claimed"], 2)
 
 
 # ============================================================================
