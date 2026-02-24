@@ -367,7 +367,7 @@ def build_document_export(
         if is_pdf and doc.pdf_file:
             logger.info(f"Processing as PDF document: {doc_id}")
 
-            from PyPDF2 import PdfReader, PdfWriter
+            from pypdf import PdfReader, PdfWriter
 
             from opencontractserver.utils.files import (
                 add_highlight_to_new_page,

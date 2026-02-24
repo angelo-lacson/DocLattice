@@ -26,8 +26,14 @@ class StorageBackendConfigTest(TestCase):
         STORAGE_BACKEND="AWS",
         AWS_STORAGE_BUCKET_NAME="test-bucket",
         AWS_S3_REGION_NAME="us-east-1",
-        DEFAULT_FILE_STORAGE="opencontractserver.utils.storages.MediaRootS3Boto3Storage",
-        STATICFILES_STORAGE="opencontractserver.utils.storages.StaticRootS3Boto3Storage",
+        STORAGES={
+            "default": {
+                "BACKEND": "opencontractserver.utils.storages.MediaRootS3Boto3Storage",
+            },
+            "staticfiles": {
+                "BACKEND": "opencontractserver.utils.storages.StaticRootS3Boto3Storage",
+            },
+        },
     )
     def test_aws_storage_configuration(self):
         """Test that AWS storage backend configuration is correct when enabled."""
@@ -37,11 +43,11 @@ class StorageBackendConfigTest(TestCase):
         self.assertEqual(settings.AWS_STORAGE_BUCKET_NAME, "test-bucket")
         self.assertEqual(settings.AWS_S3_REGION_NAME, "us-east-1")
         self.assertEqual(
-            settings.DEFAULT_FILE_STORAGE,
+            settings.STORAGES["default"]["BACKEND"],
             "opencontractserver.utils.storages.MediaRootS3Boto3Storage",
         )
         self.assertEqual(
-            settings.STATICFILES_STORAGE,
+            settings.STORAGES["staticfiles"]["BACKEND"],
             "opencontractserver.utils.storages.StaticRootS3Boto3Storage",
         )
 
@@ -61,8 +67,14 @@ class StorageBackendConfigTest(TestCase):
         GS_PROJECT_ID="test-project",
         GS_QUERYSTRING_AUTH=True,
         GS_FILE_OVERWRITE=False,
-        DEFAULT_FILE_STORAGE="opencontractserver.utils.storages.MediaRootGoogleCloudStorage",
-        STATICFILES_STORAGE="opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
+        STORAGES={
+            "default": {
+                "BACKEND": "opencontractserver.utils.storages.MediaRootGoogleCloudStorage",
+            },
+            "staticfiles": {
+                "BACKEND": "opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
+            },
+        },
     )
     def test_gcp_storage_configuration(self):
         """Test that GCP storage backend configuration is correct when enabled."""
@@ -74,11 +86,11 @@ class StorageBackendConfigTest(TestCase):
         self.assertTrue(settings.GS_QUERYSTRING_AUTH)
         self.assertFalse(settings.GS_FILE_OVERWRITE)
         self.assertEqual(
-            settings.DEFAULT_FILE_STORAGE,
+            settings.STORAGES["default"]["BACKEND"],
             "opencontractserver.utils.storages.MediaRootGoogleCloudStorage",
         )
         self.assertEqual(
-            settings.STATICFILES_STORAGE,
+            settings.STORAGES["staticfiles"]["BACKEND"],
             "opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
         )
 

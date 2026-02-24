@@ -40,10 +40,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Validation checks**: ZIP↔data.json file consistency, label definitions and type constraints, annotation token/page index bounds, annotation bounds non-negativity, structural set hash consistency, folder hierarchy (circular reference detection, path consistency), document path references, relationship label type enforcement (including structural relationships), V2 required top-level fields, conversation/message/vote cross-references, unknown version warnings
 - **Test suite**: `opencontractserver/tests/test_validate_export.py` — 48 pure-Python tests covering all validation paths including CLI entry point
 
+### Changed
+
+#### Migrate from deprecated PyPDF2 to pypdf (Closes #938)
+- Replaced `PyPDF2==3.0.1` with `pypdf` in `requirements/base.txt`
+- Removed redundant `pypdf` entry from `requirements/local.txt` (now provided by base)
+- Updated imports in `opencontractserver/utils/files.py`, `opencontractserver/utils/etl.py`, and `opencontractserver/tests/test_pdf_redaction.py`
+- Removed unused `add_highlight_to_page` function from `opencontractserver/utils/files.py` (used deprecated `_addObject` API, never called)
+
+#### Django 4.2 → 5.2 LTS Upgrade
+- **Django version**: Upgraded from Django 4.2.24 to 5.2.11 (LTS)
+  - `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
+- **STORAGES migration**: Replaced deprecated `STATICFILES_STORAGE` and `DEFAULT_FILE_STORAGE` settings with the unified `STORAGES` dict (required since Django 5.1)
+  - `config/settings/base.py` — LOCAL, AWS, and GCP storage backends all migrated
+  - `config/settings/test.py` — test storage configuration migrated
+  - `opencontractserver/tests/base.py` — test `@override_settings` migrated
+  - `opencontractserver/tests/test_agent_search_tools.py` — all `@override_settings` decorators migrated
+  - `opencontractserver/tests/test_storage_backends.py` — assertions updated to check `STORAGES` dict
+- **Removed `USE_L10N` setting**: This setting was removed in Django 5.0 (localization is always enabled)
+  - `config/settings/base.py:78`
+- **Removed `SECURE_BROWSER_XSS_FILTER` setting**: This setting was removed in Django 5.0 (modern browsers handle XSS filtering natively)
+  - `config/settings/base.py:503-504`
+- **Replaced `pytz` with `datetime.timezone`**: Django 5.0+ uses `zoneinfo` instead of `pytz`
+  - `opencontractserver/users/tasks.py` — replaced `pytz.utc.localize()` with `datetime.datetime.now(datetime.timezone.utc)`
+  - Removed `pytz` from direct requirements in `requirements/base.txt`
+- **Updated third-party packages for Django 5.2 compatibility**:
+  - `graphene-django`: 3.2.2 → 3.2.3 (adds Django 5.1+ support; Django 5.2 not officially supported — tracked via TODO)
+  - `django-stubs`: 4.2.7 → 5.2.0
+  - `djangorestframework-stubs`: 1.8.0 → 3.15.4
+  - `django-celery-beat`: 2.6.0 → 2.8.1 (adds Django 5.2 support)
+  - `django-filter`: 24.3 → 25.1 (adds Django 5.2 support)
+  - `django-model-utils`: 4.3.1 → 5.0.0 (adds Django 5.x support; no direct imports in codebase — transitive dependency)
+  - `django-crispy-forms`: 2.4 → 2.5 (adds Django 5.2 support)
+  - `django-cte`: 2.0.0 → 3.0.0 (adds Django 5.2 support, fixes ambiguous column names; LOUTER breaking change does not affect this project — no `_join_type` usage found)
+  - `django-environ`: 0.12.0 → 0.13.0 (adds Django 5.2 support)
+- **Removed `django-debug-toolbar`**: Was never wired into INSTALLED_APPS or MIDDLEWARE; removed unused dependency and associated INTERNAL_IPS config from `config/settings/local.py`
+- **Replaced Collectfast with Collectfasta** (production static file collection):
+  - `Collectfast==2.2.0` was archived/unmaintained (last release 2020), incompatible with Django 5.x `STORAGES` setting
+  - Switched to `collectfasta>=3.2.0`, an actively maintained fork tested with Django 5.2.3
+  - `requirements/production.txt` — package swap
+  - `config/settings/production.py` — updated INSTALLED_APPS reference
+  - `config/settings/base.py` — renamed `COLLECTFAST_STRATEGY` to `COLLECTFASTA_STRATEGY` and updated paths from `collectfast.strategies.*` to `collectfasta.strategies.*`
+
 ### Security
 
 #### Dependency Security Updates
-- **Django 4.2.24 → 4.2.28**: Fixes 11 CVEs including multiple SQL injection vectors (CVE-2025-59681, CVE-2025-64459, CVE-2025-13372, CVE-2026-1312, CVE-2026-1287, CVE-2026-1207), directory traversal (CVE-2025-59682), DoS attacks (CVE-2025-64458, CVE-2025-64460), and user enumeration timing attack (CVE-2025-13473)
+- **Django 4.2.24 → 4.2.28 (now 5.2.11)**: CVEs fixed by the 5.2.11 LTS release include multiple SQL injection vectors (CVE-2025-59681, CVE-2025-64459, CVE-2025-13372, CVE-2026-1312, CVE-2026-1287, CVE-2026-1207), directory traversal (CVE-2025-59682), DoS attacks (CVE-2025-64458, CVE-2025-64460), and user enumeration timing attack (CVE-2025-13473)
   - Updated in `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
 - **cryptography 46.0.3 → 46.0.5**: Fixes CVE-2026-26007 — missing subgroup validation in ECDSA/ECDH public key loading for SECT curves, enabling signature forgery and private key leakage
   - Updated in `requirements/base.txt`

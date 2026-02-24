@@ -74,8 +74,6 @@ LANGUAGE_CODE = "en-us"
 SITE_ID = 1
 # https://docs.djangoproject.com/en/dev/ref/settings/#use-i18n
 USE_I18N = True
-# https://docs.djangoproject.com/en/dev/ref/settings/#use-l10n
-USE_L10N = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#use-tz
 USE_TZ = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#locale-paths
@@ -300,9 +298,16 @@ STATICFILES_FINDERS = [
 ]
 
 if STORAGE_BACKEND == "LOCAL":
-    # STATIC
-    # ------------------------
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    # STORAGES (Django 5.x unified storage configuration)
+    # https://docs.djangoproject.com/en/5.2/ref/settings/#std-setting-STORAGES
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
     # MEDIA
     # ------------------------------------------------------------------------------
@@ -349,21 +354,19 @@ elif STORAGE_BACKEND == "AWS":
     S3_PREFIX = env("S3_PREFIX", default="documents")
     S3_COMPRESSION_LEVEL = int(env("S3_COMPRESSION_LEVEL", default=6))
 
-    # STATIC
-    # ------------------------
+    # STORAGES (Django 5.x unified storage configuration)
     # Use pooled storage backends for better performance
-    STATICFILES_STORAGE = (
-        "opencontractserver.utils.enhanced_storages.PooledStaticRootS3Storage"
-    )
-    COLLECTFAST_STRATEGY = "collectfast.strategies.boto3.Boto3Strategy"
+    STORAGES = {
+        "default": {
+            "BACKEND": "opencontractserver.utils.enhanced_storages.PooledMediaRootS3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "opencontractserver.utils.enhanced_storages.PooledStaticRootS3Storage",
+        },
+    }
+    COLLECTFASTA_STRATEGY = "collectfasta.strategies.boto3.Boto3Strategy"
     STATIC_URL = f"https://{aws_s3_domain}/static/"
 
-    # MEDIA
-    # ------------------------------------------------------------------------------
-    # Use pooled storage backends for better performance
-    DEFAULT_FILE_STORAGE = (
-        "opencontractserver.utils.enhanced_storages.PooledMediaRootS3Storage"
-    )
     MEDIA_URL = f"https://{aws_s3_domain}/media/"
     S3_DOCUMENT_PATH = env("S3_DOCUMENT_PATH", default="open_contracts")
     MEDIA_ROOT = str(APPS_DIR / "media")
@@ -437,19 +440,18 @@ elif STORAGE_BACKEND == "GCP":
     else:
         gcs_domain = f"storage.googleapis.com/{GS_BUCKET_NAME}"
 
-    # STATIC
-    # ------------------------
-    STATICFILES_STORAGE = (
-        "opencontractserver.utils.storages.StaticRootGoogleCloudStorage"
-    )
-    COLLECTFAST_STRATEGY = "collectfast.strategies.gcloud.GoogleCloudStrategy"
+    # STORAGES (Django 5.x unified storage configuration)
+    STORAGES = {
+        "default": {
+            "BACKEND": "opencontractserver.utils.storages.MediaRootGoogleCloudStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "opencontractserver.utils.storages.StaticRootGoogleCloudStorage",
+        },
+    }
+    COLLECTFASTA_STRATEGY = "collectfasta.strategies.gcloud.GoogleCloudStrategy"
     STATIC_URL = f"https://{gcs_domain}/static/"
 
-    # MEDIA
-    # ------------------------------------------------------------------------------
-    DEFAULT_FILE_STORAGE = (
-        "opencontractserver.utils.storages.MediaRootGoogleCloudStorage"
-    )
     MEDIA_URL = f"https://{gcs_domain}/media/"
     GCS_DOCUMENT_PATH = env("GCS_DOCUMENT_PATH", default="open_contracts")
     MEDIA_ROOT = str(APPS_DIR / "media")
@@ -503,8 +505,6 @@ FIXTURE_DIRS = (str(APPS_DIR / "fixtures"),)
 SESSION_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-httponly
 CSRF_COOKIE_HTTPONLY = True
-# https://docs.djangoproject.com/en/dev/ref/settings/#secure-browser-xss-filter
-SECURE_BROWSER_XSS_FILTER = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
 

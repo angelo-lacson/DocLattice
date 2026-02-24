@@ -23,7 +23,14 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.django_db
 @override_settings(
-    DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage",
+    STORAGES={
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    },
     MEDIA_ROOT="test_media/",
     CELERY_TASK_ALWAYS_EAGER=True,
 )
@@ -91,10 +98,13 @@ class BaseFixtureTestCase(TransactionTestCase):
 
         super().setUpClass()
 
-    def _pre_setup(self):
+    @classmethod
+    def _pre_setup(cls):
         """
-        Additional setup before each test method, which includes ensuring
+        Additional setup before each test, which includes ensuring
         no stale database connections remain.
+
+        In Django 5.2 this became a classmethod called from setUpClass().
         """
         for conn in connections.all():
             conn.close()

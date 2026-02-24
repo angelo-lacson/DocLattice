@@ -1,7 +1,6 @@
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
-from django_cte import CTEQuerySet
 from tree_queries.query import TreeQuerySet
 
 from opencontractserver.shared.mixins import VectorSearchViaEmbeddingMixin
@@ -228,18 +227,14 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
             return self.filter(Q(creator=user) | Q(is_public=True)).distinct()
 
 
-class AnnotationQuerySet(
-    CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixin
-):
+class AnnotationQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
     """
     Custom QuerySet for Annotation model, combining:
-      - CTEQuerySet for recursive common table expressions
       - PermissionQuerySet for permission-based filtering
       - VectorSearchViaEmbeddingMixin for vector-based search
 
-    Example:
-        class AnnotationQuerySet(CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixin):
-            EMBEDDING_RELATED_NAME = "embeddings"  # or whatever your FK related_name is
+    CTE support: django-cte 3.0+ provides the standalone with_cte() function
+    that works on any queryset, so CTEQuerySet inheritance is no longer needed.
     """
 
     def visible_to_user(self, user, perm=None):
@@ -379,15 +374,17 @@ class AnnotationQuerySet(
         ).distinct()
 
 
-class NoteQuerySet(CTEQuerySet, PermissionQuerySet, VectorSearchViaEmbeddingMixin):
+class NoteQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
     """
     Custom QuerySet for Note model, combining:
-      - CTEQuerySet
       - PermissionQuerySet
       - VectorSearchViaEmbeddingMixin
 
     Notes inherit permissions from their parent document and corpus
     following the MIN(document_permission, corpus_permission) pattern.
+
+    CTE support: django-cte 3.0+ provides the standalone with_cte() function
+    that works on any queryset, so CTEQuerySet inheritance is no longer needed.
     """
 
     def visible_to_user(self, user, perm=None):

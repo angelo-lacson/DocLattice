@@ -95,8 +95,9 @@ class TestPermanentDeletionCore(TestCase):
         )
 
         # Count paths before deletion
+        doc_id = self.doc.id
         path_count_before = DocumentPath.objects.filter(
-            document=self.doc,
+            document_id=doc_id,
             corpus=self.corpus,
         ).count()
         self.assertGreater(path_count_before, 0)
@@ -107,7 +108,7 @@ class TestPermanentDeletionCore(TestCase):
 
         # Verify all paths are gone
         path_count_after = DocumentPath.objects.filter(
-            document=self.doc,
+            document_id=doc_id,
             corpus=self.corpus,
         ).count()
         self.assertEqual(path_count_after, 0)
@@ -154,12 +155,13 @@ class TestPermanentDeletionCore(TestCase):
         delete_document(corpus, current_path.path, user)
 
         # Permanently delete
+        doc_id = doc.id
         success, _ = permanently_delete_document(corpus, doc, user)
         self.assertTrue(success)
 
         # All paths should be gone (including historical)
         remaining_paths = DocumentPath.objects.filter(
-            document=doc, corpus=corpus
+            document_id=doc_id, corpus=corpus
         ).count()
         self.assertEqual(remaining_paths, 0)
 
@@ -1042,12 +1044,15 @@ class TestPermanentDeletionEdgeCases(TestCase):
         delete_document(self.corpus, "/versioned_doc.pdf", self.user)
 
         # Permanently delete
+        doc_v2_id = doc_v2.id
         success, message = permanently_delete_document(self.corpus, doc_v2, self.user)
         self.assertTrue(success, f"Failed: {message}")
 
         # Verify all paths are gone
         self.assertFalse(
-            DocumentPath.objects.filter(corpus=self.corpus, document=doc_v2).exists()
+            DocumentPath.objects.filter(
+                corpus=self.corpus, document_id=doc_v2_id
+            ).exists()
         )
 
     def test_permanently_delete_document_in_folder(self):
@@ -1076,18 +1081,19 @@ class TestPermanentDeletionEdgeCases(TestCase):
         self.assertEqual(current_path.folder, folder)
 
         # Soft delete then permanently delete
+        doc_id = doc.id
         delete_document(self.corpus, current_path.path, self.user)
         success, message = permanently_delete_document(self.corpus, doc, self.user)
         self.assertTrue(success, f"Failed: {message}")
 
         # All paths should be gone
         remaining = DocumentPath.objects.filter(
-            document=doc, corpus=self.corpus
+            document_id=doc_id, corpus=self.corpus
         ).count()
         self.assertEqual(remaining, 0)
 
         # Document should be gone too (Rule Q1)
-        self.assertFalse(Document.objects.filter(id=doc.id).exists())
+        self.assertFalse(Document.objects.filter(id=doc_id).exists())
 
     def test_permanently_delete_preserves_other_documents_in_corpus(self):
         """Test that permanent deletion doesn't affect other documents."""
