@@ -28,7 +28,6 @@ DATABASES["default"]["OPTIONS"] = {
 }
 DATABASES["default"]["TEST"] = {
     **DATABASES["default"].get("TEST", {}),
-    "SERIALIZE": False,  # Required for parallel testing with TransactionTestCase
     # pytest-xdist creates worker-specific databases automatically (test_db_gw0, test_db_gw1, etc.)
 }
 
@@ -105,11 +104,18 @@ CACHES = {
 # Individual tests can enable it with @override_settings(RATELIMIT_DISABLE=False)
 RATELIMIT_DISABLE = True
 
-# STATIC FILES
+# STORAGES
 # ------------------------------------------------------------------------------
 # Use simple static files storage that doesn't require manifest
 # This avoids "Missing staticfiles manifest entry" errors in admin tests
-STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 # Telemetry
 # ------------------------------------------------------------------------------
