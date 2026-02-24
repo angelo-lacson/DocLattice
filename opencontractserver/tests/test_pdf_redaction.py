@@ -8,7 +8,7 @@ import random
 import zipfile
 from unittest import TestCase
 
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 
 from opencontractserver.pipeline.utils import run_post_processors
 from opencontractserver.tests.fixtures import (
@@ -369,7 +369,7 @@ class TestPDFRedaction(TestCase):
         logger.info("Starting test_pdf_redactor_with_ocr_verification...")
         import pytesseract
         from pdf2image import convert_from_bytes
-        from PyPDF2 import PdfReader
+        from pypdf import PdfReader
 
         # Search FIRST page tokens for consecutive "Aucta" and "Pharmaceuticals" (ignoring case).
         page_tokens = self.pawls_data[0]["tokens"]

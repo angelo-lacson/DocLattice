@@ -5,7 +5,15 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-22
+## [Unreleased] - 2026-02-23
+
+### Changed
+
+#### Migrate from deprecated PyPDF2 to pypdf (Closes #938)
+- Replaced `PyPDF2==3.0.1` with `pypdf` in `requirements/base.txt`
+- Removed redundant `pypdf` entry from `requirements/local.txt` (now provided by base)
+- Updated imports in `opencontractserver/utils/files.py`, `opencontractserver/utils/etl.py`, and `opencontractserver/tests/test_pdf_redaction.py`
+- Removed unused `add_highlight_to_page` function from `opencontractserver/utils/files.py` (used deprecated `_addObject` API, never called)
 
 ### Added
 
