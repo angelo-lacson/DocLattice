@@ -435,15 +435,15 @@ class AnnotationTreeTestCase(TestCase):
         """
         Helper method to get all descendant IDs of a given node.
         """
-        from django_cte import With
+        from django_cte import CTE, with_cte
 
         def get_descendants(cte):
             base_qs = Annotation.objects.filter(parent_id=node.id).values("id")
             recursive_qs = cte.join(Annotation, parent_id=cte.col.id).values("id")
             return base_qs.union(recursive_qs, all=True)
 
-        cte = With.recursive(get_descendants)
-        descendants_qs = cte.queryset().with_cte(cte)
+        cte = CTE.recursive(get_descendants)
+        descendants_qs = with_cte(cte, select=cte.queryset())
         descendant_ids = [item["id"] for item in descendants_qs.values("id")]
         return descendant_ids
 
