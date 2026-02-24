@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 
-import pytz
 import requests
 from celery import chain
 from django.conf import settings
@@ -89,7 +88,7 @@ if settings.USE_AUTH0:
                 # print(data["family_name"])
                 user.synced = True
                 user.is_social_user = True
-                user.last_synced = pytz.utc.localize(datetime.datetime.now())
+                user.last_synced = datetime.datetime.now(datetime.timezone.utc)
                 user.last_ip = data["last_ip"]
                 # print(user.last_ip)
                 # print(user)
@@ -114,7 +113,7 @@ if settings.USE_AUTH0:
                 tok.delete()
             refresh = True
         else:
-            if tokens[0].expiration_Date < pytz.utc.localize(datetime.datetime.now()):
+            if tokens[0].expiration_Date < datetime.datetime.now(datetime.timezone.utc):
                 # print("Token has expired. Refetching from Auth0")
                 tokens[0].delete()
                 refresh = True
@@ -149,7 +148,7 @@ if settings.USE_AUTH0:
                 tok.delete()
                 return get_new_auth0_token.delay().get()
         else:
-            if tokens[0].expiration_Date < pytz.utc.localize(datetime.datetime.now()):
+            if tokens[0].expiration_Date < datetime.datetime.now(datetime.timezone.utc):
                 # print("Token has expired. Refetching from Auth0")
                 tokens[0].delete()
                 return get_new_auth0_token.delay().get()

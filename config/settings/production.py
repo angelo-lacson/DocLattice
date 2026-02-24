@@ -119,10 +119,10 @@ ADMIN_URL = env("DJANGO_ADMIN_URL")
 #     "MAILGUN_API_URL": env("MAILGUN_API_URL", default="https://api.mailgun.net/v3"),
 # }
 
-# Collectfast
+# Collectfasta (maintained fork of Collectfast)
 # ------------------------------------------------------------------------------
-# https://github.com/antonagestam/collectfast#installation
-INSTALLED_APPS = ["collectfast"] + INSTALLED_APPS  # noqa F405
+# https://github.com/jasongi/collectfasta
+INSTALLED_APPS = ["collectfasta"] + INSTALLED_APPS  # noqa F405
 
 # LOGGING
 # ------------------------------------------------------------------------------
