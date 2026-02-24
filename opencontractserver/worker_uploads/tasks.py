@@ -327,6 +327,7 @@ def _store_embeddings(
             vector=doc_embedding,
             embedder_path=embedder_path,
             document=corpus_doc,
+            creator=user,
         )
 
     # Annotation embeddings
@@ -369,6 +370,7 @@ def _store_single_embedding(
     embedder_path: str,
     document=None,
     annotation=None,
+    creator=None,
 ) -> Embedding | None:
     """Store a single embedding, determining the correct vector field by dimension."""
     field_name = _get_vector_field(len(vector))
@@ -376,19 +378,16 @@ def _store_single_embedding(
         logger.warning(f"Unsupported embedding dimension {len(vector)}, skipping.")
         return None
 
-    kwargs = {
-        "embedder_path": embedder_path,
-        "document": document,
-        "annotation": annotation,
-    }
-    kwargs[field_name] = vector
+    defaults = {field_name: vector}
+    if creator is not None:
+        defaults["creator"] = creator
 
     # Use update_or_create to handle duplicates gracefully
     emb, created = Embedding.objects.update_or_create(
         embedder_path=embedder_path,
         document=document,
         annotation=annotation,
-        defaults={field_name: vector},
+        defaults=defaults,
     )
     return emb
 

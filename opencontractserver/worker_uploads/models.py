@@ -17,7 +17,7 @@ def _generate_token_key() -> str:
 
 
 def _upload_staging_path(instance, filename):
-    return calc_oc_file_path(instance, filename, "worker_uploads/staging/")
+    return calc_oc_file_path(instance, filename, "worker_uploads/staging")
 
 
 class WorkerAccount(models.Model):

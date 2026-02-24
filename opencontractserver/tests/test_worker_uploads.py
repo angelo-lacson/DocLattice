@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from graphene.test import Client as GraphQLClient
@@ -60,8 +61,18 @@ def _make_metadata(**overrides):
     return base
 
 
-def _make_fake_pdf() -> BytesIO:
-    """Create a minimal PDF-like file for testing."""
+def _make_fake_pdf():
+    """Create a minimal PDF-like file for testing.
+
+    Returns a ContentFile (Django File subclass) so that Django's FileField
+    descriptor properly wraps it in a FieldFile during model creation.
+    For multipart uploads via DRF, this is also accepted.
+    """
+    return ContentFile(b"%PDF-1.4 fake pdf content for testing", name="test.pdf")
+
+
+def _make_fake_pdf_upload() -> BytesIO:
+    """Create a minimal PDF-like file for multipart upload testing."""
     buf = BytesIO(b"%PDF-1.4 fake pdf content for testing")
     buf.name = "test.pdf"
     return buf
@@ -275,7 +286,7 @@ class TestWorkerUploadEndpoint(TransactionTestCase):
         response = self.client.post(
             "/api/worker-uploads/documents/",
             {
-                "file": _make_fake_pdf(),
+                "file": _make_fake_pdf_upload(),
                 "metadata": json.dumps(metadata),
             },
             format="multipart",
@@ -302,7 +313,7 @@ class TestWorkerUploadEndpoint(TransactionTestCase):
         response = self.client.post(
             "/api/worker-uploads/documents/",
             {
-                "file": _make_fake_pdf(),
+                "file": _make_fake_pdf_upload(),
                 "metadata": json.dumps({"title": "incomplete"}),
             },
             format="multipart",
@@ -316,7 +327,7 @@ class TestWorkerUploadEndpoint(TransactionTestCase):
         response = self.client.post(
             "/api/worker-uploads/documents/",
             {
-                "file": _make_fake_pdf(),
+                "file": _make_fake_pdf_upload(),
                 "metadata": "not valid json {{{",
             },
             format="multipart",
@@ -336,7 +347,7 @@ class TestWorkerUploadEndpoint(TransactionTestCase):
         response = self.client.post(
             "/api/worker-uploads/documents/",
             {
-                "file": _make_fake_pdf(),
+                "file": _make_fake_pdf_upload(),
                 "metadata": json.dumps(metadata),
             },
             format="multipart",
@@ -347,7 +358,7 @@ class TestWorkerUploadEndpoint(TransactionTestCase):
         response = self.client.post(
             "/api/worker-uploads/documents/",
             {
-                "file": _make_fake_pdf(),
+                "file": _make_fake_pdf_upload(),
                 "metadata": json.dumps(metadata),
             },
             format="multipart",

@@ -8,7 +8,7 @@ import logging
 
 import graphene
 from graphql import GraphQLError
-from graphql_jwt.decorators import login_required, superuser_required
+from graphql_jwt.decorators import user_passes_test
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.worker_uploads.models import (
@@ -73,8 +73,7 @@ class CreateWorkerAccount(graphene.Mutation):
     ok = graphene.Boolean()
     worker_account = graphene.Field(WorkerAccountType)
 
-    @login_required
-    @superuser_required
+    @user_passes_test(lambda user: user.is_superuser)
     def mutate(root, info, name, description=""):
         user = info.context.user
 
@@ -109,8 +108,7 @@ class DeactivateWorkerAccount(graphene.Mutation):
 
     ok = graphene.Boolean()
 
-    @login_required
-    @superuser_required
+    @user_passes_test(lambda user: user.is_superuser)
     def mutate(root, info, worker_account_id):
         try:
             account = WorkerAccount.objects.get(id=worker_account_id)
@@ -144,8 +142,7 @@ class CreateCorpusAccessTokenMutation(graphene.Mutation):
     ok = graphene.Boolean()
     token = graphene.Field(CorpusAccessTokenCreatedType)
 
-    @login_required
-    @superuser_required
+    @user_passes_test(lambda user: user.is_superuser)
     def mutate(
         root,
         info,
@@ -198,8 +195,7 @@ class RevokeCorpusAccessTokenMutation(graphene.Mutation):
 
     ok = graphene.Boolean()
 
-    @login_required
-    @superuser_required
+    @user_passes_test(lambda user: user.is_superuser)
     def mutate(root, info, token_id):
         try:
             token = CorpusAccessToken.objects.get(id=token_id)
