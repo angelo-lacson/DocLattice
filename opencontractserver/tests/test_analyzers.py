@@ -71,7 +71,9 @@ class TestOpenContractsAnalyzers(TransactionTestCase):
 
         for index, pdf_path in enumerate(sample_pdfs):
             with pdf_path.open("rb") as pdf_file:
-                pdf_contents = ContentFile(pdf_file.read())
+                pdf_contents = ContentFile(
+                    pdf_file.read(), name=f"test_doc_{index}.pdf"
+                )
                 Document.objects.create(
                     title=f"TestDoc{index}",
                     description="Sample PDF Document",

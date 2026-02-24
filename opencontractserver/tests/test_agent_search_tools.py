@@ -47,7 +47,12 @@ def create_mock_pawls_content(text: str) -> str:
 
 @pytest.mark.django_db
 @override_settings(
-    DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage",
+    STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    },
     MEDIA_ROOT="test_media/",
 )
 class TestDataExtractTasks(TestCase):
@@ -263,7 +268,12 @@ class TestDataExtractTasks(TestCase):
 
 @pytest.mark.django_db
 @override_settings(
-    DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage",
+    STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    },
     MEDIA_ROOT="test_media/",
 )
 class TestCoreTools(TestCase):
@@ -348,7 +358,12 @@ class TestCoreTools(TestCase):
     # ---------------------------------------------------------------------
 
     @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage",
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        },
         MEDIA_ROOT="test_media/",
     )
     async def test_async_md_summary_helpers(self):
@@ -395,7 +410,12 @@ class TestCoreTools(TestCase):
             await aget_md_summary_token_length(999_999)
 
     @override_settings(
-        DEFAULT_FILE_STORAGE="django.core.files.storage.FileSystemStorage",
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+            },
+        },
         MEDIA_ROOT="test_media/",
     )
     async def test_aget_notes_for_document_corpus(self):

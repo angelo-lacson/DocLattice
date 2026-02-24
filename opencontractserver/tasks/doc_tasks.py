@@ -12,7 +12,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
 from django.db.models import Q
 from django.utils import timezone
-from pydantic import validate_arguments
+from pydantic import validate_call
 
 from config import celery_app
 from opencontractserver.annotations.models import TOKEN_LABEL, Annotation
@@ -437,7 +437,7 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
 
 
 @celery_app.task()
-@validate_arguments
+@validate_call
 def burn_doc_annotations(
     label_lookups: LabelLookupPythonType,
     doc_id: int,
