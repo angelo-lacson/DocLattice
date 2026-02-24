@@ -161,7 +161,7 @@ class CreateCorpusAccessTokenMutation(graphene.Mutation):
         except Corpus.DoesNotExist:
             raise GraphQLError("Corpus not found.")
 
-        token = CorpusAccessToken.objects.create(
+        token, plaintext_key = CorpusAccessToken.create_token(
             worker_account=account,
             corpus=corpus,
             expires_at=expires_at,
@@ -177,7 +177,7 @@ class CreateCorpusAccessTokenMutation(graphene.Mutation):
             ok=True,
             token=CorpusAccessTokenCreatedType(
                 id=token.id,
-                key=token.key,
+                key=plaintext_key,
                 worker_account_name=account.name,
                 corpus_id=corpus.id,
                 expires_at=token.expires_at,

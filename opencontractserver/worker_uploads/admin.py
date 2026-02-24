@@ -20,6 +20,7 @@ class WorkerAccountAdmin(admin.ModelAdmin):
 class CorpusAccessTokenAdmin(admin.ModelAdmin):
     list_display = (
         "id",
+        "key_prefix",
         "worker_account",
         "corpus",
         "is_active",
@@ -28,8 +29,8 @@ class CorpusAccessTokenAdmin(admin.ModelAdmin):
         "created",
     )
     list_filter = ("is_active",)
-    search_fields = ("worker_account__name",)
-    readonly_fields = ("key", "created", "modified")
+    search_fields = ("worker_account__name", "key_prefix")
+    readonly_fields = ("key", "key_prefix", "created", "modified")
     raw_id_fields = ("worker_account", "corpus")
 
 
@@ -43,8 +44,9 @@ class WorkerDocumentUploadAdmin(admin.ModelAdmin):
         "processing_started",
         "processing_finished",
     )
-    list_filter = ("status",)
-    search_fields = ("id",)
+    list_filter = ("status", "corpus")
+    # UUID search via LIKE is slow; use list_filter for corpus/status instead.
+    search_fields = ()
     readonly_fields = (
         "id",
         "created",

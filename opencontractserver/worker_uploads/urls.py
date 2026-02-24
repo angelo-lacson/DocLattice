@@ -8,6 +8,9 @@ from opencontractserver.worker_uploads.views import (
 
 app_name = "worker_uploads"
 
+# IMPORTANT: "documents/list/" must precede "documents/<uuid:upload_id>/"
+# because Django resolves URLs top-down and would otherwise try to parse
+# the literal string "list" as a UUID.
 urlpatterns = [
     path(
         "documents/",

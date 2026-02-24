@@ -8,6 +8,7 @@ GET  /api/worker-uploads/documents/<id> — check status of a specific upload
 
 import logging
 
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
@@ -31,10 +32,18 @@ logger = logging.getLogger(__name__)
 
 
 class IsValidWorkerToken(permissions.BasePermission):
-    """Ensure request.auth is a valid CorpusAccessToken."""
+    """
+    Ensure the request was authenticated with a valid CorpusAccessToken.
+
+    WorkerTokenAuthentication already validates is_active, account status,
+    and expiry before returning successfully. This permission class only
+    needs to confirm that the auth backend actually ran (i.e. request.auth
+    is a CorpusAccessToken, not a session or JWT token that happened to pass
+    through a different backend).
+    """
 
     def has_permission(self, request, view):
-        return isinstance(request.auth, CorpusAccessToken) and request.auth.is_valid
+        return isinstance(request.auth, CorpusAccessToken)
 
 
 class WorkerDocumentUploadView(APIView):
@@ -44,9 +53,11 @@ class WorkerDocumentUploadView(APIView):
     The document and metadata are staged in the database for asynchronous
     processing by the batch drain task. Returns 202 Accepted immediately.
 
-    Rate limiting is enforced per-token if configured (best-effort; the count
-    check and subsequent create are not atomic, so under high concurrency a few
-    extra requests may slip through before being counted).
+    Rate limiting is best-effort: the count check and subsequent create are
+    not atomic, so under concurrent burst a token holder can exceed their
+    limit by a small margin. This is acceptable because worker tokens are
+    issued to trusted internal workers, not adversarial external clients.
+    For hardened rate limiting, use a reverse proxy (e.g. nginx limit_req).
     """
 
     authentication_classes = [WorkerTokenAuthentication]
@@ -56,7 +67,22 @@ class WorkerDocumentUploadView(APIView):
     def post(self, request):
         token: CorpusAccessToken = request.auth
 
-        # Enforce per-token rate limit
+        # Enforce file size limit
+        max_size = settings.MAX_WORKER_UPLOAD_SIZE_BYTES
+        uploaded_file = request.FILES.get("file")
+        if max_size and uploaded_file and uploaded_file.size > max_size:
+            return Response(
+                {
+                    "error": "File too large.",
+                    "detail": (
+                        f"Maximum upload size is {max_size} bytes "
+                        f"({max_size // (1024 * 1024)} MB)."
+                    ),
+                },
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        # Enforce per-token rate limit (best-effort, see docstring)
         if token.rate_limit_per_minute > 0:
             window_start = timezone.now() - timezone.timedelta(minutes=1)
             recent_count = WorkerDocumentUpload.objects.filter(

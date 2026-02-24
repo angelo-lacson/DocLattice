@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from celery import shared_task
 from django.conf import settings
@@ -40,8 +41,8 @@ from opencontractserver.worker_uploads.models import (
 
 logger = logging.getLogger(__name__)
 
-# Default batch size for processing pending uploads
-_DEFAULT_BATCH_SIZE = 50
+# Maximum length for sanitized filenames
+_MAX_FILENAME_LENGTH = 200
 
 # Dimension -> field name mapping for the Embedding model
 _VECTOR_FIELD_MAP = {
@@ -80,9 +81,7 @@ def process_pending_uploads(self) -> dict:
             WorkerDocumentUpload.objects.select_for_update(skip_locked=True)
             .filter(status=UploadStatus.PENDING)
             .order_by("created")
-            .values_list("id", flat=True)[
-                : getattr(settings, "WORKER_UPLOAD_BATCH_SIZE", _DEFAULT_BATCH_SIZE)
-            ]
+            .values_list("id", flat=True)[: settings.WORKER_UPLOAD_BATCH_SIZE]
         )
 
         if not pending_ids:
@@ -150,10 +149,20 @@ def _process_single_upload(upload_id) -> None:
     # not the service account, so they inherit the correct permissions
     # and appear naturally in the corpus owner's workspace.
     user = corpus.creator
+    if user is None:
+        raise ValueError(
+            f"Corpus {corpus.id} has no creator; cannot process worker upload."
+        )
 
+    # Guardian permission writes use the default DB connection, so they
+    # participate in the same transaction.atomic() block and roll back on failure.
     with transaction.atomic():
         # 1. Create the standalone Document
-        doc_filename = metadata.get("title", "document") or "document"
+        # Sanitize the title for use as a filename — strip path traversal chars,
+        # null bytes, and other unsafe characters from worker-supplied input.
+        raw_title = metadata.get("title", "document") or "document"
+        doc_filename = re.sub(r"[^\w\s\-.]", "_", raw_title)[:_MAX_FILENAME_LENGTH]
+        doc_filename = doc_filename.strip() or "document"
 
         pawls_content = metadata.get("pawls_file_content", [])
         text_content = metadata.get("content", "")

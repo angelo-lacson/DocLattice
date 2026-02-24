@@ -1,39 +1,25 @@
-"""Data migration to set up the Beat periodic task for draining worker uploads."""
+"""
+Data migration to clean up the DB-based Beat schedule for worker uploads.
+
+The periodic task is now defined in settings via CELERY_BEAT_SCHEDULE, which
+the DatabaseScheduler syncs automatically on startup. This migration removes
+any leftover DB row from the previous approach so the schedule is not doubled.
+"""
 
 from django.db import migrations
 
 TASK_NAME = "worker-uploads-drain-pending"
-TASK_PATH = "opencontractserver.worker_uploads.tasks.process_pending_uploads"
 
 
-def create_periodic_task(apps, schema_editor):
-    IntervalSchedule = apps.get_model("django_celery_beat", "IntervalSchedule")
-    PeriodicTask = apps.get_model("django_celery_beat", "PeriodicTask")
-
-    # Run every 60 seconds to catch uploads that arrive during worker downtime
-    schedule, _ = IntervalSchedule.objects.get_or_create(
-        every=60,
-        period="seconds",
-    )
-
-    if not PeriodicTask.objects.filter(name=TASK_NAME).exists():
-        PeriodicTask.objects.create(
-            name=TASK_NAME,
-            task=TASK_PATH,
-            interval=schedule,
-            enabled=True,
-            description=(
-                "Periodic drain of pending worker document uploads. "
-                "Ensures uploads are processed even if the per-request "
-                "nudge was missed during task-worker downtime."
-            ),
-            queue="worker_uploads",
-        )
-
-
-def remove_periodic_task(apps, schema_editor):
+def remove_db_schedule(apps, schema_editor):
+    """Remove the old DB-based periodic task (now managed via settings)."""
     PeriodicTask = apps.get_model("django_celery_beat", "PeriodicTask")
     PeriodicTask.objects.filter(name=TASK_NAME).delete()
+
+
+def noop_reverse(apps, schema_editor):
+    """No-op reverse — the settings-based schedule handles this now."""
+    pass
 
 
 class Migration(migrations.Migration):
@@ -44,5 +30,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(create_periodic_task, reverse_code=remove_periodic_task),
+        migrations.RunPython(remove_db_schedule, reverse_code=noop_reverse),
     ]

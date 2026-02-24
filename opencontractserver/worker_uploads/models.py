@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 import uuid
 
@@ -10,10 +11,17 @@ from opencontractserver.shared.utils import calc_oc_file_path
 User = get_user_model()
 
 TOKEN_KEY_LENGTH = 64  # 256-bit random hex token
+TOKEN_HASH_LENGTH = 64  # SHA-256 hex digest length
 
 
 def _generate_token_key() -> str:
+    """Generate a cryptographically random token key (plaintext)."""
     return secrets.token_hex(TOKEN_KEY_LENGTH // 2)
+
+
+def hash_token(plaintext: str) -> str:
+    """One-way SHA-256 hash of a plaintext token for secure storage."""
+    return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
 
 
 def _upload_staging_path(instance, filename):
@@ -80,7 +88,13 @@ class WorkerAccount(models.Model):
         - username: worker_<uuid> (guaranteed unique)
         - unusable password (no login possible)
         - is_staff=False, is_superuser=False
+
+        Raises:
+            ValueError: If a WorkerAccount with the given name already exists.
         """
+        if cls.objects.filter(name=name).exists():
+            raise ValueError(f"WorkerAccount with name '{name}' already exists.")
+
         username = f"worker_{uuid.uuid4().hex[:12]}"
         user = User.objects.create_user(
             username=username,
@@ -105,17 +119,24 @@ class CorpusAccessToken(models.Model):
     Tokens are long-lived (configurable expiry) and can be revoked individually.
     Each token is scoped to exactly one corpus. Create multiple tokens for
     multi-corpus access.
+
+    Security: Only the SHA-256 hash of the token is stored. The plaintext is
+    returned once at creation via ``create_token()`` and cannot be recovered.
+    Authentication hashes the incoming key and performs a constant-time lookup.
     """
 
-    # Stored in plaintext for simplicity. A hashed-token approach (store only
-    # SHA-256, show full key once at creation) would improve defense-in-depth
-    # against database breaches. Tracked as a follow-up improvement.
     key = models.CharField(
-        max_length=TOKEN_KEY_LENGTH,
+        max_length=TOKEN_HASH_LENGTH,
         unique=True,
         db_index=True,
-        default=_generate_token_key,
-        help_text="Cryptographically random access token.",
+        help_text="SHA-256 hash of the access token. Plaintext shown only once at creation.",
+    )
+    # Short prefix for admin identification (first 8 chars of plaintext)
+    key_prefix = models.CharField(
+        max_length=8,
+        blank=True,
+        default="",
+        help_text="First 8 characters of the plaintext token for admin identification.",
     )
     worker_account = models.ForeignKey(
         WorkerAccount,
@@ -156,7 +177,31 @@ class CorpusAccessToken(models.Model):
 
     def __str__(self):
         status = "active" if self.is_active else "revoked"
-        return f"CorpusAccessToken(worker={self.worker_account.name}, corpus={self.corpus_id}, {status})"
+        prefix = f"{self.key_prefix}..." if self.key_prefix else "???"
+        return (
+            f"CorpusAccessToken({prefix}, "
+            f"worker={self.worker_account.name}, "
+            f"corpus={self.corpus_id}, {status})"
+        )
+
+    @classmethod
+    def create_token(cls, *, worker_account, corpus, **kwargs):
+        """
+        Create a new token, storing only the SHA-256 hash.
+
+        Returns:
+            Tuple of (token_instance, plaintext_key). The plaintext is shown
+            only once — it cannot be recovered from the stored hash.
+        """
+        plaintext = _generate_token_key()
+        token = cls.objects.create(
+            key=hash_token(plaintext),
+            key_prefix=plaintext[:8],
+            worker_account=worker_account,
+            corpus=corpus,
+            **kwargs,
+        )
+        return token, plaintext
 
     @property
     def is_valid(self) -> bool:

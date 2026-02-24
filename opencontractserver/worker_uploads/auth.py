@@ -4,8 +4,9 @@ DRF authentication backend for CorpusAccessToken-based worker auth.
 Workers authenticate via:
     Authorization: WorkerKey <token>
 
-The backend validates the token, checks expiry and account status,
-and returns the associated WorkerAccount's User.
+The backend hashes the incoming plaintext token with SHA-256 and looks up
+the hash in the database. Only hashes are stored — plaintext tokens are
+shown once at creation and never persisted.
 """
 
 import logging
@@ -13,7 +14,7 @@ import logging
 from django.utils import timezone
 from rest_framework import authentication, exceptions
 
-from opencontractserver.worker_uploads.models import CorpusAccessToken
+from opencontractserver.worker_uploads.models import CorpusAccessToken, hash_token
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class WorkerTokenAuthentication(authentication.BaseAuthentication):
             return None
 
         parts = auth_header.split()
+        # Empty after split — only reachable for whitespace-only headers like "  "
         if len(parts) == 0 or parts[0] != WORKER_AUTH_PREFIX:
             return None
 
@@ -49,11 +51,12 @@ class WorkerTokenAuthentication(authentication.BaseAuthentication):
 
         return self._authenticate_token(parts[1])
 
-    def _authenticate_token(self, key: str):
+    def _authenticate_token(self, plaintext_key: str):
+        key_hash = hash_token(plaintext_key)
         try:
             token = CorpusAccessToken.objects.select_related(
                 "worker_account", "worker_account__user"
-            ).get(key=key)
+            ).get(key=key_hash)
         except CorpusAccessToken.DoesNotExist:
             raise exceptions.AuthenticationFailed("Invalid worker token.")
 

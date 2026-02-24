@@ -26,14 +26,6 @@ from config.graphql.agent_mutations import (
 )
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
 
-# Import worker mutations
-from config.graphql.worker_mutations import (
-    CreateCorpusAccessTokenMutation,
-    CreateWorkerAccount,
-    DeactivateWorkerAccount,
-    RevokeCorpusAccessTokenMutation,
-)
-
 # Import badge mutations
 from config.graphql.badge_mutations import (
     AwardBadgeMutation,
@@ -137,6 +129,14 @@ from config.graphql.voting_mutations import (
     RemoveVoteMutation,
     VoteConversationMutation,
     VoteMessageMutation,
+)
+
+# Import worker mutations
+from config.graphql.worker_mutations import (
+    CreateCorpusAccessTokenMutation,
+    CreateWorkerAccount,
+    DeactivateWorkerAccount,
+    RevokeCorpusAccessTokenMutation,
 )
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
