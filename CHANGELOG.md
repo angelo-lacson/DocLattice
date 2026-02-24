@@ -5,7 +5,14 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-22
+## [Unreleased] - 2026-02-24
+
+### Fixed
+
+#### Document Version Structural Annotation Set Inheritance
+- **Bug**: When a document was updated with new content (different hash), `import_document()` unconditionally inherited the old version's `structural_annotation_set`. This caused the parser's `_create_structural_annotation_set()` to short-circuit (early return at `pipeline/base/parser.py:299`), leaving freshly-parsed structural annotations orphaned — never migrated into a set.
+- **Fix**: `opencontractserver/documents/versioning.py:224-231` — `structural_annotation_set` is now only inherited when the content hash is unchanged. When content changes, the field is set to `None` so the parser creates a fresh `StructuralAnnotationSet` during ingestion.
+- **Tests**: `opencontractserver/tests/test_structural_annotation_portability.py` — replaced single test with two: one verifying `None` on changed content, one verifying inheritance on identical content.
 
 ### Added
 
