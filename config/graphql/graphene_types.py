@@ -324,7 +324,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Returns a flat list of descendant annotations,
         each including only the IDs of its immediate children.
         """
-        from django_cte import With
+        from django_cte import CTE, with_cte
 
         def get_descendants(cte):
             base_qs = Annotation.objects.filter(parent_id=self.id).values(
@@ -335,8 +335,8 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             )
             return base_qs.union(recursive_qs, all=True)
 
-        cte = With.recursive(get_descendants)
-        descendants_qs = cte.queryset().with_cte(cte).order_by("id")
+        cte = CTE.recursive(get_descendants)
+        descendants_qs = with_cte(cte, select=cte.queryset()).order_by("id")
         descendants_list = list(descendants_qs)
 
         return build_flat_tree(
@@ -349,7 +349,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Returns a flat list of annotations from the root ancestor,
         each including only the IDs of its immediate children.
         """
-        from django_cte import With
+        from django_cte import CTE, with_cte
 
         # Find the root ancestor
         root = self
@@ -365,8 +365,8 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             )
             return base_qs.union(recursive_qs, all=True)
 
-        cte = With.recursive(get_full_tree)
-        full_tree_qs = cte.queryset().with_cte(cte).order_by("id")
+        cte = CTE.recursive(get_full_tree)
+        full_tree_qs = with_cte(cte, select=cte.queryset()).order_by("id")
         nodes = list(full_tree_qs)
         full_tree = build_flat_tree(
             nodes, type_name="AnnotationType", text_key="raw_text"
@@ -380,7 +380,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         - The path from the root ancestor to this annotation (ancestors).
         - This annotation and all its descendants.
         """
-        from django_cte import With
+        from django_cte import CTE, with_cte
 
         # Find all ancestors up to the root
         ancestors = []
@@ -401,12 +401,10 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             )
             return base_qs.union(recursive_qs, all=True)
 
-        descendants_cte = With.recursive(get_descendants)
-        descendants_qs = (
-            descendants_cte.queryset()
-            .with_cte(descendants_cte)
-            .values("id", "parent_id", "raw_text")
-        )
+        descendants_cte = CTE.recursive(get_descendants)
+        descendants_qs = with_cte(
+            descendants_cte, select=descendants_cte.queryset()
+        ).values("id", "parent_id", "raw_text")
 
         # Combine ancestors and descendants
         combined_qs = (
@@ -787,7 +785,7 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Returns a flat list of descendant notes,
         each including only the IDs of its immediate children.
         """
-        from django_cte import With
+        from django_cte import CTE, with_cte
 
         def get_descendants(cte):
             base_qs = Note.objects.filter(parent_id=self.id).values(
@@ -798,8 +796,8 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             )
             return base_qs.union(recursive_qs, all=True)
 
-        cte = With.recursive(get_descendants)
-        descendants_qs = cte.queryset().with_cte(cte).order_by("id")
+        cte = CTE.recursive(get_descendants)
+        descendants_qs = with_cte(cte, select=cte.queryset()).order_by("id")
         descendants_list = list(descendants_qs)
         descendants_tree = build_flat_tree(
             descendants_list, type_name="NoteType", text_key="content"
@@ -812,7 +810,7 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Returns a flat list of notes from the root ancestor,
         each including only the IDs of its immediate children.
         """
-        from django_cte import With
+        from django_cte import CTE, with_cte
 
         # Find the root ancestor
         root = self
@@ -828,8 +826,8 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             )
             return base_qs.union(recursive_qs, all=True)
 
-        cte = With.recursive(get_full_tree)
-        full_tree_qs = cte.queryset().with_cte(cte).order_by("id")
+        cte = CTE.recursive(get_full_tree)
+        full_tree_qs = with_cte(cte, select=cte.queryset()).order_by("id")
         nodes = list(full_tree_qs)
         full_tree = build_flat_tree(nodes, type_name="NoteType", text_key="content")
         return full_tree
@@ -841,7 +839,7 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         - The path from the root ancestor to this note (ancestors).
         - This note and all its descendants.
         """
-        from django_cte import With
+        from django_cte import CTE, with_cte
 
         # Find all ancestors up to the root
         ancestors = []
@@ -862,12 +860,10 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             )
             return base_qs.union(recursive_qs, all=True)
 
-        descendants_cte = With.recursive(get_descendants)
-        descendants_qs = (
-            descendants_cte.queryset()
-            .with_cte(descendants_cte)
-            .values("id", "parent_id", "content")
-        )
+        descendants_cte = CTE.recursive(get_descendants)
+        descendants_qs = with_cte(
+            descendants_cte, select=descendants_cte.queryset()
+        ).values("id", "parent_id", "content")
 
         # Combine ancestors and descendants
         combined_qs = (
