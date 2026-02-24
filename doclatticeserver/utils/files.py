@@ -11,8 +11,8 @@ from typing import Union
 
 from django.conf import settings
 from PIL import Image, ImageDraw, ImageFont
-from PyPDF2 import PdfReader
-from PyPDF2.generic import (
+from pypdf import PdfReader
+from pypdf.generic import (
     ArrayObject,
     DictionaryObject,
     FloatObject,
@@ -89,16 +89,6 @@ def createHighlight(
 def add_highlight_to_new_page(highlight: DictionaryObject, page, output):
     # TODO - finish typing
     highlight_ref = output._add_object(highlight)
-
-    if "/Annots" in page:
-        page[NameObject("/Annots")].append(highlight_ref)
-    else:
-        page[NameObject("/Annots")] = ArrayObject([highlight_ref])
-
-
-def add_highlight_to_page(highlight: DictionaryObject, page):
-    # TODO - finish typing
-    highlight_ref = page._addObject(highlight)
 
     if "/Annots" in page:
         page[NameObject("/Annots")].append(highlight_ref)

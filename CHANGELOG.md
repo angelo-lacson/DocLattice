@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fix**: `doclatticeserver/documents/versioning.py:224-231` — `structural_annotation_set` is now only inherited when the content hash is unchanged. When content changes, the field is set to `None` so the parser creates a fresh `StructuralAnnotationSet` during ingestion.
 - **Tests**: `doclatticeserver/tests/test_structural_annotation_portability.py` — replaced single test with two: one verifying `None` on changed content, one verifying inheritance on identical content.
 
+### Changed
+
+#### Migrate from deprecated PyPDF2 to pypdf (Closes #938)
+- Replaced `PyPDF2==3.0.1` with `pypdf` in `requirements/base.txt`
+- Removed redundant `pypdf` entry from `requirements/local.txt` (now provided by base)
+- Updated imports in `doclatticeserver/utils/files.py`, `doclatticeserver/utils/etl.py`, and `doclatticeserver/tests/test_pdf_redaction.py`
+- Removed unused `add_highlight_to_page` function from `doclatticeserver/utils/files.py` (used deprecated `_addObject` API, never called)
+
 ### Added
 
 #### Corpus Export Format Specification and Validation Utility
