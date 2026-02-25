@@ -72,7 +72,7 @@ test.describe("TrashFolderView", () => {
 
     await expect(page.getByText("Trash is Empty")).toBeVisible();
     await expect(
-      page.getByText("Deleted documents will appear here"),
+      page.getByText("Deleted documents will appear here")
     ).toBeVisible();
   });
 
@@ -84,7 +84,7 @@ test.describe("TrashFolderView", () => {
     });
 
     await expect(
-      page.locator(".header").getByText("Failed to load trash"),
+      page.locator(".header").getByText("Failed to load trash")
     ).toBeVisible();
   });
 
@@ -171,7 +171,7 @@ test.describe("TrashFolderView", () => {
       timeout: 10000,
     });
     await expect(
-      page.getByRole("paragraph").getByText("Document restored successfully"),
+      page.getByRole("paragraph").getByText("Document restored successfully")
     ).toBeVisible();
   });
 
@@ -201,7 +201,7 @@ test.describe("TrashFolderView", () => {
         onBack={() => {
           backCalled = true;
         }}
-      />,
+      />
     );
 
     await page.waitForSelector('text="Trash"', { timeout: 10000 });
@@ -323,7 +323,7 @@ test.describe("TrashFolderView", () => {
 
     // Success message should be gone
     await expect(
-      page.locator(".header").getByText("Success"),
+      page.locator(".header").getByText("Success")
     ).not.toBeVisible();
   });
 
@@ -398,7 +398,7 @@ test.describe("TrashFolderView", () => {
 
       // Should show error message about missing document information
       await expect(
-        page.getByText("Cannot restore: document information is missing"),
+        page.getByText("Cannot restore: document information is missing")
       ).toBeVisible({ timeout: 10000 });
     });
 
@@ -413,7 +413,7 @@ test.describe("TrashFolderView", () => {
         <TrashFolderViewTestWrapper
           mockType="mixedNull"
           restoreMockType="mixedNull"
-        />,
+        />
       );
 
       await page.waitForSelector('text="Valid Document"', { timeout: 10000 });
@@ -431,7 +431,7 @@ test.describe("TrashFolderView", () => {
 
       // Should show warning about skipped document with missing data (appears in error message)
       await expect(
-        page.getByText(/1 document skipped: missing or corrupted data/),
+        page.getByText(/1 document skipped: missing or corrupted data/)
       ).toBeVisible({ timeout: 15000 });
     });
 
@@ -455,8 +455,8 @@ test.describe("TrashFolderView", () => {
       // Should show clear error message
       await expect(
         page.getByText(
-          "Selected documents cannot be restored: document data is missing or corrupted",
-        ),
+          "Selected documents cannot be restored: document data is missing or corrupted"
+        )
       ).toBeVisible({ timeout: 10000 });
     });
   });

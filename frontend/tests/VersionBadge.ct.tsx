@@ -11,7 +11,7 @@ test.describe("VersionBadge", () => {
         hasHistory={false}
         isLatest={true}
         versionCount={1}
-      />,
+      />
     );
 
     await expect(component.getByText("v1")).toBeVisible({ timeout: 10000 });
@@ -28,7 +28,7 @@ test.describe("VersionBadge", () => {
         hasHistory={false}
         isLatest={true}
         versionCount={1}
-      />,
+      />
     );
 
     // Badge with no history should not have pointer cursor
@@ -50,7 +50,7 @@ test.describe("VersionBadge", () => {
         hasHistory={true}
         isLatest={true}
         versionCount={2}
-      />,
+      />
     );
 
     // Badge with history should have pointer cursor
@@ -72,7 +72,7 @@ test.describe("VersionBadge", () => {
         hasHistory={true}
         isLatest={true}
         versionCount={5}
-      />,
+      />
     );
 
     await expect(component.getByText("v3")).toBeVisible({ timeout: 10000 });
@@ -93,7 +93,7 @@ test.describe("VersionBadge", () => {
         onClick={() => {
           clicked = true;
         }}
-      />,
+      />
     );
 
     // Use role=button selector which is more reliable
@@ -113,7 +113,7 @@ test.describe("VersionBadge", () => {
         onClick={() => {
           clicked = true;
         }}
-      />,
+      />
     );
 
     await expect(component.getByText("v1")).toBeVisible({ timeout: 10000 });
@@ -130,7 +130,7 @@ test.describe("VersionBadge", () => {
         isLatest={true}
         versionCount={3}
         onClick={() => {}}
-      />,
+      />
     );
 
     const badge = page.getByRole("button");
@@ -149,7 +149,7 @@ test.describe("VersionBadge", () => {
         hasHistory={false}
         isLatest={true}
         versionCount={1}
-      />,
+      />
     );
 
     await expect(component.getByText("v1")).toBeVisible({ timeout: 10000 });
@@ -170,7 +170,7 @@ test.describe("VersionBadge", () => {
         hasHistory={true}
         isLatest={true}
         versionCount={3}
-      />,
+      />
     );
 
     const badge = page.getByRole("button");
@@ -199,7 +199,7 @@ test.describe("VersionBadge", () => {
         hasHistory={true}
         isLatest={false}
         versionCount={3}
-      />,
+      />
     );
 
     const badge = page.getByRole("button");
@@ -215,7 +215,7 @@ test.describe("VersionBadge", () => {
       timeout: 5000,
     });
     await expect(
-      page.getByText("A newer version is available (you are viewing v2 of 3)"),
+      page.getByText("A newer version is available (you are viewing v2 of 3)")
     ).toBeVisible();
   });
 
@@ -227,7 +227,7 @@ test.describe("VersionBadge", () => {
         isLatest={true}
         versionCount={3}
         onClick={() => {}}
-      />,
+      />
     );
 
     const badge = page.getByRole("button");
@@ -246,7 +246,7 @@ test.describe("VersionBadge", () => {
         isLatest={true}
         versionCount={2}
         className="custom-test-class"
-      />,
+      />
     );
 
     const badge = page.getByRole("button");
@@ -264,7 +264,7 @@ test.describe("VersionBadge", () => {
         hasHistory={false}
         isLatest={true}
         versionCount={1}
-      />,
+      />
     );
 
     await expect(component.getByText("v1")).toBeVisible({ timeout: 10000 });
