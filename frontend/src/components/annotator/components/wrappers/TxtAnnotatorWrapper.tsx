@@ -37,6 +37,7 @@ import {
   decodeTextBlock,
   TextSpanBlock,
 } from "../../../../utils/textBlockEncoding";
+import { TEXT_BLOCK_DEEPLINK_ID } from "../../../../assets/configurations/constants";
 
 interface TxtAnnotatorWrapperProps {
   readOnly: boolean;
@@ -133,8 +134,8 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
       allSources.push({
         start_index: textBlockSpan.start,
         end_index: textBlockSpan.end,
-        sourceId: "__text_block_deeplink__",
-        messageId: "__text_block_deeplink__",
+        sourceId: TEXT_BLOCK_DEEPLINK_ID,
+        messageId: TEXT_BLOCK_DEEPLINK_ID,
       });
     }
 
@@ -184,7 +185,7 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
         chatSources={chatSourceMatches}
         selectedChatSourceId={
           textBlockSpan
-            ? "__text_block_deeplink__"
+            ? TEXT_BLOCK_DEEPLINK_ID
             : selectedMessageId && selectedSourceIndex !== null
             ? `${selectedMessageId}.${selectedSourceIndex}`
             : undefined

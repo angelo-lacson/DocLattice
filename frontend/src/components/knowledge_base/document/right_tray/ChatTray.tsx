@@ -101,8 +101,6 @@ export interface WebSocketSources {
   rawText: string;
   /** Document ID this source belongs to (provided by backend SourceNode metadata) */
   document_id?: number;
-  /** Corpus ID this source belongs to (provided by backend SourceNode metadata) */
-  corpus_id?: number;
 }
 
 /**

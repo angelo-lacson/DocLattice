@@ -137,6 +137,7 @@ import {
   textBlockFromTokensByPage,
 } from "../utils/textBlockEncoding";
 import { buildQueryParams } from "../utils/navigationUtils";
+import { toGlobalId } from "../utils/idValidation";
 import { CorpusHome } from "../components/corpuses/CorpusHome";
 import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptionEditor";
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
@@ -1622,9 +1623,13 @@ export const Corpuses = () => {
         );
       }
 
+      // Bail out if we couldn't build a text block reference —
+      // navigating without ?tb= would be a silent no-op.
+      if (!textBlock) return;
+
       // Build the document URL using the GraphQL ID format
       // CentralRouteManager Phase 1 handles ID→slug redirect
-      const docGraphQLId = btoa(`DocumentType:${source.document_id}`);
+      const docGraphQLId = toGlobalId("DocumentType", source.document_id);
       const userSlug =
         opened_corpus.creator?.slug || opened_corpus.creator?.username || "_";
       const corpusSlug = opened_corpus.slug || opened_corpus.id;

@@ -134,7 +134,13 @@ export const PDFPage = ({
       pageTokensMap[pageInfo.page.pageNumber - 1] = pageInfo.tokens;
     }
     const bounds = textBlockToBounds(block, pageTokensMap);
-    return { tokenIds, bounds };
+    // Determine the first page that contains highlight data so only
+    // that page triggers scrollIntoView (avoids multi-page scroll conflict).
+    const allPages = Object.keys(block.tokensByPage)
+      .map(Number)
+      .sort((a, b) => a - b);
+    const firstMatchingPage = allPages.length > 0 ? allPages[0] : -1;
+    return { tokenIds, bounds, firstMatchingPage };
   }, [textBlockParam, pageInfo.page.pageNumber, pageInfo.tokens]);
 
   const updatedPageInfo = useMemo(() => {
@@ -602,7 +608,7 @@ export const PDFPage = ({
               tokens={textBlockData.tokenIds[pageIndex] || []}
               bounds={textBlockData.bounds[pageIndex]}
               pageInfo={updatedPageInfo}
-              scrollIntoView={true}
+              scrollIntoView={pageIndex === textBlockData.firstMatchingPage}
             />
           )}
       </CanvasWrapper>

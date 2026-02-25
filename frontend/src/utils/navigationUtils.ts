@@ -1071,15 +1071,3 @@ export function updateTextBlockParam(
   }
   navigate({ search: searchParams.toString() }, { replace: true });
 }
-
-/**
- * Clear text block highlight from URL
- * @param location - React Router location object
- * @param navigate - React Router navigate function
- */
-export function clearTextBlockParam(
-  location: { search: string },
-  navigate: (to: { search: string }, options?: { replace?: boolean }) => void
-) {
-  updateTextBlockParam(location, navigate, null);
-}

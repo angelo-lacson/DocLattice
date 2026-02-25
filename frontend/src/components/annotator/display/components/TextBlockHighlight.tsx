@@ -5,7 +5,6 @@
  *
  * This allows highlighting arbitrary text regions WITHOUT creating DB annotations.
  */
-import { useRef, useEffect } from "react";
 import { ResultBoundary } from "./ResultBoundary";
 import { ChatSourceTokens } from "./ChatSourceTokens";
 import { PDFPageInfo } from "../../types/pdf";
@@ -31,21 +30,12 @@ export const TextBlockHighlight = ({
   scrollIntoView = false,
 }: TextBlockHighlightProps) => {
   const { showBoundingBoxes } = useAnnotationDisplay();
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (scrollIntoView && containerRef.current) {
-      containerRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  }, [scrollIntoView]);
 
   const scaledBounds = pageInfo.getScaledBounds(bounds);
 
+  // Scroll is handled entirely by ResultBoundary's internal useEffect.
   return (
-    <div ref={containerRef}>
+    <>
       <ResultBoundary
         id="TEXT_BLOCK_HIGHLIGHT"
         hidden={false}
@@ -64,6 +54,6 @@ export const TextBlockHighlight = ({
           tokens={tokens}
         />
       )}
-    </div>
+    </>
   );
 };

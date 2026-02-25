@@ -80,6 +80,10 @@ function encodeTokenRanges(tokens: number[]): string {
   return ranges.join(",");
 }
 
+/** Maximum number of tokens a single range segment may expand to.
+ *  Guards against malicious URLs like "0-9999999" creating huge arrays. */
+const MAX_RANGE_SPAN = 10_000;
+
 /**
  * Decode a compact token range string back to an array of numbers.
  * "1-3,5,7-9" → [1, 2, 3, 5, 7, 8, 9]
@@ -94,6 +98,7 @@ function decodeTokenRanges(rangeStr: string): number[] {
       const start = parseInt(startStr, 10);
       const end = parseInt(endStr, 10);
       if (isNaN(start) || isNaN(end)) continue;
+      if (end - start > MAX_RANGE_SPAN) continue;
       for (let i = start; i <= end; i++) {
         tokens.push(i);
       }
