@@ -606,6 +606,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60.0,
         "options": {"queue": "worker_uploads"},
     },
+    "worker-uploads-recover-stalled": {
+        "task": "opencontractserver.worker_uploads.tasks.recover_stalled_uploads",
+        "schedule": 300.0,  # every 5 minutes
+        "options": {"queue": "worker_uploads"},
+    },
 }
 
 # Worker Upload Processing
@@ -617,6 +622,15 @@ WORKER_UPLOAD_BATCH_SIZE = int(env("WORKER_UPLOAD_BATCH_SIZE", default="50"))
 # Default: 256 MB. Set to 0 to disable the limit.
 MAX_WORKER_UPLOAD_SIZE_BYTES = int(
     env("MAX_WORKER_UPLOAD_SIZE_BYTES", default=str(256 * 1024 * 1024))
+)
+
+# Minutes before a PROCESSING upload is considered stalled and reset to PENDING.
+WORKER_UPLOAD_STALE_MINUTES = int(env("WORKER_UPLOAD_STALE_MINUTES", default="15"))
+
+# Maximum metadata JSON size (in bytes) accepted by the worker upload endpoint.
+# Default: 500 MB. Set to 0 to disable the limit.
+MAX_WORKER_METADATA_SIZE_BYTES = int(
+    env("MAX_WORKER_METADATA_SIZE_BYTES", default=str(500 * 1024 * 1024))
 )
 
 # django-rest-framework

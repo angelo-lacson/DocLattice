@@ -1,7 +1,7 @@
 """
 GraphQL mutations for managing worker accounts and corpus access tokens.
 
-Only superusers or corpus owners can create/manage worker accounts and tokens.
+Only superusers can create/manage worker accounts and tokens.
 """
 
 import logging
@@ -77,14 +77,14 @@ class CreateWorkerAccount(graphene.Mutation):
     def mutate(root, info, name, description=""):
         user = info.context.user
 
-        if WorkerAccount.objects.filter(name=name).exists():
-            raise GraphQLError(f"Worker account with name '{name}' already exists.")
-
-        account = WorkerAccount.create_with_user(
-            name=name,
-            description=description,
-            creator=user,
-        )
+        try:
+            account = WorkerAccount.create_with_user(
+                name=name,
+                description=description,
+                creator=user,
+            )
+        except ValueError as e:
+            raise GraphQLError(str(e))
 
         logger.info(f"Worker account created: {account.name} by user {user.id}")
 

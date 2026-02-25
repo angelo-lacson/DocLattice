@@ -6,7 +6,9 @@ GET  /api/worker-uploads/documents/     — list uploads for the authenticated t
 GET  /api/worker-uploads/documents/<id> — check status of a specific upload
 """
 
+import json
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.utils import timezone
@@ -82,9 +84,26 @@ class WorkerDocumentUploadView(APIView):
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
 
+        # Enforce metadata size limit
+        max_metadata_size = settings.MAX_WORKER_METADATA_SIZE_BYTES
+        if max_metadata_size:
+            raw_metadata = request.data.get("metadata", "")
+            if isinstance(raw_metadata, dict):
+                metadata_size = len(json.dumps(raw_metadata).encode())
+            else:
+                metadata_size = len(str(raw_metadata).encode())
+            if metadata_size > max_metadata_size:
+                return Response(
+                    {
+                        "error": "Metadata too large.",
+                        "max_bytes": max_metadata_size,
+                    },
+                    status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                )
+
         # Enforce per-token rate limit (best-effort, see docstring)
         if token.rate_limit_per_minute > 0:
-            window_start = timezone.now() - timezone.timedelta(minutes=1)
+            window_start = timezone.now() - timedelta(minutes=1)
             recent_count = WorkerDocumentUpload.objects.filter(
                 corpus_access_token=token,
                 created__gte=window_start,
