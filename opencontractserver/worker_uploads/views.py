@@ -14,6 +14,7 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -101,7 +102,10 @@ class WorkerDocumentUploadView(APIView):
                     status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 )
 
-        # Enforce per-token rate limit (best-effort, see docstring)
+        # Best-effort rate limit: the count-then-create is intentionally
+        # non-atomic. Under concurrent burst traffic a caller can marginally
+        # exceed the limit. This is acceptable for trusted internal workers;
+        # for strict enforcement use a reverse proxy (e.g. nginx limit_req).
         if token.rate_limit_per_minute > 0:
             window_start = timezone.now() - timedelta(minutes=1)
             recent_count = WorkerDocumentUpload.objects.filter(
@@ -160,7 +164,15 @@ class WorkerDocumentUploadStatusView(RetrieveAPIView):
 
     def get_queryset(self):
         token: CorpusAccessToken = self.request.auth
-        return WorkerDocumentUpload.objects.filter(corpus_access_token=token)
+        return WorkerDocumentUpload.objects.select_related(
+            "result_document", "corpus_access_token"
+        ).filter(corpus_access_token=token)
+
+
+class WorkerUploadPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 200
 
 
 class WorkerDocumentUploadListView(ListAPIView):
@@ -169,10 +181,13 @@ class WorkerDocumentUploadListView(ListAPIView):
     authentication_classes = [WorkerTokenAuthentication]
     permission_classes = [IsValidWorkerToken]
     serializer_class = WorkerDocumentUploadStatusSerializer
+    pagination_class = WorkerUploadPagination
 
     def get_queryset(self):
         token: CorpusAccessToken = self.request.auth
-        qs = WorkerDocumentUpload.objects.filter(corpus_access_token=token)
+        qs = WorkerDocumentUpload.objects.select_related(
+            "result_document", "corpus_access_token"
+        ).filter(corpus_access_token=token)
 
         # Optional status filter
         status_filter = self.request.query_params.get("status")

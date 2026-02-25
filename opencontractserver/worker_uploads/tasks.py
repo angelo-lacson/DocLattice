@@ -28,6 +28,9 @@ from opencontractserver.annotations.models import (
     AnnotationLabel,
     Embedding,
 )
+from opencontractserver.constants.document_processing import (
+    MAX_UPLOAD_ERROR_MESSAGE_LENGTH,
+)
 from opencontractserver.corpuses.models import CorpusFolder
 from opencontractserver.documents.models import (
     Document,
@@ -54,6 +57,13 @@ _MAX_FILENAME_LENGTH = 200
 # Dimension -> field name mapping, derived from the Embedding model's
 # authoritative EMBEDDING_DIMENSIONS list so new dimensions propagate automatically.
 _VECTOR_FIELD_MAP = {dim: f"vector_{dim}" for dim, _ in EMBEDDING_DIMENSIONS}
+
+# Validate that every entry in _VECTOR_FIELD_MAP corresponds to an actual
+# Embedding model field. Catches dimension/field mismatches at import time
+# rather than silently dropping embeddings at runtime.
+assert all(
+    hasattr(Embedding, f) for f in _VECTOR_FIELD_MAP.values()
+), "EMBEDDING_DIMENSIONS has entries without matching Embedding model fields"
 
 
 @shared_task(
@@ -107,7 +117,7 @@ def process_pending_uploads(self) -> dict:
                 f"process_pending_uploads: upload {upload_id} failed: {e}",
                 exc_info=True,
             )
-            _fail_upload(upload_id, str(e)[:2000])
+            _fail_upload(upload_id, str(e)[:MAX_UPLOAD_ERROR_MESSAGE_LENGTH])
             result["failed"] += 1
 
     # Re-enqueue if there are more pending uploads
@@ -127,15 +137,40 @@ def process_pending_uploads(self) -> dict:
 
 @shared_task(queue="worker_uploads")
 def recover_stalled_uploads() -> dict:
-    """Reset uploads stuck in PROCESSING beyond the configured timeout."""
+    """
+    Reset uploads stuck in PROCESSING beyond the configured timeout.
+
+    Uses SELECT ... FOR UPDATE SKIP LOCKED to avoid resetting uploads that
+    are actively being processed (row-locked by the batch processor). Each
+    row is reset individually with a compare-and-swap on processing_started
+    to prevent races where an upload is legitimately re-claimed between the
+    select and the update.
+    """
     cutoff = timezone.now() - timedelta(minutes=settings.WORKER_UPLOAD_STALE_MINUTES)
-    count = WorkerDocumentUpload.objects.filter(
-        status=UploadStatus.PROCESSING,
-        processing_started__lt=cutoff,
-    ).update(
-        status=UploadStatus.PENDING,
-        processing_started=None,
-    )
+    count = 0
+
+    with transaction.atomic():
+        stalled = list(
+            WorkerDocumentUpload.objects.select_for_update(skip_locked=True)
+            .filter(
+                status=UploadStatus.PROCESSING,
+                processing_started__lt=cutoff,
+            )
+            .values_list("id", "processing_started")
+        )
+
+        for upload_id, original_started in stalled:
+            # Compare-and-swap: only reset if processing_started hasn't changed
+            # since we read it, preventing double-processing races.
+            updated = WorkerDocumentUpload.objects.filter(
+                id=upload_id,
+                status=UploadStatus.PROCESSING,
+                processing_started=original_started,
+            ).update(
+                status=UploadStatus.PENDING,
+                processing_started=None,
+            )
+            count += updated
 
     if count:
         logger.info(f"recover_stalled_uploads: reset {count} stalled upload(s).")
@@ -161,7 +196,9 @@ def _process_single_upload(upload_id) -> None:
     metadata = upload.metadata
     corpus = upload.corpus
 
-    # Validate required metadata fields
+    # Defensive re-check of required fields. The serializer validates these at
+    # upload time, but metadata lives in a JSONField and could theoretically be
+    # modified between staging and processing (e.g., admin edit, migration).
     required_fields = ["title", "content", "pawls_file_content", "page_count"]
     missing = [f for f in required_fields if f not in metadata]
     if missing:
@@ -174,6 +211,11 @@ def _process_single_upload(upload_id) -> None:
     if user is None:
         raise ValueError(
             f"Corpus {corpus.id} has no creator; cannot process worker upload."
+        )
+    if not user.is_active:
+        raise ValueError(
+            f"Corpus {corpus.id} creator (user {user.id}) is inactive; "
+            f"cannot process worker upload."
         )
 
     # Guardian permission writes use the default DB connection, so they

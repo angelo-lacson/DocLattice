@@ -2,7 +2,10 @@ import json
 
 from rest_framework import serializers
 
+from opencontractserver.annotations.models import EMBEDDING_DIMENSIONS
 from opencontractserver.worker_uploads.models import WorkerDocumentUpload
+
+_SUPPORTED_DIMS = frozenset(dim for dim, _ in EMBEDDING_DIMENSIONS)
 
 
 class WorkerDocumentUploadSerializer(serializers.Serializer):
@@ -48,17 +51,36 @@ class WorkerDocumentUploadSerializer(serializers.Serializer):
                     "embeddings.embedder_path is required when providing embeddings."
                 )
             doc_emb = embeddings.get("document_embedding")
-            if doc_emb is not None and not isinstance(doc_emb, list):
-                raise serializers.ValidationError(
-                    "embeddings.document_embedding must be a list of floats."
-                )
+            if doc_emb is not None:
+                _validate_vector(doc_emb, "embeddings.document_embedding")
             annot_embs = embeddings.get("annotation_embeddings")
-            if annot_embs is not None and not isinstance(annot_embs, dict):
-                raise serializers.ValidationError(
-                    "embeddings.annotation_embeddings must be a dict."
-                )
+            if annot_embs is not None:
+                if not isinstance(annot_embs, dict):
+                    raise serializers.ValidationError(
+                        "embeddings.annotation_embeddings must be a dict."
+                    )
+                for annot_id, vec in annot_embs.items():
+                    _validate_vector(
+                        vec,
+                        f"embeddings.annotation_embeddings[{annot_id}]",
+                    )
 
         return data
+
+
+def _validate_vector(vec, field_name: str) -> None:
+    """Validate that a vector is a list of numbers with a supported dimension."""
+    if not isinstance(vec, list):
+        raise serializers.ValidationError(f"{field_name} must be a list of floats.")
+    if not all(isinstance(v, (int, float)) for v in vec):
+        raise serializers.ValidationError(
+            f"{field_name} must contain only numeric values."
+        )
+    if len(vec) not in _SUPPORTED_DIMS:
+        raise serializers.ValidationError(
+            f"{field_name} has unsupported dimension {len(vec)}. "
+            f"Supported: {sorted(_SUPPORTED_DIMS)}."
+        )
 
 
 class WorkerDocumentUploadStatusSerializer(serializers.ModelSerializer):
