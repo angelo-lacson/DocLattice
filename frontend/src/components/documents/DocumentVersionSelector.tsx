@@ -1,32 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { useLazyQuery, gql, useReactiveVar } from "@apollo/client";
+import { useLazyQuery, useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { Popup, Loader, Icon } from "semantic-ui-react";
 import { selectedDocVersion } from "../../graphql/cache";
-
-/**
- * GraphQL query to fetch available versions for a document in a corpus.
- * Uses the corpusVersions field on DocumentType.
- */
-export const GET_CORPUS_VERSIONS = gql`
-  query GetCorpusVersions($documentId: ID!, $corpusId: ID!) {
-    document(id: $documentId) {
-      id
-      versionCount
-      hasVersionHistory
-      isLatestVersion
-      versionNumber(corpusId: $corpusId)
-      corpusVersions(corpusId: $corpusId) {
-        versionNumber
-        documentId
-        documentSlug
-        created
-        isCurrent
-      }
-    }
-  }
-`;
+import { GET_CORPUS_VERSIONS } from "../../graphql/queries";
 
 interface CorpusVersion {
   versionNumber: number;

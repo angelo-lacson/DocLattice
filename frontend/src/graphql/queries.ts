@@ -291,6 +291,25 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
   }
 `;
 
+export const GET_CORPUS_VERSIONS = gql`
+  query GetCorpusVersions($documentId: ID!, $corpusId: ID!) {
+    document(id: $documentId) {
+      id
+      versionCount
+      hasVersionHistory
+      isLatestVersion
+      versionNumber(corpusId: $corpusId)
+      corpusVersions(corpusId: $corpusId) {
+        versionNumber
+        documentId
+        documentSlug
+        created
+        isCurrent
+      }
+    }
+  }
+`;
+
 export interface ResolveExtractByIdInput {
   extractId: string;
 }
