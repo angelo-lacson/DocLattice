@@ -130,6 +130,14 @@ from config.graphql.voting_mutations import (
     VoteConversationMutation,
     VoteMessageMutation,
 )
+
+# Import worker mutations
+from config.graphql.worker_mutations import (
+    CreateCorpusAccessTokenMutation,
+    CreateWorkerAccount,
+    DeactivateWorkerAccount,
+    RevokeCorpusAccessTokenMutation,
+)
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import (
@@ -6213,3 +6221,9 @@ class Mutation(graphene.ObjectType):
     reset_pipeline_settings = ResetPipelineSettingsMutation.Field()
     update_component_secrets = UpdateComponentSecretsMutation.Field()
     delete_component_secrets = DeleteComponentSecretsMutation.Field()
+
+    # WORKER UPLOAD MUTATIONS (Superuser only) ####################################
+    create_worker_account = CreateWorkerAccount.Field()
+    deactivate_worker_account = DeactivateWorkerAccount.Field()
+    create_corpus_access_token = CreateCorpusAccessTokenMutation.Field()
+    revoke_corpus_access_token = RevokeCorpusAccessTokenMutation.Field()

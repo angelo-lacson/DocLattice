@@ -154,6 +154,7 @@ LOCAL_APPS = [
     "opencontractserver.badges",
     "opencontractserver.notifications",
     "opencontractserver.agents",
+    "opencontractserver.worker_uploads",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -577,13 +578,61 @@ CELERY_RESULT_SERIALIZER = "json"
 # TODO: set to whatever value is adequate in your circumstances
 # CELERY_TASK_SOFT_TIME_LIMIT = 3600
 # http://docs.celeryproject.org/en/latest/userguide/configuration.html#beat-scheduler
-# Uses database scheduler - periodic tasks are set up via migrations
-# See: opencontractserver/users/migrations/0024_setup_telemetry_periodic_task.py
+# Uses database scheduler - periodic tasks defined in CELERY_BEAT_SCHEDULE below
+# are automatically synced into the DB on Beat startup.
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_WORKER_MAX_MEMORY_PER_CHILD = 14240000  # 14 GB (thousands of kilobytes)
 CELERY_MAX_TASKS_PER_CHILD = 4
 CELERY_PREFETCH_MULTIPLIER = 1
 CELERY_RESULT_BACKEND_MAX_RETRIES = 10
+
+# Celery task routing
+# -----------------------------------------------------------------------
+# All task queue routes are defined here in one place. Do NOT assign
+# CELERY_TASK_ROUTES elsewhere — add new routes to this dict instead.
+CELERY_TASK_ROUTES = {
+    # Worker upload processing runs on a dedicated queue so it never starves
+    # regular user operations (parsing, embedding, export, etc.)
+    "opencontractserver.worker_uploads.tasks.*": {"queue": "worker_uploads"},
+}
+
+# Celery Beat schedule (settings-based)
+# -----------------------------------------------------------------------
+# Periodic drain of pending worker document uploads. Ensures uploads are
+# processed even if the per-request nudge was missed during task-worker downtime.
+CELERY_BEAT_SCHEDULE = {
+    "worker-uploads-drain-pending": {
+        "task": "opencontractserver.worker_uploads.tasks.process_pending_uploads",
+        "schedule": 60.0,
+        "options": {"queue": "worker_uploads"},
+    },
+    "worker-uploads-recover-stalled": {
+        "task": "opencontractserver.worker_uploads.tasks.recover_stalled_uploads",
+        "schedule": 300.0,  # every 5 minutes
+        "options": {"queue": "worker_uploads"},
+    },
+}
+
+# Worker Upload Processing
+# ------------------------------------------------------------------------------
+# Documents per batch when draining the staging table
+WORKER_UPLOAD_BATCH_SIZE = int(env("WORKER_UPLOAD_BATCH_SIZE", default="50"))
+
+# Maximum file size (in bytes) accepted by the worker upload endpoint.
+# Default: 256 MB. Set to 0 to disable the limit.
+MAX_WORKER_UPLOAD_SIZE_BYTES = int(
+    env("MAX_WORKER_UPLOAD_SIZE_BYTES", default=str(256 * 1024 * 1024))
+)
+
+# Minutes before a PROCESSING upload is considered stalled and reset to PENDING.
+WORKER_UPLOAD_STALE_MINUTES = int(env("WORKER_UPLOAD_STALE_MINUTES", default="15"))
+
+# Maximum metadata JSON size (in bytes) accepted by the worker upload endpoint.
+# Default: 500 MB. Set to 0 to disable the limit.
+MAX_WORKER_METADATA_SIZE_BYTES = int(
+    env("MAX_WORKER_METADATA_SIZE_BYTES", default=str(500 * 1024 * 1024))
+)
+
 # django-rest-framework
 # -------------------------------------------------------------------------------
 # django-rest-framework - https://www.django-rest-framework.org/api-guide/settings/

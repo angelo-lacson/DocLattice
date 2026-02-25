@@ -662,3 +662,70 @@ class OpenContractsExportDataJsonV2Type(TypedDict):
 
     # Action trail (only if include_action_trail=True)
     action_trail: NotRequired[ActionTrailExport]
+
+
+# ============================================================================
+# Worker Document Upload Format
+# ============================================================================
+
+
+class WorkerEmbeddingsType(TypedDict):
+    """
+    Embedding data included in a worker document upload.
+
+    External workers pre-compute embeddings and include them so that the server
+    can store them directly without re-running an embedder. The embedder_path
+    must match one of the supported embedding dimensions (384–4096).
+    """
+
+    # Identifies the model/pipeline that produced these embeddings
+    embedder_path: str  # e.g. "sentence-transformers/all-MiniLM-L6-v2"
+
+    # Document-level embedding (optional)
+    document_embedding: NotRequired[Optional[list[float]]]
+
+    # Annotation embeddings keyed by the annotation's local ID from labelled_text
+    annotation_embeddings: NotRequired[dict[str, list[float]]]
+
+
+class WorkerDocumentUploadMetadataType(TypedDict):
+    """
+    JSON metadata payload for a single-document worker upload.
+
+    Extends the V2 document export format with:
+    - Pre-computed embeddings
+    - Target path / folder placement
+    - Label definitions (so missing labels can be auto-created)
+
+    The document file itself is sent as a separate multipart field.
+    """
+
+    # Document metadata
+    title: str
+    description: NotRequired[Optional[str]]
+    content: str  # Full extracted text
+    page_count: int
+    file_type: NotRequired[Optional[str]]  # MIME type
+
+    # PAWLs token data (required for PDF annotations)
+    pawls_file_content: list[PawlsPagePythonType]
+
+    # Target placement within the corpus
+    target_path: NotRequired[Optional[str]]  # e.g. "contracts/2024/nda.pdf"
+    target_folder_path: NotRequired[Optional[str]]  # e.g. "contracts/2024"
+
+    # Document-level labels (list of label names)
+    doc_labels: NotRequired[list[str]]
+
+    # Text / token-level annotations
+    labelled_text: NotRequired[list[OpenContractsAnnotationPythonType]]
+
+    # Intra-document relationships
+    relationships: NotRequired[list[OpenContractsRelationshipPythonType]]
+
+    # Label definitions — allows the server to auto-create any that don't exist
+    text_labels: NotRequired[dict[str, AnnotationLabelPythonType]]
+    doc_labels_definitions: NotRequired[dict[str, AnnotationLabelPythonType]]
+
+    # Pre-computed embeddings from the external worker
+    embeddings: NotRequired[WorkerEmbeddingsType]
