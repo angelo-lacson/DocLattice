@@ -314,6 +314,7 @@ class Query(graphene.ObjectType):
                     document__version_tree_id=doc.version_tree_id,
                     corpus=corpus,
                     version_number=version_number,
+                    is_deleted=False,
                 )
                 .select_related("document")
                 .first()

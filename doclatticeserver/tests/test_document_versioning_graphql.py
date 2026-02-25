@@ -1364,6 +1364,47 @@ class TestVersionAwareSlugResolution(TestCase):
         self.assertIsNone(result.get("errors"))
         self.assertIsNone(result["data"]["documentInCorpusBySlugs"])
 
+    def test_resolve_deleted_version_returns_null(self):
+        """When the requested version's path is deleted, returns null."""
+        # Delete doc v2's path so it is marked is_deleted=True
+        delete_document(
+            corpus=self.corpus,
+            path="/versioned_doc.pdf",
+            user=self.user,
+        )
+        # After delete, v3's current path is marked deleted.
+        # Re-import so there's a new current, and now v3's old path is deleted.
+        import_document(
+            corpus=self.corpus,
+            path="/versioned_doc.pdf",
+            content=b"Version 4 content",
+            user=self.user,
+            title="Versioned Document",
+        )
+        # Manually mark v1's path as deleted to test the filter
+        DocumentPath.objects.filter(
+            document=self.doc_v1,
+            corpus=self.corpus,
+        ).update(is_deleted=True)
+
+        query = f"""
+            query {{
+                documentInCorpusBySlugs(
+                    userSlug: "{self.user.slug}"
+                    corpusSlug: "{self.corpus.slug}"
+                    documentSlug: "{self.doc_v3.slug}"
+                    versionNumber: 1
+                ) {{
+                    id
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+        # Version 1's path is deleted, so it should not be resolvable
+        self.assertIsNone(result["data"]["documentInCorpusBySlugs"])
+
     def test_resolve_version_using_old_slug(self):
         """Resolution works even when using an older version's slug."""
         # v1 has its own slug since each Document is a separate record.
@@ -1505,6 +1546,83 @@ class TestCorpusVersionsField(TestCase):
         self.assertEqual(versions[0]["documentId"], v1_id)
         self.assertEqual(versions[1]["documentId"], v2_id)
         self.assertEqual(versions[2]["documentId"], v3_id)
+
+    def test_corpus_versions_excludes_invisible_versions(self):
+        """corpusVersions should only include versions the user can see."""
+        # Create a second user who can see v3 but NOT v1 or v2
+        other_user = User.objects.create_user(
+            username="limited_viewer",
+            password="testpass123",
+            email="limited@test.com",
+        )
+        # Grant corpus READ so they can query
+        set_permissions_for_obj_to_user(other_user, self.corpus, [PermissionTypes.READ])
+        # Grant READ only on v3
+        set_permissions_for_obj_to_user(other_user, self.doc_v3, [PermissionTypes.READ])
+
+        corpus_id = to_global_id("CorpusType", self.corpus.id)
+        doc_id = to_global_id("DocumentType", self.doc_v3.id)
+
+        query = f"""
+            query {{
+                document(id: "{doc_id}") {{
+                    corpusVersions(corpusId: "{corpus_id}") {{
+                        versionNumber
+                        documentId
+                    }}
+                }}
+            }}
+        """
+
+        request = type("Request", (), {"user": other_user})()
+        result = self.client.execute(query, context_value=request)
+        self.assertIsNone(result.get("errors"))
+
+        versions = result["data"]["document"]["corpusVersions"]
+        # Should only see v3, not v1 or v2
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0]["versionNumber"], 3)
+        self.assertEqual(
+            versions[0]["documentId"],
+            to_global_id("DocumentType", self.doc_v3.id),
+        )
+
+    def test_corpus_versions_excludes_deleted_paths(self):
+        """corpusVersions should not include versions with deleted paths."""
+        # Delete the document (marks current path as deleted)
+        delete_document(
+            corpus=self.corpus,
+            path="/multi_version.pdf",
+            user=self.user,
+        )
+        # Manually mark v1's path as deleted too
+        DocumentPath.objects.filter(
+            document=self.doc_v1,
+            corpus=self.corpus,
+        ).update(is_deleted=True)
+
+        corpus_id = to_global_id("CorpusType", self.corpus.id)
+        doc_id = to_global_id("DocumentType", self.doc_v3.id)
+
+        query = f"""
+            query {{
+                document(id: "{doc_id}") {{
+                    corpusVersions(corpusId: "{corpus_id}") {{
+                        versionNumber
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+
+        versions = result["data"]["document"]["corpusVersions"]
+        version_numbers = [v["versionNumber"] for v in versions]
+        # v1 and v3 paths are deleted, only v2 should remain
+        self.assertNotIn(1, version_numbers)
+        self.assertIn(2, version_numbers)
+        self.assertNotIn(3, version_numbers)
 
     def test_single_version_document(self):
         """A document with no version history should return a single entry."""
