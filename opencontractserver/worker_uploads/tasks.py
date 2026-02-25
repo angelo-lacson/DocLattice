@@ -28,7 +28,12 @@ from opencontractserver.annotations.models import (
     AnnotationLabel,
     Embedding,
 )
-from opencontractserver.documents.models import DocumentProcessingStatus
+from opencontractserver.corpuses.models import CorpusFolder
+from opencontractserver.documents.models import (
+    Document,
+    DocumentPath,
+    DocumentProcessingStatus,
+)
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.importing import (
     import_annotations,
@@ -146,8 +151,6 @@ def _process_single_upload(upload_id) -> None:
     Runs inside its own transaction. On success, marks COMPLETED.
     On failure, the caller catches the exception and marks FAILED.
     """
-    from opencontractserver.documents.models import Document
-
     upload = WorkerDocumentUpload.objects.select_related(
         "corpus",
         "corpus__creator",
@@ -228,7 +231,10 @@ def _process_single_upload(upload_id) -> None:
         labelset = corpus.label_set
         label_lookup, doc_label_lookup = _prepare_labels(metadata, user.id, labelset)
 
-        # 3. Add document to corpus (creates corpus-isolated copy)
+        # 3. Add document to corpus — returns the corpus-linked Document
+        # record (not the original standalone doc). All subsequent annotations,
+        # labels, relationships, and embeddings must reference corpus_doc so
+        # queries filtering by (document, corpus) resolve correctly.
         target_path = metadata.get("target_path")
         corpus_doc, _status, _doc_path = corpus.add_document(
             document=doc,
@@ -462,9 +468,6 @@ def _assign_to_folder(corpus, corpus_doc, folder_path: str, user) -> None:
     Assign a document to a folder within the corpus, creating the folder
     hierarchy if needed.
     """
-    from opencontractserver.corpuses.models import CorpusFolder
-    from opencontractserver.documents.models import DocumentPath
-
     # Build folder hierarchy from path components
     parts = [p.strip() for p in folder_path.strip("/").split("/") if p.strip()]
     if not parts:

@@ -51,7 +51,9 @@ class Migration(migrations.Migration):
                 max_length=8,
             ),
         ),
-        # Update key field help_text (max_length stays 64 — SHA-256 hex is 64 chars)
+        # Remove the callable default from 0001. Without a default, bare
+        # .objects.create() and Django admin "Add" are blocked — all token
+        # creation must go through create_token() which hashes before storage.
         migrations.AlterField(
             model_name="corpusaccesstoken",
             name="key",

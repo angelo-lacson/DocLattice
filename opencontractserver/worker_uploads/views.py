@@ -118,6 +118,7 @@ class WorkerDocumentUploadView(APIView):
                         ),
                     },
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers={"Retry-After": "60"},
                 )
 
         serializer = WorkerDocumentUploadSerializer(data=request.data)
