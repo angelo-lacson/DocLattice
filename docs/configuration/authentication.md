@@ -96,6 +96,15 @@ validates tokens against this audience.
       -- it does not need to resolve to a real URL, it is just a logical identifier
     - **Signing Algorithm**: **RS256** (critical -- the backend only supports RS256)
 3. Click **Create**
+4. After creating the SPA application (Step 3 below), return here and go to the
+   API's **Machine to Machine Applications** tab
+5. Toggle the SPA application **on** to grant it access to this API
+
+!!! warning "SPA must be authorized on the API"
+    After creating both the API and the SPA application, you must return to the
+    API's **Machine to Machine Applications** tab and grant the SPA access.
+    Without this, `getAccessTokenSilently()` will fail with
+    `"Client is not authorized to access resource server"`.
 
 #### Step 3: Create a Single Page Application (SPA)
 
