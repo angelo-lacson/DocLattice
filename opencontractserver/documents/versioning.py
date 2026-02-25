@@ -221,6 +221,15 @@ def import_document(
                     )
                 effective_txt_file = None
 
+            # Inherit structural annotation set only when content is unchanged.
+            # When content changes (different hash), the parser will create a
+            # fresh StructuralAnnotationSet for the new content during ingestion.
+            old_set = old_doc.structural_annotation_set
+            if old_set and old_doc.pdf_file_hash == content_hash:
+                inherited_set = old_set
+            else:
+                inherited_set = None
+
             # Create new document version (isolated within corpus)
             new_doc = Document.objects.create(
                 title=doc_kwargs.get("title", old_doc.title),
@@ -232,7 +241,7 @@ def import_document(
                 version_tree_id=old_doc.version_tree_id,  # Same tree
                 parent=old_doc,
                 is_current=True,
-                structural_annotation_set=old_doc.structural_annotation_set,  # Inherit structural annotations
+                structural_annotation_set=inherited_set,
                 creator=user,
                 **{
                     k: v

@@ -354,14 +354,13 @@ class ImportContentStructuralSetTests(TransactionTestCase):
         # import_document doesn't copy structural sets from existing docs
         self.assertIsNone(doc.structural_annotation_set)
 
-    def test_version_update_inherits_structural_set_from_previous_version(self):
-        """When content is updated, the new version INHERITS the structural set from previous version."""
+    def test_version_update_with_changed_content_gets_no_structural_set(self):
+        """When content changes, the new version gets NO structural set (parser creates fresh one)."""
         from opencontractserver.documents.versioning import import_document
 
         content_v1 = b"test pdf content v1"
         content_v2 = b"test pdf content v2"
         hash_v1 = hashlib.sha256(content_v1).hexdigest()
-        _hash_v2 = hashlib.sha256(content_v2).hexdigest()  # noqa: F841
 
         # Create structural set for v1
         structural_set_v1 = StructuralAnnotationSet.objects.create(
@@ -381,7 +380,7 @@ class ImportContentStructuralSetTests(TransactionTestCase):
         doc_v1.structural_annotation_set = structural_set_v1
         doc_v1.save()
 
-        # Import v2 at same path (version update)
+        # Import v2 at same path with DIFFERENT content (version update)
         doc_v2, status_v2, path_v2 = import_document(
             corpus=self.corpus_a,
             path="/documents/test.pdf",
@@ -390,10 +389,46 @@ class ImportContentStructuralSetTests(TransactionTestCase):
         )
         self.assertEqual(status_v2, "updated")
 
-        # v2 INHERITS structural set from v1 (version updates carry forward the set)
-        # This is different from add_document() which DUPLICATES the set
-        # The parser may later update the set if needed for new content
-        self.assertEqual(doc_v2.structural_annotation_set, structural_set_v1)
+        # v2 should NOT inherit v1's structural set because content changed.
+        # The parser will create a fresh StructuralAnnotationSet during ingestion.
+        self.assertIsNone(doc_v2.structural_annotation_set)
+
+    def test_version_update_with_same_content_inherits_structural_set(self):
+        """When content hash is unchanged, the new version reuses the existing structural set."""
+        from opencontractserver.documents.versioning import import_document
+
+        content = b"test pdf content unchanged"
+        content_hash = hashlib.sha256(content).hexdigest()
+
+        # Create structural set for this content
+        structural_set = StructuralAnnotationSet.objects.create(
+            content_hash=content_hash, creator=self.user
+        )
+
+        # Import v1
+        doc_v1, status_v1, path_v1 = import_document(
+            corpus=self.corpus_a,
+            path="/documents/test.pdf",
+            content=content,
+            user=self.user,
+        )
+        self.assertEqual(status_v1, "created")
+
+        # Manually set the structural set (simulating parser creating it)
+        doc_v1.structural_annotation_set = structural_set
+        doc_v1.save()
+
+        # Import same content again at same path (re-upload, same hash)
+        doc_v2, status_v2, path_v2 = import_document(
+            corpus=self.corpus_a,
+            path="/documents/test.pdf",
+            content=content,
+            user=self.user,
+        )
+        self.assertEqual(status_v2, "updated")
+
+        # v2 should inherit the structural set because content hash is identical
+        self.assertEqual(doc_v2.structural_annotation_set, structural_set)
 
     def test_brand_new_content_has_no_structural_set(self):
         """Brand new content should have no structural set (parser will create it later)."""
