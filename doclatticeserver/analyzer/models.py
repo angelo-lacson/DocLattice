@@ -94,7 +94,7 @@ class Analyzer(BaseOCModel):
         )
         constraints = [
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     django.db.models.Q(
                         host_gremlin__isnull=True, task_name__isnull=False
                     )

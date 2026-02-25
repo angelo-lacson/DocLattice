@@ -13,7 +13,7 @@ class ParseModelOrPrimitiveTestCase(TestCase):
         """
         parsed_model = parse_model_or_primitive(model_string)
         self.assertTrue(issubclass(parsed_model, BaseModel))
-        self.assertEqual(parsed_model.__fields__.keys(), {"name", "age", "email"})
+        self.assertEqual(parsed_model.model_fields.keys(), {"name", "age", "email"})
 
     def test_parse_int_type(self):
         primitive_type_string = "int"
