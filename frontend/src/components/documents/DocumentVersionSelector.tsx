@@ -1,9 +1,8 @@
-import React, { useState, useCallback } from "react";
-import { useLazyQuery, gql } from "@apollo/client";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { useLazyQuery, gql, useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { Popup, Loader, Icon } from "semantic-ui-react";
-import { useReactiveVar } from "@apollo/client";
 import { selectedDocVersion } from "../../graphql/cache";
 
 /**
@@ -197,21 +196,8 @@ export const DocumentVersionSelector: React.FC<
     !versions.find((v) => v.versionNumber === currentVersion && v.isCurrent);
 
   const handleToggle = useCallback(() => {
-    if (!hasHistory && !loading && versions.length <= 1) {
-      // Fetch versions to check if there are any
-      fetchVersions({ variables: { documentId, corpusId } });
-    }
-    if (hasHistory) {
-      setIsOpen((prev) => !prev);
-    }
-  }, [
-    hasHistory,
-    loading,
-    versions.length,
-    fetchVersions,
-    documentId,
-    corpusId,
-  ]);
+    setIsOpen((prev) => !prev);
+  }, []);
 
   const handleVersionSelect = useCallback(
     (versionNumber: number, isCurrent: boolean) => {
@@ -231,13 +217,34 @@ export const DocumentVersionSelector: React.FC<
     [location.search, navigate]
   );
 
-  // Close dropdown when clicking outside
-  const handleBlur = useCallback((e: React.FocusEvent) => {
-    // Check if the new focus target is within the dropdown
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsOpen(false);
-    }
-  }, []);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside or Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen]);
 
   // Fetch versions on mount to know if there's history
   React.useEffect(() => {
@@ -263,7 +270,7 @@ export const DocumentVersionSelector: React.FC<
   }
 
   return (
-    <SelectorContainer onBlur={handleBlur} style={{ position: "relative" }}>
+    <SelectorContainer ref={containerRef} style={{ position: "relative" }}>
       <Popup
         trigger={
           <VersionPill
