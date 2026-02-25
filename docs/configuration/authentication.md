@@ -365,6 +365,31 @@ with an error message.
    `https://opencontracts.opensource.legal/` (with trailing slash) unless you've
    overridden `AUTH0_ADMIN_CLAIM_NAMESPACE`.
 
+### "Client is not authorized to access resource server"
+
+**Symptom**: Browser console shows `getAccessTokenSilently()` failing with this error,
+or the Auth0 `/authorize` endpoint returns a 403.
+
+**Cause**: The SPA application has not been granted access to the API.
+
+**Fix**: Go to **Applications > APIs > (your API) > Machine to Machine Applications**
+tab and toggle the SPA application **on**. See Step 2, items 4-5.
+
+### Auth0 `/authorize` returns 403
+
+**Symptom**: Network tab shows a 403 response from
+`https://<tenant>.auth0.com/authorize?...` on page load. The Auth0 login button
+shows "Auth0 unavailable" or clicking it logs "Auth0 client not initialized".
+
+**Likely causes**:
+
+1. **Callback URL not whitelisted**: The `redirect_uri` in the request must exactly
+   match one of the SPA's **Allowed Callback URLs**. For admin login this is
+   `http://localhost:8000/admin/login/` (local) or
+   `https://your-domain.com/admin/login/` (production).
+2. **Web origin not whitelisted**: The SPA's **Allowed Web Origins** must include the
+   origin making the request (e.g., `http://localhost:8000`).
+
 ### "Authentication failed" error
 
 **Likely causes**:
@@ -373,6 +398,23 @@ with an error message.
    the API identifier in Auth0 and the frontend `AUDIENCE` variable.
 2. **Wrong domain**: `AUTH0_DOMAIN` must match your Auth0 tenant domain exactly.
 3. **Expired or invalid token**: Check browser console for Auth0 SDK errors.
+
+### Admin claim missing, defaulting to False
+
+**Symptom**: Django logs show `Admin claim is_staff missing; defaulting to False`
+and the user is denied admin access even though they authenticated successfully.
+
+**Likely causes**:
+
+1. **Post-Login Action not deployed or not in the flow**: Go to
+   **Actions > Flows > Login** and verify the Action is dragged into the flow
+   and **Apply** has been clicked.
+2. **Missing `app_metadata`**: The user needs `is_staff: true` (and optionally
+   `is_superuser: true`) in their `app_metadata`. Go to
+   **User Management > Users > (your user) > app_metadata** and set it.
+3. **Stale token**: The claims are set at login time. If you added `app_metadata`
+   after the user logged in, they need to log out and log back in to get a new
+   token with the updated claims.
 
 ### User created but has no email
 
