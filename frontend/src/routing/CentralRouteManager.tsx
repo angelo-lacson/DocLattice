@@ -345,11 +345,8 @@ export function CentralRouteManager() {
           ) {
             routingLogger.debug("[RouteManager] Resolving document in corpus");
 
-            // Check for version parameter in URL query string
-            const versionParam = searchParams.get("v");
-            const versionNumber = versionParam
-              ? parseInt(versionParam, 10)
-              : undefined;
+            // Reuse vParam extracted at top of effect for pathKey construction
+            const versionNumber = vParam ? parseInt(vParam, 10) : undefined;
 
             // Try slug-based resolution first
             const { data, error } = await resolveDocumentInCorpus({
