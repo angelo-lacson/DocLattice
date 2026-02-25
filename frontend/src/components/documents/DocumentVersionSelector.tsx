@@ -18,6 +18,7 @@ const SelectorContainer = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  position: relative;
 `;
 
 const VersionPill = styled.button<{
@@ -130,6 +131,11 @@ const CurrentTag = styled.span`
   text-transform: uppercase;
 `;
 
+const DropdownLoading = styled.div`
+  padding: 16px;
+  text-align: center;
+`;
+
 interface DocumentVersionSelectorProps {
   documentId: string;
   corpusId: string;
@@ -151,19 +157,16 @@ export const DocumentVersionSelector: React.FC<
   DocumentVersionSelectorProps
 > = ({ documentId, corpusId }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [versions, setVersions] = useState<CorpusVersion[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
   const currentVersion = useReactiveVar(selectedDocVersion);
 
-  const [fetchVersions, { loading }] = useLazyQuery(GET_CORPUS_VERSIONS, {
-    fetchPolicy: "cache-first",
-    onCompleted: (data) => {
-      if (data?.document?.corpusVersions) {
-        setVersions(data.document.corpusVersions);
-      }
-    },
-  });
+  const [fetchVersions, { loading, data: versionsData }] = useLazyQuery(
+    GET_CORPUS_VERSIONS,
+    { fetchPolicy: "cache-first" }
+  );
+  const versions: CorpusVersion[] =
+    versionsData?.document?.corpusVersions ?? [];
 
   const versionCount = versions.length;
   const hasHistory = versionCount > 1;
@@ -252,7 +255,7 @@ export const DocumentVersionSelector: React.FC<
   }
 
   return (
-    <SelectorContainer ref={containerRef} style={{ position: "relative" }}>
+    <SelectorContainer ref={containerRef}>
       <Popup
         trigger={
           <VersionPill
@@ -286,9 +289,9 @@ export const DocumentVersionSelector: React.FC<
       {isOpen && (
         <DropdownMenu role="listbox" aria-label="Document versions">
           {loading ? (
-            <div style={{ padding: "16px", textAlign: "center" }}>
+            <DropdownLoading>
               <Loader active inline="centered" size="tiny" />
-            </div>
+            </DropdownLoading>
           ) : (
             [...versions]
               .sort((a, b) => b.versionNumber - a.versionNumber)

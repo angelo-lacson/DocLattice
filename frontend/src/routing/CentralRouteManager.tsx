@@ -346,9 +346,15 @@ export function CentralRouteManager() {
           ) {
             routingLogger.debug("[RouteManager] Resolving document in corpus");
 
-            const versionNumber = urlVersionParam
+            const parsedVersion = urlVersionParam
               ? parseInt(urlVersionParam, 10)
               : undefined;
+            const versionNumber =
+              parsedVersion != null &&
+              !isNaN(parsedVersion) &&
+              parsedVersion > 0
+                ? parsedVersion
+                : undefined;
 
             // Try slug-based resolution first
             const { data, error } = await resolveDocumentInCorpus({
@@ -356,8 +362,7 @@ export function CentralRouteManager() {
                 userSlug: route.userIdent!,
                 corpusSlug: route.corpusIdent,
                 documentSlug: route.documentIdent,
-                ...(versionNumber != null &&
-                  !isNaN(versionNumber) && { versionNumber }),
+                ...(versionNumber != null && { versionNumber }),
               },
             });
 
