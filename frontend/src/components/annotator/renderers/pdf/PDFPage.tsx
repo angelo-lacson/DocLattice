@@ -25,10 +25,20 @@ import { PDFPageInfo } from "../../types/pdf";
 import { chatSourcesAtom } from "../../context/ChatSourceAtom";
 import { useCorpusState } from "../../context/CorpusAtom";
 import { ChatSourceResult } from "../../display/components/ChatSourceResult";
+import { TextBlockHighlight } from "../../display/components/TextBlockHighlight";
 import { useVisibleAnnotations } from "../../hooks/useVisibleAnnotations";
 import { pendingScrollAnnotationIdAtom } from "../../context/DocumentAtom";
 import { pendingScrollSearchResultIdAtom } from "../../context/DocumentAtom";
 import { pendingScrollChatSourceKeyAtom } from "../../context/DocumentAtom";
+import { useReactiveVar } from "@apollo/client";
+import { useLocation, useNavigate } from "react-router-dom";
+import { highlightedTextBlock } from "../../../../graphql/cache";
+import {
+  decodeTextBlock,
+  PdfTokenBlock,
+  textBlockToBounds,
+} from "../../../../utils/textBlockEncoding";
+import { updateTextBlockParam } from "../../../../utils/navigationUtils";
 
 /**
  * This wrapper is inline-block (shrink-wrapped) and position:relative
@@ -107,6 +117,66 @@ export const PDFPage = ({
     () => messages.find((m) => m.messageId === selectedMessageId),
     [messages, selectedMessageId]
   );
+
+  // Derive page index early — needed by text block memo and annotation rendering.
+  const pageIndex = pageInfo.page.pageNumber - 1;
+
+  // URL-based clearing: use navigate to remove ?tb= from URL (which also
+  // clears the reactive var via CentralRouteManager's Phase 2 sync).
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Clear text block highlight when user interacts with annotations or chat.
+  // This ensures the ?tb= deep link is dismissed once the user moves on,
+  // preventing a stale highlight from persisting indefinitely in the URL.
+  useEffect(() => {
+    if (
+      (selectedAnnotations.length > 0 || selectedMessage) &&
+      highlightedTextBlock()
+    ) {
+      updateTextBlockParam(location, navigate, null);
+    }
+  }, [selectedAnnotations, selectedMessage, location, navigate]);
+
+  // Text block deep link (from ?tb= URL param).
+  // Computed per-page to avoid repeating work for all pages in every
+  // virtualized PDFPage instance.
+  // NOTE: pageInfo.tokens is reference-stable — it's a readonly property set
+  // once in the PDFPageInfo constructor and stored in a stable map via usePages.
+  const textBlockParam = useReactiveVar(highlightedTextBlock);
+  const textBlockData = useMemo(() => {
+    if (!textBlockParam) return null;
+    const decoded = decodeTextBlock(textBlockParam);
+    if (!decoded || decoded.type !== "pdf") return null;
+    const block = decoded as PdfTokenBlock;
+
+    // Only compute for this page — avoids O(pages) work per PDFPage instance
+    const pageTokenIndices = block.tokensByPage[pageIndex];
+    if (!pageTokenIndices || pageTokenIndices.length === 0) return null;
+
+    // Convert raw indices to TokenId format for this page
+    const tokenIds = pageTokenIndices.map((tokenIndex) => ({
+      pageIndex,
+      tokenIndex,
+    }));
+
+    // Compute bounding box using shared utility (avoids duplicating the
+    // Infinity/min/max loop that also lives in textBlockEncoding.ts).
+    const boundsMap = pageInfo.tokens
+      ? textBlockToBounds(block, { [pageIndex]: pageInfo.tokens })
+      : {};
+    const bounds = boundsMap[pageIndex];
+    if (!bounds) return null;
+
+    // Determine the first matching page across the entire block so only
+    // that page triggers scrollIntoView (avoids multi-page scroll conflict).
+    const allPages = Object.keys(block.tokensByPage)
+      .map(Number)
+      .sort((a, b) => a - b);
+    const firstMatchingPage = allPages.length > 0 ? allPages[0] : -1;
+
+    return { tokenIds, bounds, firstMatchingPage };
+  }, [textBlockParam, pageIndex, pageInfo.tokens]);
 
   const updatedPageInfo = useMemo(() => {
     return new PDFPageInfo(
@@ -308,8 +378,6 @@ export const PDFPage = ({
    * Determines the annotations to render, including ensuring that any annotation
    * involved in a currently selected relation is visible, regardless of other filters.
    */
-  const pageIndex = pageInfo.page.pageNumber - 1;
-
   const annots_to_render = useMemo(() => {
     return visibleAnnotations.filter((annot) => {
       /* Selection layer renders only token annotations with bounds
@@ -563,6 +631,22 @@ export const PDFPage = ({
               selected={selectedSourceIndex === index}
             />
           ))}
+
+        {/* Text block deep link highlight (from ?tb= URL param).
+            Suppressed when a chat message is selected to avoid visual clutter —
+            both highlight types use the same bounding-box overlay machinery, so
+            showing them simultaneously would be confusing. The text block
+            reappears when the user deselects the message (or is cleared entirely
+            by the useEffect above when annotations/chat are selected). */}
+        {!selectedMessage && textBlockData && (
+          <TextBlockHighlight
+            tokens={textBlockData.tokenIds}
+            bounds={textBlockData.bounds}
+            pageInfo={updatedPageInfo}
+            pageIndex={pageIndex}
+            scrollIntoView={pageIndex === textBlockData.firstMatchingPage}
+          />
+        )}
       </CanvasWrapper>
     </PageAnnotationsContainer>
   );

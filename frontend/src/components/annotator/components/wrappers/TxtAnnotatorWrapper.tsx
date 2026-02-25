@@ -5,7 +5,7 @@
  * of the parent DocumentViewer component.
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import { useSetAtom } from "jotai";
 import {
   useApproveAnnotation,
@@ -31,6 +31,15 @@ import {
   registerRefAtom,
   unregisterRefAtom,
 } from "../../context/AnnotationRefsAtoms";
+import { useReactiveVar } from "@apollo/client";
+import { useLocation, useNavigate } from "react-router-dom";
+import { highlightedTextBlock } from "../../../../graphql/cache";
+import {
+  decodeTextBlock,
+  TextSpanBlock,
+} from "../../../../utils/textBlockEncoding";
+import { updateTextBlockParam } from "../../../../utils/navigationUtils";
+import { TEXT_BLOCK_DEEPLINK_ID } from "../../../../assets/configurations/constants";
 
 interface TxtAnnotatorWrapperProps {
   readOnly: boolean;
@@ -87,6 +96,31 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
   const { messages, selectedMessageId, selectedSourceIndex } =
     useChatSourceState();
 
+  // URL-based clearing: use navigate to remove ?tb= from URL (which also
+  // clears the reactive var via CentralRouteManager's Phase 2 sync).
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Clear text block highlight when user selects an annotation or chat source.
+  // This ensures the ?tb= deep link is dismissed once the user moves on.
+  useEffect(() => {
+    if (
+      (selectedAnnotations.length > 0 || selectedMessageId) &&
+      highlightedTextBlock()
+    ) {
+      updateTextBlockParam(location, navigate, null);
+    }
+  }, [selectedAnnotations, selectedMessageId, location, navigate]);
+
+  // Text block deep link (from ?tb= URL param)
+  const textBlockParam = useReactiveVar(highlightedTextBlock);
+  const textBlockSpan = React.useMemo(() => {
+    if (!textBlockParam) return null;
+    const decoded = decodeTextBlock(textBlockParam);
+    if (!decoded || decoded.type !== "span") return null;
+    return decoded as TextSpanBlock;
+  }, [textBlockParam]);
+
   const chatSourceMatches = React.useMemo(() => {
     const allSources: {
       start_index: number;
@@ -113,8 +147,18 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
       }
     }
 
+    // Include text block deep link as a virtual chat source
+    if (textBlockSpan) {
+      allSources.push({
+        start_index: textBlockSpan.start,
+        end_index: textBlockSpan.end,
+        sourceId: TEXT_BLOCK_DEEPLINK_ID,
+        messageId: TEXT_BLOCK_DEEPLINK_ID,
+      });
+    }
+
     return allSources;
-  }, [messages]);
+  }, [messages, textBlockSpan]);
 
   // Memoized getSpan callback
   const getSpan = useCallback(
@@ -158,7 +202,9 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
         searchResults={filteredSearchResults}
         chatSources={chatSourceMatches}
         selectedChatSourceId={
-          selectedMessageId && selectedSourceIndex !== null
+          textBlockSpan
+            ? TEXT_BLOCK_DEEPLINK_ID
+            : selectedMessageId && selectedSourceIndex !== null
             ? `${selectedMessageId}.${selectedSourceIndex}`
             : undefined
         }
