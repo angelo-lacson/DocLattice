@@ -1434,7 +1434,9 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         from graphql_relay import to_global_id
 
-        _, corpus_pk = from_global_id(corpus_id)
+        type_name, corpus_pk = from_global_id(corpus_id)
+        if type_name and type_name != "CorpusType":
+            return []
 
         # Subquery: only documents in this version tree the user can see.
         visible_version_docs = (
@@ -1476,8 +1478,6 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 }
             )
 
-        # Sort by version_number ascending
-        results.sort(key=lambda v: v["version_number"])
         return results
 
     def resolve_can_restore(self, info, corpus_id):
