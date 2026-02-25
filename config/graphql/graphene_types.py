@@ -1423,29 +1423,47 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Uses DocumentPath records to find all versions, ordered by version_number.
         Each entry maps to a specific Document record, enabling the frontend
         to navigate to historical versions via the ?v=N URL parameter.
+
+        Only returns versions whose underlying Document the requesting user
+        has permission to see (via visible_to_user), preventing information
+        disclosure of historical version metadata the user shouldn't access.
         """
         from graphql_relay import to_global_id
 
         _, corpus_pk = from_global_id(corpus_id)
 
-        # Find all DocumentPath records for this document's version tree in the corpus.
-        # We want one record per version_number (the latest path record for each version).
+        # Build the set of document IDs the user can actually see within
+        # this version tree, so we only expose permitted versions.
+        visible_doc_ids = set(
+            Document.objects.filter(
+                version_tree_id=self.version_tree_id,
+            )
+            .visible_to_user(info.context.user)
+            .values_list("pk", flat=True)
+        )
+
+        # Find all non-deleted DocumentPath records for this version tree
+        # in the corpus. One record per version_number (most recent path).
         path_records = (
             DocumentPath.objects.filter(
                 document__version_tree_id=self.version_tree_id,
                 corpus_id=corpus_pk,
+                is_deleted=False,
             )
             .select_related("document")
             .order_by("version_number", "-created")
         )
 
         # Deduplicate by version_number (keep first = most recent due to -created)
+        # and skip versions the user cannot see.
         seen_versions = set()
         results = []
         for path_record in path_records:
             if path_record.version_number in seen_versions:
                 continue
             seen_versions.add(path_record.version_number)
+            if path_record.document_id not in visible_doc_ids:
+                continue
             results.append(
                 {
                     "version_number": path_record.version_number,
@@ -1454,9 +1472,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                     ),
                     "document_slug": path_record.document.slug,
                     "created": path_record.created,
-                    "is_current": (
-                        path_record.is_current and not path_record.is_deleted
-                    ),
+                    "is_current": path_record.is_current,
                 }
             )
 
