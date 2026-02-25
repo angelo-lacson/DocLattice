@@ -305,13 +305,21 @@ class Query(graphene.ObjectType):
             return None
 
         if version_number is not None:
-            # Resolve a specific historical version:
-            # 1. Use the slug-resolved doc's version_tree_id to find all versions
-            # 2. Find the DocumentPath with the requested version_number in this corpus
-            # 3. Return that version's Document
+            # Resolve a specific historical version in a single query:
+            # Push visibility check into the path query via document__in
+            # subquery, avoiding a separate exists() round-trip.
+            # lightweight=True skips prefetches/JOINs not needed for
+            # a subquery that only contributes PKs.
+            visible_version_docs = (
+                Document.objects.filter(
+                    version_tree_id=doc.version_tree_id,
+                )
+                .visible_to_user(info.context.user, lightweight=True)
+                .only("pk")
+            )
             path_record = (
                 DocumentPath.objects.filter(
-                    document__version_tree_id=doc.version_tree_id,
+                    document__in=visible_version_docs,
                     corpus=corpus,
                     version_number=version_number,
                     is_deleted=False,
@@ -321,15 +329,7 @@ class Query(graphene.ObjectType):
             )
             if not path_record:
                 return None
-            version_doc = path_record.document
-            # Verify the user can see the version document
-            if (
-                not Document.objects.filter(pk=version_doc.pk)
-                .visible_to_user(info.context.user)
-                .exists()
-            ):
-                return None
-            return version_doc
+            return path_record.document
 
         # Default: validate membership via DocumentPath (current version)
         if not DocumentPath.objects.filter(

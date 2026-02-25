@@ -1427,26 +1427,32 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Only returns versions whose underlying Document the requesting user
         has permission to see (via visible_to_user), preventing information
         disclosure of historical version metadata the user shouldn't access.
+
+        Performance: Uses a DB-level subquery (document__in) to push
+        permission filtering into a single query instead of materializing
+        visible IDs in Python then filtering. Uses lightweight=True to
+        skip unnecessary prefetches/JOINs in the visibility subquery.
         """
         from graphql_relay import to_global_id
 
         _, corpus_pk = from_global_id(corpus_id)
 
-        # Build the set of document IDs the user can actually see within
-        # this version tree, so we only expose permitted versions.
-        visible_doc_ids = set(
+        # Subquery: only documents in this version tree the user can see.
+        # lightweight=True avoids select_related/prefetch_related overhead
+        # since this is used as an IN subquery, not to instantiate objects.
+        visible_version_docs = (
             Document.objects.filter(
                 version_tree_id=self.version_tree_id,
             )
-            .visible_to_user(info.context.user)
-            .values_list("pk", flat=True)
+            .visible_to_user(info.context.user, lightweight=True)
+            .only("pk")
         )
 
-        # Find all non-deleted DocumentPath records for this version tree
-        # in the corpus. One record per version_number (most recent path).
+        # Single query: non-deleted paths whose document passes visibility.
+        # select_related("document") is needed only for slug access.
         path_records = (
             DocumentPath.objects.filter(
-                document__version_tree_id=self.version_tree_id,
+                document__in=visible_version_docs,
                 corpus_id=corpus_pk,
                 is_deleted=False,
             )
@@ -1454,16 +1460,13 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             .order_by("version_number", "-created")
         )
 
-        # Deduplicate by version_number (keep first = most recent due to -created)
-        # and skip versions the user cannot see.
+        # Deduplicate by version_number (keep first = most recent due to -created).
         seen_versions = set()
         results = []
         for path_record in path_records:
             if path_record.version_number in seen_versions:
                 continue
             seen_versions.add(path_record.version_number)
-            if path_record.document_id not in visible_doc_ids:
-                continue
             results.append(
                 {
                     "version_number": path_record.version_number,
