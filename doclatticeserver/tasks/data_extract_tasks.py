@@ -269,7 +269,7 @@ async def doc_extract_query_task(
                     framework=AgentFramework.PYDANTIC_AI,
                     temperature=0.3,  # Low temperature for consistent extraction
                     similarity_top_k=similarity_top_k,
-                    model="gpt-4o-mini",  # Fast and reliable
+                    model="openai:gpt-4o-mini",  # Fast and reliable
                     user_id=datacell.creator.id,
                 )
 
