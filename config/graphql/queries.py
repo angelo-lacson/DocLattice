@@ -308,13 +308,11 @@ class Query(graphene.ObjectType):
             # Resolve a specific historical version in a single query:
             # Push visibility check into the path query via document__in
             # subquery, avoiding a separate exists() round-trip.
-            # lightweight=True skips prefetches/JOINs not needed for
-            # a subquery that only contributes PKs.
             visible_version_docs = (
                 Document.objects.filter(
                     version_tree_id=doc.version_tree_id,
                 )
-                .visible_to_user(info.context.user, lightweight=True)
+                .visible_to_user(info.context.user)
                 .only("pk")
             )
             path_record = (

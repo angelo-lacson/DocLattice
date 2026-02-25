@@ -1430,21 +1430,18 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         Performance: Uses a DB-level subquery (document__in) to push
         permission filtering into a single query instead of materializing
-        visible IDs in Python then filtering. Uses lightweight=True to
-        skip unnecessary prefetches/JOINs in the visibility subquery.
+        visible IDs in Python then filtering.
         """
         from graphql_relay import to_global_id
 
         _, corpus_pk = from_global_id(corpus_id)
 
         # Subquery: only documents in this version tree the user can see.
-        # lightweight=True avoids select_related/prefetch_related overhead
-        # since this is used as an IN subquery, not to instantiate objects.
         visible_version_docs = (
             Document.objects.filter(
                 version_tree_id=self.version_tree_id,
             )
-            .visible_to_user(info.context.user, lightweight=True)
+            .visible_to_user(info.context.user)
             .only("pk")
         )
 
