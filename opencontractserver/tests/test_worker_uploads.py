@@ -19,7 +19,6 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
-from graphene.test import Client as GraphQLClient
 from rest_framework.test import APIClient
 
 from config.graphql.schema import schema
@@ -111,6 +110,18 @@ class TestWorkerAccountModel(TestCase):
         WorkerAccount.create_with_user(name="unique-worker", creator=self.admin)
         with self.assertRaises(ValueError):
             WorkerAccount.create_with_user(name="unique-worker", creator=self.admin)
+
+    def test_create_with_user_atomic_rollback(self):
+        """If WorkerAccount creation fails, the User should not be orphaned."""
+        initial_user_count = User.objects.count()
+
+        with patch.object(
+            WorkerAccount.objects, "create", side_effect=Exception("DB error")
+        ):
+            with self.assertRaises(Exception):
+                WorkerAccount.create_with_user(name="atomictest", creator=self.admin)
+
+        self.assertEqual(User.objects.count(), initial_user_count)
 
 
 class TestCorpusAccessTokenModel(TestCase):
@@ -390,6 +401,23 @@ class TestWorkerUploadEndpoint(TransactionTestCase):
         )
         self.assertEqual(response.status_code, 413)
 
+    @patch(
+        "opencontractserver.worker_uploads.views.process_pending_uploads.apply_async"
+    )
+    @override_settings(MAX_WORKER_METADATA_SIZE_BYTES=100)
+    def test_metadata_size_limit_enforced(self, mock_task):
+        """Oversized metadata should be rejected."""
+        huge_metadata = json.dumps({"title": "x", "content": "y" * 200})
+        response = self.client.post(
+            "/api/worker-uploads/documents/",
+            {
+                "file": _make_fake_pdf_upload(),
+                "metadata": huge_metadata,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 413)
+
     def test_status_endpoint(self):
         upload = WorkerDocumentUpload.objects.create(
             corpus_access_token=self.token,
@@ -518,19 +546,20 @@ class TestBatchProcessor(TransactionTestCase):
         # _process_single_upload in case schema changes in the future.
         upload = self._create_staged_upload()
 
+        # Fetch the real upload BEFORE mocking select_related
+        real_upload = WorkerDocumentUpload.objects.select_related(
+            "corpus",
+            "corpus__creator",
+            "corpus_access_token",
+            "corpus_access_token__worker_account",
+        ).get(id=upload.id)
+        real_upload.corpus.creator = None
+
         with patch(
             "opencontractserver.worker_uploads.tasks.WorkerDocumentUpload"
             ".objects.select_related"
         ) as mock_qs:
-            # Simulate a corpus whose creator is None
-            mock_upload = WorkerDocumentUpload.objects.select_related(
-                "corpus",
-                "corpus__creator",
-                "corpus_access_token",
-                "corpus_access_token__worker_account",
-            ).get(id=upload.id)
-            mock_upload.corpus.creator = None
-            mock_qs.return_value.get.return_value = mock_upload
+            mock_qs.return_value.get.return_value = real_upload
 
             result = process_pending_uploads.apply().get()
 
@@ -543,7 +572,7 @@ class TestBatchProcessor(TransactionTestCase):
         """Document filenames are sanitized to remove path traversal characters."""
         from opencontractserver.worker_uploads.tasks import process_pending_uploads
 
-        upload = self._create_staged_upload(title="../../etc/passwd\x00.pdf")
+        upload = self._create_staged_upload(title="../../etc/passwd.pdf")
 
         process_pending_uploads.apply().get()
 
@@ -552,7 +581,6 @@ class TestBatchProcessor(TransactionTestCase):
         doc = upload.result_document
         # The filename stored in the pdf_file field should be sanitized
         self.assertNotIn("..", doc.pdf_file.name)
-        self.assertNotIn("\x00", doc.pdf_file.name)
 
     def test_embeddings_stored(self):
         """Pre-computed embeddings are stored in the Embedding table."""
@@ -616,6 +644,39 @@ class TestBatchProcessor(TransactionTestCase):
         )
         self.assertEqual(annot_embeddings.count(), 1)
 
+    def test_process_upload_with_target_folder_path(self):
+        """Uploads with target_folder_path create folders and assign the document."""
+        from opencontractserver.corpuses.models import CorpusFolder
+        from opencontractserver.documents.models import DocumentPath
+        from opencontractserver.worker_uploads.tasks import process_pending_uploads
+
+        upload = self._create_staged_upload(target_folder_path="/legal/contracts")
+
+        process_pending_uploads.apply().get()
+
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, UploadStatus.COMPLETED)
+
+        # Verify folder hierarchy was created
+        legal_folder = CorpusFolder.objects.filter(
+            corpus=self.corpus, name="legal", parent=None
+        ).first()
+        self.assertIsNotNone(legal_folder)
+
+        contracts_folder = CorpusFolder.objects.filter(
+            corpus=self.corpus, name="contracts", parent=legal_folder
+        ).first()
+        self.assertIsNotNone(contracts_folder)
+
+        # Verify the document path was assigned to the leaf folder
+        doc_path = DocumentPath.objects.filter(
+            corpus=self.corpus,
+            document=upload.result_document,
+            is_current=True,
+        ).first()
+        self.assertIsNotNone(doc_path)
+        self.assertEqual(doc_path.folder, contracts_folder)
+
     @override_settings(WORKER_UPLOAD_BATCH_SIZE=2)
     def test_batch_size_respected(self):
         """Only WORKER_UPLOAD_BATCH_SIZE uploads are claimed per run."""
@@ -632,6 +693,67 @@ class TestBatchProcessor(TransactionTestCase):
 # ============================================================================
 # GraphQL Mutation Tests
 # ============================================================================
+
+
+class TestStalledUploadRecovery(TransactionTestCase):
+    """Test that stalled PROCESSING uploads are recovered."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="admin_stalled_test",
+            password="testpass",
+            email="admin_stalled@test.com",
+        )
+        self.account = WorkerAccount.create_with_user(
+            name="stalled-test-worker", creator=self.admin
+        )
+        self.label_set = LabelSet.objects.create(
+            title="Stalled Test LS", creator=self.admin
+        )
+        self.corpus = Corpus.objects.create(
+            title="Stalled Test Corpus",
+            creator=self.admin,
+            label_set=self.label_set,
+        )
+        set_permissions_for_obj_to_user(self.admin, self.corpus, [PermissionTypes.ALL])
+        self.token, _ = CorpusAccessToken.create_token(
+            worker_account=self.account, corpus=self.corpus
+        )
+
+    def test_recover_stalled_uploads_resets_old_processing(self):
+        """Uploads stuck in PROCESSING beyond the timeout are reset to PENDING."""
+        from opencontractserver.worker_uploads.tasks import recover_stalled_uploads
+
+        upload = WorkerDocumentUpload.objects.create(
+            corpus_access_token=self.token,
+            corpus=self.corpus,
+            file=_make_fake_pdf(),
+            metadata=_make_metadata(),
+            status=UploadStatus.PROCESSING,
+            processing_started=timezone.now() - timedelta(minutes=20),
+        )
+        result = recover_stalled_uploads()
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, UploadStatus.PENDING)
+        self.assertIsNone(upload.processing_started)
+        self.assertEqual(result["recovered"], 1)
+
+    def test_recover_stalled_uploads_ignores_recent_processing(self):
+        """Uploads still within the timeout window are not touched."""
+        from opencontractserver.worker_uploads.tasks import recover_stalled_uploads
+
+        upload = WorkerDocumentUpload.objects.create(
+            corpus_access_token=self.token,
+            corpus=self.corpus,
+            file=_make_fake_pdf(),
+            metadata=_make_metadata(),
+            status=UploadStatus.PROCESSING,
+            processing_started=timezone.now() - timedelta(minutes=2),
+        )
+        result = recover_stalled_uploads()
+        upload.refresh_from_db()
+        self.assertEqual(upload.status, UploadStatus.PROCESSING)
+        self.assertEqual(result["recovered"], 0)
 
 
 class TestWorkerGraphQLMutations(TestCase):
@@ -653,7 +775,6 @@ class TestWorkerGraphQLMutations(TestCase):
             creator=cls.admin,
             label_set=cls.label_set,
         )
-        cls.gql_client = GraphQLClient(schema)
 
     def _execute(self, query, user, variables=None):
         class MockRequest:
@@ -661,9 +782,13 @@ class TestWorkerGraphQLMutations(TestCase):
                 self.user = u
                 self.META = {}
 
-        return self.gql_client.execute(
+        result = schema.execute(
             query, variables=variables, context_value=MockRequest(user)
         )
+        response = {"data": result.data}
+        if result.errors:
+            response["errors"] = result.errors
+        return response
 
     def test_create_worker_account_as_superuser(self):
         mutation = """

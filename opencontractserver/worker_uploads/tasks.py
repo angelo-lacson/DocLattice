@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
@@ -22,6 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from opencontractserver.annotations.models import (
+    EMBEDDING_DIMENSIONS,
     Annotation,
     AnnotationLabel,
     Embedding,
@@ -44,16 +46,9 @@ logger = logging.getLogger(__name__)
 # Maximum length for sanitized filenames
 _MAX_FILENAME_LENGTH = 200
 
-# Dimension -> field name mapping for the Embedding model
-_VECTOR_FIELD_MAP = {
-    384: "vector_384",
-    768: "vector_768",
-    1024: "vector_1024",
-    1536: "vector_1536",
-    2048: "vector_2048",
-    3072: "vector_3072",
-    4096: "vector_4096",
-}
+# Dimension -> field name mapping, derived from the Embedding model's
+# authoritative EMBEDDING_DIMENSIONS list so new dimensions propagate automatically.
+_VECTOR_FIELD_MAP = {dim: f"vector_{dim}" for dim, _ in EMBEDDING_DIMENSIONS}
 
 
 @shared_task(
@@ -125,6 +120,24 @@ def process_pending_uploads(self) -> dict:
     return result
 
 
+@shared_task(queue="worker_uploads")
+def recover_stalled_uploads() -> dict:
+    """Reset uploads stuck in PROCESSING beyond the configured timeout."""
+    cutoff = timezone.now() - timedelta(minutes=settings.WORKER_UPLOAD_STALE_MINUTES)
+    count = WorkerDocumentUpload.objects.filter(
+        status=UploadStatus.PROCESSING,
+        processing_started__lt=cutoff,
+    ).update(
+        status=UploadStatus.PENDING,
+        processing_started=None,
+    )
+
+    if count:
+        logger.info(f"recover_stalled_uploads: reset {count} stalled upload(s).")
+
+    return {"recovered": count}
+
+
 def _process_single_upload(upload_id) -> None:
     """
     Process one WorkerDocumentUpload: create Document, annotations,
@@ -145,6 +158,12 @@ def _process_single_upload(upload_id) -> None:
     metadata = upload.metadata
     corpus = upload.corpus
 
+    # Validate required metadata fields
+    required_fields = ["title", "content", "pawls_file_content", "page_count"]
+    missing = [f for f in required_fields if f not in metadata]
+    if missing:
+        raise ValueError(f"Missing required metadata fields: {', '.join(missing)}")
+
     # Documents uploaded via workers are owned by the corpus creator,
     # not the service account, so they inherit the correct permissions
     # and appear naturally in the corpus owner's workspace.
@@ -158,11 +177,18 @@ def _process_single_upload(upload_id) -> None:
     # participate in the same transaction.atomic() block and roll back on failure.
     with transaction.atomic():
         # 1. Create the standalone Document
-        # Sanitize the title for use as a filename — strip path traversal chars,
-        # null bytes, and other unsafe characters from worker-supplied input.
+        # Sanitize the title — strip null bytes (which Postgres rejects) and
+        # path traversal characters from worker-supplied input.
         raw_title = metadata.get("title", "document") or "document"
-        doc_filename = re.sub(r"[^\w\s\-.]", "_", raw_title)[:_MAX_FILENAME_LENGTH]
-        doc_filename = doc_filename.strip() or "document"
+        safe_title = raw_title.replace("\x00", "")
+        doc_filename = re.sub(r"[^\w \-.]", "_", safe_title)
+        # Collapse consecutive dots to prevent path traversal remnants
+        doc_filename = re.sub(r"\.{2,}", ".", doc_filename)
+        doc_filename = (
+            doc_filename.strip().lstrip(".")[:_MAX_FILENAME_LENGTH] or "document"
+        )
+        if "." not in doc_filename:
+            doc_filename += ".pdf"
 
         pawls_content = metadata.get("pawls_file_content", [])
         text_content = metadata.get("content", "")
@@ -180,7 +206,7 @@ def _process_single_upload(upload_id) -> None:
         upload.file.open("rb")
         try:
             doc = Document.objects.create(
-                title=metadata.get("title", "Untitled"),
+                title=safe_title,
                 description=metadata.get("description", ""),
                 pdf_file=File(upload.file, doc_filename),
                 pawls_parse_file=pawls_file,
@@ -267,10 +293,15 @@ def _process_single_upload(upload_id) -> None:
         upload.processing_finished = timezone.now()
         upload.save(update_fields=["status", "result_document", "processing_finished"])
 
-        # Delete the staging file — the document's pdf_file field now holds
-        # the authoritative copy.
-        if upload.file:
+    # Clean up staging file after successful commit
+    if upload.file:
+        try:
             upload.file.delete(save=False)
+        except Exception:
+            logger.warning(
+                f"Failed to delete staging file for upload {upload_id}",
+                exc_info=True,
+            )
 
     logger.info(
         f"Worker upload {upload_id} processed: doc={corpus_doc.id} "

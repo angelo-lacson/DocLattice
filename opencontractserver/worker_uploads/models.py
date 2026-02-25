@@ -89,27 +89,36 @@ class WorkerAccount(models.Model):
         - unusable password (no login possible)
         - is_staff=False, is_superuser=False
 
+        Runs inside transaction.atomic() so the User is rolled back if
+        WorkerAccount creation fails (no orphaned users).
+
         Raises:
             ValueError: If a WorkerAccount with the given name already exists.
         """
-        if cls.objects.filter(name=name).exists():
-            raise ValueError(f"WorkerAccount with name '{name}' already exists.")
+        from django.db import IntegrityError, transaction
 
-        username = f"worker_{uuid.uuid4().hex[:12]}"
-        user = User.objects.create_user(
-            username=username,
-            email=f"{username}@workers.internal",
-            password=None,  # create_user(password=None) sets unusable password
-            is_staff=False,
-            is_superuser=False,
-        )
+        with transaction.atomic():
+            if cls.objects.filter(name=name).exists():
+                raise ValueError(f"WorkerAccount with name '{name}' already exists.")
 
-        return cls.objects.create(
-            name=name,
-            description=description,
-            user=user,
-            creator=creator,
-        )
+            username = f"worker_{uuid.uuid4().hex[:12]}"
+            user = User.objects.create_user(
+                username=username,
+                email=f"{username}@workers.internal",
+                password=None,  # create_user(password=None) sets unusable password
+                is_staff=False,
+                is_superuser=False,
+            )
+
+            try:
+                return cls.objects.create(
+                    name=name,
+                    description=description,
+                    user=user,
+                    creator=creator,
+                )
+            except IntegrityError:
+                raise ValueError(f"WorkerAccount with name '{name}' already exists.")
 
 
 class CorpusAccessToken(models.Model):
@@ -185,7 +194,15 @@ class CorpusAccessToken(models.Model):
         )
 
     @classmethod
-    def create_token(cls, *, worker_account, corpus, **kwargs):
+    def create_token(
+        cls,
+        *,
+        worker_account,
+        corpus,
+        expires_at=None,
+        rate_limit_per_minute=0,
+        is_active=True,
+    ):
         """
         Create a new token, storing only the SHA-256 hash.
 
@@ -199,7 +216,9 @@ class CorpusAccessToken(models.Model):
             key_prefix=plaintext[:8],
             worker_account=worker_account,
             corpus=corpus,
-            **kwargs,
+            expires_at=expires_at,
+            rate_limit_per_minute=rate_limit_per_minute,
+            is_active=is_active,
         )
         return token, plaintext
 
