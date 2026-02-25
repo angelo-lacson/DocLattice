@@ -284,7 +284,7 @@ class Relationship(BaseOCModel):
         constraints = [
             # Ensure a relationship can't be created by both analysis AND extract
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     django.db.models.Q(created_by_analysis__isnull=True)
                     | django.db.models.Q(created_by_extract__isnull=True)
                 ),
@@ -293,7 +293,7 @@ class Relationship(BaseOCModel):
             ),
             # Ensure relationship has EITHER document OR structural_set (XOR)
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     django.db.models.Q(
                         document__isnull=False, structural_set__isnull=True
                     )
@@ -310,7 +310,7 @@ class Relationship(BaseOCModel):
             # Ensure relationships in a structural_set must have structural=True
             # This enforces data integrity consistent with Annotation model
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     django.db.models.Q(structural_set__isnull=True)
                     | django.db.models.Q(structural=True)
                 ),
@@ -1117,7 +1117,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         constraints = [
             # Ensure an annotation can't be created by both analysis AND extract
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     django.db.models.Q(created_by_analysis__isnull=True)
                     | django.db.models.Q(created_by_extract__isnull=True)
                 ),
@@ -1126,7 +1126,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             ),
             # Ensure annotation has EITHER document OR structural_set (XOR)
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     django.db.models.Q(
                         document__isnull=False, structural_set__isnull=True
                     )
@@ -1143,7 +1143,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             # Ensure annotations in a structural_set must have structural=True
             # This enforces data integrity for the assumption in query_optimizer.py
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     django.db.models.Q(structural_set__isnull=True)
                     | django.db.models.Q(structural=True)
                 ),

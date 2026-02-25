@@ -650,7 +650,7 @@ class TestStructuredResponseAPI(BaseFixtureTestCase):
         result = await agent.structured_response(
             "Using the specified model, summarize the amendment made by Pub. L. 112-231.",
             str,
-            model="gpt-3.5-turbo",
+            model="openai:gpt-3.5-turbo",
         )
 
         # Log the structured result for inspection
@@ -1056,7 +1056,7 @@ class TestStructuredResponseAPIConvenience(BaseFixtureTestCase):
             target_type=SimpleResult,
             framework=AgentFramework.PYDANTIC_AI,
             user_id=self.user.id,
-            model="gpt-4",
+            model="openai:gpt-4",
             system_prompt="You are a document analyst",
             temperature=0.5,
             max_tokens=100,
