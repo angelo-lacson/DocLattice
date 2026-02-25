@@ -3801,10 +3801,11 @@ class Query(graphene.ObjectType):
         Returns:
             LeaderboardType with ranked entries
         """
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         from django.contrib.auth import get_user_model
         from django.db.models import Count, Q
+        from django.utils import timezone
 
         from opencontractserver.annotations.models import Annotation
 
@@ -3813,9 +3814,9 @@ class Query(graphene.ObjectType):
         # Calculate date cutoff based on scope
         cutoff_date = None
         if scope == "weekly":
-            cutoff_date = datetime.now() - timedelta(days=7)
+            cutoff_date = timezone.now() - timedelta(days=7)
         elif scope == "monthly":
-            cutoff_date = datetime.now() - timedelta(days=30)
+            cutoff_date = timezone.now() - timedelta(days=30)
 
         # Get corpus if specified
         corpus_django_pk = None
@@ -4012,10 +4013,11 @@ class Query(graphene.ObjectType):
         Returns:
             CommunityStatsType with engagement metrics
         """
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         from django.contrib.auth import get_user_model
         from django.db.models import Count, Q
+        from django.utils import timezone
 
         from opencontractserver.annotations.models import Annotation
 
@@ -4036,8 +4038,9 @@ class Query(graphene.ObjectType):
                 raise GraphQLError("Corpus not found or access denied")
 
         # Calculate date cutoffs
-        week_ago = datetime.now() - timedelta(days=7)
-        month_ago = datetime.now() - timedelta(days=30)
+        now = timezone.now()
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
 
         # Get visible users
         users = User.objects.visible_to_user(info.context.user).filter(is_active=True)

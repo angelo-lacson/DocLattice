@@ -30,7 +30,7 @@ class TestTextThumbnail(unittest.TestCase):
         # Convert image to RGB mode for compatibility
         img_loaded = img_loaded.convert("RGB")
 
-        pixels = list(img_loaded.getdata())
+        pixels = list(img_loaded.get_flattened_data())
 
         # Check for any non-white pixels instead of just black
         non_white_pixels = [p for p in pixels if p != (255, 255, 255)]
@@ -54,13 +54,17 @@ class TestTextThumbnail(unittest.TestCase):
         """Test if the function respects custom font size"""
         img1 = create_text_thumbnail("Test", font_size=12)
         img2 = create_text_thumbnail("Test", font_size=24)
-        self.assertNotEqual(list(img1.getdata()), list(img2.getdata()))
+        self.assertNotEqual(
+            list(img1.get_flattened_data()), list(img2.get_flattened_data())
+        )
 
     def test_custom_margins(self):
         """Test if the function respects custom margins"""
         img1 = create_text_thumbnail("Test", margin=10)
         img2 = create_text_thumbnail("Test", margin=50)
-        self.assertNotEqual(list(img1.getdata()), list(img2.getdata()))
+        self.assertNotEqual(
+            list(img1.get_flattened_data()), list(img2.get_flattened_data())
+        )
 
 
 if __name__ == "__main__":

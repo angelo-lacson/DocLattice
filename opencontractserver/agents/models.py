@@ -127,7 +127,7 @@ class AgentConfiguration(BaseOCModel):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                check=(
+                condition=(
                     Q(scope="GLOBAL", corpus__isnull=True)
                     | Q(scope="CORPUS", corpus__isnull=False)
                 ),

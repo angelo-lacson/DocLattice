@@ -32,6 +32,10 @@ MAX_PROCESSING_TRACEBACK_LENGTH = 10000
 # Maximum length for error message in GraphQL display (UI truncation)
 MAX_PROCESSING_ERROR_DISPLAY_LENGTH = 500
 
+# Maximum length for error messages stored on WorkerDocumentUpload.error_message.
+# Prevents unbounded exception strings from bloating the staging table.
+MAX_UPLOAD_ERROR_MESSAGE_LENGTH = 2000
+
 # ---------------------------------------------------------------------------
 # Chunked document processing constants
 # ---------------------------------------------------------------------------

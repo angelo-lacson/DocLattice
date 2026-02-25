@@ -57,6 +57,10 @@ urlpatterns = [
         AnnotationImagesView.as_view(),
         name="annotation_images",
     ),
+    path(
+        "api/worker-uploads/",
+        include("opencontractserver.worker_uploads.urls", namespace="worker_uploads"),
+    ),
     *(
         []
         if not settings.USE_ANALYZER

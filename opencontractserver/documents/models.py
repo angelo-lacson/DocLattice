@@ -856,7 +856,7 @@ class PipelineSettings(django.db.models.Model):
         verbose_name_plural = "Pipeline Settings"
         constraints = [
             django.db.models.CheckConstraint(
-                check=django.db.models.Q(pk=1),
+                condition=django.db.models.Q(pk=1),
                 name="pipeline_settings_singleton_pk",
             ),
         ]

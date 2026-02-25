@@ -625,3 +625,32 @@ class UnifiedAgentConsumerTitleGenerationTestCase(WebsocketFixtureBaseTestCase):
             consumer.session_id = "test-session"
             title = await consumer._generate_conversation_title("Test query")
             self.assertTrue(title.startswith("Conversation "))
+
+
+@override_settings(USE_AUTH0=False)
+@pytest.mark.django_db(transaction=True)
+class UnifiedAgentConsumerDisconnectTestCase(WebsocketFixtureBaseTestCase):
+    """Tests for graceful disconnect handling."""
+
+    async def test_disconnect_sets_connected_flag(self):
+        """After disconnect(), _is_connected should be False."""
+        consumer = UnifiedAgentConsumer()
+        consumer.session_id = "test-session"
+        consumer._is_connected = True
+
+        await consumer.disconnect(close_code=1000)
+
+        self.assertFalse(consumer._is_connected)
+        self.assertIsNone(consumer.agent)
+
+    async def test_send_safe_returns_false_when_disconnected(self):
+        """_send_safe should return False when _is_connected is False."""
+        consumer = UnifiedAgentConsumer()
+        consumer.session_id = "test-session"
+        consumer._is_connected = False
+
+        result = await consumer._send_safe(
+            msg_type="ASYNC_CONTENT",
+            content="test",
+        )
+        self.assertFalse(result)
