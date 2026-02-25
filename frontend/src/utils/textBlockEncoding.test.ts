@@ -43,6 +43,10 @@ describe("textBlockEncoding", () => {
       expect(decodeTextBlock("s-100")).toBeNull();
       expect(decodeTextBlock("sabc-def")).toBeNull();
     });
+
+    it("returns null for inverted span (start > end)", () => {
+      expect(decodeTextBlock("s500-100")).toBeNull();
+    });
   });
 
   describe("span roundtrip", () => {

@@ -5,7 +5,7 @@
  * of the parent DocumentViewer component.
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import { useSetAtom } from "jotai";
 import {
   useApproveAnnotation,
@@ -93,6 +93,17 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
 
   const { messages, selectedMessageId, selectedSourceIndex } =
     useChatSourceState();
+
+  // Clear text block highlight when user selects an annotation or chat source.
+  // This ensures the ?tb= deep link is dismissed once the user moves on.
+  useEffect(() => {
+    if (
+      (selectedAnnotations.length > 0 || selectedMessageId) &&
+      highlightedTextBlock()
+    ) {
+      highlightedTextBlock(null);
+    }
+  }, [selectedAnnotations, selectedMessageId]);
 
   // Text block deep link (from ?tb= URL param)
   const textBlockParam = useReactiveVar(highlightedTextBlock);

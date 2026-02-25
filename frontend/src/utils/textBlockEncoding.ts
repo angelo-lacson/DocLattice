@@ -155,11 +155,10 @@ export function decodeTextBlock(param: string): TextBlockReference | null {
   if (param.startsWith("s")) {
     const match = param.match(/^s(\d+)-(\d+)$/);
     if (!match) return null;
-    return {
-      type: "span",
-      start: parseInt(match[1], 10),
-      end: parseInt(match[2], 10),
-    };
+    const start = parseInt(match[1], 10);
+    const end = parseInt(match[2], 10);
+    if (start > end) return null;
+    return { type: "span", start, end };
   }
 
   // PDF tokens: "p{page}:{ranges};p{page}:{ranges};..."

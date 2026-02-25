@@ -34,8 +34,6 @@ import { useReactiveVar } from "@apollo/client";
 import { highlightedTextBlock } from "../../../../graphql/cache";
 import {
   decodeTextBlock,
-  textBlockToTokenIds,
-  textBlockToBounds,
   PdfTokenBlock,
 } from "../../../../utils/textBlockEncoding";
 
@@ -117,31 +115,74 @@ export const PDFPage = ({
     [messages, selectedMessageId]
   );
 
-  // Text block deep link (from ?tb= URL param)
+  // Derive page index early — needed by text block memo and annotation rendering.
+  const pageIndex = pageInfo.page.pageNumber - 1;
+
+  // Clear text block highlight when user interacts with annotations or chat.
+  // This ensures the ?tb= deep link is dismissed once the user moves on,
+  // preventing a stale highlight from persisting indefinitely in the URL.
+  useEffect(() => {
+    if (
+      (selectedAnnotations.length > 0 || selectedMessage) &&
+      highlightedTextBlock()
+    ) {
+      highlightedTextBlock(null);
+    }
+  }, [selectedAnnotations, selectedMessage]);
+
+  // Text block deep link (from ?tb= URL param).
+  // Computed per-page to avoid repeating work for all pages in every
+  // virtualized PDFPage instance.
+  // NOTE: pageInfo.tokens is reference-stable — it's a readonly property set
+  // once in the PDFPageInfo constructor and stored in a stable map via usePages.
   const textBlockParam = useReactiveVar(highlightedTextBlock);
   const textBlockData = useMemo(() => {
     if (!textBlockParam) return null;
     const decoded = decodeTextBlock(textBlockParam);
     if (!decoded || decoded.type !== "pdf") return null;
     const block = decoded as PdfTokenBlock;
-    const tokenIds = textBlockToTokenIds(block);
-    // Build page tokens map from pageInfo for bounds computation
-    const pageTokensMap: Record<
-      number,
-      { x: number; y: number; width: number; height: number }[]
-    > = {};
+
+    // Only compute for this page — avoids O(pages) work per PDFPage instance
+    const pageTokenIndices = block.tokensByPage[pageIndex];
+    if (!pageTokenIndices || pageTokenIndices.length === 0) return null;
+
+    // Convert raw indices to TokenId format for this page
+    const tokenIds = pageTokenIndices.map((tokenIndex) => ({
+      pageIndex,
+      tokenIndex,
+    }));
+
+    // Compute bounding box from token geometry for this page
+    let bounds: BoundingBox | null = null;
     if (pageInfo.tokens) {
-      pageTokensMap[pageInfo.page.pageNumber - 1] = pageInfo.tokens;
+      let top = Infinity;
+      let left = Infinity;
+      let bottom = -Infinity;
+      let right = -Infinity;
+      for (const idx of pageTokenIndices) {
+        const token = pageInfo.tokens[idx];
+        if (!token) continue;
+        top = Math.min(top, token.y);
+        left = Math.min(left, token.x);
+        bottom = Math.max(bottom, token.y + token.height);
+        right = Math.max(right, token.x + token.width);
+      }
+      if (top !== Infinity) {
+        bounds = { top, left, bottom, right };
+      }
     }
-    const bounds = textBlockToBounds(block, pageTokensMap);
-    // Determine the first page that contains highlight data so only
+
+    if (!bounds) return null;
+
+    // Determine the first matching page across the entire block so only
     // that page triggers scrollIntoView (avoids multi-page scroll conflict).
     const allPages = Object.keys(block.tokensByPage)
       .map(Number)
       .sort((a, b) => a - b);
     const firstMatchingPage = allPages.length > 0 ? allPages[0] : -1;
+
     return { tokenIds, bounds, firstMatchingPage };
-  }, [textBlockParam, pageInfo.page.pageNumber, pageInfo.tokens]);
+  }, [textBlockParam, pageIndex, pageInfo.tokens]);
 
   const updatedPageInfo = useMemo(() => {
     return new PDFPageInfo(
@@ -343,8 +384,6 @@ export const PDFPage = ({
    * Determines the annotations to render, including ensuring that any annotation
    * involved in a currently selected relation is visible, regardless of other filters.
    */
-  const pageIndex = pageInfo.page.pageNumber - 1;
-
   const annots_to_render = useMemo(() => {
     return visibleAnnotations.filter((annot) => {
       /* Selection layer renders only token annotations with bounds
@@ -599,18 +638,20 @@ export const PDFPage = ({
             />
           ))}
 
-        {/* Text block deep link highlight (from ?tb= URL param) */}
-        {!selectedMessage &&
-          textBlockData &&
-          textBlockData.bounds[pageIndex] &&
-          textBlockData.tokenIds[pageIndex] && (
-            <TextBlockHighlight
-              tokens={textBlockData.tokenIds[pageIndex] || []}
-              bounds={textBlockData.bounds[pageIndex]}
-              pageInfo={updatedPageInfo}
-              scrollIntoView={pageIndex === textBlockData.firstMatchingPage}
-            />
-          )}
+        {/* Text block deep link highlight (from ?tb= URL param).
+            Suppressed when a chat message is selected to avoid visual clutter —
+            both highlight types use the same bounding-box overlay machinery, so
+            showing them simultaneously would be confusing. The text block
+            reappears when the user deselects the message (or is cleared entirely
+            by the useEffect above when annotations/chat are selected). */}
+        {!selectedMessage && textBlockData && (
+          <TextBlockHighlight
+            tokens={textBlockData.tokenIds}
+            bounds={textBlockData.bounds}
+            pageInfo={updatedPageInfo}
+            scrollIntoView={pageIndex === textBlockData.firstMatchingPage}
+          />
+        )}
       </CanvasWrapper>
     </PageAnnotationsContainer>
   );

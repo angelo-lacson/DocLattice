@@ -1604,6 +1604,18 @@ export const Corpuses = () => {
     (source: ChatMessageSource) => {
       if (!source.document_id || !opened_corpus) return;
 
+      // Validate corpus has slug data. This should always be present when
+      // viewing a corpus (resolved from a slug-based URL by CentralRouteManager).
+      // Falling back to opened_corpus.id (a Relay global ID) would produce an
+      // unresolvable URL like /d/user/Q29ycHVzVHlwZTo1/... that 404s.
+      if (!opened_corpus.slug || !opened_corpus.creator?.slug) {
+        console.warn(
+          "Cannot navigate to source: corpus missing slug data",
+          opened_corpus
+        );
+        return;
+      }
+
       // Build the text block encoding from source data
       let textBlock: string | null = null;
       if (
@@ -1627,18 +1639,17 @@ export const Corpuses = () => {
       // navigating without ?tb= would be a silent no-op.
       if (!textBlock) return;
 
-      // Build the document URL using the GraphQL ID format
-      // CentralRouteManager Phase 1 handles ID→slug redirect
+      // We only have the document's raw database ID from the WebSocket source,
+      // not its slug, so we use a Relay global ID for the document segment.
+      // CentralRouteManager Phase 1 detects this as a GraphQL ID and resolves
+      // it via resolveDocumentById, then redirects to the canonical slug URL.
+      // The corpus segment uses validated slugs from the already-resolved corpus.
       const docGraphQLId = toGlobalId("DocumentType", source.document_id);
-      const userSlug =
-        opened_corpus.creator?.slug || opened_corpus.creator?.username || "_";
-      const corpusSlug = opened_corpus.slug || opened_corpus.id;
+      const queryString = buildQueryParams({ textBlock });
 
-      const queryString = buildQueryParams({
-        textBlock,
-      });
-
-      navigate(`/d/${userSlug}/${corpusSlug}/${docGraphQLId}${queryString}`);
+      navigate(
+        `/d/${opened_corpus.creator.slug}/${opened_corpus.slug}/${docGraphQLId}${queryString}`
+      );
     },
     [opened_corpus, navigate]
   );
