@@ -189,8 +189,12 @@ export const DocumentVersionSelector: React.FC<
         searchParams.set("v", String(versionNumber));
       }
 
-      const search = searchParams.toString();
-      navigate({ search: search ? `?${search}` : "" }, { replace: false });
+      const newSearch = searchParams.toString();
+      const newSearchStr = newSearch ? `?${newSearch}` : "";
+      // Use replace when the result is equivalent to the current URL
+      // to avoid polluting browser history on redundant clicks.
+      const isNoop = newSearchStr === location.search;
+      navigate({ search: newSearchStr }, { replace: isNoop });
     },
     [location.search, navigate]
   );
@@ -225,7 +229,7 @@ export const DocumentVersionSelector: React.FC<
   }, [isOpen]);
 
   // Fetch versions on mount to know if there's history
-  React.useEffect(() => {
+  useEffect(() => {
     if (documentId && corpusId) {
       fetchVersions({ variables: { documentId, corpusId } });
     }

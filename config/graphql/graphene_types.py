@@ -1435,7 +1435,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         from graphql_relay import to_global_id
 
         type_name, corpus_pk = from_global_id(corpus_id)
-        if type_name and type_name != "CorpusType":
+        if not type_name or type_name != "CorpusType":
             return []
 
         # Subquery: only documents in this version tree the user can see.
@@ -1447,7 +1447,18 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             .only("pk")
         )
 
-        # Single query: non-deleted paths whose document passes visibility.
+        # delete_document() creates a tombstone (is_current=True, is_deleted=True)
+        # but leaves the previous path record with is_deleted=False.
+        # Exclude version_numbers that have a deleted current path.
+        deleted_version_numbers = DocumentPath.objects.filter(
+            corpus_id=corpus_pk,
+            document__version_tree_id=self.version_tree_id,
+            is_current=True,
+            is_deleted=True,
+        ).values("version_number")
+
+        # Non-deleted paths whose document passes visibility,
+        # excluding versions that are soft-deleted via tombstone.
         # select_related("document") is needed only for slug access.
         path_records = (
             DocumentPath.objects.filter(
@@ -1455,6 +1466,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 corpus_id=corpus_pk,
                 is_deleted=False,
             )
+            .exclude(version_number__in=deleted_version_numbers)
             .select_related("document")
             .order_by("version_number", "-created")
         )
