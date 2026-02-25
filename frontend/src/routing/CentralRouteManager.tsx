@@ -223,8 +223,9 @@ export function CentralRouteManager() {
 
     // Include version param in the processed-path key so version changes
     // trigger re-resolution even when the path itself hasn't changed.
-    const vParam = searchParams.get("v");
-    const pathKey = vParam ? `${currentPath}?v=${vParam}` : currentPath;
+    const pathKey = urlVersionParam
+      ? `${currentPath}?v=${urlVersionParam}`
+      : currentPath;
 
     // Browse routes - no entity fetch needed
     if (route.type === "browse" || route.type === "unknown") {
@@ -345,8 +346,9 @@ export function CentralRouteManager() {
           ) {
             routingLogger.debug("[RouteManager] Resolving document in corpus");
 
-            // Reuse vParam extracted at top of effect for pathKey construction
-            const versionNumber = vParam ? parseInt(vParam, 10) : undefined;
+            const versionNumber = urlVersionParam
+              ? parseInt(urlVersionParam, 10)
+              : undefined;
 
             // Try slug-based resolution first
             const { data, error } = await resolveDocumentInCorpus({
@@ -808,7 +810,9 @@ export function CentralRouteManager() {
     const docVersion =
       versionParam !== null ? parseInt(versionParam, 10) : null;
     const validDocVersion =
-      docVersion !== null && !isNaN(docVersion) ? docVersion : null;
+      docVersion !== null && !isNaN(docVersion) && docVersion > 0
+        ? docVersion
+        : null;
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";

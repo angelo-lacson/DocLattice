@@ -1656,3 +1656,40 @@ class TestCorpusVersionsField(TestCase):
         self.assertEqual(len(versions), 1)
         self.assertEqual(versions[0]["versionNumber"], 1)
         self.assertTrue(versions[0]["isCurrent"])
+
+    def test_version_number_cannot_cross_version_trees(self):
+        """corpusVersions must not leak versions from a different version tree."""
+        # Create a separate document at a different path (different version tree)
+        other_doc, _, _ = import_document(
+            corpus=self.corpus,
+            path="/other.pdf",
+            content=b"Other",
+            user=self.user,
+            title="Other Doc",
+        )
+        set_permissions_for_obj_to_user(self.user, other_doc, [PermissionTypes.ALL])
+
+        corpus_id = to_global_id("CorpusType", self.corpus.id)
+        other_doc_id = to_global_id("DocumentType", other_doc.id)
+
+        query = f"""
+            query {{
+                document(id: "{other_doc_id}") {{
+                    corpusVersions(corpusId: "{corpus_id}") {{
+                        versionNumber
+                        documentId
+                    }}
+                }}
+            }}
+        """
+
+        result = self.client.execute(query, context_value=self._make_request())
+        self.assertIsNone(result.get("errors"))
+
+        versions = result["data"]["document"]["corpusVersions"]
+        # other_doc has its own version tree — it must only see its own v1,
+        # not the 3 versions from the multi_version.pdf tree.
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0]["versionNumber"], 1)
+        version_doc_id = versions[0]["documentId"]
+        self.assertEqual(version_doc_id, to_global_id("DocumentType", other_doc.id))
