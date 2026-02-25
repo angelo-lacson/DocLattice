@@ -53,23 +53,38 @@ class WorkerTokenAuthentication(authentication.BaseAuthentication):
 
     def _authenticate_token(self, plaintext_key: str):
         key_hash = hash_token(plaintext_key)
+        key_prefix = plaintext_key[:8]
         try:
             token = CorpusAccessToken.objects.select_related(
                 "worker_account", "worker_account__user"
             ).get(key=key_hash)
         except CorpusAccessToken.DoesNotExist:
+            logger.warning(
+                "WorkerToken auth failed: invalid token (prefix=%s)", key_prefix
+            )
             raise exceptions.AuthenticationFailed("Invalid worker token.")
 
         if not token.is_active:
+            logger.warning(
+                "WorkerToken auth failed: revoked token (prefix=%s)", key_prefix
+            )
             raise exceptions.AuthenticationFailed("Token has been revoked.")
 
         if not token.worker_account.is_active:
+            logger.warning(
+                "WorkerToken auth failed: inactive account %s (prefix=%s)",
+                token.worker_account.name,
+                key_prefix,
+            )
             raise exceptions.AuthenticationFailed("Worker account is inactive.")
 
         if token.expires_at and timezone.now() >= token.expires_at:
+            logger.warning(
+                "WorkerToken auth failed: expired token (prefix=%s)", key_prefix
+            )
             raise exceptions.AuthenticationFailed("Token has expired.")
 
         return (token.worker_account.user, token)
 
     def authenticate_header(self, request):
-        return WORKER_AUTH_PREFIX
+        return f'{WORKER_AUTH_PREFIX} realm="api"'

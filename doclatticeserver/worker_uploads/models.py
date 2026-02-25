@@ -15,7 +15,12 @@ TOKEN_HASH_LENGTH = 64  # SHA-256 hex digest length
 
 
 def _generate_token_key() -> str:
-    """Generate a cryptographically random token key (plaintext)."""
+    """Generate a cryptographically random token key (plaintext).
+
+    Referenced by migration 0001_initial as a field default. Not used at
+    runtime — all token creation goes through CorpusAccessToken.create_token()
+    which hashes before storage. Do not remove: the migration import will break.
+    """
     return secrets.token_hex(TOKEN_KEY_LENGTH // 2)
 
 
