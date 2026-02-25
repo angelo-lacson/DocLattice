@@ -25,6 +25,10 @@ export interface ChatMessageSource {
   startIndex?: number;
   endIndex?: number;
   isTextBased?: boolean;
+  /** Document ID this source belongs to (for cross-document deep linking) */
+  document_id?: number;
+  /** Corpus ID this source belongs to (for cross-document deep linking) */
+  corpus_id?: number;
 }
 
 export interface ChatMessage {
@@ -109,6 +113,8 @@ export function mapWebSocketSourcesToChatMessageSources(
             startIndex: start,
             endIndex: end,
             isTextBased: true,
+            document_id: src.document_id,
+            corpus_id: src.corpus_id,
           };
         } else {
           const multiPageObj = src.json as MultipageAnnotationJson;
@@ -156,6 +162,8 @@ export function mapWebSocketSourcesToChatMessageSources(
             startIndex: undefined,
             endIndex: undefined,
             isTextBased: false,
+            document_id: src.document_id,
+            corpus_id: src.corpus_id,
           };
         }
       } catch (error) {

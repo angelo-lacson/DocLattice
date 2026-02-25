@@ -130,6 +130,13 @@ import { CorpusDashboard } from "../components/corpuses/CorpusDashboard";
 import { useCorpusState } from "../components/annotator/context/CorpusAtom";
 import { CorpusSettings } from "../components/corpuses/CorpusSettings";
 import { CorpusChat } from "../components/corpuses/CorpusChat";
+import { ChatMessageSource } from "../components/annotator/context/ChatSourceAtom";
+import {
+  encodeTextBlock,
+  textBlockFromSpan,
+  textBlockFromTokensByPage,
+} from "../utils/textBlockEncoding";
+import { buildQueryParams } from "../utils/navigationUtils";
 import { CorpusHome } from "../components/corpuses/CorpusHome";
 import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptionEditor";
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
@@ -357,6 +364,7 @@ const CorpusQueryView = ({
   stats,
   statsLoading,
   onOpenMobileMenu,
+  onSourceNavigate,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
@@ -372,6 +380,7 @@ const CorpusQueryView = ({
   };
   statsLoading: boolean;
   onOpenMobileMenu?: () => void;
+  onSourceNavigate?: (source: ChatMessageSource) => void;
 }) => {
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -508,6 +517,7 @@ const CorpusQueryView = ({
             initialQuery={searchQuery}
             setShowLoad={() => {}}
             onMessageSelect={() => {}}
+            onSourceNavigate={onSourceNavigate}
             forceNewChat={true}
             onClose={resetToSearch}
           />
@@ -598,6 +608,7 @@ const CorpusQueryView = ({
             showLoad={true}
             setShowLoad={() => {}}
             onMessageSelect={() => {}}
+            onSourceNavigate={onSourceNavigate}
           />
         </div>
       </motion.div>
@@ -1583,6 +1594,50 @@ export const Corpuses = () => {
   const currentSelectedThreadId = useReactiveVar(selectedThreadId);
   const discussionInThreadView = currentSelectedThreadId !== null;
 
+  /**
+   * Navigate to a source document with text block highlighting.
+   * Called from CorpusChat when a user clicks a source citation.
+   * Builds a deep link URL with ?tb= param and navigates to the document.
+   */
+  const handleSourceNavigate = useCallback(
+    (source: ChatMessageSource) => {
+      if (!source.document_id || !opened_corpus) return;
+
+      // Build the text block encoding from source data
+      let textBlock: string | null = null;
+      if (
+        source.isTextBased &&
+        typeof source.startIndex === "number" &&
+        typeof source.endIndex === "number"
+      ) {
+        textBlock = encodeTextBlock(
+          textBlockFromSpan(source.startIndex, source.endIndex)
+        );
+      } else if (
+        source.tokensByPage &&
+        Object.keys(source.tokensByPage).length > 0
+      ) {
+        textBlock = encodeTextBlock(
+          textBlockFromTokensByPage(source.tokensByPage)
+        );
+      }
+
+      // Build the document URL using the GraphQL ID format
+      // CentralRouteManager Phase 1 handles ID→slug redirect
+      const docGraphQLId = btoa(`DocumentType:${source.document_id}`);
+      const userSlug =
+        opened_corpus.creator?.slug || opened_corpus.creator?.username || "_";
+      const corpusSlug = opened_corpus.slug || opened_corpus.id;
+
+      const queryString = buildQueryParams({
+        textBlock,
+      });
+
+      navigate(`/d/${userSlug}/${corpusSlug}/${docGraphQLId}${queryString}`);
+    },
+    [opened_corpus, navigate]
+  );
+
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setDocumentsViewMode(mode);
   }, []);
@@ -2204,6 +2259,7 @@ export const Corpuses = () => {
             stats={stats}
             statsLoading={effectiveStatsLoading}
             onOpenMobileMenu={() => setMobileSidebarOpen(true)}
+            onSourceNavigate={handleSourceNavigate}
           />
         ),
       },
@@ -2429,6 +2485,7 @@ export const Corpuses = () => {
                 corpusId={opened_corpus.id}
                 showLoad={true}
                 onMessageSelect={() => {}}
+                onSourceNavigate={handleSourceNavigate}
                 setShowLoad={() => {}}
                 onViewModeChange={setChatInConversation}
                 onClose={() => setActiveTab(0)}

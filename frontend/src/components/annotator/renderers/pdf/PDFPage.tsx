@@ -25,10 +25,19 @@ import { PDFPageInfo } from "../../types/pdf";
 import { chatSourcesAtom } from "../../context/ChatSourceAtom";
 import { useCorpusState } from "../../context/CorpusAtom";
 import { ChatSourceResult } from "../../display/components/ChatSourceResult";
+import { TextBlockHighlight } from "../../display/components/TextBlockHighlight";
 import { useVisibleAnnotations } from "../../hooks/useVisibleAnnotations";
 import { pendingScrollAnnotationIdAtom } from "../../context/DocumentAtom";
 import { pendingScrollSearchResultIdAtom } from "../../context/DocumentAtom";
 import { pendingScrollChatSourceKeyAtom } from "../../context/DocumentAtom";
+import { useReactiveVar } from "@apollo/client";
+import { highlightedTextBlock } from "../../../../graphql/cache";
+import {
+  decodeTextBlock,
+  textBlockToTokenIds,
+  textBlockToBounds,
+  PdfTokenBlock,
+} from "../../../../utils/textBlockEncoding";
 
 /**
  * This wrapper is inline-block (shrink-wrapped) and position:relative
@@ -107,6 +116,26 @@ export const PDFPage = ({
     () => messages.find((m) => m.messageId === selectedMessageId),
     [messages, selectedMessageId]
   );
+
+  // Text block deep link (from ?tb= URL param)
+  const textBlockParam = useReactiveVar(highlightedTextBlock);
+  const textBlockData = useMemo(() => {
+    if (!textBlockParam) return null;
+    const decoded = decodeTextBlock(textBlockParam);
+    if (!decoded || decoded.type !== "pdf") return null;
+    const block = decoded as PdfTokenBlock;
+    const tokenIds = textBlockToTokenIds(block);
+    // Build page tokens map from pageInfo for bounds computation
+    const pageTokensMap: Record<
+      number,
+      { x: number; y: number; width: number; height: number }[]
+    > = {};
+    if (pageInfo.tokens) {
+      pageTokensMap[pageInfo.page.pageNumber - 1] = pageInfo.tokens;
+    }
+    const bounds = textBlockToBounds(block, pageTokensMap);
+    return { tokenIds, bounds };
+  }, [textBlockParam, pageInfo.page.pageNumber, pageInfo.tokens]);
 
   const updatedPageInfo = useMemo(() => {
     return new PDFPageInfo(
@@ -563,6 +592,19 @@ export const PDFPage = ({
               selected={selectedSourceIndex === index}
             />
           ))}
+
+        {/* Text block deep link highlight (from ?tb= URL param) */}
+        {!selectedMessage &&
+          textBlockData &&
+          textBlockData.bounds[pageIndex] &&
+          textBlockData.tokenIds[pageIndex] && (
+            <TextBlockHighlight
+              tokens={textBlockData.tokenIds[pageIndex] || []}
+              bounds={textBlockData.bounds[pageIndex]}
+              pageInfo={updatedPageInfo}
+              scrollIntoView={true}
+            />
+          )}
       </CanvasWrapper>
     </PageAnnotationsContainer>
   );

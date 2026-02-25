@@ -604,6 +604,22 @@ export type CorpusDetailViewType = "landing" | "details";
 export const corpusDetailView = makeVar<CorpusDetailViewType>("landing");
 
 /**
+ * Text block deep linking (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Holds a compact-encoded text block reference for highlighting arbitrary text
+ * in a document WITHOUT a database annotation. Used for deep linking from
+ * corpus agent sources and other citation views.
+ *
+ * The string value is the raw ?tb= URL parameter value (compact encoding).
+ * Components decode it via decodeTextBlock() from textBlockEncoding.ts.
+ *
+ * URL Examples:
+ *   /d/user/corpus/doc?tb=s100-500            → text span from char 100 to 500
+ *   /d/user/corpus/doc?tb=p0:45-65;p1:0-23   → PDF tokens on pages 0 and 1
+ */
+export const highlightedTextBlock = makeVar<string | null>(null);
+
+/**
  * Auth-related global variables
  */
 export const userObj = makeVar<User | null>(null);

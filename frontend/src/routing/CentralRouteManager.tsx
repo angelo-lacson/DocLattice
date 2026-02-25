@@ -40,6 +40,7 @@ import {
   showSelectedAnnotationOnly,
   showAnnotationBoundingBoxes,
   showAnnotationLabels,
+  highlightedTextBlock,
   CorpusHomeViewType,
   CorpusDetailViewType,
 } from "../graphql/cache";
@@ -787,6 +788,9 @@ export function CentralRouteManager() {
     const tocExpandedParam = searchParams.get("tocExpanded") === "true";
     const detailViewParam = searchParams.get("view");
 
+    // Text block deep link
+    const textBlockParam = searchParams.get("tb");
+
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
     const selectedOnly = searchParams.get("selectedOnly") === "true";
@@ -822,6 +826,7 @@ export function CentralRouteManager() {
     const currentHomeView = corpusHomeView();
     const currentTocExpandAll = tocExpandAll();
     const currentDetailView = corpusDetailView();
+    const currentTextBlock = highlightedTextBlock();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -890,6 +895,9 @@ export function CentralRouteManager() {
     }
     if (currentLabels !== newLabels) {
       updates.push(() => showAnnotationLabels(newLabels as any));
+    }
+    if (currentTextBlock !== (textBlockParam || null)) {
+      updates.push(() => highlightedTextBlock(textBlockParam || null));
     }
 
     // Execute all reactive var updates in a single batched operation
@@ -1033,7 +1041,7 @@ export function CentralRouteManager() {
   //
   // Vars synced: annotationIds, analysisIds, extractIds, threadId,
   // folderId, tab, messageId, homeView, tocExpanded, structural,
-  // selectedOnly, boundingBoxes, labels
+  // selectedOnly, boundingBoxes, labels, textBlock
   // ═══════════════════════════════════════════════════════════════
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
@@ -1049,6 +1057,7 @@ export function CentralRouteManager() {
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
   const labels = useReactiveVar(showAnnotationLabels);
+  const textBlock = useReactiveVar(highlightedTextBlock);
 
   useEffect(() => {
     const currentUrlParams = new URLSearchParams(location.search);
@@ -1132,6 +1141,7 @@ export function CentralRouteManager() {
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
       labelDisplay: labels,
+      textBlock,
     });
 
     // Both should have consistent "?" prefix for comparison
@@ -1166,6 +1176,7 @@ export function CentralRouteManager() {
     selectedOnly,
     boundingBoxes,
     labels,
+    textBlock,
   ]);
 
   // This component is purely side-effect driven, renders nothing

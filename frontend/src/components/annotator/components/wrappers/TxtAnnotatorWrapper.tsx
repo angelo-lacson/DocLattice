@@ -31,6 +31,12 @@ import {
   registerRefAtom,
   unregisterRefAtom,
 } from "../../context/AnnotationRefsAtoms";
+import { useReactiveVar } from "@apollo/client";
+import { highlightedTextBlock } from "../../../../graphql/cache";
+import {
+  decodeTextBlock,
+  TextSpanBlock,
+} from "../../../../utils/textBlockEncoding";
 
 interface TxtAnnotatorWrapperProps {
   readOnly: boolean;
@@ -87,6 +93,15 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
   const { messages, selectedMessageId, selectedSourceIndex } =
     useChatSourceState();
 
+  // Text block deep link (from ?tb= URL param)
+  const textBlockParam = useReactiveVar(highlightedTextBlock);
+  const textBlockSpan = React.useMemo(() => {
+    if (!textBlockParam) return null;
+    const decoded = decodeTextBlock(textBlockParam);
+    if (!decoded || decoded.type !== "span") return null;
+    return decoded as TextSpanBlock;
+  }, [textBlockParam]);
+
   const chatSourceMatches = React.useMemo(() => {
     const allSources: {
       start_index: number;
@@ -113,8 +128,18 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
       }
     }
 
+    // Include text block deep link as a virtual chat source
+    if (textBlockSpan) {
+      allSources.push({
+        start_index: textBlockSpan.start,
+        end_index: textBlockSpan.end,
+        sourceId: "__text_block_deeplink__",
+        messageId: "__text_block_deeplink__",
+      });
+    }
+
     return allSources;
-  }, [messages]);
+  }, [messages, textBlockSpan]);
 
   // Memoized getSpan callback
   const getSpan = useCallback(
@@ -158,7 +183,9 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
         searchResults={filteredSearchResults}
         chatSources={chatSourceMatches}
         selectedChatSourceId={
-          selectedMessageId && selectedSourceIndex !== null
+          textBlockSpan
+            ? "__text_block_deeplink__"
+            : selectedMessageId && selectedSourceIndex !== null
             ? `${selectedMessageId}.${selectedSourceIndex}`
             : undefined
         }
