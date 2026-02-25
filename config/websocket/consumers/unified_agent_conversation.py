@@ -84,6 +84,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.consumer_id = uuid.uuid4()
+        self._is_connected = False
         logger.debug(f"[UnifiedAgent {self.consumer_id}] __init__ called.")
 
     # -------------------------------------------------------------------------
@@ -202,6 +203,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
 
             # 7. Accept connection
             await self.accept()
+            self._is_connected = True
             logger.debug(f"[Session {self.session_id}] Connection accepted.")
 
         except Exception as e:
@@ -213,6 +215,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code: int) -> None:
         """Clean up on socket close."""
+        self._is_connected = False
         logger.debug(
             f"[UnifiedAgent {self.consumer_id} | Session {self.session_id}] "
             f"disconnect() called. Code={close_code}"
@@ -329,6 +332,29 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             json.dumps({"type": msg_type, "content": content, "data": data})
         )
 
+    async def _send_safe(
+        self,
+        msg_type: MessageType,
+        content: str = "",
+        data: dict[str, Any] | None = None,
+    ) -> bool:
+        """
+        Send a message, returning False (instead of raising) when the
+        socket is already closed.  This prevents cascading exceptions
+        through PydanticAI's async generators during mid-stream disconnects.
+        """
+        if not self._is_connected:
+            return False
+        try:
+            await self.send_standard_message(msg_type, content, data)
+            return True
+        except Exception:
+            self._is_connected = False
+            logger.debug(
+                f"[Session {self.session_id}] Send failed (client disconnected)."
+            )
+            return False
+
     # -------------------------------------------------------------------------
     #  Main message handler
     # -------------------------------------------------------------------------
@@ -355,7 +381,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             user_query: str = payload.get("query", "").strip()
             if not user_query:
                 logger.warning(f"[Session {self.session_id}] Empty query received.")
-                await self.send_standard_message(
+                await self._send_safe(
                     msg_type="SYNC_CONTENT",
                     content="No query provided.",
                 )
@@ -378,7 +404,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             await self._stream_agent_response(user_query)
 
         except json.JSONDecodeError:
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="SYNC_CONTENT",
                 data={"error": "Malformed JSON payload."},
             )
@@ -387,7 +413,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                 f"[Session {self.session_id}] Error during message processing: {e}",
                 exc_info=True,
             )
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="SYNC_CONTENT",
                 data={"error": f"Error during message processing: {e}"},
             )
@@ -556,16 +582,27 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
         """Stream the agent's response to the client."""
         try:
             async for event in self.agent.stream(user_query):
+                if not self._is_connected:
+                    logger.debug(
+                        f"[Session {self.session_id}] Client disconnected mid-stream, "
+                        "stopping iteration."
+                    )
+                    break
                 await self._handle_agent_event(event)
 
             logger.debug(f"[Session {self.session_id}] Streaming complete.")
 
         except Exception as e:
+            if not self._is_connected:
+                logger.debug(
+                    f"[Session {self.session_id}] Streaming interrupted by disconnect: {e}"
+                )
+                return
             logger.error(
                 f"[Session {self.session_id}] Error during streaming: {e}",
                 exc_info=True,
             )
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="SYNC_CONTENT",
                 data={"error": f"Error during processing: {e}"},
             )
@@ -577,7 +614,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
         if getattr(event, "user_message_id", None) is not None and not hasattr(
             self, "_sent_start"
         ):
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="ASYNC_START",
                 content="",
                 data={"message_id": event.llm_message_id},
@@ -586,7 +623,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
 
         # Handle event types
         if isinstance(event, ThoughtEvent):
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="ASYNC_THOUGHT",
                 content=event.thought,
                 data={"message_id": event.llm_message_id, **event.metadata},
@@ -594,7 +631,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
 
         elif isinstance(event, ContentEvent):
             if event.content:
-                await self.send_standard_message(
+                await self._send_safe(
                     msg_type="ASYNC_CONTENT",
                     content=event.content,
                     data={"message_id": event.llm_message_id},
@@ -602,7 +639,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
 
         elif isinstance(event, SourceEvent):
             if event.sources:
-                await self.send_standard_message(
+                await self._send_safe(
                     msg_type="ASYNC_SOURCES",
                     content="",
                     data={
@@ -612,7 +649,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                 )
 
         elif isinstance(event, ApprovalNeededEvent):
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="ASYNC_APPROVAL_NEEDED",
                 content="",
                 data={
@@ -625,7 +662,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             )
 
         elif isinstance(event, ApprovalResultEvent):
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="ASYNC_APPROVAL_RESULT",
                 content="",
                 data={
@@ -636,14 +673,14 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             )
 
         elif isinstance(event, ResumeEvent):
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="ASYNC_RESUME",
                 content="",
                 data={"message_id": event.llm_message_id},
             )
 
         elif isinstance(event, ErrorEvent):
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="ASYNC_ERROR",
                 content="",
                 data={
@@ -657,7 +694,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
 
         elif isinstance(event, FinalEvent):
             sources_payload = [s.to_dict() for s in event.sources]
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="ASYNC_FINISH",
                 content=event.accumulated_content or event.content,
                 data={
@@ -681,7 +718,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
         else:
             # Legacy path for frameworks yielding UnifiedStreamResponse
             if hasattr(event, "content") and event.content:
-                await self.send_standard_message(
+                await self._send_safe(
                     msg_type="ASYNC_CONTENT",
                     content=str(event.content),
                     data={"message_id": getattr(event, "llm_message_id", None)},
@@ -692,7 +729,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                 if hasattr(event, "sources") and event.sources:
                     sources_payload = [s.to_dict() for s in event.sources]
 
-                await self.send_standard_message(
+                await self._send_safe(
                     msg_type="ASYNC_FINISH",
                     content=getattr(event, "accumulated_content", ""),
                     data={
@@ -726,14 +763,14 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
         llm_msg_id = payload.get("llm_message_id")
 
         if llm_msg_id is None:
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="SYNC_CONTENT",
                 data={"error": "llm_message_id missing in approval payload"},
             )
             return
 
         if self.agent is None:
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="SYNC_CONTENT",
                 data={"error": "Agent not initialized for approval"},
             )
@@ -744,14 +781,24 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             async for event in self.agent.resume_with_approval(
                 llm_msg_id, approved, stream=True
             ):
+                if not self._is_connected:
+                    logger.debug(
+                        f"[Session {self.session_id}] Client disconnected during approval stream."
+                    )
+                    break
                 await self._handle_agent_event(event)
 
         except Exception as e:
+            if not self._is_connected:
+                logger.debug(
+                    f"[Session {self.session_id}] Approval stream interrupted by disconnect."
+                )
+                return
             logger.error(
                 f"[Session {self.session_id}] Approval resume error: {e}",
                 exc_info=True,
             )
-            await self.send_standard_message(
+            await self._send_safe(
                 msg_type="SYNC_CONTENT",
                 data={"error": f"Failed to resume after approval: {e}"},
             )
