@@ -28,6 +28,7 @@ Expected Behaviors:
 """
 
 import logging
+import warnings
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -794,14 +795,19 @@ class ExtractMetadataPermissionTestCase(TestCase):
         )
 
         # Create manual metadata (no extract needed for manual metadata)
-        self.manual_datacell = Datacell.objects.create(
-            creator=self.user,
-            extract=None,  # Manual metadata doesn't need extract
-            column=self.manual_column,
-            document=self.doc,
-            data={"value": "Manual metadata value"},
-            data_definition="Manual entry",
-        )
+        # Suppress RuntimeWarning from Django's conditional UniqueConstraint
+        # resolution during full_clean() — the Q(extract__isnull=True) condition
+        # triggers an unawaited coroutine in the expression resolution chain.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            self.manual_datacell = Datacell.objects.create(
+                creator=self.user,
+                extract=None,  # Manual metadata doesn't need extract
+                column=self.manual_column,
+                document=self.doc,
+                data={"value": "Manual metadata value"},
+                data_definition="Manual entry",
+            )
 
     def test_manual_metadata_follows_document_permissions(self):
         """

@@ -745,7 +745,7 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
             # For CHAT type: enforce mutual exclusivity (at least one must be NULL)
             # For THREAD type: allow both to be set (doc-in-corpus discussions)
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     # THREAD type allows both fields to be set
                     django.db.models.Q(conversation_type="thread")
                     | (

@@ -1039,7 +1039,7 @@ class CorpusAction(BaseOCModel):
     class Meta:
         constraints = [
             django.db.models.CheckConstraint(
-                check=(
+                condition=(
                     # Fieldset only (no analyzer, no agent)
                     django.db.models.Q(
                         fieldset__isnull=False,
