@@ -1430,13 +1430,25 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         Performance: Uses a DB-level subquery (document__in) to push
         permission filtering into a single query instead of materializing
-        visible IDs in Python then filtering.
+        visible IDs in Python then filtering. Results are cached on the
+        request context so that listing N documents with corpusVersions
+        in one query reuses the same result for documents sharing a
+        version_tree_id + corpus_id pair (avoids N+1).
         """
         from graphql_relay import to_global_id
 
         type_name, corpus_pk = from_global_id(corpus_id)
         if not type_name or type_name != "CorpusType":
             return []
+
+        # Request-level cache keyed on (version_tree_id, corpus_pk).
+        cache_key = (self.version_tree_id, corpus_pk)
+        cache = getattr(info.context, "_corpus_versions_cache", None)
+        if cache is None:
+            cache = {}
+            info.context._corpus_versions_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
 
         # Subquery: only documents in this version tree the user can see.
         visible_version_docs = (
@@ -1490,6 +1502,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 }
             )
 
+        cache[cache_key] = results
         return results
 
     def resolve_can_restore(self, info, corpus_id):
