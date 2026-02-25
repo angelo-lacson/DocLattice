@@ -145,6 +145,12 @@ def _process_single_upload(upload_id) -> None:
     metadata = upload.metadata
     corpus = upload.corpus
 
+    # Validate required metadata fields
+    required_fields = ["title", "content", "pawls_file_content", "page_count"]
+    missing = [f for f in required_fields if f not in metadata]
+    if missing:
+        raise ValueError(f"Missing required metadata fields: {', '.join(missing)}")
+
     # Documents uploaded via workers are owned by the corpus creator,
     # not the service account, so they inherit the correct permissions
     # and appear naturally in the corpus owner's workspace.
@@ -158,11 +164,16 @@ def _process_single_upload(upload_id) -> None:
     # participate in the same transaction.atomic() block and roll back on failure.
     with transaction.atomic():
         # 1. Create the standalone Document
-        # Sanitize the title for use as a filename — strip path traversal chars,
-        # null bytes, and other unsafe characters from worker-supplied input.
+        # Sanitize the title — strip null bytes (which Postgres rejects) and
+        # path traversal characters from worker-supplied input.
         raw_title = metadata.get("title", "document") or "document"
-        doc_filename = re.sub(r"[^\w\s\-.]", "_", raw_title)[:_MAX_FILENAME_LENGTH]
-        doc_filename = doc_filename.strip() or "document"
+        safe_title = raw_title.replace("\x00", "")
+        doc_filename = re.sub(r"[^\w\s\-.]", "_", safe_title)
+        # Collapse consecutive dots to prevent path traversal remnants
+        doc_filename = re.sub(r"\.{2,}", ".", doc_filename)
+        doc_filename = (
+            doc_filename.strip().lstrip(".")[:_MAX_FILENAME_LENGTH] or "document"
+        )
 
         pawls_content = metadata.get("pawls_file_content", [])
         text_content = metadata.get("content", "")
@@ -180,7 +191,7 @@ def _process_single_upload(upload_id) -> None:
         upload.file.open("rb")
         try:
             doc = Document.objects.create(
-                title=metadata.get("title", "Untitled"),
+                title=safe_title,
                 description=metadata.get("description", ""),
                 pdf_file=File(upload.file, doc_filename),
                 pawls_parse_file=pawls_file,

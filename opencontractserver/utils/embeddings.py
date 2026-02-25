@@ -1,6 +1,7 @@
-import asyncio
 import logging
 from typing import Optional, Union
+
+from channels.db import database_sync_to_async
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
@@ -207,9 +208,9 @@ async def aget_embedder(
     never blocks the event-loop thread.  The public signature mirrors the
     synchronous helper for drop-in replacement.
     """
-    # Wrap the synchronous implementation in a thread to keep the code DRY.
-    return await asyncio.to_thread(
-        get_embedder, corpus_id, mimetype_or_enum, embedder_path
+    # Wrap the synchronous implementation to keep the code DRY.
+    return await database_sync_to_async(get_embedder, thread_sensitive=False)(
+        corpus_id, mimetype_or_enum, embedder_path
     )
 
 
@@ -225,16 +226,17 @@ async def agenerate_embeddings_from_text(
     The synchronous implementation performs blocking I/O (DB look-ups,
     model loading).  Running it in the event-loop thread would trigger
     ``SynchronousOnlyOperation`` and stall other coroutines.  We therefore
-    delegate the entire call to a worker thread via ``asyncio.to_thread``.
+    delegate the entire call via ``database_sync_to_async``.
 
     Returns
     -------
     (embedder_path, vector)      – identical to the synchronous helper.
     """
-    return await asyncio.to_thread(
-        generate_embeddings_from_text,
-        text=text,
-        corpus_id=corpus_id,
-        mimetype=mimetype,
-        embedder_path=embedder_path,
+    return await database_sync_to_async(
+        generate_embeddings_from_text, thread_sensitive=False
+    )(
+        text,
+        corpus_id,
+        mimetype,
+        embedder_path,
     )
