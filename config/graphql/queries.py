@@ -305,6 +305,10 @@ class Query(graphene.ObjectType):
             return None
 
         if version_number is not None:
+            # Reject invalid version numbers early to avoid unnecessary DB queries
+            if version_number <= 0:
+                return None
+
             # Resolve a specific historical version in a single query:
             # Push visibility check into the path query via document__in
             # subquery, avoiding a separate exists() round-trip.

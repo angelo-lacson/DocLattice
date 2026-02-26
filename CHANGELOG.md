@@ -5,7 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-25
+## [Unreleased] - 2026-02-26
+
+### Fixed
+
+#### Document Version Selector UI Cleanup (Closes #964)
+- **Query overfetching**: Removed unused `versionCount`, `hasVersionHistory`, `isLatestVersion`, and `versionNumber(corpusId:)` fields from `GET_CORPUS_VERSIONS` query (`frontend/src/graphql/queries.ts`). These fields triggered backend resolvers (including database queries for `versionNumber`) but were never consumed by the component, which derives all values from `corpusVersions.length`.
+- **Missing keyboard navigation**: Added full WAI-ARIA listbox keyboard navigation to `DocumentVersionSelector` — Arrow Up/Down to move focus, Home/End to jump to first/last option, Enter/Space to select, Escape to close and return focus to trigger (`frontend/src/components/documents/DocumentVersionSelector.tsx`). Previously keyboard-only users could not navigate the dropdown.
+- **Unsafe displayVersion fallback**: Changed fallback from hardcoded `1` to `null` with conditional rendering (`v?` placeholder) when version data is unavailable, preventing display of incorrect version numbers during initial load (`frontend/src/components/documents/DocumentVersionSelector.tsx:~183`).
+- **Backend validation gap**: Added early return for invalid version numbers (≤ 0) in `resolve_document_in_corpus_by_slugs` to avoid unnecessary database roundtrips (`config/graphql/queries.py`).
+- **isCurrent field clarity**: Added JSDoc comment to `CorpusVersion.isCurrent` interface field documenting that it means "latest (most recent) version" (`frontend/src/components/documents/DocumentVersionSelector.tsx:14`).
+- **Tests**: Updated GraphQL mocks to match trimmed query shape; added new test cases for arrow key navigation, Home/End keys, and Enter-to-select behavior (`frontend/tests/DocumentVersionSelector.ct.tsx`).
 
 ### Added
 
