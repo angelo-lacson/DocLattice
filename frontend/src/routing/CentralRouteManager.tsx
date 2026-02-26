@@ -29,6 +29,7 @@ import {
   selectedFolderId,
   selectedTab,
   selectedMessageId,
+  selectedDocVersion,
   corpusHomeView,
   tocExpandAll,
   corpusDetailView,
@@ -101,7 +102,8 @@ export function CentralRouteManager() {
   const [searchParams] = useSearchParams();
   const apolloClient = useApolloClient();
 
-  // Track last processed route to prevent duplicate work
+  // Track last processed route to prevent duplicate work.
+  // Includes version param so version changes trigger re-resolution.
   const lastProcessedPath = useRef<string>("");
 
   // Track if Phase 2 has run at least once (prevents Phase 4 from overwriting URL on mount)
@@ -211,9 +213,19 @@ export function CentralRouteManager() {
   const authStatus = useReactiveVar(authStatusVar);
   const authInitComplete = useReactiveVar(authInitCompleteVar);
 
+  // Extract version param as stable value for Phase 1 dependency.
+  // Changing ?v= must trigger re-resolution to load the correct document version.
+  const urlVersionParam = searchParams.get("v");
+
   useEffect(() => {
     const currentPath = location.pathname;
     const route = parseRoute(currentPath);
+
+    // Include version param in the processed-path key so version changes
+    // trigger re-resolution even when the path itself hasn't changed.
+    const pathKey = urlVersionParam
+      ? `${currentPath}?v=${urlVersionParam}`
+      : currentPath;
 
     // Browse routes - no entity fetch needed
     if (route.type === "browse" || route.type === "unknown") {
@@ -231,7 +243,7 @@ export function CentralRouteManager() {
       openedLabelset(null);
       routeLoading(false);
       routeError(null);
-      lastProcessedPath.current = currentPath;
+      lastProcessedPath.current = pathKey;
       return;
     }
 
@@ -249,16 +261,16 @@ export function CentralRouteManager() {
       return;
     }
 
-    // Skip if we've already processed this exact path (after auth is ready)
-    if (lastProcessedPath.current === currentPath) {
+    // Skip if we've already processed this exact path+version (after auth is ready)
+    if (lastProcessedPath.current === pathKey) {
       routingLogger.debug(
         "[RouteManager] Skipping duplicate path processing:",
-        currentPath
+        pathKey
       );
       return;
     }
 
-    lastProcessedPath.current = currentPath;
+    lastProcessedPath.current = pathKey;
 
     // Entity routes - async resolution required
     const resolveEntity = async () => {
@@ -334,12 +346,23 @@ export function CentralRouteManager() {
           ) {
             routingLogger.debug("[RouteManager] Resolving document in corpus");
 
+            const parsedVersion = urlVersionParam
+              ? parseInt(urlVersionParam, 10)
+              : undefined;
+            const versionNumber =
+              parsedVersion != null &&
+              !isNaN(parsedVersion) &&
+              parsedVersion > 0
+                ? parsedVersion
+                : undefined;
+
             // Try slug-based resolution first
             const { data, error } = await resolveDocumentInCorpus({
               variables: {
                 userSlug: route.userIdent!,
                 corpusSlug: route.corpusIdent,
                 documentSlug: route.documentIdent,
+                ...(versionNumber != null && { versionNumber }),
               },
             });
 
@@ -763,7 +786,7 @@ export function CentralRouteManager() {
     };
 
     resolveEntity();
-  }, [location.pathname, authStatus, authInitComplete]); // Re-run when path, auth status, or init complete changes
+  }, [location.pathname, urlVersionParam, authStatus, authInitComplete]); // Re-run when path, version param, auth status, or init complete changes
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 2: URL Query Params → Reactive Vars
@@ -786,6 +809,15 @@ export function CentralRouteManager() {
     const homeViewParam = searchParams.get("homeView");
     const tocExpandedParam = searchParams.get("tocExpanded") === "true";
     const detailViewParam = searchParams.get("view");
+
+    // Document version
+    const versionParam = searchParams.get("v");
+    const docVersion =
+      versionParam !== null ? parseInt(versionParam, 10) : null;
+    const validDocVersion =
+      docVersion !== null && !isNaN(docVersion) && docVersion > 0
+        ? docVersion
+        : null;
 
     // Visualization state (booleans and enums)
     const structural = searchParams.get("structural") === "true";
@@ -822,6 +854,7 @@ export function CentralRouteManager() {
     const currentHomeView = corpusHomeView();
     const currentTocExpandAll = tocExpandAll();
     const currentDetailView = corpusDetailView();
+    const currentDocVersion = selectedDocVersion();
     const currentStructural = showStructuralAnnotations();
     const currentSelectedOnly = showSelectedAnnotationOnly();
     const currentBoundingBoxes = showAnnotationBoundingBoxes();
@@ -878,6 +911,9 @@ export function CentralRouteManager() {
     }
     if (currentDetailView !== newDetailView) {
       updates.push(() => corpusDetailView(newDetailView));
+    }
+    if (currentDocVersion !== validDocVersion) {
+      updates.push(() => selectedDocVersion(validDocVersion));
     }
     if (currentStructural !== structural) {
       updates.push(() => showStructuralAnnotations(structural));
@@ -1042,6 +1078,7 @@ export function CentralRouteManager() {
   const folderId = useReactiveVar(selectedFolderId);
   const tab = useReactiveVar(selectedTab);
   const messageId = useReactiveVar(selectedMessageId);
+  const docVersion = useReactiveVar(selectedDocVersion);
   const homeView = useReactiveVar(corpusHomeView);
   const tocExpanded = useReactiveVar(tocExpandAll);
   const detailView = useReactiveVar(corpusDetailView);
@@ -1107,6 +1144,7 @@ export function CentralRouteManager() {
         folderId,
         tab,
         messageId,
+        docVersion,
         homeView,
         tocExpanded,
         detailView,
@@ -1125,6 +1163,7 @@ export function CentralRouteManager() {
       folderId,
       tab,
       messageId,
+      version: docVersion,
       homeView,
       tocExpanded,
       view: detailView,
@@ -1159,6 +1198,7 @@ export function CentralRouteManager() {
     folderId,
     tab,
     messageId,
+    docVersion,
     homeView,
     tocExpanded,
     detailView,
