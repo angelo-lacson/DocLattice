@@ -167,6 +167,25 @@ describe("textBlockEncoding", () => {
       const pdfBlock = result as PdfTokenBlock;
       expect(pdfBlock.tokensByPage[0]).toHaveLength(101);
     });
+
+    it("caps cumulative tokens across pages at MAX_TOTAL_TOKENS (50 000)", () => {
+      // Build 10 page segments of 9999 tokens each = 99990 total, exceeding cap
+      const segments = Array.from(
+        { length: 10 },
+        (_, i) => `p${i}:0-9998`
+      ).join(";");
+      const result = decodeTextBlock(segments);
+      expect(result).not.toBeNull();
+      const pdfBlock = result as PdfTokenBlock;
+      // Should have stopped adding pages once cumulative count exceeded 50 000
+      const totalTokens = Object.values(pdfBlock.tokensByPage).reduce(
+        (sum, arr) => sum + arr.length,
+        0
+      );
+      expect(totalTokens).toBeLessThanOrEqual(50_000);
+      // Should have fewer than 10 pages (some were dropped)
+      expect(Object.keys(pdfBlock.tokensByPage).length).toBeLessThan(10);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────

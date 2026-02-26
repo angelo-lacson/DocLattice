@@ -84,6 +84,11 @@ function encodeTokenRanges(tokens: number[]): string {
  *  Guards against malicious URLs like "0-9999999" creating huge arrays. */
 const MAX_RANGE_SPAN = 10_000;
 
+/** Maximum cumulative token count across ALL page segments.
+ *  Prevents crafted URLs with many small-but-valid page entries from
+ *  allocating a significant amount of memory (e.g., 500 pages × 10k each). */
+const MAX_TOTAL_TOKENS = 50_000;
+
 /**
  * Decode a compact token range string back to an array of numbers.
  * "1-3,5,7-9" → [1, 2, 3, 5, 7, 8, 9]
@@ -164,6 +169,7 @@ export function decodeTextBlock(param: string): TextBlockReference | null {
   // PDF tokens: "p{page}:{ranges};p{page}:{ranges};..."
   if (param.startsWith("p")) {
     const tokensByPage: Record<number, number[]> = {};
+    let totalTokens = 0;
     const pageSegments = param.split(";");
     for (const segment of pageSegments) {
       const pageMatch = segment.match(/^p(\d+):(.+)$/);
@@ -171,6 +177,8 @@ export function decodeTextBlock(param: string): TextBlockReference | null {
       const pageIdx = parseInt(pageMatch[1], 10);
       const tokens = decodeTokenRanges(pageMatch[2]);
       if (tokens.length > 0) {
+        totalTokens += tokens.length;
+        if (totalTokens > MAX_TOTAL_TOKENS) break;
         tokensByPage[pageIdx] = tokens;
       }
     }

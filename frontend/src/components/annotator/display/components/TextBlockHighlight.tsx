@@ -19,6 +19,8 @@ export interface TextBlockHighlightProps {
   bounds: BoundingBox;
   /** Page-specific info (viewport, scaling, etc.) */
   pageInfo: PDFPageInfo;
+  /** Zero-based page index — used to produce a unique DOM id per page */
+  pageIndex: number;
   /** Whether to scroll this highlight into view */
   scrollIntoView?: boolean;
 }
@@ -27,6 +29,7 @@ export const TextBlockHighlight = ({
   tokens,
   bounds,
   pageInfo,
+  pageIndex,
   scrollIntoView = false,
 }: TextBlockHighlightProps) => {
   const { showBoundingBoxes } = useAnnotationDisplay();
@@ -37,7 +40,7 @@ export const TextBlockHighlight = ({
   return (
     <>
       <ResultBoundary
-        id="TEXT_BLOCK_HIGHLIGHT"
+        id={`TEXT_BLOCK_HIGHLIGHT_p${pageIndex}`}
         hidden={false}
         showBoundingBox={showBoundingBoxes}
         color={TEXT_BLOCK_HIGHLIGHT_COLOR}

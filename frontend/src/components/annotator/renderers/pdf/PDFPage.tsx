@@ -31,11 +31,14 @@ import { pendingScrollAnnotationIdAtom } from "../../context/DocumentAtom";
 import { pendingScrollSearchResultIdAtom } from "../../context/DocumentAtom";
 import { pendingScrollChatSourceKeyAtom } from "../../context/DocumentAtom";
 import { useReactiveVar } from "@apollo/client";
+import { useLocation, useNavigate } from "react-router-dom";
 import { highlightedTextBlock } from "../../../../graphql/cache";
 import {
   decodeTextBlock,
   PdfTokenBlock,
+  textBlockToBounds,
 } from "../../../../utils/textBlockEncoding";
+import { updateTextBlockParam } from "../../../../utils/navigationUtils";
 
 /**
  * This wrapper is inline-block (shrink-wrapped) and position:relative
@@ -118,6 +121,11 @@ export const PDFPage = ({
   // Derive page index early — needed by text block memo and annotation rendering.
   const pageIndex = pageInfo.page.pageNumber - 1;
 
+  // URL-based clearing: use navigate to remove ?tb= from URL (which also
+  // clears the reactive var via CentralRouteManager's Phase 2 sync).
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Clear text block highlight when user interacts with annotations or chat.
   // This ensures the ?tb= deep link is dismissed once the user moves on,
   // preventing a stale highlight from persisting indefinitely in the URL.
@@ -126,9 +134,9 @@ export const PDFPage = ({
       (selectedAnnotations.length > 0 || selectedMessage) &&
       highlightedTextBlock()
     ) {
-      highlightedTextBlock(null);
+      updateTextBlockParam(location, navigate, null);
     }
-  }, [selectedAnnotations, selectedMessage]);
+  }, [selectedAnnotations, selectedMessage, location, navigate]);
 
   // Text block deep link (from ?tb= URL param).
   // Computed per-page to avoid repeating work for all pages in every
@@ -152,26 +160,12 @@ export const PDFPage = ({
       tokenIndex,
     }));
 
-    // Compute bounding box from token geometry for this page
-    let bounds: BoundingBox | null = null;
-    if (pageInfo.tokens) {
-      let top = Infinity;
-      let left = Infinity;
-      let bottom = -Infinity;
-      let right = -Infinity;
-      for (const idx of pageTokenIndices) {
-        const token = pageInfo.tokens[idx];
-        if (!token) continue;
-        top = Math.min(top, token.y);
-        left = Math.min(left, token.x);
-        bottom = Math.max(bottom, token.y + token.height);
-        right = Math.max(right, token.x + token.width);
-      }
-      if (top !== Infinity) {
-        bounds = { top, left, bottom, right };
-      }
-    }
-
+    // Compute bounding box using shared utility (avoids duplicating the
+    // Infinity/min/max loop that also lives in textBlockEncoding.ts).
+    const boundsMap = pageInfo.tokens
+      ? textBlockToBounds(block, { [pageIndex]: pageInfo.tokens })
+      : {};
+    const bounds = boundsMap[pageIndex];
     if (!bounds) return null;
 
     // Determine the first matching page across the entire block so only
@@ -649,6 +643,7 @@ export const PDFPage = ({
             tokens={textBlockData.tokenIds}
             bounds={textBlockData.bounds}
             pageInfo={updatedPageInfo}
+            pageIndex={pageIndex}
             scrollIntoView={pageIndex === textBlockData.firstMatchingPage}
           />
         )}
