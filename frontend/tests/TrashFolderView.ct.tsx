@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { TrashFolderViewTestWrapper } from "./TrashFolderViewTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("TrashFolderView", () => {
   test("renders trash folder header", async ({ mount, page }) => {
@@ -151,6 +152,7 @@ test.describe("TrashFolderView", () => {
 
     // At least 2 restore buttons (one per document)
     expect(count).toBeGreaterThanOrEqual(2);
+    await docScreenshot(page, "versioning--trash-folder--restore-ui");
   });
 
   test("shows success message after restore", async ({ mount, page }) => {
