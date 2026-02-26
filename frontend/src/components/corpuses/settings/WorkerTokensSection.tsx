@@ -115,10 +115,18 @@ const getNumericId = (globalId: string): number => {
   try {
     const decoded = atob(globalId);
     const parts = decoded.split(":");
-    return parseInt(parts[1], 10);
+    const id = parseInt(parts[1], 10);
+    if (!isNaN(id)) return id;
   } catch {
-    return parseInt(globalId, 10);
+    // Fall through to direct parse
   }
+  const id = parseInt(globalId, 10);
+  if (isNaN(id)) {
+    throw new Error(
+      `Invalid ID: "${globalId}" is not a valid Relay global ID or numeric ID`
+    );
+  }
+  return id;
 };
 
 // ---------------------------------------------------------------------------
@@ -295,7 +303,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
   const { data: accountsData, loading: loadingAccounts } = useQuery(
     GET_WORKER_ACCOUNTS_FOR_TOKENS,
     {
-      skip: !isSuperuser,
+      skip: !isSuperuser && !isCreator,
     }
   );
 
@@ -412,7 +420,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
             <Key size={18} style={{ marginRight: "-0.25rem" }} />
             Worker Access Tokens
           </SettingsCardTitle>
-          {isSuperuser && (
+          {(isSuperuser || isCreator) && (
             <Button
               primary
               size="small"
@@ -449,7 +457,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
             <Message info>
               <Message.Header>No Access Tokens</Message.Header>
               <p>
-                {isSuperuser
+                {isSuperuser || isCreator
                   ? "Create a token to allow a worker account to upload documents to this corpus."
                   : "No access tokens have been created for this corpus yet. Contact an administrator to create one."}
               </p>

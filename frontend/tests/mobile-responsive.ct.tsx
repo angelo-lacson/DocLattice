@@ -272,8 +272,11 @@ test.describe("GlobalSettingsPanel - Mobile Responsive", () => {
 
     await expect(page.getByText("Badge Management")).toBeVisible();
 
-    // Find a settings card and check it has reasonable size for touch
-    const card = page.locator(".ui.card").first();
+    // Find a settings card by navigating from known text to its card container
+    const card = page
+      .locator("text=Badge Management")
+      .locator("..")
+      .locator("..");
     const box = await card.boundingBox();
 
     // Card should have minimum touch-friendly dimensions

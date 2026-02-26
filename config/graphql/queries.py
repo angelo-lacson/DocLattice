@@ -120,6 +120,7 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.badges.criteria_registry import BadgeCriteriaRegistry
 from opencontractserver.badges.models import Badge, UserBadge
+from opencontractserver.constants.document_processing import WORKER_UPLOADS_QUERY_LIMIT
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -4438,19 +4439,20 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_worker_accounts(self, info, name_contains=None, is_active=None):
         user = info.context.user
-        if not user.is_superuser:
-            raise GraphQLError("Permission denied. Superuser access required.")
 
-        qs = (
-            WorkerAccount.objects.select_related("creator")
-            .annotate(_token_count=Count("access_tokens"))
-            .order_by("-created")
-        )
+        qs = WorkerAccount.objects.select_related("creator").order_by("-created")
+
+        # Non-superusers can only see active accounts (for token creation)
+        if not user.is_superuser:
+            qs = qs.filter(is_active=True)
+        else:
+            if is_active is not None:
+                qs = qs.filter(is_active=is_active)
+
+        qs = qs.annotate(_token_count=Count("access_tokens"))
 
         if name_contains:
             qs = qs.filter(name__icontains=name_contains)
-        if is_active is not None:
-            qs = qs.filter(is_active=is_active)
 
         return [
             WorkerAccountQueryType(
@@ -4461,7 +4463,7 @@ class Query(graphene.ObjectType):
                 creator_name=a.creator.username if a.creator else None,
                 created=a.created,
                 modified=a.modified,
-                token_count=a._token_count,
+                token_count=a._token_count if user.is_superuser else 0,
             )
             for a in qs
         ]
@@ -4469,13 +4471,12 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_corpus_access_tokens(self, info, corpus_id, is_active=None):
         user = info.context.user
-        try:
-            corpus = Corpus.objects.get(id=corpus_id)
-        except Corpus.DoesNotExist:
-            raise GraphQLError("Corpus not found.")
-
-        if not user.is_superuser and (not corpus.creator or corpus.creator != user):
-            raise GraphQLError("Permission denied.")
+        qs = Corpus.objects.filter(id=corpus_id)
+        if not user.is_superuser:
+            qs = qs.filter(creator=user)
+        corpus = qs.first()
+        if corpus is None:
+            raise GraphQLError("Not found or permission denied.")
 
         qs = (
             CorpusAccessToken.objects.filter(corpus=corpus)
@@ -4512,13 +4513,12 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_worker_document_uploads(self, info, corpus_id, status=None):
         user = info.context.user
-        try:
-            corpus = Corpus.objects.get(id=corpus_id)
-        except Corpus.DoesNotExist:
-            raise GraphQLError("Corpus not found.")
-
-        if not user.is_superuser and (not corpus.creator or corpus.creator != user):
-            raise GraphQLError("Permission denied.")
+        qs = Corpus.objects.filter(id=corpus_id)
+        if not user.is_superuser:
+            qs = qs.filter(creator=user)
+        corpus = qs.first()
+        if corpus is None:
+            raise GraphQLError("Not found or permission denied.")
 
         qs = WorkerDocumentUpload.objects.filter(corpus=corpus).order_by("-created")
         if status:
@@ -4535,7 +4535,7 @@ class Query(graphene.ObjectType):
                 processing_started=u.processing_started,
                 processing_finished=u.processing_finished,
             )
-            for u in qs[:100]
+            for u in qs[:WORKER_UPLOADS_QUERY_LIMIT]
         ]
 
     # DEBUG FIELD ########################################

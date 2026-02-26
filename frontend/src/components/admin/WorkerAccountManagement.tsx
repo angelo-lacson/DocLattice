@@ -11,6 +11,7 @@ import {
   Form,
   Input,
   TextArea,
+  Confirm,
 } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
@@ -187,6 +188,8 @@ export const WorkerAccountManagement: React.FC = () => {
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formState, setFormState] = useState<FormState>(initialFormState);
+  const [accountToDeactivate, setAccountToDeactivate] =
+    useState<WorkerAccount | null>(null);
 
   const { loading, error, data, refetch } = useQuery(GET_WORKER_ACCOUNTS);
 
@@ -241,11 +244,21 @@ export const WorkerAccountManagement: React.FC = () => {
   };
 
   const handleToggleActive = (account: WorkerAccount) => {
-    const variables = { workerAccountId: parseInt(account.id, 10) };
     if (account.isActive) {
-      deactivateAccount({ variables });
+      setAccountToDeactivate(account);
     } else {
-      reactivateAccount({ variables });
+      reactivateAccount({
+        variables: { workerAccountId: parseInt(account.id, 10) },
+      });
+    }
+  };
+
+  const handleConfirmDeactivate = () => {
+    if (accountToDeactivate) {
+      deactivateAccount({
+        variables: { workerAccountId: parseInt(accountToDeactivate.id, 10) },
+      });
+      setAccountToDeactivate(null);
     }
   };
 
@@ -402,6 +415,16 @@ export const WorkerAccountManagement: React.FC = () => {
           </Button>
         </Modal.Actions>
       </Modal>
+
+      {/* Deactivate Confirmation */}
+      <Confirm
+        open={accountToDeactivate !== null}
+        onCancel={() => setAccountToDeactivate(null)}
+        onConfirm={handleConfirmDeactivate}
+        content={`Are you sure you want to deactivate "${accountToDeactivate?.name}"? This will invalidate all access tokens for this account.`}
+        confirmButton="Deactivate"
+        cancelButton="Cancel"
+      />
     </Container>
   );
 };

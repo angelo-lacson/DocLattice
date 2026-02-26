@@ -1546,3 +1546,20 @@ class TestWorkerGraphQLQueries(TestCase):
 
         self.worker.refresh_from_db()
         self.assertTrue(self.worker.is_active)
+
+    def test_non_superuser_cannot_reactivate_worker_account(self):
+        self.worker.is_active = False
+        self.worker.save(update_fields=["is_active"])
+
+        result = self._execute(
+            """
+            mutation($workerId: Int!) {
+                reactivateWorkerAccount(workerAccountId: $workerId) {
+                    ok
+                }
+            }
+            """,
+            self.regular_user,
+            variables={"workerId": self.worker.id},
+        )
+        self.assertIsNotNone(result.get("errors"))
