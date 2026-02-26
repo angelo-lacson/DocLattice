@@ -1,7 +1,13 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Header, Segment, Card, Icon } from "semantic-ui-react";
 import styled from "styled-components";
+import { Trophy, Bot, Settings, Users, Upload, LucideIcon } from "lucide-react";
+
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_TYPOGRAPHY,
+  OS_LEGAL_SPACING,
+} from "../../assets/configurations/osLegalStyles";
 
 const Container = styled.div`
   padding: 2rem;
@@ -26,25 +32,32 @@ const PageHeader = styled.div`
   }
 `;
 
-const PageTitle = styled(Header)`
-  &.ui.header {
-    margin-bottom: 0.5rem;
-    color: #1e293b;
+const PageTitle = styled.h1`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  margin: 0 0 0.5rem 0;
 
-    @media (max-width: 768px) {
-      font-size: 1.5rem !important;
-    }
+  @media (max-width: 768px) {
+    font-size: 1.5rem;
+    justify-content: center;
+  }
 
-    @media (max-width: 480px) {
-      font-size: 1.3rem !important;
-    }
+  @media (max-width: 480px) {
+    font-size: 1.3rem;
   }
 `;
 
 const PageDescription = styled.p`
-  color: #64748b;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 1rem;
   margin: 0;
+  line-height: 1.5;
 
   @media (max-width: 768px) {
     font-size: 0.9rem;
@@ -67,50 +80,54 @@ const SettingsGrid = styled.div`
   }
 `;
 
-const SettingsCard = styled(Card)`
-  &.ui.card {
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease;
-    cursor: pointer;
+const SettingsCard = styled.div<{ $disabled?: boolean }>`
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
+  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+  padding: 1.5rem;
+  cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
+  opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 
+  ${({ $disabled }) =>
+    !$disabled &&
+    `
     &:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+      border-color: ${OS_LEGAL_COLORS.borderHover};
     }
 
     /* Disable hover transforms on touch devices */
     @media (hover: none) {
       &:hover {
         transform: none;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+        border-color: ${OS_LEGAL_COLORS.border};
       }
 
       &:active {
         transform: scale(0.98);
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
       }
     }
+  `}
 
-    .content {
-      padding: 1.5rem;
+  @media (max-width: 768px) {
+    padding: 1.25rem;
+  }
 
-      @media (max-width: 768px) {
-        padding: 1.25rem;
-      }
-
-      @media (max-width: 480px) {
-        padding: 1rem;
-      }
-    }
+  @media (max-width: 480px) {
+    padding: 1rem;
   }
 `;
 
-const CardIcon = styled.div<{ $color: string }>`
+const CardIconWrapper = styled.div<{ $gradient: string }>`
   width: 48px;
   height: 48px;
-  border-radius: 12px;
-  background: ${(props) => props.$color};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
+  background: ${({ $gradient }) => $gradient};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,18 +138,17 @@ const CardIcon = styled.div<{ $color: string }>`
     height: 44px;
     margin-bottom: 0.75rem;
   }
-
-  i.icon {
-    color: white;
-    margin: 0;
-  }
 `;
 
 const CardTitle = styled.h3`
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 
   @media (max-width: 768px) {
     font-size: 1rem;
@@ -140,8 +156,9 @@ const CardTitle = styled.h3`
 `;
 
 const CardDescription = styled.p`
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0;
   line-height: 1.5;
 
@@ -152,6 +169,7 @@ const CardDescription = styled.p`
 
 const ComingSoonBadge = styled.span`
   display: inline-block;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
   font-size: 0.75rem;
   font-weight: 500;
   color: #8b5cf6;
@@ -172,8 +190,8 @@ interface SettingItem {
   id: string;
   title: string;
   description: string;
-  icon: string;
-  color: string;
+  icon: LucideIcon;
+  gradient: string;
   route?: string;
   comingSoon?: boolean;
 }
@@ -184,8 +202,8 @@ const settingsItems: SettingItem[] = [
     title: "Badge Management",
     description:
       "Create and manage badges that can be awarded to users for achievements and contributions.",
-    icon: "trophy",
-    color: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    icon: Trophy,
+    gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
     route: "/admin/badges",
   },
   {
@@ -193,17 +211,26 @@ const settingsItems: SettingItem[] = [
     title: "Global Agents",
     description:
       "Configure global AI agents available across all corpuses for document and corpus analysis.",
-    icon: "robot",
-    color: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+    icon: Bot,
+    gradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
     route: "/admin/agents",
+  },
+  {
+    id: "worker-accounts",
+    title: "Worker Accounts",
+    description:
+      "Manage service accounts used by automated pipelines to upload and process documents.",
+    icon: Upload,
+    gradient: "linear-gradient(135deg, #0f766e 0%, #0d6860 100%)",
+    route: "/admin/worker-accounts",
   },
   {
     id: "system-settings",
     title: "System Settings",
     description:
       "Configure system-wide pipeline settings including parsers, embedders, and document processing.",
-    icon: "cog",
-    color: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+    icon: Settings,
+    gradient: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
     route: "/system_settings",
   },
   {
@@ -211,8 +238,8 @@ const settingsItems: SettingItem[] = [
     title: "User Management",
     description:
       "View and manage user accounts, permissions, and access controls.",
-    icon: "users",
-    color: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+    icon: Users,
+    gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
     comingSoon: true,
   },
 ];
@@ -229,8 +256,9 @@ export const GlobalSettingsPanel: React.FC = () => {
   return (
     <Container>
       <PageHeader>
-        <PageTitle as="h1">
-          <Icon name="settings" /> Admin Settings
+        <PageTitle>
+          <Settings size={28} color={OS_LEGAL_COLORS.accent} />
+          Admin Settings
         </PageTitle>
         <PageDescription>
           Manage global settings, configurations, and administrative features
@@ -239,16 +267,17 @@ export const GlobalSettingsPanel: React.FC = () => {
       </PageHeader>
 
       <SettingsGrid>
-        {settingsItems.map((item) => (
-          <SettingsCard
-            key={item.id}
-            onClick={() => handleCardClick(item)}
-            style={{ opacity: item.comingSoon ? 0.7 : 1 }}
-          >
-            <Card.Content>
-              <CardIcon $color={item.color}>
-                <Icon name={item.icon as any} size="large" />
-              </CardIcon>
+        {settingsItems.map((item) => {
+          const IconComponent = item.icon;
+          return (
+            <SettingsCard
+              key={item.id}
+              $disabled={item.comingSoon}
+              onClick={() => handleCardClick(item)}
+            >
+              <CardIconWrapper $gradient={item.gradient}>
+                <IconComponent size={24} color="white" />
+              </CardIconWrapper>
               <CardTitle>
                 {item.title}
                 {item.comingSoon && (
@@ -256,9 +285,9 @@ export const GlobalSettingsPanel: React.FC = () => {
                 )}
               </CardTitle>
               <CardDescription>{item.description}</CardDescription>
-            </Card.Content>
-          </SettingsCard>
-        ))}
+            </SettingsCard>
+          );
+        })}
       </SettingsGrid>
     </Container>
   );
