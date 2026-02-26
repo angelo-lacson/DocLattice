@@ -5,7 +5,18 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-24
+## [Unreleased] - 2026-02-25
+
+### Added
+
+#### Document Version Selector End-to-End Documentation (Closes #954)
+- **User-facing guide**: `docs/features/document_versioning.md` — covers version creation workflow, visual status indicators (gray/blue/orange badges), Version History Panel usage, and Trash folder recovery
+- **Documentation screenshots**: Added `docScreenshot` calls to capture five key UI states:
+  - `versioning--badge--single-version` — gray badge for documents without history (`frontend/tests/VersionBadge.ct.tsx`)
+  - `versioning--badge--latest-version` — blue badge showing version count (`frontend/tests/VersionBadge.ct.tsx`)
+  - `versioning--badge--older-version` — orange badge for outdated versions (`frontend/tests/VersionBadge.ct.tsx`)
+  - `versioning--history-panel--with-versions` — already captured in `frontend/tests/VersionHistoryPanel.ct.tsx`
+  - `versioning--trash-folder--restore-ui` — deleted document recovery interface (`frontend/tests/TrashFolderView.ct.tsx`)
 
 ### Fixed
 
