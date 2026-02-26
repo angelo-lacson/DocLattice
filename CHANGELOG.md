@@ -5,7 +5,18 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-24
+## [Unreleased] - 2026-02-25
+
+### Added
+
+#### Document Version Selector End-to-End Documentation (Closes #954)
+- **User-facing guide**: `docs/features/document_versioning.md` — covers version creation workflow, visual status indicators (gray/blue/orange badges), Version History Panel usage, and Trash folder recovery
+- **Documentation screenshots**: Added `docScreenshot` calls to capture five key UI states:
+  - `versioning--badge--single-version` — gray badge for documents without history (`frontend/tests/VersionBadge.ct.tsx`)
+  - `versioning--badge--latest-version` — blue badge showing version count (`frontend/tests/VersionBadge.ct.tsx`)
+  - `versioning--badge--older-version` — orange badge for outdated versions (`frontend/tests/VersionBadge.ct.tsx`)
+  - `versioning--history-panel--with-versions` — already captured in `frontend/tests/VersionHistoryPanel.ct.tsx`
+  - `versioning--trash-folder--restore-ui` — deleted document recovery interface (`frontend/tests/TrashFolderView.ct.tsx`)
 
 ### Fixed
 
@@ -15,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tests**: `opencontractserver/tests/test_structural_annotation_portability.py` — replaced single test with two: one verifying `None` on changed content, one verifying inheritance on identical content.
 
 ### Added
+
+#### Annotation Versioning and Document Version-Aware Deep Linking
+- **Version-aware document resolution**: `documentInCorpusBySlugs` GraphQL query now accepts optional `versionNumber` parameter to resolve a specific historical version of a document (`config/graphql/queries.py`)
+- **Corpus versions field**: New `corpusVersions(corpusId)` field on `DocumentType` returns all versions of a document in a corpus with version number, document ID, slug, creation date, and current status (`config/graphql/graphene_types.py`)
+- **`CorpusVersionInfoType` GraphQL type**: New type for version selector data returned by `corpusVersions` field
+- **`?v=N` URL parameter**: Deep links to documents now support a `?v=N` query parameter to view a specific version (e.g., `/d/user/corpus/doc?v=1&ann=123`)
+- **`selectedDocVersion` reactive var**: New URL-driven state variable in `frontend/src/graphql/cache.ts` synced bidirectionally via CentralRouteManager Phases 2 and 4
+- **CentralRouteManager version support**: Phase 1 passes version to GraphQL resolution, Phase 2 parses `?v=` into reactive var, Phase 4 syncs back to URL (`frontend/src/routing/CentralRouteManager.tsx`)
+- **`DocumentVersionSelector` component**: Inline version badge and dropdown in document header that shows available versions and allows switching between them (`frontend/src/components/documents/DocumentVersionSelector.tsx`)
+- **Navigation utilities**: `QueryParams` interface and `buildQueryParams` now support `version` field for URL construction (`frontend/src/utils/navigationUtils.ts`)
+- **Routing documentation**: Updated `docs/frontend/routing_system.md` with version parameter documentation, examples, and reactive var listing
 
 #### Worker Document Upload System
 - **New Django app** `opencontractserver.worker_uploads` — enables external document-processing workers to upload fully ingested, annotated, and embedded documents to a target corpus via REST API
