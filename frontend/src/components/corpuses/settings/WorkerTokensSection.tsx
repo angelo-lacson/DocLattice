@@ -2,8 +2,8 @@
  * WorkerTokensSection - Manages worker access tokens for a corpus.
  *
  * Displays existing tokens in a table with status, expiry, rate limit, and
- * upload stats.  Superusers can create new tokens; both superusers and corpus
- * creators can view and revoke tokens.
+ * upload stats.  Both superusers and corpus creators can create, view, and
+ * revoke tokens.
  */
 import React, { useState } from "react";
 import { gql, useQuery, useMutation } from "@apollo/client";
@@ -36,6 +36,7 @@ import {
   OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
 } from "../../../assets/configurations/osLegalStyles";
+import { getNumericIdFromGlobalId } from "../../../utils/idValidation";
 
 // ---------------------------------------------------------------------------
 // GraphQL operations
@@ -102,32 +103,6 @@ const REVOKE_CORPUS_ACCESS_TOKEN = gql`
     }
   }
 `;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Extract the numeric Django PK from a Relay global ID
- * (e.g. "Q29ycHVzVHlwZTo0Ng==" -> 46).
- */
-const getNumericId = (globalId: string): number => {
-  try {
-    const decoded = atob(globalId);
-    const parts = decoded.split(":");
-    const id = parseInt(parts[1], 10);
-    if (!isNaN(id)) return id;
-  } catch {
-    // Fall through to direct parse
-  }
-  const id = parseInt(globalId, 10);
-  if (isNaN(id)) {
-    throw new Error(
-      `Invalid ID: "${globalId}" is not a valid Relay global ID or numeric ID`
-    );
-  }
-  return id;
-};
 
 // ---------------------------------------------------------------------------
 // Styled helpers
@@ -279,7 +254,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
   isSuperuser,
   isCreator,
 }) => {
-  const numericCorpusId = getNumericId(corpusId);
+  const numericCorpusId = getNumericIdFromGlobalId(corpusId);
 
   // UI state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -366,16 +341,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
       toast.success("Token copied to clipboard");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement("textarea");
-      textarea.value = newTokenKey;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopied(true);
-      toast.success("Token copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      toast.info("Please select the token text and copy manually (Ctrl+C)");
     }
   };
 

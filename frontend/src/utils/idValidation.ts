@@ -3,6 +3,29 @@
  */
 
 /**
+ * Extract the numeric Django PK from a Relay global ID
+ * (e.g. "Q29ycHVzVHlwZTo0Ng==" -> 46).  Falls back to parsing the string
+ * as a plain integer.  Throws on completely unparseable input.
+ */
+export function getNumericIdFromGlobalId(globalId: string): number {
+  try {
+    const decoded = atob(globalId);
+    const parts = decoded.split(":");
+    const id = parseInt(parts[1], 10);
+    if (!isNaN(id)) return id;
+  } catch {
+    // Fall through to direct parse
+  }
+  const id = parseInt(globalId, 10);
+  if (isNaN(id)) {
+    throw new Error(
+      `Invalid ID: "${globalId}" is not a valid Relay global ID or numeric ID`
+    );
+  }
+  return id;
+}
+
+/**
  * Checks if a value is a valid GraphQL ID (base64 encoded, gid: prefixed, or numeric)
  */
 export function isValidGraphQLId(value: string | undefined | null): boolean {

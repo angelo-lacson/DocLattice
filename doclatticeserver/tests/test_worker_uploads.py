@@ -1378,12 +1378,28 @@ class TestWorkerGraphQLQueries(TestCase):
         self.assertTrue(account["isActive"])
         self.assertEqual(account["tokenCount"], 1)
 
-    def test_worker_accounts_denied_for_regular_user(self):
+    def test_worker_accounts_regular_user_sees_active_only(self):
+        """Regular users can query active worker accounts (for token creation
+        dropdown) but with tokenCount hidden (always 0)."""
         result = self._execute(
-            "query { workerAccounts { id name } }",
+            """
+            query {
+                workerAccounts {
+                    id
+                    name
+                    isActive
+                    tokenCount
+                }
+            }
+            """,
             self.regular_user,
         )
-        self.assertIsNotNone(result.get("errors"))
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        accounts = result["data"]["workerAccounts"]
+        # Only active accounts visible
+        self.assertTrue(all(a["isActive"] for a in accounts))
+        # tokenCount is hidden for non-superusers
+        self.assertTrue(all(a["tokenCount"] == 0 for a in accounts))
 
     # ---- Query: corpusAccessTokens ----
 
@@ -1447,8 +1463,10 @@ class TestWorkerGraphQLQueries(TestCase):
             """
             query($corpusId: Int!) {
                 workerDocumentUploads(corpusId: $corpusId) {
-                    id
-                    status
+                    items { id status }
+                    totalCount
+                    limit
+                    offset
                 }
             }
             """,
@@ -1456,7 +1474,10 @@ class TestWorkerGraphQLQueries(TestCase):
             variables={"corpusId": self.corpus.id},
         )
         self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
-        self.assertEqual(result["data"]["workerDocumentUploads"], [])
+        page = result["data"]["workerDocumentUploads"]
+        self.assertEqual(page["items"], [])
+        self.assertEqual(page["totalCount"], 0)
+        self.assertEqual(page["offset"], 0)
 
     # ---- Mutation: createCorpusAccessToken (corpus creator permission) ----
 
@@ -1530,36 +1551,46 @@ class TestWorkerGraphQLQueries(TestCase):
         self.worker.is_active = False
         self.worker.save(update_fields=["is_active"])
 
-        result = self._execute(
-            """
-            mutation($workerId: Int!) {
-                reactivateWorkerAccount(workerAccountId: $workerId) {
-                    ok
+        try:
+            result = self._execute(
+                """
+                mutation($workerId: Int!) {
+                    reactivateWorkerAccount(workerAccountId: $workerId) {
+                        ok
+                    }
                 }
-            }
-            """,
-            self.superuser,
-            variables={"workerId": self.worker.id},
-        )
-        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
-        self.assertTrue(result["data"]["reactivateWorkerAccount"]["ok"])
+                """,
+                self.superuser,
+                variables={"workerId": self.worker.id},
+            )
+            self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+            self.assertTrue(result["data"]["reactivateWorkerAccount"]["ok"])
 
-        self.worker.refresh_from_db()
-        self.assertTrue(self.worker.is_active)
+            self.worker.refresh_from_db()
+            self.assertTrue(self.worker.is_active)
+        finally:
+            # Restore shared fixture state
+            self.worker.is_active = True
+            self.worker.save(update_fields=["is_active"])
 
     def test_non_superuser_cannot_reactivate_worker_account(self):
         self.worker.is_active = False
         self.worker.save(update_fields=["is_active"])
 
-        result = self._execute(
-            """
-            mutation($workerId: Int!) {
-                reactivateWorkerAccount(workerAccountId: $workerId) {
-                    ok
+        try:
+            result = self._execute(
+                """
+                mutation($workerId: Int!) {
+                    reactivateWorkerAccount(workerAccountId: $workerId) {
+                        ok
+                    }
                 }
-            }
-            """,
-            self.regular_user,
-            variables={"workerId": self.worker.id},
-        )
-        self.assertIsNotNone(result.get("errors"))
+                """,
+                self.regular_user,
+                variables={"workerId": self.worker.id},
+            )
+            self.assertIsNotNone(result.get("errors"))
+        finally:
+            # Restore shared fixture state
+            self.worker.is_active = True
+            self.worker.save(update_fields=["is_active"])
