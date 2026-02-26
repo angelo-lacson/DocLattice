@@ -106,6 +106,7 @@ export interface ResolveDocumentInCorpusFullQuery {
     isPublic: boolean;
     pdfFile: string | null;
     backendLock: boolean;
+    isLatestVersion: boolean;
     creator: {
       id: string;
       username: string;
@@ -118,4 +119,5 @@ export interface ResolveDocumentInCorpusFullVariables {
   userSlug: string;
   corpusSlug: string;
   documentSlug: string;
+  versionNumber?: number | null;
 }

@@ -46,6 +46,7 @@ export interface QueryParams {
   homeView?: string | null; // "about" | "toc" - corpus home view selection
   tocExpanded?: boolean; // true to expand all TOC nodes
   view?: string | null; // "landing" | "details" - corpus detail view selection
+  version?: number | null; // Document version number (null = current version)
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
@@ -241,6 +242,9 @@ export function buildQueryParams(params: QueryParams): string {
   if (params.view && params.view !== "landing") {
     // Only add to URL if not default value
     searchParams.set("view", params.view);
+  }
+  if (params.version != null && params.version > 0) {
+    searchParams.set("v", String(params.version));
   }
 
   // Visualization state - only add non-default values to keep URLs clean
