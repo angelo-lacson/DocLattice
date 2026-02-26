@@ -290,7 +290,7 @@ export const cache = new InMemoryCache({
           keyArgs: ["userSlug", "documentSlug"],
         },
         documentInCorpusBySlugs: {
-          keyArgs: ["userSlug", "corpusSlug", "documentSlug"],
+          keyArgs: ["userSlug", "corpusSlug", "documentSlug", "versionNumber"],
         },
         resolveCorpus: {
           keyArgs: ["userIdent", "corpusIdent"],
@@ -366,6 +366,20 @@ export const allowUserInput = makeVar<boolean>(false);
  */
 export const documentSearchTerm = makeVar<string>("");
 export const openedDocument = makeVar<DocumentType | null>(null);
+
+/**
+ * Document version selection (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Tracks which version of the document is being viewed.
+ * - null: viewing current (latest) version (default)
+ * - number: viewing a specific historical version
+ *
+ * URL Examples:
+ *   /d/user/corpus/doc-slug             → selectedDocVersion(null) = current version
+ *   /d/user/corpus/doc-slug?v=1         → selectedDocVersion(1) = version 1
+ *   /d/user/corpus/doc-slug?v=2&ann=123 → selectedDocVersion(2) = version 2 with annotation
+ */
+export const selectedDocVersion = makeVar<number | null>(null);
 export const selectedDocumentIds = makeVar<string[]>([]);
 export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
