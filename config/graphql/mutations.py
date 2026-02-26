@@ -136,6 +136,7 @@ from config.graphql.worker_mutations import (
     CreateCorpusAccessTokenMutation,
     CreateWorkerAccount,
     DeactivateWorkerAccount,
+    ReactivateWorkerAccount,
     RevokeCorpusAccessTokenMutation,
 )
 from config.telemetry import record_event
@@ -6222,8 +6223,9 @@ class Mutation(graphene.ObjectType):
     update_component_secrets = UpdateComponentSecretsMutation.Field()
     delete_component_secrets = DeleteComponentSecretsMutation.Field()
 
-    # WORKER UPLOAD MUTATIONS (Superuser only) ####################################
+    # WORKER UPLOAD MUTATIONS ########################################################
     create_worker_account = CreateWorkerAccount.Field()
     deactivate_worker_account = DeactivateWorkerAccount.Field()
+    reactivate_worker_account = ReactivateWorkerAccount.Field()
     create_corpus_access_token = CreateCorpusAccessTokenMutation.Field()
     revoke_corpus_access_token = RevokeCorpusAccessTokenMutation.Field()

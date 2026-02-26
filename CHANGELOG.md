@@ -5,7 +5,23 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-24
+## [Unreleased] - 2026-02-25
+
+### Added
+
+#### Worker Upload Management UI and Documentation (#955)
+- **GraphQL queries**: `workerAccounts`, `corpusAccessTokens`, `workerDocumentUploads` resolvers with proper permission checks (superuser-only for accounts, superuser/corpus-creator for tokens and uploads) (`config/graphql/queries.py`)
+- **ReactivateWorkerAccount mutation**: Allows superusers to re-enable previously deactivated worker accounts (`config/graphql/worker_mutations.py`)
+- **Worker Account management page**: New admin page at `/admin/worker-accounts` for creating, listing, and activating/deactivating worker service accounts (`frontend/src/components/admin/WorkerAccountManagement.tsx`)
+- **Worker Access Tokens section in Corpus Settings**: Corpus creators and superusers can view, create, and revoke access tokens scoped to their corpus. Includes one-time key display with copy-to-clipboard (`frontend/src/components/corpuses/settings/WorkerTokensSection.tsx`)
+- **Documentation walkthrough**: End-to-end guide covering account creation, token management, document upload (with curl/Python examples), metadata format reference, rate limiting, error handling, and security model (`docs/worker_uploads/walkthrough.md`)
+- **Component tests**: Playwright component tests for WorkerAccountManagement with automated documentation screenshots
+
+### Changed
+
+#### Worker Upload Permission Expansion (#955)
+- `CreateCorpusAccessTokenMutation` and `RevokeCorpusAccessTokenMutation` now allow corpus creators (not just superusers) to manage tokens scoped to their own corpora
+- GlobalSettingsPanel refreshed with OS Legal design tokens and lucide-react icons, replacing Semantic UI dependencies
 
 ### Fixed
 

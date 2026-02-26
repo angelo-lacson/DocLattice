@@ -94,7 +94,8 @@ services:
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
-    command: /start-celeryworker
+    command: >
+      bash -c 'watchfiles --target-type command "celery -A config.celery_app worker -l INFO --concurrency=1 -Q celery,worker_uploads"'
 
 
   celerybeat:
