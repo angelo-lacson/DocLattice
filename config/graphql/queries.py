@@ -108,6 +108,7 @@ from config.graphql.ratelimits import (
 from config.graphql.worker_mutations import (
     CorpusAccessTokenQueryType,
     WorkerAccountQueryType,
+    WorkerDocumentUploadPageType,
     WorkerDocumentUploadQueryType,
 )
 from opencontractserver.analyzer.models import Analyzer, GremlinEngine
@@ -4429,10 +4430,15 @@ class Query(graphene.ObjectType):
         description="List access tokens for a corpus. Superuser or corpus creator.",
     )
 
-    worker_document_uploads = graphene.List(
-        WorkerDocumentUploadQueryType,
+    worker_document_uploads = graphene.Field(
+        WorkerDocumentUploadPageType,
         corpus_id=graphene.Int(required=True),
         status=graphene.String(required=False),
+        limit=graphene.Int(
+            required=False,
+            description=f"Max results (default/max {WORKER_UPLOADS_QUERY_LIMIT})",
+        ),
+        offset=graphene.Int(required=False, description="Pagination offset"),
         description="List worker uploads for a corpus. Superuser or corpus creator.",
     )
 
@@ -4511,7 +4517,9 @@ class Query(graphene.ObjectType):
         ]
 
     @login_required
-    def resolve_worker_document_uploads(self, info, corpus_id, status=None):
+    def resolve_worker_document_uploads(
+        self, info, corpus_id, status=None, limit=None, offset=None
+    ):
         user = info.context.user
         qs = Corpus.objects.filter(id=corpus_id)
         if not user.is_superuser:
@@ -4524,7 +4532,15 @@ class Query(graphene.ObjectType):
         if status:
             qs = qs.filter(status=status.upper())
 
-        return [
+        total_count = qs.count()
+
+        effective_limit = min(
+            limit or WORKER_UPLOADS_QUERY_LIMIT, WORKER_UPLOADS_QUERY_LIMIT
+        )
+        effective_offset = max(offset or 0, 0)
+        page = qs[effective_offset : effective_offset + effective_limit]
+
+        items = [
             WorkerDocumentUploadQueryType(
                 id=str(u.id),
                 corpus_id=u.corpus_id,
@@ -4535,8 +4551,14 @@ class Query(graphene.ObjectType):
                 processing_started=u.processing_started,
                 processing_finished=u.processing_finished,
             )
-            for u in qs[:WORKER_UPLOADS_QUERY_LIMIT]
+            for u in page
         ]
+        return WorkerDocumentUploadPageType(
+            items=items,
+            total_count=total_count,
+            limit=effective_limit,
+            offset=effective_offset,
+        )
 
     # DEBUG FIELD ########################################
     if settings.ALLOW_GRAPHQL_DEBUG:

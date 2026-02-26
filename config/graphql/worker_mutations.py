@@ -107,6 +107,15 @@ class WorkerDocumentUploadQueryType(graphene.ObjectType):
     processing_finished = graphene.DateTime()
 
 
+class WorkerDocumentUploadPageType(graphene.ObjectType):
+    """Paginated wrapper for worker document uploads."""
+
+    items = graphene.List(graphene.NonNull(WorkerDocumentUploadQueryType))
+    total_count = graphene.Int(description="Total matching uploads before pagination")
+    limit = graphene.Int(description="Max items returned")
+    offset = graphene.Int(description="Items skipped")
+
+
 # ============================================================================
 # Mutations
 # ============================================================================

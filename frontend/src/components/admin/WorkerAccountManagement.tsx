@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { gql, useQuery, useMutation } from "@apollo/client";
+import { gql, useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
@@ -22,6 +22,7 @@ import {
   OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
 } from "../../assets/configurations/osLegalStyles";
+import { backendUserObj } from "../../graphql/cache";
 
 // ---------------------------------------------------------------------------
 // GraphQL operations
@@ -161,7 +162,7 @@ const TruncatedCell = styled.span`
 // ---------------------------------------------------------------------------
 
 interface WorkerAccount {
-  id: string;
+  id: number;
   name: string;
   description: string | null;
   isActive: boolean;
@@ -186,12 +187,17 @@ const initialFormState: FormState = {
 
 export const WorkerAccountManagement: React.FC = () => {
   const navigate = useNavigate();
+  const currentUser = useReactiveVar(backendUserObj);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formState, setFormState] = useState<FormState>(initialFormState);
   const [accountToDeactivate, setAccountToDeactivate] =
     useState<WorkerAccount | null>(null);
 
-  const { loading, error, data, refetch } = useQuery(GET_WORKER_ACCOUNTS);
+  const isSuperuser = currentUser?.isSuperuser === true;
+
+  const { loading, error, data, refetch } = useQuery(GET_WORKER_ACCOUNTS, {
+    skip: !isSuperuser,
+  });
 
   const [createAccount, { loading: creating }] = useMutation(
     CREATE_WORKER_ACCOUNT,
@@ -248,7 +254,7 @@ export const WorkerAccountManagement: React.FC = () => {
       setAccountToDeactivate(account);
     } else {
       reactivateAccount({
-        variables: { workerAccountId: parseInt(account.id, 10) },
+        variables: { workerAccountId: account.id },
       });
     }
   };
@@ -256,13 +262,24 @@ export const WorkerAccountManagement: React.FC = () => {
   const handleConfirmDeactivate = () => {
     if (accountToDeactivate) {
       deactivateAccount({
-        variables: { workerAccountId: parseInt(accountToDeactivate.id, 10) },
+        variables: { workerAccountId: accountToDeactivate.id },
       });
       setAccountToDeactivate(null);
     }
   };
 
   const accounts: WorkerAccount[] = data?.workerAccounts ?? [];
+
+  if (!isSuperuser) {
+    return (
+      <Container>
+        <Message warning>
+          <Message.Header>Access Denied</Message.Header>
+          <p>Only administrators can manage worker accounts.</p>
+        </Message>
+      </Container>
+    );
+  }
 
   if (loading) {
     return (

@@ -272,6 +272,7 @@ export const GlobalSettingsPanel: React.FC = () => {
           return (
             <SettingsCard
               key={item.id}
+              data-testid={`settings-card-${item.id}`}
               $disabled={item.comingSoon}
               onClick={() => handleCardClick(item)}
             >
