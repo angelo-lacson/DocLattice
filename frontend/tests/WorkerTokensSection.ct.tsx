@@ -238,13 +238,13 @@ test.describe("WorkerTokensSection", () => {
     await docScreenshot(page, "corpus--worker-tokens--create-modal");
   });
 
-  test("hides create button for non-superuser corpus creator", async ({
+  test("shows create button for non-superuser corpus creator", async ({
     mount,
     page,
   }) => {
     await mount(
       <WorkerTokensSectionTestWrapper
-        mocks={[tokenQueryMock]}
+        mocks={[tokenQueryMock, accountsQueryMock]}
         isSuperuser={false}
         isCreator={true}
       />
@@ -257,7 +257,32 @@ test.describe("WorkerTokensSection", () => {
     // Token list should still render
     await expect(page.getByText("a1b2c3d4...")).toBeVisible();
 
-    // But Create Token button should not be visible
+    // Corpus creators can create tokens
+    await expect(
+      page.getByRole("button", { name: "Create Token" })
+    ).toBeVisible();
+  });
+
+  test("hides create button for non-superuser non-creator", async ({
+    mount,
+    page,
+  }) => {
+    await mount(
+      <WorkerTokensSectionTestWrapper
+        mocks={[tokenQueryMock]}
+        isSuperuser={false}
+        isCreator={false}
+      />
+    );
+
+    await expect(page.getByText("Worker Access Tokens")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Token list should still render
+    await expect(page.getByText("a1b2c3d4...")).toBeVisible();
+
+    // Non-creator, non-superuser should not see Create Token button
     await expect(
       page.getByRole("button", { name: "Create Token" })
     ).not.toBeVisible();
