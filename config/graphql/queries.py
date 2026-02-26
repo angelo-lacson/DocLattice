@@ -219,6 +219,13 @@ class Query(graphene.ObjectType):
         user_slug=graphene.String(required=True),
         corpus_slug=graphene.String(required=True),
         document_slug=graphene.String(required=True),
+        version_number=graphene.Int(
+            required=False,
+            description=(
+                "Optional version number to resolve a specific historical version. "
+                "When omitted, returns the current (latest) version."
+            ),
+        ),
     )
 
     def resolve_me(self, info):
@@ -281,7 +288,7 @@ class Query(graphene.ObjectType):
         return qs.first()
 
     def resolve_document_in_corpus_by_slugs(
-        self, info, user_slug, corpus_slug, document_slug
+        self, info, user_slug, corpus_slug, document_slug, version_number=None
     ):
         from django.contrib.auth import get_user_model
 
@@ -306,7 +313,33 @@ class Query(graphene.ObjectType):
         )
         if not doc:
             return None
-        # Validate membership via DocumentPath (dual-tree versioning model)
+
+        if version_number is not None:
+            # Resolve a specific historical version in a single query:
+            # Push visibility check into the path query via document__in
+            # subquery, avoiding a separate exists() round-trip.
+            visible_version_docs = (
+                Document.objects.filter(
+                    version_tree_id=doc.version_tree_id,
+                )
+                .visible_to_user(info.context.user)
+                .only("pk")
+            )
+            path_record = (
+                DocumentPath.objects.filter(
+                    document__in=visible_version_docs,
+                    corpus=corpus,
+                    version_number=version_number,
+                    is_deleted=False,
+                )
+                .select_related("document")
+                .first()
+            )
+            if not path_record:
+                return None
+            return path_record.document
+
+        # Default: validate membership via DocumentPath (current version)
         if not DocumentPath.objects.filter(
             document=doc, corpus=corpus, is_current=True, is_deleted=False
         ).exists():
