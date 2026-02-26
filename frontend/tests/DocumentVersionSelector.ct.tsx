@@ -15,10 +15,6 @@ const singleVersionMock = {
     data: {
       document: {
         id: DOC_ID,
-        versionCount: 1,
-        hasVersionHistory: false,
-        isLatestVersion: true,
-        versionNumber: 1,
         corpusVersions: [
           {
             versionNumber: 1,
@@ -42,10 +38,6 @@ const multiVersionMock = {
     data: {
       document: {
         id: DOC_ID,
-        versionCount: 3,
-        hasVersionHistory: true,
-        isLatestVersion: true,
-        versionNumber: 3,
         corpusVersions: [
           {
             versionNumber: 1,
@@ -207,6 +199,114 @@ test.describe("DocumentVersionSelector", () => {
     await page.getByTestId("outside").click();
 
     // Verify the listbox is no longer visible
+    await expect(page.getByRole("listbox")).not.toBeVisible();
+  });
+
+  test("navigates options with arrow keys", async ({ mount, page }) => {
+    const component = await mount(
+      <DocumentVersionSelectorTestWrapper
+        mocks={[multiVersionMock, multiVersionMock]}
+      >
+        <DocumentVersionSelector documentId={DOC_ID} corpusId={CORPUS_ID} />
+      </DocumentVersionSelectorTestWrapper>
+    );
+
+    // Wait for the pill to appear and click to open
+    const pill = page.locator("button[aria-haspopup='listbox']");
+    await expect(pill).toBeVisible();
+    await pill.click();
+
+    // Listbox should open with the current version (v3) focused.
+    // Sorted descending: [v3, v2, v1] → index 0 = v3
+    const listbox = page.getByRole("listbox");
+    await expect(listbox).toBeVisible();
+
+    // The pill should reference the active descendant
+    await expect(pill).toHaveAttribute(
+      "aria-activedescendant",
+      "version-option-3"
+    );
+
+    // Press ArrowDown to move focus to v2
+    await page.keyboard.press("ArrowDown");
+    await expect(pill).toHaveAttribute(
+      "aria-activedescendant",
+      "version-option-2"
+    );
+
+    // Press ArrowDown again to move to v1
+    await page.keyboard.press("ArrowDown");
+    await expect(pill).toHaveAttribute(
+      "aria-activedescendant",
+      "version-option-1"
+    );
+
+    // ArrowDown at the end should stay on v1
+    await page.keyboard.press("ArrowDown");
+    await expect(pill).toHaveAttribute(
+      "aria-activedescendant",
+      "version-option-1"
+    );
+
+    // ArrowUp should move back to v2
+    await page.keyboard.press("ArrowUp");
+    await expect(pill).toHaveAttribute(
+      "aria-activedescendant",
+      "version-option-2"
+    );
+  });
+
+  test("Home and End keys jump to first and last options", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <DocumentVersionSelectorTestWrapper
+        mocks={[multiVersionMock, multiVersionMock]}
+      >
+        <DocumentVersionSelector documentId={DOC_ID} corpusId={CORPUS_ID} />
+      </DocumentVersionSelectorTestWrapper>
+    );
+
+    const pill = page.locator("button[aria-haspopup='listbox']");
+    await expect(pill).toBeVisible();
+    await pill.click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+
+    // End key should focus the last option (v1 at index 2)
+    await page.keyboard.press("End");
+    await expect(pill).toHaveAttribute(
+      "aria-activedescendant",
+      "version-option-1"
+    );
+
+    // Home key should focus the first option (v3 at index 0)
+    await page.keyboard.press("Home");
+    await expect(pill).toHaveAttribute(
+      "aria-activedescendant",
+      "version-option-3"
+    );
+  });
+
+  test("Enter key selects the focused option", async ({ mount, page }) => {
+    const component = await mount(
+      <DocumentVersionSelectorTestWrapper
+        mocks={[multiVersionMock, multiVersionMock]}
+      >
+        <DocumentVersionSelector documentId={DOC_ID} corpusId={CORPUS_ID} />
+      </DocumentVersionSelectorTestWrapper>
+    );
+
+    const pill = page.locator("button[aria-haspopup='listbox']");
+    await expect(pill).toBeVisible();
+    await pill.click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+
+    // Navigate down to v2 and press Enter
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+
+    // Dropdown should close after selection
     await expect(page.getByRole("listbox")).not.toBeVisible();
   });
 });
