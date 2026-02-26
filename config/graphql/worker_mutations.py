@@ -280,15 +280,12 @@ class RevokeCorpusAccessTokenMutation(graphene.Mutation):
     def mutate(root, info, token_id):
         user = info.context.user
 
-        try:
-            token = CorpusAccessToken.objects.select_related("corpus").get(id=token_id)
-        except CorpusAccessToken.DoesNotExist:
-            raise GraphQLError("Token not found.")
-
-        if not user.is_superuser and (
-            not token.corpus.creator or token.corpus.creator != user
-        ):
-            raise GraphQLError("Permission denied.")
+        qs = CorpusAccessToken.objects.select_related("corpus").filter(id=token_id)
+        if not user.is_superuser:
+            qs = qs.filter(corpus__creator=user)
+        token = qs.first()
+        if token is None:
+            raise GraphQLError("Not found or permission denied.")
 
         token.is_active = False
         token.save(update_fields=["is_active"])
