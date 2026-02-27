@@ -3,6 +3,14 @@
  */
 
 /**
+ * Convert a raw database ID to a GraphQL global ID.
+ * Graphene-Django with Relay uses base64-encoded "{TypeName}:{id}" format.
+ */
+export function toGlobalId(typeName: string, id: number | string): string {
+  return btoa(`${typeName}:${id}`);
+}
+
+/**
  * Checks if a value is a valid GraphQL ID (base64 encoded, gid: prefixed, or numeric)
  */
 export function isValidGraphQLId(value: string | undefined | null): boolean {

@@ -130,6 +130,14 @@ import { CorpusDashboard } from "../components/corpuses/CorpusDashboard";
 import { useCorpusState } from "../components/annotator/context/CorpusAtom";
 import { CorpusSettings } from "../components/corpuses/CorpusSettings";
 import { CorpusChat } from "../components/corpuses/CorpusChat";
+import { ChatMessageSource } from "../components/annotator/context/ChatSourceAtom";
+import {
+  encodeTextBlock,
+  textBlockFromSpan,
+  textBlockFromTokensByPage,
+} from "../utils/textBlockEncoding";
+import { buildQueryParams } from "../utils/navigationUtils";
+import { toGlobalId } from "../utils/idValidation";
 import { CorpusHome } from "../components/corpuses/CorpusHome";
 import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptionEditor";
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
@@ -357,6 +365,7 @@ const CorpusQueryView = ({
   stats,
   statsLoading,
   onOpenMobileMenu,
+  onSourceNavigate,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
@@ -372,6 +381,7 @@ const CorpusQueryView = ({
   };
   statsLoading: boolean;
   onOpenMobileMenu?: () => void;
+  onSourceNavigate?: (source: ChatMessageSource) => void;
 }) => {
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -508,6 +518,7 @@ const CorpusQueryView = ({
             initialQuery={searchQuery}
             setShowLoad={() => {}}
             onMessageSelect={() => {}}
+            onSourceNavigate={onSourceNavigate}
             forceNewChat={true}
             onClose={resetToSearch}
           />
@@ -598,6 +609,7 @@ const CorpusQueryView = ({
             showLoad={true}
             setShowLoad={() => {}}
             onMessageSelect={() => {}}
+            onSourceNavigate={onSourceNavigate}
           />
         </div>
       </motion.div>
@@ -1583,6 +1595,65 @@ export const Corpuses = () => {
   const currentSelectedThreadId = useReactiveVar(selectedThreadId);
   const discussionInThreadView = currentSelectedThreadId !== null;
 
+  /**
+   * Navigate to a source document with text block highlighting.
+   * Called from CorpusChat when a user clicks a source citation.
+   * Builds a deep link URL with ?tb= param and navigates to the document.
+   */
+  const handleSourceNavigate = useCallback(
+    (source: ChatMessageSource) => {
+      if (!source.document_id || !opened_corpus) return;
+
+      // Validate corpus has slug data. This should always be present when
+      // viewing a corpus (resolved from a slug-based URL by CentralRouteManager).
+      // Falling back to opened_corpus.id (a Relay global ID) would produce an
+      // unresolvable URL like /d/user/Q29ycHVzVHlwZTo1/... that 404s.
+      if (!opened_corpus.slug || !opened_corpus.creator?.slug) {
+        console.warn(
+          "Cannot navigate to source: corpus missing slug data",
+          opened_corpus
+        );
+        return;
+      }
+
+      // Build the text block encoding from source data
+      let textBlock: string | null = null;
+      if (
+        source.isTextBased &&
+        typeof source.startIndex === "number" &&
+        typeof source.endIndex === "number"
+      ) {
+        textBlock = encodeTextBlock(
+          textBlockFromSpan(source.startIndex, source.endIndex)
+        );
+      } else if (
+        source.tokensByPage &&
+        Object.keys(source.tokensByPage).length > 0
+      ) {
+        textBlock = encodeTextBlock(
+          textBlockFromTokensByPage(source.tokensByPage)
+        );
+      }
+
+      // Bail out if we couldn't build a text block reference —
+      // navigating without ?tb= would be a silent no-op.
+      if (!textBlock) return;
+
+      // We only have the document's raw database ID from the WebSocket source,
+      // not its slug, so we use a Relay global ID for the document segment.
+      // CentralRouteManager Phase 1 detects this as a GraphQL ID and resolves
+      // it via resolveDocumentById, then redirects to the canonical slug URL.
+      // The corpus segment uses validated slugs from the already-resolved corpus.
+      const docGraphQLId = toGlobalId("DocumentType", source.document_id);
+      const queryString = buildQueryParams({ textBlock });
+
+      navigate(
+        `/d/${opened_corpus.creator.slug}/${opened_corpus.slug}/${docGraphQLId}${queryString}`
+      );
+    },
+    [opened_corpus, navigate]
+  );
+
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setDocumentsViewMode(mode);
   }, []);
@@ -2204,6 +2275,7 @@ export const Corpuses = () => {
             stats={stats}
             statsLoading={effectiveStatsLoading}
             onOpenMobileMenu={() => setMobileSidebarOpen(true)}
+            onSourceNavigate={handleSourceNavigate}
           />
         ),
       },
@@ -2429,6 +2501,7 @@ export const Corpuses = () => {
                 corpusId={opened_corpus.id}
                 showLoad={true}
                 onMessageSelect={() => {}}
+                onSourceNavigate={handleSourceNavigate}
                 setShowLoad={() => {}}
                 onViewModeChange={setChatInConversation}
                 onClose={() => setActiveTab(0)}
