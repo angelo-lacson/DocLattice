@@ -377,6 +377,10 @@ class ApproveDatacell(graphene.Mutation):
 
 
 class RejectDatacell(graphene.Mutation):
+    # NOTE(deferred): Datacell-level permissions would add significant overhead.
+    # Currently access is scoped to creator via `Datacell.objects.get(pk=pk, creator=user)`.
+    # If multi-user extract collaboration is needed, permissions should inherit
+    # from the parent corpus/extract rather than being set per-cell.
 
     class Arguments:
         datacell_id = graphene.String(required=True)
@@ -407,6 +411,10 @@ class RejectDatacell(graphene.Mutation):
 
 
 class EditDatacell(graphene.Mutation):
+    # NOTE(deferred): Datacell-level permissions would add significant overhead.
+    # Currently access is scoped to creator via `Datacell.objects.get(pk=pk, creator=user)`.
+    # If multi-user extract collaboration is needed, permissions should inherit
+    # from the parent corpus/extract rather than being set per-cell.
 
     class Arguments:
         datacell_id = graphene.String(required=True)
