@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DocumentKnowledgeBase.tsx** (3,363 → 2,322 lines): Extracted styled components (`document_kb/styles.ts`), zoom management hook (`useZoomManager.ts`), RightPanelContent, DocumentModals, and ContextBar components.
 - **ChatTray.tsx** (2,215 → 1,772 lines): Extracted ApprovalOverlay, ConversationListView, and chat utility functions (`chatUtils.ts`).
 - **DRY consolidation**: Extracted shared chat WebSocket types (WebSocketSources, MessageData, ContextStatus, CompactionNotice) from ChatTray and CorpusChat into canonical `components/chat/types.ts`, eliminating duplicate type definitions across 6 files.
+- **ConversationListView naming**: Renamed duplicate `ConversationListView` components to `CorpusConversationListView` (corpus chat) and `DocumentConversationListView` (document chat tray) to eliminate naming collision.
+- **STAGE_CONFIG**: Moved runtime constant from `system_settings/types.ts` to `system_settings/config.ts` (Single Responsibility Principle).
+- **EmptyStates.tsx**: Moved from `styled/` to `document_kb/` since it exports a React component, not just styled-component definitions.
+- **RightPanelContent.tsx**: Converted inline style objects to styled-components (`FlexColumnPanel`, `ExtractHeader`, etc.) for consistency.
+- **useZoomManager**: Extracted `getTouchDistance` to module level; internalized timer cleanup via `useEffect` instead of exposing refs; eliminated stale closure in zoom handlers using `zoomLevelRef`.
+- **chatUtils.ts**: Added empty-array guard in `calculateMessageStats`; replaced `Math.max(...spread)` with `reduce` to prevent stack overflow on large inputs; extracted magic numbers to `MESSAGE_COUNT_COLORS` constant.
+- **chat/types.ts**: Replaced `any` types with explicit typed properties (`args`, `pending_tool_call.arguments`, `decision`, `error`, `context_status`, `compaction`, `approval_decision`).
+- **DocumentKnowledgeBase.tsx**: Memoized `getPanelWidthPercentage` with `useCallback` to prevent auto-zoom effect from re-running on every render.
 
 ### Fixed
 

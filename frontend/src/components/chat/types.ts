@@ -38,13 +38,27 @@ export interface MessageData {
     timeline?: TimelineEntry[];
     message_id?: string;
     tool_name?: string;
-    args?: any;
+    args?: Record<string, unknown>;
+    tool_result?: string;
     pending_tool_call?: {
       name: string;
-      arguments: any;
+      arguments: Record<string, unknown>;
       tool_call_id?: string;
     };
-    [key: string]: any;
+    /** Approval decision echo from backend */
+    decision?: string;
+    /** Approval decision used in document chat flow */
+    approval_decision?: string;
+    /** Error description from backend */
+    error?: string;
+    /** Context status metadata (token usage, compaction info) */
+    context_status?: ContextStatus;
+    /** Context compaction notice */
+    compaction?: {
+      tokens_before: number;
+      tokens_after: number;
+      context_window: number;
+    };
   };
 }
 

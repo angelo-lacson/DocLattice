@@ -248,6 +248,39 @@ export const CloseButton = styled.button`
   }
 `;
 
+export const FlexColumnPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+`;
+
+export const ExtractHeader = styled.div`
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
+export const ExtractHeaderTitle = styled.div`
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1e293b;
+`;
+
+export const ExtractHeaderSubtitle = styled.div`
+  font-size: 0.875rem;
+  color: #64748b;
+`;
+
+export const OverflowHiddenFill = styled.div`
+  flex: 1;
+  overflow: hidden;
+`;
+
 export const SidebarHeader = styled.div`
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #e2e8f0;

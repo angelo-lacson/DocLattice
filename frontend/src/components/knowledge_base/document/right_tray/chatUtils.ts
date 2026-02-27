@@ -3,6 +3,8 @@
  * These have no React dependencies and operate on plain data.
  */
 
+import { MESSAGE_COUNT_COLORS } from "../../../../assets/configurations/constants";
+
 export interface MessageStats {
   max: number;
   min: number;
@@ -29,8 +31,13 @@ export const calculateMessageStats = (
   const counts = conversations.map(
     (conv) => conv?.chatMessages?.totalCount || 0
   );
-  const max = Math.max(...counts);
-  const min = Math.min(...counts);
+
+  if (counts.length === 0) {
+    return { max: 0, min: 0, mean: 0, stdDev: 0 };
+  }
+
+  const max = counts.reduce((a, b) => Math.max(a, b), 0);
+  const min = counts.reduce((a, b) => Math.min(a, b), Infinity);
   const sum = counts.reduce((a, b) => a + b, 0);
   const mean = sum / counts.length;
 
@@ -54,11 +61,13 @@ export const getMessageCountColor = (
   count: number,
   stats: MessageStats
 ): MessageCountColorStyle => {
+  const C = MESSAGE_COUNT_COLORS;
+
   if (count === 0) {
     return {
-      background: "linear-gradient(135deg, #EDF2F7 0%, #E2E8F0 100%)",
-      opacity: 0.9,
-      textColor: "#4A5568", // Dark text for zero count
+      background: `linear-gradient(135deg, ${C.ZERO_GRADIENT_START} 0%, ${C.ZERO_GRADIENT_END} 100%)`,
+      opacity: C.ZERO_OPACITY,
+      textColor: C.ZERO_TEXT,
     };
   }
 
@@ -71,9 +80,13 @@ export const getMessageCountColor = (
   // Create gradient based on intensity
   return {
     background: `linear-gradient(135deg,
-      rgba(43, 108, 176, ${0.7 + intensity * 0.3}) 0%,
-      rgba(44, 82, 130, ${0.8 + intensity * 0.2}) 100%)`,
-    opacity: 0.8 + intensity * 0.2,
-    textColor: intensity > 0.3 ? "white" : "#1A202C", // Flip text color based on intensity
+      rgba(${C.PRIMARY_R}, ${C.PRIMARY_G}, ${C.PRIMARY_B}, ${
+      C.BASE_ALPHA_START + intensity * C.INTENSITY_ALPHA_START
+    }) 0%,
+      rgba(${C.SECONDARY_R}, ${C.SECONDARY_G}, ${C.SECONDARY_B}, ${
+      C.BASE_ALPHA_END + intensity * C.INTENSITY_ALPHA_END
+    }) 100%)`,
+    opacity: C.BASE_OPACITY + intensity * C.INTENSITY_OPACITY,
+    textColor: intensity > C.LIGHT_TEXT_THRESHOLD ? C.LIGHT_TEXT : C.DARK_TEXT,
   };
 };

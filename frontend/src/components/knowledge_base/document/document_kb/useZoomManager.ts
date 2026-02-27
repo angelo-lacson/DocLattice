@@ -1,6 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { routingLogger } from "../../../../utils/routingLogger";
 
+/** Calculate distance between two touch points (pure helper, no closure deps). */
+function getTouchDistance(touches: TouchList): number {
+  if (touches.length < 2) return 0;
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 interface UseZoomManagerParams {
   zoomLevel: number;
   setZoomLevel: (zoom: number) => void;
@@ -15,8 +23,6 @@ interface UseZoomManagerParams {
 interface UseZoomManagerReturn {
   /** Whether the zoom indicator overlay is visible */
   showZoomIndicator: boolean;
-  /** Timer ref for zoom indicator auto-hide */
-  zoomIndicatorTimer: React.MutableRefObject<NodeJS.Timeout | undefined>;
   /** Whether auto-zoom on sidebar open/close is enabled */
   autoZoomEnabled: boolean;
   setAutoZoomEnabled: (enabled: boolean) => void;
@@ -32,8 +38,6 @@ interface UseZoomManagerReturn {
   handleTouchMove: (event: TouchEvent) => void;
   /** Touch end handler for pinch zoom */
   handleTouchEnd: (event: TouchEvent) => void;
-  /** Cleanup function for unmount */
-  cleanupZoomIndicatorTimer: () => void;
 }
 
 /**
@@ -58,6 +62,10 @@ export function useZoomManager({
   // Zoom indicator state
   const [showZoomIndicator, setShowZoomIndicator] = useState(false);
   const zoomIndicatorTimer = useRef<NodeJS.Timeout>();
+
+  // Ref to always access the latest zoomLevel without stale closures
+  const zoomLevelRef = useRef<number>(zoomLevel);
+  zoomLevelRef.current = zoomLevel;
 
   // Auto-zoom state
   const [autoZoomEnabled, setAutoZoomEnabled] = useState<boolean>(true);
@@ -91,6 +99,8 @@ export function useZoomManager({
   }, []);
 
   // Browser zoom event handlers
+  // These use zoomLevelRef to read the latest value without re-creating the
+  // callback (and re-attaching the event listener) on every zoom change.
   const handleWheelZoom = useCallback(
     (event: WheelEvent) => {
       // Only handle if in document layer and Ctrl/Cmd is pressed
@@ -103,12 +113,10 @@ export function useZoomManager({
 
       // Calculate zoom delta (normalize across browsers)
       const delta = event.deltaY > 0 ? -0.1 : 0.1;
-      const newZoom = Math.max(0.5, Math.min(4, zoomLevel + delta));
-
-      setZoomLevel(newZoom);
+      setZoomLevel(Math.max(0.5, Math.min(4, zoomLevelRef.current + delta)));
       showZoomFeedback();
     },
-    [activeLayer, zoomLevel, setZoomLevel, showZoomFeedback]
+    [activeLayer, setZoomLevel, showZoomFeedback]
   );
 
   const handleKeyboardZoom = useCallback(
@@ -125,13 +133,13 @@ export function useZoomManager({
         case "+":
         case "=": // Handle both + and = (same key without shift)
           event.preventDefault();
-          setZoomLevel(Math.min(zoomLevel + 0.1, 4));
+          setZoomLevel(Math.min(zoomLevelRef.current + 0.1, 4));
           handled = true;
           break;
         case "-":
         case "_": // Handle both - and _ (same key without shift)
           event.preventDefault();
-          setZoomLevel(Math.max(zoomLevel - 0.1, 0.5));
+          setZoomLevel(Math.max(zoomLevelRef.current - 0.1, 0.5));
           handled = true;
           break;
         case "0":
@@ -145,16 +153,8 @@ export function useZoomManager({
         showZoomFeedback();
       }
     },
-    [activeLayer, zoomLevel, setZoomLevel, showZoomFeedback]
+    [activeLayer, setZoomLevel, showZoomFeedback]
   );
-
-  // Helper function to calculate distance between two touch points
-  const getTouchDistance = (touches: TouchList): number => {
-    if (touches.length < 2) return 0;
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
 
   // Handle touch start for pinch zoom
   const handleTouchStart = useCallback(
@@ -382,15 +382,17 @@ export function useZoomManager({
     handleTouchEnd,
   ]);
 
-  const cleanupZoomIndicatorTimer = useCallback(() => {
-    if (zoomIndicatorTimer.current) {
-      clearTimeout(zoomIndicatorTimer.current);
-    }
+  // Cleanup zoom indicator timer on unmount
+  useEffect(() => {
+    return () => {
+      if (zoomIndicatorTimer.current) {
+        clearTimeout(zoomIndicatorTimer.current);
+      }
+    };
   }, []);
 
   return {
     showZoomIndicator,
-    zoomIndicatorTimer,
     autoZoomEnabled,
     setAutoZoomEnabled,
     showZoomFeedback,
@@ -399,6 +401,5 @@ export function useZoomManager({
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
-    cleanupZoomIndicatorTimer,
   };
 }

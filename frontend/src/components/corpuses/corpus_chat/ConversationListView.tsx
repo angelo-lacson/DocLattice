@@ -73,7 +73,9 @@ interface ConversationListViewProps {
  * the scrollable grid of conversation cards with infinite scroll,
  * and an empty-state placeholder when no conversations exist.
  */
-export const ConversationListView: React.FC<ConversationListViewProps> = ({
+export const CorpusConversationListView: React.FC<
+  ConversationListViewProps
+> = ({
   conversations,
   onLoadConversation,
   onStartNewChat,

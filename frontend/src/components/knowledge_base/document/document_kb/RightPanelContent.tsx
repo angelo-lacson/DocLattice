@@ -9,6 +9,11 @@ import {
 } from "../../../../types/graphql-api";
 
 import {
+  FlexColumnPanel,
+  ExtractHeader,
+  ExtractHeaderTitle,
+  ExtractHeaderSubtitle,
+  OverflowHiddenFill,
   SidebarHeader,
   SidebarHeaderContent,
   SidebarHeaderTitle,
@@ -121,53 +126,21 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
   // Handle extract mode - show extract results
   if (sidebarViewMode === "extract" && selectedExtract) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            padding: "1rem 1.5rem",
-            borderBottom: "1px solid #e2e8f0",
-            background: "#f8fafc",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-          }}
-        >
+      <FlexColumnPanel>
+        <ExtractHeader>
           <Database size={20} style={{ color: "#8b5cf6" }} />
           <div style={{ flex: 1 }}>
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: "1rem",
-                color: "#1e293b",
-              }}
-            >
-              {selectedExtract.name}
-            </div>
-            <div
-              style={{
-                fontSize: "0.875rem",
-                color: "#64748b",
-              }}
-            >
-              Data Extract Results
-            </div>
+            <ExtractHeaderTitle>{selectedExtract.name}</ExtractHeaderTitle>
+            <ExtractHeaderSubtitle>Data Extract Results</ExtractHeaderSubtitle>
           </div>
-        </div>
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        </ExtractHeader>
+        <OverflowHiddenFill>
           <SingleDocumentExtractResults
             datacells={dataCells}
             columns={columns}
           />
-        </div>
-      </div>
+        </OverflowHiddenFill>
+      </FlexColumnPanel>
     );
   }
 
@@ -175,15 +148,7 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
   if (sidebarViewMode === "analysis" && selectedAnalysis) {
     const annotationCount = selectedAnalysis.annotations?.totalCount || 0;
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-        }}
-      >
+      <FlexColumnPanel>
         <SidebarHeader>
           <BarChart3 size={20} style={{ color: "#f59e0b" }} />
           <SidebarHeaderContent>
@@ -217,22 +182,14 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
             }}
           />
         </CompactAnnotationFeed>
-      </div>
+      </FlexColumnPanel>
     );
   }
 
   // Handle unified feed mode
   if (sidebarViewMode === "feed") {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-        }}
-      >
+      <FlexColumnPanel>
         {controlBar}
         <UnifiedContentFeed
           notes={notes}
@@ -252,7 +209,7 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
             }
           }}
         />
-      </div>
+      </FlexColumnPanel>
     );
   }
 
@@ -265,15 +222,7 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
 
   // Handle chat mode (default behavior)
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-        minHeight: 0,
-        overflow: "hidden",
-      }}
-    >
+    <FlexColumnPanel>
       {controlBar}
       <ChatTray
         setShowLoad={setShowLoad}
@@ -286,6 +235,6 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
         initialMessage={pendingChatMessage}
         readOnly={readOnly}
       />
-    </div>
+    </FlexColumnPanel>
   );
 };

@@ -1,4 +1,4 @@
-export { EmptyState, EmptyStateContainer } from "./EmptyStates";
+export { EmptyState, EmptyStateContainer } from "../document_kb/EmptyStates";
 export {
   HeaderContainer,
   MetadataRow,
