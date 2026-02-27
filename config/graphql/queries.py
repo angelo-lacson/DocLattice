@@ -25,6 +25,7 @@ from config.graphql.search_queries import SearchQueryMixin
 from config.graphql.slug_queries import SlugQueryMixin
 from config.graphql.social_queries import SocialQueryMixin
 from config.graphql.user_queries import UserQueryMixin
+from config.graphql.worker_queries import WorkerQueryMixin
 
 
 class Query(
@@ -40,6 +41,7 @@ class Query(
     ActionQueryMixin,
     PipelineQueryMixin,
     OGMetadataQueryMixin,
+    WorkerQueryMixin,
     graphene.ObjectType,
 ):
     if settings.ALLOW_GRAPHQL_DEBUG:

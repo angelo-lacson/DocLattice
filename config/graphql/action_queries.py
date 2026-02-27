@@ -6,6 +6,7 @@ import logging
 
 import graphene
 from graphene_django.fields import DjangoConnectionField
+from graphql import GraphQLError
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
@@ -290,7 +291,7 @@ class ActionQueryMixin:
 
         # Validate document_id is required and not empty
         if not document_pk:
-            raise Exception("documentId is required and must be a valid ID")
+            raise GraphQLError("documentId is required and must be a valid ID")
 
         # Use centralized permission-aware optimizer
         actions = DocumentActionsQueryOptimizer.get_document_actions(
