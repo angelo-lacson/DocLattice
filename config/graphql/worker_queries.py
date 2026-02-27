@@ -1,8 +1,5 @@
 """
-Worker upload query resolvers.
-
-Provides GraphQL queries for worker accounts, corpus access tokens,
-and worker document uploads.
+GraphQL query mixin for worker upload management queries.
 """
 
 import logging
@@ -30,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 class WorkerQueryMixin:
+    """Query fields and resolvers for worker upload management."""
+
     worker_accounts = graphene.List(
         WorkerAccountQueryType,
         name_contains=graphene.String(required=False),
