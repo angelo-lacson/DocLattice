@@ -243,8 +243,8 @@ export const WorkerAccountManagement: React.FC = () => {
   const handleCreate = () => {
     createAccount({
       variables: {
-        name: formState.name,
-        description: formState.description || null,
+        name: formState.name.trim(),
+        description: formState.description.trim() || null,
       },
     });
   };
@@ -425,7 +425,7 @@ export const WorkerAccountManagement: React.FC = () => {
           <Button
             primary
             loading={creating}
-            disabled={!formState.name || creating}
+            disabled={!formState.name.trim() || creating}
             onClick={handleCreate}
           >
             Create Account

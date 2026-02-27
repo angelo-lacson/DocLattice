@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CreateCorpusAccessTokenMutation` and `RevokeCorpusAccessTokenMutation` now allow corpus creators (not just superusers) to manage tokens scoped to their own corpora
 - GlobalSettingsPanel refreshed with OS Legal design tokens and lucide-react icons, replacing Semantic UI dependencies
 
+#### Auth0 Refresh Token Migration (#955)
+- **DEPLOYMENT NOTE**: `useRefreshTokens: true` is now enabled in the Auth0 SDK configuration (`frontend/src/index.tsx`). Deployments using Auth0 **must** enable "Refresh Token Rotation" in the Auth0 dashboard before deploying this change, or silent authentication will fail for all users.
+
 ### Fixed
 
 #### Document Version Structural Annotation Set Inheritance

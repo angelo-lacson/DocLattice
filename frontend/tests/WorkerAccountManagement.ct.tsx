@@ -25,7 +25,7 @@ const GET_WORKER_ACCOUNTS = gql`
 
 const mockWorkerAccounts = [
   {
-    id: "1",
+    id: 1,
     name: "Pipeline Uploader",
     description: "Automated document ingestion service",
     isActive: true,
@@ -34,7 +34,7 @@ const mockWorkerAccounts = [
     created: "2025-11-01T10:00:00Z",
   },
   {
-    id: "2",
+    id: 2,
     name: "CI Integration Bot",
     description: "Continuous integration worker for nightly imports",
     isActive: true,
@@ -43,7 +43,7 @@ const mockWorkerAccounts = [
     created: "2025-12-15T14:30:00Z",
   },
   {
-    id: "3",
+    id: 3,
     name: "Legacy Importer",
     description: null,
     isActive: false,

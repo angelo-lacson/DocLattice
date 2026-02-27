@@ -96,8 +96,8 @@ const mockTokens = [
 ];
 
 const mockWorkerAccounts = [
-  { id: "1", name: "Pipeline Uploader" },
-  { id: "2", name: "OCR Service" },
+  { id: 1, name: "Pipeline Uploader" },
+  { id: 2, name: "OCR Service" },
 ];
 
 // ---------------------------------------------------------------------------
