@@ -17,8 +17,10 @@ from pydantic import validate_call
 from config import celery_app
 from opencontractserver.annotations.models import TOKEN_LABEL, Annotation
 from opencontractserver.constants import (
+    MAX_PROCESSING_ERROR_DISPLAY_LENGTH,
     MAX_PROCESSING_ERROR_LENGTH,
     MAX_PROCESSING_TRACEBACK_LENGTH,
+    NOTIFICATION_DOC_TITLE_MAX_LENGTH,
 )
 from opencontractserver.documents.models import Document, DocumentProcessingStatus
 from opencontractserver.notifications.models import (
@@ -125,7 +127,7 @@ def _create_document_processing_failed_notification(
     # Get document title for notification
     doc_title = document.title
     if not doc_title and document.description:
-        doc_title = document.description[:50]
+        doc_title = document.description[:NOTIFICATION_DOC_TITLE_MAX_LENGTH]
     if not doc_title:
         doc_title = "Untitled"
 
@@ -136,7 +138,7 @@ def _create_document_processing_failed_notification(
             data={
                 "document_id": document.id,
                 "document_title": doc_title,
-                "error_message": error_msg[:500],  # Limit for notification data
+                "error_message": error_msg[:MAX_PROCESSING_ERROR_DISPLAY_LENGTH],
                 "file_type": document.file_type,
             },
         )
@@ -256,7 +258,7 @@ def _create_document_processed_notifications(
     # Get document title for notification
     doc_title = document.title
     if not doc_title and document.description:
-        doc_title = document.description[:50]
+        doc_title = document.description[:NOTIFICATION_DOC_TITLE_MAX_LENGTH]
     if not doc_title:
         doc_title = "Untitled"
 

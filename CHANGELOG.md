@@ -5,7 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-25
+## [Unreleased] - 2026-02-27
+
+### Changed
+
+#### Extract Magic Numbers to Constants Files (Closes #970)
+- **`config/settings/base.py:66`**: Replaced hardcoded `5242880000` (5 GB upload limit) with `MAX_FILE_UPLOAD_SIZE_BYTES` from constants
+- **`opencontractserver/llms/tools/core_tools.py`**: Replaced `512` (note content truncation), `500` (default partial content end), `150` (page image DPI), and `100`/`97` (markdown link title limit) with named constants
+- **`opencontractserver/tasks/doc_tasks.py`**: Replaced `50` (notification doc title truncation) with `NOTIFICATION_DOC_TITLE_MAX_LENGTH` and `500` (notification error limit) with `MAX_PROCESSING_ERROR_DISPLAY_LENGTH`
+- **`opencontractserver/corpuses/models.py:1775-1776`**: Replaced `5000`/`10000` (error/traceback truncation in `CorpusActionExecution.mark_failed`) with existing `MAX_PROCESSING_ERROR_LENGTH`/`MAX_PROCESSING_TRACEBACK_LENGTH`
+- **New constants file**: `opencontractserver/constants/llm_tools.py` — `NOTE_CONTENT_PREVIEW_LENGTH`, `DEFAULT_PARTIAL_CONTENT_END`, `DEFAULT_PAGE_IMAGE_DPI`, `MARKDOWN_LINK_TITLE_MAX_LENGTH`
+- **New constants**: `MAX_FILE_UPLOAD_SIZE_BYTES` and `NOTIFICATION_DOC_TITLE_MAX_LENGTH` added to `opencontractserver/constants/document_processing.py`
 
 ### Added
 
