@@ -127,13 +127,9 @@ class CreateDocumentRelationship(graphene.Mutation):
             try:
                 source_doc = Document.objects.get(pk=source_doc_pk)
             except Document.DoesNotExist:
-                return CreateDocumentRelationship(
-                    ok=False,
-                    document_relationship=None,
-                    message="Source document not found",
-                )
+                source_doc = None
 
-            if not user_has_permission_for_obj(
+            if source_doc is None or not user_has_permission_for_obj(
                 info.context.user,
                 source_doc,
                 PermissionTypes.CREATE,
@@ -142,20 +138,16 @@ class CreateDocumentRelationship(graphene.Mutation):
                 return CreateDocumentRelationship(
                     ok=False,
                     document_relationship=None,
-                    message="You don't have permission to create relationships for the source document",
+                    message="Source document not found",
                 )
 
             # Fetch target document and check permission
             try:
                 target_doc = Document.objects.get(pk=target_doc_pk)
             except Document.DoesNotExist:
-                return CreateDocumentRelationship(
-                    ok=False,
-                    document_relationship=None,
-                    message="Target document not found",
-                )
+                target_doc = None
 
-            if not user_has_permission_for_obj(
+            if target_doc is None or not user_has_permission_for_obj(
                 info.context.user,
                 target_doc,
                 PermissionTypes.CREATE,
@@ -164,7 +156,7 @@ class CreateDocumentRelationship(graphene.Mutation):
                 return CreateDocumentRelationship(
                     ok=False,
                     document_relationship=None,
-                    message="You don't have permission to create relationships for the target document",
+                    message="Target document not found",
                 )
 
             # Validate both docs are in the corpus via DocumentPath
