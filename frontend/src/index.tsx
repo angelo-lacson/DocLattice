@@ -77,6 +77,19 @@ if (REACT_APP_USE_AUTH0) {
       scope: "openid profile email",
       redirect_uri: window.location.origin,
     },
+    // Use refresh tokens instead of hidden iframes for session management.
+    // The default iframe approach (checkSession) sends cross-origin cookies
+    // to the Auth0 domain, which modern browsers block on http://localhost
+    // (SameSite=None requires Secure/HTTPS). Refresh tokens avoid iframes
+    // entirely — they use a standard HTTPS POST to /oauth/token.
+    // Requires "Refresh Token Rotation" enabled in Auth0 dashboard.
+    useRefreshTokens: true,
+    // Don't fall back to iframe if refresh token is missing/expired.
+    // Without this, the SDK retries via iframe and hangs again.
+    useRefreshTokensFallback: false,
+    // Reduce authorize timeout from 60s default. Only affects the login
+    // popup/redirect flow, not refresh tokens.
+    authorizeTimeoutInSeconds: 10,
   };
 
   console.log("[index.tsx] Auth0 providerConfig:", providerConfig);
