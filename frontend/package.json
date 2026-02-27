@@ -92,8 +92,8 @@
     "web-vitals": "^2.1.2"
   },
   "scripts": {
-    "start": "vite",
-    "build": "tsc && vite build",
+    "start": "node scripts/env.js && vite",
+    "build": "node scripts/env.js && tsc && vite build",
     "serve": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
