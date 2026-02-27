@@ -3,6 +3,7 @@ import {
   BoundingBox,
   PermissionTypes,
   SinglePageAnnotationJson,
+  TokenId,
 } from "../../../types";
 
 import { normalizeBounds } from "../../../../utils/transform";
@@ -16,8 +17,13 @@ import { useAnnotationSelection } from "../../context/UISettingsAtom";
 import { useAtom, useAtomValue } from "jotai";
 import { isCreatingAnnotationAtom } from "../../context/UISettingsAtom";
 import styled from "styled-components";
-import { Copy, Tag, X, AlertCircle, Settings } from "lucide-react";
+import { Copy, Tag, X, AlertCircle, Settings, Link } from "lucide-react";
 import { scrollContainerRefAtom } from "../../context/DocumentAtom";
+import { useLocation } from "react-router-dom";
+import {
+  encodeTextBlock,
+  textBlockFromTokensByPage,
+} from "../../../../utils/textBlockEncoding";
 
 interface SelectionLayerProps {
   pageInfo: PDFPageInfo;
@@ -34,6 +40,7 @@ const SelectionLayer = ({
   createAnnotation,
   pageNumber,
 }: SelectionLayerProps) => {
+  const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useAtomValue(scrollContainerRefAtom);
   const {
@@ -199,6 +206,43 @@ const SelectionLayer = ({
     setPendingSelections({});
     setMultiSelections({});
   }, [pendingSelections, pageInfo]);
+
+  /**
+   * Handles copying a deep link to the selected text block.
+   */
+  const handleCopyLink = useCallback(() => {
+    const selections = pendingSelections;
+    const pages = Object.keys(selections)
+      .map(Number)
+      .sort((a, b) => a - b);
+
+    // Collect token IDs across all selected pages
+    const tokensByPage: Record<number, TokenId[]> = {};
+    for (const pageNum of pages) {
+      const pageAnnotation = pageInfo.getPageAnnotationJson(
+        selections[pageNum]
+      );
+      if (pageAnnotation && pageAnnotation.tokensJsons.length > 0) {
+        tokensByPage[pageNum] = pageAnnotation.tokensJsons;
+      }
+    }
+
+    if (Object.keys(tokensByPage).length > 0) {
+      const block = textBlockFromTokensByPage(tokensByPage);
+      const encoded = encodeTextBlock(block);
+      const params = new URLSearchParams(location.search);
+      params.set("tb", encoded);
+      const url = `${window.location.origin}${
+        location.pathname
+      }?${params.toString()}`;
+      navigator.clipboard.writeText(url);
+    }
+
+    lastMenuInteractionTime.current = Date.now();
+    setShowActionMenu(false);
+    setPendingSelections({});
+    setMultiSelections({});
+  }, [pendingSelections, pageInfo, location]);
 
   /**
    * Handles applying the current label to create an annotation.
@@ -653,6 +697,10 @@ const SelectionLayer = ({
             event.preventDefault();
             handleCopyText();
             break;
+          case "l":
+            event.preventDefault();
+            handleCopyLink();
+            break;
           case "a":
             event.preventDefault();
             if (activeSpanLabel) {
@@ -677,7 +725,13 @@ const SelectionLayer = ({
         document.removeEventListener("keydown", handleKeyPress);
       };
     }
-  }, [showActionMenu, handleCopyText, handleApplyLabel, activeSpanLabel]);
+  }, [
+    showActionMenu,
+    handleCopyText,
+    handleCopyLink,
+    handleApplyLabel,
+    activeSpanLabel,
+  ]);
 
   return (
     <div
@@ -752,6 +806,22 @@ const SelectionLayer = ({
             <Copy size={16} />
             <span>Copy Text</span>
             <ShortcutHint>C</ShortcutHint>
+          </ActionMenuItem>
+
+          <ActionMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopyLink();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              lastMenuInteractionTime.current = Date.now();
+            }}
+            data-testid="copy-link-button"
+          >
+            <Link size={16} />
+            <span>Copy Link</span>
+            <ShortcutHint>L</ShortcutHint>
           </ActionMenuItem>
 
           {/* Show annotation option or helpful message */}

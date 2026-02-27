@@ -87,6 +87,9 @@ import {
 import { TimelineEntry } from "../../../widgets/chat/ChatMessage";
 import { useUISettings } from "../../../annotator/hooks/useUISettings";
 import useWindowDimensions from "../../../hooks/WindowDimensionHook";
+import { useLocation, useNavigate } from "react-router-dom";
+import { updateAnnotationSelectionParams } from "../../../../utils/navigationUtils";
+import { toGlobalId } from "../../../../utils/idValidation";
 
 /**
  * A helper interface representing the properties of data included in websocket messages,
@@ -191,6 +194,10 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
   initialMessage,
   readOnly = false,
 }) => {
+  // Routing hooks for URL-driven annotation selection
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // User / Auth state – must be declared before any state that depends on it
   const user_obj = useReactiveVar(userObj);
   // Note: auth_token is kept for WebSocket URL construction which requires the token
@@ -1780,6 +1787,16 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                           selectedMessageId: sourcedMessage.messageId,
                           selectedSourceIndex: index,
                         }));
+                        // Update URL with annotation selection (single source of truth)
+                        if (source.annotation_id) {
+                          const globalId = toGlobalId(
+                            "AnnotationType",
+                            source.annotation_id
+                          );
+                          updateAnnotationSelectionParams(location, navigate, {
+                            annotationIds: [globalId],
+                          });
+                        }
                       },
                     })) || [];
 
@@ -1797,15 +1814,23 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                       }
                       onSelect={() => {
                         if (sourcedMessage) {
+                          const isDeselecting =
+                            selectedMessageId === sourcedMessage.messageId;
                           setChatSourceState((prev) => ({
                             ...prev,
-                            selectedMessageId:
-                              prev.selectedMessageId ===
-                              sourcedMessage.messageId
-                                ? null // deselect if already selected
-                                : sourcedMessage.messageId,
+                            selectedMessageId: isDeselecting
+                              ? null // deselect if already selected
+                              : sourcedMessage.messageId,
                             selectedSourceIndex: null, // Reset source selection when message selection changes
                           }));
+                          // Update URL annotation selection: clear on deselect
+                          if (isDeselecting) {
+                            updateAnnotationSelectionParams(
+                              location,
+                              navigate,
+                              { annotationIds: [] }
+                            );
+                          }
                           // Call the onMessageSelect callback when a message with sources is selected
                           if (sourcedMessage.sources.length > 0) {
                             onMessageSelect?.();
