@@ -40,7 +40,7 @@ import {
   ChatMessageSource,
   chatSourcesAtom,
 } from "../annotator/context/ChatSourceAtom";
-import { WebSocketSources } from "../knowledge_base/document/right_tray/ChatTray";
+import { WebSocketSources } from "../chat/types";
 import { EditMessageModal } from "./EditMessageModal";
 import {
   DELETE_MESSAGE,
