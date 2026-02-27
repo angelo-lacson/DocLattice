@@ -316,7 +316,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     useChatPanelWidth();
 
   // Calculate actual panel width based on mode
-  const getPanelWidthPercentage = (): number => {
+  const getPanelWidthPercentage = useCallback((): number => {
     let width: number;
     switch (mode) {
       case "quarter":
@@ -341,7 +341,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       width
     );
     return width;
-  };
+  }, [mode, customWidth]);
 
   // Resize handle state
   const [isDragging, setIsDragging] = useState(false);
@@ -387,7 +387,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     autoZoomEnabled,
     setAutoZoomEnabled,
     showZoomFeedback,
-    cleanupZoomIndicatorTimer,
   } = useZoomManager({
     zoomLevel,
     setZoomLevel,
@@ -1643,11 +1642,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       // Clear selected relationships (local Jotai atom, not URL-driven)
       setSelectedRelations([]);
-
-      // Clean up zoom indicator timer
-      cleanupZoomIndicatorTimer();
     };
-  }, [setSelectedRelations, cleanupZoomIndicatorTimer]);
+  }, [setSelectedRelations]);
 
   const [selectedSummaryContent, setSelectedSummaryContent] = useState<
     string | null

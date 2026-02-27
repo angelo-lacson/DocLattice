@@ -65,7 +65,9 @@ export interface ConversationListViewProps {
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export const ConversationListView: React.FC<ConversationListViewProps> = ({
+export const DocumentConversationListView: React.FC<
+  ConversationListViewProps
+> = ({
   conversations,
   showSearch,
   setShowSearch,

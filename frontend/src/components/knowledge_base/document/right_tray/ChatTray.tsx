@@ -59,7 +59,7 @@ import type {
 } from "../../../chat/types";
 import { ApprovalOverlay, ReopenApprovalButton } from "./ApprovalOverlay";
 import type { PendingApproval } from "./ApprovalOverlay";
-import { ConversationListView } from "./ConversationListView";
+import { DocumentConversationListView } from "./ConversationListView";
 
 export type { WebSocketSources, MessageData } from "../../../chat/types";
 
@@ -1736,7 +1736,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               </ChatInputContainer>
             </motion.div>
           ) : (
-            <ConversationListView
+            <DocumentConversationListView
               conversations={conversations}
               showSearch={showSearch}
               setShowSearch={setShowSearch}

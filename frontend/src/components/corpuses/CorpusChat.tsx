@@ -80,7 +80,7 @@ import {
   InputRow,
 } from "./corpus_chat/styles";
 import { ApprovalModal, PendingApproval } from "./corpus_chat/ApprovalModal";
-import { ConversationListView } from "./corpus_chat/ConversationListView";
+import { CorpusConversationListView } from "./corpus_chat/ConversationListView";
 
 /**
  * CorpusChat props definition.
@@ -373,7 +373,9 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   toolCall.name = subName;
                   const subArgs = toolCall.arguments?._sub_tool_arguments;
                   toolCall.arguments =
-                    subArgs && typeof subArgs === "object" ? subArgs : {};
+                    subArgs && typeof subArgs === "object"
+                      ? (subArgs as Record<string, unknown>)
+                      : {};
                 }
               }
               setPendingApproval({
@@ -1318,7 +1320,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             </motion.div>
           ) : (
             // CONVERSATION MENU VIEW
-            <ConversationListView
+            <CorpusConversationListView
               conversations={conversations}
               onLoadConversation={loadConversation}
               onStartNewChat={startNewChat}

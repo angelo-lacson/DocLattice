@@ -45,11 +45,8 @@ import {
   PipelineSettingsQueryResult,
   PipelineComponentsQueryResult,
 } from "./system_settings/graphql";
-import {
-  StageType,
-  SettingsSchemaEntry,
-  STAGE_CONFIG,
-} from "./system_settings/types";
+import { StageType, SettingsSchemaEntry } from "./system_settings/types";
+import { STAGE_CONFIG } from "./system_settings/config";
 import {
   Container,
   BackButton,
