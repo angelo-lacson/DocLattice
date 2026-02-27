@@ -79,7 +79,6 @@ class DocParserTestCase(TestCase):
         """
         Test burning annotations into the document.
         """
-        # TODO - handle text labels and perform a substantive test
         label_lookups = {
             "text_labels": {},
             "doc_labels": {

@@ -70,5 +70,3 @@ class ImportCorpusTestCase:
 
         documents = Document.objects.all()
         assert documents.count() == 2
-
-        # TODO - check the integrity of the corpus itself
