@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 import uuid
 import zipfile
 from unittest.mock import MagicMock, patch
@@ -19,6 +20,8 @@ from opencontractserver.documents.models import Document
 from opencontractserver.tasks.import_tasks import process_documents_zip
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -109,6 +112,7 @@ class BulkDocumentUploadTests(TestCase):
                 return response["data"]["uploadDocumentsZip"]
             return None
         except Exception:
+            logger.warning("Exception executing mutation", exc_info=True)
             return None
 
     def execute_status_query(self, job_id: str) -> dict:
@@ -143,6 +147,7 @@ class BulkDocumentUploadTests(TestCase):
                 return response["data"]["bulkDocumentUploadStatus"]
             return None
         except Exception:
+            logger.warning("Exception executing status query", exc_info=True)
             return None
 
     @override_settings(
