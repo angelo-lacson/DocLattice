@@ -9,6 +9,7 @@ import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { X } from "lucide-react";
 import { FAILURE_COLORS } from "../../assets/configurations/constants";
 
 import {
@@ -453,6 +454,39 @@ const ListRelationshipPopup = styled.div`
     height: 12px;
     background: white;
     box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.05);
+  }
+`;
+
+// Delete button that floats above the processing dimmer
+const ProcessingDeleteButton = styled.button`
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1001;
+  pointer-events: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.15s ease;
+  padding: 0;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.9);
+    transform: scale(1.1);
   }
 `;
 
@@ -1244,6 +1278,16 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             />
           )}
 
+          {isProcessing && removeFromCorpus && (
+            <ProcessingDeleteButton
+              onClick={handleRemoveFromCorpus}
+              title="Remove processing document"
+              aria-label="Remove processing document from corpus"
+            >
+              <X />
+            </ProcessingDeleteButton>
+          )}
+
           <CardCheckbox
             className={`checkbox ${is_selected ? "selected" : ""}`}
             onClick={handleCheckboxClick}
@@ -1436,6 +1480,16 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             size="small"
             content="Processing..."
           />
+        )}
+
+        {isProcessing && removeFromCorpus && (
+          <ProcessingDeleteButton
+            onClick={handleRemoveFromCorpus}
+            title="Remove processing document"
+            aria-label="Remove processing document from corpus"
+          >
+            <X />
+          </ProcessingDeleteButton>
         )}
 
         <ListCheckbox

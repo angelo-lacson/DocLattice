@@ -6,7 +6,7 @@ import { formatDistanceToNow, format } from "date-fns";
 
 // GraphQL query for fetching version history
 export const GET_DOCUMENT_VERSION_HISTORY = gql`
-  query GetDocumentVersionHistory($documentId: ID!) {
+  query GetDocumentVersionHistory($documentId: String!) {
     document(id: $documentId) {
       id
       title
