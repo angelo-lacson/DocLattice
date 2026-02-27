@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useReactiveVar } from "@apollo/client";
 import { authToken } from "../../../graphql/cache";
+import { getNumericIdFromGlobalId } from "../../../utils/idValidation";
 
 interface ImageData {
   base64_data: string;
@@ -21,23 +22,6 @@ interface UseAnnotationImagesResult {
   loading: boolean;
   error: boolean;
 }
-
-/**
- * Extract numeric ID from GraphQL relay ID (base64 encoded "TypeName:123")
- */
-const extractNumericId = (relayId: string): string | null => {
-  try {
-    const decoded = atob(relayId);
-    const parts = decoded.split(":");
-    if (parts.length === 2) {
-      return parts[1];
-    }
-    return null;
-  } catch {
-    // If not base64, assume it's already a numeric ID
-    return relayId;
-  }
-};
 
 // Simple in-memory cache for annotation images
 const imageCache = new Map<string, ImageData[]>();
@@ -81,8 +65,10 @@ export const useAnnotationImages = (
     }
 
     // Extract numeric ID from relay ID
-    const numericId = extractNumericId(annotationId);
-    if (!numericId) {
+    let numericId: string;
+    try {
+      numericId = String(getNumericIdFromGlobalId(annotationId));
+    } catch {
       setError(true);
       return;
     }

@@ -54,11 +54,11 @@ OPENAI_MODEL=gpt-4o
 # ------------------------------------------------------------------------------
 USE_AUTH0=True
 
-AUTH0_CLIENT_ID=
-AUTH0_API_AUDIENCE=https://opensource.legal/contracts
-AUTH0_DOMAIN=dev-7ranai11.auth0.com
-AUTH0_M2M_MANAGEMENT_API_SECRET=
-AUTH0_M2M_MANAGEMENT_API_ID=
+AUTH0_CLIENT_ID=<your-spa-client-id>
+AUTH0_API_AUDIENCE=https://contracts.your-domain.com
+AUTH0_DOMAIN=<your-tenant>.us.auth0.com
+AUTH0_M2M_MANAGEMENT_API_SECRET=<your-m2m-client-secret>
+AUTH0_M2M_MANAGEMENT_API_ID=<your-m2m-client-id>
 AUTH0_M2M_MANAGEMENT_GRANT_TYPE=client_credentials
 
 # Docling
