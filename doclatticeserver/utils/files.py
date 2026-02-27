@@ -271,7 +271,7 @@ def is_plaintext_content(
                 sample = f.read(sample_size)
         except OSError as e:
             # Handle potential errors during file read more gracefully
-            print(f"Error reading file {content}: {e}")
+            logger.error("Error reading file %s: %s", content, e)
             return False
     elif isinstance(content, bytes):
         sample = content[:sample_size]

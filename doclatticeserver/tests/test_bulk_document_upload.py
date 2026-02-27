@@ -103,15 +103,12 @@ class BulkDocumentUploadTests(TestCase):
         # Execute the mutation
         try:
             response = client.execute(mutation, variable_values=variables)
-            # Debug output
-            print(f"GraphQL Response: {response}")
             # Safely access nested dictionary
             mutation_result = response.get("data", {}).get("uploadDocumentsZip")
             if mutation_result:
                 return response["data"]["uploadDocumentsZip"]
             return None
-        except Exception as e:
-            print(f"Exception executing mutation: {e}")
+        except Exception:
             return None
 
     def execute_status_query(self, job_id: str) -> dict:
@@ -138,8 +135,6 @@ class BulkDocumentUploadTests(TestCase):
         # Execute the query
         try:
             response = client.execute(query, variable_values=variables)
-            # Debug output
-            print(f"GraphQL Status Query Response: {response}")
             if (
                 response
                 and "data" in response
@@ -147,8 +142,7 @@ class BulkDocumentUploadTests(TestCase):
             ):
                 return response["data"]["bulkDocumentUploadStatus"]
             return None
-        except Exception as e:
-            print(f"Exception executing status query: {e}")
+        except Exception:
             return None
 
     @override_settings(
@@ -226,7 +220,6 @@ class BulkDocumentUploadTests(TestCase):
         )
 
         # Use our known task ID to perform the status query
-        print(f"Querying status with job_id: {test_task_id}")
         response = self.execute_status_query(test_task_id)
         self.assertIsNotNone(
             response, "Response from execute_status_query should not be None"
@@ -271,11 +264,6 @@ class BulkDocumentUploadTests(TestCase):
 
         # Create the zip file
         base64_zip = self.create_test_zip()
-
-        # Ensure the zip contains expected files
-        print(
-            f"Created test zip with content: {list(zipfile.ZipFile(io.BytesIO(base64.b64decode(base64_zip))).namelist())}"  # noqa: E501
-        )
 
         # Execute the mutation with corpus ID
         corpus_id = to_global_id("CorpusType", self.corpus.id)
@@ -347,8 +335,7 @@ class BulkDocumentUploadTests(TestCase):
                     doc_path_exists,
                     f"Document {doc.id} should have a DocumentPath to corpus {self.corpus.id}",
                 )
-        except Exception as e:
-            print(f"Exception in end-to-end test: {e}")
+        except Exception:
             raise
 
     @override_settings(

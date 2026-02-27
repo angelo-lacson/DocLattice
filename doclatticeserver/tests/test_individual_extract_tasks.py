@@ -111,7 +111,6 @@ class TestDocExtractQueryTask(TransactionTestCase):
             # Optionally, assert structure/contents of 'result' as appropriate for your logic
             self.assertIn("data", result, "Expected 'data' key in result")
 
-            print(f"Synchronous doc_extract_query_task result: {result}")
         except Exception as e:
             logging.error(
                 f"Exception in test_doc_extract_query_task_synchronously: {e}"

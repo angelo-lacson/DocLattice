@@ -61,32 +61,16 @@ class ExportCorpusTestCase(TestCase):
     #  and not just export labels used in the corpus. This is a temporary fix to get working outputs,
     #  but more thorough redesign is needed..
     def test_export_utils(self):
-        print(
-            "# TEST CORPUS EXPORT PIPELINE #########################################################################"
-        )
         self.original_corpus_obj.refresh_from_db()
 
-        print("1)\tTest building label lookups")
         label_lookups = build_label_lookups(corpus_id=self.original_corpus_obj.id)
-        print("\t\tSUCCESS")
 
-        print("2)\tTest that we have proper text_labels value in return obj")
         assert "text_labels" in label_lookups
-        print(f"\t\tlabel_lookups['text_labels']: {label_lookups['text_labels']}")
-        print(f"Length of text_labels: {len(label_lookups['text_labels'])}")
         assert len(label_lookups["text_labels"]) == 3
-        print("\t\tSUCCESS")
 
-        print("3)\tTest that we have proper doc_labels value in return obj")
         assert "doc_labels" in label_lookups
-        print(f"\t\tlabel_lookups['doc_labels']: {label_lookups['doc_labels']}")
-        print(f"Length of doc_labels: {len(label_lookups['doc_labels'])}")
         assert len(label_lookups["doc_labels"]) == 1
-        print("\t\tSUCCESS")
 
-        print(
-            "4)\tTest that we can burn in each document and produce labelled document"
-        )
         for doc in self.original_corpus_obj.get_documents():
 
             build_document_export(
@@ -111,8 +95,6 @@ class ExportCorpusTestCase(TestCase):
         """
         Test that the exported values from build_document_export match the expected data shapes.
         """
-        print("5)\tTest that exported values match the expected data shapes")
-
         # Build label lookups
         label_lookups = build_label_lookups(corpus_id=self.original_corpus_obj.id)
 
@@ -157,7 +139,3 @@ class ExportCorpusTestCase(TestCase):
                 self.assertIn("id", label)
                 self.assertIn("text", label)
                 self.assertIn("color", label)
-
-            print(f"\t\tDocument '{doc_name}' exported successfully and matches types")
-
-        print("\t\tSUCCESS")
