@@ -19,6 +19,17 @@ import {
 // Mock Auth0
 vi.mock("@auth0/auth0-react");
 
+// Mock getRuntimeEnv to return a consistent domain for testing
+vi.mock("../../utils/env", () => ({
+  getRuntimeEnv: () => ({
+    REACT_APP_APPLICATION_DOMAIN: "test-tenant.auth0.com",
+    REACT_APP_APPLICATION_CLIENT_ID: "test-client-id",
+    REACT_APP_AUDIENCE: "test-audience",
+    REACT_APP_API_ROOT_URL: "http://localhost:8000",
+    REACT_APP_USE_AUTH0: true,
+  }),
+}));
+
 // Mock useCacheManager - we don't need to test cache behavior here
 vi.mock("../../hooks/useCacheManager", () => ({
   useCacheManager: () => ({
@@ -57,8 +68,9 @@ const baseAuth0Props = {
   isReadOnly: false,
 };
 
-// Key used by AuthGate to track if user has authenticated before
+// Keys used by AuthGate to track if user has authenticated before
 const HAS_AUTHENTICATED_KEY = "oc_has_authenticated";
+const AUTH_DOMAIN_KEY = "oc_auth0_domain";
 
 describe("AuthGate", () => {
   beforeEach(() => {
@@ -70,6 +82,7 @@ describe("AuthGate", () => {
     authInitCompleteVar(false);
     // Clear localStorage before each test
     localStorage.removeItem(HAS_AUTHENTICATED_KEY);
+    localStorage.removeItem(AUTH_DOMAIN_KEY);
   });
 
   describe("Auth0 Mode", () => {
@@ -210,8 +223,9 @@ describe("AuthGate", () => {
         message: "Login required",
       });
 
-      // Set flag indicating user has previously authenticated
+      // Set flag indicating user has previously authenticated on this tenant
       localStorage.setItem(HAS_AUTHENTICATED_KEY, "true");
+      localStorage.setItem(AUTH_DOMAIN_KEY, "test-tenant.auth0.com");
 
       const mockUseAuth0 = useAuth0 as MockedFunction<typeof useAuth0>;
       mockUseAuth0.mockReturnValue({
@@ -311,8 +325,11 @@ describe("AuthGate", () => {
         expect(screen.getByText("Protected Content")).toBeInTheDocument();
       });
 
-      // Verify auth flag was set
+      // Verify auth flag and domain were set
       expect(localStorage.getItem(HAS_AUTHENTICATED_KEY)).toBe("true");
+      expect(localStorage.getItem(AUTH_DOMAIN_KEY)).toBe(
+        "test-tenant.auth0.com"
+      );
     });
   });
 
@@ -538,6 +555,13 @@ describe("AuthGate", () => {
       const mockToken = "race-condition-token";
       const mockGetAccessTokenSilently = vi.fn().mockResolvedValue(mockToken);
 
+      // Simulate OAuth callback URL so the fast-path doesn't skip verification
+      const originalSearch = window.location.search;
+      Object.defineProperty(window, "location", {
+        writable: true,
+        value: { ...window.location, search: "?code=abc&state=xyz" },
+      });
+
       const mockUseAuth0 = useAuth0 as MockedFunction<typeof useAuth0>;
       mockUseAuth0.mockReturnValue({
         isLoading: false,
@@ -565,6 +589,12 @@ describe("AuthGate", () => {
 
       // Verify getAccessTokenSilently was called to verify auth state
       expect(mockGetAccessTokenSilently).toHaveBeenCalled();
+
+      // Restore original location
+      Object.defineProperty(window, "location", {
+        writable: true,
+        value: { ...window.location, search: originalSearch },
+      });
     });
   });
 });
