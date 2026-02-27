@@ -105,7 +105,7 @@ from config.graphql.ratelimits import (
     graphql_ratelimit,
     graphql_ratelimit_dynamic,
 )
-from config.graphql.worker_mutations import (
+from config.graphql.worker_types import (
     CorpusAccessTokenQueryType,
     WorkerAccountQueryType,
     WorkerDocumentUploadPageType,
@@ -4444,11 +4444,20 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_worker_accounts(self, info, name_contains=None, is_active=None):
+        """List worker accounts.
+
+        Intentionally accessible to all authenticated users so that corpus
+        creators can populate the worker-account dropdown when creating
+        access tokens.  The frontend gates the admin management page to
+        superusers; non-superusers only see active accounts with
+        tokenCount hidden (forced to 0).
+        """
         user = info.context.user
 
         qs = WorkerAccount.objects.select_related("creator").order_by("-created")
 
-        # Non-superusers can only see active accounts (for token creation)
+        # Non-superusers see only active accounts (for the token-creation dropdown).
+        # Sensitive fields (tokenCount) are zeroed out below.
         if not user.is_superuser:
             qs = qs.filter(is_active=True)
         else:

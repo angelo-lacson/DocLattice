@@ -5,7 +5,7 @@
  * upload stats.  Both superusers and corpus creators can create, view, and
  * revoke tokens.
  */
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { gql, useQuery, useMutation } from "@apollo/client";
 import {
   Button,
@@ -223,7 +223,7 @@ interface CorpusAccessToken {
 }
 
 interface WorkerAccountOption {
-  id: string;
+  id: number;
   name: string;
 }
 
@@ -234,13 +234,13 @@ interface WorkerTokensSectionProps {
 }
 
 interface CreateFormState {
-  workerAccountId: string;
+  workerAccountId: number | null;
   expiresAt: string;
   rateLimitPerMinute: number;
 }
 
 const initialFormState: CreateFormState = {
-  workerAccountId: "",
+  workerAccountId: null,
   expiresAt: "",
   rateLimitPerMinute: 0,
 };
@@ -254,7 +254,13 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
   isSuperuser,
   isCreator,
 }) => {
-  const numericCorpusId = getNumericIdFromGlobalId(corpusId);
+  const numericCorpusId = useMemo(() => {
+    try {
+      return getNumericIdFromGlobalId(corpusId);
+    } catch {
+      return null;
+    }
+  }, [corpusId]);
 
   // UI state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -271,7 +277,8 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
     error: tokensError,
     refetch: refetchTokens,
   } = useQuery(GET_CORPUS_ACCESS_TOKENS, {
-    variables: { corpusId: numericCorpusId },
+    variables: { corpusId: numericCorpusId! },
+    skip: numericCorpusId === null,
     fetchPolicy: "network-only",
   });
 
@@ -317,7 +324,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
   // Handlers
   const handleCreate = () => {
     const variables: Record<string, unknown> = {
-      workerAccountId: parseInt(formState.workerAccountId, 10),
+      workerAccountId: formState.workerAccountId,
       corpusId: numericCorpusId,
     };
     if (formState.expiresAt) {
@@ -377,6 +384,15 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
     value: a.id,
     text: a.name,
   }));
+
+  if (numericCorpusId === null) {
+    return (
+      <Message negative>
+        <Message.Header>Invalid corpus ID</Message.Header>
+        <p>Unable to parse the corpus identifier.</p>
+      </Message>
+    );
+  }
 
   return (
     <>
@@ -537,11 +553,11 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
                   fluid
                   selection
                   options={accountOptions}
-                  value={formState.workerAccountId}
+                  value={formState.workerAccountId ?? undefined}
                   onChange={(_e, { value }) =>
                     setFormState({
                       ...formState,
-                      workerAccountId: value as string,
+                      workerAccountId: value as number,
                     })
                   }
                 />

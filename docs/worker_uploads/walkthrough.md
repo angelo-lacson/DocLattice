@@ -119,21 +119,23 @@ From this list you can **revoke** active tokens. Revoked tokens can no longer au
 ```graphql
 mutation {
   createCorpusAccessToken(
-    workerAccountId: "V29ya2VyQWNjb3VudDox"
-    corpusId: "Q29ycHVzOjE="
-    rateLimit: 60
+    workerAccountId: 1
+    corpusId: 1
+    rateLimitPerMinute: 60
   ) {
     ok
     token {
       id
-      keyPrefix
+      key
+      workerAccountName
+      expiresAt
+      rateLimitPerMinute
     }
-    plaintextKey
   }
 }
 ```
 
-Store the `plaintextKey` value securely. It will not be returned again.
+Store the `token.key` value securely. It will not be returned again.
 
 ---
 

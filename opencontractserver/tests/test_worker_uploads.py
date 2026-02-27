@@ -1548,49 +1548,50 @@ class TestWorkerGraphQLQueries(TestCase):
     # ---- Mutation: reactivateWorkerAccount ----
 
     def test_reactivate_worker_account(self):
-        self.worker.is_active = False
-        self.worker.save(update_fields=["is_active"])
+        # Use a dedicated instance to avoid mutating shared cls.worker
+        inactive_worker = WorkerAccount.create_with_user(
+            name="inactive-for-reactivation",
+            description="Test worker for reactivation",
+            creator=self.superuser,
+        )
+        inactive_worker.is_active = False
+        inactive_worker.save(update_fields=["is_active"])
 
-        try:
-            result = self._execute(
-                """
-                mutation($workerId: Int!) {
-                    reactivateWorkerAccount(workerAccountId: $workerId) {
-                        ok
-                    }
+        result = self._execute(
+            """
+            mutation($workerId: Int!) {
+                reactivateWorkerAccount(workerAccountId: $workerId) {
+                    ok
                 }
-                """,
-                self.superuser,
-                variables={"workerId": self.worker.id},
-            )
-            self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
-            self.assertTrue(result["data"]["reactivateWorkerAccount"]["ok"])
+            }
+            """,
+            self.superuser,
+            variables={"workerId": inactive_worker.id},
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        self.assertTrue(result["data"]["reactivateWorkerAccount"]["ok"])
 
-            self.worker.refresh_from_db()
-            self.assertTrue(self.worker.is_active)
-        finally:
-            # Restore shared fixture state
-            self.worker.is_active = True
-            self.worker.save(update_fields=["is_active"])
+        inactive_worker.refresh_from_db()
+        self.assertTrue(inactive_worker.is_active)
 
     def test_non_superuser_cannot_reactivate_worker_account(self):
-        self.worker.is_active = False
-        self.worker.save(update_fields=["is_active"])
+        inactive_worker = WorkerAccount.create_with_user(
+            name="inactive-for-denied-reactivation",
+            description="Test worker for denied reactivation",
+            creator=self.superuser,
+        )
+        inactive_worker.is_active = False
+        inactive_worker.save(update_fields=["is_active"])
 
-        try:
-            result = self._execute(
-                """
-                mutation($workerId: Int!) {
-                    reactivateWorkerAccount(workerAccountId: $workerId) {
-                        ok
-                    }
+        result = self._execute(
+            """
+            mutation($workerId: Int!) {
+                reactivateWorkerAccount(workerAccountId: $workerId) {
+                    ok
                 }
-                """,
-                self.regular_user,
-                variables={"workerId": self.worker.id},
-            )
-            self.assertIsNotNone(result.get("errors"))
-        finally:
-            # Restore shared fixture state
-            self.worker.is_active = True
-            self.worker.save(update_fields=["is_active"])
+            }
+            """,
+            self.regular_user,
+            variables={"workerId": inactive_worker.id},
+        )
+        self.assertIsNotNone(result.get("errors"))
