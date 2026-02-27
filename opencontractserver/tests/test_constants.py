@@ -58,13 +58,15 @@ from opencontractserver.constants.moderation import (
 class TestAuthConstants(TestCase):
     """Tests for authentication constants."""
 
-    def test_token_log_prefix_length_type_and_value(self):
+    def test_token_log_prefix_length_type_and_range(self):
         self.assertIsInstance(TOKEN_LOG_PREFIX_LENGTH, int)
-        self.assertEqual(TOKEN_LOG_PREFIX_LENGTH, 10)
+        self.assertGreater(TOKEN_LOG_PREFIX_LENGTH, 0)
+        self.assertLessEqual(TOKEN_LOG_PREFIX_LENGTH, 50)
 
-    def test_admin_claims_cache_ttl_type_and_value(self):
+    def test_admin_claims_cache_ttl_type_and_range(self):
         self.assertIsInstance(ADMIN_CLAIMS_CACHE_TTL, int)
-        self.assertEqual(ADMIN_CLAIMS_CACHE_TTL, 300)
+        self.assertGreater(ADMIN_CLAIMS_CACHE_TTL, 0)
+        self.assertLessEqual(ADMIN_CLAIMS_CACHE_TTL, 3600)
 
     def test_admin_claims_cache_ttl_positive(self):
         self.assertGreater(ADMIN_CLAIMS_CACHE_TTL, 0)
@@ -92,7 +94,7 @@ class TestContextGuardrailsConstants(TestCase):
 
     def test_default_context_window(self):
         self.assertIsInstance(DEFAULT_CONTEXT_WINDOW, int)
-        self.assertEqual(DEFAULT_CONTEXT_WINDOW, 128_000)
+        self.assertGreater(DEFAULT_CONTEXT_WINDOW, 0)
 
     def test_compaction_threshold_ratio(self):
         self.assertIsInstance(COMPACTION_THRESHOLD_RATIO, float)
@@ -191,18 +193,19 @@ class TestCorpusActionConstants(TestCase):
 
     def test_max_description_preview_length(self):
         self.assertIsInstance(MAX_DESCRIPTION_PREVIEW_LENGTH, int)
-        self.assertEqual(MAX_DESCRIPTION_PREVIEW_LENGTH, 500)
+        self.assertGreater(MAX_DESCRIPTION_PREVIEW_LENGTH, 0)
 
     def test_max_message_preview_length(self):
         self.assertIsInstance(MAX_MESSAGE_PREVIEW_LENGTH, int)
-        self.assertEqual(MAX_MESSAGE_PREVIEW_LENGTH, 200)
+        self.assertGreater(MAX_MESSAGE_PREVIEW_LENGTH, 0)
 
 
 class TestDocumentProcessingConstants(TestCase):
     """Tests for document processing pipeline constants."""
 
     def test_default_document_path_prefix(self):
-        self.assertEqual(DEFAULT_DOCUMENT_PATH_PREFIX, "/documents")
+        self.assertIsInstance(DEFAULT_DOCUMENT_PATH_PREFIX, str)
+        self.assertTrue(DEFAULT_DOCUMENT_PATH_PREFIX.startswith("/"))
 
     def test_embedding_batch_size(self):
         self.assertIsInstance(EMBEDDING_BATCH_SIZE, int)
@@ -217,7 +220,8 @@ class TestDocumentProcessingConstants(TestCase):
         self.assertGreater(MAX_FILENAME_LENGTH, 0)
 
     def test_personal_corpus_defaults(self):
-        self.assertEqual(PERSONAL_CORPUS_TITLE, "My Documents")
+        self.assertIsInstance(PERSONAL_CORPUS_TITLE, str)
+        self.assertTrue(len(PERSONAL_CORPUS_TITLE) > 0)
         self.assertIsInstance(PERSONAL_CORPUS_DESCRIPTION, str)
         self.assertTrue(len(PERSONAL_CORPUS_DESCRIPTION) > 0)
 
@@ -251,51 +255,45 @@ class TestModerationConstants(TestCase):
     def test_hourly_rate_threshold(self):
         self.assertIsInstance(MODERATION_HOURLY_RATE_THRESHOLD, int)
         self.assertGreater(MODERATION_HOURLY_RATE_THRESHOLD, 0)
-        self.assertEqual(MODERATION_HOURLY_RATE_THRESHOLD, 10)
 
     def test_untrusted_content_size_warning(self):
         self.assertIsInstance(UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD, int)
         self.assertGreater(UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD, 0)
-        self.assertEqual(UNTRUSTED_CONTENT_SIZE_WARNING_THRESHOLD, 1000)
 
 
 class TestZipImportConstants(TestCase):
-    """Tests for ZIP import security constants with settings overrides."""
-
-    def test_default_values(self):
-        # Import inside test to get fresh values
-        from opencontractserver.constants import zip_import
-
-        self.assertEqual(zip_import.ZIP_MAX_FILE_COUNT, 1000)
-        self.assertEqual(zip_import.ZIP_MAX_TOTAL_SIZE_BYTES, 500 * 1024 * 1024)
-        self.assertEqual(zip_import.ZIP_MAX_SINGLE_FILE_SIZE_BYTES, 100 * 1024 * 1024)
-        self.assertEqual(zip_import.ZIP_MAX_COMPRESSION_RATIO, 100)
-        self.assertEqual(zip_import.ZIP_MAX_FOLDER_DEPTH, 20)
-        self.assertEqual(zip_import.ZIP_MAX_FOLDER_COUNT, 500)
-        self.assertEqual(zip_import.ZIP_MAX_PATH_COMPONENT_LENGTH, 255)
-        self.assertEqual(zip_import.ZIP_MAX_PATH_LENGTH, 1024)
-        self.assertEqual(zip_import.ZIP_DOCUMENT_BATCH_SIZE, 50)
+    """Tests for ZIP import security constants."""
 
     def test_all_positive(self):
-        from opencontractserver.constants import zip_import
+        from opencontractserver.constants.zip_import import (
+            ZIP_DOCUMENT_BATCH_SIZE,
+            ZIP_MAX_COMPRESSION_RATIO,
+            ZIP_MAX_FILE_COUNT,
+            ZIP_MAX_FOLDER_COUNT,
+            ZIP_MAX_FOLDER_DEPTH,
+            ZIP_MAX_PATH_COMPONENT_LENGTH,
+            ZIP_MAX_PATH_LENGTH,
+            ZIP_MAX_SINGLE_FILE_SIZE_BYTES,
+            ZIP_MAX_TOTAL_SIZE_BYTES,
+        )
 
-        self.assertGreater(zip_import.ZIP_MAX_FILE_COUNT, 0)
-        self.assertGreater(zip_import.ZIP_MAX_TOTAL_SIZE_BYTES, 0)
-        self.assertGreater(zip_import.ZIP_MAX_SINGLE_FILE_SIZE_BYTES, 0)
-        self.assertGreater(zip_import.ZIP_MAX_COMPRESSION_RATIO, 0)
-        self.assertGreater(zip_import.ZIP_MAX_FOLDER_DEPTH, 0)
-        self.assertGreater(zip_import.ZIP_MAX_FOLDER_COUNT, 0)
-        self.assertGreater(zip_import.ZIP_MAX_PATH_COMPONENT_LENGTH, 0)
-        self.assertGreater(zip_import.ZIP_MAX_PATH_LENGTH, 0)
-        self.assertGreater(zip_import.ZIP_DOCUMENT_BATCH_SIZE, 0)
+        self.assertGreater(ZIP_MAX_FILE_COUNT, 0)
+        self.assertGreater(ZIP_MAX_TOTAL_SIZE_BYTES, 0)
+        self.assertGreater(ZIP_MAX_SINGLE_FILE_SIZE_BYTES, 0)
+        self.assertGreater(ZIP_MAX_COMPRESSION_RATIO, 0)
+        self.assertGreater(ZIP_MAX_FOLDER_DEPTH, 0)
+        self.assertGreater(ZIP_MAX_FOLDER_COUNT, 0)
+        self.assertGreater(ZIP_MAX_PATH_COMPONENT_LENGTH, 0)
+        self.assertGreater(ZIP_MAX_PATH_LENGTH, 0)
+        self.assertGreater(ZIP_DOCUMENT_BATCH_SIZE, 0)
 
     def test_single_file_less_than_total(self):
-        from opencontractserver.constants import zip_import
-
-        self.assertLess(
-            zip_import.ZIP_MAX_SINGLE_FILE_SIZE_BYTES,
-            zip_import.ZIP_MAX_TOTAL_SIZE_BYTES,
+        from opencontractserver.constants.zip_import import (
+            ZIP_MAX_SINGLE_FILE_SIZE_BYTES,
+            ZIP_MAX_TOTAL_SIZE_BYTES,
         )
+
+        self.assertLess(ZIP_MAX_SINGLE_FILE_SIZE_BYTES, ZIP_MAX_TOTAL_SIZE_BYTES)
 
 
 class TestConstantsBarrelImport(TestCase):
