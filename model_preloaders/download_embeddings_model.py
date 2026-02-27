@@ -3,6 +3,7 @@ import os
 
 from sentence_transformers import SentenceTransformer
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Directory to save the model (absolute path)
