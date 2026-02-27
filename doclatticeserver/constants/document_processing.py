@@ -36,6 +36,9 @@ MAX_PROCESSING_ERROR_DISPLAY_LENGTH = 500
 # Prevents unbounded exception strings from bloating the staging table.
 MAX_UPLOAD_ERROR_MESSAGE_LENGTH = 2000
 
+# Maximum number of worker document uploads returned by the GraphQL query resolver.
+WORKER_UPLOADS_QUERY_LIMIT = 100
+
 # ---------------------------------------------------------------------------
 # Chunked document processing constants
 # ---------------------------------------------------------------------------
