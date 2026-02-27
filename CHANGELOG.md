@@ -5,7 +5,16 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-25
+## [Unreleased] - 2026-02-27
+
+### Changed
+
+#### Triage and Clean Up TODO/FIXME Comments (Closes #971)
+- **Removed 62 TODO/FIXME/HACK annotations** across 43 files in backend (`opencontractserver/`, `config/`) and frontend (`frontend/src/`)
+- **Stale comments removed**: Deleted outdated TODOs referencing non-existent files (`data_types.py`), functions confirmed in-use (`run_analysis`, `get_extract_annotation_summary`), already-implemented features (FUNSD annotation building, PAWLS resolution), empty test placeholders (`test_doc_analysis_tasks.py`), aspirational test improvements, and boilerplate template comments
+- **Intentional deferrals documented**: Replaced vague TODOs with `NOTE(deferred):` comments explaining the reasoning — includes datacell permissioning (overhead vs. value), async OpenAI client migration (executor approach works), diff reconstruction (snapshots used), Column validation (mutation-layer validation suffices), embeddings config consolidation, instance-level sharing in QuerySets, and various frontend feature gaps (version download, mention user search, upvote aggregation, modal annotation seeding)
+- **Code clarity improved**: Replaced question-mark TODOs with descriptive comments explaining design decisions — random UUID in SelectionLayer (transient selection), commented-out CorpusAnalysesCards effect (infinite refresh), `undoAnnotation` method purpose, Celery time limit rationale, annotation serializer placement (circular import avoidance)
+- **Fixed typo**: "whould" → "should" in `test_permissioning.py` docstring
 
 ### Added
 

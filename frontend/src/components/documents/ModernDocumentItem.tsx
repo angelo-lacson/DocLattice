@@ -1404,8 +1404,9 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           isOpen={versionHistoryOpen}
           onClose={() => setVersionHistoryOpen(false)}
           onDownload={(versionId) => {
+            // Version download not yet implemented — requires a backend
+            // endpoint that serves the file for a specific DocumentVersion.
             console.log("Download version", versionId);
-            // TODO: Implement version download
           }}
         />
       </>
@@ -1592,8 +1593,9 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
         isOpen={versionHistoryOpen}
         onClose={() => setVersionHistoryOpen(false)}
         onDownload={(versionId) => {
+          // Version download not yet implemented — requires a backend
+          // endpoint that serves the file for a specific DocumentVersion.
           console.log("Download version", versionId);
-          // TODO: Implement version download
         }}
       />
     </>

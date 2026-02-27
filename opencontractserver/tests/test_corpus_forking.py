@@ -108,5 +108,3 @@ class CorpusForkTestCase(TransactionTestCase):
         forked_labelset_labels = forked_corpus.label_set.annotation_labels.all()
         assert forked_labelset_labels.count() == original_labelset_labels.count()
         print("\t\tSUCCESS")
-
-        # TODO - improve tests to actually check data integrity of cloned objs...
