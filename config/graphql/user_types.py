@@ -1,0 +1,211 @@
+"""GraphQL type definitions for user-related types."""
+import graphene
+from django.contrib.auth import get_user_model
+from graphene import relay
+from graphene_django import DjangoObjectType
+
+from config.graphql.base import CountableConnection
+from config.graphql.permissioning.permission_annotator.mixins import (
+    AnnotatePermissionsForReadMixin,
+)
+from opencontractserver.users.models import Assignment, UserExport, UserImport
+
+User = get_user_model()
+
+
+class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    # Reputation fields (Epic #565)
+    reputation_global = graphene.Int(
+        description="Global reputation score across all corpuses"
+    )
+    reputation_for_corpus = graphene.Int(
+        corpus_id=graphene.ID(required=True),
+        description="Reputation score for a specific corpus",
+    )
+
+    # Activity statistics (Issue #611 - User Profile Page)
+    total_messages = graphene.Int(
+        description="Total number of messages posted by this user"
+    )
+    total_threads_created = graphene.Int(
+        description="Total number of threads created by this user"
+    )
+    total_annotations_created = graphene.Int(
+        description="Total number of annotations created by this user (visible to requester)"
+    )
+    total_documents_uploaded = graphene.Int(
+        description="Total number of documents uploaded by this user (visible to requester)"
+    )
+
+    def resolve_reputation_global(self, info):
+        """
+        Resolve global reputation for this user.
+
+        Uses pre-attached _reputation_global from resolve_global_leaderboard
+        to avoid N+1 queries. Falls back to database query for single-user
+        lookups.
+
+        Epic: #565 - Corpus Engagement Metrics & Analytics
+        Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+        """
+        if hasattr(self, "_reputation_global") and self._reputation_global is not None:
+            return self._reputation_global
+
+        from opencontractserver.conversations.models import UserReputation
+
+        try:
+            rep = UserReputation.objects.get(user=self, corpus__isnull=True)
+            return rep.reputation_score
+        except UserReputation.DoesNotExist:
+            return 0
+
+    def resolve_reputation_for_corpus(self, info, corpus_id):
+        """
+        Resolve reputation for this user in a specific corpus.
+
+        Epic: #565 - Corpus Engagement Metrics & Analytics
+        Issue: #568 - Create GraphQL queries for engagement metrics and leaderboards
+        """
+        from graphql_relay import from_global_id
+
+        from opencontractserver.conversations.models import UserReputation
+
+        try:
+            _, corpus_pk = from_global_id(corpus_id)
+            rep = UserReputation.objects.get(user=self, corpus_id=corpus_pk)
+            return rep.reputation_score
+        except UserReputation.DoesNotExist:
+            return 0
+        except Exception:
+            return 0
+
+    def resolve_total_messages(self, info):
+        """
+        Resolve total messages posted by this user.
+        Only counts messages visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.conversations.models import (
+            ChatMessage,
+            MessageTypeChoices,
+        )
+
+        return (
+            ChatMessage.objects.filter(creator=self, msg_type=MessageTypeChoices.HUMAN)
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_threads_created(self, info):
+        """
+        Resolve total threads created by this user.
+        Only counts threads visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.conversations.models import Conversation
+
+        return (
+            Conversation.objects.filter(creator=self, conversation_type="thread")
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_annotations_created(self, info):
+        """
+        Resolve total annotations created by this user.
+        Only counts annotations visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.annotations.models import Annotation
+
+        return (
+            Annotation.objects.filter(creator=self)
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    def resolve_total_documents_uploaded(self, info):
+        """
+        Resolve total documents uploaded by this user.
+        Only counts documents visible to the requesting user.
+
+        Issue: #611 - User Profile Page
+        """
+        from opencontractserver.documents.models import Document
+
+        return (
+            Document.objects.filter(creator=self)
+            .visible_to_user(info.context.user)
+            .count()
+        )
+
+    class Meta:
+        model = User
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class AssignmentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = Assignment
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class UserExportType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    def resolve_file(self, info):
+        return "" if not self.file else info.context.build_absolute_uri(self.file.url)
+
+    class Meta:
+        model = UserExport
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class UserImportType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    def resolve_zip(self, info):
+        return "" if not self.file else info.context.build_absolute_uri(self.zip.url)
+
+    class Meta:
+        model = UserImport
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class BulkDocumentUploadStatusType(graphene.ObjectType):
+    """Type for checking the status of a bulk document upload job"""
+
+    job_id = graphene.String()
+    success = graphene.Boolean()
+    total_files = graphene.Int()
+    processed_files = graphene.Int()
+    skipped_files = graphene.Int()
+    error_files = graphene.Int()
+    document_ids = graphene.List(graphene.String)
+    errors = graphene.List(graphene.String)
+    completed = graphene.Boolean()
+
+
+class UserFeedbackType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        from opencontractserver.feedback.models import UserFeedback
+
+        model = UserFeedback
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+    # https://docs.graphene-python.org/projects/django/en/latest/queries/#default-queryset
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        from django.db.models import QuerySet
+
+        if issubclass(type(queryset), QuerySet):
+            return queryset.visible_to_user(info.context.user)
+        elif "RelatedManager" in str(type(queryset)):
+            # https://stackoverflow.com/questions/11320702/import-relatedmanager-from-django-db-models-fields-related
+            return queryset.all().visible_to_user(info.context.user)
+        else:
+            return queryset

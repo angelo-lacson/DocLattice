@@ -1,0 +1,1127 @@
+"""GraphQL type definitions for document-related types."""
+import logging
+from typing import Optional
+
+import graphene
+from django.contrib.auth import get_user_model
+from django.db.models import QuerySet
+from graphene import relay
+from graphene.types.generic import GenericScalar
+from graphene_django import DjangoObjectType
+from graphql_relay import from_global_id
+
+from config.graphql.annotation_types import (
+    AnnotationType,
+    NoteType,
+    RelationshipType,
+)
+from config.graphql.base import CountableConnection
+from config.graphql.base_types import (
+    CorpusVersionInfoType,
+    DocumentProcessingStatusEnum,
+    PathActionEnum,
+    PathHistoryType,
+    VersionHistoryType,
+)
+from config.graphql.custom_resolvers import resolve_doc_annotations_optimized
+from config.graphql.permissioning.permission_annotator.mixins import (
+    AnnotatePermissionsForReadMixin,
+)
+from opencontractserver.constants import MAX_PROCESSING_ERROR_DISPLAY_LENGTH
+from opencontractserver.documents.models import (
+    Document,
+    DocumentAnalysisRow,
+    DocumentPath,
+    DocumentProcessingStatus,
+    DocumentRelationship,
+    DocumentSummaryRevision,
+)
+
+User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
+class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for DocumentPath model - represents filesystem lifecycle events."""
+
+    action = graphene.Field(PathActionEnum, description="Inferred action type")
+
+    def resolve_action(self, info):
+        """Infer action type from path state."""
+        if self.is_deleted:
+            return "DELETED"
+        elif self.parent is None:
+            return "IMPORTED"
+        else:
+            # Check if this is an update vs move
+            if hasattr(self, "parent") and self.parent:
+                if self.parent.path != self.path:
+                    return "MOVED"
+                elif self.parent.version_number != self.version_number:
+                    return "UPDATED"
+            return "UPDATED"
+
+    class Meta:
+        model = DocumentPath
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+    _VISIBLE_CORPUS_IDS_CACHE_KEY = "_docpath_visible_corpus_ids"
+
+    @classmethod
+    def _get_visible_corpus_ids(cls, info):
+        """Get visible corpus IDs with request-level caching to prevent N+1 queries."""
+        from opencontractserver.corpuses.models import Corpus
+
+        user = info.context.user
+        user_id = getattr(user, "id", "anonymous")
+        cache_key = f"{cls._VISIBLE_CORPUS_IDS_CACHE_KEY}_{user_id}"
+
+        if hasattr(info.context, cache_key):
+            return getattr(info.context, cache_key)
+
+        visible_ids = set(
+            Corpus.objects.visible_to_user(user).values_list("id", flat=True)
+        )
+        setattr(info.context, cache_key, visible_ids)
+        return visible_ids
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        """Filter paths to current, non-deleted paths in visible corpuses."""
+        visible_corpus_ids = cls._get_visible_corpus_ids(info)
+
+        if issubclass(type(queryset), QuerySet):
+            return queryset.filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
+        elif "RelatedManager" in str(type(queryset)):
+            return queryset.all().filter(
+                corpus_id__in=visible_corpus_ids,
+                is_current=True,
+                is_deleted=False,
+            )
+        else:
+            return queryset
+
+
+class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for DocumentRelationship model."""
+
+    data = GenericScalar()
+
+    class Meta:
+        model = DocumentRelationship
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        # DocumentRelationship uses inherited permissions (not PermissionManager)
+        # Permission filtering is done by DocumentRelationshipQueryOptimizer
+        # in the resolver, so just pass through the queryset here
+        if issubclass(type(queryset), QuerySet):
+            return queryset
+        elif "RelatedManager" in str(type(queryset)):
+            return queryset.all()
+        else:
+            return queryset
+
+
+class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    # Import optimized resolvers for file fields
+    from config.graphql.optimized_file_resolvers import (
+        resolve_icon_optimized,
+        resolve_md_summary_file_optimized,
+        resolve_pawls_parse_file_optimized,
+        resolve_pdf_file_optimized,
+        resolve_txt_extract_file_optimized,
+    )
+
+    # Use optimized resolvers that minimize storage backend overhead
+    resolve_pdf_file = resolve_pdf_file_optimized
+    resolve_icon = resolve_icon_optimized
+    resolve_txt_extract_file = resolve_txt_extract_file_optimized
+    resolve_md_summary_file = resolve_md_summary_file_optimized
+    resolve_pawls_parse_file = resolve_pawls_parse_file_optimized
+    resolve_doc_annotations = resolve_doc_annotations_optimized
+
+    all_structural_annotations = graphene.List(AnnotationType)
+
+    def resolve_all_structural_annotations(self, info):
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        return AnnotationQueryOptimizer.get_document_annotations(
+            document_id=self.id,
+            user=getattr(info.context, "user", None),
+            structural=True,
+            use_cache=True,
+        )
+
+    # Updated field and resolver for all annotations with enhanced filtering
+    all_annotations = graphene.List(
+        AnnotationType,
+        corpus_id=graphene.ID(),
+        analysis_id=graphene.ID(),
+        is_structural=graphene.Boolean(),
+    )
+
+    def resolve_all_annotations(
+        self, info, corpus_id=None, analysis_id=None, is_structural=None
+    ):
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        user = getattr(info.context, "user", None)
+        corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+        analysis_pk = None
+        if analysis_id:
+            analysis_pk = (
+                0 if analysis_id == "__none__" else from_global_id(analysis_id)[1]
+            )
+        return AnnotationQueryOptimizer.get_document_annotations(
+            document_id=self.id,
+            user=user,
+            corpus_id=corpus_pk,
+            analysis_id=analysis_pk,
+            structural=is_structural,
+            use_cache=True,
+        )
+
+    # New field and resolver for all relationships
+    all_relationships = graphene.List(
+        RelationshipType,
+        corpus_id=graphene.ID(),
+        analysis_id=graphene.ID(),
+    )
+
+    def resolve_all_relationships(self, info, corpus_id=None, analysis_id=None):
+        """Resolve all relationships using the optimizer."""
+        from opencontractserver.annotations.query_optimizer import (
+            RelationshipQueryOptimizer,
+        )
+
+        try:
+            corpus_pk = None
+            analysis_pk = None
+
+            if corpus_id:
+                _, corpus_pk = from_global_id(corpus_id)
+            if analysis_id and analysis_id != "__none__":
+                _, analysis_pk = from_global_id(analysis_id)
+            elif analysis_id == "__none__":
+                analysis_pk = 0  # Special case for user relationships
+
+            # Get user from context
+            user = info.context.user if hasattr(info.context, "user") else None
+
+            return RelationshipQueryOptimizer.get_document_relationships(
+                document_id=self.id,
+                user=user,
+                corpus_id=corpus_pk,
+                analysis_id=analysis_pk,
+                use_cache=True,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed resolving relationships query for document {self.id} with input: corpus_id={corpus_id}, "
+                f"analysis_id={analysis_id}. Error: {e}"
+            )
+            return []
+
+    # New field for document relationships
+    all_doc_relationships = graphene.List(
+        DocumentRelationshipType,
+        corpus_id=graphene.String(),
+    )
+
+    # Relationship count field for efficient badge display
+    doc_relationship_count = graphene.Int(
+        corpus_id=graphene.String(),
+        description="Count of document relationships for this document in the given corpus",
+    )
+
+    def resolve_doc_relationship_count(self, info, corpus_id=None):
+        """
+        Return the count of document relationships for this document.
+
+        Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
+        DocumentRelationship has its own guardian permissions.
+
+        Performance: Passes info.context to the query optimizer for request-level
+        caching of visible document/corpus IDs. This prevents N+1 queries when
+        this field is requested for multiple documents in a single GraphQL query.
+        """
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        try:
+            user = info.context.user
+            corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+
+            # Use the query optimizer for proper permission filtering
+            # Pass info.context for request-level caching to prevent N+1 queries
+            return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+                user=user,
+                document_id=self.id,
+                corpus_id=int(corpus_pk) if corpus_pk else None,
+                context=info.context,
+            ).count()
+        except Exception as e:
+            logger.warning(
+                f"Failed resolving doc_relationship_count for document {self.id}. "
+                f"Error: {e}"
+            )
+            return 0
+
+    def resolve_all_doc_relationships(self, info, corpus_id=None):
+        """
+        Resolve DocumentRelationship objects for this document.
+
+        Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
+        DocumentRelationship has its own guardian permissions (unlike annotation
+        Relationships which inherit from document/corpus).
+
+        Performance: Passes info.context to the query optimizer for request-level
+        caching of visible document/corpus IDs.
+        """
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        try:
+            user = info.context.user
+            corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+
+            # Use the query optimizer for proper permission filtering
+            # Pass info.context for request-level caching
+            return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
+                user=user,
+                document_id=self.id,
+                corpus_id=int(corpus_pk) if corpus_pk else None,
+                context=info.context,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed resolving document relationships query for "
+                f"document {self.id} with input: corpus_id={corpus_id}. "
+                f"Error: {e}"
+            )
+            return []
+
+    all_notes = graphene.List(
+        NoteType,
+        corpus_id=graphene.ID(),
+    )
+
+    def resolve_all_notes(self, info, corpus_id: Optional[str] = None):
+        """
+        Return the set of Note objects related to this Document instance that the user can see,
+        filtered by corpus_id.
+        """
+        from opencontractserver.annotations.models import Note
+
+        user = info.context.user
+
+        # Start with a base queryset of all Notes the user can see
+        base_qs = Note.objects.visible_to_user(user=user)
+
+        if corpus_id is None:
+            corpus_pk = None
+            return base_qs.filter(document=self)
+
+        else:
+            corpus_pk = from_global_id(corpus_id)[1]
+            # Then intersect with this Document's related notes, filtering by the given corpus_id
+            # This ensures we only query notes that are both visible to the user and belong to
+            # this specific Document (through the related manager self.notes).
+            return base_qs.filter(document=self, corpus_id=corpus_pk)
+
+    # Summary version history (corpus-specific)
+    summary_revisions = graphene.List(
+        lambda: DocumentSummaryRevisionType,
+        corpus_id=graphene.ID(required=True),
+        description="List of all summary revisions/versions for a specific corpus, ordered by version.",
+    )
+    current_summary_version = graphene.Int(
+        corpus_id=graphene.ID(required=True),
+        description="Current version number of the summary for a specific corpus",
+    )
+    summary_content = graphene.String(
+        corpus_id=graphene.ID(required=True),
+        description="Current summary content for a specific corpus",
+    )
+
+    def resolve_summary_revisions(self, info, corpus_id):
+        """Returns all revisions for this document's summary in a specific corpus, ordered by version."""
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import DocumentSummaryRevision
+
+        _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning summary data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return DocumentSummaryRevision.objects.none()
+        return DocumentSummaryRevision.objects.filter(
+            document_id=self.pk, corpus_id=corpus_pk
+        ).order_by("version")
+
+    def resolve_current_summary_version(self, info, corpus_id):
+        """Returns the current summary version number for a specific corpus."""
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.documents.models import DocumentSummaryRevision
+
+        _, corpus_pk = from_global_id(corpus_id)
+        # Verify user can access the corpus before returning version data
+        if (
+            not Corpus.objects.visible_to_user(info.context.user)
+            .filter(pk=corpus_pk)
+            .exists()
+        ):
+            return 0
+        latest_revision = (
+            DocumentSummaryRevision.objects.filter(
+                document_id=self.pk, corpus_id=corpus_pk
+            )
+            .order_by("-version")
+            .first()
+        )
+
+        return latest_revision.version if latest_revision else 0
+
+    def resolve_summary_content(self, info, corpus_id):
+        """Returns the current summary content for a specific corpus."""
+        from opencontractserver.corpuses.models import Corpus
+
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            # Use visible_to_user() to prevent cross-corpus data leakage
+            corpus = Corpus.objects.visible_to_user(info.context.user).get(pk=corpus_pk)
+            return self.get_summary_for_corpus(corpus)
+        except Corpus.DoesNotExist:
+            return ""
+
+    # -------------------- Version Metadata Fields (Phase 1.1) -------------------- #
+    # These are lightweight fields that are always loaded with documents
+
+    version_number = graphene.Int(
+        corpus_id=graphene.ID(required=True),
+        description="Content version number in this corpus (from DocumentPath)",
+    )
+    has_version_history = graphene.Boolean(
+        description="True if this document has multiple versions (parent exists)"
+    )
+    version_count = graphene.Int(
+        description="Total number of versions in this document's version tree"
+    )
+    is_latest_version = graphene.Boolean(
+        description="True if this is the current version (Document.is_current)"
+    )
+    last_modified = graphene.DateTime(
+        corpus_id=graphene.ID(required=True),
+        description="When the document was last modified in this corpus",
+    )
+
+    # Lazy-loaded version history fields
+    version_history = graphene.Field(
+        VersionHistoryType,
+        description="Complete version history (lazy-loaded on request)",
+    )
+    path_history = graphene.Field(
+        PathHistoryType,
+        corpus_id=graphene.ID(required=True),
+        description="Path/location history in corpus (lazy-loaded on request)",
+    )
+
+    # Corpus-specific version list for version selector UI
+    corpus_versions = graphene.List(
+        graphene.NonNull(CorpusVersionInfoType),
+        corpus_id=graphene.ID(required=True),
+        description=(
+            "All versions of this document in a specific corpus. "
+            "Used by the version selector UI to show available versions."
+        ),
+    )
+
+    # Permission helpers for versioning features
+    can_restore = graphene.Boolean(
+        corpus_id=graphene.ID(required=True),
+        description="Whether user can restore this document (requires UPDATE permission)",
+    )
+    can_view_history = graphene.Boolean(
+        description="Whether user can view version history (requires READ permission)"
+    )
+
+    def resolve_version_number(self, info, corpus_id):
+        """Get version number from DocumentPath for this corpus."""
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            path_record = DocumentPath.objects.filter(
+                document_id=self.id, corpus_id=corpus_pk, is_current=True
+            ).first()
+            return path_record.version_number if path_record else 1
+        except Exception:
+            return 1
+
+    def resolve_has_version_history(self, info):
+        """Check if document has parent (i.e., multiple versions exist)."""
+        return self.parent is not None
+
+    def resolve_version_count(self, info):
+        """Count total versions in this document's version tree."""
+        # Count all documents with same version_tree_id
+        return Document.objects.filter(version_tree_id=self.version_tree_id).count()
+
+    def resolve_is_latest_version(self, info):
+        """Check if this is the current version."""
+        return self.is_current
+
+    def resolve_last_modified(self, info, corpus_id):
+        """Get last modification time from DocumentPath."""
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            path_record = DocumentPath.objects.filter(
+                document_id=self.id, corpus_id=corpus_pk, is_current=True
+            ).first()
+            return path_record.created if path_record else self.modified
+        except Exception:
+            return self.modified
+
+    def resolve_version_history(self, info):
+        """
+        Lazy-load complete version history.
+        Returns all versions in the document's version tree.
+        """
+        from graphql_relay import to_global_id
+
+        # Get all documents in the version tree, ordered by creation
+        versions = Document.objects.filter(
+            version_tree_id=self.version_tree_id
+        ).order_by("created")
+
+        version_list = []
+        for idx, doc in enumerate(versions, start=1):
+            # Determine change type
+            if doc.parent is None:
+                change_type = "INITIAL"
+            else:
+                # Could be enhanced to detect minor vs major changes
+                change_type = "CONTENT_UPDATE"
+
+            version_data = {
+                "id": to_global_id("DocumentType", doc.id),
+                "version_number": idx,
+                "hash": doc.pdf_file_hash or "",
+                "created_at": doc.created,
+                "created_by": doc.creator,
+                "size_bytes": doc.pdf_file.size if doc.pdf_file else None,
+                "change_type": change_type,
+                "parent_version": None,  # Could be resolved if needed
+            }
+            version_list.append(version_data)
+
+        # Find current version
+        current = next(
+            (
+                v
+                for v in version_list
+                if v["id"] == to_global_id("DocumentType", self.id)
+            ),
+            version_list[-1] if version_list else None,
+        )
+
+        return {
+            "versions": version_list,
+            "current_version": current,
+            "version_tree": None,  # Could build tree structure if needed
+        }
+
+    def resolve_path_history(self, info, corpus_id):
+        """
+        Lazy-load path history for this document in a corpus.
+        Returns all lifecycle events (import, move, delete, restore).
+        """
+        from graphql_relay import to_global_id
+
+        _, corpus_pk = from_global_id(corpus_id)
+
+        # Get all path records for this document in this corpus
+        path_records = DocumentPath.objects.filter(
+            document__version_tree_id=self.version_tree_id, corpus_id=corpus_pk
+        ).order_by("created")
+
+        events = []
+        original_path = None
+        current_path = None
+        move_count = 0
+
+        for path_record in path_records:
+            # Infer action type
+            if path_record.is_deleted:
+                action = "DELETED"
+            elif path_record.parent is None:
+                action = "IMPORTED"
+                original_path = path_record.path
+            else:
+                # Check if path changed vs version changed
+                if hasattr(path_record, "parent") and path_record.parent:
+                    if path_record.parent.path != path_record.path:
+                        action = "MOVED"
+                        move_count += 1
+                    elif (
+                        path_record.parent.version_number != path_record.version_number
+                    ):
+                        action = "UPDATED"
+                    else:
+                        action = "RESTORED"
+                else:
+                    action = "UPDATED"
+
+            if path_record.is_current and not path_record.is_deleted:
+                current_path = path_record.path
+
+            event = {
+                "id": to_global_id("DocumentPathType", path_record.id),
+                "action": action,
+                "path": path_record.path,
+                "folder": path_record.folder,
+                "timestamp": path_record.created,
+                "user": path_record.creator,
+                "version_number": path_record.version_number,
+            }
+            events.append(event)
+
+        return {
+            "events": events,
+            "current_path": current_path or original_path or "",
+            "original_path": original_path or "",
+            "move_count": move_count,
+        }
+
+    def resolve_corpus_versions(self, info, corpus_id):
+        """Return all versions of this document in a specific corpus.
+
+        Uses DocumentPath records to find all versions, ordered by version_number.
+        Each entry maps to a specific Document record, enabling the frontend
+        to navigate to historical versions via the ?v=N URL parameter.
+
+        Only returns versions whose underlying Document the requesting user
+        has permission to see (via visible_to_user), preventing information
+        disclosure of historical version metadata the user shouldn't access.
+
+        Performance: Uses a DB-level subquery (document__in) to push
+        permission filtering into a single query instead of materializing
+        visible IDs in Python then filtering. Results are cached on the
+        request context so that listing N documents with corpusVersions
+        in one query reuses the same result for documents sharing a
+        version_tree_id + corpus_id pair (avoids N+1).
+        """
+        from graphql_relay import to_global_id
+
+        type_name, corpus_pk = from_global_id(corpus_id)
+        if not type_name or type_name != "CorpusType":
+            return []
+
+        # Request-level cache keyed on (version_tree_id, corpus_pk).
+        cache_key = (self.version_tree_id, corpus_pk)
+        cache = getattr(info.context, "_corpus_versions_cache", None)
+        if cache is None:
+            cache = {}
+            info.context._corpus_versions_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+
+        # Subquery: only documents in this version tree the user can see.
+        visible_version_docs = (
+            Document.objects.filter(
+                version_tree_id=self.version_tree_id,
+            )
+            .visible_to_user(info.context.user)
+            .only("pk")
+        )
+
+        # delete_document() creates a tombstone (is_current=True, is_deleted=True)
+        # but leaves the previous path record with is_deleted=False.
+        # Exclude version_numbers that have a deleted current path.
+        deleted_version_numbers = DocumentPath.objects.filter(
+            corpus_id=corpus_pk,
+            document__version_tree_id=self.version_tree_id,
+            is_current=True,
+            is_deleted=True,
+        ).values("version_number")
+
+        # Non-deleted paths whose document passes visibility,
+        # excluding versions that are soft-deleted via tombstone.
+        # select_related("document") is needed only for slug access.
+        path_records = (
+            DocumentPath.objects.filter(
+                document__in=visible_version_docs,
+                corpus_id=corpus_pk,
+                is_deleted=False,
+            )
+            .exclude(version_number__in=deleted_version_numbers)
+            .select_related("document")
+            .order_by("version_number", "-created")
+        )
+
+        # Deduplicate by version_number (keep first = most recent due to -created).
+        seen_versions = set()
+        results = []
+        for path_record in path_records:
+            if path_record.version_number in seen_versions:
+                continue
+            seen_versions.add(path_record.version_number)
+            results.append(
+                {
+                    "version_number": path_record.version_number,
+                    "document_id": to_global_id(
+                        "DocumentType", path_record.document_id
+                    ),
+                    "document_slug": path_record.document.slug,
+                    "created": path_record.created,
+                    "is_current": path_record.is_current,
+                }
+            )
+
+        cache[cache_key] = results
+        return results
+
+    def resolve_can_restore(self, info, corpus_id):
+        """Check if user has UPDATE permission for restore operations."""
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        user = info.context.user
+        if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+            return False
+
+        # Check document permission
+        has_doc_update = user_has_permission_for_obj(
+            user, self, PermissionTypes.UPDATE, include_group_permissions=True
+        )
+        if not has_doc_update:
+            return False
+
+        # Check corpus permission
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            corpus = Corpus.objects.get(pk=corpus_pk)
+            has_corpus_update = user_has_permission_for_obj(
+                user, corpus, PermissionTypes.UPDATE, include_group_permissions=True
+            )
+            return has_corpus_update
+        except Corpus.DoesNotExist:
+            return False
+
+    def resolve_can_view_history(self, info):
+        """Check if user has READ permission for viewing history."""
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        user = info.context.user
+
+        # Public documents can be viewed by anyone
+        if self.is_public:
+            return True
+
+        if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+            return False
+
+        return user_has_permission_for_obj(
+            user, self, PermissionTypes.READ, include_group_permissions=True
+        )
+
+    # -------------------- Processing Status Fields (Pipeline Hardening) -------------------- #
+    processing_status = graphene.Field(
+        DocumentProcessingStatusEnum,
+        description="Current processing status of the document in the parsing pipeline",
+    )
+    processing_error = graphene.String(
+        description="Error message if processing failed (truncated for display)",
+    )
+    can_retry = graphene.Boolean(
+        description="Whether the user can retry processing for this document (True if FAILED and user has permission)",
+    )
+
+    def resolve_processing_status(self, info):
+        """Resolve the processing status enum value."""
+        status_value = self.processing_status
+        if status_value:
+            try:
+                return DocumentProcessingStatusEnum.get(status_value)
+            except Exception:
+                return None
+        return None
+
+    def resolve_processing_error(self, info):
+        """Resolve processing error message (truncated for display)."""
+        if self.processing_error:
+            return self.processing_error[:MAX_PROCESSING_ERROR_DISPLAY_LENGTH]
+        return None
+
+    def resolve_can_retry(self, info):
+        """
+        Check if user can retry processing for this document.
+
+        Returns True only if:
+        1. Document is in FAILED state
+        2. User has UPDATE permission (or is creator/superuser)
+
+        Note: This logic must stay aligned with RetryDocumentProcessing mutation.
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+        # Must be in failed state to retry
+        if self.processing_status != DocumentProcessingStatus.FAILED:
+            return False
+
+        user = info.context.user
+        if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+            return False
+
+        # Creator and superuser can always retry their documents
+        if self.creator == user or user.is_superuser:
+            return True
+
+        # Others need UPDATE permission
+        return user_has_permission_for_obj(
+            user, self, PermissionTypes.UPDATE, include_group_permissions=True
+        )
+
+    page_annotations = graphene.List(
+        AnnotationType,
+        corpus_id=graphene.ID(required=True),
+        page=graphene.Int(),  # Now optional for backwards compatibility
+        pages=graphene.List(graphene.Int),  # NEW: Accept multiple pages
+        structural=graphene.Boolean(),
+        analysis_id=graphene.ID(),
+        description="Get annots for spec. page(s) using opt. queries. Either 'page' (single) or 'pages' (multiple).",
+    )
+
+    page_relationships = graphene.List(
+        RelationshipType,
+        corpus_id=graphene.ID(required=True),
+        pages=graphene.List(graphene.Int, required=True),
+        structural=graphene.Boolean(),
+        analysis_id=graphene.ID(),
+        description="Get relationships where source or target annotations are on the specified page(s).",
+    )
+
+    def resolve_page_annotations(
+        self,
+        info,
+        corpus_id,
+        page=None,
+        pages=None,
+        structural=None,
+        analysis_id=None,
+        extract_id=None,
+    ):
+        """Resolve annotations for specific page(s) using optimized queries."""
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        _, corpus_pk = from_global_id(corpus_id)
+        analysis_pk = None
+        if analysis_id:
+            _, analysis_pk = from_global_id(analysis_id)
+        extract_pk = None
+        if extract_id:
+            _, extract_pk = from_global_id(extract_id)
+
+        # Get user from the GraphQL context
+        user = info.context.user if hasattr(info.context, "user") else None
+
+        # Check if user has permission to access this document
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                # Check if user has explicit permission
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        # Handle both single page and multiple pages
+        # Priority: if 'pages' is provided, use it; otherwise fall back to 'page'
+        page_list = None
+        if pages is not None and len(pages) > 0:
+            page_list = pages
+        elif page is not None:
+            page_list = [page]
+
+        # If neither is provided, return empty list (maintain backwards compatibility)
+        if page_list is None:
+            return []
+
+        return AnnotationQueryOptimizer.get_document_annotations(
+            document_id=self.id,
+            user=user,
+            corpus_id=corpus_pk,
+            pages=page_list,  # Pass list of pages
+            structural=structural,
+            analysis_id=analysis_pk,
+            extract_id=extract_pk,
+            use_cache=True,
+        )
+
+    def resolve_page_relationships(
+        self,
+        info,
+        corpus_id,
+        pages,
+        structural=None,
+        analysis_id=None,
+        extract_id=None,
+        strict_extract_mode=False,
+    ):
+        """Resolve relationships for specific page(s) using the optimizer."""
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            RelationshipQueryOptimizer,
+        )
+
+        _, corpus_pk = from_global_id(corpus_id)
+        analysis_pk = None
+        if analysis_id:
+            if analysis_id == "__none__":
+                analysis_pk = 0  # Special case for user annotations
+            else:
+                _, analysis_pk = from_global_id(analysis_id)
+        extract_pk = None
+        if extract_id:
+            _, extract_pk = from_global_id(extract_id)
+
+        # Get user from the GraphQL context
+        user = info.context.user if hasattr(info.context, "user") else None
+
+        # Permission checks mirroring annotation resolvers
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        return RelationshipQueryOptimizer.get_document_relationships(
+            document_id=self.id,
+            user=user,
+            corpus_id=corpus_pk,
+            pages=pages if pages else None,
+            structural=structural,
+            analysis_id=analysis_pk,
+            extract_id=extract_pk,
+            strict_extract_mode=strict_extract_mode,
+            use_cache=True,
+        )
+
+    relationship_summary = graphene.Field(
+        GenericScalar,
+        corpus_id=graphene.ID(required=True),
+        description="Get relationship summary statistics for this document and corpus (MV-backed).",
+    )
+
+    # Extract-specific summary
+    extract_annotation_summary = graphene.Field(
+        GenericScalar,
+        extract_id=graphene.ID(required=True),
+        description="Get summary of annotations used in specific extract.",
+    )
+
+    def resolve_relationship_summary(self, info, corpus_id):
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            RelationshipQueryOptimizer,
+        )
+
+        # Permissions mirroring annotation summary style
+        user = info.context.user if hasattr(info.context, "user") else None
+
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        _, corpus_pk = from_global_id(corpus_id)
+        summary = RelationshipQueryOptimizer.get_relationship_summary(
+            document_id=self.id, corpus_id=corpus_pk, user=user
+        )
+        return summary
+
+    def resolve_extract_annotation_summary(self, info, extract_id):
+        """Get summary of annotations in extract."""
+        from django.contrib.auth.models import AnonymousUser
+        from graphql import GraphQLError
+
+        from opencontractserver.annotations.query_optimizer import (
+            AnnotationQueryOptimizer,
+        )
+
+        user = info.context.user if hasattr(info.context, "user") else None
+        _, extract_pk = from_global_id(extract_id)
+
+        # Check if user has permission to access this document
+        if not self.is_public:
+            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
+                raise GraphQLError(
+                    "Permission denied: Authentication required to access private documents"
+                )
+            elif user != self.creator and not user.is_superuser:
+                from opencontractserver.types.enums import PermissionTypes
+                from opencontractserver.utils.permissioning import (
+                    user_has_permission_for_obj,
+                )
+
+                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
+                    raise GraphQLError(
+                        "Permission denied: You do not have access to this document"
+                    )
+
+        return AnnotationQueryOptimizer.get_extract_annotation_summary(
+            document_id=self.id, extract_id=extract_pk, user=user, use_cache=True
+        )
+
+    # Folder assignment within a corpus
+    folder_in_corpus = graphene.Field(
+        lambda: _get_corpus_folder_type(),
+        corpus_id=graphene.ID(required=True),
+        description="Get the folder this document is in within a specific corpus (null = root)",
+    )
+
+    def resolve_folder_in_corpus(self, info, corpus_id):
+        """
+        Get folder assignment for this document in a specific corpus.
+
+        Delegates to DocumentFolderService.get_document_folder() for
+        permission checking and dual-system consistency.
+        """
+        from opencontractserver.corpuses.folder_service import DocumentFolderService
+        from opencontractserver.corpuses.models import Corpus
+
+        _, corpus_pk = from_global_id(corpus_id)
+        try:
+            corpus = Corpus.objects.get(pk=corpus_pk)
+            return DocumentFolderService.get_document_folder(
+                user=info.context.user,
+                document=self,
+                corpus=corpus,
+            )
+        except Corpus.DoesNotExist:
+            return None
+
+    class Meta:
+        model = Document
+        interfaces = [relay.Node]
+        exclude = ("embedding",)
+        connection_class = CountableConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        if issubclass(type(queryset), QuerySet):
+            return queryset.visible_to_user(info.context.user)
+        elif "RelatedManager" in str(type(queryset)):
+            # https://stackoverflow.com/questions/11320702/import-relatedmanager-from-django-db-models-fields-related
+            return queryset.all().visible_to_user(info.context.user)
+        else:
+            return queryset
+
+
+# Explicit Connection class for DocumentType to use in relay.ConnectionField
+class DocumentTypeConnection(CountableConnection):
+    """Connection class for DocumentType used in Corpus.documents field."""
+
+    class Meta:
+        node = DocumentType
+
+
+class DocumentAnalysisRowType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    class Meta:
+        model = DocumentAnalysisRow
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+class DocumentCorpusActionsType(graphene.ObjectType):
+    corpus_actions = graphene.List(lambda: _get_corpus_action_type())
+    extracts = graphene.List(lambda: _get_extract_type())
+    analysis_rows = graphene.List(DocumentAnalysisRowType)
+
+
+class DocumentSummaryRevisionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for document summary revisions."""
+
+    class Meta:
+        model = DocumentSummaryRevision
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+
+def _get_corpus_folder_type():
+    from config.graphql.corpus_types import CorpusFolderType
+
+    return CorpusFolderType
+
+
+def _get_corpus_action_type():
+    from config.graphql.agent_types import CorpusActionType
+
+    return CorpusActionType
+
+
+def _get_extract_type():
+    from config.graphql.extract_types import ExtractType
+
+    return ExtractType
