@@ -166,6 +166,11 @@ interface CorpusChatProps {
    * Callback fired when a source citation is clicked and should navigate to the
    * source document with the text block highlighted. Receives the source's
    * ChatMessageSource so the parent can build a deep link URL.
+   *
+   * When provided, ALL sources with a `document_id` will route through this
+   * callback instead of selecting locally. Only pass this prop in contexts
+   * where no document is currently displayed (e.g. corpus-level chat), so
+   * that every source is effectively a cross-document navigation.
    */
   onSourceNavigate?: (source: ChatMessageSource) => void;
 }
@@ -1732,6 +1737,15 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     sourcedMessage?.sources.map((source, index) => ({
                       text: source.rawText || `Source ${index + 1}`,
                       onClick: () => {
+                        // Cross-document source: navigate away instead of
+                        // selecting locally (avoids a flash of local selection
+                        // state before the navigation replaces the view).
+                        if (source.document_id && onSourceNavigate) {
+                          onSourceNavigate(source);
+                          return;
+                        }
+
+                        // Same-document source: select locally
                         setChatSourceState((prev) => ({
                           ...prev,
                           selectedMessageId: sourcedMessage.messageId,
@@ -1739,10 +1753,6 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                         }));
                         if (sourcedMessage.sources.length > 0) {
                           onMessageSelect?.(sourcedMessage.messageId);
-                        }
-                        // Navigate to source document with text block highlight
-                        if (source.document_id && onSourceNavigate) {
-                          onSourceNavigate(source);
                         }
                       },
                     })) || [];
