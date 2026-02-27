@@ -116,8 +116,8 @@ class TestDbUtils(TestCase):
         table_has_column.cache_clear()
 
     def test_existing_table_and_column(self):
-        # auth_user table should exist with 'username' column
-        result = table_has_column("auth_user", "username")
+        # users_user table exists (custom user model: AUTH_USER_MODEL = "users.User")
+        result = table_has_column("users_user", "username")
         self.assertTrue(result)
 
     def test_existing_table_missing_column(self):
@@ -265,8 +265,8 @@ class TestGenerateUniqueSlug(TestCase):
             max_length=7,
             fallback_prefix="x",
         )
-        # Should be "abcd-2" (trimmed + suffix)
-        self.assertEqual(result, "abcd-2")
+        # "abcde" (5 chars) + "-2" fits within max_length=7
+        self.assertEqual(result, "abcde-2")
         self.assertLessEqual(len(result), 7)
 
 

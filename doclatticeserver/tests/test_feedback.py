@@ -187,11 +187,17 @@ class TestUserFeedbackModel(TestCase):
         self.assertEqual(perm_codenames, expected)
 
     def test_guardian_user_permission_model(self):
+        from django.contrib.auth.models import Permission
+
         feedback = UserFeedback.objects.create(creator=self.user)
+        permission = Permission.objects.get(
+            codename="read_userfeedback",
+            content_type__app_label="feedback",
+        )
         perm = UserFeedbackUserObjectPermission(
             content_object=feedback,
             user=self.user,
-            permission_id=1,
+            permission=permission,
         )
         self.assertEqual(perm.content_object, feedback)
 
