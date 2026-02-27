@@ -7,7 +7,6 @@ and read-only query projection types (WorkerAccountQueryType, etc.).
 
 import graphene
 
-
 # ============================================================================
 # Mutation return types
 # ============================================================================
@@ -69,9 +68,7 @@ class CorpusAccessTokenQueryType(graphene.ObjectType):
     """Corpus access token for listing. Never exposes the hashed key."""
 
     id = graphene.Int()
-    key_prefix = graphene.String(
-        description="First 8 characters of the original token"
-    )
+    key_prefix = graphene.String(description="First 8 characters of the original token")
     worker_account_id = graphene.Int()
     worker_account_name = graphene.String()
     corpus_id = graphene.Int()
@@ -101,8 +98,6 @@ class WorkerDocumentUploadPageType(graphene.ObjectType):
     """Paginated wrapper for worker document uploads."""
 
     items = graphene.List(graphene.NonNull(WorkerDocumentUploadQueryType))
-    total_count = graphene.Int(
-        description="Total matching uploads before pagination"
-    )
+    total_count = graphene.Int(description="Total matching uploads before pagination")
     limit = graphene.Int(description="Max items returned")
     offset = graphene.Int(description="Items skipped")
