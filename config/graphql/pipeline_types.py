@@ -1,4 +1,5 @@
 """GraphQL type definitions for pipeline-related types."""
+
 import graphene
 from graphene.types.generic import GenericScalar
 

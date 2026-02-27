@@ -31,6 +31,7 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
+from opencontractserver.constants.annotations import MANUAL_ANNOTATION_SENTINEL
 from opencontractserver.documents.models import Document
 from opencontractserver.types.enums import LabelType
 
@@ -129,9 +130,11 @@ class AnnotationQueryMixin:
         if analysis_ids:
             logger.info(f"Filtering by analysis_ids: {analysis_ids}")
             analysis_id_list = analysis_ids.split(",")
-            if "~~MANUAL~~" in analysis_id_list:
+            if MANUAL_ANNOTATION_SENTINEL in analysis_id_list:
                 logger.info("Including manual annotations in filter")
-                analysis_id_list = [id for id in analysis_id_list if id != "~~MANUAL~~"]
+                analysis_id_list = [
+                    id for id in analysis_id_list if id != MANUAL_ANNOTATION_SENTINEL
+                ]
                 analysis_pks = [
                     int(from_global_id(value)[1]) for value in analysis_id_list
                 ]
@@ -150,13 +153,15 @@ class AnnotationQueryMixin:
         if analyzer_ids:
             logger.info(f"Filtering by analyzer_ids: {analyzer_ids}")
             analyzer_id_list = analyzer_ids.split(",")
-            if "~~MANUAL~~" in analyzer_id_list:
+            if MANUAL_ANNOTATION_SENTINEL in analyzer_id_list:
                 logger.info("Including manual annotations in filter")
-                analyzer_id_list = [id for id in analyzer_id_list if id != "~~MANUAL~~"]
+                analyzer_id_list = [
+                    id for id in analyzer_id_list if id != MANUAL_ANNOTATION_SENTINEL
+                ]
                 analyzer_pks = [
                     int(from_global_id(id)[1])
                     for id in analyzer_id_list
-                    if id != "~~MANUAL~~"
+                    if id != MANUAL_ANNOTATION_SENTINEL
                 ]
                 queryset = queryset.filter(
                     Q(analysis__isnull=True) | Q(analysis__analyzer_id__in=analyzer_pks)
@@ -449,28 +454,29 @@ class AnnotationQueryMixin:
             "page_containing_annotation_with_id", None
         )
         page_number_list = kwargs.get("page_number_list", None)
+        pages = []  # Default empty; populated if page_number_list is valid
         current_page = 1  # Default to page 1 (1-indexed)
+
+        # Always parse page_number_list when provided so `pages` is available
+        # for the filtering step below, regardless of which branch sets current_page.
+        if page_number_list is not None:
+            if re.search(r"^(?:\d+,)*\d+$", page_number_list):
+                pages = [int(page) for page in page_number_list.split(",")]
+            else:
+                logger.warning(
+                    f"Invalid format for page_number_list: {page_number_list}"
+                )
 
         if kwargs.get("current_page", None) is not None:
             current_page = kwargs.get("current_page")
             logger.info(
                 f"resolve_page_annotations - Using provided current_page: {current_page}"
             )
-        elif page_number_list is not None:
-            if re.search(r"^(?:\d+,)*\d+$", page_number_list):  # Validate format better
-                pages = [int(page) for page in page_number_list.split(",")]
-                current_page = (
-                    pages[-1] if pages else 1
-                )  # Use last page in list, default 1 if empty
-                logger.info(
-                    f"resolve_page_annotations - Using last page from page_number_list: {current_page}"
-                )
-            else:
-                # Handle invalid format - maybe raise error or log warning and default
-                logger.warning(
-                    f"Invalid format for page_number_list: {page_number_list}"
-                )
-                # Keep default current_page = 1
+        elif pages:
+            current_page = pages[-1]
+            logger.info(
+                f"resolve_page_annotations - Using last page from page_number_list: {current_page}"
+            )
         elif page_containing_annotation_with_id:
             try:
                 annotation_pk = int(

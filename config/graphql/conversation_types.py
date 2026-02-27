@@ -1,4 +1,5 @@
 """GraphQL type definitions for conversation, message, and moderation types."""
+
 import graphene
 from django.db.models import QuerySet
 from graphene import relay
