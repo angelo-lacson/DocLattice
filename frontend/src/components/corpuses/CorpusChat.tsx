@@ -1732,6 +1732,15 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     sourcedMessage?.sources.map((source, index) => ({
                       text: source.rawText || `Source ${index + 1}`,
                       onClick: () => {
+                        // Cross-document source: navigate away instead of
+                        // selecting locally (avoids a flash of local selection
+                        // state before the navigation replaces the view).
+                        if (source.document_id && onSourceNavigate) {
+                          onSourceNavigate(source);
+                          return;
+                        }
+
+                        // Same-document source: select locally
                         setChatSourceState((prev) => ({
                           ...prev,
                           selectedMessageId: sourcedMessage.messageId,
@@ -1739,10 +1748,6 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                         }));
                         if (sourcedMessage.sources.length > 0) {
                           onMessageSelect?.(sourcedMessage.messageId);
-                        }
-                        // Navigate to source document with text block highlight
-                        if (source.document_id && onSourceNavigate) {
-                          onSourceNavigate(source);
                         }
                       },
                     })) || [];
