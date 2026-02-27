@@ -1,7 +1,7 @@
 """GraphQL type definitions for badge, leaderboard, community, notification, and search types."""
+
 import graphene
 from graphene import relay
-from graphene.types.generic import GenericScalar
 from graphene_django import DjangoObjectType
 
 from config.graphql.annotation_types import AnnotationType

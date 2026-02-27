@@ -1,4 +1,5 @@
 """GraphQL type definitions for extract and analysis types."""
+
 import graphene
 from graphene import relay
 from graphene.types.generic import GenericScalar
