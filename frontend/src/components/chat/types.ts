@@ -1,0 +1,68 @@
+import { MultipageAnnotationJson } from "../types";
+import { TimelineEntry } from "../widgets/chat/ChatMessage";
+
+/**
+ * Properties of source annotation data included in websocket messages.
+ */
+export interface WebSocketSources {
+  page: number;
+  json: { start: number; end: number } | MultipageAnnotationJson;
+  annotation_id: number;
+  label: string;
+  label_id: number;
+  rawText: string;
+  /** Document ID this source belongs to (provided by backend SourceNode metadata) */
+  document_id?: number;
+}
+
+/**
+ * Full websocket message structure for chat streaming.
+ * Covers async streaming (ASYNC_START/CONTENT/FINISH), synchronous messages,
+ * agent thoughts, source citations, and approval gates.
+ */
+export interface MessageData {
+  type:
+    | "ASYNC_START"
+    | "ASYNC_CONTENT"
+    | "ASYNC_FINISH"
+    | "SYNC_CONTENT"
+    | "ASYNC_THOUGHT"
+    | "ASYNC_SOURCES"
+    | "ASYNC_APPROVAL_NEEDED"
+    | "ASYNC_APPROVAL_RESULT"
+    | "ASYNC_RESUME"
+    | "ASYNC_ERROR";
+  content: string;
+  data?: {
+    sources?: WebSocketSources[];
+    timeline?: TimelineEntry[];
+    message_id?: string;
+    tool_name?: string;
+    args?: any;
+    pending_tool_call?: {
+      name: string;
+      arguments: any;
+      tool_call_id?: string;
+    };
+    [key: string]: any;
+  };
+}
+
+/**
+ * Context status metadata from the backend (token usage, compaction info).
+ */
+export interface ContextStatus {
+  used_tokens: number;
+  context_window: number;
+  was_compacted: boolean;
+  tokens_before_compaction: number;
+}
+
+/**
+ * Notice shown to user when context window compaction occurs.
+ */
+export interface CompactionNotice {
+  tokensBefore: number;
+  tokensAfter: number;
+  contextWindow: number;
+}

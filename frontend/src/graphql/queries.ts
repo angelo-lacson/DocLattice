@@ -26,7 +26,7 @@ import {
   RawDocumentType,
 } from "../types/graphql-api";
 import { ExportObject } from "../types/graphql-api";
-import { WebSocketSources } from "../components/knowledge_base/document/right_tray/ChatTray";
+import { WebSocketSources } from "../components/chat/types";
 
 export interface RequestDocumentsInputs {
   textSearch?: string;

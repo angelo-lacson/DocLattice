@@ -11,42 +11,15 @@
  *   4) Allow sending user queries through the socket.
  */
 
-import { formatDistanceToNow } from "date-fns";
 import {
-  BackButton,
-  CardContent,
-  CardTitle,
   ChatContainer,
-  ConversationCard,
-  ConversationGrid,
   ConversationIndicator,
-  Creator,
   ErrorContainer,
-  MessageCount,
-  TimeStamp,
 } from "../ChatContainers";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  AlertCircle,
-  ArrowLeft,
-  Plus,
-  Search,
-  Send,
-  X,
-  Calendar,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-} from "lucide-react";
-import { Button, CardMeta } from "semantic-ui-react";
-import {
-  SetStateAction,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { AlertCircle, ArrowLeft, Send } from "lucide-react";
+import { Button } from "semantic-ui-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChatMessage,
   ChatMessageProps,
@@ -71,15 +44,6 @@ import {
   ChatInputWrapper,
   CharacterCount,
 } from "../ChatContainers";
-import { FetchMoreOnVisible } from "../../../widgets/infinite_scroll/FetchMoreOnVisible";
-import { NewChatFloatingButton } from "../ChatContainers";
-import {
-  DatePickerExpanded,
-  ExpandingInput,
-  FilterContainer,
-  IconButton,
-} from "../FilterContainers";
-import { MultipageAnnotationJson } from "../../../types";
 import {
   useChatSourceState,
   mapWebSocketSourcesToChatMessageSources,
@@ -87,70 +51,17 @@ import {
 import { TimelineEntry } from "../../../widgets/chat/ChatMessage";
 import { useUISettings } from "../../../annotator/hooks/useUISettings";
 import useWindowDimensions from "../../../hooks/WindowDimensionHook";
+import type {
+  WebSocketSources,
+  MessageData,
+  ContextStatus,
+  CompactionNotice,
+} from "../../../chat/types";
+import { ApprovalOverlay, ReopenApprovalButton } from "./ApprovalOverlay";
+import type { PendingApproval } from "./ApprovalOverlay";
+import { ConversationListView } from "./ConversationListView";
 
-/**
- * A helper interface representing the properties of data included in websocket messages,
- * specifically any source annotations or label metadata.
- */
-export interface WebSocketSources {
-  page: number;
-  json: { start: number; end: number } | MultipageAnnotationJson;
-  annotation_id: number;
-  label: string;
-  label_id: number;
-  rawText: string;
-  /** Document ID this source belongs to (provided by backend SourceNode metadata) */
-  document_id?: number;
-}
-
-/**
- * An interface for the full websocket message structure.
- * Includes the type of content (async start, streaming content, final, etc.),
- * the actual text content, and optional annotation data.
- */
-export interface MessageData {
-  type:
-    | "ASYNC_START"
-    | "ASYNC_CONTENT"
-    | "ASYNC_FINISH"
-    | "SYNC_CONTENT"
-    | "ASYNC_THOUGHT"
-    | "ASYNC_SOURCES"
-    | "ASYNC_APPROVAL_NEEDED"
-    | "ASYNC_APPROVAL_RESULT"
-    | "ASYNC_RESUME"
-    | "ASYNC_ERROR";
-  content: string;
-  data?: {
-    sources?: WebSocketSources[];
-    timeline?: TimelineEntry[];
-    message_id?: string;
-    tool_name?: string;
-    args?: any;
-    pending_tool_call?: {
-      name: string;
-      arguments: any;
-      tool_call_id?: string;
-    };
-    [key: string]: any; // For any additional metadata
-  };
-}
-
-/**
- * Context status metadata from the backend (token usage, compaction info).
- */
-interface ContextStatus {
-  used_tokens: number;
-  context_window: number;
-  was_compacted: boolean;
-  tokens_before_compaction: number;
-}
-
-interface CompactionNotice {
-  tokensBefore: number;
-  tokensAfter: number;
-  contextWindow: number;
-}
+export type { WebSocketSources, MessageData } from "../../../chat/types";
 
 /**
  * ChatTray props definition.
@@ -216,14 +127,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     useState<CompactionNotice | null>(null);
 
   // Approval state
-  const [pendingApproval, setPendingApproval] = useState<{
-    messageId: string;
-    toolCall: {
-      name: string;
-      arguments: any;
-      tool_call_id?: string;
-    };
-  } | null>(null);
+  const [pendingApproval, setPendingApproval] =
+    useState<PendingApproval | null>(null);
 
   // Controls visibility of the approval modal (can be dismissed & reopened)
   const [showApprovalModal, setShowApprovalModal] = useState<boolean>(false);
@@ -252,8 +157,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
   // For dynamic display of filters
   const [showSearch, setShowSearch] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const datePickerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLElement>(null);
+  const datePickerRef = useRef<HTMLElement>(null);
 
   const { data, loading, error, fetchMore, refetch } = useQuery<
     GetConversationsOutputs,
@@ -1270,52 +1175,6 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     );
   }
 
-  // Add these utility functions at the top of the file
-  const calculateMessageStats = (conversations: any[]) => {
-    const counts = conversations.map(
-      (conv) => conv?.chatMessages?.totalCount || 0
-    );
-    const max = Math.max(...counts);
-    const min = Math.min(...counts);
-    const sum = counts.reduce((a, b) => a + b, 0);
-    const mean = sum / counts.length;
-
-    // Calculate standard deviation
-    const variance =
-      counts.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / counts.length;
-    const stdDev = Math.sqrt(variance);
-
-    return { max, min, mean, stdDev };
-  };
-
-  const getMessageCountColor = (
-    count: number,
-    stats: { max: number; min: number; mean: number; stdDev: number }
-  ) => {
-    if (count === 0) {
-      return {
-        background: "linear-gradient(135deg, #EDF2F7 0%, #E2E8F0 100%)",
-        opacity: 0.9,
-        textColor: "#4A5568", // Dark text for zero count
-      };
-    }
-
-    // Calculate z-score
-    const zScore = (count - stats.mean) / (stats.stdDev || 1);
-
-    // Convert z-score to a 0-1 scale using sigmoid function
-    const intensity = 1 / (1 + Math.exp(-zScore));
-
-    // Create gradient based on intensity
-    return {
-      background: `linear-gradient(135deg, 
-        rgba(43, 108, 176, ${0.7 + intensity * 0.3}) 0%, 
-        rgba(44, 82, 130, ${0.8 + intensity * 0.2}) 100%)`,
-      opacity: 0.8 + intensity * 0.2,
-      textColor: intensity > 0.3 ? "white" : "#1A202C", // Flip text color based on intensity
-    };
-  };
-
   const handleCompleteMessage = (
     content: string,
     sourcesData?: Array<WebSocketSources>,
@@ -1447,181 +1306,6 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
     });
   };
 
-  /**
-   * Approval overlay component
-   */
-  const ApprovalOverlay = () => {
-    if (!pendingApproval || !showApprovalModal) return null;
-
-    return (
-      <motion.div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000,
-          padding: "1rem",
-        }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-      >
-        <motion.div
-          style={{
-            backgroundColor: "white",
-            borderRadius: "12px",
-            padding: "2rem",
-            maxWidth: "500px",
-            width: "100%",
-            boxShadow:
-              "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-          }}
-          initial={{ scale: 0.9, y: 20 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.9, y: 20 }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              marginBottom: "1.5rem",
-            }}
-          >
-            <AlertTriangle size={24} style={{ color: "#f59e0b" }} />
-            <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
-              Tool Approval Required
-            </h3>
-            <button
-              style={{
-                marginLeft: "auto",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "1.25rem",
-                color: "#6b7280",
-                padding: "0.25rem",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              onClick={() => setShowApprovalModal(false)}
-              aria-label="Close approval modal"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div style={{ marginBottom: "1.5rem" }}>
-            <p style={{ margin: "0 0 1rem 0", color: "#374151" }}>
-              The assistant wants to execute the following tool:
-            </p>
-            <div
-              style={{
-                backgroundColor: "#f3f4f6",
-                padding: "1rem",
-                borderRadius: "8px",
-                fontFamily: "monospace",
-                fontSize: "0.875rem",
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-                Tool: {pendingApproval.toolCall.name}
-              </div>
-              {Object.keys(pendingApproval.toolCall.arguments).length > 0 && (
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-                    Arguments:
-                  </div>
-                  <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                    {JSON.stringify(
-                      pendingApproval.toolCall.arguments,
-                      null,
-                      2
-                    )}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div
-            style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}
-          >
-            <Button
-              size="medium"
-              onClick={() => sendApprovalDecision(false)}
-              style={{
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <XCircle size={16} />
-              Reject
-            </Button>
-            <Button
-              size="medium"
-              onClick={() => sendApprovalDecision(true)}
-              style={{
-                backgroundColor: "#059669",
-                color: "white",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <CheckCircle size={16} />
-              Approve
-            </Button>
-          </div>
-        </motion.div>
-      </motion.div>
-    );
-  };
-
-  // Helper to render reopen button when modal dismissed but approval pending
-  const ReopenApprovalButton = () => {
-    if (!pendingApproval || showApprovalModal) return null;
-
-    // Check if the message is actually still awaiting approval
-    const messageStillAwaiting = combinedMessages.some(
-      (msg) =>
-        msg.messageId === pendingApproval.messageId &&
-        msg.approvalStatus === "awaiting"
-    );
-
-    if (!messageStillAwaiting) {
-      // Clear pendingApproval if the message is no longer awaiting
-      setPendingApproval(null);
-      return null;
-    }
-
-    return (
-      <Button
-        size="small"
-        onClick={() => setShowApprovalModal(true)}
-        style={{
-          background: "#f59e0b",
-          color: "white",
-          marginLeft: "1rem",
-        }}
-      >
-        Pending Approval
-      </Button>
-    );
-  };
-
   /* ----------------------------------------------------------- */
   /* Handle initialMessage (from FloatingDocumentInput)          */
   /* ----------------------------------------------------------- */
@@ -1740,7 +1424,13 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                     Back to Conversations
                   </Button>
                 )}
-                <ReopenApprovalButton />
+                <ReopenApprovalButton
+                  pendingApproval={pendingApproval}
+                  showApprovalModal={showApprovalModal}
+                  setShowApprovalModal={setShowApprovalModal}
+                  combinedMessages={combinedMessages}
+                  setPendingApproval={setPendingApproval}
+                />
               </motion.div>
 
               {/* Scrollable Messages Container */}
@@ -2046,171 +1736,36 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               </ChatInputContainer>
             </motion.div>
           ) : (
-            <motion.div
-              id="conversation-menu"
-              style={{
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "1rem",
-                padding: "2rem",
-                overflowY: "hidden",
-              }}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <FilterContainer>
-                <AnimatePresence>
-                  {showSearch && (
-                    <ExpandingInput
-                      initial={{ width: 0, opacity: 0 }}
-                      animate={{ width: "auto", opacity: 1 }}
-                      exit={{ width: 0, opacity: 0 }}
-                      ref={searchInputRef}
-                    >
-                      <input
-                        className="expanded"
-                        placeholder="Search by title..."
-                        value={titleFilter}
-                        onChange={(e) => setTitleFilter(e.target.value)}
-                        autoFocus
-                      />
-                    </ExpandingInput>
-                  )}
-                </AnimatePresence>
-
-                <IconButton
-                  onClick={() => setShowSearch(!showSearch)}
-                  $isActive={!!titleFilter}
-                  whileTap={{ scale: 0.95 }}
-                  data-testid="search-filter-button"
-                >
-                  <Search />
-                </IconButton>
-
-                <IconButton
-                  onClick={() => setShowDatePicker(!showDatePicker)}
-                  $isActive={!!(createdAtGte || createdAtLte)}
-                  whileTap={{ scale: 0.95 }}
-                  data-testid="date-filter-button"
-                >
-                  <Calendar />
-                </IconButton>
-
-                <AnimatePresence>
-                  {showDatePicker && (
-                    <DatePickerExpanded
-                      ref={datePickerRef}
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                    >
-                      <input
-                        type="date"
-                        value={createdAtGte}
-                        onChange={(e) => setCreatedAtGte(e.target.value)}
-                        placeholder="Start Date"
-                      />
-                      <input
-                        type="date"
-                        value={createdAtLte}
-                        onChange={(e) => setCreatedAtLte(e.target.value)}
-                        placeholder="End Date"
-                      />
-                    </DatePickerExpanded>
-                  )}
-                </AnimatePresence>
-
-                {(titleFilter || createdAtGte || createdAtLte) && (
-                  <IconButton
-                    onClick={() => {
-                      setTitleFilter("");
-                      setCreatedAtGte("");
-                      setCreatedAtLte("");
-                      setShowSearch(false);
-                      setShowDatePicker(false);
-                    }}
-                    whileTap={{ scale: 0.95 }}
-                    data-testid="clear-filters-button"
-                  >
-                    <X />
-                  </IconButton>
-                )}
-              </FilterContainer>
-              <ConversationGrid id="conversation-grid">
-                {conversations.map((conv, index) => {
-                  if (!conv) return null;
-                  return (
-                    <ConversationCard
-                      key={conv.id}
-                      data-testid={`conversation-card-${conv.id}`}
-                      onClick={() => loadConversation(conv.id)}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.3,
-                        delay: index * 0.05,
-                        ease: [0.4, 0, 0.2, 1],
-                      }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <MessageCount
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 25,
-                          delay: index * 0.05 + 0.2,
-                        }}
-                        $colorStyle={getMessageCountColor(
-                          conv.chatMessages?.totalCount || 0,
-                          calculateMessageStats(conversations)
-                        )}
-                      >
-                        {conv.chatMessages?.totalCount || 0}
-                      </MessageCount>
-                      <CardContent>
-                        <CardTitle>
-                          {conv.title || "Untitled Conversation"}
-                        </CardTitle>
-                        <CardMeta>
-                          <TimeStamp>
-                            {formatDistanceToNow(new Date(conv.createdAt))} ago
-                          </TimeStamp>
-                          <Creator>{conv.creator?.email}</Creator>
-                        </CardMeta>
-                      </CardContent>
-                    </ConversationCard>
-                  );
-                })}
-                <FetchMoreOnVisible
-                  fetchNextPage={handleFetchMoreConversations}
-                />
-              </ConversationGrid>
-              <NewChatFloatingButton
-                onClick={() => startNewChat()}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                data-testid="new-chat-button"
-              >
-                <Plus />
-              </NewChatFloatingButton>
-            </motion.div>
+            <ConversationListView
+              conversations={conversations}
+              showSearch={showSearch}
+              setShowSearch={setShowSearch}
+              showDatePicker={showDatePicker}
+              setShowDatePicker={setShowDatePicker}
+              titleFilter={titleFilter}
+              setTitleFilter={setTitleFilter}
+              createdAtGte={createdAtGte}
+              setCreatedAtGte={setCreatedAtGte}
+              createdAtLte={createdAtLte}
+              setCreatedAtLte={setCreatedAtLte}
+              searchInputRef={searchInputRef}
+              datePickerRef={datePickerRef}
+              loadConversation={loadConversation}
+              handleFetchMoreConversations={handleFetchMoreConversations}
+              startNewChat={startNewChat}
+            />
           )}
         </AnimatePresence>
       </ConversationIndicator>
 
       {/* Approval Overlay */}
       <AnimatePresence>
-        <ApprovalOverlay />
+        <ApprovalOverlay
+          pendingApproval={pendingApproval}
+          showApprovalModal={showApprovalModal}
+          setShowApprovalModal={setShowApprovalModal}
+          sendApprovalDecision={sendApprovalDecision}
+        />
       </AnimatePresence>
     </ChatContainer>
   );
