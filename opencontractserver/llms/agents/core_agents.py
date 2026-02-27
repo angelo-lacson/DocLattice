@@ -651,7 +651,7 @@ class CoreAgentBase(ABC):
             return result
         except Exception as e:
             # Log the error but don't raise - return None per spec
-            print(f"Error in structured_response: {e}")
+            logger.error("Error in structured_response: %s", e)
             return None
 
     # ------------------------------------------------------------------

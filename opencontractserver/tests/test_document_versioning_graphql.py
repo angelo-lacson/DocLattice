@@ -893,11 +893,6 @@ class TestRestoreDeletedDocumentMutation(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        # Debug output
-        if not result["data"]["restoreDeletedDocument"]["ok"]:
-            print(
-                f"Error message: {result['data']['restoreDeletedDocument']['message']}"
-            )
         self.assertTrue(result["data"]["restoreDeletedDocument"]["ok"])
         self.assertIn("restored", result["data"]["restoreDeletedDocument"]["message"])
         self.assertEqual(
@@ -1073,11 +1068,6 @@ class TestRestoreDocumentToVersionMutation(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        # Debug output to see actual error
-        if not result["data"]["restoreDocumentToVersion"]["ok"]:
-            print(
-                f"Error message: {result['data']['restoreDocumentToVersion']['message']}"
-            )
         self.assertTrue(result["data"]["restoreDocumentToVersion"]["ok"])
         self.assertEqual(
             result["data"]["restoreDocumentToVersion"]["newVersionNumber"], 4

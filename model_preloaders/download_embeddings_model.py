@@ -1,6 +1,9 @@
+import logging
 import os
 
 from sentence_transformers import SentenceTransformer
+
+logger = logging.getLogger(__name__)
 
 # Directory to save the model (absolute path)
 cache_dir = "/models"
@@ -19,6 +22,7 @@ model = SentenceTransformer(
 # Save the model to the desired path
 model.save(model_save_path)
 
-print(
-    f"Sentence transformer model has been downloaded and saved to '{model_save_path}'."
+logger.info(
+    "Sentence transformer model has been downloaded and saved to '%s'.",
+    model_save_path,
 )

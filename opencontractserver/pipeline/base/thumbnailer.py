@@ -113,5 +113,5 @@ class BaseThumbnailGenerator(PipelineComponentBase, ABC):
             return None
 
         except Document.DoesNotExist:
-            print(f"Document with id {doc_id} does not exist.")
+            logger.warning("Document with id %s does not exist.", doc_id)
             return None
