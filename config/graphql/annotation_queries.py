@@ -456,6 +456,7 @@ class AnnotationQueryMixin:
         page_number_list = kwargs.get("page_number_list", None)
         pages = []  # Default empty; populated if page_number_list is valid
         current_page = 1  # Default to page 1 (1-indexed)
+        pages = []  # Parsed page list from page_number_list (1-indexed)
 
         # Always parse page_number_list when provided so `pages` is available
         # for the filtering step below, regardless of which branch sets current_page.

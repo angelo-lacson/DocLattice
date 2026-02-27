@@ -20,6 +20,7 @@ from config.graphql.graphene_types import (
 )
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
 from opencontractserver.annotations.models import Annotation
+from opencontractserver.constants.annotations import SEMANTIC_SEARCH_MAX_RESULTS
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 
@@ -435,7 +436,7 @@ class SearchQueryMixin:
         ),
         limit=graphene.Int(
             default_value=50,
-            description="Maximum number of results to return (default: 50, max: 200)",
+            description=f"Maximum number of results to return (default: 50, max: {SEMANTIC_SEARCH_MAX_RESULTS})",
         ),
         offset=graphene.Int(
             default_value=0,
@@ -504,7 +505,7 @@ class SearchQueryMixin:
         # made when accessing annotation.document, annotation.corpus, or
         # annotation.annotation_label in the filter loops or result types below.
         # Cap limit to prevent abuse
-        limit = min(limit, 200)
+        limit = min(limit, SEMANTIC_SEARCH_MAX_RESULTS)
 
         # Convert global IDs to database IDs
         corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
