@@ -190,11 +190,9 @@ export const DocumentVersionSelector: React.FC<
     (a, b) => b.versionNumber - a.versionNumber
   );
 
-  const versionCount = versions.length;
-  const hasHistory = versionCount > 1;
+  const hasHistory = sortedVersions.length > 1;
   const latestVersion = versions.find((v) => v.isCurrent);
-  const displayVersion =
-    currentVersion ?? latestVersion?.versionNumber ?? null;
+  const displayVersion = currentVersion ?? latestVersion?.versionNumber ?? null;
   const isOutdated =
     currentVersion !== null &&
     !versions.find((v) => v.versionNumber === currentVersion && v.isCurrent);
@@ -344,7 +342,9 @@ export const DocumentVersionSelector: React.FC<
             $isOutdated={isOutdated}
             $hasHistory={hasHistory}
             onClick={handleToggle}
-            aria-label={`Version ${displayVersion} of ${versionCount}, click to switch versions`}
+            aria-label={`Version ${displayVersion ?? "?"} of ${
+              sortedVersions.length
+            }, click to switch versions`}
             aria-expanded={isOpen}
             aria-haspopup="listbox"
             aria-activedescendant={
@@ -353,9 +353,9 @@ export const DocumentVersionSelector: React.FC<
                 : undefined
             }
           >
-            v{displayVersion}
+            v{displayVersion ?? "?"}
             <span style={{ fontSize: "9px", opacity: 0.7 }}>
-              / {versionCount}
+              / {sortedVersions.length}
             </span>
             <Icon
               name={isOpen ? "chevron up" : "chevron down"}
@@ -365,8 +365,12 @@ export const DocumentVersionSelector: React.FC<
         }
         content={
           isOutdated
-            ? `Viewing version ${displayVersion} of ${versionCount}. A newer version is available.`
-            : `Version ${displayVersion} of ${versionCount}. Click to switch versions.`
+            ? `Viewing version ${displayVersion ?? "?"} of ${
+                sortedVersions.length
+              }. A newer version is available.`
+            : `Version ${displayVersion ?? "?"} of ${
+                sortedVersions.length
+              }. Click to switch versions.`
         }
         position="bottom left"
         size="small"
@@ -404,9 +408,7 @@ export const DocumentVersionSelector: React.FC<
                   tabIndex={-1}
                 >
                   <div>
-                    <VersionLabel>
-                      Version {version.versionNumber}
-                    </VersionLabel>
+                    <VersionLabel>Version {version.versionNumber}</VersionLabel>
                     <VersionDate>
                       {new Date(version.created).toLocaleDateString()}
                     </VersionDate>

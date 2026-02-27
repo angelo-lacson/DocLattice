@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { Bot, Database, FileText, Tag, User } from "lucide-react";
+import { Bot, Database, FileText, MapPin, Tag, User } from "lucide-react";
 import { color } from "../../theme/colors";
 import { MentionedResourceType } from "../../types/graphql-api";
 import { sanitizeForTooltip } from "../../utils/textSanitization";
@@ -79,6 +79,8 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
       return "linear-gradient(135deg, #f093fb15 0%, #f5576c15 100%)";
     if (props.$type === "annotation")
       return "linear-gradient(135deg, #43e97b15 0%, #38f9d715 100%)";
+    if (props.$type === "source")
+      return "linear-gradient(135deg, #0ea5e915 0%, #06b6d415 100%)";
     if (props.$type === "agent")
       return "linear-gradient(135deg, #8b5cf615 0%, #6366f115 100%)";
     return "linear-gradient(135deg, #e0e0e015 0%, #c0c0c015 100%)";
@@ -90,6 +92,7 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
       if (props.$type === "corpus") return color.P4;
       if (props.$type === "document") return "#f5576c40";
       if (props.$type === "annotation") return "#38f9d780";
+      if (props.$type === "source") return "#0ea5e960";
       if (props.$type === "agent") return "#8b5cf660";
       return color.N4;
     }};
@@ -99,6 +102,7 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
     if (props.$type === "corpus") return color.P8;
     if (props.$type === "document") return "#c41e3a";
     if (props.$type === "annotation") return "#0d9488";
+    if (props.$type === "source") return "#0284c7";
     if (props.$type === "agent") return "#7c3aed";
     return color.N8;
   }};
@@ -116,6 +120,8 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
           ? "linear-gradient(135deg, #f093fb25 0%, #f5576c25 100%)"
           : props.$type === "annotation"
           ? "linear-gradient(135deg, #43e97b25 0%, #38f9d725 100%)"
+          : props.$type === "source"
+          ? "linear-gradient(135deg, #0ea5e925 0%, #06b6d425 100%)"
           : props.$type === "agent"
           ? "linear-gradient(135deg, #8b5cf625 0%, #6366f125 100%)"
           : "linear-gradient(135deg, #e0e0e025 0%, #c0c0c025 100%)"
@@ -129,6 +135,8 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
           ? "#f5576c80"
           : props.$type === "annotation"
           ? "#38f9d7"
+          : props.$type === "source"
+          ? "#0ea5e9"
           : props.$type === "agent"
           ? "#8b5cf6"
           : color.N6
@@ -209,6 +217,10 @@ export function MarkdownMessageRenderer({
 
     // Document: /d/{creator}/{corpus}/{doc}
     if (href.startsWith("/d/")) {
+      // Text block deep link has query param ?tb=
+      if (href.includes("?tb=") || href.includes("&tb=")) {
+        return "source";
+      }
       // Annotation has query param ?ann=
       if (href.includes("?ann=") || href.includes("&ann=")) {
         return "annotation";
@@ -232,6 +244,8 @@ export function MarkdownMessageRenderer({
         return <FileText size={14} />;
       case "annotation":
         return <Tag size={14} />;
+      case "source":
+        return <MapPin size={14} />;
       case "agent":
         return <Bot size={14} />;
       default:
@@ -293,6 +307,14 @@ export function MarkdownMessageRenderer({
         )}${suffix}`;
       case "annotation":
         return `Annotation: ${sanitizeForTooltip(text)}${suffix}`;
+      case "source":
+        return `Source: ${sanitizeForTooltip(
+          resource?.rawText
+            ? resource.rawText.length > 200
+              ? resource.rawText.slice(0, 200) + "..."
+              : resource.rawText
+            : text
+        )}${suffix}`;
       case "agent":
         return `AI Agent: ${sanitizeForTooltip(text)}${suffix}`;
       default:
