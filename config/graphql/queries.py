@@ -312,8 +312,15 @@ class Query(graphene.ObjectType):
         # Resolve document via corpus membership (DocumentPath), not by
         # creator.  Documents in a corpus may have been uploaded by any
         # user with write access, not necessarily the corpus owner.
+        # Filter by corpus membership to avoid ambiguity when documents
+        # in different corpuses share the same slug.
         doc = (
-            Document.objects.filter(slug=document_slug)
+            Document.objects.filter(
+                slug=document_slug,
+                documentpath__corpus=corpus,
+                documentpath__is_current=True,
+                documentpath__is_deleted=False,
+            )
             .visible_to_user(info.context.user)
             .first()
         )

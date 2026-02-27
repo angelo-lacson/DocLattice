@@ -485,7 +485,7 @@ const ProcessingDeleteButton = styled.button`
 
   &:hover {
     opacity: 1;
-    background: rgba(239, 68, 68, 0.9);
+    background: ${FAILURE_COLORS.BORDER};
     transform: scale(1.1);
   }
 `;
