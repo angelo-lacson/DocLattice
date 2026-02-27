@@ -183,3 +183,6 @@ scratch.py
 # Local notes
 /notes/
 .ipython/
+
+# Claude Code
+.claude/
