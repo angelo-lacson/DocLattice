@@ -31,6 +31,7 @@ import {
   encodeTextBlock,
   textBlockFromTokensByPage,
 } from "../../../../utils/textBlockEncoding";
+import { SELECTION_MENU } from "../../../../assets/configurations/constants";
 
 interface SelectionLayerProps {
   pageInfo: PDFPageInfo;
@@ -100,8 +101,8 @@ const SelectionLayer = ({
    */
   const calculateMenuPosition = (mouseX: number, mouseY: number) => {
     // Menu dimensions (approximate based on styled component)
-    const menuWidth = 200; // min-width: 160px + padding + border
-    const menuHeight = 200; // Approximate height for menu with items
+    const menuWidth = SELECTION_MENU.APPROX_WIDTH;
+    const menuHeight = SELECTION_MENU.APPROX_HEIGHT;
 
     // Get viewport dimensions
     const viewportWidth = window.innerWidth;
