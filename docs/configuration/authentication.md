@@ -96,15 +96,24 @@ validates tokens against this audience.
       -- it does not need to resolve to a real URL, it is just a logical identifier
     - **Signing Algorithm**: **RS256** (critical -- the backend only supports RS256)
 3. Click **Create**
-4. After creating the SPA application (Step 3 below), return here and go to the
+4. In the API's **Settings** tab, scroll to **Access Settings** and enable
+   **Allow Offline Access**. This allows the frontend to request refresh tokens
+   (via the `offline_access` scope), which are required for the SDK's
+   `useRefreshTokens: true` configuration.
+5. After creating the SPA application (Step 3 below), return here and go to the
    API's **Machine to Machine Applications** tab
-5. Toggle the SPA application **on** to grant it access to this API
+6. Toggle the SPA application **on** to grant it access to this API
 
 !!! warning "SPA must be authorized on the API"
     After creating both the API and the SPA application, you must return to the
     API's **Machine to Machine Applications** tab and grant the SPA access.
     Without this, `getAccessTokenSilently()` will fail with
     `"Client is not authorized to access resource server"`.
+
+!!! warning "Allow Offline Access must be enabled on the API"
+    Without **Allow Offline Access** on the API (Step 2, item 4), Auth0 will not
+    issue refresh tokens even when the SDK requests the `offline_access` scope.
+    This causes `"Missing Refresh Token"` errors on the frontend.
 
 #### Step 3: Create a Single Page Application (SPA)
 
@@ -134,7 +143,11 @@ This is used by the React frontend to authenticate users via PKCE.
     http://localhost:3000, http://localhost:8000, https://your-domain.com
     ```
 
-6. Save changes
+6. Scroll to **Refresh Token Rotation** and enable **Rotation**. This is required
+   because the frontend SDK uses `useRefreshTokens: true` to avoid cross-origin
+   iframe issues on localhost. Optionally enable **Refresh Token Expiration** for
+   additional security (recommended for production).
+7. Save changes
 
 !!! note "You do not need the Client Secret for the SPA"
     Single Page Applications use the PKCE (Proof Key for Code Exchange) flow,
@@ -350,6 +363,20 @@ asynchronously within a few seconds of first login.
 
 ## Troubleshooting
 
+### "Missing Refresh Token" error
+
+**Symptom**: After authenticating, the browser console or a toast shows
+`Authentication failed: Missing Refresh Token (audience: '...', scope: 'openid profile email offline_access')`.
+
+**Cause**: The frontend SDK is configured with `useRefreshTokens: true` (to avoid
+cross-origin iframe issues), which makes it request the `offline_access` scope. Auth0
+only issues refresh tokens when both conditions are met:
+
+1. The **API** has **Allow Offline Access** enabled (Step 2, item 4)
+2. The **SPA application** has **Refresh Token Rotation** enabled (Step 3, item 6)
+
+**Fix**: Enable both settings in your Auth0 dashboard. No code changes needed.
+
 ### Auth0 login redirects back to login page
 
 **Symptom**: After Auth0 authentication, you're redirected back to `/admin/login/`
@@ -373,7 +400,7 @@ or the Auth0 `/authorize` endpoint returns a 403.
 **Cause**: The SPA application has not been granted access to the API.
 
 **Fix**: Go to **Applications > APIs > (your API) > Machine to Machine Applications**
-tab and toggle the SPA application **on**. See Step 2, items 4-5.
+tab and toggle the SPA application **on**. See Step 2, items 5-6.
 
 ### Auth0 `/authorize` returns 403
 
