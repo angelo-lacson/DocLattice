@@ -16,6 +16,11 @@ export const DEFAULT_LABEL_COLOR = "94a3b8";
 export const PRIMARY_LABEL_COLOR = "0F766E";
 // Default color for agent messages when no badge color is configured
 export const DEFAULT_AGENT_COLOR = "#4A90E2";
+// Color for text block deep link highlights (teal, distinct from chat source blue #5C7C9D)
+export const TEXT_BLOCK_HIGHLIGHT_COLOR = "#0EA5E9";
+// Sentinel ID used to inject text block deep links as virtual chat sources
+// in the TxtAnnotator (so they render with the same highlight machinery).
+export const TEXT_BLOCK_DEEPLINK_ID = "__text_block_deeplink__";
 
 // File size constants for formatting
 export const FILE_SIZE = {
@@ -169,6 +174,10 @@ export const MENTION_TYPES = {
   agent: {
     navigable: false, // No agent detail page yet
     label: "AI Agent",
+  },
+  source: {
+    navigable: true,
+    label: "Source",
   },
 } as const;
 
