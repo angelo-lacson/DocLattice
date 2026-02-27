@@ -25,6 +25,12 @@ import { PermissionTypes, TextSearchSpanResult } from "../../../types";
 import { Label, LabelContainer, PaperContainer } from "./StyledComponents";
 import RadialButtonCloud, { CloudButtonItem } from "./RadialButtonCloud";
 import { hexToRgba } from "./utils";
+import { useLocation } from "react-router-dom";
+import { Copy, Link, Tag, X, AlertCircle } from "lucide-react";
+import {
+  encodeTextBlock,
+  textBlockFromSpan,
+} from "../../../../utils/textBlockEncoding";
 
 /**
  * Shape of an individual text chunk used to render text spans.
@@ -253,6 +259,81 @@ const ChatSourceIcon = styled.div<{ isSelected: boolean }>`
   }
 `;
 
+const TxtActionMenu = styled.div`
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  min-width: 160px;
+`;
+
+const TxtActionMenuItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.2s;
+  &:hover {
+    background-color: #f5f5f5;
+  }
+  svg {
+    flex-shrink: 0;
+  }
+`;
+
+const TxtMenuDivider = styled.div`
+  height: 1px;
+  background-color: #e0e0e0;
+  margin: 4px 0;
+`;
+
+const TxtShortcutHint = styled.span`
+  margin-left: auto;
+  font-size: 12px;
+  color: #666;
+  background-color: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+`;
+
+const TxtHelpMessage = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  color: #666;
+  font-size: 14px;
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #f59e0b;
+  }
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  span {
+    font-weight: 500;
+    color: #333;
+  }
+`;
+
+const TxtHelpText = styled.div`
+  font-size: 12px;
+  color: #666;
+  line-height: 1.3;
+`;
+
 /**
  * Convert a local selection offset to the global offset based on
  * an array of text spans. Each <span> is matched by data-span-index.
@@ -336,12 +417,24 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   selectedChatSourceId,
   onAnnotationRefChange,
 }) => {
+  const location = useLocation();
+
   const [hoveredSpanIndex, setHoveredSpanIndex] = useState<number | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [annotationToEdit, setAnnotationToEdit] =
     useState<ServerSpanAnnotation | null>(null);
   const [labelsToRender, setLabelsToRender] = useState<LabelRenderData[]>([]);
   const [spans, setSpans] = useState<TextSpan[]>([]);
+
+  // Selection action menu state
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [actionMenuPosition, setActionMenuPosition] = useState({ x: 0, y: 0 });
+  const [pendingSelection, setPendingSelection] = useState<{
+    start: number;
+    end: number;
+    text: string;
+  } | null>(null);
+  const lastMenuInteractionTime = useRef<number>(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hideLabelsTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -749,10 +842,11 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   }, [selectedChatSourceId, spans]);
 
   /**
-   * Handle a mouse-up event to create a new annotation from selection, if any.
+   * Handle a mouse-up event to show the action menu for the selection.
    */
   const handleMouseUp = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!allowInput || read_only) return;
+    // Cooldown after menu interaction to prevent immediate re-trigger
+    if (Date.now() - lastMenuInteractionTime.current < 300) return;
 
     const selection = document.getSelection();
     if (!selection || selection.toString().length === 0) {
@@ -781,10 +875,112 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     const selectedText = text.slice(start, end);
 
     if (selectedText.length > 0) {
-      const newAnnotation = getSpan({ start, end, text: selectedText });
-      createAnnotation(newAnnotation);
+      setPendingSelection({ start, end, text: selectedText });
+
+      // Position menu near cursor, clamped to viewport
+      const menuWidth = 200;
+      const menuHeight = 200;
+      let x = event.clientX + 5;
+      let y = event.clientY + 5;
+      if (x + menuWidth > window.innerWidth - 10) {
+        x = event.clientX - menuWidth - 5;
+      }
+      if (y + menuHeight > window.innerHeight - 10) {
+        y = event.clientY - menuHeight - 5;
+      }
+      setActionMenuPosition({ x: Math.max(10, x), y: Math.max(10, y) });
+      setShowActionMenu(true);
     }
   };
+
+  const dismissMenu = useCallback(() => {
+    lastMenuInteractionTime.current = Date.now();
+    setShowActionMenu(false);
+    setPendingSelection(null);
+    document.getSelection()?.removeAllRanges();
+  }, []);
+
+  const handleTxtCopyText = useCallback(() => {
+    if (pendingSelection) {
+      navigator.clipboard.writeText(pendingSelection.text);
+    }
+    dismissMenu();
+  }, [pendingSelection, dismissMenu]);
+
+  const handleTxtCopyLink = useCallback(() => {
+    if (pendingSelection) {
+      const block = textBlockFromSpan(
+        pendingSelection.start,
+        pendingSelection.end
+      );
+      const encoded = encodeTextBlock(block);
+      const params = new URLSearchParams(location.search);
+      params.set("tb", encoded);
+      const url = `${window.location.origin}${
+        location.pathname
+      }?${params.toString()}`;
+      navigator.clipboard.writeText(url);
+    }
+    dismissMenu();
+  }, [pendingSelection, location, dismissMenu]);
+
+  const handleTxtApplyLabel = useCallback(() => {
+    if (pendingSelection) {
+      const newAnnotation = getSpan(pendingSelection);
+      createAnnotation(newAnnotation);
+    }
+    dismissMenu();
+  }, [pendingSelection, getSpan, createAnnotation, dismissMenu]);
+
+  // Handle clicks outside the action menu and keyboard shortcuts
+  useEffect(() => {
+    if (!showActionMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".txt-action-menu")) {
+        dismissMenu();
+      }
+    };
+
+    const handleKeyPress = (event: KeyboardEvent) => {
+      switch (event.key.toLowerCase()) {
+        case "c":
+          event.preventDefault();
+          handleTxtCopyText();
+          break;
+        case "l":
+          event.preventDefault();
+          handleTxtCopyLink();
+          break;
+        case "a":
+          event.preventDefault();
+          if (allowInput && !read_only) {
+            handleTxtApplyLabel();
+          }
+          break;
+        case "escape":
+          event.preventDefault();
+          dismissMenu();
+          break;
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyPress);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyPress);
+    };
+  }, [
+    showActionMenu,
+    handleTxtCopyText,
+    handleTxtCopyLink,
+    handleTxtApplyLabel,
+    dismissMenu,
+    allowInput,
+    read_only,
+  ]);
 
   return (
     <>
@@ -1011,6 +1207,92 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           }
         )}
       </PaperContainer>
+
+      {/* Text Selection Action Menu */}
+      {showActionMenu && (
+        <TxtActionMenu
+          className="txt-action-menu"
+          data-testid="txt-selection-action-menu"
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed",
+            left: `${actionMenuPosition.x}px`,
+            top: `${actionMenuPosition.y}px`,
+            zIndex: 1000,
+          }}
+        >
+          <TxtActionMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTxtCopyText();
+            }}
+            data-testid="txt-copy-text-button"
+          >
+            <Copy size={16} />
+            <span>Copy Text</span>
+            <TxtShortcutHint>C</TxtShortcutHint>
+          </TxtActionMenuItem>
+
+          <TxtActionMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTxtCopyLink();
+            }}
+            data-testid="txt-copy-link-button"
+          >
+            <Link size={16} />
+            <span>Copy Link</span>
+            <TxtShortcutHint>L</TxtShortcutHint>
+          </TxtActionMenuItem>
+
+          {allowInput && !read_only && (
+            <>
+              <TxtMenuDivider />
+              <TxtActionMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTxtApplyLabel();
+                }}
+                data-testid="txt-apply-label-button"
+              >
+                <Tag size={16} />
+                <span>Apply Label</span>
+                <TxtShortcutHint>A</TxtShortcutHint>
+              </TxtActionMenuItem>
+            </>
+          )}
+
+          {(!allowInput || read_only) && (
+            <>
+              <TxtMenuDivider />
+              <TxtHelpMessage>
+                <AlertCircle size={16} />
+                <div>
+                  <span>Annotation unavailable</span>
+                  <TxtHelpText>
+                    {read_only
+                      ? "Document is read-only"
+                      : "No input permissions"}
+                  </TxtHelpText>
+                </div>
+              </TxtHelpMessage>
+            </>
+          )}
+
+          <TxtMenuDivider />
+          <TxtActionMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              dismissMenu();
+            }}
+            data-testid="txt-cancel-button"
+          >
+            <X size={16} />
+            <span>Cancel</span>
+            <TxtShortcutHint>ESC</TxtShortcutHint>
+          </TxtActionMenuItem>
+        </TxtActionMenu>
+      )}
 
       <Modal
         open={editModalOpen}
