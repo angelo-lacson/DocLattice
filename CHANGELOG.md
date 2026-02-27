@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **chat/types.ts**: Replaced `any` types with explicit typed properties (`args`, `pending_tool_call.arguments`, `decision`, `error`, `context_status`, `compaction`, `approval_decision`).
 - **DocumentKnowledgeBase.tsx**: Memoized `getPanelWidthPercentage` with `useCallback` to prevent auto-zoom effect from re-running on every render.
 
+### Added
+
+#### Test Coverage for Untested Backend Modules (Closes #975)
+- Unit tests for five previously uncovered modules: feedback, shared (defaults, db_utils, slug_utils, utils, mixins), constants, types (enums, TypedDicts), and MCP extended (telemetry, TTLLRUCache, RateLimiter, formatters, config, permissions, URI parser) (`opencontractserver/tests/`)
+
 ### Fixed
 
 #### Rollup Vulnerability - Arbitrary File Write via Path Traversal (Closes #973)

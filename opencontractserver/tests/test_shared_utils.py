@@ -121,7 +121,7 @@ class TestDbUtils(TestCase):
         self.assertTrue(result)
 
     def test_existing_table_missing_column(self):
-        result = table_has_column("auth_user", "nonexistent_column_xyz")
+        result = table_has_column("users_user", "nonexistent_column_xyz")
         self.assertFalse(result)
 
     def test_nonexistent_table(self):
@@ -130,9 +130,9 @@ class TestDbUtils(TestCase):
 
     def test_result_is_cached(self):
         # First call
-        result1 = table_has_column("auth_user", "username")
+        result1 = table_has_column("users_user", "username")
         # Second call should hit cache
-        result2 = table_has_column("auth_user", "username")
+        result2 = table_has_column("users_user", "username")
         self.assertEqual(result1, result2)
         # Check cache info
         info = table_has_column.cache_info()

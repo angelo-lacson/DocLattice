@@ -68,9 +68,6 @@ class TestAuthConstants(TestCase):
         self.assertGreater(ADMIN_CLAIMS_CACHE_TTL, 0)
         self.assertLessEqual(ADMIN_CLAIMS_CACHE_TTL, 3600)
 
-    def test_admin_claims_cache_ttl_positive(self):
-        self.assertGreater(ADMIN_CLAIMS_CACHE_TTL, 0)
-
 
 class TestContextGuardrailsConstants(TestCase):
     """Tests for LLM context management constants."""
