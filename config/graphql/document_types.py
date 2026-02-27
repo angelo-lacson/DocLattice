@@ -1,4 +1,5 @@
 """GraphQL type definitions for document-related types."""
+
 import logging
 from typing import Optional
 

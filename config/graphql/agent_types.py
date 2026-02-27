@@ -1,4 +1,5 @@
 """GraphQL type definitions for agent and action types."""
+
 import graphene
 from graphene import relay
 from graphene_django import DjangoObjectType

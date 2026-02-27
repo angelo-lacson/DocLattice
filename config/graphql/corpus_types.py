@@ -1,4 +1,5 @@
 """GraphQL type definitions for corpus-related types."""
+
 import logging
 
 import graphene
