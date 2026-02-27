@@ -10,10 +10,44 @@ import {
 import { toast } from "react-toastify";
 import { ModernLoadingDisplay } from "../widgets/ModernLoadingDisplay";
 import { useCacheManager } from "../../hooks/useCacheManager";
+import { getRuntimeEnv } from "../../utils/env";
 
 // LocalStorage key to track if user has ever successfully authenticated.
 // Used to distinguish first-time visitors from returning users with expired sessions.
+// Keyed by Auth0 domain so switching tenants resets the flag.
 const HAS_AUTHENTICATED_KEY = "oc_has_authenticated";
+const AUTH_DOMAIN_KEY = "oc_auth0_domain";
+
+/**
+ * Check if user has authenticated before on the CURRENT Auth0 tenant.
+ * Returns false if the stored domain doesn't match (tenant was switched).
+ */
+function hasAuthenticatedOnCurrentTenant(): boolean {
+  try {
+    const { REACT_APP_APPLICATION_DOMAIN } = getRuntimeEnv();
+    const storedDomain = localStorage.getItem(AUTH_DOMAIN_KEY);
+    if (storedDomain && storedDomain !== REACT_APP_APPLICATION_DOMAIN) {
+      // Tenant changed — clear stale flag so we don't try the slow iframe path
+      localStorage.removeItem(HAS_AUTHENTICATED_KEY);
+      localStorage.setItem(AUTH_DOMAIN_KEY, REACT_APP_APPLICATION_DOMAIN);
+      return false;
+    }
+    return localStorage.getItem(HAS_AUTHENTICATED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** Store auth flag together with the current Auth0 domain. */
+function markAuthenticated(): void {
+  try {
+    const { REACT_APP_APPLICATION_DOMAIN } = getRuntimeEnv();
+    localStorage.setItem(HAS_AUTHENTICATED_KEY, "true");
+    localStorage.setItem(AUTH_DOMAIN_KEY, REACT_APP_APPLICATION_DOMAIN);
+  } catch {
+    // localStorage may be unavailable
+  }
+}
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -88,17 +122,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
           if (token) {
             console.log("[AuthGate] Token obtained successfully");
 
-            // Mark that user has successfully authenticated at least once.
-            // This flag helps distinguish first-time visitors from returning users
-            // when handling "login_required" errors from Auth0.
-            try {
-              localStorage.setItem(HAS_AUTHENTICATED_KEY, "true");
-            } catch (e) {
-              // localStorage may be unavailable in some contexts
-              console.warn(
-                "[AuthGate] Could not set auth flag in localStorage"
-              );
-            }
+            markAuthenticated();
 
             // RACE CONDITION PREVENTION: Auth state MUST be set synchronously BEFORE
             // cache clear. clearStore() is async and may trigger Apollo query refetches.
@@ -195,6 +219,28 @@ export const AuthGate: React.FC<AuthGateProps> = ({
         return;
       }
 
+      // Detect if we're in an OAuth callback (URL has code + state params).
+      // The race condition only occurs during callback processing, so we
+      // only need the slow iframe verification in that case.
+      const params = new URLSearchParams(window.location.search);
+      const isOAuthCallback = params.has("code") && params.has("state");
+
+      // Also check if the user has ever authenticated on the CURRENT tenant.
+      // First-time visitors (or users who switched tenants) have no session
+      // to verify — skip straight to anonymous.
+      if (!isOAuthCallback && !hasAuthenticatedOnCurrentTenant()) {
+        // No callback in progress and never authenticated — go anonymous immediately
+        console.log(
+          "[AuthGate] First-time visitor, skipping token verification"
+        );
+        authToken("");
+        userObj(null);
+        authStatusVar("ANONYMOUS");
+        authInitCompleteVar(true);
+        setAuthInitialized(true);
+        return;
+      }
+
       console.log(
         "[AuthGate] isAuthenticated is false, verifying with getAccessTokenSilently..."
       );
@@ -202,11 +248,16 @@ export const AuthGate: React.FC<AuthGateProps> = ({
       // Mark that we're starting an auth flow
       authFlowInProgressRef.current = true;
 
+      // Use a short timeout for the verification call. The default (60s)
+      // causes a long hang when there's no valid session. During OAuth
+      // callback the response is near-instant; for returning users with
+      // expired sessions, 10s is plenty.
       getAccessTokenSilently({
         authorizationParams: {
           audience: audience || undefined,
           scope: "openid profile email",
         },
+        timeoutInSeconds: 10,
       })
         .then((token) => {
           // We have a token despite isAuthenticated being false!
@@ -216,11 +267,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({
             "[AuthGate] Race condition detected - have token despite isAuthenticated:false"
           );
 
-          try {
-            localStorage.setItem(HAS_AUTHENTICATED_KEY, "true");
-          } catch (e) {
-            console.warn("[AuthGate] Could not set auth flag in localStorage");
-          }
+          markAuthenticated();
 
           // Set auth state with the token we just got
           // Note: we don't have the user object here, but it will be populated
