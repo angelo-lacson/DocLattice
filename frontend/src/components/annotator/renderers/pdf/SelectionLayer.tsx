@@ -16,8 +16,15 @@ import { useCorpusState } from "../../context/CorpusAtom";
 import { useAnnotationSelection } from "../../context/UISettingsAtom";
 import { useAtom, useAtomValue } from "jotai";
 import { isCreatingAnnotationAtom } from "../../context/UISettingsAtom";
-import styled from "styled-components";
 import { Copy, Tag, X, AlertCircle, Settings, Link } from "lucide-react";
+import {
+  SelectionActionMenu,
+  ActionMenuItem,
+  MenuDivider,
+  ShortcutHint,
+  HelpMessage,
+  HelpText,
+} from "../../components/SelectionActionMenu";
 import { scrollContainerRefAtom } from "../../context/DocumentAtom";
 import { useLocation } from "react-router-dom";
 import {
@@ -81,6 +88,7 @@ const SelectionLayer = ({
 
   // Prevent new selection immediately after menu interaction
   const lastMenuInteractionTime = useRef<number>(0);
+  const menuRef = useRef<HTMLDivElement>(null);
   const MENU_INTERACTION_COOLDOWN = 300; // 300ms cooldown after menu interaction
 
   // Check if corpus has labelset
@@ -209,6 +217,11 @@ const SelectionLayer = ({
 
   /**
    * Handles copying a deep link to the selected text block.
+   *
+   * Note: pageInfo.getPageAnnotationJson uses this page's token list to
+   * resolve bounding boxes.  This is safe because each SelectionLayer
+   * instance only accumulates selections for its own page — cross-page
+   * selections are handled by separate SelectionLayer instances.
    */
   const handleCopyLink = useCallback(() => {
     const selections = pendingSelections;
@@ -384,7 +397,7 @@ const SelectionLayer = ({
 
       // Check if touch target is within the action menu
       const target = event.target as HTMLElement;
-      if (target.closest(".selection-action-menu")) {
+      if (menuRef.current && menuRef.current.contains(target)) {
         return;
       }
 
@@ -683,7 +696,10 @@ const SelectionLayer = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (showActionMenu && !target.closest(".selection-action-menu")) {
+      if (
+        showActionMenu &&
+        (!menuRef.current || !menuRef.current.contains(target))
+      ) {
         setShowActionMenu(false);
         setPendingSelections({});
         setMultiSelections({});
@@ -779,7 +795,7 @@ const SelectionLayer = ({
       {/* Selection Action Menu */}
       {showActionMenu && (
         <SelectionActionMenu
-          className="selection-action-menu"
+          ref={menuRef}
           data-testid="selection-action-menu"
           onTouchStart={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
@@ -915,86 +931,5 @@ const SelectionLayer = ({
     </div>
   );
 };
-
-// Styled components for the action menu
-const SelectionActionMenu = styled.div`
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  padding: 4px;
-  min-width: 160px;
-`;
-
-const ActionMenuItem = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  font-size: 14px;
-  color: #333;
-  transition: background-color 0.2s;
-
-  &:hover {
-    background-color: #f5f5f5;
-  }
-
-  svg {
-    flex-shrink: 0;
-  }
-`;
-
-const MenuDivider = styled.div`
-  height: 1px;
-  background-color: #e0e0e0;
-  margin: 4px 0;
-`;
-
-const ShortcutHint = styled.span`
-  margin-left: auto;
-  font-size: 12px;
-  color: #666;
-  background-color: #f0f0f0;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 500;
-`;
-
-const HelpMessage = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px;
-  color: #666;
-  font-size: 14px;
-
-  svg {
-    flex-shrink: 0;
-    margin-top: 2px;
-    color: #f59e0b;
-  }
-
-  div {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  span {
-    font-weight: 500;
-    color: #333;
-  }
-`;
-
-const HelpText = styled.div`
-  font-size: 12px;
-  color: #666;
-  line-height: 1.3;
-`;
 
 export default React.memo(SelectionLayer);
