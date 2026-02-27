@@ -3,6 +3,14 @@
  */
 
 /**
+ * Convert a raw database ID to a GraphQL global ID.
+ * Graphene-Django with Relay uses base64-encoded "{TypeName}:{id}" format.
+ */
+export function toGlobalId(typeName: string, id: number | string): string {
+  return btoa(`${typeName}:${id}`);
+}
+
+/**
  * Extract the numeric Django PK from a Relay global ID
  * (e.g. "Q29ycHVzVHlwZTo0Ng==" -> 46).  Falls back to parsing the string
  * as a plain integer.  Throws on completely unparseable input.
