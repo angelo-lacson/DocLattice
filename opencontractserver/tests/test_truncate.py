@@ -60,6 +60,22 @@ class TruncateTests(TestCase):
         self.assertEqual(result, text)
 
     # ------------------------------------------------------------------
+    # Suffix edge cases
+    # ------------------------------------------------------------------
+
+    def test_suffix_longer_than_max_length(self):
+        result = truncate("hello world", 2, suffix="...")
+        self.assertLessEqual(len(result), 2)
+
+    def test_suffix_equal_to_max_length(self):
+        result = truncate("hello world", 3, suffix="...")
+        self.assertEqual(result, "...")
+        self.assertEqual(len(result), 3)
+
+    def test_max_length_zero(self):
+        self.assertEqual(truncate("hello", 0), "")
+
+    # ------------------------------------------------------------------
     # Constants are sane
     # ------------------------------------------------------------------
 
@@ -72,3 +88,6 @@ class TruncateTests(TestCase):
             MAX_NOTIFICATION_ERROR_LENGTH,
         ):
             self.assertGreater(const, 0)
+
+    def test_link_title_length_exceeds_ellipsis(self):
+        self.assertGreater(MAX_LINK_TITLE_LENGTH, len("..."))

@@ -745,6 +745,8 @@ def update_document_description(
     return {
         "updated": True,
         "document_id": document_id,
+        # truncate() returns "" for None/empty; convert back to None to
+        # match the original contract of this response dict.
         "previous_description": truncate(
             old_description, MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH
         )
