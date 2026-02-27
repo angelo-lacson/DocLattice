@@ -309,4 +309,26 @@ test.describe("DocumentVersionSelector", () => {
     // Dropdown should close after selection
     await expect(page.getByRole("listbox")).not.toBeVisible();
   });
+
+  test("Space key selects the focused option", async ({ mount, page }) => {
+    const component = await mount(
+      <DocumentVersionSelectorTestWrapper
+        mocks={[multiVersionMock, multiVersionMock]}
+      >
+        <DocumentVersionSelector documentId={DOC_ID} corpusId={CORPUS_ID} />
+      </DocumentVersionSelectorTestWrapper>
+    );
+
+    const pill = page.locator("button[aria-haspopup='listbox']");
+    await expect(pill).toBeVisible();
+    await pill.click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+
+    // Navigate down to v2 and press Space
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press(" ");
+
+    // Dropdown should close after selection
+    await expect(page.getByRole("listbox")).not.toBeVisible();
+  });
 });
