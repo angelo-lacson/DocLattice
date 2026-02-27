@@ -231,14 +231,8 @@ test.describe("GlobalSettingsPanel - Mobile Responsive", () => {
     await expect(page.getByText("Badge Management")).toBeVisible();
 
     // Cards should be visible in single column layout
-    const badgeCard = page
-      .locator("text=Badge Management")
-      .locator("..")
-      .locator("..");
-    const agentsCard = page
-      .locator("text=Global Agents")
-      .locator("..")
-      .locator("..");
+    const badgeCard = page.getByTestId("settings-card-badges");
+    const agentsCard = page.getByTestId("settings-card-global-agents");
 
     const badgeBox = await badgeCard.boundingBox();
     const agentsBox = await agentsCard.boundingBox();
@@ -272,8 +266,8 @@ test.describe("GlobalSettingsPanel - Mobile Responsive", () => {
 
     await expect(page.getByText("Badge Management")).toBeVisible();
 
-    // Find a settings card and check it has reasonable size for touch
-    const card = page.locator(".ui.card").first();
+    // Find a settings card by stable test ID
+    const card = page.getByTestId("settings-card-badges");
     const box = await card.boundingBox();
 
     // Card should have minimum touch-friendly dimensions

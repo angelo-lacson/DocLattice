@@ -1294,3 +1294,304 @@ class TestWorkerGraphQLMutations(TestCase):
 
         account.refresh_from_db()
         self.assertFalse(account.is_active)
+
+
+class TestWorkerGraphQLQueries(TestCase):
+    """Tests for the worker upload GraphQL query resolvers and permission changes."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = User.objects.create_superuser(
+            username="admin_query",
+            password="testpass123",
+            email="admin_query@test.com",
+        )
+        cls.regular_user = User.objects.create_user(
+            username="regular_query",
+            password="testpass123",
+            email="regular_query@test.com",
+        )
+        cls.corpus_creator = User.objects.create_user(
+            username="corpus_owner_query",
+            password="testpass123",
+            email="owner_query@test.com",
+        )
+
+        cls.worker = WorkerAccount.create_with_user(
+            name="test-query-worker",
+            description="Worker for query tests",
+            creator=cls.superuser,
+        )
+
+        cls.label_set = LabelSet.objects.create(
+            title="Query Test LS",
+            creator=cls.corpus_creator,
+        )
+        cls.corpus = Corpus.objects.create(
+            title="Query Test Corpus",
+            creator=cls.corpus_creator,
+            label_set=cls.label_set,
+        )
+
+        cls.token, cls.plaintext = CorpusAccessToken.create_token(
+            worker_account=cls.worker,
+            corpus=cls.corpus,
+            rate_limit_per_minute=10,
+        )
+
+    def _execute(self, query, user, variables=None):
+        class MockRequest:
+            def __init__(self, u):
+                self.user = u
+                self.META = {}
+
+        result = schema.execute(
+            query, variables=variables, context_value=MockRequest(user)
+        )
+        response = {"data": result.data}
+        if result.errors:
+            response["errors"] = result.errors
+        return response
+
+    # ---- Query: workerAccounts ----
+
+    def test_worker_accounts_superuser(self):
+        result = self._execute(
+            """
+            query {
+                workerAccounts {
+                    id
+                    name
+                    description
+                    isActive
+                    tokenCount
+                    creatorName
+                }
+            }
+            """,
+            self.superuser,
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        accounts = result["data"]["workerAccounts"]
+        self.assertTrue(len(accounts) >= 1)
+        account = next(a for a in accounts if a["name"] == "test-query-worker")
+        self.assertTrue(account["isActive"])
+        self.assertEqual(account["tokenCount"], 1)
+
+    def test_worker_accounts_regular_user_sees_active_only(self):
+        """Regular users can query active worker accounts (for token creation
+        dropdown) but with tokenCount hidden (always 0)."""
+        result = self._execute(
+            """
+            query {
+                workerAccounts {
+                    id
+                    name
+                    isActive
+                    tokenCount
+                }
+            }
+            """,
+            self.regular_user,
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        accounts = result["data"]["workerAccounts"]
+        # Only active accounts visible
+        self.assertTrue(all(a["isActive"] for a in accounts))
+        # tokenCount is hidden for non-superusers
+        self.assertTrue(all(a["tokenCount"] == 0 for a in accounts))
+
+    # ---- Query: corpusAccessTokens ----
+
+    def test_corpus_access_tokens_superuser(self):
+        result = self._execute(
+            """
+            query($corpusId: Int!) {
+                corpusAccessTokens(corpusId: $corpusId) {
+                    id
+                    keyPrefix
+                    workerAccountName
+                    isActive
+                    rateLimitPerMinute
+                    uploadCountPending
+                    uploadCountCompleted
+                    uploadCountFailed
+                }
+            }
+            """,
+            self.superuser,
+            variables={"corpusId": self.corpus.id},
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        tokens = result["data"]["corpusAccessTokens"]
+        self.assertEqual(len(tokens), 1)
+        self.assertEqual(tokens[0]["workerAccountName"], "test-query-worker")
+        self.assertEqual(tokens[0]["rateLimitPerMinute"], 10)
+
+    def test_corpus_access_tokens_corpus_creator(self):
+        result = self._execute(
+            """
+            query($corpusId: Int!) {
+                corpusAccessTokens(corpusId: $corpusId) {
+                    id
+                    keyPrefix
+                }
+            }
+            """,
+            self.corpus_creator,
+            variables={"corpusId": self.corpus.id},
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        self.assertEqual(len(result["data"]["corpusAccessTokens"]), 1)
+
+    def test_corpus_access_tokens_denied_for_non_creator(self):
+        result = self._execute(
+            """
+            query($corpusId: Int!) {
+                corpusAccessTokens(corpusId: $corpusId) { id }
+            }
+            """,
+            self.regular_user,
+            variables={"corpusId": self.corpus.id},
+        )
+        self.assertIsNotNone(result.get("errors"))
+
+    # ---- Query: workerDocumentUploads ----
+
+    def test_worker_document_uploads_empty(self):
+        result = self._execute(
+            """
+            query($corpusId: Int!) {
+                workerDocumentUploads(corpusId: $corpusId) {
+                    items { id status }
+                    totalCount
+                    limit
+                    offset
+                }
+            }
+            """,
+            self.superuser,
+            variables={"corpusId": self.corpus.id},
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        page = result["data"]["workerDocumentUploads"]
+        self.assertEqual(page["items"], [])
+        self.assertEqual(page["totalCount"], 0)
+        self.assertEqual(page["offset"], 0)
+
+    # ---- Mutation: createCorpusAccessToken (corpus creator permission) ----
+
+    def test_corpus_creator_can_create_token(self):
+        result = self._execute(
+            """
+            mutation($workerId: Int!, $corpusId: Int!) {
+                createCorpusAccessToken(
+                    workerAccountId: $workerId,
+                    corpusId: $corpusId,
+                    rateLimitPerMinute: 5
+                ) {
+                    ok
+                    token {
+                        id
+                        key
+                        workerAccountName
+                    }
+                }
+            }
+            """,
+            self.corpus_creator,
+            variables={"workerId": self.worker.id, "corpusId": self.corpus.id},
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        self.assertTrue(result["data"]["createCorpusAccessToken"]["ok"])
+        self.assertIsNotNone(result["data"]["createCorpusAccessToken"]["token"]["key"])
+
+    def test_non_creator_cannot_create_token(self):
+        result = self._execute(
+            """
+            mutation($workerId: Int!, $corpusId: Int!) {
+                createCorpusAccessToken(
+                    workerAccountId: $workerId,
+                    corpusId: $corpusId
+                ) {
+                    ok
+                    token { id }
+                }
+            }
+            """,
+            self.regular_user,
+            variables={"workerId": self.worker.id, "corpusId": self.corpus.id},
+        )
+        self.assertIsNotNone(result.get("errors"))
+
+    # ---- Mutation: revokeCorpusAccessToken (corpus creator permission) ----
+
+    def test_corpus_creator_can_revoke_token(self):
+        token, _ = CorpusAccessToken.create_token(
+            worker_account=self.worker,
+            corpus=self.corpus,
+        )
+        result = self._execute(
+            """
+            mutation($tokenId: Int!) {
+                revokeCorpusAccessToken(tokenId: $tokenId) {
+                    ok
+                }
+            }
+            """,
+            self.corpus_creator,
+            variables={"tokenId": token.id},
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        self.assertTrue(result["data"]["revokeCorpusAccessToken"]["ok"])
+
+    # ---- Mutation: reactivateWorkerAccount ----
+
+    def test_reactivate_worker_account(self):
+        # Use a dedicated instance to avoid mutating shared cls.worker
+        inactive_worker = WorkerAccount.create_with_user(
+            name="inactive-for-reactivation",
+            description="Test worker for reactivation",
+            creator=self.superuser,
+        )
+        inactive_worker.is_active = False
+        inactive_worker.save(update_fields=["is_active"])
+
+        result = self._execute(
+            """
+            mutation($workerId: Int!) {
+                reactivateWorkerAccount(workerAccountId: $workerId) {
+                    ok
+                }
+            }
+            """,
+            self.superuser,
+            variables={"workerId": inactive_worker.id},
+        )
+        self.assertIsNone(result.get("errors"), f"Errors: {result.get('errors')}")
+        self.assertTrue(result["data"]["reactivateWorkerAccount"]["ok"])
+
+        inactive_worker.refresh_from_db()
+        self.assertTrue(inactive_worker.is_active)
+
+    def test_non_superuser_cannot_reactivate_worker_account(self):
+        inactive_worker = WorkerAccount.create_with_user(
+            name="inactive-for-denied-reactivation",
+            description="Test worker for denied reactivation",
+            creator=self.superuser,
+        )
+        inactive_worker.is_active = False
+        inactive_worker.save(update_fields=["is_active"])
+
+        result = self._execute(
+            """
+            mutation($workerId: Int!) {
+                reactivateWorkerAccount(workerAccountId: $workerId) {
+                    ok
+                }
+            }
+            """,
+            self.regular_user,
+            variables={"workerId": inactive_worker.id},
+        )
+        self.assertIsNotNone(result.get("errors"))
