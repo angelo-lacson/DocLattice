@@ -308,28 +308,21 @@ class Query(graphene.ObjectType):
         )
         if not corpus:
             return None
-        doc = (
-            Document.objects.filter(creator=owner, slug=document_slug)
-            .visible_to_user(info.context.user)
-            .first()
+
+        # Resolve document via corpus membership (DocumentPath), not by
+        # creator.  Documents in a corpus may have been uploaded by any
+        # user with write access, not necessarily the corpus owner.
+        visible_docs = Document.objects.filter(slug=document_slug).visible_to_user(
+            info.context.user
         )
-        if not doc:
-            return None
 
         if version_number is not None:
             # Resolve a specific historical version in a single query:
             # Push visibility check into the path query via document__in
             # subquery, avoiding a separate exists() round-trip.
-            visible_version_docs = (
-                Document.objects.filter(
-                    version_tree_id=doc.version_tree_id,
-                )
-                .visible_to_user(info.context.user)
-                .only("pk")
-            )
             path_record = (
                 DocumentPath.objects.filter(
-                    document__in=visible_version_docs,
+                    document__in=visible_docs,
                     corpus=corpus,
                     version_number=version_number,
                     is_deleted=False,
@@ -342,11 +335,19 @@ class Query(graphene.ObjectType):
             return path_record.document
 
         # Default: validate membership via DocumentPath (current version)
-        if not DocumentPath.objects.filter(
-            document=doc, corpus=corpus, is_current=True, is_deleted=False
-        ).exists():
+        path_record = (
+            DocumentPath.objects.filter(
+                document__in=visible_docs,
+                corpus=corpus,
+                is_current=True,
+                is_deleted=False,
+            )
+            .select_related("document")
+            .first()
+        )
+        if not path_record:
             return None
-        return doc
+        return path_record.document
 
     # ANNOTATION RESOLVERS #####################################
     annotations = DjangoConnectionField(
