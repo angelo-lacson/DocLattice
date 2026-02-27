@@ -7,16 +7,12 @@ import {
   FileText,
   User,
   Calendar,
-  X,
   FileType,
   ArrowLeft,
-  Settings,
   Plus,
   Layers,
-  PanelRightOpen,
   Database,
   BarChart3,
-  Download,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -90,11 +86,7 @@ import {
   selectedRelationsAtom,
 } from "../../annotator/context/UISettingsAtom";
 import { useNavigate, useLocation } from "react-router-dom";
-import {
-  clearAnnotationSelection,
-  updateAnnotationSelectionParams,
-  getDocumentUrl,
-} from "../../../utils/navigationUtils";
+import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
 import { routingLogger } from "../../../utils/routingLogger";
 
 import {
@@ -105,14 +97,12 @@ import {
   SlidingPanel,
   EmptyState,
   ResizeHandle,
-  ChatIndicator,
   SidebarTabsContainer,
   SidebarTab,
   TabBadge,
   MobileTabBar,
   MobileTab,
 } from "./StyledContainers";
-import { NoteModal } from "./StickyNotes";
 
 import { useTextSearch } from "../../annotator/hooks/useTextSearch";
 import {
@@ -121,470 +111,45 @@ import {
 } from "../../annotator/hooks/AnalysisHooks";
 
 import { FullScreenModal } from "./LayoutComponents";
-import { ChatTray } from "./right_tray/ChatTray";
 import { SafeMarkdown } from "../markdown/SafeMarkdown";
 import { useAnnotationSelection } from "../../annotator/context/UISettingsAtom";
-import styled from "styled-components";
-import { Icon } from "semantic-ui-react";
 import { useChatSourceState } from "../../annotator/context/ChatSourceAtom";
 import { isTextFileType, isPdfFileType } from "../../../utils/files";
 import { useCreateAnnotation } from "../../annotator/hooks/AnnotationHooks";
 import { useScrollContainerRef } from "../../annotator/context/DocumentAtom";
 import { useChatPanelWidth } from "../../annotator/context/UISettingsAtom";
-import { NoteEditor } from "./NoteEditor";
-import { NewNoteModal } from "./NewNoteModal";
 import { FloatingSummaryPreview } from "./floating_summary_preview/FloatingSummaryPreview";
 import { ZoomControls } from "./ZoomControls";
 
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
-import {
-  openedDocument,
-  selectedAnnotationIds,
-  selectedAnalysesIds,
-  showStructuralAnnotations,
-  showSelectedAnnotationOnly,
-  showAnnotationBoundingBoxes,
-  selectedThreadId,
-} from "../../../graphql/cache";
+import { selectedThreadId } from "../../../graphql/cache";
 import { useAuthReady } from "../../../hooks/useAuthReady";
 import { useCorpusMdDescription } from "../../../hooks/useCorpusMdDescription";
-import { DocumentDiscussionsContent } from "../../discussions/DocumentDiscussionsContent";
 
 // New imports for unified feed
-import {
-  UnifiedContentFeed,
-  SidebarControlBar,
-  ContentFilters,
-  SortOption,
-  SidebarViewMode,
-} from "./unified_feed";
+import { ContentFilters, SortOption, SidebarViewMode } from "./unified_feed";
 import { FloatingDocumentControls } from "./FloatingDocumentControls";
 import { FloatingDocumentInput } from "./FloatingDocumentInput";
 import { FloatingAnalysesPanel } from "./FloatingAnalysesPanel";
 import { FloatingExtractsPanel } from "./FloatingExtractsPanel";
 import UnifiedKnowledgeLayer from "./layers/UnifiedKnowledgeLayer";
-import { AddToCorpusModal } from "../../modals/AddToCorpusModal";
-import { FeatureUnavailable } from "../../common/FeatureUnavailable";
-import { SingleDocumentExtractResults } from "../../annotator/sidebar/SingleDocumentExtractResults";
 import { DocumentVersionSelector } from "../../documents/DocumentVersionSelector";
+
+// Sub-components extracted from DocumentKnowledgeBase
+import {
+  HeaderButtonGroup,
+  HeaderButton,
+  FloatingInputWrapper,
+  ZoomIndicator,
+} from "./document_kb/styles";
+import { useZoomManager } from "./document_kb/useZoomManager";
+import { RightPanelContent } from "./document_kb/RightPanelContent";
+import { DocumentModals } from "./document_kb/DocumentModals";
+import { AnalysisExtractContextBar } from "./document_kb/ContextBar";
 
 // Setting worker path to worker bundle.
 GlobalWorkerOptions.workerSrc = workerSrc;
-
-/* ------------------------------------------------------------- */
-/* Styled components - defined outside component to avoid warnings */
-/* ------------------------------------------------------------- */
-
-const HeaderButtonGroup = styled.div`
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-`;
-
-const HeaderButton = styled.button<{ $variant?: "primary" | "secondary" }>`
-  height: 36px;
-  padding: 0 ${(props) => (props.$variant === "primary" ? "16px" : "10px")};
-  background: ${(props) =>
-    props.$variant === "primary"
-      ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-      : "rgba(255, 255, 255, 0.1)"};
-  color: ${(props) => (props.$variant === "primary" ? "white" : "#64748b")};
-  border: 1px solid
-    ${(props) =>
-      props.$variant === "primary"
-        ? "rgba(102, 126, 234, 0.4)"
-        : "rgba(148, 163, 184, 0.2)"};
-  border-radius: 10px;
-  font-size: ${(props) => (props.$variant === "primary" ? "13px" : "14px")};
-  font-weight: ${(props) => (props.$variant === "primary" ? "600" : "500")};
-  letter-spacing: ${(props) => (props.$variant === "primary" ? "0.3px" : "0")};
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  gap: ${(props) => (props.$variant === "primary" ? "8px" : "0")};
-  backdrop-filter: blur(12px);
-  box-shadow: ${(props) =>
-    props.$variant === "primary"
-      ? "0 4px 16px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15)"
-      : "0 2px 4px rgba(0, 0, 0, 0.04)"};
-  position: relative;
-  overflow: hidden;
-
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: ${(props) =>
-      props.$variant === "primary"
-        ? "linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%)"
-        : "transparent"};
-    opacity: 0;
-    transition: opacity 0.25s ease;
-  }
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: ${(props) =>
-      props.$variant === "primary"
-        ? "0 8px 24px rgba(102, 126, 234, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25)"
-        : "0 4px 12px rgba(0, 0, 0, 0.08)"};
-    border-color: ${(props) =>
-      props.$variant === "primary"
-        ? "rgba(102, 126, 234, 0.6)"
-        : "rgba(148, 163, 184, 0.3)"};
-
-    &::before {
-      opacity: 1;
-    }
-  }
-
-  &:active {
-    transform: translateY(0);
-    box-shadow: ${(props) =>
-      props.$variant === "primary"
-        ? "0 2px 8px rgba(102, 126, 234, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.1)"
-        : "inset 0 1px 2px rgba(0, 0, 0, 0.08)"};
-  }
-
-  svg {
-    width: ${(props) => (props.$variant === "primary" ? "18px" : "18px")};
-    height: ${(props) => (props.$variant === "primary" ? "18px" : "18px")};
-    stroke-width: 2.5;
-  }
-`;
-
-const FloatingInputWrapper = styled.div<{ $panelOffset: number }>`
-  position: absolute;
-  bottom: 4rem; /* Increased from 2rem to give more space from bottom */
-  left: 0;
-  right: ${(props) => props.$panelOffset}px;
-  display: flex;
-  justify-content: center;
-  pointer-events: none; /* allow clicks only on children */
-  z-index: 850;
-
-  @media (max-width: 768px) {
-    /* On mobile, position below zoom controls with higher z-index to prevent covering */
-    position: absolute;
-    top: 80px; /* Below zoom controls */
-    left: 1rem;
-    right: auto; /* Don't constrain right side for collapsed state */
-    bottom: auto;
-    width: auto; /* Let child determine width */
-    display: block;
-    pointer-events: none;
-    box-sizing: border-box;
-    /* Fix Issue #1: Increase z-index above zoom controls (900) to prevent mobile tray from covering input */
-    z-index: 950;
-  }
-`;
-
-const ZoomIndicator = styled.div`
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 18px;
-  font-weight: 600;
-  z-index: 2000;
-  pointer-events: none;
-  transition: opacity 0.2s ease-in-out;
-`;
-
-const ContextBar = styled.div`
-  background: linear-gradient(
-    90deg,
-    rgba(102, 126, 234, 0.95) 0%,
-    rgba(118, 75, 162, 0.95) 100%
-  );
-  backdrop-filter: blur(10px);
-  color: white;
-  padding: 8px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-`;
-
-const ContextBarContent = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-`;
-
-const ContextBarBadge = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  flex-shrink: 0;
-
-  svg,
-  i {
-    width: 16px;
-    height: 16px;
-    margin: 0 !important;
-  }
-`;
-
-const ContextBarLabel = styled.div`
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 0.95;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const ContextBarStats = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: auto;
-  margin-right: 12px;
-`;
-
-const StatPill = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-
-  svg,
-  i {
-    width: 14px;
-    height: 14px;
-    opacity: 0.9;
-    margin: 0 !important;
-  }
-`;
-
-const CloseButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 50%;
-  color: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.4);
-    transform: scale(1.05);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-`;
-
-const SidebarHeader = styled.div`
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-`;
-
-const SidebarHeaderContent = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const SidebarHeaderTitle = styled.div`
-  font-weight: 600;
-  font-size: 1rem;
-  color: #1e293b;
-  max-height: 8.4rem; /* ~6 lines at 1.4 line-height */
-  overflow-y: auto;
-  line-height: 1.4;
-
-  /* Pretty scrollbar */
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 2px;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-  }
-
-  /* Clean markdown rendering */
-  p {
-    margin: 0;
-    line-height: 1.4;
-  }
-
-  strong,
-  b {
-    font-weight: 700;
-  }
-
-  em,
-  i {
-    font-style: italic;
-  }
-
-  code {
-    background: #e2e8f0;
-    padding: 0.125rem 0.375rem;
-    border-radius: 3px;
-    font-size: 0.875rem;
-    font-family: monospace;
-  }
-
-  /* Don't let markdown break the layout */
-  ul,
-  ol,
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    display: none;
-  }
-`;
-
-const SidebarHeaderSubtitle = styled.div`
-  font-size: 0.875rem;
-  color: #64748b;
-  margin-top: 0.125rem;
-`;
-
-const CompactAnnotationFeed = styled.div`
-  height: 100%;
-  overflow: hidden;
-
-  /* Compact annotation cards for analysis view */
-  .highlight-item {
-    margin-bottom: 0.75rem !important;
-    border-radius: 10px !important;
-    background: white !important;
-  }
-
-  /* Clean up markdown in annotation cards */
-  .annotation-content {
-    p {
-      margin: 0.25rem 0 !important;
-      line-height: 1.5 !important;
-    }
-
-    ul,
-    ol {
-      margin: 0.5rem 0 !important;
-      padding-left: 1.5rem !important;
-    }
-
-    li {
-      margin: 0.25rem 0 !important;
-    }
-
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      margin: 0.5rem 0 0.25rem 0 !important;
-      font-size: 0.95rem !important;
-      font-weight: 600 !important;
-    }
-
-    code {
-      background: #f1f5f9 !important;
-      padding: 0.125rem 0.375rem !important;
-      border-radius: 3px !important;
-      font-size: 0.875rem !important;
-    }
-
-    pre {
-      background: #f8fafc !important;
-      padding: 0.75rem !important;
-      border-radius: 6px !important;
-      overflow-x: auto !important;
-      margin: 0.5rem 0 !important;
-    }
-
-    blockquote {
-      border-left: 3px solid #e2e8f0 !important;
-      padding-left: 1rem !important;
-      margin: 0.5rem 0 !important;
-      color: #64748b !important;
-    }
-
-    /* Compact spacing for analysis results */
-    & > *:first-child {
-      margin-top: 0 !important;
-    }
-
-    & > *:last-child {
-      margin-bottom: 0 !important;
-    }
-  }
-
-  /* Hide unnecessary metadata in compact view */
-  .annotation-metadata {
-    font-size: 0.8125rem !important;
-    color: #94a3b8 !important;
-  }
-
-  /* Better page headers */
-  .page-header {
-    background: linear-gradient(to right, #fef3c7 0%, #fef9e7 100%) !important;
-    border-left: 3px solid #f59e0b !important;
-  }
-`;
 
 interface DocumentKnowledgeBaseProps {
   documentId: string;
@@ -751,7 +316,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     useChatPanelWidth();
 
   // Calculate actual panel width based on mode
-  const getPanelWidthPercentage = (): number => {
+  const getPanelWidthPercentage = useCallback((): number => {
     let width: number;
     switch (mode) {
       case "quarter":
@@ -776,7 +341,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       width
     );
     return width;
-  };
+  }, [mode, customWidth]);
 
   // Resize handle state
   const [isDragging, setIsDragging] = useState(false);
@@ -794,12 +359,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   const [viewState, setViewState] = useState<ViewState>(ViewState.LOADING);
   const [showRightPanel, setShowRightPanel] = useState(false);
-  const [autoZoomEnabled, setAutoZoomEnabled] = useState<boolean>(true);
-
-  // Track base zoom level (when sidebar is closed) for proportional adjustment
-  const baseZoomRef = useRef<number>(zoomLevel);
-  const isAdjustingZoomRef = useRef<boolean>(false);
-  const justToggledAutoZoomRef = useRef<boolean>(false);
 
   // Calculate floating controls offset and visibility - MEMOIZED to prevent new object on every render
   const floatingControlsState = React.useMemo(() => {
@@ -821,6 +380,23 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       visible: !shouldHide,
     };
   }, [isMobile, showRightPanel, activeLayer, mode, customWidth, width]); // Dependencies: all values that affect calculation
+
+  // Zoom management (keyboard, wheel, pinch, auto-zoom on sidebar toggle)
+  const {
+    showZoomIndicator,
+    autoZoomEnabled,
+    setAutoZoomEnabled,
+    showZoomFeedback,
+  } = useZoomManager({
+    zoomLevel,
+    setZoomLevel,
+    activeLayer,
+    showRightPanel,
+    isMobile,
+    mode,
+    customWidth,
+    getPanelWidthPercentage,
+  });
 
   const { setDocumentType } = useDocumentType();
   const { setDocument } = useDocumentState();
@@ -1149,135 +725,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   /* clear on unmount so stale refs are never used */
   useEffect(() => () => setScrollContainerRef(null), [setScrollContainerRef]);
 
-  // Track previous auto-zoom state to detect when user toggles it
-  const prevAutoZoomEnabledRef = useRef<boolean>(autoZoomEnabled);
-
-  // When auto-zoom is toggled ON, capture current zoom as the new base
-  useEffect(() => {
-    const wasDisabled = !prevAutoZoomEnabledRef.current;
-    const isNowEnabled = autoZoomEnabled;
-
-    if (wasDisabled && isNowEnabled) {
-      // User just toggled auto-zoom from OFF to ON
-      // Capture current zoom as the new base, don't adjust yet
-      baseZoomRef.current = zoomLevel;
-      justToggledAutoZoomRef.current = true;
-      routingLogger.debug(
-        "Auto-zoom toggled ON - setting base zoom to current:",
-        zoomLevel
-      );
-    }
-
-    prevAutoZoomEnabledRef.current = autoZoomEnabled;
-  }, [autoZoomEnabled, zoomLevel]);
-
-  // Automatically adjust zoom level when sidebar opens/closes to maintain proportional document width
-  useEffect(() => {
-    // Skip if auto-zoom is disabled
-    if (!autoZoomEnabled) {
-      return;
-    }
-
-    if (isMobile || activeLayer !== "document") {
-      return;
-    }
-
-    // If user just toggled auto-zoom ON, skip this adjustment cycle
-    if (justToggledAutoZoomRef.current) {
-      justToggledAutoZoomRef.current = false;
-      return;
-    }
-
-    // If we're currently auto-adjusting, skip to prevent loops
-    if (isAdjustingZoomRef.current) {
-      return;
-    }
-
-    const panelWidth = getPanelWidthPercentage();
-
-    if (showRightPanel) {
-      // Sidebar just opened or resized
-      // If we don't have a base zoom yet, store current zoom
-      if (baseZoomRef.current === zoomLevel || !baseZoomRef.current) {
-        baseZoomRef.current = zoomLevel;
-      }
-
-      // Calculate adjusted zoom: reduce proportionally to viewport shrinkage
-      const viewportReduction = (100 - panelWidth) / 100;
-      const adjustedZoom = baseZoomRef.current * viewportReduction;
-
-      // Clamp to valid zoom range
-      const clampedZoom = Math.max(0.5, Math.min(4, adjustedZoom));
-
-      // Only update if there's a meaningful difference
-      if (Math.abs(zoomLevel - clampedZoom) > 0.01) {
-        isAdjustingZoomRef.current = true;
-        setZoomLevel(clampedZoom);
-        // Reset flag after state update completes
-        setTimeout(() => {
-          isAdjustingZoomRef.current = false;
-        }, 0);
-      }
-    } else {
-      // Sidebar closed - restore base zoom
-      if (
-        baseZoomRef.current &&
-        Math.abs(zoomLevel - baseZoomRef.current) > 0.01
-      ) {
-        isAdjustingZoomRef.current = true;
-        setZoomLevel(baseZoomRef.current);
-        // Reset flag after state update completes
-        setTimeout(() => {
-          isAdjustingZoomRef.current = false;
-        }, 0);
-      }
-    }
-  }, [
-    autoZoomEnabled,
-    showRightPanel,
-    mode,
-    customWidth,
-    isMobile,
-    activeLayer,
-    // NOTE: Do NOT include zoomLevel here - it causes auto-zoom to override manual zoom changes
-    setZoomLevel,
-  ]);
-
-  // When user manually zooms while sidebar is open, update base zoom for proper restoration
-  useEffect(() => {
-    // Only track manual zoom changes if auto-zoom is enabled
-    if (!autoZoomEnabled) {
-      return;
-    }
-
-    if (
-      !isMobile &&
-      showRightPanel &&
-      activeLayer === "document" &&
-      !isAdjustingZoomRef.current
-    ) {
-      // User manually changed zoom while sidebar is open
-      // Back-calculate what the base zoom should be
-      const panelWidth = getPanelWidthPercentage();
-      const viewportReduction = (100 - panelWidth) / 100;
-      const backCalculatedBase = zoomLevel / viewportReduction;
-
-      // Update base zoom so when sidebar closes, it restores to the right level
-      baseZoomRef.current = Math.max(0.5, Math.min(4, backCalculatedBase));
-    } else if (!showRightPanel && !isAdjustingZoomRef.current) {
-      // Sidebar is closed, keep baseZoom in sync with current zoom
-      baseZoomRef.current = zoomLevel;
-    }
-  }, [
-    autoZoomEnabled,
-    zoomLevel,
-    showRightPanel,
-    isMobile,
-    activeLayer,
-    mode,
-    customWidth,
-  ]);
-
   const handleKeyUpPress = useCallback(
     (event: { keyCode: any }) => {
       const { keyCode } = event;
@@ -1297,160 +744,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     },
     [setShiftDown]
   );
-
-  // Show zoom indicator feedback
-  const showZoomFeedback = useCallback(() => {
-    setShowZoomIndicator(true);
-
-    // Clear existing timer
-    if (zoomIndicatorTimer.current) {
-      clearTimeout(zoomIndicatorTimer.current);
-    }
-
-    // Hide after 1.5 seconds
-    zoomIndicatorTimer.current = setTimeout(() => {
-      setShowZoomIndicator(false);
-    }, 1500);
-  }, []);
-
-  // Browser zoom event handlers
-  const handleWheelZoom = useCallback(
-    (event: WheelEvent) => {
-      // Only handle if in document layer and Ctrl/Cmd is pressed
-      if (activeLayer !== "document" || (!event.ctrlKey && !event.metaKey)) {
-        return;
-      }
-
-      // Prevent default browser zoom
-      event.preventDefault();
-
-      // Calculate zoom delta (normalize across browsers)
-      const delta = event.deltaY > 0 ? -0.1 : 0.1;
-      const newZoom = Math.max(0.5, Math.min(4, zoomLevel + delta));
-
-      setZoomLevel(newZoom);
-      showZoomFeedback();
-    },
-    [activeLayer, zoomLevel, setZoomLevel, showZoomFeedback]
-  );
-
-  const handleKeyboardZoom = useCallback(
-    (event: KeyboardEvent) => {
-      // Only handle if in document layer
-      if (activeLayer !== "document") return;
-
-      // Check for Ctrl/Cmd modifier
-      if (!event.ctrlKey && !event.metaKey) return;
-
-      let handled = false;
-
-      switch (event.key) {
-        case "+":
-        case "=": // Handle both + and = (same key without shift)
-          event.preventDefault();
-          setZoomLevel(Math.min(zoomLevel + 0.1, 4));
-          handled = true;
-          break;
-        case "-":
-        case "_": // Handle both - and _ (same key without shift)
-          event.preventDefault();
-          setZoomLevel(Math.max(zoomLevel - 0.1, 0.5));
-          handled = true;
-          break;
-        case "0":
-          event.preventDefault();
-          setZoomLevel(1); // Reset to 100%
-          handled = true;
-          break;
-      }
-
-      if (handled) {
-        showZoomFeedback();
-      }
-    },
-    [activeLayer, zoomLevel, setZoomLevel, showZoomFeedback]
-  );
-
-  // Pinch zoom state for mobile
-  const [isPinching, setIsPinching] = useState(false);
-  const [initialPinchDistance, setInitialPinchDistance] = useState<
-    number | null
-  >(null);
-  const [lastPinchZoom, setLastPinchZoom] = useState<number | null>(null);
-
-  // Helper function to calculate distance between two touch points
-  const getTouchDistance = (touches: TouchList): number => {
-    if (touches.length < 2) return 0;
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  // Handle touch start for pinch zoom
-  const handleTouchStart = useCallback(
-    (event: TouchEvent) => {
-      // Only handle if in document layer and using two fingers
-      if (activeLayer !== "document" || event.touches.length !== 2) {
-        return;
-      }
-
-      // Initialize pinch zoom
-      const distance = getTouchDistance(event.touches);
-      setIsPinching(true);
-      setInitialPinchDistance(distance);
-      setLastPinchZoom(zoomLevel);
-
-      // Prevent default to avoid scrolling
-      event.preventDefault();
-    },
-    [activeLayer, zoomLevel]
-  );
-
-  // Handle touch move for pinch zoom
-  const handleTouchMove = useCallback(
-    (event: TouchEvent) => {
-      // Only handle if we're pinching with two fingers
-      if (
-        !isPinching ||
-        event.touches.length !== 2 ||
-        !initialPinchDistance ||
-        lastPinchZoom === null
-      ) {
-        return;
-      }
-
-      // Calculate new zoom based on pinch distance
-      const currentDistance = getTouchDistance(event.touches);
-      const scale = currentDistance / initialPinchDistance;
-
-      // Apply zoom with limits
-      const newZoom = Math.max(0.5, Math.min(4, lastPinchZoom * scale));
-      setZoomLevel(newZoom);
-
-      // Show zoom feedback
-      showZoomFeedback();
-
-      // Prevent default to avoid scrolling
-      event.preventDefault();
-    },
-    [
-      isPinching,
-      initialPinchDistance,
-      lastPinchZoom,
-      setZoomLevel,
-      showZoomFeedback,
-    ]
-  );
-
-  // Handle touch end for pinch zoom
-  const handleTouchEnd = useCallback((event: TouchEvent) => {
-    // Reset pinch state when touches end
-    if (event.touches.length < 2) {
-      setIsPinching(false);
-      setInitialPinchDistance(null);
-      setLastPinchZoom(null);
-    }
-  }, []);
 
   // Fetch document data - either with corpus context or without
   const authReady = useAuthReady();
@@ -2154,38 +1447,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     fetchMarkdownContent();
   }, [combinedData?.document?.mdSummaryFile]);
 
-  // Browser zoom event handling
-  useEffect(() => {
-    // Only attach listeners if we're in document view
-    if (activeLayer !== "document") return;
-
-    // Add wheel listener with passive: false to allow preventDefault
-    document.addEventListener("wheel", handleWheelZoom, { passive: false });
-    document.addEventListener("keydown", handleKeyboardZoom);
-
-    // Add touch listeners for pinch zoom with passive: false
-    document.addEventListener("touchstart", handleTouchStart, {
-      passive: false,
-    });
-    document.addEventListener("touchmove", handleTouchMove, { passive: false });
-    document.addEventListener("touchend", handleTouchEnd, { passive: false });
-
-    return () => {
-      document.removeEventListener("wheel", handleWheelZoom);
-      document.removeEventListener("keydown", handleKeyboardZoom);
-      document.removeEventListener("touchstart", handleTouchStart);
-      document.removeEventListener("touchmove", handleTouchMove);
-      document.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [
-    activeLayer,
-    handleWheelZoom,
-    handleKeyboardZoom,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-  ]);
-
   const [selectedNote, setSelectedNote] = useState<(typeof notes)[0] | null>(
     null
   );
@@ -2207,8 +1468,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const [showExtractsPanel, setShowExtractsPanel] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
   const [pendingChatMessage, setPendingChatMessage] = useState<string>();
-  const [showZoomIndicator, setShowZoomIndicator] = useState(false);
-  const zoomIndicatorTimer = useRef<NodeJS.Timeout>();
 
   // Clear pending message after passing it to ChatTray
   useEffect(() => {
@@ -2230,200 +1489,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       });
     }
   }, [threadId, combinedData?.document]);
-
-  const rightPanelContent = (() => {
-    if (!showRightPanel) return null;
-
-    // First, add the control bar for switching between chat and feed modes
-    const controlBar = (
-      <SidebarControlBar
-        viewMode={sidebarViewMode}
-        onViewModeChange={setSidebarViewMode}
-        filters={feedFilters}
-        onFiltersChange={setFeedFilters}
-        sortBy={feedSortBy}
-        onSortChange={setFeedSortBy}
-        hasActiveSearch={!!searchText}
-      />
-    );
-
-    // Handle extract mode - show extract results
-    if (sidebarViewMode === "extract" && selectedExtract) {
-      return (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "1rem 1.5rem",
-              borderBottom: "1px solid #e2e8f0",
-              background: "#f8fafc",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-            }}
-          >
-            <Database size={20} style={{ color: "#8b5cf6" }} />
-            <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: "1rem",
-                  color: "#1e293b",
-                }}
-              >
-                {selectedExtract.name}
-              </div>
-              <div
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#64748b",
-                }}
-              >
-                Data Extract Results
-              </div>
-            </div>
-          </div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <SingleDocumentExtractResults
-              datacells={dataCells}
-              columns={columns}
-            />
-          </div>
-        </div>
-      );
-    }
-
-    // Handle analysis mode - show analysis annotations
-    if (sidebarViewMode === "analysis" && selectedAnalysis) {
-      const annotationCount = selectedAnalysis.annotations?.totalCount || 0;
-      return (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <SidebarHeader>
-            <BarChart3 size={20} style={{ color: "#f59e0b" }} />
-            <SidebarHeaderContent>
-              <SidebarHeaderTitle>
-                <SafeMarkdown>
-                  {selectedAnalysis.analyzer.description ||
-                    selectedAnalysis.analyzer.id}
-                </SafeMarkdown>
-              </SidebarHeaderTitle>
-              <SidebarHeaderSubtitle>
-                {annotationCount} annotation
-                {annotationCount !== 1 ? "s" : ""} • Analysis Results
-              </SidebarHeaderSubtitle>
-            </SidebarHeaderContent>
-          </SidebarHeader>
-          <CompactAnnotationFeed>
-            <UnifiedContentFeed
-              notes={notes}
-              filters={{
-                contentTypes: new Set(["annotation", "relationship"]),
-              }}
-              sortBy="page"
-              isLoading={loading}
-              readOnly={readOnly}
-              documentId={documentId}
-              onItemSelect={(item) => {
-                // Annotations from analysis
-                if (
-                  item.type === "annotation" ||
-                  item.type === "relationship"
-                ) {
-                  // Already in document view, annotations will scroll into view
-                }
-              }}
-            />
-          </CompactAnnotationFeed>
-        </div>
-      );
-    }
-
-    // Handle unified feed mode
-    if (sidebarViewMode === "feed") {
-      return (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          {controlBar}
-          <UnifiedContentFeed
-            notes={notes}
-            filters={feedFilters}
-            sortBy={feedSortBy}
-            isLoading={loading}
-            readOnly={readOnly}
-            documentId={documentId}
-            onItemSelect={(item) => {
-              // Handle item selection based on type
-              if (item.type === "annotation" || item.type === "relationship") {
-                setActiveLayer("document");
-              }
-              // For notes, we could open the note modal
-              if (item.type === "note" && "creator" in item.data) {
-                setSelectedNote(item.data as (typeof notes)[0]);
-              }
-            }}
-          />
-        </div>
-      );
-    }
-
-    // Handle discussions mode
-    if (sidebarViewMode === "discussions") {
-      return (
-        <DocumentDiscussionsContent
-          documentId={documentId}
-          corpusId={corpusId}
-        />
-      );
-    }
-
-    // Handle chat mode (default behavior)
-    return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-        }}
-      >
-        {controlBar}
-        <ChatTray
-          setShowLoad={setShowLoad}
-          showLoad={showLoad}
-          documentId={documentId}
-          onMessageSelect={() => {
-            setActiveLayer("document");
-          }}
-          corpusId={corpusId}
-          initialMessage={pendingChatMessage}
-          readOnly={readOnly}
-        />
-      </div>
-    );
-  })();
 
   // The main viewer content:
   let viewerContent: JSX.Element = <></>;
@@ -2577,11 +1642,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       // Clear selected relationships (local Jotai atom, not URL-driven)
       setSelectedRelations([]);
-
-      // Clean up zoom indicator timer
-      if (zoomIndicatorTimer.current) {
-        clearTimeout(zoomIndicatorTimer.current);
-      }
     };
   }, [setSelectedRelations]);
 
@@ -2691,56 +1751,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       </HeaderContainer>
 
       {/* Context Bar - shows when analysis or extract is selected */}
-      {(selectedAnalysis || selectedExtract) && (
-        <ContextBar data-testid="context-bar">
-          <ContextBarContent>
-            <ContextBarBadge>
-              {selectedAnalysis ? (
-                <>
-                  <Icon name="chart line" />
-                  ANALYSIS
-                </>
-              ) : (
-                <>
-                  <Icon name="table" />
-                  EXTRACT
-                </>
-              )}
-            </ContextBarBadge>
-            <ContextBarLabel>
-              {selectedAnalysis
-                ? selectedAnalysis.analyzer.description ||
-                  selectedAnalysis.analyzer.id
-                : selectedExtract?.fieldset?.name || "Data Extract"}
-            </ContextBarLabel>
-            <ContextBarStats>
-              <StatPill title="Annotations visible">
-                <Icon name="tag" />
-                {pdfAnnotations?.annotations?.length || 0}
-              </StatPill>
-              {selectedAnalysis && (
-                <StatPill title="Total analyses available">
-                  <Icon name="chart line" />
-                  {analyses.length}
-                </StatPill>
-              )}
-              {selectedExtract && (
-                <StatPill title="Total extracts available">
-                  <Icon name="table" />
-                  {extracts.length}
-                </StatPill>
-              )}
-            </ContextBarStats>
-          </ContextBarContent>
-          <CloseButton
-            onClick={handleClearAnalysisExtractSelection}
-            data-testid="clear-analysis-extract-button"
-            title="Clear filter"
-          >
-            <X />
-          </CloseButton>
-        </ContextBar>
-      )}
+      <AnalysisExtractContextBar
+        selectedAnalysis={selectedAnalysis}
+        selectedExtract={selectedExtract}
+        pdfAnnotations={pdfAnnotations}
+        analysesCount={analyses.length}
+        extractsCount={extracts.length}
+        onClearSelection={handleClearAnalysisExtractSelection}
+      />
 
       {/* Error message for GraphQL failures - show prominently and prevent other content */}
       {queryError ? (
@@ -3241,115 +2259,52 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                       </SidebarTab>
                     </SidebarTabsContainer>
 
-                    {rightPanelContent}
+                    <RightPanelContent
+                      showRightPanel={showRightPanel}
+                      sidebarViewMode={sidebarViewMode}
+                      setSidebarViewMode={setSidebarViewMode}
+                      feedFilters={feedFilters}
+                      setFeedFilters={setFeedFilters}
+                      feedSortBy={feedSortBy}
+                      setFeedSortBy={setFeedSortBy}
+                      searchText={searchText}
+                      selectedAnalysis={selectedAnalysis}
+                      selectedExtract={selectedExtract}
+                      dataCells={dataCells}
+                      columns={columns}
+                      notes={notes}
+                      loading={loading}
+                      readOnly={readOnly}
+                      documentId={documentId}
+                      corpusId={corpusId}
+                      setActiveLayer={setActiveLayer}
+                      setSelectedNote={setSelectedNote}
+                      showLoad={showLoad}
+                      setShowLoad={setShowLoad}
+                      pendingChatMessage={pendingChatMessage}
+                    />
                   </SlidingPanel>
                 )}
               </AnimatePresence>
             </MainContentArea>
           </ContentArea>
 
-          <Modal
-            open={showGraph}
-            onClose={() => setShowGraph(false)}
-            size="large"
-            basic
-          >
-            <Modal.Content>
-              {/* Graph or relationship visualization */}
-            </Modal.Content>
-            <Modal.Actions>
-              <Button onClick={() => setShowGraph(false)}>
-                <X size={16} />
-                Close
-              </Button>
-            </Modal.Actions>
-          </Modal>
-
-          <NoteModal
-            id={`note-modal_${selectedNote?.id}`}
-            closeIcon
-            open={!!selectedNote}
-            onClose={() => setSelectedNote(null)}
-            size="large"
-          >
-            {selectedNote && (
-              <>
-                <Modal.Header>
-                  {selectedNote.title || "Untitled Note"}
-                </Modal.Header>
-                <Modal.Content>
-                  <SafeMarkdown>{selectedNote.content}</SafeMarkdown>
-                </Modal.Content>
-                <Modal.Actions>
-                  {!readOnly && (
-                    <Button
-                      primary
-                      onClick={() => {
-                        setEditingNoteId(selectedNote.id);
-                        setSelectedNote(null);
-                      }}
-                    >
-                      <Icon name="edit" />
-                      Edit Note
-                    </Button>
-                  )}
-                  <Button onClick={() => setSelectedNote(null)}>Close</Button>
-                </Modal.Actions>
-                <div className="meta">
-                  Added by {selectedNote.creator.email} on{" "}
-                  {new Date(selectedNote.created).toLocaleString()}
-                </div>
-              </>
-            )}
-          </NoteModal>
-
-          {!readOnly && editingNoteId && (
-            <NoteEditor
-              noteId={editingNoteId}
-              isOpen={true}
-              onClose={() => setEditingNoteId(null)}
-              onUpdate={() => {
-                // Refetch the document data to get updated notes
-                refetch();
-              }}
-            />
-          )}
-
-          {!readOnly && (
-            <NewNoteModal
-              isOpen={showNewNoteModal}
-              onClose={() => setShowNewNoteModal(false)}
-              documentId={documentId}
-              corpusId={corpusId}
-              onCreated={() => {
-                // Refetch the document data to get the new note
-                refetch();
-              }}
-            />
-          )}
-
-          <AddToCorpusModal
+          <DocumentModals
+            showGraph={showGraph}
+            setShowGraph={setShowGraph}
+            selectedNote={selectedNote}
+            setSelectedNote={setSelectedNote}
+            editingNoteId={editingNoteId}
+            setEditingNoteId={setEditingNoteId}
+            showNewNoteModal={showNewNoteModal}
+            setShowNewNoteModal={setShowNewNoteModal}
+            showAddToCorpusModal={showAddToCorpusModal}
+            setShowAddToCorpusModal={setShowAddToCorpusModal}
+            readOnly={readOnly}
             documentId={documentId}
-            open={showAddToCorpusModal}
-            onClose={() => setShowAddToCorpusModal(false)}
-            onSuccess={(newCorpusId, newCorpus) => {
-              // Navigate with corpus context using proper SPA navigation
-              const document = combinedData?.document;
-              if (document && newCorpus) {
-                const url = getDocumentUrl(document, newCorpus);
-                if (url !== "#") {
-                  navigate(url);
-                } else {
-                  console.warn(
-                    "[DocumentKnowledgeBase] Missing slugs for navigation:",
-                    { newCorpus, document }
-                  );
-                  navigate("/documents");
-                }
-              } else {
-                navigate("/documents");
-              }
-            }}
+            corpusId={corpusId}
+            refetch={refetch}
+            combinedDocumentData={combinedData?.document}
           />
         </>
       )}
