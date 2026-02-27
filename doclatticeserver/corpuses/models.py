@@ -1622,7 +1622,7 @@ class CorpusActionExecution(BaseOCModel):
     error_traceback = django.db.models.TextField(
         blank=True,
         default="",
-        help_text="Full traceback for debugging (truncated to 10KB)",
+        help_text="Full traceback for debugging (truncated to MAX_PROCESSING_TRACEBACK_LENGTH chars)",
     )
 
     # Execution metadata (model, tokens, retries, etc.)
