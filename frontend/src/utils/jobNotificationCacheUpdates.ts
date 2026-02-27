@@ -1,5 +1,6 @@
 import { ApolloCache } from "@apollo/client";
 import type { NotificationType } from "../hooks/useNotificationWebSocket";
+import { toGlobalId } from "./idValidation";
 
 /**
  * Cache update utilities for job completion notifications.
@@ -19,14 +20,6 @@ interface JobNotificationData {
   analysis_id?: number;
   // Export complete
   export_id?: number;
-}
-
-/**
- * Convert a raw database ID to a GraphQL global ID.
- * Graphene-Django with Relay uses base64-encoded "{TypeName}:{id}" format.
- */
-function toGlobalId(typeName: string, id: number | string): string {
-  return btoa(`${typeName}:${id}`);
 }
 
 /**
