@@ -6,7 +6,7 @@ import {
   MultipageAnnotationJson,
   SinglePageAnnotationJson,
 } from "../../types";
-import { WebSocketSources } from "../../knowledge_base/document/right_tray/ChatTray";
+import { WebSocketSources } from "../../chat/types";
 
 /**
  * A single pinned source in a message.
