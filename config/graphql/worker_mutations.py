@@ -1,15 +1,20 @@
 """
 GraphQL mutations for managing worker accounts and corpus access tokens.
 
-Only superusers can create/manage worker accounts and tokens.
+Superusers can manage all worker accounts and tokens.
+Corpus creators can create/revoke tokens scoped to their own corpuses.
 """
 
 import logging
 
 import graphene
 from graphql import GraphQLError
-from graphql_jwt.decorators import user_passes_test
+from graphql_jwt.decorators import login_required, user_passes_test
 
+from config.graphql.worker_types import (
+    CorpusAccessTokenCreatedType,
+    WorkerAccountType,
+)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.worker_uploads.models import (
     CorpusAccessToken,
@@ -17,45 +22,6 @@ from opencontractserver.worker_uploads.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# GraphQL Types
-# ============================================================================
-
-
-class WorkerAccountType(graphene.ObjectType):
-    id = graphene.Int()
-    name = graphene.String()
-    description = graphene.String()
-    is_active = graphene.Boolean()
-    created = graphene.DateTime()
-
-
-class CorpusAccessTokenType(graphene.ObjectType):
-    id = graphene.Int()
-    # Only show the full key on creation; afterwards show a masked version
-    key = graphene.String()
-    worker_account_name = graphene.String()
-    corpus_id = graphene.Int()
-    expires_at = graphene.DateTime()
-    is_active = graphene.Boolean()
-    rate_limit_per_minute = graphene.Int()
-    created = graphene.DateTime()
-
-
-class CorpusAccessTokenCreatedType(graphene.ObjectType):
-    """Returned only on token creation — includes the full key."""
-
-    id = graphene.Int()
-    key = graphene.String(
-        description="Full token key. Store securely — shown only once."
-    )
-    worker_account_name = graphene.String()
-    corpus_id = graphene.Int()
-    expires_at = graphene.DateTime()
-    rate_limit_per_minute = graphene.Int()
-    created = graphene.DateTime()
 
 
 # ============================================================================
@@ -126,11 +92,38 @@ class DeactivateWorkerAccount(graphene.Mutation):
         return DeactivateWorkerAccount(ok=True)
 
 
+class ReactivateWorkerAccount(graphene.Mutation):
+    """Reactivate a previously deactivated worker account. Superuser only."""
+
+    class Arguments:
+        worker_account_id = graphene.Int(required=True)
+
+    ok = graphene.Boolean()
+
+    @user_passes_test(lambda user: user.is_superuser)
+    def mutate(root, info, worker_account_id):
+        try:
+            account = WorkerAccount.objects.get(id=worker_account_id)
+        except WorkerAccount.DoesNotExist:
+            raise GraphQLError("Worker account not found.")
+
+        account.is_active = True
+        account.save(update_fields=["is_active"])
+
+        logger.info(
+            f"Worker account reactivated: {account.name} "
+            f"by user {info.context.user.id}"
+        )
+
+        return ReactivateWorkerAccount(ok=True)
+
+
 class CreateCorpusAccessTokenMutation(graphene.Mutation):
     """
     Create a scoped access token granting a worker upload access to a corpus.
 
-    Returns the full token key — it is only shown once. Superuser only.
+    Returns the full token key — it is only shown once.
+    Allowed for superusers and the corpus creator.
     """
 
     class Arguments:
@@ -142,7 +135,7 @@ class CreateCorpusAccessTokenMutation(graphene.Mutation):
     ok = graphene.Boolean()
     token = graphene.Field(CorpusAccessTokenCreatedType)
 
-    @user_passes_test(lambda user: user.is_superuser)
+    @login_required
     def mutate(
         root,
         info,
@@ -151,15 +144,20 @@ class CreateCorpusAccessTokenMutation(graphene.Mutation):
         expires_at=None,
         rate_limit_per_minute=0,
     ):
-        try:
-            account = WorkerAccount.objects.get(id=worker_account_id)
-        except WorkerAccount.DoesNotExist:
-            raise GraphQLError("Worker account not found.")
+        user = info.context.user
 
         try:
             corpus = Corpus.objects.get(id=corpus_id)
         except Corpus.DoesNotExist:
             raise GraphQLError("Corpus not found.")
+
+        if not user.is_superuser and (not corpus.creator or corpus.creator != user):
+            raise GraphQLError("Permission denied.")
+
+        try:
+            account = WorkerAccount.objects.get(id=worker_account_id)
+        except WorkerAccount.DoesNotExist:
+            raise GraphQLError("Worker account not found.")
 
         token, plaintext_key = CorpusAccessToken.create_token(
             worker_account=account,
@@ -170,7 +168,7 @@ class CreateCorpusAccessTokenMutation(graphene.Mutation):
 
         logger.info(
             f"Corpus access token created: worker={account.name}, "
-            f"corpus={corpus.id}, token_id={token.id}, by user {info.context.user.id}"
+            f"corpus={corpus.id}, token_id={token.id}, by user {user.id}"
         )
 
         return CreateCorpusAccessTokenMutation(
@@ -188,26 +186,29 @@ class CreateCorpusAccessTokenMutation(graphene.Mutation):
 
 
 class RevokeCorpusAccessTokenMutation(graphene.Mutation):
-    """Revoke a corpus access token. Superuser only."""
+    """Revoke a corpus access token. Allowed for superusers and the corpus creator."""
 
     class Arguments:
         token_id = graphene.Int(required=True)
 
     ok = graphene.Boolean()
 
-    @user_passes_test(lambda user: user.is_superuser)
+    @login_required
     def mutate(root, info, token_id):
-        try:
-            token = CorpusAccessToken.objects.get(id=token_id)
-        except CorpusAccessToken.DoesNotExist:
-            raise GraphQLError("Token not found.")
+        user = info.context.user
+
+        qs = CorpusAccessToken.objects.select_related("corpus").filter(id=token_id)
+        if not user.is_superuser:
+            qs = qs.filter(corpus__creator=user)
+        token = qs.first()
+        if token is None:
+            raise GraphQLError("Not found or permission denied.")
 
         token.is_active = False
         token.save(update_fields=["is_active"])
 
         logger.info(
-            f"Corpus access token revoked: token_id={token.id}, "
-            f"by user {info.context.user.id}"
+            f"Corpus access token revoked: token_id={token.id}, " f"by user {user.id}"
         )
 
         return RevokeCorpusAccessTokenMutation(ok=True)
