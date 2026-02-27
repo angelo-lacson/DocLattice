@@ -7,7 +7,7 @@ import {
   TokenId,
 } from "../components/types";
 import { JSONSchema7 } from "json-schema";
-import { WebSocketSources } from "../components/knowledge_base/document/right_tray/ChatTray";
+import { WebSocketSources } from "../components/chat/types";
 
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
