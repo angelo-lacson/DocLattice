@@ -5,7 +5,15 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-25
+## [Unreleased] - 2026-02-27
+
+### Changed
+
+#### Consolidate Duplicate String Truncation Utilities (Closes #976)
+- **New helper**: `opencontractserver/utils/text.py` — added `truncate(text, max_length, suffix="")` centralising all string-truncation logic
+- **New constants**: `opencontractserver/constants/truncation.py` — `MAX_NOTE_CONTENT_PREVIEW_LENGTH` (512), `MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH` (200), `MAX_LINK_TITLE_LENGTH` (100), `MAX_DOC_TITLE_FALLBACK_LENGTH` (50), `MAX_NOTIFICATION_ERROR_LENGTH` (500)
+- **Replaced inline truncation** in `opencontractserver/llms/tools/core_tools.py`, `opencontractserver/tasks/doc_tasks.py`, and `opencontractserver/corpuses/models.py` with calls to `truncate()` and named constants
+- **Tests**: `opencontractserver/tests/test_truncate.py` — unit tests for the new helper and constants
 
 ### Added
 
