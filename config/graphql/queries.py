@@ -312,17 +312,27 @@ class Query(graphene.ObjectType):
         # Resolve document via corpus membership (DocumentPath), not by
         # creator.  Documents in a corpus may have been uploaded by any
         # user with write access, not necessarily the corpus owner.
-        visible_docs = Document.objects.filter(slug=document_slug).visible_to_user(
-            info.context.user
+        doc = (
+            Document.objects.filter(slug=document_slug)
+            .visible_to_user(info.context.user)
+            .first()
         )
+        if not doc:
+            return None
 
         if version_number is not None:
-            # Resolve a specific historical version in a single query:
-            # Push visibility check into the path query via document__in
-            # subquery, avoiding a separate exists() round-trip.
+            # Resolve a specific historical version via version_tree_id.
+            # A document's slug may change between versions, so we must
+            # traverse by version_tree_id (which groups all versions of
+            # the same logical document) rather than filtering by slug.
+            visible_version_docs = (
+                Document.objects.filter(version_tree_id=doc.version_tree_id)
+                .visible_to_user(info.context.user)
+                .only("pk")
+            )
             path_record = (
                 DocumentPath.objects.filter(
-                    document__in=visible_docs,
+                    document__in=visible_version_docs,
                     corpus=corpus,
                     version_number=version_number,
                     is_deleted=False,
@@ -335,6 +345,11 @@ class Query(graphene.ObjectType):
             return path_record.document
 
         # Default: validate membership via DocumentPath (current version)
+        visible_docs = (
+            Document.objects.filter(slug=document_slug)
+            .visible_to_user(info.context.user)
+            .only("pk")
+        )
         path_record = (
             DocumentPath.objects.filter(
                 document__in=visible_docs,
@@ -1419,7 +1434,7 @@ class Query(graphene.ObjectType):
         # queries requesting only basic document fields.
         return Document.objects.visible_to_user(info.context.user, lightweight=True)
 
-    document = graphene.Field(DocumentType, id=graphene.String())
+    document = graphene.Field(DocumentType, id=graphene.ID())
 
     def resolve_document(self, info, **kwargs):
         document_id = kwargs.get("id")

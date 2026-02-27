@@ -31,6 +31,14 @@ import {
   encodeTextBlock,
   textBlockFromSpan,
 } from "../../../../utils/textBlockEncoding";
+import {
+  SelectionActionMenu,
+  ActionMenuItem,
+  MenuDivider,
+  ShortcutHint,
+  HelpMessage,
+  HelpText,
+} from "../../components/SelectionActionMenu";
 
 /**
  * Shape of an individual text chunk used to render text spans.
@@ -259,81 +267,6 @@ const ChatSourceIcon = styled.div<{ isSelected: boolean }>`
   }
 `;
 
-const TxtActionMenu = styled.div`
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  padding: 4px;
-  min-width: 160px;
-`;
-
-const TxtActionMenuItem = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  font-size: 14px;
-  color: #333;
-  transition: background-color 0.2s;
-  &:hover {
-    background-color: #f5f5f5;
-  }
-  svg {
-    flex-shrink: 0;
-  }
-`;
-
-const TxtMenuDivider = styled.div`
-  height: 1px;
-  background-color: #e0e0e0;
-  margin: 4px 0;
-`;
-
-const TxtShortcutHint = styled.span`
-  margin-left: auto;
-  font-size: 12px;
-  color: #666;
-  background-color: #f0f0f0;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 500;
-`;
-
-const TxtHelpMessage = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px;
-  color: #666;
-  font-size: 14px;
-  svg {
-    flex-shrink: 0;
-    margin-top: 2px;
-    color: #f59e0b;
-  }
-  div {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  span {
-    font-weight: 500;
-    color: #333;
-  }
-`;
-
-const TxtHelpText = styled.div`
-  font-size: 12px;
-  color: #666;
-  line-height: 1.3;
-`;
-
 /**
  * Convert a local selection offset to the global offset based on
  * an array of text spans. Each <span> is matched by data-span-index.
@@ -435,6 +368,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
     text: string;
   } | null>(null);
   const lastMenuInteractionTime = useRef<number>(0);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hideLabelsTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -938,7 +872,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (!target.closest(".txt-action-menu")) {
+      if (menuRef.current && !menuRef.current.contains(target)) {
         dismissMenu();
       }
     };
@@ -1210,8 +1144,8 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
       {/* Text Selection Action Menu */}
       {showActionMenu && (
-        <TxtActionMenu
-          className="txt-action-menu"
+        <SelectionActionMenu
+          ref={menuRef}
           data-testid="txt-selection-action-menu"
           onMouseDown={(e) => e.stopPropagation()}
           style={{
@@ -1221,7 +1155,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
             zIndex: 1000,
           }}
         >
-          <TxtActionMenuItem
+          <ActionMenuItem
             onClick={(e) => {
               e.stopPropagation();
               handleTxtCopyText();
@@ -1230,10 +1164,10 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           >
             <Copy size={16} />
             <span>Copy Text</span>
-            <TxtShortcutHint>C</TxtShortcutHint>
-          </TxtActionMenuItem>
+            <ShortcutHint>C</ShortcutHint>
+          </ActionMenuItem>
 
-          <TxtActionMenuItem
+          <ActionMenuItem
             onClick={(e) => {
               e.stopPropagation();
               handleTxtCopyLink();
@@ -1242,13 +1176,13 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           >
             <Link size={16} />
             <span>Copy Link</span>
-            <TxtShortcutHint>L</TxtShortcutHint>
-          </TxtActionMenuItem>
+            <ShortcutHint>L</ShortcutHint>
+          </ActionMenuItem>
 
           {allowInput && !read_only && (
             <>
-              <TxtMenuDivider />
-              <TxtActionMenuItem
+              <MenuDivider />
+              <ActionMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
                   handleTxtApplyLabel();
@@ -1257,30 +1191,30 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
               >
                 <Tag size={16} />
                 <span>Apply Label</span>
-                <TxtShortcutHint>A</TxtShortcutHint>
-              </TxtActionMenuItem>
+                <ShortcutHint>A</ShortcutHint>
+              </ActionMenuItem>
             </>
           )}
 
           {(!allowInput || read_only) && (
             <>
-              <TxtMenuDivider />
-              <TxtHelpMessage>
+              <MenuDivider />
+              <HelpMessage>
                 <AlertCircle size={16} />
                 <div>
                   <span>Annotation unavailable</span>
-                  <TxtHelpText>
+                  <HelpText>
                     {read_only
                       ? "Document is read-only"
                       : "No input permissions"}
-                  </TxtHelpText>
+                  </HelpText>
                 </div>
-              </TxtHelpMessage>
+              </HelpMessage>
             </>
           )}
 
-          <TxtMenuDivider />
-          <TxtActionMenuItem
+          <MenuDivider />
+          <ActionMenuItem
             onClick={(e) => {
               e.stopPropagation();
               dismissMenu();
@@ -1289,9 +1223,9 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           >
             <X size={16} />
             <span>Cancel</span>
-            <TxtShortcutHint>ESC</TxtShortcutHint>
-          </TxtActionMenuItem>
-        </TxtActionMenu>
+            <ShortcutHint>ESC</ShortcutHint>
+          </ActionMenuItem>
+        </SelectionActionMenu>
       )}
 
       <Modal
