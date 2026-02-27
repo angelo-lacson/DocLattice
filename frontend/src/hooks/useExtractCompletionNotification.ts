@@ -12,23 +12,7 @@ import {
   useNotificationWebSocket,
   NotificationUpdate,
 } from "./useNotificationWebSocket";
-
-/**
- * Extract numeric ID from a GraphQL global ID.
- * Global IDs are base64 encoded "{TypeName}:{id}" strings.
- */
-function extractNumericId(globalId: string): number | null {
-  try {
-    const decoded = atob(globalId);
-    const parts = decoded.split(":");
-    if (parts.length === 2) {
-      return parseInt(parts[1], 10);
-    }
-  } catch {
-    // Invalid base64 or format
-  }
-  return null;
-}
+import { getNumericIdFromGlobalId } from "../utils/idValidation";
 
 export interface UseExtractCompletionNotificationOptions {
   /** The global ID of the extract to watch */
@@ -57,7 +41,12 @@ export function useExtractCompletionNotification(
   }, [onComplete]);
 
   // Extract the numeric ID once
-  const numericId = extractId ? extractNumericId(extractId) : null;
+  let numericId: number | null = null;
+  try {
+    numericId = extractId ? getNumericIdFromGlobalId(extractId) : null;
+  } catch {
+    // Invalid ID format
+  }
 
   // Handle incoming notifications
   const handleNotificationCreated = useCallback(
