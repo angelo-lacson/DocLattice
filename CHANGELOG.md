@@ -5,7 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-25
+## [Unreleased] - 2026-02-27
+
+### Changed
+
+#### Break Up Large Frontend Components (Closes #977)
+- **StyledContainers.tsx** (2,115 → 12 lines): Split into 9 feature-specific style files under `styled/` directory (HeaderAndLayout, LeftSidebar, RightPanel, ResizeControls, Relationships, LoadingStates, EmptyStates, KnowledgeLayer, SidebarTabs) with barrel `index.ts` for backward compatibility.
+- **SystemSettings.tsx** (2,616 → 1,108 lines): Extracted GraphQL operations (`system_settings/graphql.ts`), types/constants (`types.ts`), styled components (`styles.ts`), and 4 memoized sub-components (PipelineComponentCard, FlowParticles, AdvancedSettingsPanel, PipelineStageSection).
+- **CorpusChat.tsx** (2,347 → 1,346 lines): Extracted styled components (`corpus_chat/styles.ts`), ApprovalModal, and ConversationListView into focused sub-files.
+- **DocumentKnowledgeBase.tsx** (3,363 → 2,322 lines): Extracted styled components (`document_kb/styles.ts`), zoom management hook (`useZoomManager.ts`), RightPanelContent, DocumentModals, and ContextBar components.
+- **ChatTray.tsx** (2,215 → 1,772 lines): Extracted ApprovalOverlay, ConversationListView, and chat utility functions (`chatUtils.ts`).
+- **DRY consolidation**: Extracted shared chat WebSocket types (WebSocketSources, MessageData, ContextStatus, CompactionNotice) from ChatTray and CorpusChat into canonical `components/chat/types.ts`, eliminating duplicate type definitions across 6 files.
 
 ### Added
 
