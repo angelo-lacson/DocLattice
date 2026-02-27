@@ -31,6 +31,7 @@ from opencontractserver.annotations.models import (
     Note,
     Relationship,
 )
+from opencontractserver.constants.annotations import MANUAL_ANNOTATION_SENTINEL
 from opencontractserver.documents.models import Document
 from opencontractserver.types.enums import LabelType
 
@@ -129,9 +130,11 @@ class AnnotationQueryMixin:
         if analysis_ids:
             logger.info(f"Filtering by analysis_ids: {analysis_ids}")
             analysis_id_list = analysis_ids.split(",")
-            if "~~MANUAL~~" in analysis_id_list:
+            if MANUAL_ANNOTATION_SENTINEL in analysis_id_list:
                 logger.info("Including manual annotations in filter")
-                analysis_id_list = [id for id in analysis_id_list if id != "~~MANUAL~~"]
+                analysis_id_list = [
+                    id for id in analysis_id_list if id != MANUAL_ANNOTATION_SENTINEL
+                ]
                 analysis_pks = [
                     int(from_global_id(value)[1]) for value in analysis_id_list
                 ]
@@ -150,13 +153,15 @@ class AnnotationQueryMixin:
         if analyzer_ids:
             logger.info(f"Filtering by analyzer_ids: {analyzer_ids}")
             analyzer_id_list = analyzer_ids.split(",")
-            if "~~MANUAL~~" in analyzer_id_list:
+            if MANUAL_ANNOTATION_SENTINEL in analyzer_id_list:
                 logger.info("Including manual annotations in filter")
-                analyzer_id_list = [id for id in analyzer_id_list if id != "~~MANUAL~~"]
+                analyzer_id_list = [
+                    id for id in analyzer_id_list if id != MANUAL_ANNOTATION_SENTINEL
+                ]
                 analyzer_pks = [
                     int(from_global_id(id)[1])
                     for id in analyzer_id_list
-                    if id != "~~MANUAL~~"
+                    if id != MANUAL_ANNOTATION_SENTINEL
                 ]
                 queryset = queryset.filter(
                     Q(analysis__isnull=True) | Q(analysis__analyzer_id__in=analyzer_pks)
@@ -450,6 +455,7 @@ class AnnotationQueryMixin:
         )
         page_number_list = kwargs.get("page_number_list", None)
         current_page = 1  # Default to page 1 (1-indexed)
+        pages = []  # Parsed page list from page_number_list (1-indexed)
 
         if kwargs.get("current_page", None) is not None:
             current_page = kwargs.get("current_page")

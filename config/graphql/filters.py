@@ -16,6 +16,7 @@ from opencontractserver.annotations.models import (
     Relationship,
 )
 from opencontractserver.badges.models import Badge, UserBadge
+from opencontractserver.constants.annotations import MANUAL_ANNOTATION_SENTINEL
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -170,8 +171,10 @@ class AnnotationFilter(django_filters.FilterSet):
         # print(f"filter_by_created_by_analysis_ids - value: {value}")
 
         analysis_ids = value.split(",")
-        if "~~MANUAL~~" in analysis_ids:
-            analysis_ids = filter(lambda id: id != "~~MANUAL~~", analysis_ids)
+        if MANUAL_ANNOTATION_SENTINEL in analysis_ids:
+            analysis_ids = filter(
+                lambda id: id != MANUAL_ANNOTATION_SENTINEL, analysis_ids
+            )
             analysis_pks = [int(from_global_id(value)[1]) for value in analysis_ids]
             return queryset.filter(
                 Q(analysis__isnull=True) | Q(analysis_id__in=analysis_pks)
@@ -186,9 +189,10 @@ class AnnotationFilter(django_filters.FilterSet):
 
     def filter_by_created_with_analyzer_id(self, queryset, info, value):
         analyzer_ids = value.split(",")
-        if "~~MANUAL~~" in analyzer_ids:
+        if MANUAL_ANNOTATION_SENTINEL in analyzer_ids:
             analyzer_ids = filter(
-                lambda analyzer_id: analyzer_id != "~~MANUAL~~", analyzer_ids
+                lambda analyzer_id: analyzer_id != MANUAL_ANNOTATION_SENTINEL,
+                analyzer_ids,
             )
             return queryset.filter(
                 Q(analysis__isnull=True) | Q(analysis__analyzer_id__in=analyzer_ids)

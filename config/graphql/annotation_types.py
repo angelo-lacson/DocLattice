@@ -1,4 +1,5 @@
 """GraphQL type definitions for annotation, relationship, label, and note types."""
+
 import graphene
 from django.db.models import QuerySet
 from graphene import relay

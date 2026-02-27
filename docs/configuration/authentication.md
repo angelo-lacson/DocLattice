@@ -72,61 +72,113 @@ automatically get a Django account created.
 
 ### Auth0 Dashboard Setup
 
-You need to create **three applications** in your [Auth0 dashboard](https://manage.auth0.com/):
+You need to create **one API**, **two applications**, and **one Action** in your
+[Auth0 dashboard](https://manage.auth0.com/).
 
-#### Step 1: Create a Single Page Application (SPA)
+#### Step 1: Create an Auth0 Tenant
 
-This is used by the React frontend to authenticate users.
-
-1. Go to **Applications > Create Application**
-2. Choose **Single Page Web Applications**
-3. Name it (e.g., "OpenContracts Frontend")
-4. In the **Settings** tab, note the:
-    - **Domain** -- e.g., `dev-xxxxx.auth0.com` (this is your `AUTH0_DOMAIN`)
-    - **Client ID** -- (this is your `AUTH0_CLIENT_ID`)
-5. Configure **Allowed Callback URLs**:
-    - Local: `http://localhost:3000, http://localhost:8000/admin/login/`
-    - Production: `https://your-domain.com, https://your-domain.com/admin/login/`
-6. Configure **Allowed Logout URLs**:
-    - Local: `http://localhost:3000, http://localhost:8000/admin/login/`
-    - Production: `https://your-domain.com, https://your-domain.com/admin/login/`
-7. Configure **Allowed Web Origins**:
-    - Local: `http://localhost:3000, http://localhost:8000`
-    - Production: `https://your-domain.com`
-8. Save changes
+1. Go to [auth0.com](https://auth0.com) and sign up or log in
+2. Click the tenant dropdown (top-left) and select **Create Tenant**
+3. Choose a tenant name (e.g., `opencontracts-prod`) and a region (US, EU, or AU)
+4. Your tenant domain will look like `opencontracts-prod.us.auth0.com`
+   -- this becomes your `AUTH0_DOMAIN`
 
 #### Step 2: Create an API
 
-This represents your OpenContracts backend and defines the audience for access tokens.
+This defines the **audience** that access tokens are issued for. The backend
+validates tokens against this audience.
 
 1. Go to **Applications > APIs > Create API**
-2. Name it (e.g., "OpenContracts API")
-3. Set the **Identifier** (audience) -- e.g., `https://your-domain.com/contracts`
-    - This is your `AUTH0_API_AUDIENCE`
-    - It does not need to be a real URL, just a unique identifier
-4. Leave signing algorithm as **RS256**
-5. Save
+2. Configure:
+    - **Name**: "OpenContracts API" (display name, your choice)
+    - **Identifier**: a unique URI for your deployment (e.g., `https://contracts.opensource.legal`)
+      -- this becomes your `AUTH0_API_AUDIENCE`
+      -- it does not need to resolve to a real URL, it is just a logical identifier
+    - **Signing Algorithm**: **RS256** (critical -- the backend only supports RS256)
+3. Click **Create**
+4. In the API's **Settings** tab, scroll to **Access Settings** and enable
+   **Allow Offline Access**. This allows the frontend to request refresh tokens
+   (via the `offline_access` scope), which are required for the SDK's
+   `useRefreshTokens: true` configuration.
+5. After creating the SPA application (Step 3 below), return here and go to the
+   API's **Machine to Machine Applications** tab
+6. Toggle the SPA application **on** to grant it access to this API
 
-#### Step 3: Create a Machine-to-Machine (M2M) Application
+!!! warning "SPA must be authorized on the API"
+    After creating both the API and the SPA application, you must return to the
+    API's **Machine to Machine Applications** tab and grant the SPA access.
+    Without this, `getAccessTokenSilently()` will fail with
+    `"Client is not authorized to access resource server"`.
+
+!!! warning "Allow Offline Access must be enabled on the API"
+    Without **Allow Offline Access** on the API (Step 2, item 4), Auth0 will not
+    issue refresh tokens even when the SDK requests the `offline_access` scope.
+    This causes `"Missing Refresh Token"` errors on the frontend.
+
+#### Step 3: Create a Single Page Application (SPA)
+
+This is used by the React frontend to authenticate users via PKCE.
+
+1. Go to **Applications > Applications > Create Application**
+2. Choose **Single Page Web Applications**
+3. Name it (e.g., "OpenContracts Frontend")
+4. In the **Settings** tab, note the:
+    - **Client ID** -- this becomes `AUTH0_CLIENT_ID` (backend) and
+      `VITE_APPLICATION_CLIENT_ID` (frontend)
+    - The **Domain** field confirms your `AUTH0_DOMAIN`
+5. Configure the following URL fields (comma-separated for multiple environments):
+
+    **Allowed Callback URLs**:
+    ```
+    http://localhost:3000, http://localhost:8000/admin/login/, https://your-domain.com, https://your-domain.com/admin/login/
+    ```
+
+    **Allowed Logout URLs**:
+    ```
+    http://localhost:3000, http://localhost:8000/admin/login/, https://your-domain.com, https://your-domain.com/admin/login/
+    ```
+
+    **Allowed Web Origins**:
+    ```
+    http://localhost:3000, http://localhost:8000, https://your-domain.com
+    ```
+
+6. Scroll to **Refresh Token Rotation** and enable **Rotation**. This is required
+   because the frontend SDK uses `useRefreshTokens: true` to avoid cross-origin
+   iframe issues on localhost. Optionally enable **Refresh Token Expiration** for
+   additional security (recommended for production).
+7. Save changes
+
+!!! note "You do not need the Client Secret for the SPA"
+    Single Page Applications use the PKCE (Proof Key for Code Exchange) flow,
+    which does not require a client secret.
+
+#### Step 4: Create a Machine-to-Machine (M2M) Application
 
 This is used by the Django backend to call the Auth0 Management API (to fetch user
-profiles like email, name, etc.).
+profiles like email, name, etc. after first login).
 
-1. Go to **Applications > Create Application**
+1. Go to **Applications > Applications > Create Application**
 2. Choose **Machine to Machine Applications**
 3. Name it (e.g., "OpenContracts Backend M2M")
-4. **Authorize** it for the **Auth0 Management API** (`https://<your-domain>.auth0.com/api/v2/`)
+4. When prompted to authorize an API, select the **Auth0 Management API**
+   (`https://<your-tenant>.auth0.com/api/v2/`)
 5. Grant the following **permissions/scopes**:
-    - `read:users`
-    - `read:user_idp_tokens`
-6. Note the:
+    - `read:users` -- fetch user profile data (email, name)
+    - `read:user_idp_tokens` -- read identity provider tokens
+6. Click **Authorize**, then save
+7. Note the:
     - **Client ID** -- this is your `AUTH0_M2M_MANAGEMENT_API_ID`
     - **Client Secret** -- this is your `AUTH0_M2M_MANAGEMENT_API_SECRET`
 
-#### Step 4: Create a Post-Login Action (for Admin Claims)
+!!! warning "The M2M app is separate from the SPA"
+    The SPA and M2M applications serve different purposes and have different
+    Client IDs. Do not reuse the SPA Client ID for M2M configuration.
 
-This Action adds custom claims to access tokens so the Django backend can grant
-`is_staff` and `is_superuser` permissions to specific Auth0 users.
+#### Step 5: Create a Post-Login Action (for Admin Claims)
+
+This Action injects custom claims into access tokens so the Django backend can
+grant `is_staff` and `is_superuser` permissions to specific Auth0 users.
 
 1. Go to **Actions > Flows > Login**
 2. Click **Add Action > Build Custom**
@@ -155,12 +207,12 @@ exports.onExecutePostLogin = async (event, api) => {
     Creating and deploying the Action is not enough. You must drag it into the
     Login Flow and click Apply, otherwise it will not execute.
 
-#### Step 5: Grant Admin Access to Auth0 Users
+#### Step 6: Grant Admin Access to Auth0 Users
 
 To give an Auth0 user admin access:
 
 1. Go to **User Management > Users**
-2. Find the user and click on them
+2. Find the user and click on them (or create a new user first)
 3. Scroll to **app_metadata** and set:
 
 ```json
@@ -175,22 +227,38 @@ To give an Auth0 user admin access:
 - `is_staff` grants access to the Django admin dashboard
 - `is_superuser` grants full permissions within Django admin
 - Users without these flags can still use the main frontend application
+- Changes take effect on the user's next login (when a new token is issued)
+
+### Summary of Auth0 Entities
+
+| Auth0 Entity | Env Variable(s) | Purpose |
+|-------------|-----------------|---------|
+| Tenant domain | `AUTH0_DOMAIN` / `VITE_APPLICATION_DOMAIN` | Identity provider |
+| API identifier | `AUTH0_API_AUDIENCE` / `VITE_AUDIENCE` | Token audience for access control |
+| SPA Client ID | `AUTH0_CLIENT_ID` / `VITE_APPLICATION_CLIENT_ID` | Frontend authentication (PKCE) |
+| M2M Client ID | `AUTH0_M2M_MANAGEMENT_API_ID` | Backend calls to Auth0 Management API |
+| M2M Client Secret | `AUTH0_M2M_MANAGEMENT_API_SECRET` | Backend calls to Auth0 Management API |
+| Post-Login Action | `AUTH0_ADMIN_CLAIM_NAMESPACE` | Injects admin claims into tokens |
+| User app_metadata | -- | Controls `is_staff` / `is_superuser` in Django |
 
 ### Backend Configuration
 
-Set the following in your backend environment file:
+Set the following in your backend environment file (`.envs/.local/.django` or
+`.envs/.production/.django`):
 
 ```bash
 USE_AUTH0=True
 
-# From Step 1 (SPA Application)
+# From Step 3 (SPA Application)
 AUTH0_CLIENT_ID=<your-spa-client-id>
-AUTH0_DOMAIN=<your-tenant>.auth0.com
+
+# From Step 1 (Tenant)
+AUTH0_DOMAIN=<your-tenant>.us.auth0.com
 
 # From Step 2 (API)
-AUTH0_API_AUDIENCE=https://your-domain.com/contracts
+AUTH0_API_AUDIENCE=https://contracts.your-domain.com
 
-# From Step 3 (M2M Application)
+# From Step 4 (M2M Application)
 AUTH0_M2M_MANAGEMENT_API_ID=<your-m2m-client-id>
 AUTH0_M2M_MANAGEMENT_API_SECRET=<your-m2m-client-secret>
 AUTH0_M2M_MANAGEMENT_GRANT_TYPE=client_credentials
@@ -202,25 +270,29 @@ AUTH0_M2M_MANAGEMENT_GRANT_TYPE=client_credentials
 
 ### Frontend Configuration
 
-**Local development** (Vite):
+**Local development** (Vite, `.envs/.local/.frontend`):
 
 ```bash
 VITE_USE_AUTH0=true
-VITE_APPLICATION_DOMAIN=<your-tenant>.auth0.com
+VITE_APPLICATION_DOMAIN=<your-tenant>.us.auth0.com
 VITE_APPLICATION_CLIENT_ID=<your-spa-client-id>
-VITE_AUDIENCE=https://your-domain.com/contracts
+VITE_AUDIENCE=https://contracts.your-domain.com
 VITE_API_ROOT_URL=http://localhost:8000
 ```
 
-**Production** (Docker):
+**Production** (Docker, `.envs/.production/.frontend`):
 
 ```bash
 OPEN_CONTRACTS_REACT_APP_USE_AUTH0=true
-OPEN_CONTRACTS_REACT_APP_APPLICATION_DOMAIN=<your-tenant>.auth0.com
+OPEN_CONTRACTS_REACT_APP_APPLICATION_DOMAIN=<your-tenant>.us.auth0.com
 OPEN_CONTRACTS_REACT_APP_APPLICATION_CLIENT_ID=<your-spa-client-id>
-OPEN_CONTRACTS_REACT_APP_AUDIENCE=https://your-domain.com/contracts
+OPEN_CONTRACTS_REACT_APP_AUDIENCE=https://contracts.your-domain.com
 OPEN_CONTRACTS_REACT_APP_API_ROOT_URL=https://your-domain.com
 ```
+
+!!! tip "Restart containers properly after changing env files"
+    `docker compose restart` does NOT re-read `.env` files. You must run
+    `docker compose up -d <service>` to recreate containers with the new values.
 
 ### Admin Dashboard Access with Auth0
 
@@ -291,6 +363,20 @@ asynchronously within a few seconds of first login.
 
 ## Troubleshooting
 
+### "Missing Refresh Token" error
+
+**Symptom**: After authenticating, the browser console or a toast shows
+`Authentication failed: Missing Refresh Token (audience: '...', scope: 'openid profile email offline_access')`.
+
+**Cause**: The frontend SDK is configured with `useRefreshTokens: true` (to avoid
+cross-origin iframe issues), which makes it request the `offline_access` scope. Auth0
+only issues refresh tokens when both conditions are met:
+
+1. The **API** has **Allow Offline Access** enabled (Step 2, item 4)
+2. The **SPA application** has **Refresh Token Rotation** enabled (Step 3, item 6)
+
+**Fix**: Enable both settings in your Auth0 dashboard. No code changes needed.
+
 ### Auth0 login redirects back to login page
 
 **Symptom**: After Auth0 authentication, you're redirected back to `/admin/login/`
@@ -306,6 +392,31 @@ with an error message.
    `https://opencontracts.opensource.legal/` (with trailing slash) unless you've
    overridden `AUTH0_ADMIN_CLAIM_NAMESPACE`.
 
+### "Client is not authorized to access resource server"
+
+**Symptom**: Browser console shows `getAccessTokenSilently()` failing with this error,
+or the Auth0 `/authorize` endpoint returns a 403.
+
+**Cause**: The SPA application has not been granted access to the API.
+
+**Fix**: Go to **Applications > APIs > (your API) > Machine to Machine Applications**
+tab and toggle the SPA application **on**. See Step 2, items 5-6.
+
+### Auth0 `/authorize` returns 403
+
+**Symptom**: Network tab shows a 403 response from
+`https://<tenant>.auth0.com/authorize?...` on page load. The Auth0 login button
+shows "Auth0 unavailable" or clicking it logs "Auth0 client not initialized".
+
+**Likely causes**:
+
+1. **Callback URL not whitelisted**: The `redirect_uri` in the request must exactly
+   match one of the SPA's **Allowed Callback URLs**. For admin login this is
+   `http://localhost:8000/admin/login/` (local) or
+   `https://your-domain.com/admin/login/` (production).
+2. **Web origin not whitelisted**: The SPA's **Allowed Web Origins** must include the
+   origin making the request (e.g., `http://localhost:8000`).
+
 ### "Authentication failed" error
 
 **Likely causes**:
@@ -314,6 +425,23 @@ with an error message.
    the API identifier in Auth0 and the frontend `AUDIENCE` variable.
 2. **Wrong domain**: `AUTH0_DOMAIN` must match your Auth0 tenant domain exactly.
 3. **Expired or invalid token**: Check browser console for Auth0 SDK errors.
+
+### Admin claim missing, defaulting to False
+
+**Symptom**: Django logs show `Admin claim is_staff missing; defaulting to False`
+and the user is denied admin access even though they authenticated successfully.
+
+**Likely causes**:
+
+1. **Post-Login Action not deployed or not in the flow**: Go to
+   **Actions > Flows > Login** and verify the Action is dragged into the flow
+   and **Apply** has been clicked.
+2. **Missing `app_metadata`**: The user needs `is_staff: true` (and optionally
+   `is_superuser: true`) in their `app_metadata`. Go to
+   **User Management > Users > (your user) > app_metadata** and set it.
+3. **Stale token**: The claims are set at login time. If you added `app_metadata`
+   after the user logged in, they need to log out and log back in to get a new
+   token with the updated claims.
 
 ### User created but has no email
 

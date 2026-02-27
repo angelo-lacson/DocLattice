@@ -1,4 +1,5 @@
 """GraphQL type definitions for user-related types."""
+
 import graphene
 from django.contrib.auth import get_user_model
 from graphene import relay

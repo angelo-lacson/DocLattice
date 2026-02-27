@@ -1,4 +1,5 @@
 """GraphQL type definitions for shared utilities, enums, and simple types."""
+
 import graphene
 from graphene.types.generic import GenericScalar
 from graphql_relay import to_global_id

@@ -18,6 +18,9 @@ from config.graphql.graphene_types import (
     DocumentType,
 )
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
+from opencontractserver.constants.annotations import (
+    DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
+)
 from opencontractserver.documents.models import Document, DocumentRelationship
 from opencontractserver.documents.query_optimizer import (
     DocumentRelationshipQueryOptimizer,
@@ -71,7 +74,7 @@ class DocumentQueryMixin:
         corpus_id=graphene.ID(required=False),
         document_id=graphene.ID(required=False),
         # Higher limit for Table of Contents which needs full hierarchy
-        max_limit=500,
+        max_limit=DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
     )
 
     @login_required
