@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-28
 
+### Fixed
+
+#### Tighten JSON Field Validation for Malformed Input (Closes #1001)
+- **Root cause**: `CustomJSONFieldFormTests.TestForm` used `NullableJSONField()` (a model field) instead of `UTF8JSONFormField` (a form field). Django's `Form` metaclass silently ignores model fields, so the form had zero fields and `is_valid()` always returned `True` — masking the fact that malformed JSON was never validated.
+- **Fix**: Changed `TestForm.json_field` to `UTF8JSONFormField(required=False)` so form validation actually runs through Django's `forms.JSONField.to_python()`, which raises `ValidationError` on `json.JSONDecodeError` (`opencontractserver/tests/test_custom_fields.py:76`).
+- **Re-enabled**: `test_form_with_invalid_json` now asserts that `'not json'` is correctly rejected (`opencontractserver/tests/test_custom_fields.py:90-92`).
+- **Added**: `test_formfield_rejects_invalid_json` and `test_formfield_accepts_valid_json` integration tests on `NullableJSONFieldTests` to verify the model field's `formfield()` method produces a form field that properly validates JSON (`opencontractserver/tests/test_custom_fields.py:63-71`).
+
 ### Changed
 
 #### Triage and Clean Up TODO/FIXME Comments (Closes #971)
