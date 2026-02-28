@@ -1,19 +1,21 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { VersionBadge } from "../src/components/documents/VersionBadge";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("VersionBadge", () => {
   test("renders version number correctly", async ({ mount, page }) => {
     const component = await mount(
       <VersionBadge
-        versionNumber={3}
+        versionNumber={1}
         hasHistory={false}
         isLatest={true}
         versionCount={1}
       />
     );
 
-    await expect(component.getByText("v3")).toBeVisible({ timeout: 10000 });
+    await expect(component.getByText("v1")).toBeVisible({ timeout: 10000 });
+    await docScreenshot(page, "versioning--badge--single-version");
   });
 
   test("displays correct cursor for no version history", async ({
@@ -76,6 +78,7 @@ test.describe("VersionBadge", () => {
     await expect(component.getByText("v3")).toBeVisible({ timeout: 10000 });
     // Version count should be displayed (• 5)
     await expect(component.getByText("5")).toBeVisible();
+    await docScreenshot(page, "versioning--badge--latest-version");
   });
 
   test("calls onClick when clicked with history", async ({ mount, page }) => {
@@ -201,6 +204,7 @@ test.describe("VersionBadge", () => {
 
     const badge = page.getByRole("button");
     await expect(badge).toBeVisible({ timeout: 10000 });
+    await docScreenshot(page, "versioning--badge--older-version");
 
     // Hover to show tooltip
     await badge.hover();
