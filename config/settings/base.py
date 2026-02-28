@@ -282,6 +282,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.common.BrokenLinkEmailsMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "config.middleware.SecurityHeadersMiddleware",
 ]
 
 # STATIC
@@ -508,6 +509,40 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
+
+# Referrer-Policy header — controls how much referrer info is sent.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+# Content-Security-Policy — defence-in-depth against XSS / injection.
+# Uses 'self' as the baseline; blob: and data: are needed by PDF.js;
+# wss: allows WebSocket connections; 'unsafe-inline' is required for
+# React's runtime-injected styles (Vite injects <style> tags in dev,
+# and hashed CSS chunks still require inline style attributes).
+SECURE_CSP_DIRECTIVES = {
+    "default-src": ["'self'"],
+    "script-src": ["'self'"],
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "data:", "blob:"],
+    "font-src": ["'self'", "data:"],
+    "connect-src": ["'self'", "wss:", "ws:"],
+    "worker-src": ["'self'", "blob:"],
+    "object-src": ["'none'"],
+    "frame-ancestors": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+}
+
+# Permissions-Policy — opt out of browser features not needed by the app.
+SECURE_PERMISSIONS_POLICY = {
+    "camera": [],
+    "microphone": [],
+    "geolocation": [],
+    "payment": [],
+    "usb": [],
+    "magnetometer": [],
+    "gyroscope": [],
+    "accelerometer": [],
+}
 
 # EMAIL
 # ------------------------------------------------------------------------------
