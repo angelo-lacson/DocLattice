@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { isTextFileType } from "../../../utils/files";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -737,10 +738,8 @@ const ToolBadge = styled.div<{ $isSelected?: boolean }>`
 `;
 
 const ToolPopover = styled(motion.div)`
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  z-index: 100;
+  position: fixed;
+  z-index: 100002;
   min-width: 320px;
   max-width: 440px;
   background: rgba(255, 255, 255, 0.98);
@@ -753,7 +752,6 @@ const ToolPopover = styled(motion.div)`
   @media (max-width: 768px) {
     min-width: 260px;
     max-width: 320px;
-    right: -1rem;
   }
 `;
 
@@ -1184,6 +1182,9 @@ export const formatToolName = (name: string): string => {
 /**
  * Displays a tool usage badge next to assistant messages. On hover, opens a
  * popover listing each tool call with its input arguments and output result.
+ *
+ * The popover is rendered via a portal to document.body to avoid clipping by
+ * ancestor containers with overflow:hidden (ChatContainer, FlexColumnPanel).
  */
 const ToolUsageIndicator: React.FC<{
   timeline: TimelineEntry[];
@@ -1191,6 +1192,8 @@ const ToolUsageIndicator: React.FC<{
   const toolCalls = useMemo(() => extractToolCalls(timeline), [timeline]);
   const [isOpen, setIsOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
 
   // Cleanup timeout on unmount to prevent memory leaks
   useEffect(() => {
@@ -1200,6 +1203,41 @@ const ToolUsageIndicator: React.FC<{
       }
     };
   }, []);
+
+  const updatePopoverPosition = useCallback(() => {
+    if (!badgeRef.current) return;
+    const rect = badgeRef.current.getBoundingClientRect();
+    const POPOVER_GAP = 8;
+    const POPOVER_MAX_HEIGHT = 500; // header + body max-height
+    const spaceBelow = window.innerHeight - rect.bottom - POPOVER_GAP;
+    const openUpward = spaceBelow < POPOVER_MAX_HEIGHT && rect.top > spaceBelow;
+
+    if (openUpward) {
+      setPopoverStyle({
+        bottom: window.innerHeight - rect.top + POPOVER_GAP,
+        right: window.innerWidth - rect.right,
+        top: undefined,
+      });
+    } else {
+      setPopoverStyle({
+        top: rect.bottom + POPOVER_GAP,
+        right: window.innerWidth - rect.right,
+        bottom: undefined,
+      });
+    }
+  }, []);
+
+  // Track position while popover is open
+  useEffect(() => {
+    if (!isOpen) return;
+    updatePopoverPosition();
+    window.addEventListener("scroll", updatePopoverPosition, true);
+    window.addEventListener("resize", updatePopoverPosition);
+    return () => {
+      window.removeEventListener("scroll", updatePopoverPosition, true);
+      window.removeEventListener("resize", updatePopoverPosition);
+    };
+  }, [isOpen, updatePopoverPosition]);
 
   if (toolCalls.length === 0) return null;
 
@@ -1227,71 +1265,81 @@ const ToolUsageIndicator: React.FC<{
   const popoverId = `tool-popover-${toolCalls.length}`;
 
   return (
-    <ToolBadgeWrapper
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onClick={(e: React.MouseEvent) => e.stopPropagation()}
-    >
-      <ToolBadge
-        $isSelected={isOpen}
-        role="button"
-        tabIndex={0}
-        aria-expanded={isOpen}
-        aria-haspopup="dialog"
-        aria-describedby={isOpen ? popoverId : undefined}
-        onKeyDown={handleKeyDown}
+    <>
+      <ToolBadgeWrapper
+        ref={badgeRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
-        <Wrench size={14} />
-        {toolCalls.length} {toolCalls.length === 1 ? "tool" : "tools"} used
-      </ToolBadge>
-      <AnimatePresence>
-        {isOpen && (
-          <ToolPopover
-            id={popoverId}
-            role="dialog"
-            aria-label={`Tool usage details: ${toolCalls.length} ${
-              toolCalls.length === 1 ? "call" : "calls"
-            }`}
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-          >
-            <ToolPopoverHeader>
-              <Wrench />
-              Tool Usage ({toolCalls.length}{" "}
-              {toolCalls.length === 1 ? "call" : "calls"})
-            </ToolPopoverHeader>
-            <ToolPopoverBody>
-              {toolCalls.map((call) => (
-                <ToolCallCard key={call.id}>
-                  <ToolCallName>
-                    <Wrench />
-                    {formatToolName(call.tool)}
-                  </ToolCallName>
-                  {call.args !== undefined && (
-                    <ToolCallSection>
-                      <ToolCallSectionLabel>Input</ToolCallSectionLabel>
-                      <ToolCallCodeBlock>
-                        {typeof call.args === "string"
-                          ? call.args
-                          : JSON.stringify(call.args, null, 2)}
-                      </ToolCallCodeBlock>
-                    </ToolCallSection>
-                  )}
-                  {call.result && (
-                    <ToolCallSection>
-                      <ToolCallSectionLabel>Output</ToolCallSectionLabel>
-                      <ToolCallResultBlock>{call.result}</ToolCallResultBlock>
-                    </ToolCallSection>
-                  )}
-                </ToolCallCard>
-              ))}
-            </ToolPopoverBody>
-          </ToolPopover>
-        )}
-      </AnimatePresence>
-    </ToolBadgeWrapper>
+        <ToolBadge
+          $isSelected={isOpen}
+          role="button"
+          tabIndex={0}
+          aria-expanded={isOpen}
+          aria-haspopup="dialog"
+          aria-describedby={isOpen ? popoverId : undefined}
+          onKeyDown={handleKeyDown}
+        >
+          <Wrench size={14} />
+          {toolCalls.length} {toolCalls.length === 1 ? "tool" : "tools"} used
+        </ToolBadge>
+      </ToolBadgeWrapper>
+      {createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <ToolPopover
+              key="tool-popover"
+              id={popoverId}
+              role="dialog"
+              aria-label={`Tool usage details: ${toolCalls.length} ${
+                toolCalls.length === 1 ? "call" : "calls"
+              }`}
+              style={popoverStyle}
+              initial={{ opacity: 0, y: -4, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+            >
+              <ToolPopoverHeader>
+                <Wrench />
+                Tool Usage ({toolCalls.length}{" "}
+                {toolCalls.length === 1 ? "call" : "calls"})
+              </ToolPopoverHeader>
+              <ToolPopoverBody>
+                {toolCalls.map((call) => (
+                  <ToolCallCard key={call.id}>
+                    <ToolCallName>
+                      <Wrench />
+                      {formatToolName(call.tool)}
+                    </ToolCallName>
+                    {call.args !== undefined && (
+                      <ToolCallSection>
+                        <ToolCallSectionLabel>Input</ToolCallSectionLabel>
+                        <ToolCallCodeBlock>
+                          {typeof call.args === "string"
+                            ? call.args
+                            : JSON.stringify(call.args, null, 2)}
+                        </ToolCallCodeBlock>
+                      </ToolCallSection>
+                    )}
+                    {call.result && (
+                      <ToolCallSection>
+                        <ToolCallSectionLabel>Output</ToolCallSectionLabel>
+                        <ToolCallResultBlock>{call.result}</ToolCallResultBlock>
+                      </ToolCallSection>
+                    )}
+                  </ToolCallCard>
+                ))}
+              </ToolPopoverBody>
+            </ToolPopover>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
   );
 };
 
