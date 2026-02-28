@@ -169,7 +169,7 @@ class ExportCorpusTestCase(TestCase):
 
             # ----- Title / content / page_count -----
             self.assertIsInstance(doc_annotation_json["title"], str)
-            self.assertTrue(len(doc_annotation_json["title"]) > 0)
+            self.assertGreater(len(doc_annotation_json["title"]), 0)
             self.assertIsInstance(doc_annotation_json["content"], str)
             self.assertIsInstance(doc_annotation_json["page_count"], int)
             self.assertGreater(doc_annotation_json["page_count"], 0)
@@ -207,7 +207,7 @@ class ExportCorpusTestCase(TestCase):
                     self.assertIn(field, annot, f"Annotation missing '{field}'")
 
                 self.assertIsInstance(annot["rawText"], str)
-                self.assertTrue(len(annot["rawText"]) > 0)
+                self.assertGreater(len(annot["rawText"]), 0)
                 self.assertIsInstance(annot["page"], int)
 
                 # annotation_json maps page numbers (as strings) to page data
@@ -343,9 +343,11 @@ class ExportCorpusTestCase(TestCase):
             lid: ldata["text"] for lid, ldata in text_labels.items()
         }
 
-        # Sort both annotation lists by rawText for stable comparison
-        fixture_sorted = sorted(fixture_annots, key=lambda a: a["rawText"])
-        exported_sorted = sorted(exported_annots, key=lambda a: a["rawText"])
+        # Sort both annotation lists by (rawText, page) to break ties stably
+        fixture_sorted = sorted(fixture_annots, key=lambda a: (a["rawText"], a["page"]))
+        exported_sorted = sorted(
+            exported_annots, key=lambda a: (a["rawText"], a["page"])
+        )
 
         for fix_annot, exp_annot in zip(fixture_sorted, exported_sorted):
             # Raw text
@@ -412,7 +414,6 @@ class ExportCorpusTestCase(TestCase):
         fixture_doc_key = list(self.import_data["annotated_docs"].keys())[0]
         fixture_doc = self.import_data["annotated_docs"][fixture_doc_key]
         fixture_text_labels = self.import_data["text_labels"]
-        fixture_doc_labels_defs = self.import_data["doc_labels"]
 
         used_text_label_ids = {
             a["annotationLabel"] for a in fixture_doc["labelled_text"]
@@ -441,13 +442,8 @@ class ExportCorpusTestCase(TestCase):
 
         # Doc-level: the label lookup should contain at least the doc labels
         # used by the document
-        expected_doc_label_names_from_defs = {
-            v["text"]
-            for v in fixture_doc_labels_defs.values()
-            if v["text"] in expected_doc_label_names
-        }
         self.assertTrue(
-            expected_doc_label_names_from_defs.issubset(exported_doc_label_names),
+            expected_doc_label_names.issubset(exported_doc_label_names),
             f"Missing doc labels: "
-            f"{expected_doc_label_names_from_defs - exported_doc_label_names}",
+            f"{expected_doc_label_names - exported_doc_label_names}",
         )
