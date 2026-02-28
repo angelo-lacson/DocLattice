@@ -164,6 +164,8 @@ export interface MentionPickerProps {
   selectedIndex: number;
   loading?: boolean;
   error?: string | null;
+  /** Optional hint shown when the user list is empty (e.g. "Type 2+ characters to search"). */
+  hint?: string;
 }
 
 export interface MentionPickerRef {
@@ -179,7 +181,7 @@ export interface MentionPickerRef {
  * exported as a standalone picker for consumers that only need user mentions.
  */
 export const MentionPicker = forwardRef<MentionPickerRef, MentionPickerProps>(
-  ({ users, onSelect, selectedIndex, loading, error }, ref) => {
+  ({ users, onSelect, selectedIndex, loading, error, hint }, ref) => {
     const [selected, setSelected] = useState(selectedIndex);
 
     useEffect(() => {
@@ -238,7 +240,7 @@ export const MentionPicker = forwardRef<MentionPickerRef, MentionPickerProps>(
     if (users.length === 0) {
       return (
         <Container>
-          <NoResults>No users found</NoResults>
+          <NoResults>{hint ?? "No users found"}</NoResults>
         </Container>
       );
     }
