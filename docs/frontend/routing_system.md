@@ -228,6 +228,21 @@ The corpus view supports inline detail panels for certain entity types. When vie
 
 This pattern keeps users in the corpus context while viewing entity details, with the option to "Open full page" to navigate to the standalone entity route (`/extracts/123`).
 
+**Document Version Parameter:**
+
+| Parameter | Purpose                          | Values                      | Default                | Set By     |
+| --------- | -------------------------------- | --------------------------- | ---------------------- | ---------- |
+| `?v=`     | Select document version          | Integer version number      | omit (current version) | Phase 1/2/4|
+
+When `?v=N` is present in the URL:
+- **Phase 1** passes `versionNumber` to the `documentInCorpusBySlugs` GraphQL query
+- The backend resolves the specific historical version via `DocumentPath.version_number`
+- The resolved document is the exact Document record for that version
+- **Annotations are version-specific**: each version's annotations are tied to its Document record
+- The version selector UI (in the document header) shows available versions and links via `?v=N`
+
+Without `?v=`, the current (latest) version is displayed.
+
 **Visualization Parameters (Document Viewer):**
 
 | Parameter         | Purpose                          | Values                      | Default      | Set By     |
@@ -256,6 +271,12 @@ This pattern keeps users in the corpus context while viewing entity details, wit
 
 # Deep link to structural annotation with optimal viewer settings
 /d/user/corpus/document?ann=structural-ann-123&structural=true&selectedOnly=true&labels=ALWAYS
+
+# View a specific historical version of a document
+/d/john/corpus/contract?v=1
+
+# Deep link to annotation on a specific version
+/d/john/corpus/contract?v=2&ann=456&structural=true
 
 # Corpus with tab selection (discussions tab)
 /c/john/legal-corpus?tab=discussions
@@ -2053,6 +2074,7 @@ This includes:
 - Entity state: `openedCorpus`, `openedDocument`
 - Selection state: `selectedAnnotationIds`, `selectedAnalysesIds`, `selectedExtractIds`
 - UI state: `selectedTab`, `selectedFolderId`, `selectedThreadId`, `selectedMessageId`, `corpusHomeView`, `tocExpandAll`
+- Document versioning state: `selectedDocVersion` (from `?v=N` URL parameter)
 - Visualization state: `showStructuralAnnotations`, `showSelectedAnnotationOnly`, `showAnnotationBoundingBoxes`, `showAnnotationLabels`
 
 All other components:

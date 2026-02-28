@@ -46,10 +46,12 @@ export interface QueryParams {
   homeView?: string | null; // "about" | "toc" - corpus home view selection
   tocExpanded?: boolean; // true to expand all TOC nodes
   view?: string | null; // "landing" | "details" - corpus detail view selection
+  version?: number | null; // Document version number (null = current version)
   showStructural?: boolean;
   showSelectedOnly?: boolean;
   showBoundingBoxes?: boolean;
   labelDisplay?: string; // "ALWAYS" | "ON_HOVER" | "HIDE"
+  textBlock?: string | null; // compact-encoded text block reference (e.g., "s100-500" or "p0:45-65")
 }
 
 /**
@@ -241,6 +243,9 @@ export function buildQueryParams(params: QueryParams): string {
     // Only add to URL if not default value
     searchParams.set("view", params.view);
   }
+  if (params.version != null && params.version > 0) {
+    searchParams.set("v", String(params.version));
+  }
 
   // Visualization state - only add non-default values to keep URLs clean
   if (params.showStructural) {
@@ -255,6 +260,11 @@ export function buildQueryParams(params: QueryParams): string {
   if (params.labelDisplay && params.labelDisplay !== "ON_HOVER") {
     // Only add if not the default
     searchParams.set("labels", params.labelDisplay);
+  }
+
+  // Text block deep link (compact-encoded reference to document text)
+  if (params.textBlock) {
+    searchParams.set("tb", params.textBlock);
   }
 
   const query = searchParams.toString();
@@ -1038,4 +1048,30 @@ export function navigateToRelationshipDocument(
   };
 
   navigateToDocument(docForNav, corpusForNav, navigate, currentPath);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Text Block Deep Link Navigation Utilities
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * SACRED UTILITY: Update text block deep link via URL
+ * Components MUST use this instead of directly setting reactive vars
+ *
+ * @param location - Current location from useLocation()
+ * @param navigate - Navigate function from useNavigate()
+ * @param textBlock - Compact-encoded text block string, or null to clear
+ */
+export function updateTextBlockParam(
+  location: { search: string },
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
+  textBlock: string | null
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (textBlock) {
+    searchParams.set("tb", textBlock);
+  } else {
+    searchParams.delete("tb");
+  }
+  navigate({ search: searchParams.toString() }, { replace: true });
 }

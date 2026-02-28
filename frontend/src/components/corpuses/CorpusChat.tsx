@@ -71,6 +71,7 @@ import {
 import {
   useChatSourceState,
   mapWebSocketSourcesToChatMessageSources,
+  ChatMessageSource,
 } from "../annotator/context/ChatSourceAtom";
 import { MultipageAnnotationJson } from "../types";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
@@ -161,6 +162,12 @@ interface CorpusChatProps {
    * Parent components can use this to adjust their navigation headers.
    */
   onViewModeChange?: (isInConversation: boolean) => void;
+  /**
+   * Callback fired when a source citation is clicked and should navigate to the
+   * source document with the text block highlighted. Receives the source's
+   * ChatMessageSource so the parent can build a deep link URL.
+   */
+  onSourceNavigate?: (source: ChatMessageSource) => void;
 }
 
 // Add these styled components near your other styled components
@@ -798,6 +805,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   forceNewChat = false,
   onClose,
   onViewModeChange,
+  onSourceNavigate,
 }) => {
   // Window dimensions for responsive layout
   const { width } = useWindowDimensions();
@@ -1731,6 +1739,10 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                         }));
                         if (sourcedMessage.sources.length > 0) {
                           onMessageSelect?.(sourcedMessage.messageId);
+                        }
+                        // Navigate to source document with text block highlight
+                        if (source.document_id && onSourceNavigate) {
+                          onSourceNavigate(source);
                         }
                       },
                     })) || [];

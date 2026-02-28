@@ -99,6 +99,8 @@ export interface WebSocketSources {
   label: string;
   label_id: number;
   rawText: string;
+  /** Document ID this source belongs to (provided by backend SourceNode metadata) */
+  document_id?: number;
 }
 
 /**

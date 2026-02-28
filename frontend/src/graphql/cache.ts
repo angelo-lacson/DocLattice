@@ -290,7 +290,7 @@ export const cache = new InMemoryCache({
           keyArgs: ["userSlug", "documentSlug"],
         },
         documentInCorpusBySlugs: {
-          keyArgs: ["userSlug", "corpusSlug", "documentSlug"],
+          keyArgs: ["userSlug", "corpusSlug", "documentSlug", "versionNumber"],
         },
         resolveCorpus: {
           keyArgs: ["userIdent", "corpusIdent"],
@@ -366,6 +366,20 @@ export const allowUserInput = makeVar<boolean>(false);
  */
 export const documentSearchTerm = makeVar<string>("");
 export const openedDocument = makeVar<DocumentType | null>(null);
+
+/**
+ * Document version selection (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Tracks which version of the document is being viewed.
+ * - null: viewing current (latest) version (default)
+ * - number: viewing a specific historical version
+ *
+ * URL Examples:
+ *   /d/user/corpus/doc-slug             → selectedDocVersion(null) = current version
+ *   /d/user/corpus/doc-slug?v=1         → selectedDocVersion(1) = version 1
+ *   /d/user/corpus/doc-slug?v=2&ann=123 → selectedDocVersion(2) = version 2 with annotation
+ */
+export const selectedDocVersion = makeVar<number | null>(null);
 export const selectedDocumentIds = makeVar<string[]>([]);
 export const viewingDocument = makeVar<DocumentType | null>(null);
 export const editingDocument = makeVar<DocumentType | null>(null);
@@ -602,6 +616,22 @@ export const tocExpandAll = makeVar<boolean>(false);
  */
 export type CorpusDetailViewType = "landing" | "details";
 export const corpusDetailView = makeVar<CorpusDetailViewType>("landing");
+
+/**
+ * Text block deep linking (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * Holds a compact-encoded text block reference for highlighting arbitrary text
+ * in a document WITHOUT a database annotation. Used for deep linking from
+ * corpus agent sources and other citation views.
+ *
+ * The string value is the raw ?tb= URL parameter value (compact encoding).
+ * Components decode it via decodeTextBlock() from textBlockEncoding.ts.
+ *
+ * URL Examples:
+ *   /d/user/corpus/doc?tb=s100-500            → text span from char 100 to 500
+ *   /d/user/corpus/doc?tb=p0:45-65;p1:0-23   → PDF tokens on pages 0 and 1
+ */
+export const highlightedTextBlock = makeVar<string | null>(null);
 
 /**
  * Auth-related global variables

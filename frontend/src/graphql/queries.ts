@@ -170,11 +170,17 @@ export const DOCUMENT_BY_SLUGS = gql`
 `;
 
 export const DOCUMENT_IN_CORPUS_BY_SLUGS = gql`
-  query ($userSlug: String!, $corpusSlug: String!, $documentSlug: String!) {
+  query (
+    $userSlug: String!
+    $corpusSlug: String!
+    $documentSlug: String!
+    $versionNumber: Int
+  ) {
     documentInCorpusBySlugs(
       userSlug: $userSlug
       corpusSlug: $corpusSlug
       documentSlug: $documentSlug
+      versionNumber: $versionNumber
     ) {
       id
       slug
@@ -240,6 +246,7 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
     $userSlug: String!
     $corpusSlug: String!
     $documentSlug: String!
+    $versionNumber: Int
   ) {
     corpusBySlugs(userSlug: $userSlug, corpusSlug: $corpusSlug) {
       id
@@ -263,6 +270,7 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
       userSlug: $userSlug
       corpusSlug: $corpusSlug
       documentSlug: $documentSlug
+      versionNumber: $versionNumber
     ) {
       id
       slug
@@ -273,10 +281,30 @@ export const RESOLVE_DOCUMENT_IN_CORPUS_BY_SLUGS_FULL = gql`
       pdfFile
       backendLock
       myPermissions
+      isLatestVersion
       creator {
         id
         username
         slug
+      }
+    }
+  }
+`;
+
+export const GET_CORPUS_VERSIONS = gql`
+  query GetCorpusVersions($documentId: ID!, $corpusId: ID!) {
+    document(id: $documentId) {
+      id
+      versionCount
+      hasVersionHistory
+      isLatestVersion
+      versionNumber(corpusId: $corpusId)
+      corpusVersions(corpusId: $corpusId) {
+        versionNumber
+        documentId
+        documentSlug
+        created
+        isCurrent
       }
     }
   }

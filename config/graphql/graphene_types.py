@@ -590,6 +590,30 @@ class PathHistoryType(graphene.ObjectType):
     )
 
 
+class CorpusVersionInfoType(graphene.ObjectType):
+    """Version information for a document within a specific corpus.
+
+    Used by the version selector UI to show available versions and allow
+    switching between them via the ?v= URL parameter.
+    """
+
+    version_number = graphene.Int(
+        required=True, description="Version number in this corpus"
+    )
+    document_id = graphene.ID(
+        required=True, description="Global ID of the Document at this version"
+    )
+    document_slug = graphene.String(
+        description="Slug of the Document at this version (for URL building)"
+    )
+    created = graphene.DateTime(
+        required=True, description="When this version was created"
+    )
+    is_current = graphene.Boolean(
+        required=True, description="Whether this is the current (latest) version"
+    )
+
+
 class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for DocumentPath model - represents filesystem lifecycle events."""
 
@@ -1228,6 +1252,16 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Path/location history in corpus (lazy-loaded on request)",
     )
 
+    # Corpus-specific version list for version selector UI
+    corpus_versions = graphene.List(
+        graphene.NonNull(CorpusVersionInfoType),
+        corpus_id=graphene.ID(required=True),
+        description=(
+            "All versions of this document in a specific corpus. "
+            "Used by the version selector UI to show available versions."
+        ),
+    )
+
     # Permission helpers for versioning features
     can_restore = graphene.Boolean(
         corpus_id=graphene.ID(required=True),
@@ -1382,6 +1416,94 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "original_path": original_path or "",
             "move_count": move_count,
         }
+
+    def resolve_corpus_versions(self, info, corpus_id):
+        """Return all versions of this document in a specific corpus.
+
+        Uses DocumentPath records to find all versions, ordered by version_number.
+        Each entry maps to a specific Document record, enabling the frontend
+        to navigate to historical versions via the ?v=N URL parameter.
+
+        Only returns versions whose underlying Document the requesting user
+        has permission to see (via visible_to_user), preventing information
+        disclosure of historical version metadata the user shouldn't access.
+
+        Performance: Uses a DB-level subquery (document__in) to push
+        permission filtering into a single query instead of materializing
+        visible IDs in Python then filtering. Results are cached on the
+        request context so that listing N documents with corpusVersions
+        in one query reuses the same result for documents sharing a
+        version_tree_id + corpus_id pair (avoids N+1).
+        """
+        from graphql_relay import to_global_id
+
+        type_name, corpus_pk = from_global_id(corpus_id)
+        if not type_name or type_name != "CorpusType":
+            return []
+
+        # Request-level cache keyed on (version_tree_id, corpus_pk).
+        cache_key = (self.version_tree_id, corpus_pk)
+        cache = getattr(info.context, "_corpus_versions_cache", None)
+        if cache is None:
+            cache = {}
+            info.context._corpus_versions_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+
+        # Subquery: only documents in this version tree the user can see.
+        visible_version_docs = (
+            Document.objects.filter(
+                version_tree_id=self.version_tree_id,
+            )
+            .visible_to_user(info.context.user)
+            .only("pk")
+        )
+
+        # delete_document() creates a tombstone (is_current=True, is_deleted=True)
+        # but leaves the previous path record with is_deleted=False.
+        # Exclude version_numbers that have a deleted current path.
+        deleted_version_numbers = DocumentPath.objects.filter(
+            corpus_id=corpus_pk,
+            document__version_tree_id=self.version_tree_id,
+            is_current=True,
+            is_deleted=True,
+        ).values("version_number")
+
+        # Non-deleted paths whose document passes visibility,
+        # excluding versions that are soft-deleted via tombstone.
+        # select_related("document") is needed only for slug access.
+        path_records = (
+            DocumentPath.objects.filter(
+                document__in=visible_version_docs,
+                corpus_id=corpus_pk,
+                is_deleted=False,
+            )
+            .exclude(version_number__in=deleted_version_numbers)
+            .select_related("document")
+            .order_by("version_number", "-created")
+        )
+
+        # Deduplicate by version_number (keep first = most recent due to -created).
+        seen_versions = set()
+        results = []
+        for path_record in path_records:
+            if path_record.version_number in seen_versions:
+                continue
+            seen_versions.add(path_record.version_number)
+            results.append(
+                {
+                    "version_number": path_record.version_number,
+                    "document_id": to_global_id(
+                        "DocumentType", path_record.document_id
+                    ),
+                    "document_slug": path_record.document.slug,
+                    "created": path_record.created,
+                    "is_current": path_record.is_current,
+                }
+            )
+
+        cache[cache_key] = results
+        return results
 
     def resolve_can_restore(self, info, corpus_id):
         """Check if user has UPDATE permission for restore operations."""
