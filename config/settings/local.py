@@ -1,5 +1,5 @@
 from .base import *  # noqa
-from .base import env
+from .base import SECURE_CSP_DIRECTIVES, env
 
 # GENERAL
 # ------------------------------------------------------------------------------
@@ -60,6 +60,12 @@ SESSION_COOKIE_HTTPONLY = False
 # https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-httponly
 CSRF_COOKIE_HTTPONLY = False
 # https://docs.djangoproject.com
+
+# Allow plaintext WebSocket (ws:) in development only.
+# Production base.py restricts connect-src to 'self' and wss: only.
+_csp = SECURE_CSP_DIRECTIVES.copy() if SECURE_CSP_DIRECTIVES else {}
+_csp["connect-src"] = ["'self'", "wss:", "ws:"]
+SECURE_CSP_DIRECTIVES = _csp
 
 # Your stuff...
 # ------------------------------------------------------------------------------
