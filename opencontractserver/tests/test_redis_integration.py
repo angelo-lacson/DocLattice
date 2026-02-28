@@ -18,11 +18,21 @@ from asgiref.sync import async_to_sync
 from celery import shared_task
 from celery.contrib.testing.worker import start_worker
 from channels.layers import get_channel_layer
+from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase
 from django_redis import get_redis_connection
 
 from config.celery_app import app as celery_app
+
+# Skip entire module when running under standard test.py settings (which use
+# LocMemCache). These tests require config.settings.test_integration with real
+# Redis backends. Without this guard, get_redis_connection() would fail during
+# normal pytest discovery.
+pytestmark = pytest.mark.skipif(
+    "django_redis" not in settings.CACHES.get("default", {}).get("BACKEND", ""),
+    reason="Requires DJANGO_SETTINGS_MODULE=config.settings.test_integration",
+)
 
 
 def _flush_redis():
@@ -215,6 +225,9 @@ class TestCeleryRedisBackend(TransactionTestCase):
         super().tearDownClass()
 
     def setUp(self):
+        _flush_redis()
+
+    def tearDown(self):
         _flush_redis()
 
     def test_task_roundtrip(self):
