@@ -83,7 +83,8 @@ class ExportCorpusTestCase(TestCase):
             )
             # Should return a 5-tuple with non-None annotation JSON
             self.assertEqual(len(result), 5)
-            self.assertIsNotNone(result[2])
+            doc_name, base64_msg, doc_annotation_json, text_labels, doc_labels = result
+            self.assertIsNotNone(doc_annotation_json)
 
     def test_exported_values_match_types(self):
         """Test that exported values from build_document_export match the
