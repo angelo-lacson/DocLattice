@@ -893,7 +893,10 @@ class TestRestoreDeletedDocumentMutation(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        self.assertTrue(result["data"]["restoreDeletedDocument"]["ok"])
+        self.assertTrue(
+            result["data"]["restoreDeletedDocument"]["ok"],
+            result["data"]["restoreDeletedDocument"].get("message", ""),
+        )
         self.assertIn("restored", result["data"]["restoreDeletedDocument"]["message"])
         self.assertEqual(
             result["data"]["restoreDeletedDocument"]["document"]["title"],
@@ -1068,7 +1071,10 @@ class TestRestoreDocumentToVersionMutation(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        self.assertTrue(result["data"]["restoreDocumentToVersion"]["ok"])
+        self.assertTrue(
+            result["data"]["restoreDocumentToVersion"]["ok"],
+            result["data"]["restoreDocumentToVersion"].get("message", ""),
+        )
         self.assertEqual(
             result["data"]["restoreDocumentToVersion"]["newVersionNumber"], 4
         )
@@ -1155,7 +1161,10 @@ class TestRestoreDocumentToVersionMutation(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        self.assertTrue(result["data"]["restoreDocumentToVersion"]["ok"])
+        self.assertTrue(
+            result["data"]["restoreDocumentToVersion"]["ok"],
+            result["data"]["restoreDocumentToVersion"].get("message", ""),
+        )
         # Version 4 because we have v1, v2, v3, and now v4 (restored from v2)
         self.assertEqual(
             result["data"]["restoreDocumentToVersion"]["newVersionNumber"], 4
