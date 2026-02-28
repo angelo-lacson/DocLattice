@@ -5,7 +5,7 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-27
+## [Unreleased] - 2026-02-28
 
 ### Changed
 
@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DocumentKnowledgeBase.tsx**: Memoized `getPanelWidthPercentage` with `useCallback` to prevent auto-zoom effect from re-running on every render.
 
 ### Added
+
+#### Replace Mock Data with Real User Query in @mention Dropdown (Closes #1002)
+- **useMentionUsers hook** (`frontend/src/components/threads/hooks/useMentionUsers.ts`): Replaced hardcoded mock users with real `SEARCH_USERS_FOR_MENTION` GraphQL query. Added 300ms debounced input to reduce excessive API calls and minimum character threshold (2 chars). Hook now returns `{ users, loading, error }` instead of just `MentionUser[]`.
+- **MentionPicker component** (`frontend/src/components/threads/MentionPicker.tsx`): Added loading and error state rendering. Shows "Searching users..." during query execution and "Failed to load users" on errors. Added `loading` and `error` optional props to `MentionPickerProps`.
 
 #### Test Coverage for Untested Backend Modules (Closes #975)
 - Unit tests for five previously uncovered modules: feedback, shared (defaults, db_utils, slug_utils, utils, mixins), constants, types (enums, TypedDicts), and MCP extended (telemetry, TTLLRUCache, RateLimiter, formatters, config, permissions, URI parser) (`opencontractserver/tests/`)

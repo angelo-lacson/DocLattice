@@ -162,6 +162,8 @@ export interface MentionPickerProps {
   users: MentionUser[];
   onSelect: (user: MentionUser) => void;
   selectedIndex: number;
+  loading?: boolean;
+  error?: string | null;
 }
 
 export interface MentionPickerRef {
@@ -173,7 +175,7 @@ export interface MentionPickerRef {
  * Used with TipTap's Mention extension
  */
 export const MentionPicker = forwardRef<MentionPickerRef, MentionPickerProps>(
-  ({ users, onSelect, selectedIndex }, ref) => {
+  ({ users, onSelect, selectedIndex, loading, error }, ref) => {
     const [selected, setSelected] = useState(selectedIndex);
 
     useEffect(() => {
@@ -206,6 +208,22 @@ export const MentionPicker = forwardRef<MentionPickerRef, MentionPickerProps>(
     const getInitials = (username: string) => {
       return username.substring(0, 2).toUpperCase();
     };
+
+    if (loading) {
+      return (
+        <Container>
+          <NoResults>Searching users…</NoResults>
+        </Container>
+      );
+    }
+
+    if (error) {
+      return (
+        <Container>
+          <NoResults>Failed to load users</NoResults>
+        </Container>
+      );
+    }
 
     if (users.length === 0) {
       return (
