@@ -76,9 +76,7 @@ class ExtractsQueryTestCase(TestCase):
                     description
                 }
             }
-        """ % to_global_id(
-            "FieldsetType", self.fieldset.id
-        )
+        """ % to_global_id("FieldsetType", self.fieldset.id)
 
         result = self.client.execute(query)
         self.assertIsNone(result.get("errors"))
@@ -98,9 +96,7 @@ class ExtractsQueryTestCase(TestCase):
                     outputType
                 }
             }
-        """ % to_global_id(
-            "ColumnType", self.column.id
-        )
+        """ % to_global_id("ColumnType", self.column.id)
 
         result = self.client.execute(query)
         self.assertIsNone(result.get("errors"))
@@ -118,9 +114,7 @@ class ExtractsQueryTestCase(TestCase):
                     name
                 }
             }
-        """ % to_global_id(
-            "ExtractType", self.extract.id
-        )
+        """ % to_global_id("ExtractType", self.extract.id)
 
         result = self.client.execute(query)
         self.assertIsNone(result.get("errors"))
@@ -139,9 +133,7 @@ class ExtractsQueryTestCase(TestCase):
                     dataDefinition
                 }
             }
-        """ % to_global_id(
-            "DatacellType", self.row.id
-        )
+        """ % to_global_id("DatacellType", self.row.id)
 
         result = self.client.execute(query)
         self.assertIsNone(result.get("errors"))

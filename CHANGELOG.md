@@ -9,18 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### Extract Magic Numbers to Constants Files (Closes #970)
+- Replaced hardcoded upload limit, truncation lengths, DPI, and title limits with named constants in `constants/document_processing.py` and `constants/llm_tools.py`
+- Reused existing `MAX_PROCESSING_ERROR_LENGTH`/`MAX_PROCESSING_TRACEBACK_LENGTH` in `corpuses/models.py`
+
 #### GraphQL Module Modularization (Closes #972)
-- **Split `config/graphql/graphene_types.py`** (3,717 lines → 107-line re-export): Extracted 80+ GraphQL type definitions into 10 domain-specific files: `base_types.py`, `user_types.py`, `annotation_types.py`, `document_types.py`, `corpus_types.py`, `extract_types.py`, `agent_types.py`, `conversation_types.py`, `social_types.py`, `pipeline_types.py`
-- **Split `config/graphql/mutations.py`** (6,229 lines → 405-line composition): Extracted 79 inline mutation classes into 8 new domain files: `analysis_mutations.py`, `annotation_mutations.py`, `document_relationship_mutations.py`, `label_mutations.py`, `corpus_mutations.py`, `document_mutations.py`, `extract_mutations.py`, `user_mutations.py` — joining 10 previously-extracted mutation files
-- **Split `config/graphql/queries.py`** (4,408 lines → 54-line composition): Extracted all query resolvers into 13 mixin classes: `UserQueryMixin`, `SlugQueryMixin`, `AnnotationQueryMixin`, `DocumentQueryMixin`, `CorpusQueryMixin`, `ExtractQueryMixin`, `ConversationQueryMixin`, `SearchQueryMixin`, `SocialQueryMixin`, `ActionQueryMixin`, `PipelineQueryMixin`, `OGMetadataQueryMixin`, `WorkerQueryMixin`
-- **Full backward compatibility**: Original import paths (`from config.graphql.graphene_types import X`, etc.) continue to work via re-exports
-- **No logic changes**: All class definitions, resolvers, and mutations moved exactly as-is
+- Split `graphene_types.py` (3,717→107 lines), `mutations.py` (6,229→405 lines), `queries.py` (4,408→54 lines) into domain-specific files
+- Full backward compatibility via re-exports; no logic changes
 
 #### Consolidate Duplicate String Truncation Utilities (Closes #976)
-- **New helper**: `opencontractserver/utils/text.py` — added `truncate(text, max_length, suffix="")` centralising all string-truncation logic
-- **New constants**: `opencontractserver/constants/truncation.py` — `MAX_NOTE_CONTENT_PREVIEW_LENGTH` (512), `MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH` (200), `MAX_LINK_TITLE_LENGTH` (100), `MAX_DOC_TITLE_FALLBACK_LENGTH` (50), `MAX_NOTIFICATION_ERROR_LENGTH` (500)
-- **Replaced inline truncation** in `opencontractserver/llms/tools/core_tools.py`, `opencontractserver/tasks/doc_tasks.py`, and `opencontractserver/corpuses/models.py` with calls to `truncate()` and named constants
-- **Tests**: `opencontractserver/tests/test_truncate.py` — unit tests for the new helper and constants
+- Added `truncate()` helper in `opencontractserver/utils/text.py` and named constants in `constants/truncation.py`
+- Replaced inline truncation across `core_tools.py`, `doc_tasks.py`, and `corpuses/models.py`
 
 #### Break Up Large Frontend Components (Closes #977)
 - **StyledContainers.tsx** (2,115 → 12 lines): Split into 9 feature-specific style files under `styled/` directory (HeaderAndLayout, LeftSidebar, RightPanel, ResizeControls, Relationships, LoadingStates, EmptyStates, KnowledgeLayer, SidebarTabs) with barrel `index.ts` for backward compatibility.
