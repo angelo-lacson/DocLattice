@@ -102,9 +102,9 @@ class SlugQueryMixin:
         doc = (
             Document.objects.filter(
                 slug=document_slug,
-                documentpath__corpus=corpus,
-                documentpath__is_current=True,
-                documentpath__is_deleted=False,
+                path_records__corpus=corpus,
+                path_records__is_current=True,
+                path_records__is_deleted=False,
             )
             .visible_to_user(info.context.user)
             .first()
