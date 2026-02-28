@@ -53,13 +53,8 @@ class ExportCorpusTestCase(TestCase):
 
         import_task.apply().get()
 
-        # TODO - load the import zip into memory so we can compare exports against original import
         self.import_zip = None
 
-    # TODO - we really need to update the export format... to make it more useful for exchanges analyses,
-    #  stopped exporting ALL labelset labels
-    #  and not just export labels used in the corpus. This is a temporary fix to get working outputs,
-    #  but more thorough redesign is needed..
     def test_export_utils(self):
         print(
             "# TEST CORPUS EXPORT PIPELINE #########################################################################"
@@ -94,18 +89,10 @@ class ExportCorpusTestCase(TestCase):
                 doc_id=doc.id,
                 corpus_id=self.original_corpus_obj.id,
             )
-
-            # TODO - need to check that each doc returns data of this format and it's valid (check against import)
-
-            # return (
-            #     doc_name,
-            #     base64_encoded_message,
-            #     doc_annotation_json,
-            #     text_labels,
-            #     doc_labels,
-            # )
-
-            # TODO - how do we check for the highlights and make sure they're right? PyMuPdf maybe?
+            # NOTE(deferred): Exported document data format and highlight
+            # correctness (via PyMuPDF) are not validated here. A round-trip
+            # comparison against the original import zip would strengthen
+            # coverage but requires non-trivial fixture work.
 
     def test_exported_values_match_types(self):
         """

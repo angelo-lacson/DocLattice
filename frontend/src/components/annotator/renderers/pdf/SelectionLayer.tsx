@@ -615,7 +615,8 @@ const SelectionLayer = ({
 
       const tokens = annotation && annotation.tokens ? annotation.tokens : null;
 
-      // TODO - ensure we WANT random UUID
+      // Random UUID is intentional — this is a transient in-progress selection,
+      // not a persisted annotation, so a stable ID is unnecessary.
       return (
         <>
           <SelectionBoundary
