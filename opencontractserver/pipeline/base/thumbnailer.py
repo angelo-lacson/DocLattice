@@ -112,6 +112,6 @@ class BaseThumbnailGenerator(PipelineComponentBase, ABC):
             # If no thumbnail generated
             return None
 
-        except Document.DoesNotExist:
+        except Document.DoesNotExist:  # pragma: no cover -- defensive guard
             logger.warning("Document with id %s does not exist.", doc_id)
             return None
