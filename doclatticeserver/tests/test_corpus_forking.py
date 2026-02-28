@@ -19,6 +19,16 @@ User = get_user_model()
 
 
 class CorpusForkTestCase(TransactionTestCase):
+    """Test suite for corpus forking data integrity.
+
+    Each test method runs an independent import+fork cycle via
+    ``_import_and_fork_corpus()``.  This is intentional:
+    ``TransactionTestCase`` truncates all tables between tests, so sharing
+    state across methods would require ``setUpClass`` plus manual cleanup
+    and would make test isolation harder to reason about.  The trade-off is
+    extra wall-clock time (~8 cycles) in exchange for clean, self-contained
+    assertions per test method.
+    """
 
     fixtures_path = pathlib.Path(__file__).parent / "fixtures"
 
@@ -93,14 +103,29 @@ class CorpusForkTestCase(TransactionTestCase):
 
     def _build_label_map(self, original_corpus, forked_corpus):
         """Build a mapping from original label IDs to forked label IDs by
-        matching on label text."""
-        original_label_by_text = {
-            lbl.text: lbl.id
-            for lbl in original_corpus.label_set.annotation_labels.all()
-        }
-        forked_label_by_text = {
-            lbl.text: lbl.id for lbl in forked_corpus.label_set.annotation_labels.all()
-        }
+        matching on label text.
+
+        Note: if multiple labels share the same ``text``, only the last one
+        wins in the dict comprehension (silently dropped).  The assertions
+        below guard against this in the test fixture.
+        """
+        original_labels = list(original_corpus.label_set.annotation_labels.all())
+        forked_labels = list(forked_corpus.label_set.annotation_labels.all())
+
+        original_label_by_text = {lbl.text: lbl.id for lbl in original_labels}
+        self.assertEqual(
+            len(original_label_by_text),
+            len(original_labels),
+            "Original corpus has duplicate label texts -- label_map would silently drop entries",
+        )
+
+        forked_label_by_text = {lbl.text: lbl.id for lbl in forked_labels}
+        self.assertEqual(
+            len(forked_label_by_text),
+            len(forked_labels),
+            "Forked corpus has duplicate label texts -- label_map would silently drop entries",
+        )
+
         label_map = {}
         for text, orig_id in original_label_by_text.items():
             if text in forked_label_by_text:
@@ -279,58 +304,74 @@ class CorpusForkTestCase(TransactionTestCase):
         if len(original_rels) == 0:
             self.skipTest("Fixture has no relationships -- nothing to verify")
 
-        # Build annotation map: original annotation id -> forked annotation id
-        # Match by raw_text + page within respective corpuses
+        # Build annotation id -> content key maps for both corpuses.
         original_annots = list(
             Annotation.objects.filter(corpus=original_corpus, analysis__isnull=True)
         )
-        original_annot_key_to_id = {}
-        for a in original_annots:
-            key = (a.raw_text, a.page)
-            original_annot_key_to_id[key] = a.id
+        original_annot_key_to_id = {(a.raw_text, a.page): a.id for a in original_annots}
 
-        # Guard: ensure (raw_text, page) is unambiguous
+        # Guard: ensure (raw_text, page) is unambiguous for originals
         self.assertEqual(
             len(original_annot_key_to_id),
             len(original_annots),
             "Fixture has duplicate (raw_text, page) pairs -- annotation key is ambiguous",
         )
 
-        forked_annot_key_to_id = {}
-        for a in Annotation.objects.filter(corpus=forked_corpus, analysis__isnull=True):
-            key = (a.raw_text, a.page)
-            forked_annot_key_to_id[key] = a.id
-
-        # Reverse map: original annotation id -> key
+        # Reverse map: original annotation id -> content key
         orig_id_to_key = {v: k for k, v in original_annot_key_to_id.items()}
 
-        # Pre-index all forked annotations by ID to avoid O(n*m) queries
-        all_forked_annot_ids = set()
-        for forked_rel in forked_rels:
-            all_forked_annot_ids.update(
-                forked_rel.source_annotations.values_list("id", flat=True)
+        # Build forked annotation id -> content key in a single query.
+        forked_annots = list(
+            Annotation.objects.filter(corpus=forked_corpus, analysis__isnull=True)
+        )
+        forked_annot_by_id = {a.id: (a.raw_text, a.page) for a in forked_annots}
+
+        # Guard: ensure forked annotations also have unambiguous keys
+        self.assertEqual(
+            len(forked_annot_by_id),
+            len(forked_annots),
+            "Forked corpus has duplicate (raw_text, page) pairs -- annotation key is ambiguous",
+        )
+
+        # Pre-compute source/target id sets per relationship from the
+        # prefetch cache (iterating .all() hits the cache; .values_list()
+        # bypasses it and issues a new query each time).
+        orig_rel_annot_ids = {}
+        for rel in original_rels:
+            orig_rel_annot_ids[rel.id] = (
+                {a.id for a in rel.source_annotations.all()},
+                {a.id for a in rel.target_annotations.all()},
             )
-            all_forked_annot_ids.update(
-                forked_rel.target_annotations.values_list("id", flat=True)
+
+        forked_rel_annot_ids = {}
+        for rel in forked_rels:
+            forked_rel_annot_ids[rel.id] = (
+                {a.id for a in rel.source_annotations.all()},
+                {a.id for a in rel.target_annotations.all()},
             )
-        forked_annot_by_id = {
-            a.id: (a.raw_text, a.page)
-            for a in Annotation.objects.filter(id__in=all_forked_annot_ids)
-        }
+
+        # Pre-compute content-key sets for each forked relationship so the
+        # inner matching loop is pure dict lookups (no DB queries).
+        forked_rel_keys = {}
+        for rel_id, (src_ids, tgt_ids) in forked_rel_annot_ids.items():
+            forked_rel_keys[rel_id] = (
+                {
+                    forked_annot_by_id[aid]
+                    for aid in src_ids
+                    if aid in forked_annot_by_id
+                },
+                {
+                    forked_annot_by_id[aid]
+                    for aid in tgt_ids
+                    if aid in forked_annot_by_id
+                },
+            )
 
         label_map = self._build_label_map(original_corpus, forked_corpus)
 
         for orig_rel in original_rels:
-            # Find the matching forked relationship by checking source/target
-            # annotation content equivalence
-            orig_source_ids = set(
-                orig_rel.source_annotations.values_list("id", flat=True)
-            )
-            orig_target_ids = set(
-                orig_rel.target_annotations.values_list("id", flat=True)
-            )
-
             # Convert original annotation IDs to content keys
+            orig_source_ids, orig_target_ids = orig_rel_annot_ids[orig_rel.id]
             orig_source_keys = {
                 orig_id_to_key[aid] for aid in orig_source_ids if aid in orig_id_to_key
             }
@@ -338,30 +379,13 @@ class CorpusForkTestCase(TransactionTestCase):
                 orig_id_to_key[aid] for aid in orig_target_ids if aid in orig_id_to_key
             }
 
-            # Find matching forked relationship
+            # Find matching forked relationship via pre-computed key sets
             matched_forked = None
             for forked_rel in forked_rels:
-                forked_source_ids = set(
-                    forked_rel.source_annotations.values_list("id", flat=True)
-                )
-                forked_target_ids = set(
-                    forked_rel.target_annotations.values_list("id", flat=True)
-                )
-
-                forked_source_keys = {
-                    forked_annot_by_id[aid]
-                    for aid in forked_source_ids
-                    if aid in forked_annot_by_id
-                }
-                forked_target_keys = {
-                    forked_annot_by_id[aid]
-                    for aid in forked_target_ids
-                    if aid in forked_annot_by_id
-                }
-
+                f_source_keys, f_target_keys = forked_rel_keys[forked_rel.id]
                 if (
-                    forked_source_keys == orig_source_keys
-                    and forked_target_keys == orig_target_keys
+                    f_source_keys == orig_source_keys
+                    and f_target_keys == orig_target_keys
                 ):
                     matched_forked = forked_rel
                     break
@@ -384,10 +408,14 @@ class CorpusForkTestCase(TransactionTestCase):
                 )
 
             # Verify source/target annotations reference forked corpus annotations
-            for source_annot in matched_forked.source_annotations.all():
-                self.assertEqual(source_annot.corpus_id, forked_corpus.id)
-            for target_annot in matched_forked.target_annotations.all():
-                self.assertEqual(target_annot.corpus_id, forked_corpus.id)
+            matched_src_ids, matched_tgt_ids = forked_rel_annot_ids[matched_forked.id]
+            for annot_id in matched_src_ids | matched_tgt_ids:
+                self.assertIn(
+                    annot_id,
+                    forked_annot_by_id,
+                    f"Forked relationship references annotation {annot_id} "
+                    "not in the forked corpus",
+                )
 
     def test_forked_corpus_metadata(self):
         """Verify the forked corpus has correct title prefix, parent reference,
