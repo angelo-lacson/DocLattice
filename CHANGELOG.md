@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Annotation validation**: Verifies raw text, page numbers, bounding box coordinates, token references, and label associations for all 6 annotations
 - **Relationship verification**: Tests `import_relationships()` with single and multiple source/target annotations, plus structural flag preservation
 
+- Expanded corpus forking test suite with field-level data integrity checks (Closes #998)
+
 ### Fixed
 
 #### Skip redundant document re-parsing during corpus import

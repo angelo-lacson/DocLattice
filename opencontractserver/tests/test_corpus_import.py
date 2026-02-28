@@ -145,7 +145,11 @@ class TestCorpusImport(TransactionTestCase):
         return doc
 
     def _create_rel_label(self, text: str, color: str = "#000000") -> AnnotationLabel:
-        """Create a relationship label with permissions for self.user."""
+        """Create a standalone relationship label with permissions for self.user.
+
+        Not added to any labelset — these are used to test
+        import_relationships() in isolation, not the full label pipeline.
+        """
         label = AnnotationLabel.objects.create(
             text=text,
             label_type=RELATIONSHIP_LABEL,
@@ -345,153 +349,153 @@ class TestCorpusImport(TransactionTestCase):
     # Relationship verification (issue #999 requirement 3)
     # ------------------------------------------------------------------
 
-    def test_relationship_import_single(self):
-        """Validate import_relationships creates a relationship with correct links."""
+    def test_relationship_import(self):
+        """Validate import_relationships: single links, multiple sources/targets,
+        and structural flag preservation."""
         corpus = self._run_import()
         doc = self._get_corpus_document(corpus)
 
-        source_annot = Annotation.objects.filter(
-            corpus=corpus, document=doc, raw_text=" ACTIVE WITH ME, Inc."
-        ).first()
-        target_annot = Annotation.objects.filter(
-            corpus=corpus, document=doc, annotation_label__text="Governing Law"
-        ).first()
-        self.assertIsNotNone(source_annot)
-        self.assertIsNotNone(target_annot)
+        # -- Single source → single target --
+        with self.subTest("single_source_and_target"):
+            source_annot = Annotation.objects.filter(
+                corpus=corpus, document=doc, raw_text=" ACTIVE WITH ME, Inc."
+            ).first()
+            target_annot = Annotation.objects.filter(
+                corpus=corpus, document=doc, annotation_label__text="Governing Law"
+            ).first()
+            self.assertIsNotNone(source_annot)
+            self.assertIsNotNone(target_annot)
 
-        rel_label = self._create_rel_label("references")
+            rel_label = self._create_rel_label("references")
 
-        annotation_id_map = {
-            str(source_annot.pk): source_annot.pk,
-            str(target_annot.pk): target_annot.pk,
-        }
+            annotation_id_map = {
+                str(source_annot.pk): source_annot.pk,
+                str(target_annot.pk): target_annot.pk,
+            }
 
-        relationships_data = [
-            {
-                "id": "rel_1",
-                "relationshipLabel": "references",
-                "source_annotation_ids": [str(source_annot.pk)],
-                "target_annotation_ids": [str(target_annot.pk)],
-                "structural": False,
-            },
-        ]
+            relationships_data = [
+                {
+                    "id": "rel_1",
+                    "relationshipLabel": "references",
+                    "source_annotation_ids": [str(source_annot.pk)],
+                    "target_annotation_ids": [str(target_annot.pk)],
+                    "structural": False,
+                },
+            ]
 
-        result = import_relationships(
-            user_id=self.user.id,
-            doc_obj=doc,
-            corpus_obj=corpus,
-            relationships_data=relationships_data,
-            label_lookup={"references": rel_label},
-            annotation_id_map=annotation_id_map,
-        )
+            result = import_relationships(
+                user_id=self.user.id,
+                doc_obj=doc,
+                corpus_obj=corpus,
+                relationships_data=relationships_data,
+                label_lookup={"references": rel_label},
+                annotation_id_map=annotation_id_map,
+            )
 
-        self.assertEqual(len(result), 1)
-        self.assertIn("rel_1", result)
+            self.assertEqual(len(result), 1)
+            self.assertIn("rel_1", result)
 
-        rel = result["rel_1"]
-        self.assertEqual(rel.relationship_label, rel_label)
-        self.assertEqual(rel.corpus, corpus)
-        self.assertEqual(rel.document, doc)
-        self.assertFalse(rel.structural)
-        self.assertEqual(rel.source_annotations.count(), 1)
-        self.assertEqual(rel.target_annotations.count(), 1)
-        self.assertEqual(rel.source_annotations.first().pk, source_annot.pk)
-        self.assertEqual(rel.target_annotations.first().pk, target_annot.pk)
+            rel = result["rel_1"]
+            self.assertEqual(rel.relationship_label, rel_label)
+            self.assertEqual(rel.corpus, corpus)
+            self.assertEqual(rel.document, doc)
+            self.assertFalse(rel.structural)
+            self.assertEqual(rel.source_annotations.count(), 1)
+            self.assertEqual(rel.target_annotations.count(), 1)
+            self.assertEqual(rel.source_annotations.first().pk, source_annot.pk)
+            self.assertEqual(rel.target_annotations.first().pk, target_annot.pk)
 
-    def test_relationship_import_multiple_sources_and_targets(self):
-        """Validate relationships with multiple source and target annotations."""
-        corpus = self._run_import()
-        doc = self._get_corpus_document(corpus)
-
-        parties_annots = list(
-            Annotation.objects.filter(
+        # -- Multiple sources → multiple targets --
+        with self.subTest("multiple_sources_and_targets"):
+            parties_annots = list(
+                Annotation.objects.filter(
+                    corpus=corpus,
+                    document=doc,
+                    annotation_label__text="Parties",
+                )[:2]
+            )
+            gov_law = Annotation.objects.filter(
                 corpus=corpus,
                 document=doc,
-                annotation_label__text="Parties",
-            )[:2]
-        )
-        gov_law = Annotation.objects.filter(
-            corpus=corpus,
-            document=doc,
-            annotation_label__text="Governing Law",
-        ).first()
-        anti_assign = Annotation.objects.filter(
-            corpus=corpus,
-            document=doc,
-            annotation_label__text="Anti-Assignment",
-        ).first()
-        self.assertEqual(len(parties_annots), 2)
-        self.assertIsNotNone(gov_law)
-        self.assertIsNotNone(anti_assign)
+                annotation_label__text="Governing Law",
+            ).first()
+            anti_assign = Annotation.objects.filter(
+                corpus=corpus,
+                document=doc,
+                annotation_label__text="Anti-Assignment",
+            ).first()
+            self.assertEqual(len(parties_annots), 2)
+            self.assertIsNotNone(gov_law)
+            self.assertIsNotNone(anti_assign)
 
-        rel_label = self._create_rel_label("related_to", color="#112233")
+            rel_label_multi = self._create_rel_label("related_to", color="#112233")
 
-        all_pks = [a.pk for a in parties_annots] + [gov_law.pk, anti_assign.pk]
-        annotation_id_map = {str(pk): pk for pk in all_pks}
+            all_pks = [a.pk for a in parties_annots] + [gov_law.pk, anti_assign.pk]
+            annotation_id_map_multi = {str(pk): pk for pk in all_pks}
 
-        relationships_data = [
-            {
-                "id": "rel_multi",
-                "relationshipLabel": "related_to",
-                "source_annotation_ids": [str(a.pk) for a in parties_annots],
-                "target_annotation_ids": [str(gov_law.pk), str(anti_assign.pk)],
-                "structural": False,
-            },
-        ]
+            relationships_data_multi = [
+                {
+                    "id": "rel_multi",
+                    "relationshipLabel": "related_to",
+                    "source_annotation_ids": [str(a.pk) for a in parties_annots],
+                    "target_annotation_ids": [
+                        str(gov_law.pk),
+                        str(anti_assign.pk),
+                    ],
+                    "structural": False,
+                },
+            ]
 
-        result = import_relationships(
-            user_id=self.user.id,
-            doc_obj=doc,
-            corpus_obj=corpus,
-            relationships_data=relationships_data,
-            label_lookup={"related_to": rel_label},
-            annotation_id_map=annotation_id_map,
-        )
+            result_multi = import_relationships(
+                user_id=self.user.id,
+                doc_obj=doc,
+                corpus_obj=corpus,
+                relationships_data=relationships_data_multi,
+                label_lookup={"related_to": rel_label_multi},
+                annotation_id_map=annotation_id_map_multi,
+            )
 
-        self.assertEqual(len(result), 1)
-        self.assertIn("rel_multi", result)
+            self.assertEqual(len(result_multi), 1)
+            self.assertIn("rel_multi", result_multi)
 
-        rel = result["rel_multi"]
-        self.assertEqual(rel.source_annotations.count(), 2)
-        self.assertEqual(rel.target_annotations.count(), 2)
+            rel_m = result_multi["rel_multi"]
+            self.assertEqual(rel_m.source_annotations.count(), 2)
+            self.assertEqual(rel_m.target_annotations.count(), 2)
 
-        source_pks = set(rel.source_annotations.values_list("pk", flat=True))
-        self.assertEqual(source_pks, {a.pk for a in parties_annots})
+            source_pks = set(rel_m.source_annotations.values_list("pk", flat=True))
+            self.assertEqual(source_pks, {a.pk for a in parties_annots})
 
-        target_pks = set(rel.target_annotations.values_list("pk", flat=True))
-        self.assertEqual(target_pks, {gov_law.pk, anti_assign.pk})
+            target_pks = set(rel_m.target_annotations.values_list("pk", flat=True))
+            self.assertEqual(target_pks, {gov_law.pk, anti_assign.pk})
 
-    def test_relationship_structural_flag(self):
-        """Validate the structural flag is preserved on imported relationships."""
-        corpus = self._run_import()
-        doc = self._get_corpus_document(corpus)
+        # -- Structural flag preservation --
+        with self.subTest("structural_flag"):
+            annots = list(Annotation.objects.filter(corpus=corpus, document=doc)[:2])
+            self.assertEqual(len(annots), 2)
 
-        annots = list(Annotation.objects.filter(corpus=corpus, document=doc)[:2])
-        self.assertEqual(len(annots), 2)
+            rel_label_struct = self._create_rel_label("structural_ref", color="#445566")
 
-        rel_label = self._create_rel_label("structural_ref", color="#445566")
+            annotation_id_map_struct = {str(a.pk): a.pk for a in annots}
 
-        annotation_id_map = {str(a.pk): a.pk for a in annots}
+            relationships_data_struct = [
+                {
+                    "id": "rel_struct",
+                    "relationshipLabel": "structural_ref",
+                    "source_annotation_ids": [str(annots[0].pk)],
+                    "target_annotation_ids": [str(annots[1].pk)],
+                    "structural": True,
+                },
+            ]
 
-        relationships_data = [
-            {
-                "id": "rel_struct",
-                "relationshipLabel": "structural_ref",
-                "source_annotation_ids": [str(annots[0].pk)],
-                "target_annotation_ids": [str(annots[1].pk)],
-                "structural": True,
-            },
-        ]
+            result_struct = import_relationships(
+                user_id=self.user.id,
+                doc_obj=doc,
+                corpus_obj=corpus,
+                relationships_data=relationships_data_struct,
+                label_lookup={"structural_ref": rel_label_struct},
+                annotation_id_map=annotation_id_map_struct,
+            )
 
-        result = import_relationships(
-            user_id=self.user.id,
-            doc_obj=doc,
-            corpus_obj=corpus,
-            relationships_data=relationships_data,
-            label_lookup={"structural_ref": rel_label},
-            annotation_id_map=annotation_id_map,
-        )
-
-        self.assertEqual(len(result), 1)
-        self.assertIn("rel_struct", result)
-        self.assertTrue(result["rel_struct"].structural)
+            self.assertEqual(len(result_struct), 1)
+            self.assertIn("rel_struct", result_struct)
+            self.assertTrue(result_struct["rel_struct"].structural)

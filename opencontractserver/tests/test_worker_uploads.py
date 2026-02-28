@@ -427,15 +427,19 @@ class TestWorkerUploadEndpoint(TransactionTestCase):
         "opencontractserver.worker_uploads.views.process_pending_uploads.apply_async"
     )
     def test_upload_invalid_json(self, mock_task):
-        response = self.client.post(
-            "/api/worker-uploads/documents/",
-            {
-                "file": _make_fake_pdf_upload(),
-                "metadata": "not valid json {{{",
-            },
-            format="multipart",
-        )
+        with self.assertLogs(
+            "opencontractserver.worker_uploads.serializers", level="WARNING"
+        ) as log_ctx:
+            response = self.client.post(
+                "/api/worker-uploads/documents/",
+                {
+                    "file": _make_fake_pdf_upload(),
+                    "metadata": "not valid json {{{",
+                },
+                format="multipart",
+            )
         self.assertEqual(response.status_code, 400)
+        self.assertTrue(any("Invalid JSON" in m for m in log_ctx.output))
 
     @patch(
         "opencontractserver.worker_uploads.views.process_pending_uploads.apply_async"
