@@ -99,8 +99,7 @@ class CorpusForkTestCase(TransactionTestCase):
             for lbl in original_corpus.label_set.annotation_labels.all()
         }
         forked_label_by_text = {
-            lbl.text: lbl.id
-            for lbl in forked_corpus.label_set.annotation_labels.all()
+            lbl.text: lbl.id for lbl in forked_corpus.label_set.annotation_labels.all()
         }
         label_map = {}
         for text, orig_id in original_label_by_text.items():
@@ -286,9 +285,7 @@ class CorpusForkTestCase(TransactionTestCase):
         # Build annotation map: original annotation id -> forked annotation id
         # Match by raw_text + page within respective corpuses
         original_annots = list(
-            Annotation.objects.filter(
-                corpus=original_corpus, analysis__isnull=True
-            )
+            Annotation.objects.filter(corpus=original_corpus, analysis__isnull=True)
         )
         original_annot_key_to_id = {}
         for a in original_annots:
@@ -303,9 +300,7 @@ class CorpusForkTestCase(TransactionTestCase):
         )
 
         forked_annot_key_to_id = {}
-        for a in Annotation.objects.filter(
-            corpus=forked_corpus, analysis__isnull=True
-        ):
+        for a in Annotation.objects.filter(corpus=forked_corpus, analysis__isnull=True):
             key = (a.raw_text, a.page)
             forked_annot_key_to_id[key] = a.id
 
