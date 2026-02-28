@@ -111,14 +111,13 @@ class TestDocExtractQueryTask(TransactionTestCase):
             # Optionally, assert structure/contents of 'result' as appropriate for your logic
             self.assertIn("data", result, "Expected 'data' key in result")
 
-            print(f"Synchronous doc_extract_query_task result: {result}")
+            logging.debug("Synchronous doc_extract_query_task result: %s", result)
         except Exception as e:
             logging.error(
-                f"Exception in test_doc_extract_query_task_synchronously: {e}"
+                "Exception in test_doc_extract_query_task_synchronously: %s",
+                e,
+                exc_info=True,
             )
-            import traceback
-
-            logging.error(traceback.format_exc())
             raise
 
 
@@ -210,7 +209,7 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
                 # Reload the Datacell from DB
                 cell.refresh_from_db()
                 result = cell.data
-                logging.debug(f"Result for cell {cell.id}: {result}")
+                logging.debug("Result for cell %s: %s", cell.id, result)
 
                 # Basic checks
                 self.assertIsNotNone(
@@ -236,11 +235,11 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
 
             except Exception as e:
                 logging.error(
-                    f"Exception in test_doc_extract_query_task_directly for cell {cell.id}: {e}"
+                    "Exception in test_doc_extract_query_task_directly for cell %s: %s",
+                    cell.id,
+                    e,
+                    exc_info=True,
                 )
-                import traceback
-
-                logging.error(traceback.format_exc())
                 raise
 
         # Double-check the number of DocumentAnalysisRows if desired
