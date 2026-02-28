@@ -101,13 +101,21 @@ class SlugQueryMixin:
         # in different corpuses share the same slug.
         # Explicit ordering ensures deterministic results when multiple
         # documents share the same slug in this corpus (different creators).
+        #
+        # When version_number is provided, skip is_current=True because the
+        # caller wants a historical version.  The slug may belong to an older
+        # version whose path record has is_current=False; we just need to
+        # confirm the document has *any* non-deleted path in this corpus.
+        path_filter = {
+            "slug": document_slug,
+            "path_records__corpus": corpus,
+            "path_records__is_deleted": False,
+        }
+        if version_number is None:
+            path_filter["path_records__is_current"] = True
+
         doc = (
-            Document.objects.filter(
-                slug=document_slug,
-                path_records__corpus=corpus,
-                path_records__is_current=True,
-                path_records__is_deleted=False,
-            )
+            Document.objects.filter(**path_filter)
             .visible_to_user(info.context.user)
             .order_by("pk")
             .first()
