@@ -5,6 +5,22 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-02-28
+
+### Added
+
+#### Corpus Forking Test Enhancement (Closes #998)
+- Expanded `opencontractserver/tests/test_corpus_forking.py` with field-level data integrity verification
+- **test_forked_label_properties**: Verifies color, description, icon, text, and label_type transfer correctly during cloning
+- **test_forked_labels_are_independent_copies**: Confirms forked labels are new DB rows, not shared references
+- **test_forked_labelset_metadata**: Checks [FORK] title prefix and description preservation on LabelSet
+- **test_forked_document_field_integrity**: Validates document title prefixes, source_document provenance, and file blob sharing
+- **test_forked_annotation_field_integrity**: Asserts page, raw_text, tokens_jsons, bounding_box, json payload, annotation_type, and label remapping
+- **test_forked_relationship_integrity**: Verifies source/target annotation remapping, corpus references, and relationship label mapping
+- **test_forked_corpus_metadata**: Confirms corpus title prefix, parent reference, backend_lock state, and creator
+- Extracted shared import-and-fork setup into `_import_and_fork_corpus()` helper to reduce duplication
+- Migrated existing test from bare `assert` to `self.assert*` methods for better failure messages
+
 ## [Unreleased] - 2026-02-27
 
 ### Changed
