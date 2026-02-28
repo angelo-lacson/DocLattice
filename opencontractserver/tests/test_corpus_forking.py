@@ -21,33 +21,35 @@ User = get_user_model()
 class CorpusForkTestCase(TransactionTestCase):
     """Test suite for corpus forking data integrity.
 
-    Uses ``setUpClass`` to run a single import+fork cycle and stores IDs as
-    class attributes.  Each test loads fresh QuerySets from those IDs, so
-    tests remain isolated while avoiding 8 redundant import+fork cycles.
-    All tests are read-only, so there is no write-isolation concern.
+    Uses ``setUp`` (instance method) to run an import+fork cycle before each
+    test.  ``TransactionTestCase`` runs ``_fixture_teardown()`` (a full
+    database FLUSH) before every test method, so data created in
+    ``setUpClass`` would be wiped before test 1 even starts.  Each test
+    method therefore gets its own fresh import+fork cycle.
+
+    All tests are read-only against the forked data, so there is no
+    write-isolation concern beyond the flush semantics.
     """
 
     fixtures_path = pathlib.Path(__file__).parent / "fixtures"
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.user = User.objects.create_user(username="bob", password="12345678")
-        original_corpus, forked_corpus = cls._import_and_fork_corpus()
-        cls._original_corpus_id = original_corpus.id
-        cls._forked_corpus_id = forked_corpus.id
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="bob", password="12345678")
+        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        self.original_corpus_id = original_corpus.id
+        self.forked_corpus_id = forked_corpus.id
 
-    @classmethod
-    def _import_and_fork_corpus(cls):
+    def _import_and_fork_corpus(self):
         """Import a test corpus and fork it. Returns (original_corpus, forked_corpus)."""
         export_zip_base64_file_string = package_zip_into_base64(
-            cls.fixtures_path / "Test_Corpus_EXPORT.zip"
+            self.fixtures_path / "Test_Corpus_EXPORT.zip"
         )
         original_corpus = Corpus.objects.create(
-            title="New Import", creator=cls.user, backend_lock=False
+            title="New Import", creator=self.user, backend_lock=False
         )
         set_permissions_for_obj_to_user(
-            cls.user, original_corpus, [PermissionTypes.ALL]
+            self.user, original_corpus, [PermissionTypes.ALL]
         )
 
         base64_img_bytes = export_zip_base64_file_string.encode("utf-8")
@@ -60,13 +62,13 @@ class CorpusForkTestCase(TransactionTestCase):
             )
 
         import_task = import_corpus.s(
-            temporary_file.id, cls.user.id, original_corpus.id
+            temporary_file.id, self.user.id, original_corpus.id
         )
         import_task.apply().get()
         original_corpus.refresh_from_db()
 
         fork_task = build_fork_corpus_task(
-            corpus_pk_to_fork=original_corpus.id, user=cls.user
+            corpus_pk_to_fork=original_corpus.id, user=self.user
         )
         task_results = fork_task.apply().get()
         forked_corpus = Corpus.objects.get(id=task_results)
@@ -76,8 +78,8 @@ class CorpusForkTestCase(TransactionTestCase):
 
     def _load_corpuses(self):
         """Load fresh QuerySets from stored IDs."""
-        original = Corpus.objects.get(id=self._original_corpus_id)
-        forked = Corpus.objects.get(id=self._forked_corpus_id)
+        original = Corpus.objects.get(id=self.original_corpus_id)
+        forked = Corpus.objects.get(id=self.forked_corpus_id)
         return original, forked
 
     def test_corpus_forking(self):
@@ -279,17 +281,28 @@ class CorpusForkTestCase(TransactionTestCase):
         )
         self.assertEqual(len(forked_annots), len(original_annots))
 
-        # Guard: ensure (raw_text, page) is unambiguous for zip-based matching
-        keys = [(a.raw_text, a.page) for a in original_annots]
-        self.assertEqual(
-            len(keys),
-            len(set(keys)),
-            "Fixture has duplicate (raw_text, page) pairs -- sort key is ambiguous",
-        )
+        # Build dict-based lookup for forked annotations by (raw_text, page)
+        forked_by_key = {}
+        for annot in forked_annots:
+            key = (annot.raw_text, annot.page)
+            self.assertNotIn(
+                key,
+                forked_by_key,
+                f"Forked corpus has duplicate (raw_text, page) pair: {key}",
+            )
+            forked_by_key[key] = annot
 
         label_map = self._build_label_map(original_corpus, forked_corpus)
 
-        for orig, forked in zip(original_annots, forked_annots):
+        for orig in original_annots:
+            key = (orig.raw_text, orig.page)
+            forked = forked_by_key.get(key)
+            self.assertIsNotNone(
+                forked,
+                f"No forked annotation found for (raw_text={orig.raw_text!r}, "
+                f"page={orig.page})",
+            )
+
             # Must be different DB rows
             self.assertNotEqual(forked.id, orig.id)
 
@@ -391,8 +404,9 @@ class CorpusForkTestCase(TransactionTestCase):
                 {a.id for a in rel.target_annotations.all()},
             )
 
-        # Index forked relationships by content-key tuple for O(1) lookup
-        # instead of O(n^2) nested loop.
+        # Index forked relationships by (label_text, source_keys, target_keys)
+        # for O(1) lookup.  Including the label text in the key prevents
+        # collisions when two relationships have empty M2M sets.
         forked_rel_by_key = {}
         for rel in forked_rels:
             src_ids, tgt_ids = forked_rel_annot_ids[rel.id]
@@ -402,7 +416,10 @@ class CorpusForkTestCase(TransactionTestCase):
             tgt_keys = frozenset(
                 forked_annot_by_id[aid] for aid in tgt_ids if aid in forked_annot_by_id
             )
-            forked_rel_by_key[(src_keys, tgt_keys)] = rel
+            rel_label_text = (
+                rel.relationship_label.text if rel.relationship_label else None
+            )
+            forked_rel_by_key[(rel_label_text, src_keys, tgt_keys)] = rel
 
         label_map = self._build_label_map(original_corpus, forked_corpus)
 
@@ -416,8 +433,18 @@ class CorpusForkTestCase(TransactionTestCase):
                 orig_id_to_key[aid] for aid in orig_target_ids if aid in orig_id_to_key
             )
 
-            # O(1) lookup by content-key tuple
-            matched_forked = forked_rel_by_key.get((orig_source_keys, orig_target_keys))
+            # Use the original label text for lookup (label text is preserved
+            # across fork, only the PK changes).
+            orig_label_text = (
+                orig_rel.relationship_label.text
+                if orig_rel.relationship_label
+                else None
+            )
+
+            # O(1) lookup by (label_text, source_keys, target_keys)
+            matched_forked = forked_rel_by_key.get(
+                (orig_label_text, orig_source_keys, orig_target_keys)
+            )
 
             self.assertIsNotNone(
                 matched_forked,
