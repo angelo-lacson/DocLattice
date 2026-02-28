@@ -295,10 +295,6 @@ export const GET_CORPUS_VERSIONS = gql`
   query GetCorpusVersions($documentId: ID!, $corpusId: ID!) {
     document(id: $documentId) {
       id
-      versionCount
-      hasVersionHistory
-      isLatestVersion
-      versionNumber(corpusId: $corpusId)
       corpusVersions(corpusId: $corpusId) {
         versionNumber
         documentId
