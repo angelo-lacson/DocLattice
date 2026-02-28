@@ -4,6 +4,10 @@ Redis integration tests for django-redis, channels-redis, and Celery.
 These tests require a real Redis instance (provided by test.yml) and must be run
 with DJANGO_SETTINGS_MODULE=config.settings.test_integration.
 
+WARNING: These tests use flushdb() for isolation and are NOT safe to run with
+pytest-xdist parallel workers (-n). They are marked @pytest.mark.serial to
+prevent parallel execution. The CI workflow runs them without -n.
+
 Run:
     docker compose -f test.yml run \
       -e DJANGO_SETTINGS_MODULE=config.settings.test_integration \
@@ -28,10 +32,16 @@ from config.celery_app import app as celery_app
 # LocMemCache). These tests require config.settings.test_integration with real
 # Redis backends. Without this guard, get_redis_connection() would fail during
 # normal pytest discovery.
-pytestmark = pytest.mark.skipif(
-    "django_redis" not in settings.CACHES.get("default", {}).get("BACKEND", ""),
-    reason="Requires DJANGO_SETTINGS_MODULE=config.settings.test_integration",
-)
+#
+# Also mark serial: these tests use flushdb() which is not safe under
+# pytest-xdist parallel workers.
+pytestmark = [
+    pytest.mark.skipif(
+        "django_redis" not in settings.CACHES.get("default", {}).get("BACKEND", ""),
+        reason="Requires DJANGO_SETTINGS_MODULE=config.settings.test_integration",
+    ),
+    pytest.mark.serial,
+]
 
 
 def _flush_redis():
@@ -236,11 +246,11 @@ class TestCeleryRedisBackend(TestCase):
         """Status transitions persist correctly through Redis backend."""
         task_id = "test-lifecycle"
 
-        # Store as PENDING (implicit) then SUCCESS
-        celery_app.backend.store_result(task_id, None, "PENDING")
-        pending = AsyncResult(task_id, app=celery_app)
-        assert pending.status == "PENDING"
+        # PENDING is the implicit state for tasks with no backend record
+        result = AsyncResult(task_id, app=celery_app)
+        assert result.status == "PENDING"
 
+        # Transition to SUCCESS and verify round-trip
         celery_app.backend.store_result(task_id, 42, "SUCCESS")
         success = AsyncResult(task_id, app=celery_app)
         assert success.status == "SUCCESS"
