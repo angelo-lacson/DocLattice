@@ -10,8 +10,14 @@ if TYPE_CHECKING:
     from opencontractserver.llms.agents.core_agents import SourceNode
 
 from opencontractserver.annotations.models import Note, NoteRevision
+from opencontractserver.constants.truncation import (
+    MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH,
+    MAX_LINK_TITLE_LENGTH,
+    MAX_NOTE_CONTENT_PREVIEW_LENGTH,
+)
 from opencontractserver.corpuses.models import Corpus, CorpusDescriptionRevision
 from opencontractserver.documents.models import Document
+from opencontractserver.utils.text import truncate
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +152,7 @@ def get_notes_for_document_corpus(
         {
             "id": note.id,
             "title": note.title,
-            "content": note.content[:512] if note.content else "",
+            "content": truncate(note.content, MAX_NOTE_CONTENT_PREVIEW_LENGTH),
             "creator_id": note.creator_id,
             "created": note.created.isoformat() if note.created else None,
             "modified": note.modified.isoformat() if note.modified else None,
@@ -313,9 +319,7 @@ async def aget_notes_for_document_corpus(
             {
                 "id": note.id,
                 "title": note.title,
-                "content": (
-                    note.content[:512] if note.content else ""
-                ),  # Truncate for performance
+                "content": truncate(note.content, MAX_NOTE_CONTENT_PREVIEW_LENGTH),
                 "creator_id": note.creator_id,
                 "created": note.created.isoformat() if note.created else None,
                 "modified": note.modified.isoformat() if note.modified else None,
@@ -741,8 +745,16 @@ def update_document_description(
     return {
         "updated": True,
         "document_id": document_id,
-        "previous_description": old_description[:200] if old_description else None,
-        "new_description_preview": new_description[:200] if new_description else None,
+        # truncate() returns "" for None/empty; convert back to None to
+        # match the original contract of this response dict.
+        "previous_description": truncate(
+            old_description, MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH
+        )
+        or None,
+        "new_description_preview": truncate(
+            new_description, MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH
+        )
+        or None,
     }
 
 
@@ -2077,9 +2089,7 @@ def create_markdown_link(
                 if annotation.raw_text
                 else f"Annotation {entity_id}"
             )
-            # Truncate title if too long
-            if len(title) > 100:
-                title = title[:97] + "..."
+            title = truncate(title, MAX_LINK_TITLE_LENGTH, suffix="...")
 
             return f"[{title}]({url})"
 
@@ -2249,8 +2259,7 @@ async def acreate_markdown_link(
                 if annotation.raw_text
                 else f"Annotation {entity_id}"
             )
-            if len(title) > 100:
-                title = title[:97] + "..."
+            title = truncate(title, MAX_LINK_TITLE_LENGTH, suffix="...")
 
             return f"[{title}]({url})"
 
