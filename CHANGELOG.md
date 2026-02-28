@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### GraphQL Module Modularization (Closes #972)
+- **Split `config/graphql/graphene_types.py`** (3,717 lines → 107-line re-export): Extracted 80+ GraphQL type definitions into 10 domain-specific files: `base_types.py`, `user_types.py`, `annotation_types.py`, `document_types.py`, `corpus_types.py`, `extract_types.py`, `agent_types.py`, `conversation_types.py`, `social_types.py`, `pipeline_types.py`
+- **Split `config/graphql/mutations.py`** (6,229 lines → 405-line composition): Extracted 79 inline mutation classes into 8 new domain files: `analysis_mutations.py`, `annotation_mutations.py`, `document_relationship_mutations.py`, `label_mutations.py`, `corpus_mutations.py`, `document_mutations.py`, `extract_mutations.py`, `user_mutations.py` — joining 10 previously-extracted mutation files
+- **Split `config/graphql/queries.py`** (4,408 lines → 54-line composition): Extracted all query resolvers into 13 mixin classes: `UserQueryMixin`, `SlugQueryMixin`, `AnnotationQueryMixin`, `DocumentQueryMixin`, `CorpusQueryMixin`, `ExtractQueryMixin`, `ConversationQueryMixin`, `SearchQueryMixin`, `SocialQueryMixin`, `ActionQueryMixin`, `PipelineQueryMixin`, `OGMetadataQueryMixin`, `WorkerQueryMixin`
+- **Full backward compatibility**: Original import paths (`from config.graphql.graphene_types import X`, etc.) continue to work via re-exports
+- **No logic changes**: All class definitions, resolvers, and mutations moved exactly as-is
+
+#### Consolidate Duplicate String Truncation Utilities (Closes #976)
+- **New helper**: `opencontractserver/utils/text.py` — added `truncate(text, max_length, suffix="")` centralising all string-truncation logic
+- **New constants**: `opencontractserver/constants/truncation.py` — `MAX_NOTE_CONTENT_PREVIEW_LENGTH` (512), `MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH` (200), `MAX_LINK_TITLE_LENGTH` (100), `MAX_DOC_TITLE_FALLBACK_LENGTH` (50), `MAX_NOTIFICATION_ERROR_LENGTH` (500)
+- **Replaced inline truncation** in `opencontractserver/llms/tools/core_tools.py`, `opencontractserver/tasks/doc_tasks.py`, and `opencontractserver/corpuses/models.py` with calls to `truncate()` and named constants
+- **Tests**: `opencontractserver/tests/test_truncate.py` — unit tests for the new helper and constants
+
 #### Break Up Large Frontend Components (Closes #977)
 - **StyledContainers.tsx** (2,115 → 12 lines): Split into 9 feature-specific style files under `styled/` directory (HeaderAndLayout, LeftSidebar, RightPanel, ResizeControls, Relationships, LoadingStates, EmptyStates, KnowledgeLayer, SidebarTabs) with barrel `index.ts` for backward compatibility.
 - **SystemSettings.tsx** (2,616 → 1,108 lines): Extracted GraphQL operations (`system_settings/graphql.ts`), types/constants (`types.ts`), styled components (`styles.ts`), and 4 memoized sub-components (PipelineComponentCard, FlowParticles, AdvancedSettingsPanel, PipelineStageSection).
@@ -28,29 +41,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Deep Linking and Context Menu for Text/PDF Annotators (Closes #958)
-- **Copy Link in PDF context menu**: `SelectionLayer.tsx` — new "Copy Link" action in the selection action menu encodes selected tokens into a `?tb=` deep link URL
-- **Copy Link in TXT context menu**: `TxtAnnotator.tsx` — new context menu with Copy Text, Copy Link, and Apply Label actions for text selections
-- **URL-driven annotation selection**: `ChatTray.tsx` — clicking a chat source with `annotation_id` updates URL params (`ann=`) so the annotator scrolls to and highlights the referenced annotation
-- **Delete button for processing documents**: `ModernDocumentItem.tsx` — `ProcessingDeleteButton` allows users to remove stuck/processing documents without waiting for completion
+- Copy Link actions in PDF (`SelectionLayer.tsx`) and TXT (`TxtAnnotator.tsx`) context menus encode selections as `?tb=` deep link URLs
+- URL-driven annotation selection from chat sources (`ChatTray.tsx`); delete button for processing documents (`ModernDocumentItem.tsx`)
+
+#### Test Coverage for Untested Backend Modules (Closes #975)
+- Unit tests for feedback, shared utils, constants, types, and MCP extended modules (`opencontractserver/tests/`)
 
 ### Fixed
 
 #### Code Review Fixes for Text Block Deep Linking (#958)
-- **Document resolution bug**: `config/graphql/queries.py` — `resolve_document_in_corpus_by_slugs` used `creator=owner` filter which excluded documents uploaded by collaborators; replaced with corpus membership check via `DocumentPath`
-- **Redundant DB queries**: Simplified default (non-versioned) path to return the already-resolved `doc` directly instead of re-querying `DocumentPath`
-- **Cross-document source click flash**: `CorpusChat.tsx` — early-return pattern for cross-document navigation prevents stale local selection state from briefly rendering
-- **Text block clearing**: Extracted `useClearTextBlockOnInteraction` hook from per-page `PDFPage` instances into a single parent component, eliminating O(visible-pages) redundant navigate calls
-- **Superuser permissions**: `opencontractserver/utils/permissioning.py` — added superuser check for guardian-enabled models, with comment explaining the richer permission set (comment, publish, permission) vs basic CRUD
-- **Clipboard error handling**: Added `.catch()` to `navigator.clipboard.writeText()` calls in PDF and TXT copy handlers to prevent unhandled promise rejections in non-HTTPS contexts
-- **Dead code removed**: `navigationUtils.ts` — removed no-op `searchParams.delete("tb")` branch in `buildQueryParams` (operates on a fresh `URLSearchParams`)
-- **Type aliases**: `LocationLike`/`NavigateFn` applied across all 10 `update*Param` functions in `navigationUtils.ts` for DRY type signatures
+- Document resolution via corpus membership (`DocumentPath`) instead of `creator=owner`; simplified default path to return already-resolved doc
+- Cross-document source click flash fix; `useClearTextBlockOnInteraction` hook consolidation; clipboard `.catch()` for non-HTTPS; dead code removal
+
+#### Document Version Selector UI Cleanup (Closes #964)
+- Removed unused query fields (`versionCount`, `hasVersionHistory`, etc.); added WAI-ARIA keyboard navigation; safe `v?` fallback during load
+- Backend validation for invalid version numbers (≤ 0); isCurrent JSDoc; updated test mocks and new keyboard nav tests
 
 #### Rollup Vulnerability - Arbitrary File Write via Path Traversal (Closes #973)
 - **Vulnerability**: `yarn audit` reported 3 high-severity advisories for rollup <4.59.0 (arbitrary file write via path traversal) across dependency chains: `vite > rollup`, `vitest > vite > rollup`, and `@playwright/experimental-ct-react > @playwright/experimental-ct-core > vite > rollup`
 - **Fix**: Added `rollup: "^4.59.0"` to yarn resolutions in `frontend/package.json` to force the patched version across all transitive dependency paths
 - **Result**: rollup updated from 4.53.1 to 4.59.0, eliminating all 3 rollup-related audit advisories
-
-## [Unreleased] - 2026-02-25
 
 ### Added
 
