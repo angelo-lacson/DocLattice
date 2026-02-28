@@ -8,10 +8,16 @@ import {
 import { MentionUser } from "../MentionPicker";
 
 /**
- * Hook to fetch users for @mention autocomplete via GraphQL.
+ * Standalone hook to fetch users for @mention autocomplete via GraphQL.
  *
  * Uses SEARCH_USERS_FOR_MENTION query with debounced input.
  * Backend filters results by privacy settings via UserQueryOptimizer.
+ *
+ * NOTE: The primary render path uses `useUnifiedMentionSearch` +
+ * `UnifiedMentionPicker` (which search users, corpuses, documents,
+ * annotations, and agents in parallel). This hook and the companion
+ * `MentionPicker` component are exported for consumers that only need
+ * user-only mention support.
  *
  * @param query - Search query string
  * @param debounceMs - Debounce delay in milliseconds (default: 300)
@@ -49,17 +55,21 @@ export function useMentionUsers(
     searchUsers({ variables: { textSearch: debouncedQuery } });
   }, [debouncedQuery, minChars, searchUsers]);
 
-  // Map GraphQL response to MentionUser[]
+  // Map GraphQL response to MentionUser[].
+  // Guard: return empty when the live query is below minChars so stale
+  // results from a previous (longer) query are not shown after backspace.
   const users: MentionUser[] =
-    data?.searchUsersForMention?.edges?.map((edge) => ({
-      id: edge.node.id,
-      username: edge.node.username,
-      email: edge.node.email ?? undefined,
-    })) ?? [];
+    debouncedQuery.length < minChars
+      ? []
+      : data?.searchUsersForMention?.edges?.map((edge) => ({
+          id: edge.node.id,
+          username: edge.node.username,
+          email: edge.node.email ?? undefined,
+        })) ?? [];
 
   return {
     users,
     loading,
-    error: error ?? null,
+    error: error?.message ?? null,
   };
 }
