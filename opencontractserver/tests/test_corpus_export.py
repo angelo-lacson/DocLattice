@@ -89,6 +89,10 @@ class ExportCorpusTestCase(TestCase):
                 doc_id=doc.id,
                 corpus_id=self.original_corpus_obj.id,
             )
+            # NOTE(deferred): Exported document data format and highlight
+            # correctness (via PyMuPDF) are not validated here. A round-trip
+            # comparison against the original import zip would strengthen
+            # coverage but requires non-trivial fixture work.
 
     def test_exported_values_match_types(self):
         """

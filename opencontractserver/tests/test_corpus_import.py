@@ -70,3 +70,6 @@ class ImportCorpusTestCase:
 
         documents = Document.objects.all()
         assert documents.count() == 2
+        # NOTE(deferred): Only object counts are checked. Field-level integrity
+        # of the imported corpus (labels, annotations, relationships) is not
+        # validated — worth expanding for round-trip import/export coverage.
