@@ -649,9 +649,9 @@ class CoreAgentBase(ABC):
                 **kwargs,
             )
             return result
-        except Exception as e:
+        except Exception:
             # Log the error but don't raise - return None per spec
-            logger.error("Error in structured_response: %s", e, exc_info=True)
+            logger.error("Error in structured_response", exc_info=True)
             return None
 
     # ------------------------------------------------------------------
