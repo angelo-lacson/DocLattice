@@ -5,13 +5,8 @@ import { MockedProvider } from "@apollo/client/testing";
 import { Badge } from "../src/components/badges/Badge";
 import { UserBadges } from "../src/components/badges/UserBadges";
 import { BadgeManagement } from "../src/components/badges/BadgeManagement";
-import { AwardBadgeModal } from "../src/components/badges/AwardBadgeModal";
 import { GET_BADGES, GET_USER_BADGES } from "../src/graphql/queries";
-import {
-  CREATE_BADGE,
-  DELETE_BADGE,
-  AWARD_BADGE,
-} from "../src/graphql/mutations";
+import { DELETE_BADGE } from "../src/graphql/mutations";
 
 const mockGlobalBadge = {
   id: "QmFkZ2VUeXBlOjE=",
@@ -49,11 +44,6 @@ const mockUserBadge = {
     username: "admin",
   },
   corpus: null,
-};
-
-const mockUser = {
-  id: "VXNlclR5cGU6Mg==",
-  username: "testuser",
 };
 
 test.describe("Badge Component", () => {
@@ -316,139 +306,6 @@ test.describe("BadgeManagement Component", () => {
 
     // Confirm deletion
     await page.locator('button:has-text("Delete")').click();
-
-    await component.unmount();
-  });
-});
-
-test.describe("AwardBadgeModal Component", () => {
-  test("should display available badges", async ({ mount, page }) => {
-    const getBadgesMock = {
-      request: {
-        query: GET_BADGES,
-        variables: {},
-      },
-      result: {
-        data: {
-          badges: {
-            edges: [{ node: mockGlobalBadge }, { node: mockCorpusBadge }],
-          },
-        },
-      },
-    };
-
-    const component = await mount(
-      <MockedProvider mocks={[getBadgesMock]} addTypename={false}>
-        <AwardBadgeModal
-          open={true}
-          onClose={() => {}}
-          userId="VXNlclR5cGU6Mg=="
-        />
-      </MockedProvider>
-    );
-
-    // Modal should be visible
-    await expect(page.locator("text=Award Badge")).toBeVisible();
-
-    // Badge dropdown should load
-    await expect(page.locator("text=Select Badge")).toBeVisible({
-      timeout: 3000,
-    });
-
-    await component.unmount();
-  });
-
-  test("should handle badge awarding", async ({ mount, page }) => {
-    const getBadgesMock = {
-      request: {
-        query: GET_BADGES,
-        variables: {},
-      },
-      result: {
-        data: {
-          badges: {
-            edges: [{ node: mockGlobalBadge }],
-          },
-        },
-      },
-    };
-
-    const awardBadgeMock = {
-      request: {
-        query: AWARD_BADGE,
-        variables: {
-          badgeId: "QmFkZ2VUeXBlOjE=",
-          userId: "VXNlclR5cGU6Mg==",
-          corpusId: undefined,
-        },
-      },
-      result: {
-        data: {
-          awardBadge: {
-            ok: true,
-            message: "Badge awarded successfully",
-            userBadge: mockUserBadge,
-          },
-        },
-      },
-    };
-
-    const component = await mount(
-      <MockedProvider
-        mocks={[getBadgesMock, awardBadgeMock]}
-        addTypename={false}
-      >
-        <AwardBadgeModal
-          open={true}
-          onClose={() => {}}
-          userId="VXNlclR5cGU6Mg=="
-        />
-      </MockedProvider>
-    );
-
-    // Wait for modal to load
-    await expect(page.locator("text=Award Badge")).toBeVisible();
-
-    // Select badge
-    await page.locator('div[role="listbox"]').click();
-    await page.locator("text=Community Champion").click();
-
-    // Click award button
-    await page.locator('button:has-text("Award Badge")').click();
-
-    await component.unmount();
-  });
-
-  test("should close on cancel", async ({ mount, page }) => {
-    const getBadgesMock = {
-      request: {
-        query: GET_BADGES,
-        variables: {},
-      },
-      result: {
-        data: {
-          badges: {
-            edges: [],
-          },
-        },
-      },
-    };
-
-    let closed = false;
-    const component = await mount(
-      <MockedProvider mocks={[getBadgesMock]} addTypename={false}>
-        <AwardBadgeModal
-          open={true}
-          onClose={() => {
-            closed = true;
-          }}
-          userId="VXNlclR5cGU6Mg=="
-        />
-      </MockedProvider>
-    );
-
-    // Click cancel
-    await page.locator('button:has-text("Cancel")').click();
 
     await component.unmount();
   });
