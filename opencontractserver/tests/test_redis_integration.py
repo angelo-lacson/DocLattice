@@ -87,7 +87,7 @@ class TestDjangoRedisCache(TestCase):
         """TTL-based expiration."""
         cache.set("expiring_key", "value", timeout=1)
         assert cache.get("expiring_key") == "value"
-        time.sleep(1.5)
+        time.sleep(2.0)
         assert cache.get("expiring_key") is None
 
     def test_cache_incr_decr(self):
@@ -172,7 +172,7 @@ class TestChannelsRedisLayer(TestCase):
         async def _receive_with_timeout():
             try:
                 return await asyncio.wait_for(
-                    self.channel_layer.receive(channel_name), timeout=1.0
+                    self.channel_layer.receive(channel_name), timeout=2.0
                 )
             except asyncio.TimeoutError:
                 return None

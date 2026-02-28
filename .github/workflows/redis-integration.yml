@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: ["master", "main", "v*"]
     paths:
-      - "requirements/base.txt"
+      - "requirements/*.txt"
       - "config/settings/base.py"
       - "config/settings/test.py"
       - "config/settings/test_integration.py"
@@ -20,7 +20,7 @@ on:
   push:
     branches: ["master", "main", "v*"]
     paths:
-      - "requirements/base.txt"
+      - "requirements/*.txt"
       - "config/settings/base.py"
       - "config/settings/test.py"
       - "config/settings/test_integration.py"
@@ -46,13 +46,7 @@ jobs:
 
       - name: Build Stack (django + postgres + redis only)
         run: |
-          docker compose -f test.yml -f compose/test-redis-integration-ci.yml build django postgres redis
-
-      - name: Start Services
-        run: |
-          docker compose -f test.yml -f compose/test-redis-integration-ci.yml up -d postgres redis
-          echo "Waiting for services to be healthy..."
-          docker compose -f test.yml -f compose/test-redis-integration-ci.yml up -d django
+          docker compose -f test.yml -f compose/test-redis-integration-ci.yml build django
 
       - name: Run DB Migrations
         run: |
@@ -71,7 +65,7 @@ jobs:
 
       - name: Upload Logs on Failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: redis-integration-logs
           path: redis-integration-logs.txt
