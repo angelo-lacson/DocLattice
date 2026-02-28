@@ -202,9 +202,20 @@ class TestUserFeedbackModel(TestCase):
         self.assertEqual(perm.content_object, feedback)
 
     def test_guardian_group_permission_model(self):
-        UserFeedback.objects.create(creator=self.user)
-        # Just verify the FK relationship exists
-        self.assertTrue(hasattr(UserFeedbackGroupObjectPermission, "content_object"))
+        from django.contrib.auth.models import Group, Permission
+
+        feedback = UserFeedback.objects.create(creator=self.user)
+        group = Group.objects.create(name="test_feedback_group")
+        permission = Permission.objects.get(
+            codename="read_userfeedback",
+            content_type__app_label="feedback",
+        )
+        perm = UserFeedbackGroupObjectPermission(
+            content_object=feedback,
+            group=group,
+            permission=permission,
+        )
+        self.assertEqual(perm.content_object, feedback)
 
 
 class TestUserFeedbackQuerySet(TestCase):
@@ -411,6 +422,7 @@ class TestUserFeedbackVisibility(TestCase):
         # Owner sees: public feedback, own private feedbacks (all 3 are owned)
         # Also sees other_user_feedback if public annotation linked - but
         # other_user_feedback is linked to private annotation
+        self.assertEqual(qs.count(), 3)
         self.assertIn(self.public_feedback.id, ids)
         self.assertIn(self.private_feedback_public_ann.id, ids)
         self.assertIn(self.private_feedback_private_ann.id, ids)

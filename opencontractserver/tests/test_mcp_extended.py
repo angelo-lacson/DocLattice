@@ -394,8 +394,8 @@ class TestRateLimiter(TestCase):
 
     def test_default_values(self):
         limiter = RateLimiter()
-        self.assertEqual(limiter.max_requests, 100)
-        self.assertEqual(limiter.window_seconds, 60)
+        self.assertEqual(limiter.max_requests, RATE_LIMIT_REQUESTS)
+        self.assertEqual(limiter.window_seconds, RATE_LIMIT_WINDOW)
 
 
 # --------------------------------------------------------------------------
