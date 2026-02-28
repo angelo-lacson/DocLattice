@@ -11,7 +11,6 @@ The Floating Summary Preview acts as a "picture-in-picture" view of the document
 - Quick access to document summaries while viewing the document itself
 - Version history with visual preview cards
 - One-click switching between document and knowledge layers
-- Full markdown editing capabilities
 
 ### Components
 
@@ -19,7 +18,6 @@ The Floating Summary Preview acts as a "picture-in-picture" view of the document
 
    - Manages expanded/collapsed states
    - Handles layer switching when versions are clicked
-   - Coordinates edit/history modals
 
 2. **SummaryVersionStack** - Manages the stack of version cards
 
@@ -32,16 +30,6 @@ The Floating Summary Preview acts as a "picture-in-picture" view of the document
    - Miniaturized markdown rendering
    - Author and timestamp metadata
    - Click to switch to knowledge layer
-
-4. **SummaryEditorModal** - Full markdown editor
-
-   - Live preview
-   - Unsaved changes detection
-   - Version tracking
-
-5. **SummaryHistoryModal** - Version history browser
-   - Full version list
-   - Revert capabilities (coming soon)
 
 ### Layer Interaction
 
@@ -111,10 +99,8 @@ This model allows collaborative annotation while preserving authorship:
 ## Features
 
 - **Beautiful animations**: Smooth transitions using Framer Motion
-- **Version management**: Full history with diff tracking
+- **Version management**: Visual version stack with preview cards
 - **Responsive design**: Adapts to different screen sizes
-- **Keyboard shortcuts**: ESC to close modals
-- **Auto-save detection**: Warns on unsaved changes
 - **Miniaturized preview**: Scaled-down markdown rendering
 
 ## Future Enhancements
