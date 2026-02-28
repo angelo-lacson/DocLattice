@@ -11,6 +11,7 @@ interface CorpusVersion {
   documentId: string;
   documentSlug: string | null;
   created: string;
+  /** Whether this is the latest (most recent) version in the corpus. */
   isCurrent: boolean;
 }
 
@@ -88,17 +89,26 @@ const DropdownMenu = styled.div`
   overflow: hidden;
 `;
 
-const DropdownItem = styled.button<{ $isActive: boolean }>`
+const DropdownItem = styled.button<{
+  $isActive: boolean;
+  $isFocused: boolean;
+}>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
   padding: 10px 14px;
   border: none;
-  background: ${(props) => (props.$isActive ? "#eff6ff" : "transparent")};
+  background: ${(props) => {
+    if (props.$isActive) return "#eff6ff";
+    if (props.$isFocused) return "#f8fafc";
+    return "transparent";
+  }};
   cursor: pointer;
   text-align: left;
   transition: background 0.15s ease;
+  outline: ${(props) => (props.$isFocused ? "2px solid #3b82f6" : "none")};
+  outline-offset: -2px;
 
   &:hover {
     background: ${(props) => (props.$isActive ? "#dbeafe" : "#f8fafc")};
@@ -152,11 +162,18 @@ interface DocumentVersionSelectorProps {
  * - Orange: Viewing an older version (not latest)
  *
  * Clicking opens a dropdown to switch versions via the ?v=N URL parameter.
+ *
+ * Supports full keyboard navigation per WAI-ARIA listbox pattern:
+ * - Arrow Up/Down: Move focus between options
+ * - Home/End: Jump to first/last option
+ * - Enter/Space: Select the focused option
+ * - Escape: Close the dropdown
  */
 export const DocumentVersionSelector: React.FC<
   DocumentVersionSelectorProps
 > = ({ documentId, corpusId }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const location = useLocation();
   const navigate = useNavigate();
   const currentVersion = useReactiveVar(selectedDocVersion);
@@ -168,25 +185,44 @@ export const DocumentVersionSelector: React.FC<
   const versions: CorpusVersion[] =
     versionsData?.document?.corpusVersions ?? [];
 
-  const versionCount = versions.length;
-  const hasHistory = versionCount > 1;
-  const displayVersion =
-    currentVersion ?? versions.find((v) => v.isCurrent)?.versionNumber ?? 1;
+  // Sort descending (newest first) once for consistent indexing
+  const sortedVersions = [...versions].sort(
+    (a, b) => b.versionNumber - a.versionNumber
+  );
+
+  const hasHistory = sortedVersions.length > 1;
+  const latestVersion = versions.find((v) => v.isCurrent);
+  const displayVersion = currentVersion ?? latestVersion?.versionNumber ?? null;
   const isOutdated =
     currentVersion !== null &&
     !versions.find((v) => v.versionNumber === currentVersion && v.isCurrent);
 
   const handleToggle = useCallback(() => {
-    setIsOpen((prev) => !prev);
-  }, []);
+    setIsOpen((prev) => {
+      const opening = !prev;
+      if (opening) {
+        // Focus the currently active option when opening
+        const activeIdx = sortedVersions.findIndex((v) =>
+          currentVersion === null
+            ? v.isCurrent
+            : v.versionNumber === currentVersion
+        );
+        setFocusedIndex(activeIdx >= 0 ? activeIdx : 0);
+      } else {
+        setFocusedIndex(-1);
+      }
+      return opening;
+    });
+  }, [sortedVersions, currentVersion]);
 
   const handleVersionSelect = useCallback(
     (versionNumber: number, isCurrent: boolean) => {
       setIsOpen(false);
+      setFocusedIndex(-1);
       const searchParams = new URLSearchParams(location.search);
 
       if (isCurrent) {
-        // Remove ?v= param to go to current version
+        // Remove ?v= param to go to latest version
         searchParams.delete("v");
       } else {
         searchParams.set("v", String(versionNumber));
@@ -203,8 +239,9 @@ export const DocumentVersionSelector: React.FC<
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
 
-  // Close dropdown on click outside or Escape key
+  // Close dropdown on click outside
   useEffect(() => {
     if (!isOpen) return;
 
@@ -214,22 +251,64 @@ export const DocumentVersionSelector: React.FC<
         !containerRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
+        setFocusedIndex(-1);
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen]);
+
+  // Keyboard navigation for listbox
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      switch (event.key) {
+        case "Escape":
+          setIsOpen(false);
+          setFocusedIndex(-1);
+          pillRef.current?.focus();
+          event.preventDefault();
+          break;
+        case "ArrowDown":
+          setFocusedIndex((prev) =>
+            prev < sortedVersions.length - 1 ? prev + 1 : prev
+          );
+          event.preventDefault();
+          break;
+        case "ArrowUp":
+          setFocusedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+          event.preventDefault();
+          break;
+        case "Home":
+          setFocusedIndex(0);
+          event.preventDefault();
+          break;
+        case "End":
+          setFocusedIndex(sortedVersions.length - 1);
+          event.preventDefault();
+          break;
+        case "Enter":
+        case " ": {
+          if (focusedIndex >= 0 && focusedIndex < sortedVersions.length) {
+            const version = sortedVersions[focusedIndex];
+            handleVersionSelect(version.versionNumber, version.isCurrent);
+            pillRef.current?.focus();
+          }
+          event.preventDefault();
+          break;
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, focusedIndex, sortedVersions, handleVersionSelect]);
 
   // Fetch versions on mount to know if there's history
   useEffect(() => {
@@ -248,7 +327,7 @@ export const DocumentVersionSelector: React.FC<
     return (
       <SelectorContainer>
         <VersionPill $isOutdated={false} $hasHistory={false}>
-          v{displayVersion}
+          {displayVersion !== null ? `v${displayVersion}` : "v?"}
         </VersionPill>
       </SelectorContainer>
     );
@@ -259,16 +338,24 @@ export const DocumentVersionSelector: React.FC<
       <Popup
         trigger={
           <VersionPill
+            ref={pillRef}
             $isOutdated={isOutdated}
             $hasHistory={hasHistory}
             onClick={handleToggle}
-            aria-label={`Version ${displayVersion} of ${versionCount}, click to switch versions`}
+            aria-label={`Version ${displayVersion ?? "?"} of ${
+              sortedVersions.length
+            }, click to switch versions`}
             aria-expanded={isOpen}
             aria-haspopup="listbox"
+            aria-activedescendant={
+              isOpen && focusedIndex >= 0
+                ? `version-option-${sortedVersions[focusedIndex]?.versionNumber}`
+                : undefined
+            }
           >
-            v{displayVersion}
+            v{displayVersion ?? "?"}
             <span style={{ fontSize: "9px", opacity: 0.7 }}>
-              / {versionCount}
+              / {sortedVersions.length}
             </span>
             <Icon
               name={isOpen ? "chevron up" : "chevron down"}
@@ -278,8 +365,12 @@ export const DocumentVersionSelector: React.FC<
         }
         content={
           isOutdated
-            ? `Viewing version ${displayVersion} of ${versionCount}. A newer version is available.`
-            : `Version ${displayVersion} of ${versionCount}. Click to switch versions.`
+            ? `Viewing version ${displayVersion ?? "?"} of ${
+                sortedVersions.length
+              }. A newer version is available.`
+            : `Version ${displayVersion ?? "?"} of ${
+                sortedVersions.length
+              }. Click to switch versions.`
         }
         position="bottom left"
         size="small"
@@ -293,39 +384,39 @@ export const DocumentVersionSelector: React.FC<
               <Loader active inline="centered" size="tiny" />
             </DropdownLoading>
           ) : (
-            [...versions]
-              .sort((a, b) => b.versionNumber - a.versionNumber)
-              .map((version) => {
-                const isActive =
-                  currentVersion === null
-                    ? version.isCurrent
-                    : version.versionNumber === currentVersion;
+            sortedVersions.map((version, index) => {
+              const isActive =
+                currentVersion === null
+                  ? version.isCurrent
+                  : version.versionNumber === currentVersion;
 
-                return (
-                  <DropdownItem
-                    key={version.versionNumber}
-                    $isActive={isActive}
-                    onClick={() =>
-                      handleVersionSelect(
-                        version.versionNumber,
-                        version.isCurrent
-                      )
-                    }
-                    role="option"
-                    aria-selected={isActive}
-                  >
-                    <div>
-                      <VersionLabel>
-                        Version {version.versionNumber}
-                      </VersionLabel>
-                      <VersionDate>
-                        {new Date(version.created).toLocaleDateString()}
-                      </VersionDate>
-                    </div>
-                    {version.isCurrent && <CurrentTag>Latest</CurrentTag>}
-                  </DropdownItem>
-                );
-              })
+              return (
+                <DropdownItem
+                  key={version.versionNumber}
+                  id={`version-option-${version.versionNumber}`}
+                  $isActive={isActive}
+                  $isFocused={index === focusedIndex}
+                  onClick={() =>
+                    handleVersionSelect(
+                      version.versionNumber,
+                      version.isCurrent
+                    )
+                  }
+                  onMouseEnter={() => setFocusedIndex(index)}
+                  role="option"
+                  aria-selected={isActive}
+                  tabIndex={-1}
+                >
+                  <div>
+                    <VersionLabel>Version {version.versionNumber}</VersionLabel>
+                    <VersionDate>
+                      {new Date(version.created).toLocaleDateString()}
+                    </VersionDate>
+                  </div>
+                  {version.isCurrent && <CurrentTag>Latest</CurrentTag>}
+                </DropdownItem>
+              );
+            })
           )}
         </DropdownMenu>
       )}

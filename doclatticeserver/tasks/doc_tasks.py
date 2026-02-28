@@ -20,6 +20,10 @@ from doclatticeserver.constants import (
     MAX_PROCESSING_ERROR_LENGTH,
     MAX_PROCESSING_TRACEBACK_LENGTH,
 )
+from doclatticeserver.constants.truncation import (
+    MAX_DOC_TITLE_FALLBACK_LENGTH,
+    MAX_NOTIFICATION_ERROR_LENGTH,
+)
 from doclatticeserver.documents.models import Document, DocumentProcessingStatus
 from doclatticeserver.notifications.models import (
     Notification,
@@ -45,6 +49,7 @@ from doclatticeserver.types.dicts import (
 from doclatticeserver.types.enums import AnnotationFilterMode
 from doclatticeserver.utils.etl import build_document_export, pawls_bbox_to_funsd_box
 from doclatticeserver.utils.files import split_pdf_into_images
+from doclatticeserver.utils.text import truncate
 
 logger = get_task_logger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -125,7 +130,7 @@ def _create_document_processing_failed_notification(
     # Get document title for notification
     doc_title = document.title
     if not doc_title and document.description:
-        doc_title = document.description[:50]
+        doc_title = truncate(document.description, MAX_DOC_TITLE_FALLBACK_LENGTH)
     if not doc_title:
         doc_title = "Untitled"
 
@@ -136,7 +141,7 @@ def _create_document_processing_failed_notification(
             data={
                 "document_id": document.id,
                 "document_title": doc_title,
-                "error_message": error_msg[:500],  # Limit for notification data
+                "error_message": truncate(error_msg, MAX_NOTIFICATION_ERROR_LENGTH),
                 "file_type": document.file_type,
             },
         )
@@ -256,7 +261,7 @@ def _create_document_processed_notifications(
     # Get document title for notification
     doc_title = document.title
     if not doc_title and document.description:
-        doc_title = document.description[:50]
+        doc_title = truncate(document.description, MAX_DOC_TITLE_FALLBACK_LENGTH)
     if not doc_title:
         doc_title = "Untitled"
 
