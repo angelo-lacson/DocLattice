@@ -8,6 +8,7 @@ from config.graphql.base import CountableConnection
 from config.graphql.permissioning.permission_annotator.mixins import (
     AnnotatePermissionsForReadMixin,
 )
+from opencontractserver.agents.models import AgentActionResult, AgentConfiguration
 from opencontractserver.corpuses.models import CorpusAction, CorpusActionExecution
 
 
@@ -43,8 +44,6 @@ class AgentActionResultType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     duration_seconds = graphene.Float()
 
     class Meta:
-        from opencontractserver.agents.models import AgentActionResult
-
         model = AgentActionResult
         interfaces = [relay.Node]
         connection_class = CountableConnection
@@ -147,8 +146,6 @@ class AgentConfigurationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     class Meta:
-        from opencontractserver.agents.models import AgentConfiguration
-
         model = AgentConfiguration
         interfaces = [relay.Node]
         connection_class = CountableConnection

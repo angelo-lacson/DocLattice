@@ -5,46 +5,13 @@ GraphQL query mixin for slug-based entity lookups.
 import graphene
 from django.db.models.functions import Coalesce
 
+from config.graphql.corpus_queries import _corpus_count_subqueries
 from config.graphql.graphene_types import (
     CorpusType,
     DocumentType,
 )
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
-
-
-def _corpus_count_subqueries():
-    """
-    Build subqueries for efficient document and annotation counting on Corpus
-    querysets. Used by resolve_corpuses and resolve_corpus_by_slugs to annotate
-    _document_count and _annotation_count without N+1 queries.
-    """
-    from django.db.models import Count, OuterRef
-
-    from opencontractserver.annotations.models import Annotation
-    from opencontractserver.documents.models import DocumentPath
-
-    document_count_sq = (
-        DocumentPath.objects.filter(
-            corpus_id=OuterRef("id"),
-            is_current=True,
-            is_deleted=False,
-        )
-        .values("corpus_id")
-        .annotate(count=Count("document_id", distinct=True))
-        .values("count")
-    )
-    annotation_count_sq = (
-        Annotation.objects.filter(
-            document__path_records__corpus_id=OuterRef("id"),
-            document__path_records__is_current=True,
-            document__path_records__is_deleted=False,
-        )
-        .values("document__path_records__corpus_id")
-        .annotate(count=Count("id", distinct=True))
-        .values("count")
-    )
-    return document_count_sq, annotation_count_sq
 
 
 class SlugQueryMixin:

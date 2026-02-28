@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Full backward compatibility**: Original import paths (`from config.graphql.graphene_types import X`, etc.) continue to work via re-exports
 - **No logic changes**: All class definitions, resolvers, and mutations moved exactly as-is
 
+#### Consolidate Duplicate String Truncation Utilities (Closes #976)
+- **New helper**: `opencontractserver/utils/text.py` — added `truncate(text, max_length, suffix="")` centralising all string-truncation logic
+- **New constants**: `opencontractserver/constants/truncation.py` — `MAX_NOTE_CONTENT_PREVIEW_LENGTH` (512), `MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH` (200), `MAX_LINK_TITLE_LENGTH` (100), `MAX_DOC_TITLE_FALLBACK_LENGTH` (50), `MAX_NOTIFICATION_ERROR_LENGTH` (500)
+- **Replaced inline truncation** in `opencontractserver/llms/tools/core_tools.py`, `opencontractserver/tasks/doc_tasks.py`, and `opencontractserver/corpuses/models.py` with calls to `truncate()` and named constants
+- **Tests**: `opencontractserver/tests/test_truncate.py` — unit tests for the new helper and constants
+
 #### Break Up Large Frontend Components (Closes #977)
 - **StyledContainers.tsx** (2,115 → 12 lines): Split into 9 feature-specific style files under `styled/` directory (HeaderAndLayout, LeftSidebar, RightPanel, ResizeControls, Relationships, LoadingStates, EmptyStates, KnowledgeLayer, SidebarTabs) with barrel `index.ts` for backward compatibility.
 - **SystemSettings.tsx** (2,616 → 1,108 lines): Extracted GraphQL operations (`system_settings/graphql.ts`), types/constants (`types.ts`), styled components (`styles.ts`), and 4 memoized sub-components (PipelineComponentCard, FlowParticles, AdvancedSettingsPanel, PipelineStageSection).
@@ -34,12 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Document Version Selector UI Cleanup (Closes #964)
+- **Query overfetching**: Removed unused `versionCount`, `hasVersionHistory`, `isLatestVersion`, and `versionNumber(corpusId:)` fields from `GET_CORPUS_VERSIONS` query (`frontend/src/graphql/queries.ts`). These fields triggered backend resolvers (including database queries for `versionNumber`) but were never consumed by the component, which derives all values from `corpusVersions.length`.
+- **Missing keyboard navigation**: Added full WAI-ARIA listbox keyboard navigation to `DocumentVersionSelector` — Arrow Up/Down to move focus, Home/End to jump to first/last option, Enter/Space to select, Escape to close and return focus to trigger (`frontend/src/components/documents/DocumentVersionSelector.tsx`). Previously keyboard-only users could not navigate the dropdown.
+- **Unsafe displayVersion fallback**: Changed fallback from hardcoded `1` to `null` with conditional rendering (`v?` placeholder) when version data is unavailable, preventing display of incorrect version numbers during initial load (`frontend/src/components/documents/DocumentVersionSelector.tsx:~183`).
+- **Backend validation gap**: Added early return for invalid version numbers (≤ 0) in `resolve_document_in_corpus_by_slugs` to avoid unnecessary database roundtrips (`config/graphql/queries.py`).
+- **isCurrent field clarity**: Added JSDoc comment to `CorpusVersion.isCurrent` interface field documenting that it means "latest (most recent) version" (`frontend/src/components/documents/DocumentVersionSelector.tsx:14`).
+- **Tests**: Updated GraphQL mocks to match trimmed query shape; added new test cases for arrow key navigation, Home/End keys, and Enter-to-select behavior (`frontend/tests/DocumentVersionSelector.ct.tsx`).
+
 #### Rollup Vulnerability - Arbitrary File Write via Path Traversal (Closes #973)
 - **Vulnerability**: `yarn audit` reported 3 high-severity advisories for rollup <4.59.0 (arbitrary file write via path traversal) across dependency chains: `vite > rollup`, `vitest > vite > rollup`, and `@playwright/experimental-ct-react > @playwright/experimental-ct-core > vite > rollup`
 - **Fix**: Added `rollup: "^4.59.0"` to yarn resolutions in `frontend/package.json` to force the patched version across all transitive dependency paths
 - **Result**: rollup updated from 4.53.1 to 4.59.0, eliminating all 3 rollup-related audit advisories
-
-## [Unreleased] - 2026-02-25
 
 ### Added
 

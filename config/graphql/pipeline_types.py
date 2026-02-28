@@ -7,7 +7,6 @@ from config.graphql.user_types import UserType
 from opencontractserver.pipeline.base.file_types import (
     FileTypeEnum as BackendFileTypeEnum,
 )
-from opencontractserver.pipeline.utils import get_components_by_mimetype
 
 
 class FileTypeEnum(graphene.Enum):
@@ -110,23 +109,6 @@ class PipelineComponentsType(graphene.ObjectType):
     post_processors = graphene.List(
         PipelineComponentType, description="List of available post-processors."
     )
-
-
-def resolve_pipeline_components(self, info, mimetype=None):
-    from opencontractserver.pipeline.base.file_types import FileTypeEnum
-
-    # Convert GraphQL string to backend enum
-    backend_enum = None
-    if mimetype:
-        try:
-            backend_enum = FileTypeEnum[
-                mimetype
-            ]  # This should work if the enum values match
-        except KeyError:
-            pass
-
-    components = get_components_by_mimetype(backend_enum)
-    return components
 
 
 # ==============================================================================

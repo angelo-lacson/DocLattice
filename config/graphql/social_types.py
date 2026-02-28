@@ -10,7 +10,9 @@ from config.graphql.permissioning.permission_annotator.mixins import (
     AnnotatePermissionsForReadMixin,
 )
 from config.graphql.user_types import UserType
+from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.conversations.models import ChatMessage, Conversation
+from opencontractserver.notifications.models import Notification
 
 
 # ---------------- Badge System Types ----------------
@@ -18,8 +20,6 @@ class BadgeType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for badges."""
 
     class Meta:
-        from opencontractserver.badges.models import Badge
-
         model = Badge
         interfaces = [relay.Node]
         connection_class = CountableConnection
@@ -44,8 +44,6 @@ class UserBadgeType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for user badge awards."""
 
     class Meta:
-        from opencontractserver.badges.models import UserBadge
-
         model = UserBadge
         interfaces = [relay.Node]
         connection_class = CountableConnection
@@ -118,8 +116,6 @@ class NotificationType(DjangoObjectType):
     """GraphQL type for notifications."""
 
     class Meta:
-        from opencontractserver.notifications.models import Notification
-
         model = Notification
         interfaces = [relay.Node]
         connection_class = CountableConnection
