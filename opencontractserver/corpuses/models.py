@@ -515,6 +515,10 @@ class Corpus(TreeNode):
                 logger.info(f"Created personal corpus {corpus.pk} for user {user.pk}")
                 # Grant full permissions to the user
                 set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.ALL])
+            elif not corpus.slug:
+                # Backfill slug for corpuses created before slug auto-generation
+                # (e.g. by migration 0038 which used historical models)
+                corpus.save(update_fields=["slug", "modified"])
 
         return corpus
 

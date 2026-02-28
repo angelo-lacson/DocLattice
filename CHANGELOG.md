@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Fix My Documents Corpus Not Navigable Due to Missing Slugs
+- **Root cause**: Migration 0038 created personal corpuses using historical models which bypass `Corpus.save()` slug auto-generation, leaving `slug=NULL`. The frontend requires both `corpus.slug` and `creator.slug` to build navigation URLs (`/c/<user>/<corpus>`), so clicking "My Documents" logged "Cannot navigate to corpus without slugs" and did nothing.
+- **Fix (model)**: `Corpus.get_or_create_personal_corpus()` now detects when a returned corpus lacks a slug and triggers `save()` to backfill it on access (`opencontractserver/corpuses/models.py:518-521`).
+- **Fix (migration)**: Added data migration `0043_backfill_corpus_slugs` that backfills slugs for all existing corpuses and users missing them (`opencontractserver/corpuses/migrations/0043_backfill_corpus_slugs.py`).
+
 #### Tighten JSON Field Validation for Malformed Input (Closes #1001)
 - **Root cause**: `CustomJSONFieldFormTests.TestForm` used `NullableJSONField()` (a model field) instead of `UTF8JSONFormField` (a form field). Django's `Form` metaclass silently ignores model fields, so the form had zero fields and `is_valid()` always returned `True` — masking the fact that malformed JSON was never validated.
 - **Fix**: Changed `TestForm.json_field` to `UTF8JSONFormField(required=False)` so form validation actually runs through Django's `forms.JSONField.to_python()`, which raises `ValidationError` on `json.JSONDecodeError` (`opencontractserver/tests/test_custom_fields.py:76`).
