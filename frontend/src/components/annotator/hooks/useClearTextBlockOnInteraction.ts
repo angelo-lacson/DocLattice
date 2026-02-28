@@ -22,6 +22,8 @@ export function useClearTextBlockOnInteraction(
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Read the reactive var directly (not via useReactiveVar) — we only
+    // clear on user interaction, not whenever the var itself changes.
     if (
       (selectedAnnotations.length > 0 || selectedMessageId) &&
       highlightedTextBlock()
