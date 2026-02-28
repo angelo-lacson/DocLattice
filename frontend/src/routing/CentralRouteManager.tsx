@@ -879,9 +879,13 @@ export function CentralRouteManager() {
         ? homeViewParam
         : null;
 
-    // Parse detailView param (only valid value is "details", defaults to "landing")
+    // Parse detailView param (valid values: "details", "discussions"; defaults to "landing")
     const newDetailView: CorpusDetailViewType =
-      detailViewParam === "details" ? "details" : "landing";
+      detailViewParam === "details"
+        ? "details"
+        : detailViewParam === "discussions"
+        ? "discussions"
+        : "landing";
 
     // Collect all reactive var updates into a batch
     // This prevents cascading re-renders - all updates happen in one React tick

@@ -29,6 +29,7 @@ import {
   BarChart3,
   MoreVertical,
   Link2,
+  Zap,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -72,6 +73,7 @@ import {
 import {
   updateTabParam,
   updateAnnotationSelectionParams,
+  updateModeParam,
 } from "../utils/navigationUtils";
 import {
   UPDATE_CORPUS,
@@ -1517,6 +1519,64 @@ const ExtractsTabContent: React.FC<{
   );
 };
 
+// Power user mode toggle - subtle, positioned at top-right of clean view
+const PowerUserToggle = styled(motion.button)`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: #f0fdfa;
+    border-color: #99f6e4;
+    color: #0f766e;
+    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #14b8a6;
+    outline-offset: 2px;
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+`;
+
+// Container for the clean landing view (no sidebar)
+const CleanViewContainer = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100vh;
+  overflow: hidden;
+`;
+
 export const Corpuses = () => {
   const { width } = useWindowDimensions();
 
@@ -1570,6 +1630,12 @@ export const Corpuses = () => {
     useState<boolean>(false);
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false); // Collapsed by default, opens on hover
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+
+  // Power user mode: when ?mode=power is in URL, show sidebar+tabs; otherwise clean landing
+  const isPowerUserMode = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get("mode") === "power";
+  }, [location.search]);
   const { REACT_APP_ALLOW_IMPORTS } = useEnv();
 
   const [corpusSearchCache, setCorpusSearchCache] =
@@ -2654,161 +2720,221 @@ export const Corpuses = () => {
     opened_corpus && // Corpus selected
     !opened_document // No document selected
   ) {
-    content = (
-      <CorpusViewContainer id="corpus-view-container">
-        {/* Mobile backdrop */}
-        <AnimatePresence>
-          {mobileSidebarOpen && (
-            <MobileMenuBackdrop
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMobileSidebarOpen(false)}
-            />
-          )}
-        </AnimatePresence>
+    if (isPowerUserMode) {
+      // Power User Mode: Full sidebar + tabs layout
+      content = (
+        <CorpusViewContainer id="corpus-view-container">
+          {/* Mobile backdrop */}
+          <AnimatePresence>
+            {mobileSidebarOpen && (
+              <MobileMenuBackdrop
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setMobileSidebarOpen(false)}
+              />
+            )}
+          </AnimatePresence>
 
-        {/* Navigation Sidebar */}
-        <NavigationSidebar
-          data-testid="navigation-sidebar"
-          $isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
-          initial={{
-            width: use_mobile_layout ? "0" : sidebarExpanded ? "280px" : "80px",
-          }}
-          animate={{
-            width: use_mobile_layout
-              ? mobileSidebarOpen
-                ? "280px"
-                : "0"
-              : sidebarExpanded
-              ? "280px"
-              : "80px",
-          }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          onMouseEnter={() => !use_mobile_layout && setSidebarExpanded(true)}
-          onMouseLeave={() => !use_mobile_layout && setSidebarExpanded(false)}
-        >
-          <BottomSheetHandle
-            onClick={() => use_mobile_layout && setMobileSidebarOpen(false)}
-          />
-          <NavigationHeader
+          {/* Navigation Sidebar */}
+          <NavigationSidebar
+            data-testid="navigation-sidebar"
             $isExpanded={
               use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
             }
+            initial={{
+              width: use_mobile_layout
+                ? "0"
+                : sidebarExpanded
+                ? "280px"
+                : "80px",
+            }}
+            animate={{
+              width: use_mobile_layout
+                ? mobileSidebarOpen
+                  ? "280px"
+                  : "0"
+                : sidebarExpanded
+                ? "280px"
+                : "80px",
+            }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            onMouseEnter={() => !use_mobile_layout && setSidebarExpanded(true)}
+            onMouseLeave={() => !use_mobile_layout && setSidebarExpanded(false)}
           >
-            {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.25rem",
-                  flex: 1,
-                }}
-              >
-                <div
+            <BottomSheetHandle
+              onClick={() => use_mobile_layout && setMobileSidebarOpen(false)}
+            />
+            <NavigationHeader
+              $isExpanded={
+                use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
+              }
+            >
+              {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
                   style={{
-                    fontSize: "0.6875rem",
-                    fontWeight: 500,
-                    color: "#94a3b8",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.25rem",
+                    flex: 1,
                   }}
                 >
-                  {opened_corpus ? "Corpus" : "Navigation"}
-                </div>
-                <div
+                  <div
+                    style={{
+                      fontSize: "0.6875rem",
+                      fontWeight: 500,
+                      color: "#94a3b8",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    {opened_corpus ? "Corpus" : "Navigation"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "1rem",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      letterSpacing: "-0.015em",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {opened_corpus ? opened_corpus.title : "Menu"}
+                  </div>
+                </motion.div>
+              )}
+              {!use_mobile_layout && (
+                <NavigationToggle
+                  data-testid="sidebar-toggle"
+                  onClick={() => setSidebarExpanded(!sidebarExpanded)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   style={{
-                    fontSize: "1rem",
-                    fontWeight: 600,
-                    color: "#0f172a",
-                    letterSpacing: "-0.015em",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    marginLeft: sidebarExpanded ? "0" : "auto",
+                    marginRight: sidebarExpanded ? "0" : "auto",
                   }}
                 >
-                  {opened_corpus ? opened_corpus.title : "Menu"}
-                </div>
-              </motion.div>
-            )}
-            {!use_mobile_layout && (
-              <NavigationToggle
-                data-testid="sidebar-toggle"
-                onClick={() => setSidebarExpanded(!sidebarExpanded)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  marginLeft: sidebarExpanded ? "0" : "auto",
-                  marginRight: sidebarExpanded ? "0" : "auto",
-                }}
-              >
-                {sidebarExpanded ? <ChevronLeft /> : <ChevronRight />}
-              </NavigationToggle>
-            )}
-          </NavigationHeader>
+                  {sidebarExpanded ? <ChevronLeft /> : <ChevronRight />}
+                </NavigationToggle>
+              )}
+            </NavigationHeader>
 
-          <NavigationItems id="nav-items">
-            {navigationItems.map((item, index) => (
+            <NavigationItems id="nav-items">
+              {navigationItems.map((item, index) => (
+                <NavigationItem
+                  data-item-id={item.id}
+                  key={item.id}
+                  isActive={active_tab === index}
+                  $isExpanded={
+                    use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
+                  }
+                  onClick={() => {
+                    setActiveTab(index);
+                    if (use_mobile_layout) {
+                      setMobileSidebarOpen(false);
+                    }
+                    // Refresh stats when switching tabs
+                    refetchStats();
+                  }}
+                  whileHover={{ x: 2 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <div style={{ position: "relative" }}>
+                    {item.icon}
+                    {item.badge !== undefined &&
+                      !sidebarExpanded &&
+                      !use_mobile_layout && (
+                        <CollapsedBadge $isZero={item.badge === 0}>
+                          {item.badge > 0 ? item.badge : "–"}
+                        </CollapsedBadge>
+                      )}
+                  </div>
+                  {(use_mobile_layout
+                    ? mobileSidebarOpen
+                    : sidebarExpanded) && (
+                    <>
+                      <span style={{ flex: "1", textAlign: "left" }}>
+                        {item.label}
+                      </span>
+                      {item.badge !== undefined && (
+                        <NavItemBadge
+                          isActive={active_tab === index}
+                          $isZero={item.badge === 0}
+                        >
+                          {item.badge > 0 ? item.badge : "–"}
+                        </NavItemBadge>
+                      )}
+                    </>
+                  )}
+                </NavigationItem>
+              ))}
+            </NavigationItems>
+
+            {/* Exit Power User Mode button */}
+            <div
+              style={{
+                padding: "0.75rem",
+                borderTop: "1px solid #e2e8f0",
+                flexShrink: 0,
+              }}
+            >
               <NavigationItem
-                data-item-id={item.id}
-                key={item.id}
-                isActive={active_tab === index}
+                isActive={false}
                 $isExpanded={
                   use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
                 }
-                onClick={() => {
-                  setActiveTab(index);
-                  if (use_mobile_layout) {
-                    setMobileSidebarOpen(false);
-                  }
-                  // Refresh stats when switching tabs
-                  refetchStats();
-                }}
+                onClick={() => updateModeParam(location, navigate, null)}
                 whileHover={{ x: 2 }}
                 whileTap={{ scale: 0.98 }}
+                data-testid="exit-power-user"
+                style={{ opacity: 0.7 }}
               >
-                <div style={{ position: "relative" }}>
-                  {item.icon}
-                  {item.badge !== undefined &&
-                    !sidebarExpanded &&
-                    !use_mobile_layout && (
-                      <CollapsedBadge $isZero={item.badge === 0}>
-                        {item.badge > 0 ? item.badge : "–"}
-                      </CollapsedBadge>
-                    )}
-                </div>
+                <ArrowLeft />
                 {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-                  <>
-                    <span style={{ flex: "1", textAlign: "left" }}>
-                      {item.label}
-                    </span>
-                    {item.badge !== undefined && (
-                      <NavItemBadge
-                        isActive={active_tab === index}
-                        $isZero={item.badge === 0}
-                      >
-                        {item.badge > 0 ? item.badge : "–"}
-                      </NavItemBadge>
-                    )}
-                  </>
+                  <span style={{ flex: "1", textAlign: "left" }}>
+                    Simple View
+                  </span>
                 )}
               </NavigationItem>
-            ))}
-          </NavigationItems>
-        </NavigationSidebar>
+            </div>
+          </NavigationSidebar>
 
-        {/* Main content area */}
-        <MainContentArea
-          id="main-corpus-content-area"
-          $sidebarExpanded={!use_mobile_layout && sidebarExpanded}
-        >
-          {currentView?.component}
-        </MainContentArea>
-      </CorpusViewContainer>
-    );
+          {/* Main content area */}
+          <MainContentArea
+            id="main-corpus-content-area"
+            $sidebarExpanded={!use_mobile_layout && sidebarExpanded}
+          >
+            {currentView?.component}
+          </MainContentArea>
+        </CorpusViewContainer>
+      );
+    } else {
+      // Clean Landing Mode: Full-page CorpusHome without sidebar
+      const homeComponent = navigationItems[0]?.component;
+      content = (
+        <CleanViewContainer id="corpus-clean-view">
+          {/* Power User toggle - only shown for users with edit rights */}
+          {canUpdateCorpus && (
+            <PowerUserToggle
+              onClick={() => updateModeParam(location, navigate, "power")}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              data-testid="power-user-toggle"
+              title="Switch to full corpus management view"
+            >
+              <Zap />
+              Power User
+            </PowerUserToggle>
+          )}
+          {homeComponent}
+        </CleanViewContainer>
+      );
+    }
   } else if (
     opened_corpus !== null &&
     opened_corpus !== undefined &&

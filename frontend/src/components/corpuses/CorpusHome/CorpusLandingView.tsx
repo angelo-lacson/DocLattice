@@ -23,6 +23,7 @@ import { PermissionTypes } from "../../types";
 import { getPermissions } from "../../../utils/transform";
 import { InlineChatBar } from "../CorpusHero/InlineChatBar";
 import { MCPShareButton } from "../../common/MCPShareButton";
+import { RecentDiscussions } from "./RecentDiscussions";
 
 import {
   LandingContainer,
@@ -61,6 +62,10 @@ export interface CorpusLandingViewProps {
   onViewChatHistory?: () => void;
   /** Callback to open mobile navigation menu */
   onOpenMobileMenu?: () => void;
+  /** Callback when "View All Discussions" is clicked */
+  onViewDiscussions?: () => void;
+  /** Callback when a specific thread is clicked from the feed */
+  onThreadClick?: (threadId: string) => void;
   /** Test ID for the component */
   testId?: string;
 }
@@ -87,6 +92,8 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onChatSubmit,
   onViewChatHistory,
   onOpenMobileMenu,
+  onViewDiscussions,
+  onThreadClick,
   testId = "corpus-landing",
 }) => {
   const [mdContent, setMdContent] = React.useState<string | null>(null);
@@ -285,6 +292,14 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
           View Details
           <ArrowRight />
         </ViewDetailsButton>
+
+        {/* Recent discussions feed */}
+        <RecentDiscussions
+          corpusId={corpus.id}
+          onThreadClick={onThreadClick || (() => {})}
+          onViewAll={onViewDiscussions || (() => {})}
+          testId={`${testId}-discussions`}
+        />
       </LandingContent>
     </LandingContainer>
   );

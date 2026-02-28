@@ -7,6 +7,7 @@ import { updateDetailViewParam } from "../../utils/navigationUtils";
 import { CorpusType } from "../../types/graphql-api";
 import { CorpusLandingView } from "./CorpusHome/CorpusLandingView";
 import { CorpusDetailsView } from "./CorpusHome/CorpusDetailsView";
+import { CorpusDiscussionsInlineView } from "./CorpusHome/CorpusDiscussionsInlineView";
 
 export interface CorpusHomeProps {
   corpus: CorpusType;
@@ -32,15 +33,17 @@ export interface CorpusHomeProps {
 }
 
 /**
- * CorpusHome - Orchestrator component that switches between landing and details views
+ * CorpusHome - Orchestrator component that switches between landing, details, and discussions views
  *
  * Views:
- * - Landing: Centered layout with description and "View Details" button
+ * - Landing: Centered layout with description, chat, discussion feed, and "View Details" button
  * - Details: Two-column layout (desktop) or tabbed (mobile) with TOC and About
+ * - Discussions: Inline thread list and detail view
  *
  * URL State:
  * - /c/user/corpus → Landing view (default)
  * - /c/user/corpus?view=details → Details view
+ * - /c/user/corpus?view=discussions → Discussions view
  */
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
@@ -68,6 +71,19 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     updateDetailViewParam(location, navigate, "landing");
   };
 
+  // Handle switching to discussions view
+  const handleViewDiscussions = () => {
+    updateDetailViewParam(location, navigate, "discussions");
+  };
+
+  // Handle clicking a specific thread from the landing page feed
+  const handleThreadClick = (threadId: string) => {
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.set("view", "discussions");
+    searchParams.set("thread", threadId);
+    navigate({ search: searchParams.toString() });
+  };
+
   // Render the appropriate view
   if (currentView === "details") {
     return (
@@ -77,6 +93,20 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         onEditDescription={onEditDescription}
         onOpenMobileMenu={onOpenMobileMenu}
         testId="corpus-home-details"
+      />
+    );
+  }
+
+  if (currentView === "discussions") {
+    const searchParams = new URLSearchParams(location.search);
+    const initialThreadId = searchParams.get("thread");
+
+    return (
+      <CorpusDiscussionsInlineView
+        corpus={corpus}
+        onBack={handleBackToLanding}
+        initialThreadId={initialThreadId}
+        testId="corpus-home-discussions"
       />
     );
   }
@@ -92,6 +122,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       onChatSubmit={onChatSubmit}
       onViewChatHistory={onViewChatHistory}
       onOpenMobileMenu={onOpenMobileMenu}
+      onViewDiscussions={handleViewDiscussions}
+      onThreadClick={handleThreadClick}
       testId="corpus-home-landing"
     />
   );

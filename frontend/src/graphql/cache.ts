@@ -613,8 +613,9 @@ export const tocExpandAll = makeVar<boolean>(false);
  * URL Examples:
  *   /c/user/corpus                    → corpusDetailView("landing") = default landing
  *   /c/user/corpus?view=details       → corpusDetailView("details")
+ *   /c/user/corpus?view=discussions   → corpusDetailView("discussions")
  */
-export type CorpusDetailViewType = "landing" | "details";
+export type CorpusDetailViewType = "landing" | "details" | "discussions";
 export const corpusDetailView = makeVar<CorpusDetailViewType>("landing");
 
 /**
