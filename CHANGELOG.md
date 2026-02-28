@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Security Headers Middleware (CSP, Referrer-Policy, Permissions-Policy)
-- Added `SecurityHeadersMiddleware` in `config/middleware.py` that attaches `Content-Security-Policy`, `Referrer-Policy`, and `Permissions-Policy` headers to every HTTP response
+#### Security Headers Middleware (CSP, Permissions-Policy)
+- Added `SecurityHeadersMiddleware` in `config/middleware.py` that attaches `Content-Security-Policy` and `Permissions-Policy` headers to every HTTP response
 - CSP directives configured via `SECURE_CSP_DIRECTIVES` dict in `config/settings/base.py` — covers `default-src`, `script-src`, `style-src`, `img-src`, `font-src`, `connect-src` (including WebSocket), `worker-src`, `object-src`, `frame-ancestors`, `base-uri`, and `form-action`
-- Referrer-Policy defaults to `strict-origin-when-cross-origin` via `SECURE_REFERRER_POLICY`
 - Permissions-Policy disables `camera`, `microphone`, `geolocation`, `payment`, `usb`, `magnetometer`, `gyroscope`, and `accelerometer` via `SECURE_PERMISSIONS_POLICY`
 - Header values are pre-built once at middleware init for zero per-request overhead
 - Tests in `opencontractserver/tests/test_security_headers_middleware.py`
+
+- Expanded corpus forking test suite with field-level data integrity checks (Closes #998)
 
 ### Fixed
 

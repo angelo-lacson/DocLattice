@@ -14,6 +14,7 @@ from config.graphql.graphene_types import AnalysisType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analysis, Analyzer
+from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.tasks import delete_analysis_and_annotations_task
 from opencontractserver.tasks.corpus_tasks import process_analyzer
@@ -108,23 +109,29 @@ class StartDocumentAnalysisMutation(graphene.Mutation):
         if document_pk is None and corpus_pk is None:
             raise ValueError("One of document_pk and corpus_pk must be provided")
 
+        not_found_msg = "Resource not found or you do not have permission."
+
         try:
-            # Check permissions for document
+            # Check permissions for document using visible_to_user()
             if document_pk:
-                document = Document.objects.get(pk=document_pk)
-                if not (document.creator == user or document.is_public):
-                    raise PermissionError(
-                        "You don't have permission to analyze this document."
+                if (
+                    not Document.objects.visible_to_user(user)
+                    .filter(pk=document_pk)
+                    .exists()
+                ):
+                    return StartDocumentAnalysisMutation(
+                        ok=False, message=not_found_msg, obj=None
                     )
 
-            # Check permissions for corpus
+            # Check permissions for corpus using visible_to_user()
             if corpus_pk:
-                from opencontractserver.corpuses.models import Corpus
-
-                corpus = Corpus.objects.get(pk=corpus_pk)
-                if not (corpus.creator == user or corpus.is_public):
-                    raise PermissionError(
-                        "You don't have permission to analyze this corpus."
+                if (
+                    not Corpus.objects.visible_to_user(user)
+                    .filter(pk=corpus_pk)
+                    .exists()
+                ):
+                    return StartDocumentAnalysisMutation(
+                        ok=False, message=not_found_msg, obj=None
                     )
 
             analyzer = Analyzer.objects.get(pk=analyzer_pk)
@@ -195,7 +202,7 @@ class DeleteAnalysisMutation(graphene.Mutation):
             permission=PermissionTypes.DELETE,
             include_group_permissions=True,
         ):
-            PermissionError("You don't have permission to delete this analysis.")
+            raise PermissionError("You don't have permission to delete this analysis.")
 
         # Kick off an async task to delete the analysis (as it can be very large)
         delete_analysis_and_annotations_task.si(analysis_pk=analysis_pk).apply_async()

@@ -297,15 +297,31 @@ class UpdateDocumentSummary(graphene.Mutation):
     @login_required
     def mutate(root, info, document_id, corpus_id, new_content):
         try:
-            from opencontractserver.corpuses.models import Corpus
             from opencontractserver.documents.models import DocumentSummaryRevision
+
+            user = info.context.user
+            not_found_msg = (
+                "Document or corpus not found, or you do not have permission."
+            )
 
             # Extract pks from graphene ids
             _, doc_pk = from_global_id(document_id)
             _, corpus_pk = from_global_id(corpus_id)
 
-            document = Document.objects.get(pk=doc_pk)
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Use visible_to_user() to prevent object-existence enumeration
+            try:
+                document = Document.objects.visible_to_user(user).get(pk=doc_pk)
+            except Document.DoesNotExist:
+                return UpdateDocumentSummary(
+                    ok=False, message=not_found_msg, obj=None, version=None
+                )
+
+            try:
+                corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+            except Corpus.DoesNotExist:
+                return UpdateDocumentSummary(
+                    ok=False, message=not_found_msg, obj=None, version=None
+                )
 
             # Check if user has any existing summary for this document-corpus combination
             existing_summary = (
@@ -319,25 +335,26 @@ class UpdateDocumentSummary(graphene.Mutation):
             # Permission logic
             if existing_summary:
                 # If summary exists, only the original author can update
-                if existing_summary.author != info.context.user:
+                if existing_summary.author != user:
                     return UpdateDocumentSummary(
                         ok=False,
-                        message="You can only edit summaries you created.",
+                        message=not_found_msg,
                         obj=None,
                         version=None,
                     )
             else:
-                # If no summary exists, check corpus permissions
-                # User can create if: corpus is public OR user has update permission on corpus
-                is_public_corpus = corpus.is_public
-                user_has_corpus_perm = info.context.user.has_perm(
-                    "update_corpus", corpus
+                # If no summary exists, check corpus permissions:
+                # creator OR explicit guardian update permission
+                has_perm = corpus.creator == user or user_has_permission_for_obj(
+                    user_val=user,
+                    instance=corpus,
+                    permission=PermissionTypes.UPDATE,
+                    include_group_permissions=True,
                 )
-                user_is_creator = corpus.creator == info.context.user
-                if not (is_public_corpus or user_has_corpus_perm or user_is_creator):
+                if not has_perm:
                     return UpdateDocumentSummary(
                         ok=False,
-                        message="You don't have permission to create summaries for this corpus.",
+                        message=not_found_msg,
                         obj=None,
                         version=None,
                     )
@@ -370,24 +387,11 @@ class UpdateDocumentSummary(graphene.Mutation):
                 version=revision.version,
             )
 
-        except Document.DoesNotExist:
-            return UpdateDocumentSummary(
-                ok=False,
-                message="Document not found.",
-                obj=None,
-                version=None,
-            )
-        except Corpus.DoesNotExist:
-            return UpdateDocumentSummary(
-                ok=False,
-                message="Corpus not found.",
-                obj=None,
-                version=None,
-            )
         except Exception as e:
+            logger.error(f"Error updating document summary: {str(e)}")
             return UpdateDocumentSummary(
                 ok=False,
-                message=f"Error updating document summary: {str(e)}",
+                message="Error updating document summary.",
                 obj=None,
                 version=None,
             )
@@ -1248,13 +1252,26 @@ class RestoreDeletedDocument(graphene.Mutation):
         from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         user = info.context.user
+        not_found_msg = "Document or corpus not found, or you do not have permission."
 
         try:
             doc_pk = from_global_id(document_id)[1]
             corpus_pk = from_global_id(corpus_id)[1]
 
-            document = Document.objects.get(pk=doc_pk)
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Use visible_to_user() to prevent object-existence enumeration
+            try:
+                document = Document.objects.visible_to_user(user).get(pk=doc_pk)
+            except Document.DoesNotExist:
+                return RestoreDeletedDocument(
+                    ok=False, message=not_found_msg, document=None
+                )
+
+            try:
+                corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+            except Corpus.DoesNotExist:
+                return RestoreDeletedDocument(
+                    ok=False, message=not_found_msg, document=None
+                )
 
             # Find the deleted path entry
             deleted_path = (
@@ -1268,7 +1285,7 @@ class RestoreDeletedDocument(graphene.Mutation):
             if not deleted_path:
                 return RestoreDeletedDocument(
                     ok=False,
-                    message="Cannot restore document - it may not be deleted or may not exist in this corpus",
+                    message="Document is not currently in a deleted state in this corpus.",
                     document=None,
                 )
 
@@ -1291,19 +1308,11 @@ class RestoreDeletedDocument(graphene.Mutation):
                 document=document,
             )
 
-        except Document.DoesNotExist:
-            return RestoreDeletedDocument(
-                ok=False, message="Document not found", document=None
-            )
-        except Corpus.DoesNotExist:
-            return RestoreDeletedDocument(
-                ok=False, message="Corpus not found", document=None
-            )
         except Exception as e:
             logger.error(f"Failed to restore document: {str(e)}")
             return RestoreDeletedDocument(
                 ok=False,
-                message=f"Failed to restore document: {str(e)}",
+                message="Failed to restore document.",
                 document=None,
             )
 
@@ -1339,13 +1348,22 @@ class PermanentlyDeleteDocument(graphene.Mutation):
         from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         user = info.context.user
+        not_found_msg = "Document or corpus not found, or you do not have permission."
 
         try:
             doc_pk = from_global_id(document_id)[1]
             corpus_pk = from_global_id(corpus_id)[1]
 
-            document = Document.objects.get(pk=doc_pk)
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Use visible_to_user() to prevent object-existence enumeration
+            try:
+                document = Document.objects.visible_to_user(user).get(pk=doc_pk)
+            except Document.DoesNotExist:
+                return PermanentlyDeleteDocument(ok=False, message=not_found_msg)
+
+            try:
+                corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+            except Corpus.DoesNotExist:
+                return PermanentlyDeleteDocument(ok=False, message=not_found_msg)
 
             success, error = DocumentFolderService.permanently_delete_document(
                 user=user,
@@ -1360,14 +1378,10 @@ class PermanentlyDeleteDocument(graphene.Mutation):
                 ok=True, message="Document permanently deleted"
             )
 
-        except Document.DoesNotExist:
-            return PermanentlyDeleteDocument(ok=False, message="Document not found")
-        except Corpus.DoesNotExist:
-            return PermanentlyDeleteDocument(ok=False, message="Corpus not found")
         except Exception as e:
             logger.error(f"Failed to permanently delete document: {str(e)}")
             return PermanentlyDeleteDocument(
-                ok=False, message=f"Failed to permanently delete document: {str(e)}"
+                ok=False, message="Failed to permanently delete document."
             )
 
 
