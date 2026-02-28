@@ -529,7 +529,7 @@ class CoreAgentBase(ABC):
             len(content),
             sources is not None,
             len(sources) if sources else 0,
-            list(metadata.keys()) if metadata else None,
+            metadata.keys() if metadata else None,
         )
         await self.conversation_manager.complete_message(
             message_id, content, sources, metadata
@@ -639,9 +639,9 @@ class CoreAgentBase(ABC):
                 **kwargs,
             )
             return result
-        except Exception as e:
+        except Exception:
             # Log the error but don't raise - return None per spec
-            logger.error("Error in structured_response: %s", e, exc_info=True)
+            logger.error("Error in structured_response", exc_info=True)
             return None
 
     # ------------------------------------------------------------------
