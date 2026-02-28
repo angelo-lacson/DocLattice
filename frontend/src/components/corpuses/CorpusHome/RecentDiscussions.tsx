@@ -27,10 +27,10 @@ const RECENT_THREAD_LIMIT = 3;
 const FeedContainer = styled.div`
   width: 100%;
   max-width: 600px;
-  margin-top: 2rem;
+  margin-top: 3.5rem;
 
   ${mediaQuery.tablet} {
-    margin-top: 1.5rem;
+    margin-top: 2.5rem;
   }
 `;
 
