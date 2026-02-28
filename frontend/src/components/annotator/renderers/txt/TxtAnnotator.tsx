@@ -780,6 +780,9 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
    * Handle a mouse-up event to show the action menu for the selection.
    */
   const handleMouseUp = (event: React.MouseEvent<HTMLDivElement>) => {
+    // Menu is shown even in read-only mode (Copy Text / Copy Link are always available).
+    // Only "Apply Label" is gated on allowInput && !read_only inside the menu.
+
     // Cooldown after menu interaction to prevent immediate re-trigger
     if (Date.now() - lastMenuInteractionTime.current < 300) return;
 
