@@ -341,6 +341,7 @@ class BulkDocumentUploadTests(TestCase):
                     f"Document {doc.id} should have a DocumentPath to corpus {self.corpus.id}",
                 )
         except Exception:
+            logger.exception("End-to-end upload test failed")
             raise
 
     @override_settings(
