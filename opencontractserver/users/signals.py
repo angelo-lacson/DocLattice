@@ -40,7 +40,7 @@ def arbitrary_function(user: User) -> None:
         user (User): The newly created user instance
     """
     # Add your custom logic here
-    logger.info("New user created: %s", user.email)
+    logger.info("New user created: pk=%s", user.pk)
 
 
 def ready_to_record() -> bool:

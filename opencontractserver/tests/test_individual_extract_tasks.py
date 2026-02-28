@@ -17,6 +17,7 @@ from opencontractserver.tasks.data_extract_tasks import (
 )
 from opencontractserver.tests.base import BaseFixtureTestCase
 
+logger = logging.getLogger(__name__)
 vcr_log = logging.getLogger("vcr")
 vcr_log.setLevel(logging.WARNING)
 
@@ -112,7 +113,7 @@ class TestDocExtractQueryTask(TransactionTestCase):
             self.assertIn("data", result, "Expected 'data' key in result")
 
         except Exception:
-            logging.exception("Exception in test_doc_extract_query_task_synchronously")
+            logger.exception("Exception in test_doc_extract_query_task_synchronously")
             raise
 
 
@@ -229,7 +230,7 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
                 )
 
             except Exception:
-                logging.exception(
+                logger.exception(
                     "Exception in test_doc_extract_query_task_directly for cell %s",
                     cell.id,
                 )
