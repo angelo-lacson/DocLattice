@@ -6,6 +6,10 @@ import {
   SearchUsersForMentionOutput,
 } from "../../../graphql/queries";
 import { MentionUser } from "../MentionPicker";
+import {
+  MENTION_SEARCH_DEBOUNCE_MS,
+  MENTION_SEARCH_MIN_CHARS,
+} from "../../../assets/configurations/constants";
 
 /**
  * Standalone hook to fetch users for @mention autocomplete via GraphQL.
@@ -20,13 +24,13 @@ import { MentionUser } from "../MentionPicker";
  * user-only mention support.
  *
  * @param query - Search query string
- * @param debounceMs - Debounce delay in milliseconds (default: 300)
- * @param minChars - Minimum characters before searching (default: 2)
+ * @param debounceMs - Debounce delay in milliseconds (default: MENTION_SEARCH_DEBOUNCE_MS)
+ * @param minChars - Minimum characters before searching (default: MENTION_SEARCH_MIN_CHARS)
  */
 export function useMentionUsers(
   query: string,
-  debounceMs: number = 300,
-  minChars: number = 2
+  debounceMs: number = MENTION_SEARCH_DEBOUNCE_MS,
+  minChars: number = MENTION_SEARCH_MIN_CHARS
 ) {
   const [debouncedQuery, setDebouncedQuery] = useState(query);
 
@@ -58,18 +62,20 @@ export function useMentionUsers(
   // Map GraphQL response to MentionUser[].
   // Guard: return empty when the live query is below minChars so stale
   // results from a previous (longer) query are not shown after backspace.
-  const users: MentionUser[] =
-    debouncedQuery.length < minChars
-      ? []
-      : data?.searchUsersForMention?.edges?.map((edge) => ({
-          id: edge.node.id,
-          username: edge.node.username,
-          email: edge.node.email ?? undefined,
-        })) ?? [];
+  const belowMinChars = debouncedQuery.length < minChars;
+  const users: MentionUser[] = belowMinChars
+    ? []
+    : data?.searchUsersForMention?.edges?.map((edge) => ({
+        id: edge.node.id,
+        username: edge.node.username,
+        email: edge.node.email ?? undefined,
+      })) ?? [];
 
   return {
     users,
-    loading,
+    // When query is below minChars we haven't fired a search, so any
+    // lingering `loading` from a previous in-flight query is stale.
+    loading: !belowMinChars && (loading ?? false),
     error: error?.message ?? null,
   };
 }
