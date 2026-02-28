@@ -27,7 +27,7 @@ class WorkerDocumentUploadSerializer(serializers.Serializer):
         try:
             data = json.loads(value)
         except (json.JSONDecodeError, TypeError):
-            logger.exception("Invalid JSON in metadata.")
+            logger.warning("Invalid JSON in metadata.", exc_info=True)
             raise serializers.ValidationError("Invalid JSON in metadata.")
 
         if not isinstance(data, dict):

@@ -59,6 +59,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Store Codecov Env Flags
+        continue-on-error: true
         run: |
           # use bash variable expression to get the substring
           ci_env=`bash <(curl -s https://codecov.io/env)`
