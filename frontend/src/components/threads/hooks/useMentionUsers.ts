@@ -13,8 +13,6 @@ import { MentionUser } from "../MentionPicker";
  * Uses SEARCH_USERS_FOR_MENTION query with debounced input.
  * Backend filters results by privacy settings via UserQueryOptimizer.
  *
- * Part of Issue #1002 - Replace mock data with real user query
- *
  * @param query - Search query string
  * @param debounceMs - Debounce delay in milliseconds (default: 300)
  * @param minChars - Minimum characters before searching (default: 2)

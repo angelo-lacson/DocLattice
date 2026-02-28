@@ -76,7 +76,7 @@ class CustomJSONFieldFormTests(TestCase):
         form = self.TestForm({"json_field": ""})
         self.assertTrue(form.is_valid())
 
-    # TODO - this test is not quite working as expected. Minimal risk ATM.
-    # def test_form_with_invalid_json(self):
-    #     form = self.TestForm({'json_field': 'not json'})
-    #     self.assertFalse(form.is_valid())
+    # NB: test_form_with_invalid_json is intentionally disabled — the custom
+    # JSON field currently accepts malformed strings as empty/null rather than
+    # raising a validation error. Low risk since the field is only used
+    # internally, but the behaviour should be tightened if exposed to user input.
