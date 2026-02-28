@@ -1,6 +1,14 @@
 """
 Constants for document processing pipeline.
+
+WARNING: This module is imported from config/settings/base.py at startup.
+It MUST remain free of Django imports (models, apps, etc.) to avoid
+AppRegistryNotReady errors during settings loading.
 """
+
+# Maximum file upload size in bytes (5 GB).
+# Used by Django's DATA_UPLOAD_MAX_MEMORY_SIZE setting.
+MAX_FILE_UPLOAD_SIZE_BYTES = 5_242_880_000
 
 # Default path prefix for documents uploaded without explicit path
 # Used when generating document paths in corpus operations
@@ -31,6 +39,10 @@ MAX_PROCESSING_TRACEBACK_LENGTH = 10000
 
 # Maximum length for error message in GraphQL display (UI truncation)
 MAX_PROCESSING_ERROR_DISPLAY_LENGTH = 500
+
+# Maximum length for document title/description preview in notifications.
+# Used when generating a short doc title for notification payloads.
+NOTIFICATION_DOC_TITLE_MAX_LENGTH = 50
 
 # Maximum length for error messages stored on WorkerDocumentUpload.error_message.
 # Prevents unbounded exception strings from bloating the staging table.
