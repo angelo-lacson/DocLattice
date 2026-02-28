@@ -1,10 +1,9 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
 import styled from "styled-components";
 import { ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { CorpusType } from "../../../types/graphql-api";
-import { ThreadDetailWithContext } from "../../threads/ThreadDetailWithContext";
 import { CorpusDiscussionsView } from "../../discussions/CorpusDiscussionsView";
 import {
   CORPUS_COLORS,
@@ -94,66 +93,39 @@ export interface CorpusDiscussionsInlineViewProps {
   corpus: CorpusType;
   /** Callback to go back to the landing page */
   onBack: () => void;
-  /** Optional initial thread ID to open directly */
+  /** Optional initial thread ID to open directly (unused; kept for API compat) */
   initialThreadId?: string | null;
   /** Test ID prefix */
   testId?: string;
 }
 
 /**
- * CorpusDiscussionsInlineView - Inline discussions view for the corpus landing page.
+ * CorpusDiscussionsInlineView - Inline discussions wrapper for the corpus landing page.
  *
- * Shows either:
- * - The thread list (CorpusDiscussionsView) when no thread is selected
- * - A thread detail (ThreadDetailWithContext) when a thread is clicked
- *
- * This provides an inline discussions experience without navigating to the
- * full Discussions tab, making discussions accessible to anonymous users.
+ * Delegates thread listing and thread-detail navigation entirely to
+ * CorpusDiscussionsView, which manages selection via the URL-driven
+ * ?thread= param (synced by CentralRouteManager). This wrapper adds
+ * only a minimal "Overview" back-button header.
  */
 export const CorpusDiscussionsInlineView: React.FC<
   CorpusDiscussionsInlineViewProps
-> = ({
-  corpus,
-  onBack,
-  initialThreadId = null,
-  testId = "discussions-inline",
-}) => {
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
-    initialThreadId
-  );
-
-  const handleThreadClick = useCallback((threadId: string) => {
-    setSelectedThreadId(threadId);
-  }, []);
-
-  const handleBackToList = useCallback(() => {
-    setSelectedThreadId(null);
-  }, []);
-
+> = ({ corpus, onBack, testId = "discussions-inline" }) => {
   return (
     <Container data-testid={testId}>
       <Header>
         <BackButton
-          onClick={selectedThreadId ? handleBackToList : onBack}
+          onClick={onBack}
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           data-testid={`${testId}-back-btn`}
         >
           <ArrowLeft />
-          {selectedThreadId ? "All Discussions" : "Overview"}
+          Overview
         </BackButton>
       </Header>
 
       <Content>
-        {selectedThreadId ? (
-          <ThreadDetailWithContext
-            conversationId={selectedThreadId}
-            corpusId={corpus.id}
-            onBack={handleBackToList}
-          />
-        ) : (
-          <CorpusDiscussionsView corpusId={corpus.id} hideHeader />
-        )}
+        <CorpusDiscussionsView corpusId={corpus.id} hideHeader />
       </Content>
     </Container>
   );
