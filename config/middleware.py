@@ -1,8 +1,11 @@
 """
 Custom security middleware for OpenContracts.
 
-Adds Content-Security-Policy, Referrer-Policy, and Permissions-Policy headers
-to all responses. Configuration is driven by Django settings (see base.py).
+Adds Content-Security-Policy and Permissions-Policy headers to all responses.
+Configuration is driven by Django settings (see base.py).
+
+Note: Referrer-Policy is handled by Django's built-in SecurityMiddleware via
+the SECURE_REFERRER_POLICY setting and is NOT duplicated here.
 """
 
 from django.conf import settings
@@ -14,8 +17,10 @@ class SecurityHeadersMiddleware:
 
     Configured via Django settings:
         SECURE_CSP_DIRECTIVES      – dict of CSP directive name → list of values
-        SECURE_REFERRER_POLICY     – string  (e.g. "strict-origin-when-cross-origin")
         SECURE_PERMISSIONS_POLICY  – dict of feature name → list of allowlist tokens
+
+    Note: Referrer-Policy is handled by Django's built-in SecurityMiddleware
+    (django.middleware.security.SecurityMiddleware) via SECURE_REFERRER_POLICY.
     """
 
     def __init__(self, get_response):
@@ -23,9 +28,6 @@ class SecurityHeadersMiddleware:
 
         # Pre-build header values once at startup for performance.
         self._csp = self._build_csp(getattr(settings, "SECURE_CSP_DIRECTIVES", None))
-        self._referrer = getattr(
-            settings, "SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin"
-        )
         self._permissions = self._build_permissions_policy(
             getattr(settings, "SECURE_PERMISSIONS_POLICY", None)
         )
@@ -35,9 +37,6 @@ class SecurityHeadersMiddleware:
 
         if self._csp:
             response["Content-Security-Policy"] = self._csp
-
-        if self._referrer:
-            response["Referrer-Policy"] = self._referrer
 
         if self._permissions:
             response["Permissions-Policy"] = self._permissions

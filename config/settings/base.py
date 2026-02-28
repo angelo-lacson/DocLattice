@@ -524,9 +524,12 @@ SECURE_CSP_DIRECTIVES = {
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", "wss:", "ws:"],
+    "connect-src": ["'self'", "wss:"],
     "worker-src": ["'self'", "blob:"],
     "object-src": ["'none'"],
+    # frame-ancestors 'none' is the modern CSP2 mechanism for blocking framing.
+    # X_FRAME_OPTIONS = "DENY" (above) is the legacy fallback for older browsers.
+    # Both are set intentionally for maximum browser coverage.
     "frame-ancestors": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
