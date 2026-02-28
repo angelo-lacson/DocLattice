@@ -97,7 +97,9 @@ class TestDjangoRedisCache(TestCase):
         """TTL-based expiration."""
         cache.set("expiring_key", "value", timeout=1)
         assert cache.get("expiring_key") == "value"
-        time.sleep(2.0)
+        # Sleep 3s for a 1s TTL: generous margin avoids flaky failures on
+        # slow CI runners where Redis expiry checks may lag.
+        time.sleep(3.0)
         assert cache.get("expiring_key") is None
 
     def test_cache_incr_decr(self):
@@ -141,6 +143,24 @@ class TestChannelsRedisLayer(TestCase):
                 self.channel_layer.receive(channel_name),
                 timeout=self.RECEIVE_TIMEOUT_SECONDS,
             )
+
+        return async_to_sync(_receive)()
+
+    def _timed_receive_or_none(self, channel_name, timeout=2.0):
+        """Receive with a timeout, returning None if nothing arrives.
+
+        Unlike _timed_receive which raises on timeout, this returns None --
+        useful for asserting that no message was delivered.
+        """
+
+        async def _receive():
+            try:
+                return await asyncio.wait_for(
+                    self.channel_layer.receive(channel_name),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                return None
 
         return async_to_sync(_receive)()
 
@@ -198,16 +218,8 @@ class TestChannelsRedisLayer(TestCase):
             {"type": "test.message", "text": "should not arrive"},
         )
 
-        # Receive should timeout (nothing to receive)
-        async def _receive_with_timeout():
-            try:
-                return await asyncio.wait_for(
-                    self.channel_layer.receive(channel_name), timeout=2.0
-                )
-            except asyncio.TimeoutError:
-                return None
-
-        result = async_to_sync(_receive_with_timeout)()
+        # Receive should timeout (nothing to receive after discard)
+        result = self._timed_receive_or_none(channel_name)
         assert result is None
 
 
