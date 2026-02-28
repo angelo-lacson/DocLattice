@@ -171,8 +171,12 @@ export interface MentionPickerRef {
 }
 
 /**
- * Mention picker component for @username autocomplete
- * Used with TipTap's Mention extension
+ * Mention picker component for @username autocomplete.
+ * Used with TipTap's Mention extension.
+ *
+ * NOTE: The primary render path uses `UnifiedMentionPicker` (which handles
+ * users, corpuses, documents, annotations, and agents). This component is
+ * exported as a standalone picker for consumers that only need user mentions.
  */
 export const MentionPicker = forwardRef<MentionPickerRef, MentionPickerProps>(
   ({ users, onSelect, selectedIndex, loading, error }, ref) => {
@@ -184,6 +188,12 @@ export const MentionPicker = forwardRef<MentionPickerRef, MentionPickerProps>(
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }: { event: KeyboardEvent }) => {
+        // Guard: prevent phantom navigation when users array is empty
+        // (e.g. during loading or error states).
+        if (users.length === 0) {
+          return false;
+        }
+
         if (event.key === "ArrowUp") {
           setSelected((selected - 1 + users.length) % users.length);
           return true;
