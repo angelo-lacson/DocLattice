@@ -1,4 +1,5 @@
 #  Copyright (C) 2022  John Scrudato
+import base64
 import io
 import logging
 from unittest.mock import MagicMock, patch
@@ -7,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.test import TestCase
+from pypdf import PdfReader
 
 from opencontractserver.annotations.models import Annotation, AnnotationLabel
 from opencontractserver.corpuses.models import Corpus
@@ -81,6 +83,9 @@ class DocParserTestCase(TestCase):
         Test burning annotations with only doc-level labels (no text labels).
         Verifies the 5-tuple structure is returned correctly.
         """
+        # NOTE(deferred): Only doc labels are exercised. Text-label burning
+        # and substantive output validation (e.g. checking the resulting PDF
+        # contains the expected highlight overlays) are not covered yet.
         label_lookups = {
             "text_labels": {},
             "doc_labels": {
@@ -104,15 +109,11 @@ class DocParserTestCase(TestCase):
         Test burning annotations with text labels exercises the PDF highlight
         code path and produces valid annotated output.
         """
-        import base64
-
-        from pypdf import PdfReader
-
         # Create a text-level annotation label in the database
         text_label = AnnotationLabel.objects.create(
             text="Important Clause",
             creator=self.user,
-            label_type="TOKEN_LABEL",
+            label_type=LabelType.TOKEN_LABEL,
             color="#FF5733",
             description="Highlights important clauses",
             icon="tag",
@@ -122,7 +123,7 @@ class DocParserTestCase(TestCase):
         doc_label = AnnotationLabel.objects.create(
             text="Contract",
             creator=self.user,
-            label_type="DOC_TYPE_LABEL",
+            label_type=LabelType.DOC_TYPE_LABEL,
             color="#33FF57",
             description="Marks document as a contract",
             icon="file",
@@ -134,7 +135,7 @@ class DocParserTestCase(TestCase):
         Annotation.objects.create(
             raw_text="Development Agreement",
             annotation_label=text_label,
-            annotation_type="TOKEN_LABEL",
+            annotation_type=LabelType.TOKEN_LABEL,
             document=self.doc,
             corpus=self.corpus,
             creator=self.user,
@@ -157,7 +158,7 @@ class DocParserTestCase(TestCase):
         Annotation.objects.create(
             raw_text="Contract",
             annotation_label=doc_label,
-            annotation_type="DOC_TYPE_LABEL",
+            annotation_type=LabelType.DOC_TYPE_LABEL,
             document=self.doc,
             corpus=self.corpus,
             creator=self.user,
@@ -210,16 +211,25 @@ class DocParserTestCase(TestCase):
         reader = PdfReader(io.BytesIO(pdf_bytes))
         self.assertGreater(len(reader.pages), 0)
 
-        # The first page should contain a highlight annotation
+        # The first page should contain our burned-in annotation
         first_page = reader.pages[0]
         annots = first_page.get("/Annots")
         self.assertIsNotNone(annots, "First page should have PDF annotations")
         self.assertGreater(len(annots), 0)
 
-        # Verify the highlight annotation metadata
-        highlight_annot = annots[0].get_object()
+        # Find the annotation we added by its /Contents field, since the
+        # sample PDF may already contain other annotations.
+        highlight_annot = None
+        for annot_ref in annots:
+            annot_obj = annot_ref.get_object()
+            if annot_obj.get("/Contents") == "Important Clause":
+                highlight_annot = annot_obj
+                break
+        self.assertIsNotNone(
+            highlight_annot,
+            "Expected an annotation with /Contents 'Important Clause'",
+        )
         self.assertEqual(highlight_annot["/Subtype"], "/Highlight")
-        self.assertEqual(highlight_annot["/Contents"], "Important Clause")
 
         # doc_export should contain the expected annotation data
         self.assertIsNotNone(doc_export)
