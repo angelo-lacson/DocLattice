@@ -1,0 +1,14 @@
+"""
+Constants for annotation-related operations.
+"""
+
+# Sentinel value used in GraphQL filters to indicate "include annotations
+# that were created manually (not by an analysis/analyzer)".
+MANUAL_ANNOTATION_SENTINEL = "~~MANUAL~~"
+
+# Maximum number of document relationships returned in a single query.
+# Set high to accommodate Table of Contents hierarchies.
+DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT = 500
+
+# Maximum number of results returned by semantic search queries.
+SEMANTIC_SEARCH_MAX_RESULTS = 200

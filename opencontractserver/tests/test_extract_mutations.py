@@ -123,7 +123,7 @@ class ExtractsMutationTestCase(TestCase):
             to_global_id("ExtractType", self.extract.id)
         )
 
-        with patch("config.graphql.mutations.run_extract") as mock_task:
+        with patch("config.graphql.extract_mutations.run_extract") as mock_task:
             # Setup the mock to handle .s().apply_async() chain
             from unittest.mock import MagicMock
 
