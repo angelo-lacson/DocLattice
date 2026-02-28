@@ -44,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Deep Linking and Context Menu for Text/PDF Annotators (Closes #958)
+- Copy Link actions in PDF (`SelectionLayer.tsx`) and TXT (`TxtAnnotator.tsx`) context menus encode selections as `?tb=` deep link URLs
+- URL-driven annotation selection from chat sources (`ChatTray.tsx`); delete button for processing documents (`ModernDocumentItem.tsx`)
+
 #### Corpus Export Test Coverage (Closes #997)
 - Added `test_exported_document_structure` to validate exported document data structure: top-level keys, PAWLS page schema, annotation structure with bounding boxes and token references, and PDF burn-in validity (`opencontractserver/tests/test_corpus_export.py`)
 - Added `test_round_trip_consistency` to compare exported data against original import fixture: document title, content, PAWLS page dimensions and token counts, annotation count, raw text, label names (mapped through label lookups), and bounding box coordinates (`opencontractserver/tests/test_corpus_export.py`)
@@ -58,12 +62,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed existing test to `test_burn_doc_annotations_doc_labels_only` for clarity
 
 #### Test Coverage for Untested Backend Modules (Closes #975)
-- Unit tests for feedback, shared utils, constants, types, and MCP extended modules
+- Unit tests for feedback, shared utils, constants, types, and MCP extended modules (`opencontractserver/tests/`)
 
 ### Fixed
 
+#### Code Review Fixes for Text Block Deep Linking (#958)
+- Document resolution via corpus membership (`DocumentPath`) instead of `creator=owner`; simplified default path to return already-resolved doc
+- Cross-document source click flash fix; `useClearTextBlockOnInteraction` hook consolidation; clipboard `.catch()` for non-HTTPS; dead code removal
+
 #### Document Version Selector UI Cleanup (Closes #964)
-- Removed unused query fields, added WAI-ARIA keyboard navigation, fixed unsafe version fallback, added backend validation for invalid version numbers
+- Removed unused query fields (`versionCount`, `hasVersionHistory`, etc.); added WAI-ARIA keyboard navigation; safe `v?` fallback during load
+- Backend validation for invalid version numbers (≤ 0); isCurrent JSDoc; updated test mocks and new keyboard nav tests
 
 #### Rollup Vulnerability (Closes #973)
 - Pinned `rollup: "^4.59.0"` via yarn resolutions to fix 3 high-severity path traversal advisories
