@@ -195,7 +195,7 @@ class DeleteAnalysisMutation(graphene.Mutation):
             permission=PermissionTypes.DELETE,
             include_group_permissions=True,
         ):
-            PermissionError("You don't have permission to delete this analysis.")
+            raise PermissionError("You don't have permission to delete this analysis.")
 
         # Kick off an async task to delete the analysis (as it can be very large)
         delete_analysis_and_annotations_task.si(analysis_pk=analysis_pk).apply_async()
