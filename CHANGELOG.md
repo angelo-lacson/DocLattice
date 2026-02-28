@@ -42,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split 5 large components: StyledContainers (2,115→12), SystemSettings (2,616→1,108), CorpusChat (2,347→1,346), DocumentKnowledgeBase (3,363→2,322), ChatTray (2,215→1,772)
 - Extracted shared chat WebSocket types into canonical `chat/types.ts`; renamed duplicate ConversationListView components; replaced `any` types with explicit typed properties
 
+### Removed
+
+#### Deprecated Semantic UI React Components and Icon Picker (PR #1009)
+- Deleted 92 files (~20,700 lines) of deprecated Semantic UI React components that had been fully replaced by OS Legal styled equivalents
+- Removed `react-icon-picker-material` package and its sole consumer `IconSelector.tsx`
+- Removed unused Semantic UI wrapper components: `DocTypeLabelDisplay`, `DocTypeLabels`, `LabelSelector`, `EditLabelModal`, `SemanticSidebar`, `LabelSetSelector`, and related CSS
+- Removed deprecated layout components: `AnnotatorSidebar.tsx`, `CRUDWidget.tsx`, `DropdownActionButton.tsx`, `DocumentCards.tsx`, `CorpusCards.tsx`, `TreeItemDisplay.tsx`
+- Removed dead modals: `SelectCorpusAnalyzerModal.tsx`, `SelectExtractFieldsModal.tsx`, `EditExtractModal.tsx`, `NewEditAnalysisModal.tsx`
+- Removed unused pages: `CorpusDashboard.tsx`, `Corpuses.tsx`, `Extracts.tsx`, `LabelSets.tsx`, `Documents.tsx`
+- Removed orphaned CSS files: `DocTypeLabelDisplayStyles.css`, `DocTypeLabels.css`, `LabelSelector.css`
+
 ### Added
 
 #### Deep Linking and Context Menu for Text/PDF Annotators (Closes #958)
