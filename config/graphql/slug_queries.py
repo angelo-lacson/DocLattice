@@ -99,6 +99,8 @@ class SlugQueryMixin:
         # user with write access, not necessarily the corpus owner.
         # Filter by corpus membership to avoid ambiguity when documents
         # in different corpuses share the same slug.
+        # Explicit ordering ensures deterministic results when multiple
+        # documents share the same slug in this corpus (different creators).
         doc = (
             Document.objects.filter(
                 slug=document_slug,
@@ -107,6 +109,7 @@ class SlugQueryMixin:
                 path_records__is_deleted=False,
             )
             .visible_to_user(info.context.user)
+            .order_by("pk")
             .first()
         )
         if not doc:
