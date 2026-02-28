@@ -52,6 +52,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split 5 large components: StyledContainers (2,115→12), SystemSettings (2,616→1,108), CorpusChat (2,347→1,346), DocumentKnowledgeBase (3,363→2,322), ChatTray (2,215→1,772)
 - Extracted shared chat WebSocket types into canonical `chat/types.ts`; renamed duplicate ConversationListView components; replaced `any` types with explicit typed properties
 
+### Removed
+
+#### Deprecated Semantic UI React Components and Icon Picker (PR #1009)
+- Deleted 103 files (~20,900 lines) of deprecated frontend components, hooks, and tests that had been fully replaced by OS Legal styled equivalents
+- Removed icon picker widget (`IconSelector.tsx`, `IconDropdown.tsx`, `IconPickerModal.tsx`, `icons.ts`, `styles.module.css`)
+- Removed unused Semantic UI wrapper components: `DocTypeLabelDisplay`, `DocTypeLabels`, `LabelSelector`, `SemanticSidebar`, and related CSS
+- Removed deprecated layout components: `AnnotatorSidebar.tsx`, `DropdownActionButton.tsx`, `CorpusCards.tsx`, `TreeItemDisplay.tsx`
+- Removed dead modals: `SelectCorpusAnalyzerModal.tsx`, `SelectExtractFieldsModal.tsx`, `EditExtractModal.tsx`, `NewEditAnalysisModal.tsx`, `SelectDocumentFieldsetModal.tsx`
+- Removed deprecated annotator hooks and display components: `useVisibleRelationships`, `useAnnotationDisplay`, `useAnnotationSelection`, `usePageAnnotations`, `RelationshipList`, `ActionBar`, `AnnotationSummary`, and others
+- Removed legacy notification components: `NotificationBell`, `NotificationCenter`, `NotificationDropdown`, `NotificationItem`
+- Removed deprecated thread components: `MentionPicker`, `ResourceMentionPicker`, `ModerationControls`, `ModeratorBadge`, `ReputationDisplay`, and associated hooks
+- Removed orphaned CSS files: `DocTypeLabelDisplayStyles.css`, `DocTypeLabels.css`, `LabelSelector.css`
+- Removed associated test files for deleted components
+
 ### Added
 
 #### Replace Mock Data with Real User Query in @mention Dropdown (Closes #1002)
