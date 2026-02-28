@@ -1,9 +1,10 @@
 import logging
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # from gliner import GLiNER
 
-# model = GLiNER.from_pretrained("urchade/gliner_base")
-logger.info("SKIPPING GLINER PRELOAD")
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    # model = GLiNER.from_pretrained("urchade/gliner_base")
+    logger.info("SKIPPING GLINER PRELOAD")
