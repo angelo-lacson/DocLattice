@@ -1,9 +1,12 @@
 import json
+import logging
 
 from rest_framework import serializers
 
 from opencontractserver.annotations.models import EMBEDDING_DIMENSIONS
 from opencontractserver.worker_uploads.models import WorkerDocumentUpload
+
+logger = logging.getLogger(__name__)
 
 _SUPPORTED_DIMS = frozenset(dim for dim, _ in EMBEDDING_DIMENSIONS)
 
@@ -23,8 +26,9 @@ class WorkerDocumentUploadSerializer(serializers.Serializer):
     def validate_metadata(self, value):
         try:
             data = json.loads(value)
-        except (json.JSONDecodeError, TypeError) as e:
-            raise serializers.ValidationError(f"Invalid JSON in metadata: {e}")
+        except (json.JSONDecodeError, TypeError):
+            logger.exception("Invalid JSON in metadata.")
+            raise serializers.ValidationError("Invalid JSON in metadata.")
 
         if not isinstance(data, dict):
             raise serializers.ValidationError("Metadata must be a JSON object.")
