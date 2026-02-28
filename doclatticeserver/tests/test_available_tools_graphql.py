@@ -26,8 +26,7 @@ class AvailableToolsQueryTests(GraphQLTestCase):
         """Test that availableTools query returns all tools."""
         self.client.force_login(self.user)
 
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 availableTools {
                     name
@@ -37,8 +36,7 @@ class AvailableToolsQueryTests(GraphQLTestCase):
                     requiresApproval
                 }
             }
-            """
-        )
+            """)
 
         content = response.json()
         self.assertResponseNoErrors(response)
@@ -59,16 +57,14 @@ class AvailableToolsQueryTests(GraphQLTestCase):
         """Test filtering tools by category."""
         self.client.force_login(self.user)
 
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 availableTools(category: "search") {
                     name
                     category
                 }
             }
-            """
-        )
+            """)
 
         content = response.json()
         self.assertResponseNoErrors(response)
@@ -85,15 +81,13 @@ class AvailableToolsQueryTests(GraphQLTestCase):
         """Test filtering by invalid category returns empty list."""
         self.client.force_login(self.user)
 
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 availableTools(category: "invalid_category") {
                     name
                 }
             }
-            """
-        )
+            """)
 
         content = response.json()
         self.assertResponseNoErrors(response)
@@ -105,13 +99,11 @@ class AvailableToolsQueryTests(GraphQLTestCase):
         """Test that availableToolCategories returns all categories."""
         self.client.force_login(self.user)
 
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 availableToolCategories
             }
-            """
-        )
+            """)
 
         content = response.json()
         self.assertResponseNoErrors(response)
@@ -136,15 +128,13 @@ class AvailableToolsQueryTests(GraphQLTestCase):
         """Test that specific expected tools are returned."""
         self.client.force_login(self.user)
 
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 availableTools {
                     name
                 }
             }
-            """
-        )
+            """)
 
         content = response.json()
         self.assertResponseNoErrors(response)
@@ -165,15 +155,13 @@ class AvailableToolsQueryTests(GraphQLTestCase):
     def test_available_tools_anonymous_user(self):
         """Test that anonymous users can still query available tools."""
         # Note: This query is informational and doesn't require auth
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 availableTools {
                     name
                 }
             }
-            """
-        )
+            """)
 
         content = response.json()
         # This should work for anonymous users as it's just static metadata

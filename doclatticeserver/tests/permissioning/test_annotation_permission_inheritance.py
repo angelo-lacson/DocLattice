@@ -199,8 +199,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
         # Convert to global ID for GraphQL
         doc_global_id = to_global_id("DocumentType", self.doc_private.id)
 
-        query = (
-            """
+        query = """
         query {
             annotations(documentId: "%s") {
                 edges {
@@ -213,9 +212,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }
             }
         }
-        """
-            % doc_global_id
-        )
+        """ % doc_global_id
 
         result = self.client_bob.execute(query)
 
@@ -297,9 +294,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_global_id, corpus_global_id
-        )
+        """.format(doc_global_id, corpus_global_id)
 
         result = self.client_bob.execute(query)
         annotations = result.get("data", {}).get("annotations", {}).get("edges", [])
@@ -370,9 +365,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_global_id, corpus_global_id
-        )
+        """.format(doc_global_id, corpus_global_id)
 
         result = self.client_bob.execute(query)
         annotations = result.get("data", {}).get("annotations", {}).get("edges", [])
@@ -443,9 +436,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_global_id, corpus_global_id
-        )
+        """.format(doc_global_id, corpus_global_id)
 
         result = self.client_bob.execute(query)
         annotations = result.get("data", {}).get("annotations", {}).get("edges", [])
@@ -518,9 +509,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_global_id, corpus_global_id
-        )
+        """.format(doc_global_id, corpus_global_id)
 
         result = self.client_bob.execute(query)
         annotations = result.get("data", {}).get("annotations", {}).get("edges", [])
@@ -589,9 +578,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_global_id, corpus_global_id
-        )
+        """.format(doc_global_id, corpus_global_id)
 
         result = self.client_bob.execute(query)
         annotations = result.get("data", {}).get("annotations", {}).get("edges", [])
@@ -646,9 +633,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_global_id, corpus_global_id
-        )
+        """.format(doc_global_id, corpus_global_id)
 
         result = self.client_super.execute(query)
         annotations = result.get("data", {}).get("annotations", {}).get("edges", [])
@@ -706,9 +691,7 @@ class AnnotationPermissionInheritanceTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_global_id, corpus_global_id
-        )
+        """.format(doc_global_id, corpus_global_id)
 
         result = self.client_alice.execute(query)
         annotations = result.get("data", {}).get("annotations", {}).get("edges", [])
