@@ -204,7 +204,7 @@ const SelectionLayer = ({
     }
 
     if (combinedText.trim()) {
-      navigator.clipboard.writeText(combinedText.trim());
+      navigator.clipboard.writeText(combinedText.trim()).catch(() => {});
     }
 
     // Mark menu interaction time
@@ -249,7 +249,7 @@ const SelectionLayer = ({
       const url = `${window.location.origin}${
         location.pathname
       }?${params.toString()}`;
-      navigator.clipboard.writeText(url);
+      navigator.clipboard.writeText(url).catch(() => {});
     }
 
     lastMenuInteractionTime.current = Date.now();

@@ -462,7 +462,7 @@ const ProcessingDeleteButton = styled.button`
   position: absolute;
   top: 6px;
   right: 6px;
-  z-index: 1001;
+  z-index: 1001; /* Above ProcessingDimmer (1000) and ListRelationshipPopup (1000) */
   pointer-events: auto;
   width: 24px;
   height: 24px;

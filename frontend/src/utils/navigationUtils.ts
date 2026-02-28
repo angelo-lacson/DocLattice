@@ -277,11 +277,10 @@ export function buildQueryParams(params: QueryParams): string {
     searchParams.set("labels", params.labelDisplay);
   }
 
-  // Text block deep link (compact-encoded reference to document text)
+  // Text block deep link (compact-encoded reference to document text).
+  // When null/undefined, the param is simply omitted (searchParams is fresh).
   if (params.textBlock) {
     searchParams.set("tb", params.textBlock);
-  } else if (params.textBlock === null) {
-    searchParams.delete("tb");
   }
 
   const query = searchParams.toString();

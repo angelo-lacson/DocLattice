@@ -351,25 +351,9 @@ class Query(graphene.ObjectType):
                 return None
             return path_record.document
 
-        # Default: validate membership via DocumentPath (current version)
-        visible_docs = (
-            Document.objects.filter(slug=document_slug)
-            .visible_to_user(info.context.user)
-            .only("pk")
-        )
-        path_record = (
-            DocumentPath.objects.filter(
-                document__in=visible_docs,
-                corpus=corpus,
-                is_current=True,
-                is_deleted=False,
-            )
-            .select_related("document")
-            .first()
-        )
-        if not path_record:
-            return None
-        return path_record.document
+        # Default: doc already satisfies corpus membership, visibility,
+        # and is_current constraints from the initial query above.
+        return doc
 
     # ANNOTATION RESOLVERS #####################################
     annotations = DjangoConnectionField(
