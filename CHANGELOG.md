@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Expand burn_doc_annotations Test (Closes #1000)
+- Added `test_burn_doc_annotations_with_text_labels` to exercise the text-label PDF burning code path with TOKEN_LABEL fixtures and bounding-box annotation data (`opencontractserver/tests/test_doc_tasks.py`)
+- Validates output PDF contains highlight annotations with correct subtype, label text, and non-empty base64-encoded content
+- Validates `doc_export` JSON contains expected `doc_labels` and `labelled_text` entries
+- Renamed existing test to `test_burn_doc_annotations_doc_labels_only` for clarity
+
 #### Test Coverage for Untested Backend Modules (Closes #975)
 - Unit tests for feedback, shared utils, constants, types, and MCP extended modules
 
