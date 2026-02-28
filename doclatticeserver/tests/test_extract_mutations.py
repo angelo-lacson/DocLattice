@@ -119,9 +119,7 @@ class ExtractsMutationTestCase(TestCase):
                     message
                 }}
             }}
-        """.format(
-            to_global_id("ExtractType", self.extract.id)
-        )
+        """.format(to_global_id("ExtractType", self.extract.id))
 
         with patch("config.graphql.extract_mutations.run_extract") as mock_task:
             # Setup the mock to handle .s().apply_async() chain
@@ -228,9 +226,7 @@ class ExtractsMutationTestCase(TestCase):
                     }}
                 }}
             }}
-        """.format(
-            to_global_id("DatacellType", datacell.id)
-        )
+        """.format(to_global_id("DatacellType", datacell.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))
@@ -271,9 +267,7 @@ class ExtractsMutationTestCase(TestCase):
                     }}
                 }}
             }}
-        """.format(
-            to_global_id("DatacellType", datacell.id)
-        )
+        """.format(to_global_id("DatacellType", datacell.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))
@@ -314,9 +308,7 @@ class ExtractsMutationTestCase(TestCase):
                     }}
                 }}
             }}
-        """.format(
-            to_global_id("DatacellType", datacell.id)
-        )
+        """.format(to_global_id("DatacellType", datacell.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))
@@ -341,9 +333,7 @@ class ExtractsMutationTestCase(TestCase):
                     message
                 }}
             }}
-        """.format(
-            to_global_id("ExtractType", self.extract.id)
-        )
+        """.format(to_global_id("ExtractType", self.extract.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))

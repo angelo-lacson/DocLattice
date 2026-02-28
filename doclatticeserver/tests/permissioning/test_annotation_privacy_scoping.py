@@ -498,9 +498,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         result = self.client_team_a_member1.execute(manual_query)
         self.assertIsNone(
@@ -542,9 +540,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_id
-        )
+        """.format(doc_id, corpus_id, analysis_id)
 
         result = self.client_team_a_member1.execute(analysis_query)
         analysis_annotations = result["data"]["document"]["allAnnotations"]
@@ -601,9 +597,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         result = self.client_team_b_member1.execute(manual_query)
         self.assertIsNone(result.get("errors"))
@@ -625,9 +619,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_id
-        )
+        """.format(doc_id, corpus_id, analysis_id)
 
         result = self.client_team_b_member1.execute(analysis_query)
         analysis_annotations = result["data"]["document"]["allAnnotations"]
@@ -670,9 +662,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         result = self.client_external.execute(query)
         self.assertIsNone(result.get("errors"))
@@ -726,9 +716,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         result = self.client_reviewer.execute(manual_query)
         self.assertIsNone(result.get("errors"))
@@ -752,9 +740,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_id
-        )
+        """.format(doc_id, corpus_id, analysis_id)
 
         result = self.client_reviewer.execute(analysis_query)
         analysis_annotations = result["data"]["document"]["allAnnotations"]
@@ -803,9 +789,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         result = self.client_admin.execute(query)
         self.assertIsNone(result.get("errors"))
@@ -864,9 +848,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         # Initially, client_user sees only public annotations
         result = self.client_external.execute(query)
@@ -899,9 +881,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_id
-        )
+        """.format(doc_id, corpus_id, analysis_id)
 
         result = self.client_external.execute(analysis_query)
         analysis_annotations = result["data"]["document"]["allAnnotations"]
@@ -966,9 +946,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_a_id
-        )
+        """.format(doc_id, corpus_id, analysis_a_id)
 
         result_a = self.client_team_a_member1.execute(query_a)
         annotations_a = result_a["data"]["document"]["allAnnotations"]
@@ -988,9 +966,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_b_id
-        )
+        """.format(doc_id, corpus_id, analysis_b_id)
 
         result_b = self.client_team_b_member1.execute(query_b)
         annotations_b = result_b["data"]["document"]["allAnnotations"]
@@ -1046,9 +1022,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         # Initially, collaborator sees only public annotations in manual mode
         result = client_collaborator.execute(manual_query)
@@ -1081,9 +1055,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_a_id
-        )
+        """.format(doc_id, corpus_id, analysis_a_id)
 
         result = client_collaborator.execute(analysis_a_query)
         analysis_a_annotations = result["data"]["document"]["allAnnotations"]
@@ -1106,9 +1078,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id, analysis_b_id
-        )
+        """.format(doc_id, corpus_id, analysis_b_id)
 
         result = client_collaborator.execute(analysis_b_query)
         analysis_b_annotations = result["data"]["document"]["allAnnotations"]
@@ -1159,9 +1129,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         # Team B member should NOT see Team A's extract annotation
         result = self.client_team_b_member1.execute(query)
@@ -1262,9 +1230,7 @@ class AnnotationPrivacyScopingTestCase(TestCase):
                 }}
             }}
         }}
-        """.format(
-            doc_id, corpus_id
-        )
+        """.format(doc_id, corpus_id)
 
         for user, expected_visibility in visibility_matrix:
             client = Client(schema, context_value=TestContext(user))
@@ -1386,17 +1352,14 @@ class AnnotationPrivacyMutationTestCase(TestCase):
         client_b = Client(schema, context_value=TestContext(self.user_b))
 
         annotation_id = to_global_id("AnnotationType", self.private_annotation.id)
-        mutation = (
-            """
+        mutation = """
         mutation {
             removeAnnotation(annotationId: "%s") {
                 ok
                 message
             }
         }
-        """
-            % annotation_id
-        )
+        """ % annotation_id
 
         result = client_b.execute(mutation)
         self.assertIsNone(result.get("errors"))
@@ -1423,17 +1386,14 @@ class AnnotationPrivacyMutationTestCase(TestCase):
         client_a = Client(schema, context_value=TestContext(self.user_a))
 
         annotation_id = to_global_id("AnnotationType", self.private_annotation.id)
-        mutation = (
-            """
+        mutation = """
         mutation {
             removeAnnotation(annotationId: "%s") {
                 ok
                 message
             }
         }
-        """
-            % annotation_id
-        )
+        """ % annotation_id
 
         result = client_a.execute(mutation)
         self.assertIsNone(
