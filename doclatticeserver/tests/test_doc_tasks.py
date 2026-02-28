@@ -79,6 +79,9 @@ class DocParserTestCase(TestCase):
         """
         Test burning annotations into the document.
         """
+        # NOTE(deferred): Only doc labels are exercised. Text-label burning
+        # and substantive output validation (e.g. checking the resulting PDF
+        # contains the expected highlight overlays) are not covered yet.
         label_lookups = {
             "text_labels": {},
             "doc_labels": {

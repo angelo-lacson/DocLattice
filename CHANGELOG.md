@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced vague TODOs with `NOTE(deferred):` comments explaining deferral reasoning
 - Deleted stale comments referencing non-existent files, already-implemented features, and empty test stubs
 - Fixed typo: "whould" → "should" in `test_permissioning.py`
+- Removed `console.log` debug statement in `ModernDocumentItem.tsx`
+- Deleted empty test stub file `test_doc_analysis_tasks.py`
+- Consolidated redundant `logger.debug()` calls in `utils/files.py`
 
 #### Extract Magic Numbers to Constants Files (Closes #970)
 - Replaced hardcoded upload limit, truncation lengths, DPI, and title limits with named constants in `constants/document_processing.py` and `constants/llm_tools.py`
