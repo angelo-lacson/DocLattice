@@ -9,17 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Corpus Forking Test Enhancement (Closes #998)
-- Expanded `opencontractserver/tests/test_corpus_forking.py` with field-level data integrity verification
-- **test_forked_label_properties**: Verifies color, description, icon, text, and label_type transfer correctly during cloning
-- **test_forked_labels_are_independent_copies**: Confirms forked labels are new DB rows, not shared references
-- **test_forked_labelset_metadata**: Checks [FORK] title prefix and description preservation on LabelSet
-- **test_forked_document_field_integrity**: Validates document title prefixes, source_document provenance, and file blob sharing
-- **test_forked_annotation_field_integrity**: Asserts page, raw_text, tokens_jsons, bounding_box, json payload, annotation_type, and label remapping
-- **test_forked_relationship_integrity**: Verifies source/target annotation remapping, corpus references, and relationship label mapping
-- **test_forked_corpus_metadata**: Confirms corpus title prefix, parent reference, backend_lock state, and creator
-- Extracted shared import-and-fork setup into `_import_and_fork_corpus()` helper to reduce duplication
-- Migrated existing test from bare `assert` to `self.assert*` methods for better failure messages
+- Expanded corpus forking test suite with field-level data integrity checks (Closes #998)
 
 ### Fixed
 
@@ -57,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extracted shared chat WebSocket types into canonical `chat/types.ts`; renamed duplicate ConversationListView components; replaced `any` types with explicit typed properties
 
 ### Added
+
+#### Replace Mock Data with Real User Query in @mention Dropdown (Closes #1002)
+- **useMentionUsers hook** (`frontend/src/components/threads/hooks/useMentionUsers.ts`): Replaced hardcoded mock users with real `SEARCH_USERS_FOR_MENTION` GraphQL query. Added 300ms debounced input to reduce excessive API calls and minimum character threshold (2 chars). Hook now returns `{ users, loading, error }` instead of just `MentionUser[]`.
+- **MentionPicker component** (`frontend/src/components/threads/MentionPicker.tsx`): Added loading and error state rendering. Shows "Searching users..." during query execution and "Failed to load users" on errors. Added `loading` and `error` optional props to `MentionPickerProps`.
 
 #### Deep Linking and Context Menu for Text/PDF Annotators (Closes #958)
 - Copy Link actions in PDF (`SelectionLayer.tsx`) and TXT (`TxtAnnotator.tsx`) context menus encode selections as `?tb=` deep link URLs

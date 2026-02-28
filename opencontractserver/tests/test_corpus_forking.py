@@ -21,30 +21,33 @@ User = get_user_model()
 class CorpusForkTestCase(TransactionTestCase):
     """Test suite for corpus forking data integrity.
 
-    Each test method runs an independent import+fork cycle via
-    ``_import_and_fork_corpus()``.  This is intentional:
-    ``TransactionTestCase`` truncates all tables between tests, so sharing
-    state across methods would require ``setUpClass`` plus manual cleanup
-    and would make test isolation harder to reason about.  The trade-off is
-    extra wall-clock time (~8 cycles) in exchange for clean, self-contained
-    assertions per test method.
+    Uses ``setUpClass`` to run a single import+fork cycle and stores IDs as
+    class attributes.  Each test loads fresh QuerySets from those IDs, so
+    tests remain isolated while avoiding 8 redundant import+fork cycles.
+    All tests are read-only, so there is no write-isolation concern.
     """
 
     fixtures_path = pathlib.Path(__file__).parent / "fixtures"
 
-    def setUp(self):
-        self.user = User.objects.create_user(username="bob", password="12345678")
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(username="bob", password="12345678")
+        original_corpus, forked_corpus = cls._import_and_fork_corpus()
+        cls._original_corpus_id = original_corpus.id
+        cls._forked_corpus_id = forked_corpus.id
 
-    def _import_and_fork_corpus(self):
+    @classmethod
+    def _import_and_fork_corpus(cls):
         """Import a test corpus and fork it. Returns (original_corpus, forked_corpus)."""
         export_zip_base64_file_string = package_zip_into_base64(
-            self.fixtures_path / "Test_Corpus_EXPORT.zip"
+            cls.fixtures_path / "Test_Corpus_EXPORT.zip"
         )
         original_corpus = Corpus.objects.create(
-            title="New Import", creator=self.user, backend_lock=False
+            title="New Import", creator=cls.user, backend_lock=False
         )
         set_permissions_for_obj_to_user(
-            self.user, original_corpus, [PermissionTypes.ALL]
+            cls.user, original_corpus, [PermissionTypes.ALL]
         )
 
         base64_img_bytes = export_zip_base64_file_string.encode("utf-8")
@@ -57,13 +60,13 @@ class CorpusForkTestCase(TransactionTestCase):
             )
 
         import_task = import_corpus.s(
-            temporary_file.id, self.user.id, original_corpus.id
+            temporary_file.id, cls.user.id, original_corpus.id
         )
         import_task.apply().get()
         original_corpus.refresh_from_db()
 
         fork_task = build_fork_corpus_task(
-            corpus_pk_to_fork=original_corpus.id, user=self.user
+            corpus_pk_to_fork=original_corpus.id, user=cls.user
         )
         task_results = fork_task.apply().get()
         forked_corpus = Corpus.objects.get(id=task_results)
@@ -71,31 +74,37 @@ class CorpusForkTestCase(TransactionTestCase):
 
         return original_corpus, forked_corpus
 
+    def _load_corpuses(self):
+        """Load fresh QuerySets from stored IDs."""
+        original = Corpus.objects.get(id=self._original_corpus_id)
+        forked = Corpus.objects.get(id=self._forked_corpus_id)
+        return original, forked
+
     def test_corpus_forking(self):
         """Test that forking preserves object counts."""
-        original_corpus_obj, forked_corpus = self._import_and_fork_corpus()
+        original_corpus, forked_corpus = self._load_corpuses()
 
         self.assertIsInstance(forked_corpus, Corpus)
         self.assertIsInstance(forked_corpus.parent, Corpus)
-        self.assertEqual(forked_corpus.parent_id, original_corpus_obj.id)
+        self.assertEqual(forked_corpus.parent_id, original_corpus.id)
 
         # Annotation count
         forked_annotation_count = Annotation.objects.filter(
             corpus=forked_corpus, analysis__isnull=True
         ).count()
         original_annotation_count = Annotation.objects.filter(
-            corpus=original_corpus_obj, analysis__isnull=True
+            corpus=original_corpus, analysis__isnull=True
         ).count()
         self.assertEqual(forked_annotation_count, original_annotation_count)
 
         # Document count
         self.assertEqual(
             forked_corpus.get_documents().count(),
-            original_corpus_obj.get_documents().count(),
+            original_corpus.get_documents().count(),
         )
 
         # Label count
-        original_labelset_labels = original_corpus_obj.label_set.annotation_labels.all()
+        original_labelset_labels = original_corpus.label_set.annotation_labels.all()
         forked_labelset_labels = forked_corpus.label_set.annotation_labels.all()
         self.assertEqual(
             forked_labelset_labels.count(), original_labelset_labels.count()
@@ -130,12 +139,18 @@ class CorpusForkTestCase(TransactionTestCase):
         for text, orig_id in original_label_by_text.items():
             if text in forked_label_by_text:
                 label_map[orig_id] = forked_label_by_text[text]
+
+        # Ensure every original label has a mapping entry
+        original_label_ids = set(original_label_by_text.values())
+        missing = original_label_ids - set(label_map.keys())
+        self.assertEqual(missing, set(), f"Labels dropped during fork: {missing}")
+
         return label_map
 
     def test_forked_label_properties(self):
         """Verify that label properties (color, description, icon, text, label_type)
         transfer correctly during cloning."""
-        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        original_corpus, forked_corpus = self._load_corpuses()
 
         original_labels = list(
             original_corpus.label_set.annotation_labels.order_by("text").values(
@@ -148,7 +163,7 @@ class CorpusForkTestCase(TransactionTestCase):
             )
         )
 
-        self.assertTrue(len(original_labels) > 0, "Fixture should contain labels")
+        self.assertGreater(len(original_labels), 0, "Fixture should contain labels")
         self.assertEqual(len(forked_labels), len(original_labels))
 
         for orig, forked in zip(original_labels, forked_labels):
@@ -160,7 +175,7 @@ class CorpusForkTestCase(TransactionTestCase):
 
     def test_forked_labels_are_independent_copies(self):
         """Forked labels must be new DB rows, not references to the originals."""
-        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        original_corpus, forked_corpus = self._load_corpuses()
 
         original_label_ids = set(
             original_corpus.label_set.annotation_labels.values_list("id", flat=True)
@@ -169,7 +184,7 @@ class CorpusForkTestCase(TransactionTestCase):
             forked_corpus.label_set.annotation_labels.values_list("id", flat=True)
         )
 
-        self.assertTrue(len(original_label_ids) > 0)
+        self.assertGreater(len(original_label_ids), 0, "Fixture should contain labels")
         self.assertTrue(
             original_label_ids.isdisjoint(forked_label_ids),
             "Forked labels should be new rows with different PKs",
@@ -177,7 +192,7 @@ class CorpusForkTestCase(TransactionTestCase):
 
     def test_forked_labelset_metadata(self):
         """Verify the forked LabelSet has the [FORK] title prefix and preserves description."""
-        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        original_corpus, forked_corpus = self._load_corpuses()
 
         original_ls = original_corpus.label_set
         forked_ls = forked_corpus.label_set
@@ -187,17 +202,28 @@ class CorpusForkTestCase(TransactionTestCase):
         self.assertEqual(forked_ls.description, original_ls.description)
 
     def test_forked_document_field_integrity(self):
-        """Verify that forked documents have correct titles, provenance, and
-        share the same underlying file blobs as the originals."""
-        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        """Verify that forked documents have correct titles, provenance, creator,
+        and share the same underlying file blobs as the originals."""
+        original_corpus, forked_corpus = self._load_corpuses()
 
-        original_docs = list(original_corpus.get_documents().order_by("title"))
-        forked_docs = list(forked_corpus.get_documents().order_by("title"))
+        original_docs = list(original_corpus.get_documents())
+        forked_docs = list(forked_corpus.get_documents())
 
-        self.assertTrue(len(original_docs) > 0, "Fixture should contain documents")
+        self.assertGreater(
+            len(original_docs), 0, "Fixture should contain documents"
+        )
         self.assertEqual(len(forked_docs), len(original_docs))
 
-        for orig_doc, forked_doc in zip(original_docs, forked_docs):
+        # Join forked documents by source_document_id for robust matching
+        forked_by_source = {d.source_document_id: d for d in forked_docs}
+
+        for orig_doc in original_docs:
+            forked_doc = forked_by_source.get(orig_doc.id)
+            self.assertIsNotNone(
+                forked_doc,
+                f"No forked document found with source_document_id={orig_doc.id}",
+            )
+
             # Title should have [FORK] prefix
             self.assertEqual(forked_doc.title, f"[FORK] {orig_doc.title}")
 
@@ -206,6 +232,13 @@ class CorpusForkTestCase(TransactionTestCase):
 
             # Forked doc must have a new PK
             self.assertNotEqual(forked_doc.id, orig_doc.id)
+
+            # Creator should propagate
+            self.assertEqual(
+                forked_doc.creator_id,
+                self.user.id,
+                "Forked document creator should match the forking user",
+            )
 
             # File blobs should be shared (same underlying file path)
             if orig_doc.pdf_file:
@@ -229,8 +262,8 @@ class CorpusForkTestCase(TransactionTestCase):
 
     def test_forked_annotation_field_integrity(self):
         """Verify that forked annotations preserve page, raw_text, tokens_jsons,
-        bounding_box, json payload, and annotation_type."""
-        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        bounding_box, json payload, annotation_type, and creator."""
+        original_corpus, forked_corpus = self._load_corpuses()
 
         original_annots = list(
             Annotation.objects.filter(
@@ -243,7 +276,9 @@ class CorpusForkTestCase(TransactionTestCase):
             ).order_by("raw_text", "page")
         )
 
-        self.assertTrue(len(original_annots) > 0, "Fixture should contain annotations")
+        self.assertGreater(
+            len(original_annots), 0, "Fixture should contain annotations"
+        )
         self.assertEqual(len(forked_annots), len(original_annots))
 
         # Guard: ensure (raw_text, page) is unambiguous for zip-based matching
@@ -268,6 +303,14 @@ class CorpusForkTestCase(TransactionTestCase):
             self.assertEqual(forked.json, orig.json)
             self.assertEqual(forked.annotation_type, orig.annotation_type)
 
+            # Creator should propagate
+            self.assertEqual(
+                forked.creator_id,
+                self.user.id,
+                f"Forked annotation creator should match the forking user "
+                f"(raw_text='{orig.raw_text}')",
+            )
+
             # Label should be remapped to the forked copy
             if orig.annotation_label_id:
                 expected_label_id = label_map.get(orig.annotation_label_id)
@@ -284,7 +327,7 @@ class CorpusForkTestCase(TransactionTestCase):
     def test_forked_relationship_integrity(self):
         """Verify forked relationships maintain correct source/target annotation
         references and preserve label mappings."""
-        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        original_corpus, forked_corpus = self._load_corpuses()
 
         original_rels = list(
             Relationship.objects.filter(
@@ -297,12 +340,12 @@ class CorpusForkTestCase(TransactionTestCase):
             ).prefetch_related("source_annotations", "target_annotations")
         )
 
-        # Count check
-        self.assertEqual(len(forked_rels), len(original_rels))
-
         # Fixture must contain relationships for this test to be meaningful
         if len(original_rels) == 0:
             self.skipTest("Fixture has no relationships -- nothing to verify")
+
+        # Count check (after skipTest for clarity)
+        self.assertEqual(len(forked_rels), len(original_rels))
 
         # Build annotation id -> content key maps for both corpuses.
         original_annots = list(
@@ -350,45 +393,39 @@ class CorpusForkTestCase(TransactionTestCase):
                 {a.id for a in rel.target_annotations.all()},
             )
 
-        # Pre-compute content-key sets for each forked relationship so the
-        # inner matching loop is pure dict lookups (no DB queries).
-        forked_rel_keys = {}
-        for rel_id, (src_ids, tgt_ids) in forked_rel_annot_ids.items():
-            forked_rel_keys[rel_id] = (
-                {
-                    forked_annot_by_id[aid]
-                    for aid in src_ids
-                    if aid in forked_annot_by_id
-                },
-                {
-                    forked_annot_by_id[aid]
-                    for aid in tgt_ids
-                    if aid in forked_annot_by_id
-                },
+        # Index forked relationships by content-key tuple for O(1) lookup
+        # instead of O(n^2) nested loop.
+        forked_rel_by_key = {}
+        for rel in forked_rels:
+            src_ids, tgt_ids = forked_rel_annot_ids[rel.id]
+            src_keys = frozenset(
+                forked_annot_by_id[aid]
+                for aid in src_ids
+                if aid in forked_annot_by_id
             )
+            tgt_keys = frozenset(
+                forked_annot_by_id[aid]
+                for aid in tgt_ids
+                if aid in forked_annot_by_id
+            )
+            forked_rel_by_key[(src_keys, tgt_keys)] = rel
 
         label_map = self._build_label_map(original_corpus, forked_corpus)
 
         for orig_rel in original_rels:
             # Convert original annotation IDs to content keys
             orig_source_ids, orig_target_ids = orig_rel_annot_ids[orig_rel.id]
-            orig_source_keys = {
+            orig_source_keys = frozenset(
                 orig_id_to_key[aid] for aid in orig_source_ids if aid in orig_id_to_key
-            }
-            orig_target_keys = {
+            )
+            orig_target_keys = frozenset(
                 orig_id_to_key[aid] for aid in orig_target_ids if aid in orig_id_to_key
-            }
+            )
 
-            # Find matching forked relationship via pre-computed key sets
-            matched_forked = None
-            for forked_rel in forked_rels:
-                f_source_keys, f_target_keys = forked_rel_keys[forked_rel.id]
-                if (
-                    f_source_keys == orig_source_keys
-                    and f_target_keys == orig_target_keys
-                ):
-                    matched_forked = forked_rel
-                    break
+            # O(1) lookup by content-key tuple
+            matched_forked = forked_rel_by_key.get(
+                (orig_source_keys, orig_target_keys)
+            )
 
             self.assertIsNotNone(
                 matched_forked,
@@ -420,7 +457,7 @@ class CorpusForkTestCase(TransactionTestCase):
     def test_forked_corpus_metadata(self):
         """Verify the forked corpus has correct title prefix, parent reference,
         and is unlocked after fork completes."""
-        original_corpus, forked_corpus = self._import_and_fork_corpus()
+        original_corpus, forked_corpus = self._load_corpuses()
 
         self.assertEqual(forked_corpus.title, f"[FORK] {original_corpus.title}")
         self.assertEqual(forked_corpus.parent_id, original_corpus.id)
