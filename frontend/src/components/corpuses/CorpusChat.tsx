@@ -1025,6 +1025,9 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                         // Cross-document source: navigate away instead of
                         // selecting locally (avoids a flash of local selection
                         // state before the navigation replaces the view).
+                        // onMessageSelect is intentionally skipped — navigation
+                        // replaces the entire view, so local selection state
+                        // and message callbacks are irrelevant.
                         if (source.document_id && onSourceNavigate) {
                           onSourceNavigate(source);
                           return;
