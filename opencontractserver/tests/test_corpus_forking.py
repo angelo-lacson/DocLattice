@@ -91,6 +91,23 @@ class CorpusForkTestCase(TransactionTestCase):
             forked_labelset_labels.count(), original_labelset_labels.count()
         )
 
+    def _build_label_map(self, original_corpus, forked_corpus):
+        """Build a mapping from original label IDs to forked label IDs by
+        matching on label text."""
+        original_label_by_text = {
+            lbl.text: lbl.id
+            for lbl in original_corpus.label_set.annotation_labels.all()
+        }
+        forked_label_by_text = {
+            lbl.text: lbl.id
+            for lbl in forked_corpus.label_set.annotation_labels.all()
+        }
+        label_map = {}
+        for text, orig_id in original_label_by_text.items():
+            if text in forked_label_by_text:
+                label_map[orig_id] = forked_label_by_text[text]
+        return label_map
+
     def test_forked_label_properties(self):
         """Verify that label properties (color, description, icon, text, label_type)
         transfer correctly during cloning."""
@@ -168,11 +185,23 @@ class CorpusForkTestCase(TransactionTestCase):
 
             # File blobs should be shared (same underlying file path)
             if orig_doc.pdf_file:
-                self.assertTrue(bool(forked_doc.pdf_file))
+                self.assertEqual(
+                    forked_doc.pdf_file.name,
+                    orig_doc.pdf_file.name,
+                    "Forked doc should share the same PDF file blob",
+                )
             if orig_doc.txt_extract_file:
-                self.assertTrue(bool(forked_doc.txt_extract_file))
+                self.assertEqual(
+                    forked_doc.txt_extract_file.name,
+                    orig_doc.txt_extract_file.name,
+                    "Forked doc should share the same text extract file blob",
+                )
             if orig_doc.pawls_parse_file:
-                self.assertTrue(bool(forked_doc.pawls_parse_file))
+                self.assertEqual(
+                    forked_doc.pawls_parse_file.name,
+                    orig_doc.pawls_parse_file.name,
+                    "Forked doc should share the same PAWLs parse file blob",
+                )
 
     def test_forked_annotation_field_integrity(self):
         """Verify that forked annotations preserve page, raw_text, tokens_jsons,
@@ -193,18 +222,15 @@ class CorpusForkTestCase(TransactionTestCase):
         self.assertTrue(len(original_annots) > 0, "Fixture should contain annotations")
         self.assertEqual(len(forked_annots), len(original_annots))
 
-        # Build label map: original label id -> forked label id by matching on text
-        original_label_by_text = {
-            lbl.text: lbl.id
-            for lbl in original_corpus.label_set.annotation_labels.all()
-        }
-        forked_label_by_text = {
-            lbl.text: lbl.id for lbl in forked_corpus.label_set.annotation_labels.all()
-        }
-        label_map = {}
-        for text, orig_id in original_label_by_text.items():
-            if text in forked_label_by_text:
-                label_map[orig_id] = forked_label_by_text[text]
+        # Guard: ensure (raw_text, page) is unambiguous for zip-based matching
+        keys = [(a.raw_text, a.page) for a in original_annots]
+        self.assertEqual(
+            len(keys),
+            len(set(keys)),
+            "Fixture has duplicate (raw_text, page) pairs -- sort key is ambiguous",
+        )
+
+        label_map = self._build_label_map(original_corpus, forked_corpus)
 
         for orig, forked in zip(original_annots, forked_annots):
             # Must be different DB rows
@@ -250,39 +276,57 @@ class CorpusForkTestCase(TransactionTestCase):
         # Count check
         self.assertEqual(len(forked_rels), len(original_rels))
 
-        if not original_rels:
-            # No relationships in fixture - nothing more to check
-            return
+        # Fixture must contain relationships for this test to be meaningful
+        self.assertGreater(
+            len(original_rels),
+            0,
+            "Fixture should contain at least one relationship",
+        )
 
         # Build annotation map: original annotation id -> forked annotation id
         # Match by raw_text + page within respective corpuses
+        original_annots = list(
+            Annotation.objects.filter(
+                corpus=original_corpus, analysis__isnull=True
+            )
+        )
         original_annot_key_to_id = {}
-        for a in Annotation.objects.filter(
-            corpus=original_corpus, analysis__isnull=True
-        ):
+        for a in original_annots:
             key = (a.raw_text, a.page)
             original_annot_key_to_id[key] = a.id
 
+        # Guard: ensure (raw_text, page) is unambiguous
+        self.assertEqual(
+            len(original_annot_key_to_id),
+            len(original_annots),
+            "Fixture has duplicate (raw_text, page) pairs -- annotation key is ambiguous",
+        )
+
         forked_annot_key_to_id = {}
-        for a in Annotation.objects.filter(corpus=forked_corpus, analysis__isnull=True):
+        for a in Annotation.objects.filter(
+            corpus=forked_corpus, analysis__isnull=True
+        ):
             key = (a.raw_text, a.page)
             forked_annot_key_to_id[key] = a.id
 
         # Reverse map: original annotation id -> key
         orig_id_to_key = {v: k for k, v in original_annot_key_to_id.items()}
 
-        # Build label map by text
-        original_label_by_text = {
-            lbl.text: lbl.id
-            for lbl in original_corpus.label_set.annotation_labels.all()
+        # Pre-index all forked annotations by ID to avoid O(n*m) queries
+        all_forked_annot_ids = set()
+        for forked_rel in forked_rels:
+            all_forked_annot_ids.update(
+                forked_rel.source_annotations.values_list("id", flat=True)
+            )
+            all_forked_annot_ids.update(
+                forked_rel.target_annotations.values_list("id", flat=True)
+            )
+        forked_annot_by_id = {
+            a.id: (a.raw_text, a.page)
+            for a in Annotation.objects.filter(id__in=all_forked_annot_ids)
         }
-        forked_label_by_text = {
-            lbl.text: lbl.id for lbl in forked_corpus.label_set.annotation_labels.all()
-        }
-        label_map = {}
-        for text, orig_id in original_label_by_text.items():
-            if text in forked_label_by_text:
-                label_map[orig_id] = forked_label_by_text[text]
+
+        label_map = self._build_label_map(original_corpus, forked_corpus)
 
         for orig_rel in original_rels:
             # Find the matching forked relationship by checking source/target
@@ -312,22 +356,15 @@ class CorpusForkTestCase(TransactionTestCase):
                     forked_rel.target_annotations.values_list("id", flat=True)
                 )
 
-                # Convert forked annotation IDs to content keys for comparison
-                forked_id_to_key = {}
-                for a in Annotation.objects.filter(
-                    id__in=forked_source_ids | forked_target_ids
-                ):
-                    forked_id_to_key[a.id] = (a.raw_text, a.page)
-
                 forked_source_keys = {
-                    forked_id_to_key[aid]
+                    forked_annot_by_id[aid]
                     for aid in forked_source_ids
-                    if aid in forked_id_to_key
+                    if aid in forked_annot_by_id
                 }
                 forked_target_keys = {
-                    forked_id_to_key[aid]
+                    forked_annot_by_id[aid]
                     for aid in forked_target_ids
-                    if aid in forked_id_to_key
+                    if aid in forked_annot_by_id
                 }
 
                 if (
