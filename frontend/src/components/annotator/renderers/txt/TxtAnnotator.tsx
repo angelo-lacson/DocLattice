@@ -837,7 +837,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
 
   const handleTxtCopyText = useCallback(() => {
     if (pendingSelection) {
-      navigator.clipboard.writeText(pendingSelection.text);
+      navigator.clipboard.writeText(pendingSelection.text).catch(() => {});
     }
     dismissMenu();
   }, [pendingSelection, dismissMenu]);
@@ -854,7 +854,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       const url = `${window.location.origin}${
         location.pathname
       }?${params.toString()}`;
-      navigator.clipboard.writeText(url);
+      navigator.clipboard.writeText(url).catch(() => {});
     }
     dismissMenu();
   }, [pendingSelection, location, dismissMenu]);

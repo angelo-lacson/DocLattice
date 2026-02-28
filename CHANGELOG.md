@@ -25,7 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **chat/types.ts**: Replaced `any` types with explicit typed properties (`args`, `pending_tool_call.arguments`, `decision`, `error`, `context_status`, `compaction`, `approval_decision`).
 - **DocumentKnowledgeBase.tsx**: Memoized `getPanelWidthPercentage` with `useCallback` to prevent auto-zoom effect from re-running on every render.
 
+### Added
+
+#### Deep Linking and Context Menu for Text/PDF Annotators (Closes #958)
+- **Copy Link in PDF context menu**: `SelectionLayer.tsx` — new "Copy Link" action in the selection action menu encodes selected tokens into a `?tb=` deep link URL
+- **Copy Link in TXT context menu**: `TxtAnnotator.tsx` — new context menu with Copy Text, Copy Link, and Apply Label actions for text selections
+- **URL-driven annotation selection**: `ChatTray.tsx` — clicking a chat source with `annotation_id` updates URL params (`ann=`) so the annotator scrolls to and highlights the referenced annotation
+- **Delete button for processing documents**: `ModernDocumentItem.tsx` — `ProcessingDeleteButton` allows users to remove stuck/processing documents without waiting for completion
+
 ### Fixed
+
+#### Code Review Fixes for Text Block Deep Linking (#958)
+- **Document resolution bug**: `config/graphql/queries.py` — `resolve_document_in_corpus_by_slugs` used `creator=owner` filter which excluded documents uploaded by collaborators; replaced with corpus membership check via `DocumentPath`
+- **Redundant DB queries**: Simplified default (non-versioned) path to return the already-resolved `doc` directly instead of re-querying `DocumentPath`
+- **Cross-document source click flash**: `CorpusChat.tsx` — early-return pattern for cross-document navigation prevents stale local selection state from briefly rendering
+- **Text block clearing**: Extracted `useClearTextBlockOnInteraction` hook from per-page `PDFPage` instances into a single parent component, eliminating O(visible-pages) redundant navigate calls
+- **Superuser permissions**: `opencontractserver/utils/permissioning.py` — added superuser check for guardian-enabled models, with comment explaining the richer permission set (comment, publish, permission) vs basic CRUD
+- **Clipboard error handling**: Added `.catch()` to `navigator.clipboard.writeText()` calls in PDF and TXT copy handlers to prevent unhandled promise rejections in non-HTTPS contexts
+- **Dead code removed**: `navigationUtils.ts` — removed no-op `searchParams.delete("tb")` branch in `buildQueryParams` (operates on a fresh `URLSearchParams`)
+- **Type aliases**: `LocationLike`/`NavigateFn` applied across all 10 `update*Param` functions in `navigationUtils.ts` for DRY type signatures
 
 #### Rollup Vulnerability - Arbitrary File Write via Path Traversal (Closes #973)
 - **Vulnerability**: `yarn audit` reported 3 high-severity advisories for rollup <4.59.0 (arbitrary file write via path traversal) across dependency chains: `vite > rollup`, `vitest > vite > rollup`, and `@playwright/experimental-ct-react > @playwright/experimental-ct-core > vite > rollup`
