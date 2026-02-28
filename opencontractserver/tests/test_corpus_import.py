@@ -358,7 +358,7 @@ class TestCorpusImport(TransactionTestCase):
         )
         set_permissions_for_obj_to_user(self.user, rel_label, [PermissionTypes.ALL])
 
-        # Build the annotation_id_map (old_id → new_pk).
+        # Build the annotation_id_map (old_id -> new_pk).
         # We use the annotation PKs themselves since we're constructing
         # synthetic import data that maps them through the same pipeline.
         annotation_id_map = {

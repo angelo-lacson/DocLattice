@@ -5,6 +5,11 @@ export const TABLET_BREAKPOINT = 768;
 // Desktop breakpoint - minimum width for desktop-only features (TABLET_BREAKPOINT + 1)
 export const DESKTOP_BREAKPOINT = 769;
 
+// Mention search configuration
+// Debounce delay before firing search queries (ms)
+export const MENTION_SEARCH_DEBOUNCE_MS = 300;
+// Minimum characters required before triggering a search
+export const MENTION_SEARCH_MIN_CHARS = 2;
 // Mention preview character limit (Issue #689)
 // Used for truncating annotation text in mention chips and pickers
 export const MENTION_PREVIEW_LENGTH = 24;
@@ -57,6 +62,12 @@ export const STATUS_FILTERS = {
 } as const;
 
 export type StatusFilter = (typeof STATUS_FILTERS)[keyof typeof STATUS_FILTERS];
+
+// Selection action menu approximate dimensions (used for viewport clamping)
+export const SELECTION_MENU = {
+  APPROX_WIDTH: 200,
+  APPROX_HEIGHT: 200,
+} as const;
 
 // Debounce timing constants
 export const DEBOUNCE = {
