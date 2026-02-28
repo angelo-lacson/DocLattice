@@ -45,13 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 #### Deprecated Semantic UI React Components and Icon Picker (PR #1009)
-- Deleted 92 files (~20,700 lines) of deprecated Semantic UI React components that had been fully replaced by OS Legal styled equivalents
-- Removed `react-icon-picker-material` package and its sole consumer `IconSelector.tsx`
-- Removed unused Semantic UI wrapper components: `DocTypeLabelDisplay`, `DocTypeLabels`, `LabelSelector`, `EditLabelModal`, `SemanticSidebar`, `LabelSetSelector`, and related CSS
-- Removed deprecated layout components: `AnnotatorSidebar.tsx`, `CRUDWidget.tsx`, `DropdownActionButton.tsx`, `DocumentCards.tsx`, `CorpusCards.tsx`, `TreeItemDisplay.tsx`
-- Removed dead modals: `SelectCorpusAnalyzerModal.tsx`, `SelectExtractFieldsModal.tsx`, `EditExtractModal.tsx`, `NewEditAnalysisModal.tsx`
-- Removed unused pages: `CorpusDashboard.tsx`, `Corpuses.tsx`, `Extracts.tsx`, `LabelSets.tsx`, `Documents.tsx`
+- Deleted 103 files (~20,900 lines) of deprecated frontend components, hooks, and tests that had been fully replaced by OS Legal styled equivalents
+- Removed icon picker widget (`IconSelector.tsx`, `IconDropdown.tsx`, `IconPickerModal.tsx`, `icons.ts`, `styles.module.css`)
+- Removed unused Semantic UI wrapper components: `DocTypeLabelDisplay`, `DocTypeLabels`, `LabelSelector`, `SemanticSidebar`, and related CSS
+- Removed deprecated layout components: `AnnotatorSidebar.tsx`, `DropdownActionButton.tsx`, `CorpusCards.tsx`, `TreeItemDisplay.tsx`
+- Removed dead modals: `SelectCorpusAnalyzerModal.tsx`, `SelectExtractFieldsModal.tsx`, `EditExtractModal.tsx`, `NewEditAnalysisModal.tsx`, `SelectDocumentFieldsetModal.tsx`
+- Removed deprecated annotator hooks and display components: `useVisibleRelationships`, `useAnnotationDisplay`, `useAnnotationSelection`, `usePageAnnotations`, `RelationshipList`, `ActionBar`, `AnnotationSummary`, and others
+- Removed legacy notification components: `NotificationBell`, `NotificationCenter`, `NotificationDropdown`, `NotificationItem`
+- Removed deprecated thread components: `MentionPicker`, `ResourceMentionPicker`, `ModerationControls`, `ModeratorBadge`, `ReputationDisplay`, and associated hooks
 - Removed orphaned CSS files: `DocTypeLabelDisplayStyles.css`, `DocTypeLabels.css`, `LabelSelector.css`
+- Removed associated test files for deleted components
 
 ### Added
 
