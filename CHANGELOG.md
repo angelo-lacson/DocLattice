@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### Triage and Clean Up TODO/FIXME Comments (Closes #971)
+- Removed 62 TODO/FIXME/HACK annotations across 43 backend and frontend files
+- Replaced vague TODOs with `NOTE(deferred):` comments explaining deferral reasoning
+- Deleted stale comments referencing non-existent files, already-implemented features, and empty test stubs
+- Fixed typo: "whould" → "should" in `test_permissioning.py`
+- Removed `console.log` debug statement in `ModernDocumentItem.tsx`
+- Deleted empty test stub file `test_doc_analysis_tasks.py`
+- Consolidated redundant `logger.debug()` calls in `utils/files.py`
+
 #### Extract Magic Numbers to Constants Files (Closes #970)
 - Replaced hardcoded upload limit, truncation lengths, DPI, and title limits with named constants in `constants/document_processing.py` and `constants/llm_tools.py`
 - Reused existing `MAX_PROCESSING_ERROR_LENGTH`/`MAX_PROCESSING_TRACEBACK_LENGTH` in `corpuses/models.py`
@@ -30,39 +39,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced inline truncation across `core_tools.py`, `doc_tasks.py`, and `corpuses/models.py`
 
 #### Break Up Large Frontend Components (Closes #977)
-- **StyledContainers.tsx** (2,115 → 12 lines): Split into 9 feature-specific style files under `styled/` directory (HeaderAndLayout, LeftSidebar, RightPanel, ResizeControls, Relationships, LoadingStates, EmptyStates, KnowledgeLayer, SidebarTabs) with barrel `index.ts` for backward compatibility.
-- **SystemSettings.tsx** (2,616 → 1,108 lines): Extracted GraphQL operations (`system_settings/graphql.ts`), types/constants (`types.ts`), styled components (`styles.ts`), and 4 memoized sub-components (PipelineComponentCard, FlowParticles, AdvancedSettingsPanel, PipelineStageSection).
-- **CorpusChat.tsx** (2,347 → 1,346 lines): Extracted styled components (`corpus_chat/styles.ts`), ApprovalModal, and ConversationListView into focused sub-files.
-- **DocumentKnowledgeBase.tsx** (3,363 → 2,322 lines): Extracted styled components (`document_kb/styles.ts`), zoom management hook (`useZoomManager.ts`), RightPanelContent, DocumentModals, and ContextBar components.
-- **ChatTray.tsx** (2,215 → 1,772 lines): Extracted ApprovalOverlay, ConversationListView, and chat utility functions (`chatUtils.ts`).
-- **DRY consolidation**: Extracted shared chat WebSocket types (WebSocketSources, MessageData, ContextStatus, CompactionNotice) from ChatTray and CorpusChat into canonical `components/chat/types.ts`, eliminating duplicate type definitions across 6 files.
-- **ConversationListView naming**: Renamed duplicate `ConversationListView` components to `CorpusConversationListView` (corpus chat) and `DocumentConversationListView` (document chat tray) to eliminate naming collision.
-- **STAGE_CONFIG**: Moved runtime constant from `system_settings/types.ts` to `system_settings/config.ts` (Single Responsibility Principle).
-- **EmptyStates.tsx**: Moved from `styled/` to `document_kb/` since it exports a React component, not just styled-component definitions.
-- **RightPanelContent.tsx**: Converted inline style objects to styled-components (`FlexColumnPanel`, `ExtractHeader`, etc.) for consistency.
-- **useZoomManager**: Extracted `getTouchDistance` to module level; internalized timer cleanup via `useEffect` instead of exposing refs; eliminated stale closure in zoom handlers using `zoomLevelRef`.
-- **chatUtils.ts**: Added empty-array guard in `calculateMessageStats`; replaced `Math.max(...spread)` with `reduce` to prevent stack overflow on large inputs; extracted magic numbers to `MESSAGE_COUNT_COLORS` constant.
-- **chat/types.ts**: Replaced `any` types with explicit typed properties (`args`, `pending_tool_call.arguments`, `decision`, `error`, `context_status`, `compaction`, `approval_decision`).
-- **DocumentKnowledgeBase.tsx**: Memoized `getPanelWidthPercentage` with `useCallback` to prevent auto-zoom effect from re-running on every render.
+- Split 5 large components: StyledContainers (2,115→12), SystemSettings (2,616→1,108), CorpusChat (2,347→1,346), DocumentKnowledgeBase (3,363→2,322), ChatTray (2,215→1,772)
+- Extracted shared chat WebSocket types into canonical `chat/types.ts`; renamed duplicate ConversationListView components; replaced `any` types with explicit typed properties
 
 ### Added
 
 #### Test Coverage for Untested Backend Modules (Closes #975)
-- Unit tests for five previously uncovered modules: feedback, shared (defaults, db_utils, slug_utils, utils, mixins), constants, types (enums, TypedDicts), and MCP extended (telemetry, TTLLRUCache, RateLimiter, formatters, config, permissions, URI parser) (`opencontractserver/tests/`)
+- Unit tests for feedback, shared utils, constants, types, and MCP extended modules
 
 ### Fixed
 
 #### Document Version Selector UI Cleanup (Closes #964)
-- **Query overfetching**: Removed unused `versionCount`, `hasVersionHistory`, `isLatestVersion`, and `versionNumber(corpusId:)` fields from `GET_CORPUS_VERSIONS` query (`frontend/src/graphql/queries.ts`). These fields triggered backend resolvers (including database queries for `versionNumber`) but were never consumed by the component, which derives all values from `corpusVersions.length`.
-- **Missing keyboard navigation**: Added full WAI-ARIA listbox keyboard navigation to `DocumentVersionSelector` — Arrow Up/Down to move focus, Home/End to jump to first/last option, Enter/Space to select, Escape to close and return focus to trigger (`frontend/src/components/documents/DocumentVersionSelector.tsx`). Previously keyboard-only users could not navigate the dropdown.
-- **Unsafe displayVersion fallback**: Changed fallback from hardcoded `1` to `null` with conditional rendering (`v?` placeholder) when version data is unavailable, preventing display of incorrect version numbers during initial load (`frontend/src/components/documents/DocumentVersionSelector.tsx:~183`).
-- **Backend validation gap**: Added early return for invalid version numbers (≤ 0) in `resolve_document_in_corpus_by_slugs` to avoid unnecessary database roundtrips (`config/graphql/queries.py`).
-- **isCurrent field clarity**: Added JSDoc comment to `CorpusVersion.isCurrent` interface field documenting that it means "latest (most recent) version" (`frontend/src/components/documents/DocumentVersionSelector.tsx:14`).
-- **Tests**: Updated GraphQL mocks to match trimmed query shape; added new test cases for arrow key navigation, Home/End keys, and Enter-to-select behavior (`frontend/tests/DocumentVersionSelector.ct.tsx`).
+- Removed unused query fields, added WAI-ARIA keyboard navigation, fixed unsafe version fallback, added backend validation for invalid version numbers
 
-#### Rollup Vulnerability - Arbitrary File Write via Path Traversal (Closes #973)
-- **Vulnerability**: `yarn audit` reported 3 high-severity advisories for rollup <4.59.0 (arbitrary file write via path traversal) across dependency chains: `vite > rollup`, `vitest > vite > rollup`, and `@playwright/experimental-ct-react > @playwright/experimental-ct-core > vite > rollup`
-- **Fix**: Added `rollup: "^4.59.0"` to yarn resolutions in `frontend/package.json` to force the patched version across all transitive dependency paths
+#### Rollup Vulnerability (Closes #973)
+- Pinned `rollup: "^4.59.0"` via yarn resolutions to fix 3 high-severity path traversal advisories
 - **Result**: rollup updated from 4.53.1 to 4.59.0, eliminating all 3 rollup-related audit advisories
 
 ### Added
