@@ -11,13 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Expand Corpus Import Test Coverage (Closes #999)
 - Rewrote `test_corpus_import.py` with proper `TransactionTestCase` base class (previously `ImportCorpusTestCase` with no parent, never discovered by test runners)
-- Fixed `FieldFile.save()` call signature (was passing `ContentFile` as `name` instead of `(name, content)`)
+- Fixed `FieldFile.save()` call signature in test setup helper (was passing `ContentFile` as `name` instead of `(name, content)`)
 - Grouped read-only assertions into 2 test methods using `subTest` to reduce import pipeline executions from 15 to 5
 - **Label integrity**: Validates all 107 labels (79 text + 28 doc) with correct color, icon, description, type, and labelset membership
 - **Annotation validation**: Verifies raw text, page numbers, bounding box coordinates, token references, and label associations for all 6 annotations
 - **Relationship verification**: Tests `import_relationships()` with single and multiple source/target annotations, plus structural flag preservation
 
 ### Fixed
+
+#### Skip redundant document re-parsing during corpus import
+- Set `processing_started` on standalone documents created via `create_document_from_export_data()` to prevent the post_save signal from triggering `ingest_doc` (`opencontractserver/utils/importing.py:323`)
+- Imported documents already have PAWLS data from the export; re-parsing wasted resources and failed in environments without a parser service
 
 #### Tighten JSON Field Validation for Malformed Input (Closes #1001)
 - **Root cause**: `CustomJSONFieldFormTests.TestForm` used `NullableJSONField()` (a model field) instead of `UTF8JSONFormField` (a form field). Django's `Form` metaclass silently ignores model fields, so the form had zero fields and `is_valid()` always returned `True` — masking the fact that malformed JSON was never validated.

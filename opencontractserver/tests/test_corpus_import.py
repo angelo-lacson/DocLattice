@@ -75,8 +75,8 @@ EXPECTED_DOC_LABELS = {
 EXPECTED_TEXT_ANNOTATIONS = [
     ("Parties", " ACTIVE WITH ME, Inc.", 0, "0", 4),
     ("Parties", " Sheri Strangway", 5, "5", 2),
-    ("Governing Law", None, 4, "4", 24),  # raw_text not validated (too long)
-    ("Anti-Assignment", None, 4, "4", 32),  # raw_text not validated (too long)
+    ("Governing Law", None, 4, "4", 24),  # raw_text too long to inline here
+    ("Anti-Assignment", None, 4, "4", 32),  # raw_text too long to inline here
     ("Parties", " Exhibit 10.2", 0, "0", 2),
 ]
 
@@ -128,17 +128,20 @@ class TestCorpusImport(TransactionTestCase):
             import_corpus.s(temp_file.id, self.user.id, corpus_obj.id).apply().get()
         )
         self.assertIsNotNone(result, "Import task should return a corpus ID")
+        self.assertIsInstance(
+            result, int, "Import task must return an integer corpus ID"
+        )
         return Corpus.objects.get(id=result)
 
     def _get_corpus_document(self, corpus: Corpus) -> Document:
-        """Return the corpus-isolated document (the one linked via annotations)."""
+        """Return the document linked to the corpus via its annotations."""
         doc = (
-            Document.objects.filter(annotation__corpus=corpus)
+            Document.objects.filter(doc_annotation__corpus=corpus)
             .distinct()
             .order_by("id")
             .first()
         )
-        self.assertIsNotNone(doc, "Should have a corpus-isolated document")
+        self.assertIsNotNone(doc, "Should have a corpus-linked document")
         return doc
 
     def _create_rel_label(self, text: str, color: str = "#000000") -> AnnotationLabel:
@@ -166,7 +169,8 @@ class TestCorpusImport(TransactionTestCase):
             self.assertEqual(
                 AnnotationLabel.objects.count(), EXPECTED_TOTAL_LABEL_COUNT
             )
-            self.assertEqual(Corpus.objects.count(), 1)
+            # 1 personal corpus (auto-created for user) + 1 imported corpus
+            self.assertEqual(Corpus.objects.count(), 2)
             # 1 standalone document + 1 corpus-isolated copy
             self.assertEqual(Document.objects.count(), 2)
             # 5 text annotations + 1 doc-level annotation
@@ -267,7 +271,7 @@ class TestCorpusImport(TransactionTestCase):
                     corpus=corpus,
                     document=doc,
                     annotation_label__text=label_text,
-                )
+                ).order_by("page", "id")
                 if raw_text:
                     qs = qs.filter(raw_text=raw_text)
                 annot = qs.first()
@@ -304,10 +308,11 @@ class TestCorpusImport(TransactionTestCase):
             self.assertAlmostEqual(
                 bounds["left"], EXPECTED_ACTIVE_BOUNDS["left"], places=1
             )
-            # places=0 for right: the imported value has more floating-point
-            # drift on the right edge (~0.24 units) than the other edges.
+            # Right edge has ~0.24 units of floating-point drift from
+            # coordinate aggregation across multiple tokens; delta=0.3 is the
+            # tightest tolerance that accommodates this without flaking.
             self.assertAlmostEqual(
-                bounds["right"], EXPECTED_ACTIVE_BOUNDS["right"], places=0
+                bounds["right"], EXPECTED_ACTIVE_BOUNDS["right"], delta=0.3
             )
             self.assertAlmostEqual(
                 bounds["bottom"], EXPECTED_ACTIVE_BOUNDS["bottom"], places=1
