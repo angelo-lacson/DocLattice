@@ -209,9 +209,7 @@ class CorpusForkTestCase(TransactionTestCase):
         original_docs = list(original_corpus.get_documents())
         forked_docs = list(forked_corpus.get_documents())
 
-        self.assertGreater(
-            len(original_docs), 0, "Fixture should contain documents"
-        )
+        self.assertGreater(len(original_docs), 0, "Fixture should contain documents")
         self.assertEqual(len(forked_docs), len(original_docs))
 
         # Join forked documents by source_document_id for robust matching
@@ -399,14 +397,10 @@ class CorpusForkTestCase(TransactionTestCase):
         for rel in forked_rels:
             src_ids, tgt_ids = forked_rel_annot_ids[rel.id]
             src_keys = frozenset(
-                forked_annot_by_id[aid]
-                for aid in src_ids
-                if aid in forked_annot_by_id
+                forked_annot_by_id[aid] for aid in src_ids if aid in forked_annot_by_id
             )
             tgt_keys = frozenset(
-                forked_annot_by_id[aid]
-                for aid in tgt_ids
-                if aid in forked_annot_by_id
+                forked_annot_by_id[aid] for aid in tgt_ids if aid in forked_annot_by_id
             )
             forked_rel_by_key[(src_keys, tgt_keys)] = rel
 
@@ -423,9 +417,7 @@ class CorpusForkTestCase(TransactionTestCase):
             )
 
             # O(1) lookup by content-key tuple
-            matched_forked = forked_rel_by_key.get(
-                (orig_source_keys, orig_target_keys)
-            )
+            matched_forked = forked_rel_by_key.get((orig_source_keys, orig_target_keys))
 
             self.assertIsNotNone(
                 matched_forked,
