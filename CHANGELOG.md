@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-28
 
+### Added
+
+- Expanded corpus forking test suite with field-level data integrity checks (Closes #998)
+
 ### Fixed
 
 #### Tighten JSON Field Validation for Malformed Input (Closes #1001)
