@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deleted stale comments referencing non-existent files, already-implemented features, and empty test stubs
 - Fixed typo: "whould" → "should" in `test_permissioning.py`
 
+#### Extract Magic Numbers to Constants Files (Closes #970)
+- Replaced hardcoded upload limit, truncation lengths, DPI, and title limits with named constants in `constants/document_processing.py` and `constants/llm_tools.py`
+- Reused existing `MAX_PROCESSING_ERROR_LENGTH`/`MAX_PROCESSING_TRACEBACK_LENGTH` in `corpuses/models.py`
+
 #### GraphQL Module Modularization (Closes #972)
 - Split `graphene_types.py` (3,717→107 lines), `mutations.py` (6,229→405 lines), `queries.py` (4,408→54 lines) into domain-specific files
 - Full backward compatibility via re-exports; no logic changes

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import environ
 
+from opencontractserver.constants.document_processing import MAX_FILE_UPLOAD_SIZE_BYTES
+
 ROOT_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # opencontractserver/
 APPS_DIR = ROOT_DIR / "opencontractserver"
@@ -62,7 +64,7 @@ CALLBACK_ROOT_URL_FOR_ANALYZER = env.str("CALLBACK_ROOT_URL_FOR_ANALYZER", None)
 ALLOW_GRAPHQL_DEBUG = env.bool("ALLOW_GRAPHQL_DEBUG", default=False)
 
 # Set max file upload size to 5 GB for large corpuses
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880000
+DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_FILE_UPLOAD_SIZE_BYTES
 # Local time zone. Choices are
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
 # though not all of them may be available with every OS.
