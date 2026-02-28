@@ -164,9 +164,7 @@ class FeedbackMutationPermissionTestCase(TestCase):
                 message
             }}
         }}
-        """.format(
-            annotation_id
-        )
+        """.format(annotation_id)
         return client.execute(mutation)
 
     def _reject_annotation(self, client, annotation_id):
@@ -178,9 +176,7 @@ class FeedbackMutationPermissionTestCase(TestCase):
                 message
             }}
         }}
-        """.format(
-            annotation_id
-        )
+        """.format(annotation_id)
         return client.execute(mutation)
 
     # =========================================================================

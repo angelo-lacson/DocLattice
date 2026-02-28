@@ -69,9 +69,7 @@ class DatacellMutationTestCase(TestCase):
                     }}
                 }}
             }}
-        """.format(
-            to_global_id("DatacellType", self.datacell.id)
-        )
+        """.format(to_global_id("DatacellType", self.datacell.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))
@@ -94,9 +92,7 @@ class DatacellMutationTestCase(TestCase):
                     }}
                 }}
             }}
-        """.format(
-            to_global_id("DatacellType", self.datacell.id)
-        )
+        """.format(to_global_id("DatacellType", self.datacell.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))
@@ -118,9 +114,7 @@ class DatacellMutationTestCase(TestCase):
                     }}
                 }}
             }}
-        """.format(
-            to_global_id("DatacellType", self.datacell.id)
-        )
+        """.format(to_global_id("DatacellType", self.datacell.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))
