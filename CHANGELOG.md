@@ -10,8 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Expand Corpus Import Test Coverage (Closes #999)
-- Rewrote `test_corpus_import.py` with proper `TransactionTestCase` base class (previously not discoverable by test runners)
-- **Label integrity**: Validates all 107 labels (79 text + 28 doc) are created with correct color, icon, description, type, and labelset membership
+- Rewrote `test_corpus_import.py` with proper `TransactionTestCase` base class (previously `ImportCorpusTestCase` with no parent, never discovered by test runners)
+- Fixed `FieldFile.save()` call signature (was passing `ContentFile` as `name` instead of `(name, content)`)
+- Grouped read-only assertions into 2 test methods using `subTest` to reduce import pipeline executions from 15 to 5
+- **Label integrity**: Validates all 107 labels (79 text + 28 doc) with correct color, icon, description, type, and labelset membership
 - **Annotation validation**: Verifies raw text, page numbers, bounding box coordinates, token references, and label associations for all 6 annotations
 - **Relationship verification**: Tests `import_relationships()` with single and multiple source/target annotations, plus structural flag preservation
 
