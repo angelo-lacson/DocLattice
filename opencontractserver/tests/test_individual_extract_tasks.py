@@ -17,6 +17,7 @@ from opencontractserver.tasks.data_extract_tasks import (
 )
 from opencontractserver.tests.base import BaseFixtureTestCase
 
+logger = logging.getLogger(__name__)
 vcr_log = logging.getLogger("vcr")
 vcr_log.setLevel(logging.WARNING)
 
@@ -125,7 +126,7 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
         """
         super().setUp()
 
-        logging.info("Setting up TestDocExtractQueryTaskDirect data.")
+        logger.info("Setting up TestDocExtractQueryTaskDirect data.")
 
         self.fieldset: Fieldset = Fieldset.objects.create(
             name="TestFieldsetForDirectTask",
@@ -167,7 +168,7 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
         self.extract.documents.add(self.doc, self.doc2, self.doc3)
         self.extract.save()
 
-        logging.info("Fixture data set up complete for TestDocExtractQueryTaskDirect.")
+        logger.info("Fixture data set up complete for TestDocExtractQueryTaskDirect.")
 
     @vcr.use_cassette(
         "fixtures/vcr_cassettes/test_doc_extract_query_task_directly.yaml",
@@ -180,7 +181,7 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
         in the extract and calling the task directly against them. This allows more
         focused testing without the extracts orchestration layer.
         """
-        logging.info("Starting test_doc_extract_query_task_directly.")
+        logger.info("Starting test_doc_extract_query_task_directly.")
 
         for doc in self.extract.documents.all():
 
@@ -227,4 +228,4 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
             "No DocumentAnalysisRow objects should be created here since we're only calling the single task directly.",
         )
 
-        logging.info("Completed test_doc_extract_query_task_directly.")
+        logger.info("Completed test_doc_extract_query_task_directly.")
