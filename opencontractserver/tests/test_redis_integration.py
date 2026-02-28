@@ -115,7 +115,16 @@ class TestChannelsRedisLayer(TestCase):
     Validates that WebSocket pub/sub operations work correctly with the
     current redis-py version. The notification broadcast path
     (signals.py -> group_send) relies on this layer.
+
+    Channel layer uses default expiry (60s) and capacity (100 messages),
+    which are adequate for these correctness tests.
     """
+
+    # Timeout for receive calls. Without this, a dropped message would cause
+    # the test to hang for the full channel expiry (60s). The 15-minute CI
+    # timeout would eventually catch it, but a 5s timeout gives a faster,
+    # more informative TimeoutError.
+    RECEIVE_TIMEOUT_SECONDS = 5.0
 
     def setUp(self):
         _flush_redis()
@@ -124,13 +133,24 @@ class TestChannelsRedisLayer(TestCase):
     def tearDown(self):
         _flush_redis()
 
+    def _timed_receive(self, channel_name):
+        """Receive with a timeout to prevent hanging on dropped messages."""
+
+        async def _receive():
+            return await asyncio.wait_for(
+                self.channel_layer.receive(channel_name),
+                timeout=self.RECEIVE_TIMEOUT_SECONDS,
+            )
+
+        return async_to_sync(_receive)()
+
     def test_send_receive(self):
         """Basic channel send/receive round-trip."""
         channel_name = async_to_sync(self.channel_layer.new_channel)()
         message = {"type": "test.message", "text": "hello"}
 
         async_to_sync(self.channel_layer.send)(channel_name, message)
-        received = async_to_sync(self.channel_layer.receive)(channel_name)
+        received = self._timed_receive(channel_name)
 
         assert received["type"] == "test.message"
         assert received["text"] == "hello"
@@ -156,7 +176,7 @@ class TestChannelsRedisLayer(TestCase):
         async_to_sync(self.channel_layer.group_send)(group_name, message)
 
         # Receive from the channel
-        received = async_to_sync(self.channel_layer.receive)(channel_name)
+        received = self._timed_receive(channel_name)
         assert received["type"] == "notification.message"
         assert received["data"]["id"] == 1
 
@@ -198,6 +218,10 @@ class TestCeleryRedisBackend(TestCase):
     serialization/deserialization work correctly with redis-py 7.x.
     Tests the broker connection directly and exercises the result backend's
     store/retrieve path, which is the code path sensitive to RESP3 changes.
+
+    These tests deliberately bypass actual task dispatch (no worker needed)
+    by calling store_result() / AsyncResult() directly. This isolates the
+    RESP3 serialization path without requiring a running Celery worker.
     """
 
     def setUp(self):
