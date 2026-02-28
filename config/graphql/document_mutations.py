@@ -343,13 +343,15 @@ class UpdateDocumentSummary(graphene.Mutation):
                         version=None,
                     )
             else:
-                # If no summary exists, check corpus permissions via guardian
-                if not user_has_permission_for_obj(
+                # If no summary exists, check corpus permissions:
+                # creator OR explicit guardian update permission
+                has_perm = corpus.creator == user or user_has_permission_for_obj(
                     user_val=user,
                     instance=corpus,
                     permission=PermissionTypes.UPDATE,
                     include_group_permissions=True,
-                ):
+                )
+                if not has_perm:
                     return UpdateDocumentSummary(
                         ok=False,
                         message=not_found_msg,
@@ -386,9 +388,10 @@ class UpdateDocumentSummary(graphene.Mutation):
             )
 
         except Exception as e:
+            logger.error(f"Error updating document summary: {str(e)}")
             return UpdateDocumentSummary(
                 ok=False,
-                message=f"Error updating document summary: {str(e)}",
+                message="Error updating document summary.",
                 obj=None,
                 version=None,
             )
@@ -1282,7 +1285,7 @@ class RestoreDeletedDocument(graphene.Mutation):
             if not deleted_path:
                 return RestoreDeletedDocument(
                     ok=False,
-                    message=not_found_msg,
+                    message="Document is not currently in a deleted state in this corpus.",
                     document=None,
                 )
 
