@@ -75,8 +75,8 @@ EXPECTED_DOC_LABELS = {
 EXPECTED_TEXT_ANNOTATIONS = [
     ("Parties", " ACTIVE WITH ME, Inc.", 0, "0", 4),
     ("Parties", " Sheri Strangway", 5, "5", 2),
-    ("Governing Law", None, 4, "4", 24),  # raw_text checked separately (long)
-    ("Anti-Assignment", None, 4, "4", 32),
+    ("Governing Law", None, 4, "4", 24),  # raw_text not validated (too long)
+    ("Anti-Assignment", None, 4, "4", 32),  # raw_text not validated (too long)
     ("Parties", " Exhibit 10.2", 0, "0", 2),
 ]
 
@@ -132,9 +132,26 @@ class TestCorpusImport(TransactionTestCase):
 
     def _get_corpus_document(self, corpus: Corpus) -> Document:
         """Return the corpus-isolated document (the one linked via annotations)."""
-        doc = Document.objects.filter(annotation__corpus=corpus).distinct().first()
+        doc = (
+            Document.objects.filter(annotation__corpus=corpus)
+            .distinct()
+            .order_by("id")
+            .first()
+        )
         self.assertIsNotNone(doc, "Should have a corpus-isolated document")
         return doc
+
+    def _create_rel_label(self, text: str, color: str = "#000000") -> AnnotationLabel:
+        """Create a relationship label with permissions for self.user."""
+        label = AnnotationLabel.objects.create(
+            text=text,
+            label_type=RELATIONSHIP_LABEL,
+            color=color,
+            icon="tag",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, label, [PermissionTypes.ALL])
+        return label
 
     # ------------------------------------------------------------------
     # Object counts and label integrity (issue #999 requirement 1)
@@ -287,6 +304,8 @@ class TestCorpusImport(TransactionTestCase):
             self.assertAlmostEqual(
                 bounds["left"], EXPECTED_ACTIVE_BOUNDS["left"], places=1
             )
+            # places=0 for right: the imported value has more floating-point
+            # drift on the right edge (~0.24 units) than the other edges.
             self.assertAlmostEqual(
                 bounds["right"], EXPECTED_ACTIVE_BOUNDS["right"], places=0
             )
@@ -335,14 +354,7 @@ class TestCorpusImport(TransactionTestCase):
         self.assertIsNotNone(source_annot)
         self.assertIsNotNone(target_annot)
 
-        rel_label = AnnotationLabel.objects.create(
-            text="references",
-            label_type=RELATIONSHIP_LABEL,
-            color="#000000",
-            icon="tag",
-            creator=self.user,
-        )
-        set_permissions_for_obj_to_user(self.user, rel_label, [PermissionTypes.ALL])
+        rel_label = self._create_rel_label("references")
 
         annotation_id_map = {
             str(source_annot.pk): source_annot.pk,
@@ -407,14 +419,7 @@ class TestCorpusImport(TransactionTestCase):
         self.assertIsNotNone(gov_law)
         self.assertIsNotNone(anti_assign)
 
-        rel_label = AnnotationLabel.objects.create(
-            text="related_to",
-            label_type=RELATIONSHIP_LABEL,
-            color="#112233",
-            icon="tag",
-            creator=self.user,
-        )
-        set_permissions_for_obj_to_user(self.user, rel_label, [PermissionTypes.ALL])
+        rel_label = self._create_rel_label("related_to", color="#112233")
 
         all_pks = [a.pk for a in parties_annots] + [gov_law.pk, anti_assign.pk]
         annotation_id_map = {str(pk): pk for pk in all_pks}
@@ -438,6 +443,9 @@ class TestCorpusImport(TransactionTestCase):
             annotation_id_map=annotation_id_map,
         )
 
+        self.assertEqual(len(result), 1)
+        self.assertIn("rel_multi", result)
+
         rel = result["rel_multi"]
         self.assertEqual(rel.source_annotations.count(), 2)
         self.assertEqual(rel.target_annotations.count(), 2)
@@ -456,14 +464,7 @@ class TestCorpusImport(TransactionTestCase):
         annots = list(Annotation.objects.filter(corpus=corpus, document=doc)[:2])
         self.assertEqual(len(annots), 2)
 
-        rel_label = AnnotationLabel.objects.create(
-            text="structural_ref",
-            label_type=RELATIONSHIP_LABEL,
-            color="#445566",
-            icon="tag",
-            creator=self.user,
-        )
-        set_permissions_for_obj_to_user(self.user, rel_label, [PermissionTypes.ALL])
+        rel_label = self._create_rel_label("structural_ref", color="#445566")
 
         annotation_id_map = {str(a.pk): a.pk for a in annots}
 
@@ -486,4 +487,6 @@ class TestCorpusImport(TransactionTestCase):
             annotation_id_map=annotation_id_map,
         )
 
+        self.assertEqual(len(result), 1)
+        self.assertIn("rel_struct", result)
         self.assertTrue(result["rel_struct"].structural)
