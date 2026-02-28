@@ -94,7 +94,9 @@ class TestSetCorpusVisibilityMutation(TestCase):
         client = Client(schema, context_value=TestContext(self.owner))
 
         # Mock the celery task to avoid async issues in tests
-        with patch("config.graphql.mutations.make_corpus_public_task") as mock_task:
+        with patch(
+            "config.graphql.corpus_mutations.make_corpus_public_task"
+        ) as mock_task:
             mock_task.si.return_value.apply_async.return_value = None
             result = client.execute(self.MUTATION, variable_values=variables)
 
@@ -145,7 +147,9 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
         client = Client(schema, context_value=TestContext(self.other_user))
 
-        with patch("config.graphql.mutations.make_corpus_public_task") as mock_task:
+        with patch(
+            "config.graphql.corpus_mutations.make_corpus_public_task"
+        ) as mock_task:
             mock_task.si.return_value.apply_async.return_value = None
             result = client.execute(self.MUTATION, variable_values=variables)
 
@@ -161,7 +165,9 @@ class TestSetCorpusVisibilityMutation(TestCase):
 
         client = Client(schema, context_value=TestContext(self.superuser))
 
-        with patch("config.graphql.mutations.make_corpus_public_task") as mock_task:
+        with patch(
+            "config.graphql.corpus_mutations.make_corpus_public_task"
+        ) as mock_task:
             mock_task.si.return_value.apply_async.return_value = None
             result = client.execute(self.MUTATION, variable_values=variables)
 
