@@ -1,36 +1,67 @@
 import { useState, useEffect } from "react";
+import { useLazyQuery } from "@apollo/client";
+import {
+  SEARCH_USERS_FOR_MENTION,
+  SearchUsersForMentionInput,
+  SearchUsersForMentionOutput,
+} from "../../../graphql/queries";
 import { MentionUser } from "../MentionPicker";
 
 /**
- * Hook to fetch users for @mention autocomplete
+ * Hook to fetch users for @mention autocomplete via GraphQL.
  *
- * TODO: Replace with real GraphQL query when backend supports user search
- * For now, returns mock users for demonstration purposes
+ * Uses SEARCH_USERS_FOR_MENTION query with debounced input.
+ * Backend filters results by privacy settings via UserQueryOptimizer.
+ *
+ * Part of Issue #1002 - Replace mock data with real user query
+ *
+ * @param query - Search query string
+ * @param debounceMs - Debounce delay in milliseconds (default: 300)
+ * @param minChars - Minimum characters before searching (default: 2)
  */
-export function useMentionUsers(query: string): MentionUser[] {
-  const [users, setUsers] = useState<MentionUser[]>([]);
+export function useMentionUsers(
+  query: string,
+  debounceMs: number = 300,
+  minChars: number = 2
+) {
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
 
+  const [searchUsers, { data, loading, error }] = useLazyQuery<
+    SearchUsersForMentionOutput,
+    SearchUsersForMentionInput
+  >(SEARCH_USERS_FOR_MENTION, {
+    fetchPolicy: "network-only",
+  });
+
+  // Debounce the query
   useEffect(() => {
-    // Mock users - in production, this would be a GraphQL query
-    const mockUsers: MentionUser[] = [
-      { id: "1", username: "admin", email: "admin@example.com" },
-      { id: "2", username: "moderator", email: "moderator@example.com" },
-      { id: "3", username: "analyst", email: "analyst@example.com" },
-      { id: "4", username: "reviewer", email: "reviewer@example.com" },
-      { id: "5", username: "contributor", email: "contributor@example.com" },
-    ];
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, debounceMs);
 
-    // Filter users based on query
-    const filtered = query
-      ? mockUsers.filter(
-          (user) =>
-            user.username.toLowerCase().includes(query.toLowerCase()) ||
-            user.email?.toLowerCase().includes(query.toLowerCase())
-        )
-      : mockUsers;
+    return () => clearTimeout(timer);
+  }, [query, debounceMs]);
 
-    setUsers(filtered.slice(0, 5)); // Limit to 5 results
-  }, [query]);
+  // Execute search when debounced query changes
+  useEffect(() => {
+    if (debouncedQuery.length < minChars) {
+      return;
+    }
 
-  return users;
+    searchUsers({ variables: { textSearch: debouncedQuery } });
+  }, [debouncedQuery, minChars, searchUsers]);
+
+  // Map GraphQL response to MentionUser[]
+  const users: MentionUser[] =
+    data?.searchUsersForMention?.edges?.map((edge) => ({
+      id: edge.node.id,
+      username: edge.node.username,
+      email: edge.node.email ?? undefined,
+    })) ?? [];
+
+  return {
+    users,
+    loading,
+    error: error ?? null,
+  };
 }
