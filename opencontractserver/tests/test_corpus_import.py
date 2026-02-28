@@ -38,21 +38,25 @@ EXPECTED_TEXT_LABELS = {
         "color": "#c17717",
         "icon": "tag",
         "description": "Add a description for Parties",
+        "label_type": TOKEN_LABEL,
     },
     "Governing Law": {
         "color": "#21baa8",
         "icon": "tag",
         "description": "Add a description for Governing Law",
+        "label_type": TOKEN_LABEL,
     },
     "Anti-Assignment": {
         "color": "#7903af",
         "icon": "tag",
         "description": "Add a description for Anti-Assignment",
+        "label_type": TOKEN_LABEL,
     },
     "Effective Date": {
         "color": "#075b82",
         "icon": "tag",
         "description": "Add a description for Effective Date",
+        "label_type": TOKEN_LABEL,
     },
 }
 
@@ -62,21 +66,26 @@ EXPECTED_DOC_LABELS = {
         "color": "#0f4996",
         "icon": "tag",
         "description": "Add a description for Supply",
+        "label_type": DOC_TYPE_LABEL,
     },
     "License_Agreements": {
         "color": "#cd0ed3",
         "icon": "tag",
         "description": "Add a description for License_Agreements",
+        "label_type": DOC_TYPE_LABEL,
     },
 }
 
-# The fixture has one document with 5 text-level annotations.
+# The fixture has one document with 5 text-level annotations and 1 doc-level
+# annotation (6 total).
 # Each entry: (label_text, raw_text, page, expected_page_key, token_count).
+# None for raw_text means the text is too long to inline; the raw_text_and_page
+# subtest skips these entries and they are matched by label + page in other subtests.
 EXPECTED_TEXT_ANNOTATIONS = [
     ("Parties", " ACTIVE WITH ME, Inc.", 0, "0", 4),
     ("Parties", " Sheri Strangway", 5, "5", 2),
-    ("Governing Law", None, 4, "4", 24),  # raw_text too long to inline here
-    ("Anti-Assignment", None, 4, "4", 32),  # raw_text too long to inline here
+    ("Governing Law", None, 4, "4", 24),
+    ("Anti-Assignment", None, 4, "4", 32),
     ("Parties", " Exhibit 10.2", 0, "0", 2),
 ]
 
@@ -93,8 +102,9 @@ class TestCorpusImport(TransactionTestCase):
     """
     Tests for the corpus import pipeline.
 
-    Validates field-level integrity of labels, annotations, and
-    relationships after importing Test_Corpus_EXPORT.zip (V1 format).
+    Validates field-level integrity of labels, annotations (5 text-level +
+    1 doc-level = 6 total), and relationships after importing
+    Test_Corpus_EXPORT.zip (V1 format).
 
     Read-only assertions are grouped into fewer test methods using subTest
     to minimize redundant import executions (each TransactionTestCase test
@@ -173,8 +183,9 @@ class TestCorpusImport(TransactionTestCase):
             self.assertEqual(
                 AnnotationLabel.objects.count(), EXPECTED_TOTAL_LABEL_COUNT
             )
-            # 1 personal corpus (auto-created for user) + 1 imported corpus
-            self.assertEqual(Corpus.objects.count(), 2)
+            # Assert the imported corpus exists (avoid relying on total count
+            # which depends on signal-created personal corpus).
+            self.assertEqual(Corpus.objects.filter(title="New Import").count(), 1)
             # 1 standalone document + 1 corpus-isolated copy
             self.assertEqual(Document.objects.count(), 2)
             # 5 text annotations + 1 doc-level annotation
