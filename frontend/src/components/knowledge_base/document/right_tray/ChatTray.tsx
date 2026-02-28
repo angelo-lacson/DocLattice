@@ -1479,6 +1479,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                         }));
                         // Update URL with annotation selection (single source of truth)
                         if (source.annotation_id) {
+                          // "AnnotationType" matches the Graphene class
+                          // name in config/graphql/annotation_types.py.
                           const globalId = toGlobalId(
                             "AnnotationType",
                             source.annotation_id

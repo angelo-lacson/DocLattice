@@ -31,7 +31,7 @@ import {
   encodeTextBlock,
   textBlockFromTokensByPage,
 } from "../../../../utils/textBlockEncoding";
-import { SELECTION_MENU } from "../../../../assets/configurations/constants";
+import { clampMenuPosition } from "../../../../utils/layout";
 
 interface SelectionLayerProps {
   pageInfo: PDFPageInfo;
@@ -95,43 +95,6 @@ const SelectionLayer = ({
   // Check if corpus has labelset
   const hasLabelset = Boolean(selectedCorpus?.labelSet);
   const hasLabels = humanTokenLabels.length > 0 || humanSpanLabels.length > 0;
-
-  /**
-   * Calculate menu position to ensure it stays within viewport
-   */
-  const calculateMenuPosition = (mouseX: number, mouseY: number) => {
-    // Menu dimensions (approximate based on styled component)
-    const menuWidth = SELECTION_MENU.APPROX_WIDTH;
-    const menuHeight = SELECTION_MENU.APPROX_HEIGHT;
-
-    // Get viewport dimensions
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    // Calculate initial position (slightly offset from cursor)
-    let x = mouseX + 10;
-    let y = mouseY + 10;
-
-    // Check right edge
-    if (x + menuWidth > viewportWidth) {
-      // Position menu to the left of cursor if it would go off-screen
-      x = Math.max(10, mouseX - menuWidth - 10);
-    }
-
-    // Check bottom edge
-    if (y + menuHeight > viewportHeight) {
-      // Position menu above cursor if it would go off-screen
-      y = Math.max(10, mouseY - menuHeight - 10);
-    }
-
-    // Ensure menu doesn't go off left edge
-    x = Math.max(10, x);
-
-    // Ensure menu doesn't go off top edge
-    y = Math.max(10, y);
-
-    return { x, y };
-  };
 
   /**
    * Handles the creation of a multi-page annotation.
@@ -230,7 +193,11 @@ const SelectionLayer = ({
       .map(Number)
       .sort((a, b) => a - b);
 
-    // Collect token IDs across all selected pages
+    // Collect token IDs across selected pages.
+    // Note: pendingSelections only contains data for this SelectionLayer's
+    // page (each page gets its own SelectionLayer instance), so the `pages`
+    // array always has exactly one entry.  The loop is kept for structural
+    // consistency with handleCopyText and handleCreateMultiPageAnnotation.
     const tokensByPage: Record<number, TokenId[]> = {};
     for (const pageNum of pages) {
       const pageAnnotation = pageInfo.getPageAnnotationJson(
@@ -304,7 +271,7 @@ const SelectionLayer = ({
           if (!event.shiftKey) {
             // Instead of immediately creating annotation, show action menu
             setPendingSelections(updatedSelections);
-            const menuPos = calculateMenuPosition(event.clientX, event.clientY);
+            const menuPos = clampMenuPosition(event.clientX, event.clientY);
             setActionMenuPosition(menuPos);
             setShowActionMenu(true);
           }
@@ -548,7 +515,7 @@ const SelectionLayer = ({
           setPendingSelections(updatedSelections);
           // Use last touch position for menu
           const touch = event.changedTouches[0];
-          const menuPos = calculateMenuPosition(touch.clientX, touch.clientY);
+          const menuPos = clampMenuPosition(touch.clientX, touch.clientY);
           setActionMenuPosition(menuPos);
           setShowActionMenu(true);
 
@@ -564,7 +531,6 @@ const SelectionLayer = ({
       localPageSelection,
       pageNumber,
       setIsCreatingAnnotation,
-      calculateMenuPosition,
     ]
   );
 

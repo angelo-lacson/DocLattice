@@ -701,7 +701,8 @@ export function updateAnnotationSelectionParams(
 ) {
   const searchParams = new URLSearchParams(location.search);
 
-  // Update only specified params
+  // Update only specified params.
+  // An empty array removes the param from the URL (clears the selection).
   if (selection.annotationIds !== undefined) {
     if (selection.annotationIds.length > 0) {
       searchParams.set("ann", selection.annotationIds.join(","));

@@ -39,7 +39,7 @@ import {
   HelpMessage,
   HelpText,
 } from "../../components/SelectionActionMenu";
-import { SELECTION_MENU } from "../../../../assets/configurations/constants";
+import { clampMenuPosition } from "../../../../utils/layout";
 
 /**
  * Shape of an individual text chunk used to render text spans.
@@ -816,17 +816,7 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
       setPendingSelection({ start, end, text: selectedText });
 
       // Position menu near cursor, clamped to viewport
-      const menuWidth = SELECTION_MENU.APPROX_WIDTH;
-      const menuHeight = SELECTION_MENU.APPROX_HEIGHT;
-      let x = event.clientX + 5;
-      let y = event.clientY + 5;
-      if (x + menuWidth > window.innerWidth - 10) {
-        x = event.clientX - menuWidth - 5;
-      }
-      if (y + menuHeight > window.innerHeight - 10) {
-        y = event.clientY - menuHeight - 5;
-      }
-      setActionMenuPosition({ x: Math.max(10, x), y: Math.max(10, y) });
+      setActionMenuPosition(clampMenuPosition(event.clientX, event.clientY));
       setShowActionMenu(true);
     }
   };
