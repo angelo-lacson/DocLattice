@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### GraphQL Module Modularization (Closes #972)
+- **Split `config/graphql/graphene_types.py`** (3,717 lines → 107-line re-export): Extracted 80+ GraphQL type definitions into 10 domain-specific files: `base_types.py`, `user_types.py`, `annotation_types.py`, `document_types.py`, `corpus_types.py`, `extract_types.py`, `agent_types.py`, `conversation_types.py`, `social_types.py`, `pipeline_types.py`
+- **Split `config/graphql/mutations.py`** (6,229 lines → 405-line composition): Extracted 79 inline mutation classes into 8 new domain files: `analysis_mutations.py`, `annotation_mutations.py`, `document_relationship_mutations.py`, `label_mutations.py`, `corpus_mutations.py`, `document_mutations.py`, `extract_mutations.py`, `user_mutations.py` — joining 10 previously-extracted mutation files
+- **Split `config/graphql/queries.py`** (4,408 lines → 54-line composition): Extracted all query resolvers into 13 mixin classes: `UserQueryMixin`, `SlugQueryMixin`, `AnnotationQueryMixin`, `DocumentQueryMixin`, `CorpusQueryMixin`, `ExtractQueryMixin`, `ConversationQueryMixin`, `SearchQueryMixin`, `SocialQueryMixin`, `ActionQueryMixin`, `PipelineQueryMixin`, `OGMetadataQueryMixin`, `WorkerQueryMixin`
+- **Full backward compatibility**: Original import paths (`from config.graphql.graphene_types import X`, etc.) continue to work via re-exports
+- **No logic changes**: All class definitions, resolvers, and mutations moved exactly as-is
+
 #### Consolidate Duplicate String Truncation Utilities (Closes #976)
 - **New helper**: `opencontractserver/utils/text.py` — added `truncate(text, max_length, suffix="")` centralising all string-truncation logic
 - **New constants**: `opencontractserver/constants/truncation.py` — `MAX_NOTE_CONTENT_PREVIEW_LENGTH` (512), `MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH` (200), `MAX_LINK_TITLE_LENGTH` (100), `MAX_DOC_TITLE_FALLBACK_LENGTH` (50), `MAX_NOTIFICATION_ERROR_LENGTH` (500)
