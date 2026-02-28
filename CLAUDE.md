@@ -168,10 +168,10 @@ docker compose -f production.yml up
    - Dual-layer architecture: Document layer (annotations) + Knowledge layer (summaries)
 
 4. **Unified Filtering Architecture**:
-   - `useVisibleAnnotations` and `useVisibleRelationships` hooks provide parallel filtering
-   - Both read from Apollo reactive vars (`showStructuralAnnotations`, `showSelectedAnnotationOnly` in `cache.ts`)
+   - `useVisibleAnnotations` hook provides single-source-of-truth filtering for both annotations and relationship-connected annotations
+   - Reads from Jotai atoms via `useAnnotationDisplay`, `useAnnotationControls`, and `useAnnotationSelection` (from `UISettingsAtom`)
    - Ensures consistency across all components
-   - Forced visibility for selected items and their connections
+   - Forced visibility for selected items and their relationship connections
 
 5. **Component Testing** (see `.cursor/rules/test-document-knowledge-base.mdc`):
    - **ALWAYS mount components through test wrappers** (e.g., `DocumentKnowledgeBaseTestWrapper`)

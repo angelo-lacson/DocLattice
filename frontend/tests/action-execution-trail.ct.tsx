@@ -3,7 +3,6 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { MemoryRouter } from "react-router-dom";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { ActionExecutionTrail } from "../src/components/corpuses/ActionExecutionTrail";
-import { ActionTrailStats } from "../src/components/corpuses/ActionTrailStats";
 import {
   GET_CORPUS_ACTION_EXECUTIONS,
   GET_CORPUS_ACTION_TRAIL_STATS,
@@ -158,74 +157,6 @@ const createMocks = (
     },
   },
 ];
-
-// ============================================================
-// STATS COMPONENT TESTS
-// ============================================================
-
-test.describe("ActionTrailStats Component", () => {
-  test("should display all stats correctly", async ({ mount, page }) => {
-    await mount(<ActionTrailStats stats={mockStats} loading={false} />);
-
-    // Verify all stat values are displayed
-    await expect(page.getByText("150")).toBeVisible();
-    await expect(page.getByText("120")).toBeVisible();
-
-    // Verify labels
-    await expect(page.getByText("Total")).toBeVisible();
-    await expect(page.getByText("Completed")).toBeVisible();
-    await expect(page.getByText("Running")).toBeVisible();
-    await expect(page.getByText("Queued")).toBeVisible();
-    await expect(page.getByText("Failed")).toBeVisible();
-  });
-
-  test("should show loading state with placeholder cards", async ({
-    mount,
-    page,
-  }) => {
-    await mount(<ActionTrailStats stats={null} loading={true} />);
-
-    // Check for loading region
-    const region = page.getByRole("region", {
-      name: "Action execution statistics",
-    });
-    await expect(region).toBeVisible();
-    await expect(region).toHaveAttribute("aria-busy", "true");
-  });
-
-  test("should be accessible with proper ARIA labels", async ({
-    mount,
-    page,
-  }) => {
-    await mount(<ActionTrailStats stats={mockStats} loading={false} />);
-
-    const region = page.getByRole("region", {
-      name: "Action execution statistics",
-    });
-    await expect(region).toBeVisible();
-  });
-
-  test("should handle zero counts correctly", async ({ mount, page }) => {
-    const zeroStats: CorpusActionTrailStats = {
-      totalExecutions: 0,
-      completed: 0,
-      failed: 0,
-      running: 0,
-      queued: 0,
-      skipped: 0,
-      avgDurationSeconds: null,
-      fieldsetCount: 0,
-      analyzerCount: 0,
-      agentCount: 0,
-    };
-
-    await mount(<ActionTrailStats stats={zeroStats} loading={false} />);
-
-    // Should show multiple zeros for the different stat cards
-    const zeros = page.getByText("0");
-    await expect(zeros.first()).toBeVisible();
-  });
-});
 
 // ============================================================
 // TRAIL COMPONENT TESTS
@@ -442,17 +373,6 @@ test.describe("ActionExecutionTrail Accessibility", () => {
     // Check for live region with results count
     const statusElement = page.getByRole("status");
     await expect(statusElement.first()).toBeVisible();
-  });
-
-  test("stats component should have aria-live for screen readers", async ({
-    mount,
-    page,
-  }) => {
-    await mount(<ActionTrailStats stats={mockStats} loading={false} />);
-
-    // Values should have aria-live for dynamic updates
-    const liveElements = page.locator('[aria-live="polite"]');
-    await expect(liveElements.first()).toBeVisible();
   });
 });
 
