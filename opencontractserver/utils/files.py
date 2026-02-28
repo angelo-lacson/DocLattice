@@ -87,6 +87,8 @@ def createHighlight(
 
 
 def add_highlight_to_new_page(highlight: DictionaryObject, page, output):
+    # NOTE(deferred): `page` and `output` are untyped (PyPDF PageObject /
+    # PdfWriter). Adding hints is deferred — this is internal to etl.py.
     highlight_ref = output._add_object(highlight)
 
     if "/Annots" in page:
