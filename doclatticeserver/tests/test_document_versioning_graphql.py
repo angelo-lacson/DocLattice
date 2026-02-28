@@ -941,7 +941,7 @@ class TestRestoreDeletedDocumentMutation(TestCase):
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["restoreDeletedDocument"]["ok"])
         self.assertIn(
-            "Cannot restore document",
+            "not currently in a deleted state",
             result["data"]["restoreDeletedDocument"]["message"],
         )
 
