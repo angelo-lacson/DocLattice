@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-02-28
 
+### Fixed
+
+#### Tighten JSON Field Validation for Malformed Input (Closes #1001)
+- **Root cause**: `CustomJSONFieldFormTests.TestForm` used `NullableJSONField()` (a model field) instead of `UTF8JSONFormField` (a form field). Django's `Form` metaclass silently ignores model fields, so the form had zero fields and `is_valid()` always returned `True` — masking the fact that malformed JSON was never validated.
+- **Fix**: Changed `TestForm.json_field` to `UTF8JSONFormField(required=False)` so form validation actually runs through Django's `forms.JSONField.to_python()`, which raises `ValidationError` on `json.JSONDecodeError` (`opencontractserver/tests/test_custom_fields.py:76`).
+- **Re-enabled**: `test_form_with_invalid_json` now asserts that `'not json'` is correctly rejected (`opencontractserver/tests/test_custom_fields.py:90-92`).
+- **Added**: `test_formfield_rejects_invalid_json` and `test_formfield_accepts_valid_json` integration tests on `NullableJSONFieldTests` to verify the model field's `formfield()` method produces a form field that properly validates JSON (`opencontractserver/tests/test_custom_fields.py:63-71`).
+
 ### Changed
 
 #### Triage and Clean Up TODO/FIXME Comments (Closes #971)
@@ -42,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `test_exported_label_names_match_fixture` to verify exported label name sets match the labels actually used in the import fixture (`opencontractserver/tests/test_corpus_export.py`)
 - Loaded import fixture data in setUp for round-trip comparison, replacing the previous TODO placeholder (`opencontractserver/tests/test_corpus_export.py:62`)
 - Cleaned up existing tests by removing verbose print statements and TODO comments
+
+#### Expand burn_doc_annotations Test (Closes #1000)
+- Added `test_burn_doc_annotations_with_text_labels` to exercise the text-label PDF burning code path with TOKEN_LABEL fixtures and bounding-box annotation data (`opencontractserver/tests/test_doc_tasks.py`)
+- Validates output PDF contains highlight annotations with correct subtype, label text, and non-empty base64-encoded content
+- Validates `doc_export` JSON contains expected `doc_labels` and `labelled_text` entries
+- Renamed existing test to `test_burn_doc_annotations_doc_labels_only` for clarity
 
 #### Test Coverage for Untested Backend Modules (Closes #975)
 - Unit tests for feedback, shared utils, constants, types, and MCP extended modules
