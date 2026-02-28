@@ -337,8 +337,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
 
         # Query for analysis
         analysis_id = to_global_id("AnalysisType", self.analysis_x.id)
-        query = (
-            """
+        query = """
         query {
             analysis(id: "%s") {
                 id
@@ -354,9 +353,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
                 }
             }
         }
-        """
-            % analysis_id
-        )
+        """ % analysis_id
 
         result = self.client_alice.execute(query)
 
@@ -400,8 +397,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
 
         # Query for analysis
         analysis_id = to_global_id("AnalysisType", self.analysis_x.id)
-        query = (
-            """
+        query = """
         query {
             analysis(id: "%s") {
                 id
@@ -413,9 +409,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
                 }
             }
         }
-        """
-            % analysis_id
-        )
+        """ % analysis_id
 
         result = self.client_bob.execute(query)
 
@@ -456,8 +450,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
 
         # Query for analysis
         analysis_id = to_global_id("AnalysisType", self.analysis_y.id)
-        query = (
-            """
+        query = """
         query {
             analysis(id: "%s") {
                 id
@@ -472,9 +465,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
                 }
             }
         }
-        """
-            % analysis_id
-        )
+        """ % analysis_id
 
         result = self.client_charlie.execute(query)
 
@@ -512,8 +503,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
 
         # Query for analysis
         analysis_id = to_global_id("AnalysisType", self.analysis_x.id)
-        query = (
-            """
+        query = """
         query {
             analysis(id: "%s") {
                 id
@@ -522,9 +512,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
                 }
             }
         }
-        """
-            % analysis_id
-        )
+        """ % analysis_id
 
         result = self.client_bob.execute(query)
 
@@ -558,8 +546,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
         )
 
         extract_id = to_global_id("ExtractType", self.extract_x.id)
-        query = (
-            """
+        query = """
         query {
             extract(id: "%s") {
                 id
@@ -572,9 +559,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
                 }
             }
         }
-        """
-            % extract_id
-        )
+        """ % extract_id
 
         # Test Alice - should see both datacells
         result_alice = self.client_alice.execute(query)
@@ -624,8 +609,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
 
         # Query for analysis
         analysis_id = to_global_id("AnalysisType", self.analysis_x.id)
-        query = (
-            """
+        query = """
         query {
             analysis(id: "%s") {
                 id
@@ -634,9 +618,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
                 }
             }
         }
-        """
-            % analysis_id
-        )
+        """ % analysis_id
 
         result = client_dave.execute(query)
 
@@ -725,8 +707,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
 
         # Query for analysis X (superuser has no explicit permissions)
         analysis_id = to_global_id("AnalysisType", self.analysis_x.id)
-        query = (
-            """
+        query = """
         query {
             analysis(id: "%s") {
                 id
@@ -737,9 +718,7 @@ class AnalysisExtractHybridPermissionTestCase(TestCase):
                 }
             }
         }
-        """
-            % analysis_id
-        )
+        """ % analysis_id
 
         result = self.client_super.execute(query)
 

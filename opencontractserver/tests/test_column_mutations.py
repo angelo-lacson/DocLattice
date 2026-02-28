@@ -82,9 +82,7 @@ class ColumnMutationTestCase(TestCase):
                     ok
                 }}
             }}
-        """.format(
-            to_global_id("ColumnType", self.column.id)
-        )
+        """.format(to_global_id("ColumnType", self.column.id))
 
         result = self.client.execute(mutation)
         self.assertIsNone(result.get("errors"))
