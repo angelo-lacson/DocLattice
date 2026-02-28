@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Corpus Export Test Coverage (Closes #997)
+- Added `test_exported_document_structure` to validate exported document data structure: top-level keys, PAWLS page schema, annotation structure with bounding boxes and token references, and PDF burn-in validity (`opencontractserver/tests/test_corpus_export.py`)
+- Added `test_round_trip_consistency` to compare exported data against original import fixture: document title, content, PAWLS page dimensions and token counts, annotation count, raw text, label names (mapped through label lookups), and bounding box coordinates (`opencontractserver/tests/test_corpus_export.py`)
+- Added `test_exported_label_names_match_fixture` to verify exported label name sets match the labels actually used in the import fixture (`opencontractserver/tests/test_corpus_export.py`)
+- Loaded import fixture data in setUp for round-trip comparison, replacing the previous TODO placeholder (`opencontractserver/tests/test_corpus_export.py:62`)
+- Cleaned up existing tests by removing verbose print statements and TODO comments
+
 #### Expand burn_doc_annotations Test (Closes #1000)
 - Added `test_burn_doc_annotations_with_text_labels` to exercise the text-label PDF burning code path with TOKEN_LABEL fixtures and bounding-box annotation data (`opencontractserver/tests/test_doc_tasks.py`)
 - Validates output PDF contains highlight annotations with correct subtype, label text, and non-empty base64-encoded content
