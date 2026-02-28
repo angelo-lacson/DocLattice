@@ -938,17 +938,17 @@ export function updateTocExpandedParam(
 
 /**
  * Update corpus detail view selection in URL
- * Used for switching between landing view and details view on corpus home.
+ * Used for switching between landing, details, and discussions views on corpus home.
  * Pushes a new history entry so browser back/forward navigates between views.
  * @param location - React Router location object
  * @param navigate - React Router navigate function
- * @param view - View identifier ("landing" or "details")
+ * @param view - View identifier ("landing", "details", or "discussions")
  *               Pass "landing" or null to clear and use default (landing)
  */
 export function updateDetailViewParam(
   location: LocationLike,
   navigate: NavigateFn,
-  view: "landing" | "details" | null
+  view: "landing" | "details" | "discussions" | null
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (view && view !== "landing") {
@@ -1001,6 +1001,28 @@ export function navigateToThreadWithMessage(
     searchParams.set("message", messageId);
   }
   navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update corpus view mode in URL.
+ * Used for toggling between the clean landing experience and power user mode.
+ * Pushes a new history entry so browser back/forward navigates between modes.
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param mode - "power" to enable sidebar+tabs, or null to clear (default clean view)
+ */
+export function updateModeParam(
+  location: LocationLike,
+  navigate: NavigateFn,
+  mode: "power" | null
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (mode) {
+    searchParams.set("mode", mode);
+  } else {
+    searchParams.delete("mode");
+  }
+  navigate({ search: searchParams.toString() });
 }
 
 // ═══════════════════════════════════════════════════════════════
