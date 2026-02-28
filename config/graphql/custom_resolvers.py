@@ -6,6 +6,8 @@ from collections.abc import Iterable
 
 from graphql_relay import from_global_id
 
+from opencontractserver.constants.annotations import MANUAL_ANNOTATION_SENTINEL
+
 SUPPORTED_FILTER_KEYS = {
     "annotationLabel_LabelType",
     "annotationLabelId",
@@ -211,10 +213,10 @@ def resolve_doc_annotations_optimized(self, info, **kwargs):
     created_by = kwargs.get("createdByAnalysisIds")
     if created_by:
         parts = [token.strip() for token in created_by.split(",") if token.strip()]
-        include_manual = "~~MANUAL~~" in parts
+        include_manual = MANUAL_ANNOTATION_SENTINEL in parts
         analysis_pks = set()
         for token in parts:
-            if token == "~~MANUAL~~":
+            if token == MANUAL_ANNOTATION_SENTINEL:
                 continue
             pk = _to_pk(token)
             if pk is None:

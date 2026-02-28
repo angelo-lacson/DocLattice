@@ -82,7 +82,7 @@ class DocumentMutationTestCase(TestCase):
         with patch(
             "opencontractserver.corpuses.models.Corpus.import_content"
         ) as mock_import, patch(
-            "config.graphql.mutations.set_permissions_for_obj_to_user"
+            "config.graphql.document_mutations.set_permissions_for_obj_to_user"
         ):
             mock_import.return_value = (mock_doc, "created", mock_path)
             result = self.client.execute(mutation, variables=variables)

@@ -17,6 +17,8 @@ from tree_queries.models import TreeNode
 from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
     MAX_FILENAME_LENGTH,
+    MAX_PROCESSING_ERROR_LENGTH,
+    MAX_PROCESSING_TRACEBACK_LENGTH,
     PERSONAL_CORPUS_DESCRIPTION,
     PERSONAL_CORPUS_TITLE,
 )
@@ -26,6 +28,7 @@ from opencontractserver.shared.QuerySets import PermissionedTreeQuerySet
 from opencontractserver.shared.slug_utils import generate_unique_slug, sanitize_slug
 from opencontractserver.shared.utils import calc_oc_file_path
 from opencontractserver.utils.embeddings import generate_embeddings_from_text
+from opencontractserver.utils.text import truncate
 
 logger = logging.getLogger(__name__)
 
@@ -1772,8 +1775,10 @@ class CorpusActionExecution(BaseOCModel):
         """Mark execution as failed with error details."""
         self.status = self.Status.FAILED
         self.completed_at = timezone.now()
-        self.error_message = error_message[:5000]  # Truncate
-        self.error_traceback = error_traceback[:10000]  # Truncate
+        self.error_message = truncate(error_message, MAX_PROCESSING_ERROR_LENGTH)
+        self.error_traceback = truncate(
+            error_traceback, MAX_PROCESSING_TRACEBACK_LENGTH
+        )
         if save:
             self.save(
                 update_fields=[

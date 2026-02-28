@@ -1,0 +1,646 @@
+"""
+GraphQL query mixin for search and mention queries.
+"""
+
+import logging
+
+import graphene
+from django.db.models import Q
+from graphene_django.fields import DjangoConnectionField
+from graphql_jwt.decorators import login_required
+from graphql_relay import from_global_id
+
+from config.graphql.graphene_types import (
+    AgentConfigurationType,
+    AnnotationType,
+    CorpusType,
+    DocumentType,
+    SemanticSearchResultType,
+    UserType,
+)
+from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
+from opencontractserver.annotations.models import Annotation
+from opencontractserver.constants.annotations import SEMANTIC_SEARCH_MAX_RESULTS
+from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import Document
+
+logger = logging.getLogger(__name__)
+
+
+class SearchQueryMixin:
+    """Query fields and resolvers for search and mention queries."""
+
+    # SEARCH RESOURCES FOR MENTIONS #####################################
+    search_corpuses_for_mention = DjangoConnectionField(
+        CorpusType,
+        text_search=graphene.String(
+            description="Search query to find corpuses by title or description"
+        ),
+    )
+    search_documents_for_mention = DjangoConnectionField(
+        DocumentType,
+        text_search=graphene.String(
+            description="Search query to find documents by title or description"
+        ),
+        corpus_id=graphene.ID(
+            description="Optional corpus ID to scope search to documents in specific corpus"
+        ),
+    )
+    search_annotations_for_mention = DjangoConnectionField(
+        AnnotationType,
+        text_search=graphene.String(
+            description="Search query to find annotations by label text or raw content"
+        ),
+        corpus_id=graphene.ID(
+            description="Optional corpus ID to scope search to specific corpus"
+        ),
+    )
+    search_users_for_mention = DjangoConnectionField(
+        UserType,
+        text_search=graphene.String(
+            description="Search query to find users by username or email"
+        ),
+    )
+
+    search_agents_for_mention = DjangoConnectionField(
+        AgentConfigurationType,
+        text_search=graphene.String(
+            description="Search query to find agents by name, slug, or description"
+        ),
+        corpus_id=graphene.ID(
+            description="Corpus ID to scope agent search (includes global + corpus agents)"
+        ),
+    )
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_corpuses_for_mention(self, info, text_search=None, **kwargs):
+        """
+        Search corpuses for @ mention autocomplete.
+
+        SECURITY: Only returns corpuses where user can meaningfully contribute.
+        Requires write permission (CREATE/UPDATE/DELETE), creator status, or public corpus.
+
+        Rationale: Mentioning a corpus implies drawing attention to it for collaborative
+        purposes. Read-only viewers shouldn't be mentioning corpuses since they can't
+        contribute to them.
+
+        See: docs/permissioning/mention_permissioning_spec.md
+        """
+        from guardian.shortcuts import get_objects_for_user
+
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Corpus.objects.none()
+
+        # Superusers see all corpuses
+        if user.is_superuser:
+            qs = Corpus.objects.all()
+        else:
+            # Get corpuses user has write permission to
+            writable_corpuses = get_objects_for_user(
+                user,
+                [
+                    "corpuses.create_corpus",
+                    "corpuses.update_corpus",
+                    "corpuses.remove_corpus",  # Note: PermissionTypes.DELETE maps to "remove"
+                ],
+                klass=Corpus,
+                accept_global_perms=False,
+                any_perm=True,  # Has ANY of these permissions
+            )
+
+            # Combine: creator OR writable OR public
+            qs = Corpus.objects.filter(
+                Q(creator=user) | Q(id__in=writable_corpuses) | Q(is_public=True)
+            ).distinct()
+
+        if text_search:
+            qs = qs.filter(
+                Q(title__icontains=text_search) | Q(description__icontains=text_search)
+            )
+
+        # Order by most recently modified first
+        return qs.order_by("-modified")
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_documents_for_mention(
+        self, info, text_search=None, corpus_id=None, **kwargs
+    ):
+        """
+        Search documents for @ mention autocomplete.
+
+        SECURITY: Only returns documents where user can meaningfully contribute.
+        Requires one of:
+        - User is creator
+        - User has write permission on document
+        - Document is in a corpus where user has write permission
+        - Document is public AND (no corpus OR public corpus OR user has corpus access)
+
+        When corpus_id is provided, results are further filtered to only include
+        documents that belong to that specific corpus. This prevents cross-corpus
+        document references in AI agent contexts (Issue #741).
+
+        Rationale: Similar to corpuses, mentioning a document implies collaborative context.
+        However, public documents are included to allow discussion/reference in open forums.
+
+        See: docs/permissioning/mention_permissioning_spec.md
+        """
+        from guardian.shortcuts import get_objects_for_user
+
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Document.objects.none()
+
+        # Superusers see all documents
+        if user.is_superuser:
+            qs = Document.objects.all()
+        else:
+            # Get documents user has write permission to
+            writable_documents = get_objects_for_user(
+                user,
+                [
+                    "documents.create_document",
+                    "documents.update_document",
+                    "documents.remove_document",  # Note: PermissionTypes.DELETE maps to "remove"
+                ],
+                klass=Document,
+                accept_global_perms=False,
+                any_perm=True,
+            )
+
+            # Get corpuses user has write permission to
+            writable_corpuses = get_objects_for_user(
+                user,
+                [
+                    "corpuses.create_corpus",
+                    "corpuses.update_corpus",
+                    "corpuses.remove_corpus",  # Note: PermissionTypes.DELETE maps to "remove"
+                ],
+                klass=Corpus,
+                accept_global_perms=False,
+                any_perm=True,
+            )
+
+            # Get corpuses user can at least read (for public document context)
+            readable_corpuses = Corpus.objects.visible_to_user(user)
+
+            # Get documents in writable corpuses via DocumentPath (corpus isolation)
+            from opencontractserver.documents.models import DocumentPath
+
+            docs_in_writable_corpuses = DocumentPath.objects.filter(
+                corpus__in=writable_corpuses, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+
+            # Get documents in readable corpuses for public document context
+            docs_in_readable_corpuses = DocumentPath.objects.filter(
+                corpus__in=readable_corpuses, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+
+            # Get documents in public corpuses for public document context
+            public_corpuses = Corpus.objects.filter(is_public=True)
+            docs_in_public_corpuses = DocumentPath.objects.filter(
+                corpus__in=public_corpuses, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+
+            # Get standalone documents (not in any corpus via DocumentPath)
+            docs_with_paths = (
+                DocumentPath.objects.filter(is_current=True, is_deleted=False)
+                .values_list("document_id", flat=True)
+                .distinct()
+            )
+
+            # Build complex filter:
+            # 1. User is creator
+            # 2. User has write permission on document
+            # 3. Document is in a writable corpus (via DocumentPath)
+            # 4. Document is public AND (not in any corpus OR in public corpus OR user has corpus access)
+            qs = Document.objects.filter(
+                Q(creator=user)
+                | Q(id__in=writable_documents)
+                | Q(id__in=docs_in_writable_corpuses)  # Via DocumentPath
+                | (
+                    Q(is_public=True)
+                    & (
+                        ~Q(id__in=docs_with_paths)  # Not in any corpus (standalone)
+                        | Q(id__in=docs_in_public_corpuses)  # In a public corpus
+                        | Q(id__in=docs_in_readable_corpuses)  # In a readable corpus
+                    )
+                )
+            ).distinct()
+
+        if text_search:
+            qs = qs.filter(
+                Q(title__icontains=text_search) | Q(description__icontains=text_search)
+            )
+
+        # Filter by corpus if provided (Issue #741 - prevent cross-corpus references)
+        if corpus_id:
+            from opencontractserver.documents.models import DocumentPath
+
+            _, corpus_pk = from_global_id(corpus_id)
+            docs_in_target_corpus = DocumentPath.objects.filter(
+                corpus_id=int(corpus_pk),
+                is_current=True,
+                is_deleted=False,
+            ).values_list("document_id", flat=True)
+            qs = qs.filter(id__in=docs_in_target_corpus)
+
+        # Note: corpus field exists in model but not in current DB schema for select_related
+        # Documents use Many-to-Many relationship via Corpus.documents instead
+
+        # Order by most recently modified first
+        return qs.order_by("-modified")
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_annotations_for_mention(
+        self, info, text_search=None, corpus_id=None, **kwargs
+    ):
+        """
+        Search annotations for @ mention autocomplete.
+
+        SECURITY: Annotations inherit permissions from document + corpus.
+        Uses .visible_to_user() which applies composite permission logic.
+
+        PERFORMANCE NOTES:
+        - Prioritizes annotation_label.text matches (indexed, fast)
+        - Falls back to raw_text search (full-text, slower)
+        - Corpus scoping significantly reduces search space
+        - Limits to 10 results to prevent overwhelming UI
+
+        Rationale: Mentioning annotations allows precise reference to specific
+        content sections. Useful for discussions, citations, and cross-references.
+
+        @param text_search: Search query for label text or content
+        @param corpus_id: Optional corpus to scope search (recommended for performance)
+        """
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return Annotation.objects.none()
+
+        # Use visible_to_user() which handles composite document+corpus permissions
+        qs = Annotation.objects.visible_to_user(user)
+
+        # Scope to specific corpus if provided (major performance boost)
+        # Issue #741: Fix to properly convert GraphQL global ID to database primary key
+        if corpus_id:
+            _, corpus_pk = from_global_id(corpus_id)
+            qs = qs.filter(corpus_id=int(corpus_pk))
+
+        if text_search:
+            # Search priority:
+            # 1. annotation_label.text (indexed CharField - fast)
+            # 2. raw_text (TextField - slower but comprehensive)
+            qs = qs.filter(
+                Q(annotation_label__text__icontains=text_search)
+                | Q(raw_text__icontains=text_search)
+            )
+
+        # Select related for efficient queries
+        qs = qs.select_related("annotation_label", "document", "corpus")
+
+        # Order by label match first (more relevant), then by created date
+        # Annotations matching label text are usually more specific/useful
+        from django.db.models import Case, IntegerField, Value, When
+
+        if text_search:
+            qs = qs.annotate(
+                label_match=Case(
+                    When(
+                        annotation_label__text__icontains=text_search,
+                        then=Value(0),
+                    ),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            ).order_by("label_match", "-created")
+        else:
+            qs = qs.order_by("-created")
+
+        # Note: DjangoConnectionField handles pagination automatically
+        # Slicing here would prevent GraphQL from applying filters
+        return qs
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_users_for_mention(self, info, text_search=None, **kwargs):
+        """
+        Search users for @ mention autocomplete.
+
+        SECURITY: Respects user profile privacy settings.
+        Users are visible if:
+        - Profile is public (is_profile_public=True)
+        - Requesting user shares corpus membership with > READ permission
+        - It's the requesting user's own profile
+
+        PERFORMANCE NOTES:
+        - Uses UserQueryOptimizer for efficient visibility filtering
+        - Searches username (indexed, fast)
+        - Searches email (indexed, fast)
+
+        @param text_search: Search query for username or email
+        """
+        from django.contrib.auth import get_user_model
+
+        from opencontractserver.users.query_optimizer import UserQueryOptimizer
+
+        User = get_user_model()
+        user = info.context.user
+
+        # Anonymous users cannot mention (must be authenticated)
+        if user.is_anonymous:
+            return User.objects.none()
+
+        # Use UserQueryOptimizer for visibility filtering
+        qs = UserQueryOptimizer.get_visible_users(user)
+
+        if text_search:
+            # Search username and email
+            qs = qs.filter(
+                Q(username__icontains=text_search) | Q(email__icontains=text_search)
+            )
+
+        # Order by username for consistent results
+        qs = qs.order_by("username")
+
+        # Note: DjangoConnectionField handles pagination automatically
+        return qs
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_agents_for_mention(
+        self, info, text_search=None, corpus_id=None, **kwargs
+    ):
+        """
+        Search agents for @ mention autocomplete.
+
+        Returns:
+        - All active global agents (GLOBAL scope)
+        - Corpus-specific agents for the provided corpus (if user has access)
+
+        SECURITY: Filters by visibility - users only see agents they can mention.
+        Anonymous users cannot search agents.
+        """
+        from opencontractserver.agents.models import AgentConfiguration
+
+        user = info.context.user
+
+        # Anonymous users cannot mention agents
+        if not user or not user.is_authenticated:
+            return AgentConfiguration.objects.none()
+
+        # Build base queryset using visible_to_user (respects permissions)
+        qs = AgentConfiguration.objects.visible_to_user(user).filter(is_active=True)
+
+        # If corpus_id provided, filter to global + that corpus only
+        if corpus_id:
+            corpus_pk = from_global_id(corpus_id)[1]
+            qs = qs.filter(Q(scope="GLOBAL") | Q(scope="CORPUS", corpus_id=corpus_pk))
+
+        # Apply text search across name, slug, and description
+        if text_search:
+            qs = qs.filter(
+                Q(name__icontains=text_search)
+                | Q(description__icontains=text_search)
+                | Q(slug__icontains=text_search)
+            )
+
+        # Order: Global first, then corpus-specific, then alphabetically by name
+        return qs.select_related("creator", "corpus").order_by("scope", "name")
+
+    # SEMANTIC SEARCH QUERIES #############################################
+    semantic_search = graphene.List(
+        SemanticSearchResultType,
+        query=graphene.String(required=True, description="Search query text"),
+        corpus_id=graphene.ID(
+            required=False, description="Optional corpus ID to search within"
+        ),
+        document_id=graphene.ID(
+            required=False, description="Optional document ID to search within"
+        ),
+        modalities=graphene.List(
+            graphene.String,
+            required=False,
+            description="Filter by content modalities (TEXT, IMAGE)",
+        ),
+        label_text=graphene.String(
+            required=False,
+            description="Filter by annotation label text (case-insensitive substring match)",
+        ),
+        raw_text_contains=graphene.String(
+            required=False,
+            description="Filter by raw_text content (case-insensitive substring match)",
+        ),
+        limit=graphene.Int(
+            default_value=50,
+            description=f"Maximum number of results to return (default: 50, max: {SEMANTIC_SEARCH_MAX_RESULTS})",
+        ),
+        offset=graphene.Int(
+            default_value=0,
+            description="Number of results to skip for pagination",
+        ),
+        description=(
+            "Hybrid search combining vector similarity with text filters. "
+            "Uses the default embedder for global cross-corpus search. "
+            "Results are first filtered by text criteria, then ranked by similarity."
+        ),
+    )
+
+    @login_required
+    def resolve_semantic_search(
+        self,
+        info,
+        query,
+        corpus_id=None,
+        document_id=None,
+        modalities=None,
+        label_text=None,
+        raw_text_contains=None,
+        limit=50,
+        offset=0,
+    ):
+        """
+        Hybrid search combining vector similarity with text filters.
+
+        This query enables semantic (meaning-based) search across all annotations
+        the user has access to, using the default embedder embeddings that are
+        created for every annotation as part of the dual embedding strategy.
+
+        HYBRID SEARCH:
+        - Vector similarity search ranks results by semantic relevance
+        - Text filters (label_text, raw_text_contains) narrow down results
+        - Filters are applied BEFORE vector search for efficiency
+
+        PERMISSION MODEL (follows consolidated_permissioning_guide.md):
+        - Uses Document.objects.visible_to_user() for document access control
+        - Structural annotations are always visible if document is accessible
+        - Non-structural annotations follow: visible if public OR owned by user
+        - Corpus permissions are respected via document visibility
+
+        Args:
+            info: GraphQL execution info
+            query: Search query text for vector similarity
+            corpus_id: Optional corpus ID to limit search to (global ID)
+            document_id: Optional document ID to limit search to (global ID)
+            modalities: Optional list of modalities to filter by (TEXT, IMAGE)
+            label_text: Optional filter by annotation label text (case-insensitive)
+            raw_text_contains: Optional filter by raw_text substring (case-insensitive)
+            limit: Maximum number of results (capped at 200)
+            offset: Pagination offset
+
+        Returns:
+            List[SemanticSearchResultType]: List of matching annotations with scores
+        """
+        from opencontractserver.llms.vector_stores.core_vector_stores import (
+            CoreAnnotationVectorStore,
+        )
+
+        # N+1 OPTIMIZATION NOTE: The CoreAnnotationVectorStore already applies
+        # select_related("annotation_label", "document", "corpus") to the base
+        # queryset (see core_vector_stores.py:200-202 and :639-641). This means
+        # all related objects are eagerly loaded and no additional queries are
+        # made when accessing annotation.document, annotation.corpus, or
+        # annotation.annotation_label in the filter loops or result types below.
+        # Cap limit to prevent abuse
+        limit = min(limit, SEMANTIC_SEARCH_MAX_RESULTS)
+
+        # Convert global IDs to database IDs
+        corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
+        document_pk = int(from_global_id(document_id)[1]) if document_id else None
+
+        user = info.context.user
+
+        # -------------------------------------------------------------------------
+        # SECURITY: Verify user has access to requested document/corpus (IDOR prevention)
+        # Uses visible_to_user() which returns empty queryset if no access.
+        # We return empty results for both "not found" and "no permission" cases
+        # to prevent enumeration attacks.
+        # -------------------------------------------------------------------------
+        if document_pk:
+            if (
+                not Document.objects.visible_to_user(user)
+                .filter(id=document_pk)
+                .exists()
+            ):
+                # Document doesn't exist or user lacks permission - return empty results
+                return []
+
+        if corpus_pk:
+            if not Corpus.objects.visible_to_user(user).filter(id=corpus_pk).exists():
+                # Corpus doesn't exist or user lacks permission - return empty results
+                return []
+
+        # Build metadata filters for hybrid search
+        metadata_filters = {}
+        if label_text:
+            metadata_filters["annotation_label"] = label_text
+        if raw_text_contains:
+            metadata_filters["raw_text"] = raw_text_contains
+
+        # If document_id or corpus_id provided, use the instance-based search
+        # which respects corpus-specific embedders
+        # Import here to avoid circular imports
+        from opencontractserver.pipeline.utils import get_default_embedder_path
+
+        if document_pk or corpus_pk:
+            # Issue #437: Use corpus.preferred_embedder for corpus-scoped search
+            # instead of the global default embedder. Each corpus has a frozen
+            # embedder binding set at creation, and all annotations in the corpus
+            # have embeddings for that embedder. This ensures consistent search
+            # even if the default embedder changes after the corpus was created.
+            # When no corpus_id is provided (document-only search), fall back to
+            # the PipelineSettings default embedder.
+            scoped_embedder_path = get_default_embedder_path()
+            if corpus_pk:
+                # Fetch the corpus's frozen embedder directly to avoid a
+                # redundant DB lookup inside CoreAnnotationVectorStore.
+                corpus_embedder = (
+                    Corpus.objects.filter(pk=corpus_pk)
+                    .values_list("preferred_embedder", flat=True)
+                    .first()
+                )
+                if corpus_embedder:
+                    scoped_embedder_path = corpus_embedder
+
+            # Use instance-based CoreAnnotationVectorStore for scoped search
+            # Permission already verified above
+            vector_store = CoreAnnotationVectorStore(
+                user_id=user.id,
+                corpus_id=corpus_pk,
+                document_id=document_pk,
+                modalities=modalities,
+                must_have_text=raw_text_contains,  # Additional text filter
+                embedder_path=scoped_embedder_path,
+            )
+
+            from opencontractserver.llms.vector_stores.core_vector_stores import (
+                VectorSearchQuery,
+            )
+
+            search_query = VectorSearchQuery(
+                query_text=query,
+                similarity_top_k=limit + offset,  # Fetch extra for pagination
+                filters={"annotation_label": label_text} if label_text else None,
+            )
+
+            results = vector_store.search(search_query)
+
+            # Apply pagination
+            paginated_results = results[offset : offset + limit]
+        else:
+            # Use global_search for cross-corpus search
+            # Then apply additional filters post-search
+            results = CoreAnnotationVectorStore.global_search(
+                user_id=user.id,
+                query_text=query,
+                top_k=(limit + offset) * 3,  # Fetch more for post-filtering
+                modalities=modalities,
+            )
+
+            # Apply hybrid text filters post-search
+            if label_text or raw_text_contains:
+                filtered_results = []
+                for result in results:
+                    annotation = result.annotation
+                    # Check label_text filter
+                    if label_text:
+                        label = getattr(annotation.annotation_label, "text", None)
+                        if not label or label_text.lower() not in label.lower():
+                            continue
+                    # Check raw_text filter
+                    if raw_text_contains:
+                        raw_text = annotation.raw_text or ""
+                        if raw_text_contains.lower() not in raw_text.lower():
+                            continue
+                    filtered_results.append(result)
+                results = filtered_results
+
+            # Apply pagination
+            paginated_results = results[offset : offset + limit]
+
+        # Defensive select_related: Re-fetch annotations with explicit prefetching
+        # to guard against changes in CoreAnnotationVectorStore implementation
+        if paginated_results:
+            annotation_ids = [r.annotation.id for r in paginated_results]
+            annotations_by_id = {
+                a.id: a
+                for a in Annotation.objects.filter(
+                    id__in=annotation_ids
+                ).select_related("annotation_label", "document", "corpus")
+            }
+            # Update results with explicitly prefetched annotations
+            for result in paginated_results:
+                if result.annotation.id in annotations_by_id:
+                    result.annotation = annotations_by_id[result.annotation.id]
+
+        # Convert to GraphQL result types
+        return [
+            SemanticSearchResultType(
+                annotation=result.annotation,
+                similarity_score=result.similarity_score,
+            )
+            for result in paginated_results
+        ]
