@@ -601,7 +601,10 @@ class TestAgentConfigurationGraphQL(TestCase):
             mutation, context_value=type("Request", (), {"user": self.admin_user})()
         )
         self.assertIsNone(result.get("errors"))
-        self.assertTrue(result["data"]["createAgentConfiguration"]["ok"])
+        self.assertTrue(
+            result["data"]["createAgentConfiguration"]["ok"],
+            result["data"]["createAgentConfiguration"].get("message", ""),
+        )
         agent_data = result["data"]["createAgentConfiguration"]["agent"]
         self.assertEqual(agent_data["name"], "New Global Agent")
         self.assertEqual(agent_data["scope"], "GLOBAL")
@@ -640,7 +643,10 @@ class TestAgentConfigurationGraphQL(TestCase):
             mutation, context_value=type("Request", (), {"user": self.admin_user})()
         )
         self.assertIsNone(result.get("errors"))
-        self.assertTrue(result["data"]["createAgentConfiguration"]["ok"])
+        self.assertTrue(
+            result["data"]["createAgentConfiguration"]["ok"],
+            result["data"]["createAgentConfiguration"].get("message", ""),
+        )
         agent_data = result["data"]["createAgentConfiguration"]["agent"]
         self.assertEqual(agent_data["scope"], "CORPUS")
         self.assertIsNotNone(agent_data["corpus"])
