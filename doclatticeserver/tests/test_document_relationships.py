@@ -128,9 +128,7 @@ class DocumentRelationshipsQueryTestCase(TestCase):
                     }
                 }
             }
-        """ % to_global_id(
-            "DocumentRelationshipType", self.relationship.id
-        )
+        """ % to_global_id("DocumentRelationshipType", self.relationship.id)
 
         result = self.client.execute(query)
         self.assertIsNone(result.get("errors"))
@@ -171,9 +169,7 @@ class DocumentRelationshipsQueryTestCase(TestCase):
                     data
                 }
             }
-        """ % to_global_id(
-            "DocumentRelationshipType", self.note.id
-        )
+        """ % to_global_id("DocumentRelationshipType", self.note.id)
 
         result = self.client.execute(query)
         self.assertIsNone(result.get("errors"))
