@@ -181,7 +181,7 @@ class TestExtractPawlsTokensFromPdf(TestCase):
         mock_pdf.pages = [mock_page1, mock_page2]
         mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-        (pawls_pages, spatial_indices, tokens_by_page, _, _, content) = (
+        pawls_pages, spatial_indices, tokens_by_page, _, _, content = (
             extract_pawls_tokens_from_pdf(b"multi-page pdf")
         )
 
@@ -203,7 +203,7 @@ class TestExtractPawlsTokensFromPdf(TestCase):
         mock_pdf.pages = [mock_page]
         mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-        (pawls_pages, spatial_indices, tokens_by_page, token_indices_by_page, _, _) = (
+        pawls_pages, spatial_indices, tokens_by_page, token_indices_by_page, _, _ = (
             extract_pawls_tokens_from_pdf(b"empty page pdf")
         )
 
@@ -230,7 +230,7 @@ class TestExtractPawlsTokensFromPdf(TestCase):
         # Override with double the dimensions
         page_dimensions = {0: (1224.0, 1584.0)}  # 2x the native dimensions
 
-        (pawls_pages, _, _, _, page_dims, _) = extract_pawls_tokens_from_pdf(
+        pawls_pages, _, _, _, page_dims, _ = extract_pawls_tokens_from_pdf(
             b"pdf", page_dimensions=page_dimensions
         )
 
@@ -279,7 +279,7 @@ class TestExtractPawlsTokensFromPdf(TestCase):
         mock_pdf.pages = [mock_page]
         mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-        (pawls_pages, _, _, _, _, _) = extract_pawls_tokens_from_pdf(b"pdf")
+        pawls_pages, _, _, _, _, _ = extract_pawls_tokens_from_pdf(b"pdf")
 
         # Only the valid token should be included
         self.assertEqual(len(pawls_pages[0]["tokens"]), 1)
