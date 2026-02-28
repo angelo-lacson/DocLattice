@@ -13,6 +13,7 @@ import {
   AlignLeft,
   Archive,
   ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
   BarChart2,
   BarChart3,
@@ -31,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Circle,
+  CircleAlert,
   Clock,
   Cloud,
   CloudDownload,
@@ -68,6 +70,7 @@ import {
   Link,
   List,
   ListOrdered,
+  Loader,
   Lock,
   Mail,
   MessageCircle,
@@ -105,7 +108,6 @@ import {
   X,
   XCircle,
   Zap,
-  Loader,
 } from "lucide-react";
 
 /**
@@ -118,6 +120,7 @@ const KNOWN_ICONS: Record<string, LucideIcon> = {
   "align-left": AlignLeft,
   archive: Archive,
   "arrow-left": ArrowLeft,
+  "arrow-left-right": ArrowLeftRight,
   "arrow-right": ArrowRight,
   "bar-chart-2": BarChart2,
   "bar-chart-3": BarChart3,
@@ -136,6 +139,7 @@ const KNOWN_ICONS: Record<string, LucideIcon> = {
   "chevron-down": ChevronDown,
   "chevron-up": ChevronUp,
   circle: Circle,
+  "circle-alert": CircleAlert,
   clock: Clock,
   cloud: Cloud,
   "cloud-download": CloudDownload,
@@ -173,8 +177,8 @@ const KNOWN_ICONS: Record<string, LucideIcon> = {
   link: Link,
   list: List,
   "list-ordered": ListOrdered,
-  lock: Lock,
   loader: Loader,
+  lock: Lock,
   mail: Mail,
   "message-circle": MessageCircle,
   "message-square": MessageSquare,
@@ -191,7 +195,6 @@ const KNOWN_ICONS: Record<string, LucideIcon> = {
   settings: Settings,
   shield: Shield,
   sparkles: Sparkles,
-  // Note: "spinner" SUI name maps to "loader" (Lucide's Loader icon)
   star: Star,
   "sticky-note": StickyNote,
   tag: Tag,
@@ -277,9 +280,9 @@ export const SEMANTIC_TO_LUCIDE: Record<string, string> = {
   edit: "edit",
   "edit outline": "edit",
   envelope: "mail",
-  "exclamation circle": "info",
+  "exclamation circle": "circle-alert",
   "exclamation triangle": "alert-triangle",
-  exchange: "arrow-right",
+  exchange: "arrow-left-right",
   external: "external-link",
   eye: "eye",
   "eye slash": "eye-off",
@@ -349,6 +352,7 @@ export const SEMANTIC_TO_LUCIDE: Record<string, string> = {
   settings: "settings",
   shield: "shield",
   "sort numeric down": "list-ordered",
+  // SUI's "spinner" maps to Lucide's Loader icon
   spinner: "loader",
   star: "star",
   "sticky note outline": "sticky-note",
@@ -367,6 +371,7 @@ export const SEMANTIC_TO_LUCIDE: Record<string, string> = {
 
   // U
   undo: "undo",
+  // SUI's upload icon visually includes a cloud, so cloud-upload is the closer match
   upload: "cloud-upload",
   user: "user",
   "user circle": "user-circle",
@@ -375,7 +380,7 @@ export const SEMANTIC_TO_LUCIDE: Record<string, string> = {
 
   // W
   warning: "alert-triangle",
-  "warning circle": "alert-triangle",
+  "warning circle": "circle-alert",
   "warning sign": "alert-triangle",
 
   // Z
@@ -383,9 +388,9 @@ export const SEMANTIC_TO_LUCIDE: Record<string, string> = {
 };
 
 /**
- * Normalise an icon name: lowercase, trim, collapse whitespace.
+ * Normalize an icon name: lowercase, trim, collapse whitespace.
  */
-function normalise(name: string): string {
+function normalize(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
@@ -397,7 +402,7 @@ function normalise(name: string): string {
  * - Otherwise returns `"help-circle"` (fallback).
  */
 export function resolveIconName(name: string): string {
-  const key = normalise(name);
+  const key = normalize(name);
 
   // Check SUI mapping first
   const mapped = SEMANTIC_TO_LUCIDE[key];

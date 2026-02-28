@@ -28,22 +28,27 @@ test.describe("DynamicIcon", () => {
     await expect(svg).toBeVisible();
   });
 
-  test("applies aria-label when provided", async ({ mount, page }) => {
+  test("applies aria-label and role=img when provided", async ({
+    mount,
+    page,
+  }) => {
     await mount(
       <DynamicIcon name="trash" size={24} aria-label="Delete item" />
     );
     const svg = page.locator('svg[aria-label="Delete item"]');
     await expect(svg).toBeVisible();
     await expect(svg).toHaveAttribute("aria-hidden", "false");
+    await expect(svg).toHaveAttribute("role", "img");
   });
 
-  test("defaults to aria-hidden when no aria-label provided", async ({
+  test("defaults to aria-hidden and no role when no aria-label provided", async ({
     mount,
     page,
   }) => {
     await mount(<DynamicIcon name="trash" size={24} />);
     const svg = page.locator("svg");
     await expect(svg).toHaveAttribute("aria-hidden", "true");
+    await expect(svg).not.toHaveAttribute("role");
   });
 
   test("renders gallery of SUI and Lucide icons", async ({ mount, page }) => {
