@@ -5,7 +5,15 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-27
+## [Unreleased] - 2026-02-28
+
+### Added
+
+#### Expand Corpus Import Test Coverage (Closes #999)
+- Rewrote `test_corpus_import.py` with proper `TransactionTestCase` base class (previously not discoverable by test runners)
+- **Label integrity**: Validates all 107 labels (79 text + 28 doc) are created with correct color, icon, description, type, and labelset membership
+- **Annotation validation**: Verifies raw text, page numbers, bounding box coordinates, token references, and label associations for all 6 annotations
+- **Relationship verification**: Tests `import_relationships()` with single and multiple source/target annotations, plus structural flag preservation
 
 ### Changed
 
