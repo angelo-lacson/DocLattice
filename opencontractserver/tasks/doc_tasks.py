@@ -17,10 +17,12 @@ from pydantic import validate_call
 from config import celery_app
 from opencontractserver.annotations.models import TOKEN_LABEL, Annotation
 from opencontractserver.constants import (
-    MAX_PROCESSING_ERROR_DISPLAY_LENGTH,
     MAX_PROCESSING_ERROR_LENGTH,
     MAX_PROCESSING_TRACEBACK_LENGTH,
-    NOTIFICATION_DOC_TITLE_MAX_LENGTH,
+)
+from opencontractserver.constants.truncation import (
+    MAX_DOC_TITLE_FALLBACK_LENGTH,
+    MAX_NOTIFICATION_ERROR_LENGTH,
 )
 from opencontractserver.documents.models import Document, DocumentProcessingStatus
 from opencontractserver.notifications.models import (
@@ -47,6 +49,7 @@ from opencontractserver.types.dicts import (
 from opencontractserver.types.enums import AnnotationFilterMode
 from opencontractserver.utils.etl import build_document_export, pawls_bbox_to_funsd_box
 from opencontractserver.utils.files import split_pdf_into_images
+from opencontractserver.utils.text import truncate
 
 logger = get_task_logger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -127,7 +130,7 @@ def _create_document_processing_failed_notification(
     # Get document title for notification
     doc_title = document.title
     if not doc_title and document.description:
-        doc_title = document.description[:NOTIFICATION_DOC_TITLE_MAX_LENGTH]
+        doc_title = truncate(document.description, MAX_DOC_TITLE_FALLBACK_LENGTH)
     if not doc_title:
         doc_title = "Untitled"
 
@@ -138,7 +141,7 @@ def _create_document_processing_failed_notification(
             data={
                 "document_id": document.id,
                 "document_title": doc_title,
-                "error_message": error_msg[:MAX_PROCESSING_ERROR_DISPLAY_LENGTH],
+                "error_message": truncate(error_msg, MAX_NOTIFICATION_ERROR_LENGTH),
                 "file_type": document.file_type,
             },
         )
@@ -258,7 +261,7 @@ def _create_document_processed_notifications(
     # Get document title for notification
     doc_title = document.title
     if not doc_title and document.description:
-        doc_title = document.description[:NOTIFICATION_DOC_TITLE_MAX_LENGTH]
+        doc_title = truncate(document.description, MAX_DOC_TITLE_FALLBACK_LENGTH)
     if not doc_title:
         doc_title = "Untitled"
 

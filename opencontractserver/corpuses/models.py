@@ -28,6 +28,7 @@ from opencontractserver.shared.QuerySets import PermissionedTreeQuerySet
 from opencontractserver.shared.slug_utils import generate_unique_slug, sanitize_slug
 from opencontractserver.shared.utils import calc_oc_file_path
 from opencontractserver.utils.embeddings import generate_embeddings_from_text
+from opencontractserver.utils.text import truncate
 
 logger = logging.getLogger(__name__)
 
@@ -1622,7 +1623,7 @@ class CorpusActionExecution(BaseOCModel):
     error_traceback = django.db.models.TextField(
         blank=True,
         default="",
-        help_text=f"Full traceback for debugging (truncated to {MAX_PROCESSING_TRACEBACK_LENGTH} chars)",
+        help_text="Full traceback for debugging (truncated to 10KB)",
     )
 
     # Execution metadata (model, tokens, retries, etc.)
@@ -1774,8 +1775,10 @@ class CorpusActionExecution(BaseOCModel):
         """Mark execution as failed with error details."""
         self.status = self.Status.FAILED
         self.completed_at = timezone.now()
-        self.error_message = error_message[:MAX_PROCESSING_ERROR_LENGTH]
-        self.error_traceback = error_traceback[:MAX_PROCESSING_TRACEBACK_LENGTH]
+        self.error_message = truncate(error_message, MAX_PROCESSING_ERROR_LENGTH)
+        self.error_traceback = truncate(
+            error_traceback, MAX_PROCESSING_TRACEBACK_LENGTH
+        )
         if save:
             self.save(
                 update_fields=[

@@ -10,14 +10,14 @@ if TYPE_CHECKING:
     from opencontractserver.llms.agents.core_agents import SourceNode
 
 from opencontractserver.annotations.models import Note, NoteRevision
-from opencontractserver.constants.llm_tools import (
-    DEFAULT_PAGE_IMAGE_DPI,
-    DEFAULT_PARTIAL_CONTENT_END,
-    MARKDOWN_LINK_TITLE_MAX_LENGTH,
-    NOTE_CONTENT_PREVIEW_LENGTH,
+from opencontractserver.constants.truncation import (
+    MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH,
+    MAX_LINK_TITLE_LENGTH,
+    MAX_NOTE_CONTENT_PREVIEW_LENGTH,
 )
 from opencontractserver.corpuses.models import Corpus, CorpusDescriptionRevision
 from opencontractserver.documents.models import Document
+from opencontractserver.utils.text import truncate
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +123,7 @@ def get_notes_for_document_corpus(
         corpus_id: The primary key (ID) of the Corpus, or None if unspecified
 
     Returns:
-        A list of dictionaries, each containing Note data (content truncated to
-        NOTE_CONTENT_PREVIEW_LENGTH chars):
+        A list of dictionaries, each containing Note data (content truncated to 512 chars):
         [
             {
                 "id": <note_id>,
@@ -153,9 +152,7 @@ def get_notes_for_document_corpus(
         {
             "id": note.id,
             "title": note.title,
-            "content": (
-                note.content[:NOTE_CONTENT_PREVIEW_LENGTH] if note.content else ""
-            ),
+            "content": truncate(note.content, MAX_NOTE_CONTENT_PREVIEW_LENGTH),
             "creator_id": note.creator_id,
             "created": note.created.isoformat() if note.created else None,
             "modified": note.modified.isoformat() if note.modified else None,
@@ -188,7 +185,7 @@ def get_note_content_token_length(note_id: int) -> int:
 def get_partial_note_content(
     note_id: int,
     start: int = 0,
-    end: int = DEFAULT_PARTIAL_CONTENT_END,
+    end: int = 500,
 ) -> str:
     """
     Retrieve a substring of the note's content from index 'start' to index 'end'.
@@ -322,9 +319,7 @@ async def aget_notes_for_document_corpus(
             {
                 "id": note.id,
                 "title": note.title,
-                "content": (
-                    note.content[:NOTE_CONTENT_PREVIEW_LENGTH] if note.content else ""
-                ),
+                "content": truncate(note.content, MAX_NOTE_CONTENT_PREVIEW_LENGTH),
                 "creator_id": note.creator_id,
                 "created": note.created.isoformat() if note.created else None,
                 "modified": note.modified.isoformat() if note.modified else None,
@@ -750,8 +745,16 @@ def update_document_description(
     return {
         "updated": True,
         "document_id": document_id,
-        "previous_description": old_description[:200] if old_description else None,
-        "new_description_preview": new_description[:200] if new_description else None,
+        # truncate() returns "" for None/empty; convert back to None to
+        # match the original contract of this response dict.
+        "previous_description": truncate(
+            old_description, MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH
+        )
+        or None,
+        "new_description_preview": truncate(
+            new_description, MAX_DESCRIPTION_RESPONSE_PREVIEW_LENGTH
+        )
+        or None,
     }
 
 
@@ -1877,7 +1880,7 @@ def get_page_image(
     document_id: int,
     page_number: int,
     image_format: str = "jpeg",
-    dpi: int = DEFAULT_PAGE_IMAGE_DPI,
+    dpi: int = 150,
 ) -> str:
     """
     Get a specific page from a PDF document as a base64-encoded image.
@@ -1887,7 +1890,7 @@ def get_page_image(
         document_id: The primary key (ID) of the Document
         page_number: The page number to render (1-indexed)
         image_format: The image format to use ('jpeg' or 'png'), defaults to 'jpeg'
-        dpi: The resolution in dots per inch (higher values = better quality but larger files)
+        dpi: The resolution in dots per inch (default 150, higher values = better quality but larger files)
 
     Returns:
         A base64-encoded string of the page image
@@ -1985,7 +1988,7 @@ async def aget_page_image(
     document_id: int,
     page_number: int,
     image_format: str = "jpeg",
-    dpi: int = DEFAULT_PAGE_IMAGE_DPI,
+    dpi: int = 150,
 ) -> str:
     """Async wrapper around :func:`get_page_image`."""
     return await _db_sync_to_async(get_page_image)(
@@ -2086,9 +2089,7 @@ def create_markdown_link(
                 if annotation.raw_text
                 else f"Annotation {entity_id}"
             )
-            # Truncate title if too long
-            if len(title) > MARKDOWN_LINK_TITLE_MAX_LENGTH:
-                title = title[: MARKDOWN_LINK_TITLE_MAX_LENGTH - 3] + "..."
+            title = truncate(title, MAX_LINK_TITLE_LENGTH, suffix="...")
 
             return f"[{title}]({url})"
 
@@ -2258,8 +2259,7 @@ async def acreate_markdown_link(
                 if annotation.raw_text
                 else f"Annotation {entity_id}"
             )
-            if len(title) > MARKDOWN_LINK_TITLE_MAX_LENGTH:
-                title = title[: MARKDOWN_LINK_TITLE_MAX_LENGTH - 3] + "..."
+            title = truncate(title, MAX_LINK_TITLE_LENGTH, suffix="...")
 
             return f"[{title}]({url})"
 
