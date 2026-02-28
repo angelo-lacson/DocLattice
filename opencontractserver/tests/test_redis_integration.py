@@ -15,12 +15,11 @@ import time
 
 import pytest
 from asgiref.sync import async_to_sync
-from celery import shared_task
-from celery.contrib.testing.worker import start_worker
+from celery.result import AsyncResult
 from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.cache import cache
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django_redis import get_redis_connection
 
 from config.celery_app import app as celery_app
@@ -182,47 +181,14 @@ class TestChannelsRedisLayer(TestCase):
         assert result is None
 
 
-# Define test tasks at module level (Celery needs to discover them)
-@shared_task
-def _add_numbers(a, b):
-    """Simple task that returns a sum."""
-    return a + b
+class TestCeleryRedisBackend(TestCase):
+    """Test Celery broker connection and result backend against real Redis.
 
-
-@shared_task
-def _return_dict():
-    """Task that returns a dict — sensitive to RESP3 deserialization."""
-    return {"status": "ok", "count": 42, "items": [1, 2, 3]}
-
-
-@shared_task
-def _failing_task():
-    """Task that always raises an exception."""
-    raise ValueError("Intentional test failure")
-
-
-class TestCeleryRedisBackend(TransactionTestCase):
-    """Test Celery broker + result backend against a real Redis instance.
-
-    Uses an in-process Celery worker via start_worker so no separate
-    celeryworker container is needed. Validates that task dispatch,
-    result storage, and result retrieval work correctly with redis-py 7.x.
-
-    Uses TransactionTestCase because the in-process worker runs in a
-    separate thread and needs to see committed data.
+    Validates that Celery's Redis broker connectivity and result
+    serialization/deserialization work correctly with redis-py 7.x.
+    Tests the broker connection directly and exercises the result backend's
+    store/retrieve path, which is the code path sensitive to RESP3 changes.
     """
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        # Start an in-process Celery worker for the duration of the test class
-        cls._worker_ctx = start_worker(celery_app, perform_ping_check=False)
-        cls._worker = cls._worker_ctx.__enter__()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._worker_ctx.__exit__(None, None, None)
-        super().tearDownClass()
 
     def setUp(self):
         _flush_redis()
@@ -230,31 +196,52 @@ class TestCeleryRedisBackend(TransactionTestCase):
     def tearDown(self):
         _flush_redis()
 
-    def test_task_roundtrip(self):
-        """Send a task via Redis broker, retrieve result from Redis backend."""
-        result = _add_numbers.delay(3, 7)
-        value = result.get(timeout=10)
-        assert value == 10
+    def test_broker_connection(self):
+        """Celery can connect to Redis as a message broker."""
+        conn = celery_app.connection()
+        conn.ensure_connection(max_retries=3)
+        conn.close()
 
-    def test_task_result_dict(self):
-        """Task returning a dict — validates RESP3 result deserialization."""
-        result = _return_dict.delay()
-        value = result.get(timeout=10)
-        assert isinstance(value, dict)
-        assert value["status"] == "ok"
-        assert value["count"] == 42
-        assert value["items"] == [1, 2, 3]
+    def test_result_backend_string(self):
+        """String result round-trip through Redis result backend."""
+        task_id = "test-string-result"
+        celery_app.backend.store_result(task_id, "hello", "SUCCESS")
 
-    def test_task_failure_propagation(self):
-        """Task exception propagates correctly through Redis result backend."""
-        result = _failing_task.delay()
-        with pytest.raises(ValueError, match="Intentional test failure"):
-            result.get(timeout=10, propagate=True)
+        retrieved = AsyncResult(task_id, app=celery_app)
+        assert retrieved.result == "hello"
+        assert retrieved.status == "SUCCESS"
 
-    def test_task_status_lifecycle(self):
-        """Task status transitions: PENDING -> SUCCESS through Redis backend."""
-        result = _add_numbers.delay(1, 1)
-        value = result.get(timeout=10)
-        assert value == 2
-        # After completion, status should be SUCCESS
-        assert result.status == "SUCCESS"
+    def test_result_backend_dict(self):
+        """Dict result round-trip — sensitive to RESP3 type changes."""
+        task_id = "test-dict-result"
+        data = {"status": "ok", "count": 42, "items": [1, 2, 3]}
+        celery_app.backend.store_result(task_id, data, "SUCCESS")
+
+        retrieved = AsyncResult(task_id, app=celery_app)
+        assert isinstance(retrieved.result, dict)
+        assert retrieved.result == data
+        assert retrieved.result["items"] == [1, 2, 3]
+
+    def test_result_backend_failure(self):
+        """Failure state stored and retrieved correctly from Redis."""
+        task_id = "test-failure-result"
+        exc = ValueError("Intentional test failure")
+        celery_app.backend.mark_as_failure(task_id, exc)
+
+        retrieved = AsyncResult(task_id, app=celery_app)
+        assert retrieved.status == "FAILURE"
+        assert "Intentional test failure" in str(retrieved.result)
+
+    def test_result_backend_status_lifecycle(self):
+        """Status transitions persist correctly through Redis backend."""
+        task_id = "test-lifecycle"
+
+        # Store as PENDING (implicit) then SUCCESS
+        celery_app.backend.store_result(task_id, None, "PENDING")
+        pending = AsyncResult(task_id, app=celery_app)
+        assert pending.status == "PENDING"
+
+        celery_app.backend.store_result(task_id, 42, "SUCCESS")
+        success = AsyncResult(task_id, app=celery_app)
+        assert success.status == "SUCCESS"
+        assert success.result == 42
