@@ -32,7 +32,7 @@ EXPECTED_TEXT_LABEL_COUNT = 79
 EXPECTED_DOC_LABEL_COUNT = 28
 EXPECTED_TOTAL_LABEL_COUNT = EXPECTED_TEXT_LABEL_COUNT + EXPECTED_DOC_LABEL_COUNT
 
-# Representative text labels to spot-check (key → expected fields).
+# Representative text labels to spot-check.
 EXPECTED_TEXT_LABELS = {
     "Parties": {
         "color": "#c17717",
@@ -75,8 +75,8 @@ EXPECTED_DOC_LABELS = {
 EXPECTED_TEXT_ANNOTATIONS = [
     ("Parties", " ACTIVE WITH ME, Inc.", 0, "0", 4),
     ("Parties", " Sheri Strangway", 5, "5", 2),
-    ("Governing Law", None, 4, "4", 24),  # raw_text checked separately (long)
-    ("Anti-Assignment", None, 4, "4", 32),
+    ("Governing Law", None, 4, "4", 24),  # raw_text not validated (too long)
+    ("Anti-Assignment", None, 4, "4", 32),  # raw_text not validated (too long)
     ("Parties", " Exhibit 10.2", 0, "0", 2),
 ]
 
@@ -95,6 +95,10 @@ class TestCorpusImport(TransactionTestCase):
 
     Validates field-level integrity of labels, annotations, and
     relationships after importing Test_Corpus_EXPORT.zip (V1 format).
+
+    Read-only assertions are grouped into fewer test methods using subTest
+    to minimize redundant import executions (each TransactionTestCase test
+    flushes the database).
     """
 
     fixtures_path = pathlib.Path(__file__).parent / "fixtures"
@@ -117,7 +121,7 @@ class TestCorpusImport(TransactionTestCase):
         with transaction.atomic():
             temp_file = TemporaryFileHandle.objects.create()
             temp_file.file.save(
-                ContentFile(decoded_data, name=f"corpus_import_{uuid.uuid4()}.zip")
+                f"corpus_import_{uuid.uuid4()}.zip", ContentFile(decoded_data)
             )
 
         result = (
@@ -128,217 +132,219 @@ class TestCorpusImport(TransactionTestCase):
 
     def _get_corpus_document(self, corpus: Corpus) -> Document:
         """Return the corpus-isolated document (the one linked via annotations)."""
-        doc = Document.objects.filter(annotation__corpus=corpus).distinct().first()
+        doc = (
+            Document.objects.filter(annotation__corpus=corpus)
+            .distinct()
+            .order_by("id")
+            .first()
+        )
         self.assertIsNotNone(doc, "Should have a corpus-isolated document")
         return doc
 
-    # ------------------------------------------------------------------
-    # Object-count smoke tests
-    # ------------------------------------------------------------------
-
-    def test_import_object_counts(self):
-        """Verify expected object counts after import."""
-        self._run_import()
-
-        self.assertEqual(AnnotationLabel.objects.count(), EXPECTED_TOTAL_LABEL_COUNT)
-        self.assertEqual(Corpus.objects.count(), 1)
-        # 1 standalone document + 1 corpus-isolated copy
-        self.assertEqual(Document.objects.count(), 2)
-        # 5 text annotations + 1 doc-level annotation
-        self.assertEqual(Annotation.objects.count(), 6)
+    def _create_rel_label(self, text: str, color: str = "#000000") -> AnnotationLabel:
+        """Create a relationship label with permissions for self.user."""
+        label = AnnotationLabel.objects.create(
+            text=text,
+            label_type=RELATIONSHIP_LABEL,
+            color=color,
+            icon="tag",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, label, [PermissionTypes.ALL])
+        return label
 
     # ------------------------------------------------------------------
-    # Label integrity (issue #999 requirement 1)
+    # Object counts and label integrity (issue #999 requirement 1)
     # ------------------------------------------------------------------
 
-    def test_label_counts_by_type(self):
-        """Verify the correct number of text and doc labels are created."""
-        self._run_import()
-
-        text_labels = AnnotationLabel.objects.filter(label_type=TOKEN_LABEL)
-        self.assertEqual(text_labels.count(), EXPECTED_TEXT_LABEL_COUNT)
-
-        doc_labels = AnnotationLabel.objects.filter(label_type=DOC_TYPE_LABEL)
-        self.assertEqual(doc_labels.count(), EXPECTED_DOC_LABEL_COUNT)
-
-    def test_text_label_fields(self):
-        """Validate imported text labels have correct color, icon, and description."""
-        self._run_import()
-
-        for label_text, expected in EXPECTED_TEXT_LABELS.items():
-            label = AnnotationLabel.objects.get(text=label_text, label_type=TOKEN_LABEL)
-            self.assertEqual(label.color, expected["color"])
-            self.assertEqual(label.icon, expected["icon"])
-            self.assertEqual(label.description, expected["description"])
-            self.assertEqual(label.creator, self.user)
-
-    def test_doc_label_fields(self):
-        """Validate imported doc labels have correct color, icon, and description."""
-        self._run_import()
-
-        for label_text, expected in EXPECTED_DOC_LABELS.items():
-            label = AnnotationLabel.objects.get(
-                text=label_text, label_type=DOC_TYPE_LABEL
-            )
-            self.assertEqual(label.color, expected["color"])
-            self.assertEqual(label.icon, expected["icon"])
-            self.assertEqual(label.description, expected["description"])
-            self.assertEqual(label.creator, self.user)
-
-    def test_labels_belong_to_corpus_labelset(self):
-        """Verify all imported labels are associated with the corpus label set."""
+    def test_import_counts_and_label_integrity(self):
+        """Verify object counts and label field-level integrity after import."""
         corpus = self._run_import()
 
-        labelset = corpus.label_set
-        self.assertIsNotNone(labelset)
-        self.assertEqual(labelset.annotation_labels.count(), EXPECTED_TOTAL_LABEL_COUNT)
+        # -- Object-count smoke tests --
+        with self.subTest("object_counts"):
+            self.assertEqual(
+                AnnotationLabel.objects.count(), EXPECTED_TOTAL_LABEL_COUNT
+            )
+            self.assertEqual(Corpus.objects.count(), 1)
+            # 1 standalone document + 1 corpus-isolated copy
+            self.assertEqual(Document.objects.count(), 2)
+            # 5 text annotations + 1 doc-level annotation
+            self.assertEqual(Annotation.objects.count(), 6)
+            self.assertEqual(Relationship.objects.count(), 0)
+
+        # -- Label counts by type --
+        with self.subTest("label_counts_by_type"):
+            text_labels = AnnotationLabel.objects.filter(label_type=TOKEN_LABEL)
+            self.assertEqual(text_labels.count(), EXPECTED_TEXT_LABEL_COUNT)
+
+            doc_labels = AnnotationLabel.objects.filter(label_type=DOC_TYPE_LABEL)
+            self.assertEqual(doc_labels.count(), EXPECTED_DOC_LABEL_COUNT)
+
+        # -- Text label fields --
+        with self.subTest("text_label_fields"):
+            for label_text, expected in EXPECTED_TEXT_LABELS.items():
+                label = AnnotationLabel.objects.get(
+                    text=label_text, label_type=TOKEN_LABEL
+                )
+                self.assertEqual(label.color, expected["color"])
+                self.assertEqual(label.icon, expected["icon"])
+                self.assertEqual(label.description, expected["description"])
+                self.assertEqual(label.creator, self.user)
+
+        # -- Doc label fields --
+        with self.subTest("doc_label_fields"):
+            for label_text, expected in EXPECTED_DOC_LABELS.items():
+                label = AnnotationLabel.objects.get(
+                    text=label_text, label_type=DOC_TYPE_LABEL
+                )
+                self.assertEqual(label.color, expected["color"])
+                self.assertEqual(label.icon, expected["icon"])
+                self.assertEqual(label.description, expected["description"])
+                self.assertEqual(label.creator, self.user)
+
+        # -- Labels belong to corpus labelset --
+        with self.subTest("labels_belong_to_corpus_labelset"):
+            labelset = corpus.label_set
+            self.assertIsNotNone(labelset)
+            self.assertEqual(
+                labelset.annotation_labels.count(), EXPECTED_TOTAL_LABEL_COUNT
+            )
 
     # ------------------------------------------------------------------
     # Annotation validation (issue #999 requirement 2)
     # ------------------------------------------------------------------
 
-    def test_annotation_label_references(self):
-        """Verify each annotation references the correct label."""
+    def test_annotation_validation(self):
+        """Verify annotation field-level integrity: labels, text, pages,
+        JSON structure, bounds, and tokens."""
         corpus = self._run_import()
         doc = self._get_corpus_document(corpus)
 
-        text_annots = Annotation.objects.filter(
-            corpus=corpus, document=doc, annotation_label__label_type=TOKEN_LABEL
-        )
-        self.assertEqual(text_annots.count(), 5)
+        # -- Label references --
+        with self.subTest("label_references"):
+            text_annots = Annotation.objects.filter(
+                corpus=corpus, document=doc, annotation_label__label_type=TOKEN_LABEL
+            )
+            self.assertEqual(text_annots.count(), 5)
+            self.assertEqual(
+                text_annots.filter(annotation_label__text="Parties").count(), 3
+            )
+            self.assertEqual(
+                text_annots.filter(annotation_label__text="Governing Law").count(), 1
+            )
+            self.assertEqual(
+                text_annots.filter(annotation_label__text="Anti-Assignment").count(), 1
+            )
 
-        # 3 annotations reference "Parties", 1 "Governing Law", 1 "Anti-Assignment"
-        self.assertEqual(
-            text_annots.filter(annotation_label__text="Parties").count(), 3
-        )
-        self.assertEqual(
-            text_annots.filter(annotation_label__text="Governing Law").count(), 1
-        )
-        self.assertEqual(
-            text_annots.filter(annotation_label__text="Anti-Assignment").count(), 1
-        )
+        # -- Raw text and page numbers --
+        with self.subTest("raw_text_and_page"):
+            for label_text, raw_text, page, _, _ in EXPECTED_TEXT_ANNOTATIONS:
+                if raw_text is None:
+                    continue
+                annot = Annotation.objects.get(
+                    corpus=corpus,
+                    document=doc,
+                    annotation_label__text=label_text,
+                    raw_text=raw_text,
+                )
+                self.assertEqual(
+                    annot.page,
+                    page,
+                    f"Page mismatch for annotation '{raw_text}'",
+                )
 
-    def test_annotation_raw_text_and_page(self):
-        """Verify annotations have the correct raw text and page numbers."""
-        corpus = self._run_import()
-        doc = self._get_corpus_document(corpus)
+        # -- Annotation JSON: bounds and token counts --
+        with self.subTest("spans_and_tokens"):
+            for (
+                label_text,
+                raw_text,
+                _,
+                page_key,
+                token_count,
+            ) in EXPECTED_TEXT_ANNOTATIONS:
+                qs = Annotation.objects.filter(
+                    corpus=corpus,
+                    document=doc,
+                    annotation_label__text=label_text,
+                )
+                if raw_text:
+                    qs = qs.filter(raw_text=raw_text)
+                annot = qs.first()
+                self.assertIsNotNone(annot, f"Missing annotation for {label_text}")
 
-        for label_text, raw_text, page, _, _ in EXPECTED_TEXT_ANNOTATIONS:
-            if raw_text is None:
-                continue
+                self.assertIn(
+                    page_key,
+                    annot.json,
+                    f"annotation_json missing page key '{page_key}' "
+                    f"for '{label_text}' / '{raw_text}'",
+                )
+
+                page_data = annot.json[page_key]
+                self.assertIn("bounds", page_data)
+
+                tokens = page_data.get("tokensJsons", [])
+                self.assertEqual(
+                    len(tokens),
+                    token_count,
+                    f"Token count mismatch for '{label_text}' / '{raw_text}'",
+                )
+
+        # -- Bounding box spot-check --
+        with self.subTest("bounds_values"):
             annot = Annotation.objects.get(
                 corpus=corpus,
                 document=doc,
-                annotation_label__text=label_text,
-                raw_text=raw_text,
+                raw_text=" ACTIVE WITH ME, Inc.",
             )
-            self.assertEqual(
-                annot.page,
-                page,
-                f"Page mismatch for annotation '{raw_text}'",
+            bounds = annot.json["0"]["bounds"]
+            self.assertAlmostEqual(
+                bounds["top"], EXPECTED_ACTIVE_BOUNDS["top"], places=1
+            )
+            self.assertAlmostEqual(
+                bounds["left"], EXPECTED_ACTIVE_BOUNDS["left"], places=1
+            )
+            # places=0 for right: the imported value has more floating-point
+            # drift on the right edge (~0.24 units) than the other edges.
+            self.assertAlmostEqual(
+                bounds["right"], EXPECTED_ACTIVE_BOUNDS["right"], places=0
+            )
+            self.assertAlmostEqual(
+                bounds["bottom"], EXPECTED_ACTIVE_BOUNDS["bottom"], places=1
             )
 
-    def test_annotation_spans_and_tokens(self):
-        """Verify annotation JSON contains correct bounds and token references."""
-        corpus = self._run_import()
-        doc = self._get_corpus_document(corpus)
-
-        for label_text, raw_text, _, page_key, token_count in EXPECTED_TEXT_ANNOTATIONS:
-            qs = Annotation.objects.filter(
+        # -- Token structure --
+        with self.subTest("token_structure"):
+            annot = Annotation.objects.get(
                 corpus=corpus,
                 document=doc,
-                annotation_label__text=label_text,
+                raw_text=" ACTIVE WITH ME, Inc.",
             )
-            if raw_text:
-                qs = qs.filter(raw_text=raw_text)
-            annot = qs.first()
-            self.assertIsNotNone(annot, f"Missing annotation for {label_text}")
+            tokens = annot.json["0"]["tokensJsons"]
+            for token in tokens:
+                self.assertIn("pageIndex", token)
+                self.assertIn("tokenIndex", token)
+                self.assertEqual(token["pageIndex"], 0)
 
-            # Verify the page key exists in annotation_json
-            self.assertIn(
-                page_key,
-                annot.json,
-                f"annotation_json missing page key '{page_key}' "
-                f"for '{label_text}' / '{raw_text}'",
+        # -- Doc-level annotation --
+        with self.subTest("doc_level_annotation"):
+            doc_annots = Annotation.objects.filter(
+                corpus=corpus,
+                document=doc,
+                annotation_label__label_type=DOC_TYPE_LABEL,
             )
-
-            page_data = annot.json[page_key]
-
-            # Verify bounds exist
-            self.assertIn("bounds", page_data)
-
-            # Verify token count
-            tokens = page_data.get("tokensJsons", [])
-            self.assertEqual(
-                len(tokens),
-                token_count,
-                f"Token count mismatch for '{label_text}' / '{raw_text}'",
-            )
-
-    def test_annotation_bounds_values(self):
-        """Verify the bounding box values for a specific annotation."""
-        corpus = self._run_import()
-        doc = self._get_corpus_document(corpus)
-
-        annot = Annotation.objects.get(
-            corpus=corpus,
-            document=doc,
-            raw_text=" ACTIVE WITH ME, Inc.",
-        )
-        bounds = annot.json["0"]["bounds"]
-        self.assertAlmostEqual(bounds["top"], EXPECTED_ACTIVE_BOUNDS["top"], places=1)
-        self.assertAlmostEqual(bounds["left"], EXPECTED_ACTIVE_BOUNDS["left"], places=1)
-        self.assertAlmostEqual(
-            bounds["right"], EXPECTED_ACTIVE_BOUNDS["right"], places=0
-        )
-        self.assertAlmostEqual(
-            bounds["bottom"], EXPECTED_ACTIVE_BOUNDS["bottom"], places=1
-        )
-
-    def test_annotation_token_structure(self):
-        """Verify token references have the expected pageIndex/tokenIndex format."""
-        corpus = self._run_import()
-        doc = self._get_corpus_document(corpus)
-
-        annot = Annotation.objects.get(
-            corpus=corpus,
-            document=doc,
-            raw_text=" ACTIVE WITH ME, Inc.",
-        )
-        tokens = annot.json["0"]["tokensJsons"]
-        for token in tokens:
-            self.assertIn("pageIndex", token)
-            self.assertIn("tokenIndex", token)
-            self.assertEqual(token["pageIndex"], 0)
-
-    def test_doc_level_annotation(self):
-        """Verify the doc-level annotation references the 'Supply' label."""
-        corpus = self._run_import()
-        doc = self._get_corpus_document(corpus)
-
-        doc_annots = Annotation.objects.filter(
-            corpus=corpus,
-            document=doc,
-            annotation_label__label_type=DOC_TYPE_LABEL,
-        )
-        self.assertEqual(doc_annots.count(), 1)
-        self.assertEqual(doc_annots.first().annotation_label.text, "Supply")
+            self.assertEqual(doc_annots.count(), 1)
+            self.assertEqual(doc_annots.first().annotation_label.text, "Supply")
 
     # ------------------------------------------------------------------
     # Relationship verification (issue #999 requirement 3)
     # ------------------------------------------------------------------
-
-    def test_fixture_has_no_relationships(self):
-        """Confirm the V1 fixture contains no relationships."""
-        self._run_import()
-        self.assertEqual(Relationship.objects.count(), 0)
 
     def test_relationship_import_single(self):
         """Validate import_relationships creates a relationship with correct links."""
         corpus = self._run_import()
         doc = self._get_corpus_document(corpus)
 
-        # Pick two annotations as source and target.
         source_annot = Annotation.objects.filter(
             corpus=corpus, document=doc, raw_text=" ACTIVE WITH ME, Inc."
         ).first()
@@ -348,19 +354,8 @@ class TestCorpusImport(TransactionTestCase):
         self.assertIsNotNone(source_annot)
         self.assertIsNotNone(target_annot)
 
-        # Create a relationship label.
-        rel_label = AnnotationLabel.objects.create(
-            text="references",
-            label_type=RELATIONSHIP_LABEL,
-            color="#000000",
-            icon="tag",
-            creator=self.user,
-        )
-        set_permissions_for_obj_to_user(self.user, rel_label, [PermissionTypes.ALL])
+        rel_label = self._create_rel_label("references")
 
-        # Build the annotation_id_map (old_id -> new_pk).
-        # We use the annotation PKs themselves since we're constructing
-        # synthetic import data that maps them through the same pipeline.
         annotation_id_map = {
             str(source_annot.pk): source_annot.pk,
             str(target_annot.pk): target_annot.pk,
@@ -385,7 +380,6 @@ class TestCorpusImport(TransactionTestCase):
             annotation_id_map=annotation_id_map,
         )
 
-        # Verify the relationship was created correctly.
         self.assertEqual(len(result), 1)
         self.assertIn("rel_1", result)
 
@@ -425,14 +419,7 @@ class TestCorpusImport(TransactionTestCase):
         self.assertIsNotNone(gov_law)
         self.assertIsNotNone(anti_assign)
 
-        rel_label = AnnotationLabel.objects.create(
-            text="related_to",
-            label_type=RELATIONSHIP_LABEL,
-            color="#112233",
-            icon="tag",
-            creator=self.user,
-        )
-        set_permissions_for_obj_to_user(self.user, rel_label, [PermissionTypes.ALL])
+        rel_label = self._create_rel_label("related_to", color="#112233")
 
         all_pks = [a.pk for a in parties_annots] + [gov_law.pk, anti_assign.pk]
         annotation_id_map = {str(pk): pk for pk in all_pks}
@@ -456,6 +443,9 @@ class TestCorpusImport(TransactionTestCase):
             annotation_id_map=annotation_id_map,
         )
 
+        self.assertEqual(len(result), 1)
+        self.assertIn("rel_multi", result)
+
         rel = result["rel_multi"]
         self.assertEqual(rel.source_annotations.count(), 2)
         self.assertEqual(rel.target_annotations.count(), 2)
@@ -474,14 +464,7 @@ class TestCorpusImport(TransactionTestCase):
         annots = list(Annotation.objects.filter(corpus=corpus, document=doc)[:2])
         self.assertEqual(len(annots), 2)
 
-        rel_label = AnnotationLabel.objects.create(
-            text="structural_ref",
-            label_type=RELATIONSHIP_LABEL,
-            color="#445566",
-            icon="tag",
-            creator=self.user,
-        )
-        set_permissions_for_obj_to_user(self.user, rel_label, [PermissionTypes.ALL])
+        rel_label = self._create_rel_label("structural_ref", color="#445566")
 
         annotation_id_map = {str(a.pk): a.pk for a in annots}
 
@@ -504,4 +487,6 @@ class TestCorpusImport(TransactionTestCase):
             annotation_id_map=annotation_id_map,
         )
 
+        self.assertEqual(len(result), 1)
+        self.assertIn("rel_struct", result)
         self.assertTrue(result["rel_struct"].structural)
