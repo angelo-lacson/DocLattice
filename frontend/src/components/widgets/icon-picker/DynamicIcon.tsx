@@ -2,12 +2,13 @@ import React from "react";
 
 import type { LucideIcon } from "lucide-react";
 
+import { DYNAMIC_ICON_DEFAULT_SIZE } from "../../../assets/configurations/constants";
 import { resolveIcon } from "../../../utils/iconCompat";
 
 export interface DynamicIconProps {
   /** SUI or Lucide icon name (e.g. "trash", "file-text", "warning sign"). */
   name: string;
-  /** Pixel size for width and height. Defaults to 16. */
+  /** Pixel size for width and height. Defaults to DYNAMIC_ICON_DEFAULT_SIZE. */
   size?: number;
   /** Icon colour (any valid CSS colour). */
   color?: string;
@@ -29,7 +30,7 @@ export interface DynamicIconProps {
  */
 export const DynamicIcon: React.FC<DynamicIconProps> = ({
   name,
-  size = 16,
+  size = DYNAMIC_ICON_DEFAULT_SIZE,
   color,
   "aria-label": ariaLabel,
   "aria-hidden": ariaHidden,
@@ -46,6 +47,7 @@ export const DynamicIcon: React.FC<DynamicIconProps> = ({
       strokeWidth={strokeWidth}
       aria-label={ariaLabel}
       aria-hidden={ariaHidden ?? !ariaLabel}
+      role={ariaLabel ? "img" : undefined}
     />
   );
 };

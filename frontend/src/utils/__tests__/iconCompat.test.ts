@@ -74,7 +74,11 @@ describe("iconCompat", () => {
 
     it("returns a valid React component for every SUI entry", () => {
       // Entries that intentionally map to HelpCircle (their Lucide equivalent)
-      const mapsToHelpCircle = new Set(["question circle outline"]);
+      const mapsToHelpCircle = new Set(
+        Object.entries(SEMANTIC_TO_LUCIDE)
+          .filter(([, v]) => v === "help-circle")
+          .map(([k]) => k)
+      );
 
       for (const [suiName, lucideName] of Object.entries(SEMANTIC_TO_LUCIDE)) {
         const component = resolveIcon(suiName);
@@ -120,10 +124,14 @@ describe("iconCompat", () => {
       expect(resolveIcon("file text")).toBe(fileIcon);
     });
 
-    it("warning variants all resolve to the same component", () => {
+    it("warning and warning sign resolve to the same component", () => {
       const warnIcon = resolveIcon("warning");
-      expect(resolveIcon("warning circle")).toBe(warnIcon);
       expect(resolveIcon("warning sign")).toBe(warnIcon);
+    });
+
+    it("warning circle resolves to circle-alert (distinct from warning)", () => {
+      expect(resolveIconName("warning circle")).toBe("circle-alert");
+      expect(resolveIconName("warning")).toBe("alert-triangle");
     });
 
     it("cog and settings resolve to different but valid components", () => {
@@ -146,7 +154,7 @@ describe("iconCompat", () => {
   // ── Case sensitivity documentation ──────────────────────────
 
   describe("case sensitivity", () => {
-    it("normalises all input to lowercase before lookup", () => {
+    it("normalizes all input to lowercase before lookup", () => {
       // SUI names
       expect(resolveIconName("TRASH")).toBe("trash");
       expect(resolveIconName("Info Circle")).toBe("info");
