@@ -111,13 +111,8 @@ class TestDocExtractQueryTask(TransactionTestCase):
             # Optionally, assert structure/contents of 'result' as appropriate for your logic
             self.assertIn("data", result, "Expected 'data' key in result")
 
-        except Exception as e:
-            logging.error(
-                f"Exception in test_doc_extract_query_task_synchronously: {e}"
-            )
-            import traceback
-
-            logging.error(traceback.format_exc())
+        except Exception:
+            logging.exception("Exception in test_doc_extract_query_task_synchronously")
             raise
 
 
@@ -233,13 +228,11 @@ class TestDocExtractQueryTaskDirect(BaseFixtureTestCase):
                     cell.failed, f"Cell {cell.id} should not be marked as failed"
                 )
 
-            except Exception as e:
-                logging.error(
-                    f"Exception in test_doc_extract_query_task_directly for cell {cell.id}: {e}"
+            except Exception:
+                logging.exception(
+                    "Exception in test_doc_extract_query_task_directly for cell %s",
+                    cell.id,
                 )
-                import traceback
-
-                logging.error(traceback.format_exc())
                 raise
 
         # Double-check the number of DocumentAnalysisRows if desired
