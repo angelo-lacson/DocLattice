@@ -26,11 +26,7 @@ Test wrapper that provides:
 - Optional corpusId parameter for testing both modes
 - Custom Apollo link for request logging
 
-### 3. CorpusRequiredEmptyState.ct.tsx
-
-Tests for the empty state component shown for corpus-required features.
-
-### 4. useFeatureAvailability.test.ts
+### 3. useFeatureAvailability.test.ts
 
 Unit tests for the feature availability hook logic.
 
