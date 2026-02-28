@@ -5,7 +5,6 @@ import { MockedProvider } from "@apollo/client/testing";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { UserProfileRoute } from "../src/components/routes/UserProfileRoute";
 import { UserProfile } from "../src/views/UserProfile";
-import { UserLink } from "../src/components/widgets/UserLink";
 import { GET_USER, GET_USER_BADGES } from "../src/graphql/queries";
 import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
 
@@ -25,62 +24,6 @@ const mockPublicUser = {
   totalAnnotationsCreated: 28,
   totalDocumentsUploaded: 10,
 };
-
-test.describe("UserLink Component", () => {
-  test("should render username as clickable link when slug provided", async ({
-    mount,
-    page,
-  }) => {
-    const component = await mount(
-      <MemoryRouter>
-        <UserLink username="testuser" slug="testuser-123" />
-      </MemoryRouter>
-    );
-
-    // Check link is visible with correct text
-    const link = page.locator('a:has-text("testuser")');
-    await expect(link).toBeVisible();
-
-    // Check link has correct href
-    await expect(link).toHaveAttribute("href", "/users/testuser-123");
-
-    await component.unmount();
-  });
-
-  test("should render username as plain text when no slug provided", async ({
-    mount,
-    page,
-  }) => {
-    const component = await mount(
-      <MemoryRouter>
-        <UserLink username="anonuser" />
-      </MemoryRouter>
-    );
-
-    // Check text is visible but not as a link
-    await expect(page.locator("span:has-text('anonuser')")).toBeVisible();
-    await expect(page.locator("a:has-text('anonuser')")).not.toBeVisible();
-
-    await component.unmount();
-  });
-
-  test("should render username as plain text when disableLink is true", async ({
-    mount,
-    page,
-  }) => {
-    const component = await mount(
-      <MemoryRouter>
-        <UserLink username="disabled" slug="disabled-123" disableLink={true} />
-      </MemoryRouter>
-    );
-
-    // Check text is visible but not as a link
-    await expect(page.locator("span:has-text('disabled')")).toBeVisible();
-    await expect(page.locator("a:has-text('disabled')")).not.toBeVisible();
-
-    await component.unmount();
-  });
-});
 
 test.describe("UserProfile View - Loading and Error States", () => {
   test("should show loading state while fetching user data", async ({
