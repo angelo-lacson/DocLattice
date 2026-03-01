@@ -56,6 +56,7 @@ import { TruncatedText } from "../../widgets/data-display/TruncatedText";
 import { CreateColumnModal } from "../../widgets/modals/CreateColumnModal";
 import { SelectDocumentsModal } from "../../widgets/modals/SelectDocumentsModal";
 import { REQUEST_GET_EXTRACT } from "../../../graphql/queries";
+import { WarningMessage } from "../../widgets/feedback";
 
 interface DragState {
   isDragging: boolean;
@@ -1173,24 +1174,10 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               {deleteModalState.columnToDelete?.name}"?
             </p>
             {extract.fieldset?.inUse && (
-              <div
-                style={{
-                  padding: "0.75rem 1rem",
-                  background: "#fefce8",
-                  border: "1px solid #fde68a",
-                  borderRadius: "6px",
-                  color: "#854d0e",
-                  marginTop: "0.5rem",
-                }}
-              >
-                <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-                  Note:
-                </strong>
-                <p style={{ margin: 0 }}>
-                  This fieldset is used in multiple places. Deleting this column
-                  will create a new copy of the fieldset for this extract only.
-                </p>
-              </div>
+              <WarningMessage title="Note:" style={{ marginTop: "0.5rem" }}>
+                This fieldset is used in multiple places. Deleting this column
+                will create a new copy of the fieldset for this extract only.
+              </WarningMessage>
             )}
           </Modal.Content>
           <Modal.Actions

@@ -16,7 +16,6 @@ import {
   Confirm,
 } from "semantic-ui-react";
 import { Input } from "@os-legal/ui";
-import { Spinner } from "@os-legal/ui";
 import { Copy, Check, Key, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -34,6 +33,11 @@ import {
   OS_LEGAL_SPACING,
 } from "../../../assets/configurations/osLegalStyles";
 import { getNumericIdFromGlobalId } from "../../../utils/idValidation";
+import {
+  ErrorMessage,
+  InfoMessage,
+  LoadingState,
+} from "../../widgets/feedback";
 
 // ---------------------------------------------------------------------------
 // GraphQL operations
@@ -384,18 +388,9 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
 
   if (numericCorpusId === null) {
     return (
-      <div
-        style={{
-          padding: "1rem",
-          border: "1px solid #fecaca",
-          borderRadius: "8px",
-          background: "#fef2f2",
-          color: "#991b1b",
-        }}
-      >
-        <strong>Invalid corpus ID</strong>
-        <p>Unable to parse the corpus identifier.</p>
-      </div>
+      <ErrorMessage title="Invalid corpus ID">
+        Unable to parse the corpus identifier.
+      </ErrorMessage>
     );
   }
 
@@ -427,47 +422,20 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
             be rate-limited or set to expire.
           </InfoNote>
 
-          {loadingTokens && (
-            <div style={{ textAlign: "center", padding: "2rem" }}>
-              <Spinner size="md" />
-              <div style={{ marginTop: "12px", color: "#64748b" }}>
-                Loading tokens...
-              </div>
-            </div>
-          )}
+          {loadingTokens && <LoadingState message="Loading tokens..." />}
 
           {tokensError && (
-            <div
-              style={{
-                padding: "1rem",
-                border: "1px solid #fecaca",
-                borderRadius: "8px",
-                background: "#fef2f2",
-                color: "#991b1b",
-              }}
-            >
-              <strong>Error loading tokens</strong>
-              <p>{tokensError.message}</p>
-            </div>
+            <ErrorMessage title="Error loading tokens">
+              {tokensError.message}
+            </ErrorMessage>
           )}
 
           {!loadingTokens && !tokensError && tokens.length === 0 && (
-            <div
-              style={{
-                padding: "1rem",
-                border: "1px solid #bfdbfe",
-                borderRadius: "8px",
-                background: "#eff6ff",
-                color: "#1e40af",
-              }}
-            >
-              <strong>No Access Tokens</strong>
-              <p>
-                {isSuperuser || isCreator
-                  ? "Create a token to allow a worker account to upload documents to this corpus."
-                  : "No access tokens have been created for this corpus yet. Contact an administrator to create one."}
-              </p>
-            </div>
+            <InfoMessage title="No Access Tokens">
+              {isSuperuser || isCreator
+                ? "Create a token to allow a worker account to upload documents to this corpus."
+                : "No access tokens have been created for this corpus yet. Contact an administrator to create one."}
+            </InfoMessage>
           )}
 
           {!loadingTokens && !tokensError && tokens.length > 0 && (
@@ -565,12 +533,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
         <Modal.Header>Create Access Token</Modal.Header>
         <Modal.Content>
           {loadingAccounts ? (
-            <div style={{ textAlign: "center", padding: "2rem" }}>
-              <Spinner size="md" />
-              <div style={{ marginTop: "12px", color: "#64748b" }}>
-                Loading worker accounts...
-              </div>
-            </div>
+            <LoadingState message="Loading worker accounts..." />
           ) : (
             <Form>
               <Form.Field required>

@@ -7,6 +7,7 @@ import { useAnnotationDisplay } from "../context/UISettingsAtom";
 import { updateAnnotationDisplayParams } from "../../../utils/navigationUtils";
 import { ViewLabelSelector } from "../labels/view_labels_selector/ViewLabelSelector";
 import { LabelDisplayBehavior } from "../../../types/graphql-api";
+import { ToggleSwitch } from "../../widgets/ToggleSwitch";
 
 interface AnnotationControlsProps {
   /** Display variant - affects styling and layout */
@@ -61,52 +62,6 @@ const ControlLabel = styled.div<{ $compact?: boolean }>`
     width: ${(props) => (props.$compact ? "16px" : "18px")};
     height: ${(props) => (props.$compact ? "16px" : "18px")};
     color: #64748b;
-  }
-`;
-
-const ToggleSwitch = styled.label`
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-  transform: scale(1.1);
-
-  input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-
-  span {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #e2e8f0;
-    border-radius: 20px;
-    transition: 0.2s;
-
-    &:before {
-      position: absolute;
-      content: "";
-      height: 14px;
-      width: 14px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      border-radius: 50%;
-      transition: 0.2s;
-    }
-  }
-
-  input:checked + span {
-    background-color: #3b82f6;
-  }
-
-  input:checked + span:before {
-    transform: translateX(16px);
   }
 `;
 
@@ -284,6 +239,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           <ToggleSwitch>
             <input
               type="checkbox"
+              aria-label="Show Only Selected"
               checked={showSelectedOnly}
               onChange={(e) => handleShowSelectedChange(e.target.checked)}
             />
@@ -299,6 +255,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           <ToggleSwitch>
             <input
               type="checkbox"
+              aria-label="Show Bounding Boxes"
               checked={showBoundingBoxes}
               onChange={(e) => handleShowBoundingBoxesChange(e.target.checked)}
             />
@@ -314,6 +271,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           <ToggleSwitch>
             <input
               type="checkbox"
+              aria-label="Show Structural"
               checked={showStructural}
               onChange={(e) => handleShowStructuralChange(e.target.checked)}
             />

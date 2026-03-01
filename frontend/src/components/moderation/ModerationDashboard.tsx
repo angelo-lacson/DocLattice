@@ -22,6 +22,12 @@ import {
   MessagesSquare,
 } from "lucide-react";
 import { Spinner } from "@os-legal/ui";
+import {
+  ErrorMessage,
+  InfoMessage,
+  WarningMessage,
+  LoadingState,
+} from "../widgets/feedback";
 import { toast } from "react-toastify";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -118,14 +124,19 @@ const formatActionType = (actionType: string): string => {
     .join(" ");
 };
 
-const getActionColor = (
-  actionType: string
-): "red" | "green" | "blue" | "yellow" | "grey" => {
-  if (actionType.includes("delete")) return "red";
-  if (actionType.includes("restore")) return "green";
-  if (actionType.includes("lock")) return "yellow";
-  if (actionType.includes("pin")) return "blue";
-  return "grey";
+const ACTION_COLOR_MAP: Record<string, { bg: string; color: string }> = {
+  delete: { bg: "#fef2f2", color: "#991b1b" },
+  restore: { bg: "#f0fdf4", color: "#166534" },
+  lock: { bg: "#fefce8", color: "#854d0e" },
+  pin: { bg: "#f0f9ff", color: "#1e40af" },
+};
+const DEFAULT_ACTION_COLORS = { bg: "#f8fafc", color: "#475569" };
+
+const getActionColors = (actionType: string): { bg: string; color: string } => {
+  for (const [key, value] of Object.entries(ACTION_COLOR_MAP)) {
+    if (actionType.includes(key)) return value;
+  }
+  return DEFAULT_ACTION_COLORS;
 };
 
 export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
@@ -316,30 +327,14 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             <Spinner size="sm" />
           </div>
         ) : metricsError ? (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "6px",
-              color: "#991b1b",
-            }}
-          >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              Error loading metrics
-            </strong>
-            <p style={{ margin: 0 }}>{metricsError.message}</p>
-          </div>
+          <ErrorMessage title="Error loading metrics">
+            {metricsError.message}
+          </ErrorMessage>
         ) : metrics ? (
           <>
             {metrics.isAboveThreshold && (
-              <div
+              <WarningMessage
                 style={{
-                  padding: "0.75rem 1rem",
-                  background: "#fefce8",
-                  border: "1px solid #fde68a",
-                  borderRadius: "6px",
-                  color: "#854d0e",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
@@ -349,7 +344,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                 <AlertTriangle size={16} />
                 High moderation activity detected! Threshold exceeded for:{" "}
                 {metrics.thresholdExceededTypes.join(", ")}
-              </div>
+              </WarningMessage>
             )}
             <div
               style={{
@@ -379,17 +374,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             </div>
           </>
         ) : (
-          <div
-            style={{
-              padding: "0.5rem 0.75rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-            }}
-          >
-            No metrics available
-          </div>
+          <InfoMessage>No metrics available</InfoMessage>
         )}
       </div>
 
@@ -470,46 +455,13 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
           Moderation Actions
         </h4>
         {actionsLoading ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "2rem",
-            }}
-          >
-            <Spinner size="md" />
-            <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-              Loading actions...
-            </span>
-          </div>
+          <LoadingState message="Loading actions..." />
         ) : actionsError ? (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "6px",
-              color: "#991b1b",
-            }}
-          >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              Error loading actions
-            </strong>
-            <p style={{ margin: 0 }}>{actionsError.message}</p>
-          </div>
+          <ErrorMessage title="Error loading actions">
+            {actionsError.message}
+          </ErrorMessage>
         ) : actions.length === 0 ? (
-          <div
-            style={{
-              padding: "0.5rem 0.75rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-            }}
-          >
-            No moderation actions found
-          </div>
+          <InfoMessage>No moderation actions found</InfoMessage>
         ) : (
           <>
             <Table celled striped>
@@ -528,32 +480,16 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                   <Table.Row key={node.id}>
                     <Table.Cell>
                       <span
+                        className="action-badge"
                         style={{
                           display: "inline-block",
                           padding: "0.2em 0.5em",
                           fontSize: "0.8rem",
                           fontWeight: 500,
                           borderRadius: "4px",
-                          background: node.actionType.includes("delete")
-                            ? "#fef2f2"
-                            : node.actionType.includes("restore")
-                            ? "#f0fdf4"
-                            : node.actionType.includes("lock")
-                            ? "#fefce8"
-                            : node.actionType.includes("pin")
-                            ? "#f0f9ff"
-                            : "#f8fafc",
-                          color: node.actionType.includes("delete")
-                            ? "#991b1b"
-                            : node.actionType.includes("restore")
-                            ? "#166534"
-                            : node.actionType.includes("lock")
-                            ? "#854d0e"
-                            : node.actionType.includes("pin")
-                            ? "#1e40af"
-                            : "#475569",
+                          background: getActionColors(node.actionType).bg,
+                          color: getActionColors(node.actionType).color,
                           border: "1px solid currentColor",
-                          borderColor: "inherit",
                         }}
                       >
                         {formatActionType(node.actionType)}

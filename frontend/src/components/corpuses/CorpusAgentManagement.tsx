@@ -7,6 +7,8 @@ import { Plus, Edit, Trash2, Cpu } from "lucide-react";
 import { Input, Spinner } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { BadgeConfigurator, BadgeConfig } from "../agents/BadgeConfigurator";
+import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
+import { StyledTextArea } from "../widgets/modals/styled";
 
 // GraphQL Queries and Mutations
 const GET_CORPUS_AGENTS = gql`
@@ -614,17 +616,9 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   if (!canUpdate) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#f0f9ff",
-            border: "1px solid #bae6fd",
-            borderRadius: "6px",
-            color: "#0369a1",
-          }}
-        >
+        <InfoMessage>
           You do not have permission to manage agents for this corpus.
-        </div>
+        </InfoMessage>
       </Container>
     );
   }
@@ -632,20 +626,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   if (loading) {
     return (
       <Container>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "3rem",
-          }}
-        >
-          <Spinner size="md" />
-          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-            Loading agents...
-          </span>
-        </div>
+        <LoadingState message="Loading agents..." />
       </Container>
     );
   }
@@ -653,20 +634,9 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   if (error) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "6px",
-            color: "#991b1b",
-          }}
-        >
-          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-            Error loading agents
-          </strong>
-          <p style={{ margin: 0 }}>{error.message}</p>
-        </div>
+        <ErrorMessage title="Error loading agents">
+          {error.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -825,34 +795,25 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
       >
         <Modal.Header>Create Agent Configuration</Modal.Header>
         <Modal.Content scrolling>
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-              marginBottom: "1rem",
-              fontSize: "0.875rem",
-            }}
+          <InfoMessage
+            title="How Agent Scope Works"
+            style={{ marginBottom: "1rem" }}
           >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              How Agent Scope Works
-            </strong>
-            <p style={{ marginTop: "0.5rem", margin: 0 }}>
-              This configuration defines the agent's capabilities. When used:
-            </p>
-            <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
-              <li>
-                In <strong>Corpus Actions</strong>: Agent processes individual
-                documents automatically
-              </li>
-              <li>
-                In <strong>Chat</strong>: Agent scope depends on the
-                conversation context (document or corpus)
-              </li>
-            </ul>
-          </div>
+            <>
+              This configuration defines the agent&apos;s capabilities. When
+              used:
+              <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
+                <li>
+                  In <strong>Corpus Actions</strong>: Agent processes individual
+                  documents automatically
+                </li>
+                <li>
+                  In <strong>Chat</strong>: Agent scope depends on the
+                  conversation context (document or corpus)
+                </li>
+              </ul>
+            </>
+          </InfoMessage>
           <Form>
             <Form.Field required>
               <label>Name</label>
@@ -882,27 +843,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <textarea
+              <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={2}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "inherit",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
               />
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <textarea
+              <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -912,15 +864,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   })
                 }
                 rows={6}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "monospace",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>
@@ -989,19 +933,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 as permission-required.
               </ToolHelpText>
               {formState.availableTools.length === 0 ? (
-                <div
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    background: "#f0f9ff",
-                    border: "1px solid #bae6fd",
-                    borderRadius: "6px",
-                    color: "#0369a1",
-                    fontSize: "0.875rem",
-                  }}
-                >
+                <InfoMessage>
                   Select available tools first to configure permission
                   requirements.
-                </div>
+                </InfoMessage>
               ) : (
                 <ToolSelectionContainer style={{ maxHeight: "150px" }}>
                   {formState.availableTools.map((toolName) => {
@@ -1142,27 +1077,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <textarea
+              <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={2}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "inherit",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
               />
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <textarea
+              <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -1172,15 +1098,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   })
                 }
                 rows={6}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "monospace",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>
@@ -1249,19 +1167,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 as permission-required.
               </ToolHelpText>
               {formState.availableTools.length === 0 ? (
-                <div
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    background: "#f0f9ff",
-                    border: "1px solid #bae6fd",
-                    borderRadius: "6px",
-                    color: "#0369a1",
-                    fontSize: "0.875rem",
-                  }}
-                >
+                <InfoMessage>
                   Select available tools first to configure permission
                   requirements.
-                </div>
+                </InfoMessage>
               ) : (
                 <ToolSelectionContainer style={{ maxHeight: "150px" }}>
                   {formState.availableTools.map((toolName) => {

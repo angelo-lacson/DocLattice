@@ -3,6 +3,8 @@ import { Modal, Form, Button, Dropdown, Menu } from "semantic-ui-react";
 import { Info, Settings, Cpu, FileText } from "lucide-react";
 import { Spinner } from "@os-legal/ui";
 import { useMutation, useQuery } from "@apollo/client";
+import { InfoMessage } from "../widgets/feedback";
+import { StyledTextArea } from "../widgets/modals/styled";
 import { toast } from "react-toastify";
 import _ from "lodash";
 
@@ -674,20 +676,10 @@ export const CreateCorpusActionModal: React.FC<
                 <FileText size={16} />
                 Fieldset Configuration
               </h4>
-              <div
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  background: "#f0f9ff",
-                  border: "1px solid #bae6fd",
-                  borderRadius: "6px",
-                  color: "#0369a1",
-                  fontSize: "0.875rem",
-                  marginBottom: "0.75rem",
-                }}
-              >
+              <InfoMessage style={{ marginBottom: "0.75rem" }}>
                 Select a fieldset to automatically extract data from documents
                 when they are {trigger === "add_document" ? "added" : "edited"}.
-              </div>
+              </InfoMessage>
               <Form.Field required>
                 <label>Fieldset</label>
                 <Dropdown
@@ -725,20 +717,10 @@ export const CreateCorpusActionModal: React.FC<
                 <Settings size={16} />
                 Analyzer Configuration
               </h4>
-              <div
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  background: "#f0f9ff",
-                  border: "1px solid #bae6fd",
-                  borderRadius: "6px",
-                  color: "#0369a1",
-                  fontSize: "0.875rem",
-                  marginBottom: "0.75rem",
-                }}
-              >
+              <InfoMessage style={{ marginBottom: "0.75rem" }}>
                 Select an analyzer to automatically run analysis on documents
                 when they are {trigger === "add_document" ? "added" : "edited"}.
-              </div>
+              </InfoMessage>
               <Form.Field required>
                 <label>Analyzer</label>
                 <Dropdown
@@ -780,18 +762,8 @@ export const CreateCorpusActionModal: React.FC<
               {/* Create mode: Show mode toggle for inline vs existing agent */}
               {!isEditMode && (
                 <>
-                  <div
-                    style={{
-                      padding: "0.5rem 0.75rem",
-                      background: "#f0f9ff",
-                      border: "1px solid #bae6fd",
-                      borderRadius: "6px",
-                      color: "#0369a1",
-                      fontSize: "0.875rem",
-                      marginBottom: "0.75rem",
-                    }}
-                  >
-                    <p style={{ margin: 0 }}>
+                  <InfoMessage style={{ marginBottom: "0.75rem" }}>
+                    <>
                       <Info
                         size={14}
                         style={{
@@ -815,8 +787,8 @@ export const CreateCorpusActionModal: React.FC<
                         ? "a document is added to this corpus"
                         : "a document is edited in this corpus"}
                       .
-                    </p>
-                  </div>
+                    </>
+                  </InfoMessage>
 
                   <Menu pointing secondary size="small">
                     <Menu.Item
@@ -907,7 +879,7 @@ export const CreateCorpusActionModal: React.FC<
                             ? "System Instructions"
                             : "Agent Role"}
                         </label>
-                        <textarea
+                        <StyledTextArea
                           value={inlineAgentInstructions}
                           onChange={(e) =>
                             setInlineAgentInstructions(e.target.value)
@@ -918,15 +890,6 @@ export const CreateCorpusActionModal: React.FC<
                               : "Brief role description (e.g., 'You are a document summarizer')"
                           }
                           rows={isThreadTrigger ? 4 : 2}
-                          style={{
-                            width: "100%",
-                            padding: "0.5rem",
-                            fontFamily: "inherit",
-                            fontSize: "0.875rem",
-                            border: "1px solid #d4d4d8",
-                            borderRadius: "6px",
-                            resize: "vertical",
-                          }}
                         />
                         <small
                           style={{
@@ -943,7 +906,7 @@ export const CreateCorpusActionModal: React.FC<
 
                       <Form.Field required>
                         <label>Task Instructions</label>
-                        <textarea
+                        <StyledTextArea
                           value={taskInstructions}
                           onChange={(e) => setTaskInstructions(e.target.value)}
                           placeholder={
@@ -952,15 +915,6 @@ export const CreateCorpusActionModal: React.FC<
                               : "e.g., 'Summarize this document and update its description'"
                           }
                           rows={3}
-                          style={{
-                            width: "100%",
-                            padding: "0.5rem",
-                            fontFamily: "inherit",
-                            fontSize: "0.875rem",
-                            border: "1px solid #d4d4d8",
-                            borderRadius: "6px",
-                            resize: "vertical",
-                          }}
                         />
                         <small
                           style={{
@@ -1141,22 +1095,13 @@ export const CreateCorpusActionModal: React.FC<
 
                           <Form.Field required>
                             <label>Task Instructions</label>
-                            <textarea
+                            <StyledTextArea
                               value={taskInstructions}
                               onChange={(e) =>
                                 setTaskInstructions(e.target.value)
                               }
                               placeholder="Enter the task prompt for the agent"
                               rows={4}
-                              style={{
-                                width: "100%",
-                                padding: "0.5em",
-                                border: "1px solid #ddd",
-                                borderRadius: "4px",
-                                fontFamily: "inherit",
-                                fontSize: "inherit",
-                                resize: "vertical",
-                              }}
                             />
                           </Form.Field>
 
@@ -1201,36 +1146,27 @@ export const CreateCorpusActionModal: React.FC<
               {/* Edit mode: Show existing agent selection only */}
               {isEditMode && (
                 <>
-                  <div
-                    style={{
-                      padding: "0.75rem 1rem",
-                      background: "#f0f9ff",
-                      border: "1px solid #bae6fd",
-                      borderRadius: "6px",
-                      color: "#0369a1",
-                      marginBottom: "0.5em",
-                    }}
-                  >
-                    <p>
+                  <InfoMessage style={{ marginBottom: "0.5em" }}>
+                    <>
                       Select an AI agent to perform custom actions on{" "}
                       <strong>individual documents</strong>. The agent will
                       execute automatically when documents are{" "}
                       {trigger === "add_document" ? "added" : "edited"}.
-                    </p>
-                    <p
-                      style={{
-                        marginTop: "0.5em",
-                        marginBottom: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.3em",
-                      }}
-                    >
-                      <Info size={14} />
-                      The agent will have access to document-scoped tools
-                      (read/update description, summary, notes, annotations).
-                    </p>
-                  </div>
+                      <br />
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3em",
+                          marginTop: "0.5em",
+                        }}
+                      >
+                        <Info size={14} />
+                        The agent will have access to document-scoped tools
+                        (read/update description, summary, notes, annotations).
+                      </span>
+                    </>
+                  </InfoMessage>
 
                   <Form.Field required>
                     <label>Agent</label>
@@ -1272,20 +1208,11 @@ export const CreateCorpusActionModal: React.FC<
 
                       <Form.Field required>
                         <label>Task Instructions</label>
-                        <textarea
+                        <StyledTextArea
                           value={taskInstructions}
                           onChange={(e) => setTaskInstructions(e.target.value)}
                           placeholder="Enter the task prompt for the agent (e.g., 'Summarize this document and update its description')"
                           rows={4}
-                          style={{
-                            width: "100%",
-                            padding: "0.5em",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            fontFamily: "inherit",
-                            fontSize: "inherit",
-                            resize: "vertical",
-                          }}
                         />
                       </Form.Field>
 

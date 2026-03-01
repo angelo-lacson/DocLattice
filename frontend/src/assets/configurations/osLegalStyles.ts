@@ -115,6 +115,22 @@ export const OS_LEGAL_COLORS = {
   successHover: "#15803d",
   /** Success background - light green tint. */
   successLight: "rgba(22, 163, 74, 0.1)",
+
+  // Info colors - blue theme for informational messages
+  /** Info surface background - very light blue. */
+  infoSurface: "#f0f9ff",
+  /** Info border color - light blue. */
+  infoBorder: "#bae6fd",
+  /** Info text color - dark blue. */
+  infoText: "#0369a1",
+
+  // Warning colors - amber theme for caution messages
+  /** Warning surface background - very light amber. */
+  warningSurface: "#fefce8",
+  /** Warning border color - amber. */
+  warningBorder: "#fde68a",
+  /** Warning text color - dark amber. */
+  warningText: "#854d0e",
 } as const;
 
 /**

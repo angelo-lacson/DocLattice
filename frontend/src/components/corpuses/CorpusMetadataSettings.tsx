@@ -4,7 +4,6 @@
  */
 import React, { useState, useEffect } from "react";
 import { Table, Button, Popup, Confirm } from "semantic-ui-react";
-import { Spinner } from "@os-legal/ui";
 import { useQuery, useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -33,6 +32,7 @@ import {
 } from "../../graphql/metadataOperations";
 import { MetadataColumn } from "../../types/metadata";
 import { MetadataColumnModal } from "../widgets/modals/MetadataColumnModal";
+import { ErrorMessage, LoadingState } from "../widgets/feedback";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
@@ -481,14 +481,8 @@ export const CorpusMetadataSettings = ({
   if (loading) {
     return (
       <Container>
-        <div
-          style={{ textAlign: "center", padding: "2rem" }}
-          data-testid="metadata-loading"
-        >
-          <Spinner size="md" />
-          <div style={{ marginTop: "12px", color: "#64748b" }}>
-            Loading metadata fields...
-          </div>
+        <div data-testid="metadata-loading">
+          <LoadingState message="Loading metadata fields..." />
         </div>
       </Container>
     );
@@ -497,19 +491,15 @@ export const CorpusMetadataSettings = ({
   if (error) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "1rem",
-            border: "1px solid #fecaca",
-            borderRadius: "8px",
-            background: "#fef2f2",
-            color: "#991b1b",
-          }}
-        >
-          <strong>Failed to load metadata</strong>
-          <p>{error.message}</p>
-          <Button onClick={() => refetch()}>Retry</Button>
-        </div>
+        <ErrorMessage title="Failed to load metadata">
+          <>
+            {error.message}
+            <br />
+            <Button onClick={() => refetch()} style={{ marginTop: "0.5rem" }}>
+              Retry
+            </Button>
+          </>
+        </ErrorMessage>
       </Container>
     );
   }

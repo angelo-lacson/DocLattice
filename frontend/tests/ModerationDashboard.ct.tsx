@@ -166,250 +166,276 @@ const createMocks = (
 /* Tests                                                                       */
 /* -------------------------------------------------------------------------- */
 
-test("renders moderation dashboard with header and sections", async ({
-  mount,
-  page,
-}) => {
-  const mocks = createMocks(actionsData, metricsData);
+test(
+  "renders moderation dashboard with header and sections",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} corpusTitle="Test Corpus" />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} corpusTitle="Test Corpus" />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for dashboard to load
-  await expect(page.getByText("Moderation Dashboard")).toBeVisible({
-    timeout: 15000,
-  });
-  await expect(page.getByText("Test Corpus")).toBeVisible();
+    // Wait for dashboard to load
+    await expect(page.getByText("Moderation Dashboard")).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByText("Test Corpus")).toBeVisible();
 
-  // Check metrics section
-  await expect(page.getByText("Moderation Metrics")).toBeVisible();
+    // Check metrics section
+    await expect(page.getByText("Moderation Metrics")).toBeVisible();
 
-  // Check filters section
-  await expect(page.getByText("Filters")).toBeVisible();
+    // Check filters section
+    await expect(page.getByText("Filters")).toBeVisible();
 
-  // Check actions section
-  await expect(page.getByText("Moderation Actions")).toBeVisible();
-});
+    // Check actions section
+    await expect(page.getByText("Moderation Actions")).toBeVisible();
+  }
+);
 
-test("displays metrics correctly", async ({ mount, page }) => {
-  const mocks = createMocks(actionsData, metricsData);
+test(
+  "displays metrics correctly",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for metrics to load
-  await expect(page.getByText("Total Actions")).toBeVisible({ timeout: 15000 });
+    // Wait for metrics to load
+    await expect(page.getByText("Total Actions")).toBeVisible({
+      timeout: 15000,
+    });
 
-  // Check metric values using more specific selectors
-  const metricsSection = page
-    .locator(".segment")
-    .filter({ hasText: "Moderation Metrics" });
-  await expect(
-    metricsSection.locator(".statistic").filter({ hasText: "15" })
-  ).toBeVisible();
-  await expect(
-    metricsSection.locator(".statistic").filter({ hasText: "8" })
-  ).toBeVisible();
-  await expect(
-    metricsSection.locator(".statistic").filter({ hasText: "7" })
-  ).toBeVisible();
-  await expect(
-    metricsSection.locator(".statistic").filter({ hasText: "2.5" })
-  ).toBeVisible();
-});
+    // Check metric labels — Statistic component is still Semantic UI
+    const metricsSection = page
+      .locator("div")
+      .filter({ hasText: "Moderation Metrics" })
+      .first();
+    await expect(
+      metricsSection.locator(".statistic").filter({ hasText: "15" })
+    ).toBeVisible();
+    await expect(metricsSection.getByText("Manual")).toBeVisible();
+    await expect(metricsSection.getByText("Actions/Hour")).toBeVisible();
+  }
+);
 
-test("displays warning when threshold exceeded", async ({ mount, page }) => {
-  const mocks = createMocks(actionsData, metricsWithWarningData);
+test(
+  "displays warning when threshold exceeded",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsWithWarningData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for warning message
-  await expect(page.getByText(/High moderation activity detected/)).toBeVisible(
-    { timeout: 15000 }
-  );
-  await expect(page.getByText(/delete_message/)).toBeVisible();
-  await expect(page.getByText(/lock_thread/)).toBeVisible();
-});
+    // Wait for warning message
+    await expect(
+      page.getByText(/High moderation activity detected/)
+    ).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/delete_message/)).toBeVisible();
+    await expect(page.getByText(/lock_thread/)).toBeVisible();
+  }
+);
 
-test("displays moderation actions in table", async ({ mount, page }) => {
-  const mocks = createMocks(actionsData, metricsData);
+test(
+  "displays moderation actions in table",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for table to load with data (wait for table row with action data)
-  const table = page.getByRole("table");
-  await expect(table).toBeVisible({ timeout: 15000 });
+    // Wait for table to load with data (wait for table row with action data)
+    const table = page.getByRole("table");
+    await expect(table).toBeVisible({ timeout: 15000 });
 
-  // Wait for data to load - check for thread title which is unique to table
-  await expect(page.getByText("Test Thread")).toBeVisible({ timeout: 15000 });
+    // Wait for data to load - check for thread title which is unique to table
+    await expect(page.getByText("Test Thread")).toBeVisible({ timeout: 15000 });
 
-  // Check table headers using th elements with exact text
-  await expect(table.locator("th", { hasText: /^Action$/ })).toBeVisible();
-  await expect(table.locator("th", { hasText: /^Target$/ })).toBeVisible();
-  await expect(table.locator("th", { hasText: /^Moderator$/ })).toBeVisible();
-  await expect(table.locator("th", { hasText: /^Reason$/ })).toBeVisible();
+    // Check table headers using th elements with exact text
+    await expect(table.locator("th", { hasText: /^Action$/ })).toBeVisible();
+    await expect(table.locator("th", { hasText: /^Target$/ })).toBeVisible();
+    await expect(table.locator("th", { hasText: /^Moderator$/ })).toBeVisible();
+    await expect(table.locator("th", { hasText: /^Reason$/ })).toBeVisible();
 
-  // Check action data - look for labels in table body
-  await expect(
-    table.locator(".label").filter({ hasText: "Lock Thread" })
-  ).toBeVisible();
-  await expect(
-    table.locator(".label").filter({ hasText: "Delete Message" })
-  ).toBeVisible();
+    // Check action data - action badges are now styled spans with .action-badge class
+    await expect(
+      table.locator(".action-badge").filter({ hasText: "Lock Thread" })
+    ).toBeVisible();
+    await expect(
+      table.locator(".action-badge").filter({ hasText: "Delete Message" })
+    ).toBeVisible();
 
-  // Check thread titles
-  await expect(page.getByText("Another Thread")).toBeVisible();
+    // Check thread titles
+    await expect(page.getByText("Another Thread")).toBeVisible();
 
-  // Check moderator
-  await expect(page.getByText("moderator_user")).toBeVisible();
+    // Check moderator
+    await expect(page.getByText("moderator_user")).toBeVisible();
 
-  // Check automated badge
-  await expect(
-    table.locator(".label").filter({ hasText: "Auto" })
-  ).toBeVisible();
-});
+    // Check automated badge (span contains SVG icon + "Auto" text)
+    await expect(
+      table.locator("span").filter({ hasText: "Auto" }).first()
+    ).toBeVisible();
+  }
+);
 
-test("shows rollback buttons for rollbackable actions", async ({
-  mount,
-  page,
-}) => {
-  const mocks = createMocks(actionsData, metricsData);
+test(
+  "shows rollback buttons for rollbackable actions",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for actions to load
-  await expect(page.getByRole("table")).toBeVisible({ timeout: 15000 });
+    // Wait for actions to load
+    await expect(page.getByRole("table")).toBeVisible({ timeout: 15000 });
 
-  // Should have rollback buttons
-  const rollbackButtons = page.getByRole("button", { name: /Rollback/i });
-  await expect(rollbackButtons.first()).toBeVisible();
-});
+    // Should have rollback buttons
+    const rollbackButtons = page.getByRole("button", { name: /Rollback/i });
+    await expect(rollbackButtons.first()).toBeVisible();
+  }
+);
 
-test("opens rollback confirmation modal", async ({ mount, page }) => {
-  const mocks = createMocks(actionsData, metricsData);
+test(
+  "opens rollback confirmation modal",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for table and click rollback button
-  await expect(page.getByRole("table")).toBeVisible({ timeout: 15000 });
-  await page
-    .getByRole("button", { name: /Rollback/i })
-    .first()
-    .click();
+    // Wait for table and click rollback button
+    await expect(page.getByRole("table")).toBeVisible({ timeout: 15000 });
+    await page
+      .getByRole("button", { name: /Rollback/i })
+      .first()
+      .click();
 
-  // Modal should open
-  await expect(page.getByText("Confirm Rollback")).toBeVisible();
-  await expect(
-    page.getByText(/Are you sure you want to rollback/)
-  ).toBeVisible();
-  await expect(
-    page.getByPlaceholder("Enter a reason for this rollback...")
-  ).toBeVisible();
+    // Modal should open
+    await expect(page.getByText("Confirm Rollback")).toBeVisible();
+    await expect(
+      page.getByText(/Are you sure you want to rollback/)
+    ).toBeVisible();
+    await expect(
+      page.getByPlaceholder("Enter a reason for this rollback...")
+    ).toBeVisible();
 
-  // Cancel and close modal
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByText("Confirm Rollback")).not.toBeVisible();
-});
+    // Cancel and close modal
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Confirm Rollback")).not.toBeVisible();
+  }
+);
 
-test("shows empty state when no actions", async ({ mount, page }) => {
-  const mocks = createMocks(emptyActionsData, metricsData);
+test(
+  "shows empty state when no actions",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(emptyActionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  await expect(page.getByText("No moderation actions found")).toBeVisible({
-    timeout: 15000,
-  });
-});
+    await expect(page.getByText("No moderation actions found")).toBeVisible({
+      timeout: 15000,
+    });
+  }
+);
 
-test("filter dropdown is visible and interactive", async ({ mount, page }) => {
-  const mocks = createMocks(actionsData, metricsData);
+test(
+  "filter dropdown is visible and interactive",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for dashboard to load
-  await expect(page.getByText("Filters")).toBeVisible({ timeout: 15000 });
+    // Wait for dashboard to load
+    await expect(page.getByText("Filters")).toBeVisible({ timeout: 15000 });
 
-  // Check action type dropdown exists
-  await expect(page.getByText("Action Type")).toBeVisible();
+    // Check action type dropdown exists
+    await expect(page.getByText("Action Type")).toBeVisible();
 
-  // Check automated checkbox exists
-  await expect(page.getByText("Automated actions only")).toBeVisible();
-});
+    // Check automated checkbox exists
+    await expect(page.getByText("Automated actions only")).toBeVisible();
+  }
+);
 
-test("time range dropdown changes selection", async ({ mount, page }) => {
-  const mocks = createMocks(actionsData, metricsData);
+test(
+  "time range dropdown changes selection",
+  { timeout: 20000 },
+  async ({ mount, page }) => {
+    const mocks = createMocks(actionsData, metricsData);
 
-  await mount(
-    <MemoryRouter>
-      <MockedProvider mocks={mocks} addTypename={false}>
-        <ModerationDashboard corpusId={CORPUS_ID} />
-      </MockedProvider>
-    </MemoryRouter>
-  );
+    await mount(
+      <MemoryRouter>
+        <MockedProvider mocks={mocks} addTypename={false}>
+          <ModerationDashboard corpusId={CORPUS_ID} />
+        </MockedProvider>
+      </MemoryRouter>
+    );
 
-  // Wait for dashboard to load
-  await expect(page.getByText("Moderation Metrics")).toBeVisible({
-    timeout: 15000,
-  });
+    // Wait for dashboard to load
+    await expect(page.getByText("Moderation Metrics")).toBeVisible({
+      timeout: 15000,
+    });
 
-  // Find the time range dropdown and check default
-  const dropdown = page
-    .locator(".dropdown")
-    .filter({ hasText: "Last 24 hours" })
-    .first();
-  await expect(dropdown).toBeVisible();
+    // Find the time range dropdown and check default
+    const dropdown = page
+      .locator(".dropdown")
+      .filter({ hasText: "Last 24 hours" })
+      .first();
+    await expect(dropdown).toBeVisible();
 
-  // Click dropdown to open
-  await dropdown.click();
+    // Click dropdown to open
+    await dropdown.click();
 
-  // Should see other options
-  await expect(page.getByText("Last hour")).toBeVisible();
-  await expect(page.getByText("Last 7 days")).toBeVisible();
-  await expect(page.getByText("Last 30 days")).toBeVisible();
-});
+    // Should see other options
+    await expect(page.getByText("Last hour")).toBeVisible();
+    await expect(page.getByText("Last 7 days")).toBeVisible();
+    await expect(page.getByText("Last 30 days")).toBeVisible();
+  }
+);

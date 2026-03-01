@@ -18,6 +18,7 @@ import {
   CreateCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
+import { ErrorMessage, InfoMessage } from "../../widgets/feedback";
 
 /**
  * CreateFolderModal - Modal for creating new folders
@@ -238,18 +239,9 @@ export const CreateFolderModal: React.FC = () => {
       <Modal.Content>
         <Form onSubmit={handleSubmit} error={!!validationError || !!error}>
           {parentFolder && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                border: "1px solid #93c5fd",
-                borderRadius: "8px",
-                background: "#eff6ff",
-                color: "#1e40af",
-                marginBottom: "1rem",
-              }}
-            >
+            <InfoMessage style={{ marginBottom: "1rem" }}>
               Creating folder inside: <strong>{parentFolder.name}</strong>
-            </div>
+            </InfoMessage>
           )}
 
           <Form.Field required>
@@ -330,37 +322,15 @@ export const CreateFolderModal: React.FC = () => {
           </Form.Field>
 
           {validationError && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                border: "1px solid #fca5a5",
-                borderRadius: "8px",
-                background: "#fef2f2",
-                color: "#991b1b",
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-                Validation Error
-              </div>
-              <p>{validationError}</p>
-            </div>
+            <ErrorMessage title="Validation Error">
+              {validationError}
+            </ErrorMessage>
           )}
 
           {error && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                border: "1px solid #fca5a5",
-                borderRadius: "8px",
-                background: "#fef2f2",
-                color: "#991b1b",
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-                Error Creating Folder
-              </div>
-              <p>{error.message}</p>
-            </div>
+            <ErrorMessage title="Error Creating Folder">
+              {error.message}
+            </ErrorMessage>
           )}
         </Form>
       </Modal.Content>

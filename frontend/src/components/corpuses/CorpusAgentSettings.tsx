@@ -3,6 +3,7 @@ import { Form, Button } from "semantic-ui-react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
+import { InfoMessage } from "../widgets/feedback";
 import {
   UPDATE_CORPUS,
   UpdateCorpusInputs,
@@ -116,18 +117,10 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
   if (!canUpdate) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            border: "1px solid #93c5fd",
-            borderRadius: "8px",
-            background: "#eff6ff",
-            color: "#1e40af",
-          }}
-        >
+        <InfoMessage>
           You do not have permission to update agent instructions for this
           corpus.
-        </div>
+        </InfoMessage>
       </Container>
     );
   }

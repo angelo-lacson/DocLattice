@@ -15,7 +15,6 @@ import {
   FileText,
   GitBranch,
   Check,
-  AlertCircle,
   RotateCcw,
   Eye,
   Edit,
@@ -36,6 +35,7 @@ import {
   CorpusRevision,
 } from "../../graphql/queries";
 import { SafeMarkdown } from "../knowledge_base/markdown/SafeMarkdown";
+import { ErrorMessage } from "../widgets/feedback";
 
 // Styled Components
 const StyledModal = styled(Modal)`
@@ -1147,22 +1147,10 @@ export const CorpusDescriptionEditor: React.FC<
                                     </div>
                                   </>
                                 ) : (
-                                  <div
-                                    style={{
-                                      padding: "1rem",
-                                      background: "#fef2f2",
-                                      borderRadius: "6px",
-                                      color: "#991b1b",
-                                      fontSize: "0.875rem",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: "0.5rem",
-                                    }}
-                                  >
-                                    <AlertCircle size={16} />
+                                  <ErrorMessage>
                                     This version does not have a snapshot
                                     available
-                                  </div>
+                                  </ErrorMessage>
                                 )}
                               </VersionDetails>
                             )}

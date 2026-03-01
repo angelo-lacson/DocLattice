@@ -19,6 +19,7 @@ import {
   GET_CORPUS_FOLDERS,
   parseCorpusFolderTags,
 } from "../../../graphql/queries/folders";
+import { ErrorMessage } from "../../widgets/feedback";
 
 /**
  * EditFolderModal - Modal for editing existing folders
@@ -306,37 +307,15 @@ export const EditFolderModal: React.FC = () => {
           </Form.Field>
 
           {validationError && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                border: "1px solid #fca5a5",
-                borderRadius: "8px",
-                background: "#fef2f2",
-                color: "#991b1b",
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-                Validation Error
-              </div>
-              <p>{validationError}</p>
-            </div>
+            <ErrorMessage title="Validation Error">
+              {validationError}
+            </ErrorMessage>
           )}
 
           {error && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                border: "1px solid #fca5a5",
-                borderRadius: "8px",
-                background: "#fef2f2",
-                color: "#991b1b",
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-                Error Updating Folder
-              </div>
-              <p>{error.message}</p>
-            </div>
+            <ErrorMessage title="Error Updating Folder">
+              {error.message}
+            </ErrorMessage>
           )}
         </Form>
       </Modal.Content>

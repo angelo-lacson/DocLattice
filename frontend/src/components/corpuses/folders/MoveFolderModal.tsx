@@ -18,6 +18,7 @@ import {
   MoveCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
+import { ErrorMessage } from "../../widgets/feedback";
 
 /**
  * MoveFolderModal - Modal for moving folders to different parents
@@ -276,37 +277,15 @@ export const MoveFolderModal: React.FC = () => {
         </div>
 
         {validationError && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              border: "1px solid #fca5a5",
-              borderRadius: "8px",
-              background: "#fef2f2",
-              color: "#991b1b",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              Cannot Move Folder
-            </div>
-            <p>{validationError}</p>
-          </div>
+          <ErrorMessage title="Cannot Move Folder">
+            {validationError}
+          </ErrorMessage>
         )}
 
         {error && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              border: "1px solid #fca5a5",
-              borderRadius: "8px",
-              background: "#fef2f2",
-              color: "#991b1b",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              Error Moving Folder
-            </div>
-            <p>{error.message}</p>
-          </div>
+          <ErrorMessage title="Error Moving Folder">
+            {error.message}
+          </ErrorMessage>
         )}
       </Modal.Content>
 

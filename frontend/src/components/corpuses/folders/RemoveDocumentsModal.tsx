@@ -18,6 +18,7 @@ import {
   RemoveDocumentsFromCorpusOutputs,
 } from "../../../graphql/mutations";
 import { selectedDocumentIds as selectedDocumentIdsReactiveVar } from "../../../graphql/cache";
+import { ErrorMessage } from "../../widgets/feedback";
 
 /**
  * RemoveDocumentsModal - Confirmation modal for bulk removing documents from corpus
@@ -204,21 +205,12 @@ export const RemoveDocumentsModal: React.FC = () => {
         </InfoBox>
 
         {error && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              border: "1px solid #fca5a5",
-              borderRadius: "8px",
-              background: "#fef2f2",
-              color: "#991b1b",
-              marginTop: "16px",
-            }}
+          <ErrorMessage
+            title="Error Removing Documents"
+            style={{ marginTop: "16px" }}
           >
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              Error Removing Documents
-            </div>
-            <p>{error.message}</p>
-          </div>
+            {error.message}
+          </ErrorMessage>
         )}
       </Modal.Content>
 

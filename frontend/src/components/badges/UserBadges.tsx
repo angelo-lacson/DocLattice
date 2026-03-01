@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@apollo/client";
 import { Spinner } from "@os-legal/ui";
 import styled from "styled-components";
+import { ErrorMessage } from "../widgets/feedback";
 import { Badge, BadgeData } from "./Badge";
 import {
   GET_USER_BADGES,
@@ -109,20 +110,7 @@ export const UserBadges: React.FC<UserBadgesProps> = ({
 
   if (error) {
     return (
-      <div
-        style={{
-          padding: "0.75rem 1rem",
-          border: "1px solid #fca5a5",
-          borderRadius: "8px",
-          background: "#fef2f2",
-          color: "#991b1b",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-          Error loading badges
-        </div>
-        <p>{error.message}</p>
-      </div>
+      <ErrorMessage title="Error loading badges">{error.message}</ErrorMessage>
     );
   }
 
