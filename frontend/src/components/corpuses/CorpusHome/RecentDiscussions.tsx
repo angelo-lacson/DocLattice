@@ -222,8 +222,12 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
       .slice(0, RECENT_THREAD_LIMIT);
   }, [data]);
 
-  // Don't render anything while loading if there's no cached data
-  if (loading && threads.length === 0) return null;
+  // Show a placeholder during initial load to prevent layout shift
+  if (loading && threads.length === 0) {
+    return (
+      <FeedContainer data-testid={testId} style={{ minHeight: "120px" }} />
+    );
+  }
 
   return (
     <FeedContainer data-testid={testId}>
@@ -254,8 +258,8 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
               <ThreadMeta>
                 <MetaItem>
                   <User />
-                  {thread.creator?.email?.split("@")[0] ||
-                    thread.creator?.username ||
+                  {thread.creator?.username ||
+                    thread.creator?.email?.split("@")[0] ||
                     "Unknown"}
                 </MetaItem>
                 <MetaItem>
