@@ -17,8 +17,7 @@ import {
   mediaQuery,
 } from "../../corpuses/styles/corpusDesignTokens";
 import { ConversationType } from "../../../types/graphql-api";
-
-const RECENT_THREAD_LIMIT = 3;
+import { RECENT_THREAD_LIMIT } from "../../../assets/configurations/constants";
 
 // ============================================================================
 // STYLED COMPONENTS
@@ -180,9 +179,9 @@ export interface RecentDiscussionsProps {
   /** Corpus ID to fetch discussions for */
   corpusId: string;
   /** Callback when a thread is clicked */
-  onThreadClick: (threadId: string) => void;
+  onThreadClick?: (threadId: string) => void;
   /** Callback when "View All" / header is clicked */
-  onViewAll: () => void;
+  onViewAll?: () => void;
   /** Test ID prefix */
   testId?: string;
 }
@@ -232,7 +231,7 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
   return (
     <FeedContainer data-testid={testId}>
       <FeedHeader
-        onClick={onViewAll}
+        onClick={() => onViewAll?.()}
         data-testid={`${testId}-header`}
         aria-label="View all discussions"
       >
@@ -251,7 +250,7 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
           {threads.map((thread) => (
             <ThreadItem
               key={thread.id}
-              onClick={() => onThreadClick(thread.id)}
+              onClick={() => onThreadClick?.(thread.id)}
               data-testid={`${testId}-thread-${thread.id}`}
             >
               <ThreadTitle>{thread.title || "Untitled Discussion"}</ThreadTitle>
@@ -264,9 +263,11 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
                 </MetaItem>
                 <MetaItem>
                   <Clock />
-                  {formatDistanceToNow(new Date(thread.createdAt), {
-                    addSuffix: true,
-                  })}
+                  {thread.createdAt
+                    ? formatDistanceToNow(new Date(thread.createdAt), {
+                        addSuffix: true,
+                      })
+                    : "recently"}
                 </MetaItem>
                 <MetaItem>
                   <MessageSquare />

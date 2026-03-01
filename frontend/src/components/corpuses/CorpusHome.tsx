@@ -69,7 +69,9 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     updateDetailViewParam(location, navigate, "details");
   };
 
-  // Handle switching back to landing view (also clears thread param to prevent stale state)
+  // Handle switching back to landing view (also clears thread param to prevent stale state).
+  // Clears both 'view' and 'thread' params in a single navigation.
+  // Cannot use updateDetailViewParam() here because it only handles one param.
   const handleBackToLanding = () => {
     const searchParams = new URLSearchParams(location.search);
     searchParams.delete("view");

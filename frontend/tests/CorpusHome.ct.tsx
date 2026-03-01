@@ -13,6 +13,7 @@ import {
 import {
   DOCUMENT_RELATIONSHIP_TOC_LIMIT,
   CORPUS_DOCUMENTS_TOC_LIMIT,
+  RECENT_THREAD_LIMIT,
 } from "../src/assets/configurations/constants";
 import { PermissionTypes } from "../src/components/types";
 import { docScreenshot } from "./utils/docScreenshot";
@@ -216,7 +217,7 @@ const conversationsMock: MockedResponse = {
     variables: {
       corpusId: dummyCorpus.id,
       conversationType: "THREAD",
-      limit: 3,
+      limit: RECENT_THREAD_LIMIT,
     },
   },
   result: {
@@ -331,7 +332,7 @@ const emptyConversationsMock: MockedResponse = {
     variables: {
       corpusId: dummyCorpus.id,
       conversationType: "THREAD",
-      limit: 3,
+      limit: RECENT_THREAD_LIMIT,
     },
   },
   result: {
@@ -690,11 +691,7 @@ test("landing view shows empty state when no discussions exist", async ({
 }) => {
   // Mount with empty conversations mock
   const emptyMocks: MockedResponse[] = [
-    ...mocks.filter((m) => {
-      const opName =
-        (m.request.query as any)?.definitions?.[0]?.name?.value ?? "";
-      return opName !== "GetConversations";
-    }),
+    ...mocks.filter((m) => m.request.query !== GET_CONVERSATIONS),
     emptyConversationsMock,
     { ...emptyConversationsMock },
   ];
