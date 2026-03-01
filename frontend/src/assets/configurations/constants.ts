@@ -134,6 +134,18 @@ export const EXTRACT_STATUS_COLORS = {
 // Tool usage UI constants (used by chat ToolUsageIndicator)
 export const TOOL_UNKNOWN_LABEL = "Unknown Tool";
 
+// Tool popover positioning constants (used by ToolUsageIndicator portal)
+/** Z-index for the fixed-position tool popover rendered via portal */
+export const POPOVER_Z_INDEX = 100002;
+/** Gap in pixels between the badge and the popover */
+export const POPOVER_GAP = 8;
+/**
+ * Maximum height of the tool popover in pixels.
+ * Must match ToolPopoverBody max-height (400px) + header height (~100px).
+ * If ToolPopoverBody max-height changes, update this value accordingly.
+ */
+export const POPOVER_MAX_HEIGHT = 500;
+
 // Conversation type constants (matches backend ConversationTypeChoices)
 export const CONVERSATION_TYPE = {
   CHAT: "CHAT",
