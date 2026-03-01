@@ -213,6 +213,14 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
             required=False,
             description="Default embedder class path when no MIME-specific embedder is found.",
         )
+        enabled_components = graphene.List(
+            graphene.String,
+            required=False,
+            description=(
+                "List of enabled component class paths. "
+                "Components assigned as filetype defaults must be included."
+            ),
+        )
 
     ok = graphene.Boolean()
     message = graphene.String()
@@ -229,6 +237,7 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
         parser_kwargs=None,
         component_settings=None,
         default_embedder=None,
+        enabled_components=None,
     ):
         """
         Update the pipeline settings.
@@ -384,6 +393,71 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                         )
                 settings_instance.default_embedder = default_embedder
 
+            # Validate enabled_components
+            if enabled_components is not None:
+                if not isinstance(enabled_components, list):
+                    return UpdatePipelineSettingsMutation(
+                        ok=False,
+                        message="enabled_components must be a list.",
+                        pipeline_settings=None,
+                    )
+
+                for comp_path in enabled_components:
+                    error = validate_component_path(comp_path)
+                    if error:
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Invalid path in enabled_components: {error}",
+                            pipeline_settings=None,
+                        )
+                    if not registry.get_by_class_name(comp_path):
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Component '{comp_path}' in enabled_components not found in registry.",
+                            pipeline_settings=None,
+                        )
+
+                # Validate that all currently assigned components are in the enabled list
+                enabled_set = set(enabled_components)
+                assigned_parsers = (
+                    preferred_parsers
+                    if preferred_parsers is not None
+                    else settings_instance.preferred_parsers or {}
+                )
+                assigned_embedders = (
+                    preferred_embedders
+                    if preferred_embedders is not None
+                    else settings_instance.preferred_embedders or {}
+                )
+                assigned_thumbnailers = (
+                    preferred_thumbnailers
+                    if preferred_thumbnailers is not None
+                    else settings_instance.preferred_thumbnailers or {}
+                )
+                assigned_default = (
+                    default_embedder
+                    if default_embedder is not None
+                    else settings_instance.default_embedder or ""
+                )
+
+                all_assigned = set()
+                all_assigned.update(assigned_parsers.values())
+                all_assigned.update(assigned_embedders.values())
+                all_assigned.update(assigned_thumbnailers.values())
+                if assigned_default:
+                    all_assigned.add(assigned_default)
+
+                disabled_but_assigned = all_assigned - enabled_set
+                if disabled_but_assigned:
+                    names = ", ".join(sorted(disabled_but_assigned))
+                    return UpdatePipelineSettingsMutation(
+                        ok=False,
+                        message=f"Cannot disable components that are assigned as filetype defaults: {names}",
+                        pipeline_settings=None,
+                    )
+
+                settings_instance.enabled_components = enabled_components
+
             # Record who made the change
             settings_instance.modified_by = user
             settings_instance.save()
@@ -397,6 +471,7 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                     ("parser_kwargs", parser_kwargs),
                     ("component_settings", component_settings),
                     ("default_embedder", default_embedder),
+                    ("enabled_components", enabled_components),
                 ]
                 if val is not None
             ]
@@ -417,6 +492,7 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                     parser_kwargs=settings_instance.parser_kwargs or {},
                     component_settings=settings_instance.component_settings or {},
                     default_embedder=settings_instance.default_embedder or "",
+                    enabled_components=settings_instance.enabled_components or [],
                     components_with_secrets=list(
                         settings_instance.get_secrets().keys()
                     ),
@@ -492,6 +568,7 @@ class ResetPipelineSettingsMutation(graphene.Mutation):
             settings_instance.default_embedder = getattr(
                 django_settings, "DEFAULT_EMBEDDER", ""
             )
+            settings_instance.enabled_components = []
             settings_instance.modified_by = user
             settings_instance.save()
 
@@ -508,6 +585,7 @@ class ResetPipelineSettingsMutation(graphene.Mutation):
                     parser_kwargs=settings_instance.parser_kwargs or {},
                     component_settings=settings_instance.component_settings or {},
                     default_embedder=settings_instance.default_embedder or "",
+                    enabled_components=[],
                     components_with_secrets=list(
                         settings_instance.get_secrets().keys()
                     ),
