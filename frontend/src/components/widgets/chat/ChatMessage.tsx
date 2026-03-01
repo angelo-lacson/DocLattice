@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useId,
+} from "react";
 import { createPortal } from "react-dom";
 import { isTextFileType } from "../../../utils/files";
 import styled from "styled-components";
@@ -39,7 +46,12 @@ import {
   SpanAnnotationJson,
 } from "../../types";
 import { AnnotationLabelType } from "../../../types/graphql-api";
-import { TOOL_UNKNOWN_LABEL } from "../../../assets/configurations/constants";
+import {
+  TOOL_UNKNOWN_LABEL,
+  POPOVER_Z_INDEX,
+  POPOVER_GAP,
+  POPOVER_MAX_HEIGHT,
+} from "../../../assets/configurations/constants";
 
 // Timeline entry type based on the schema
 export interface TimelineEntry {
@@ -695,7 +707,6 @@ const TimelineItemArgs = styled.div`
 
 // Tool Usage Badge & Popover styled components
 const ToolBadgeWrapper = styled.div`
-  position: relative;
   display: inline-flex;
 `;
 
@@ -739,7 +750,7 @@ const ToolBadge = styled.div<{ $isSelected?: boolean }>`
 
 const ToolPopover = styled(motion.div)`
   position: fixed;
-  z-index: 100002;
+  z-index: ${POPOVER_Z_INDEX};
   min-width: 320px;
   max-width: 440px;
   background: rgba(255, 255, 255, 0.98);
@@ -1193,6 +1204,7 @@ const ToolUsageIndicator: React.FC<{
   const [isOpen, setIsOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
+  const baseId = useId();
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
 
   // Cleanup timeout on unmount to prevent memory leaks
@@ -1207,8 +1219,6 @@ const ToolUsageIndicator: React.FC<{
   const updatePopoverPosition = useCallback(() => {
     if (!badgeRef.current) return;
     const rect = badgeRef.current.getBoundingClientRect();
-    const POPOVER_GAP = 8;
-    const POPOVER_MAX_HEIGHT = 500; // header + body max-height
     const spaceBelow = window.innerHeight - rect.bottom - POPOVER_GAP;
     const openUpward = spaceBelow < POPOVER_MAX_HEIGHT && rect.top > spaceBelow;
 
@@ -1227,8 +1237,8 @@ const ToolUsageIndicator: React.FC<{
     }
   }, []);
 
-  // Track position while popover is open
-  useEffect(() => {
+  // Track position while popover is open (useLayoutEffect prevents flash at 0,0)
+  useLayoutEffect(() => {
     if (!isOpen) return;
     updatePopoverPosition();
     window.addEventListener("scroll", updatePopoverPosition, true);
@@ -1262,7 +1272,7 @@ const ToolUsageIndicator: React.FC<{
     }
   };
 
-  const popoverId = `tool-popover-${toolCalls.length}`;
+  const popoverId = `tool-popover-${baseId}`;
 
   return (
     <>
