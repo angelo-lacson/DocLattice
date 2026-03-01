@@ -31,7 +31,7 @@ const MessageTitle = styled.strong`
   margin-bottom: 0.25rem;
 `;
 
-const MessageBody = styled.p`
+const MessageBody = styled.div`
   margin: 0;
 `;
 

@@ -124,14 +124,19 @@ const formatActionType = (actionType: string): string => {
     .join(" ");
 };
 
-const getActionColor = (
-  actionType: string
-): "red" | "green" | "blue" | "yellow" | "grey" => {
-  if (actionType.includes("delete")) return "red";
-  if (actionType.includes("restore")) return "green";
-  if (actionType.includes("lock")) return "yellow";
-  if (actionType.includes("pin")) return "blue";
-  return "grey";
+const ACTION_COLOR_MAP: Record<string, { bg: string; color: string }> = {
+  delete: { bg: "#fef2f2", color: "#991b1b" },
+  restore: { bg: "#f0fdf4", color: "#166534" },
+  lock: { bg: "#fefce8", color: "#854d0e" },
+  pin: { bg: "#f0f9ff", color: "#1e40af" },
+};
+const DEFAULT_ACTION_COLORS = { bg: "#f8fafc", color: "#475569" };
+
+const getActionColors = (actionType: string): { bg: string; color: string } => {
+  for (const [key, value] of Object.entries(ACTION_COLOR_MAP)) {
+    if (actionType.includes(key)) return value;
+  }
+  return DEFAULT_ACTION_COLORS;
 };
 
 export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
@@ -475,32 +480,16 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                   <Table.Row key={node.id}>
                     <Table.Cell>
                       <span
+                        className="action-badge"
                         style={{
                           display: "inline-block",
                           padding: "0.2em 0.5em",
                           fontSize: "0.8rem",
                           fontWeight: 500,
                           borderRadius: "4px",
-                          background: node.actionType.includes("delete")
-                            ? "#fef2f2"
-                            : node.actionType.includes("restore")
-                            ? "#f0fdf4"
-                            : node.actionType.includes("lock")
-                            ? "#fefce8"
-                            : node.actionType.includes("pin")
-                            ? "#f0f9ff"
-                            : "#f8fafc",
-                          color: node.actionType.includes("delete")
-                            ? "#991b1b"
-                            : node.actionType.includes("restore")
-                            ? "#166534"
-                            : node.actionType.includes("lock")
-                            ? "#854d0e"
-                            : node.actionType.includes("pin")
-                            ? "#1e40af"
-                            : "#475569",
+                          background: getActionColors(node.actionType).bg,
+                          color: getActionColors(node.actionType).color,
                           border: "1px solid currentColor",
-                          borderColor: "inherit",
                         }}
                       >
                         {formatActionType(node.actionType)}

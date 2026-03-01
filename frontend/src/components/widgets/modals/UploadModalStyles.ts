@@ -516,6 +516,23 @@ export const UploadProgress = styled.div<{ $percent?: number }>`
   height: 20px;
   position: relative;
 
+  &::before {
+    content: "${({ $percent }) => Math.round($percent ?? 0)}%";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: ${({ $percent }) => (($percent ?? 0) > 50 ? "#fff" : "#475569")};
+    z-index: 1;
+    line-height: 20px;
+  }
+
   &::after {
     content: "";
     display: block;

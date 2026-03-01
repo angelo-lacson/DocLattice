@@ -15,6 +15,7 @@ import {
   Calendar,
   User,
   FileText,
+  X,
 } from "lucide-react";
 import {
   GET_DELETED_DOCUMENTS_IN_CORPUS,
@@ -668,15 +669,17 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           </div>
           <button
             onClick={() => setRestoreSuccess(null)}
+            aria-label="Dismiss"
             style={{
               background: "none",
               border: "none",
               cursor: "pointer",
-              fontSize: "18px",
               color: "inherit",
+              display: "flex",
+              alignItems: "center",
             }}
           >
-            &times;
+            <X size={16} />
           </button>
         </div>
       )}
@@ -696,16 +699,18 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           </ErrorMessage>
           <button
             onClick={() => setRestoreError(null)}
+            aria-label="Dismiss"
             style={{
               background: "none",
               border: "none",
               cursor: "pointer",
-              fontSize: "18px",
               color: "#991b1b",
               padding: "0.75rem 0.25rem 0",
+              display: "flex",
+              alignItems: "center",
             }}
           >
-            &times;
+            <X size={16} />
           </button>
         </div>
       )}

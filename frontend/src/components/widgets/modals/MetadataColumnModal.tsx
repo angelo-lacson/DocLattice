@@ -7,6 +7,7 @@ import {
   MetadataDataType,
   getDefaultValueForDataType,
 } from "../../../types/metadata";
+import { InfoMessage } from "../feedback";
 
 interface MetadataColumnModalProps {
   open: boolean;
@@ -71,24 +72,6 @@ const ErrorChip = styled.span`
   background: #fff6f6;
   border: 1px solid #e0b4b4;
   border-radius: 4px;
-`;
-
-const InfoMessage = styled.div`
-  padding: 0.75rem 1rem;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 6px;
-  color: #0369a1;
-
-  strong {
-    display: block;
-    margin-bottom: 0.25rem;
-  }
-
-  p {
-    margin: 0;
-    font-size: 0.875rem;
-  }
 `;
 
 const HelpTextArea = styled.textarea`
@@ -419,12 +402,9 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 
           {dataType !== MetadataDataType.BOOLEAN &&
             !["CHOICE", "MULTI_CHOICE"].includes(dataType) && (
-              <InfoMessage>
-                <strong>Default Value</strong>
-                <p>
-                  You can set default values for individual documents when
-                  editing metadata.
-                </p>
+              <InfoMessage title="Default Value">
+                You can set default values for individual documents when editing
+                metadata.
               </InfoMessage>
             )}
         </Form>
