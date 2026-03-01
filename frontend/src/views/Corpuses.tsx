@@ -29,6 +29,7 @@ import {
   BarChart3,
   MoreVertical,
   Link2,
+  Zap,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -68,10 +69,12 @@ import {
   selectedTab,
   selectedExtractIds,
   selectedThreadId,
+  corpusPowerUserMode,
 } from "../graphql/cache";
 import {
   updateTabParam,
   updateAnnotationSelectionParams,
+  updateModeParam,
 } from "../utils/navigationUtils";
 import {
   UPDATE_CORPUS,
@@ -144,6 +147,13 @@ import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussio
 import { BadgeManagement } from "../components/badges/BadgeManagement";
 import { CorpusEngagementDashboard } from "../components/analytics/CorpusEngagementDashboard";
 import { CorpusDocumentRelationships } from "../components/corpuses/CorpusDocumentRelationships";
+import {
+  CORPUS_COLORS,
+  CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
+  mediaQuery as corpusMediaQuery,
+} from "../components/corpuses/styles/corpusDesignTokens";
 
 // Add these styled components near your other styled components
 const DashboardContainer = styled.div`
@@ -627,7 +637,7 @@ const CorpusViewContainer = styled.div`
   flex: 1;
   align-items: stretch;
   min-height: 0;
-  max-height: 100vh;
+  max-height: 100dvh;
   height: 100%;
 `;
 
@@ -1517,6 +1527,71 @@ const ExtractsTabContent: React.FC<{
   );
 };
 
+// Power user mode toggle - subtle, positioned at top-right of clean view
+const PowerUserToggle = styled(motion.button)`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.md};
+  color: ${CORPUS_COLORS.slate[500]};
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all ${CORPUS_TRANSITIONS.normal};
+  z-index: 10;
+  box-shadow: ${CORPUS_SHADOWS.sm};
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: ${CORPUS_COLORS.teal[50]};
+    border-color: ${CORPUS_COLORS.teal[200]};
+    color: ${CORPUS_COLORS.teal[700]};
+    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${CORPUS_COLORS.teal[500]};
+    outline-offset: 2px;
+  }
+
+  ${corpusMediaQuery.tablet} {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+`;
+
+// Container for the clean landing view (no sidebar)
+const CleanViewContainer = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100dvh;
+  overflow: hidden;
+`;
+
+// Wrapper for the "Simple View" exit button at the bottom of the sidebar
+const ExitPowerUserWrapper = styled.div`
+  padding: 0.75rem;
+  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
+  flex-shrink: 0;
+`;
+
 export const Corpuses = () => {
   const { width } = useWindowDimensions();
 
@@ -1570,6 +1645,9 @@ export const Corpuses = () => {
     useState<boolean>(false);
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false); // Collapsed by default, opens on hover
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+
+  // Power user mode: URL-driven via CentralRouteManager (?mode=power)
+  const isPowerUserMode = useReactiveVar(corpusPowerUserMode);
   const { REACT_APP_ALLOW_IMPORTS } = useEnv();
 
   const [corpusSearchCache, setCorpusSearchCache] =
@@ -2654,7 +2732,12 @@ export const Corpuses = () => {
     opened_corpus && // Corpus selected
     !opened_document // No document selected
   ) {
-    content = (
+    // Determine the content to display in the main area
+    const mainContent = isPowerUserMode
+      ? currentView?.component
+      : navigationItems.find((item) => item.id === "home")?.component;
+
+    content = isPowerUserMode ? (
       <CorpusViewContainer id="corpus-view-container">
         {/* Mobile backdrop */}
         <AnimatePresence>
@@ -2798,6 +2881,28 @@ export const Corpuses = () => {
               </NavigationItem>
             ))}
           </NavigationItems>
+
+          {/* Exit Power User Mode button */}
+          <ExitPowerUserWrapper>
+            <NavigationItem
+              isActive={false}
+              $isExpanded={
+                use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
+              }
+              onClick={() => updateModeParam(location, navigate, null)}
+              whileHover={{ x: 2 }}
+              whileTap={{ scale: 0.98 }}
+              data-testid="exit-power-user"
+              style={{ opacity: 0.7 }}
+            >
+              <ArrowLeft />
+              {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
+                <span style={{ flex: "1", textAlign: "left" }}>
+                  Simple View
+                </span>
+              )}
+            </NavigationItem>
+          </ExitPowerUserWrapper>
         </NavigationSidebar>
 
         {/* Main content area */}
@@ -2805,9 +2910,26 @@ export const Corpuses = () => {
           id="main-corpus-content-area"
           $sidebarExpanded={!use_mobile_layout && sidebarExpanded}
         >
-          {currentView?.component}
+          {mainContent}
         </MainContentArea>
       </CorpusViewContainer>
+    ) : (
+      <CleanViewContainer id="corpus-clean-view">
+        {/* Power User toggle - only shown for users with edit rights */}
+        {canUpdateCorpus && (
+          <PowerUserToggle
+            onClick={() => updateModeParam(location, navigate, "power")}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            data-testid="power-user-toggle"
+            title="Switch to full corpus management view"
+          >
+            <Zap />
+            Power User
+          </PowerUserToggle>
+        )}
+        {mainContent}
+      </CleanViewContainer>
     );
   } else if (
     opened_corpus !== null &&

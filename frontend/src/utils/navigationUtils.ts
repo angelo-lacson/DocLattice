@@ -43,9 +43,10 @@ export interface QueryParams {
   folderId?: string | null;
   tab?: string | null;
   messageId?: string | null;
-  homeView?: string | null; // "about" | "toc" - corpus home view selection
+  homeView?: "about" | "toc" | null; // corpus home view selection
   tocExpanded?: boolean; // true to expand all TOC nodes
-  view?: string | null; // "landing" | "details" - corpus detail view selection
+  view?: "landing" | "details" | "discussions" | null; // corpus detail view selection
+  mode?: "power" | null; // corpus power user mode
   version?: number | null; // Document version number (null = current version)
   showStructural?: boolean;
   showSelectedOnly?: boolean;
@@ -257,6 +258,9 @@ export function buildQueryParams(params: QueryParams): string {
   if (params.view && params.view !== "landing") {
     // Only add to URL if not default value
     searchParams.set("view", params.view);
+  }
+  if (params.mode) {
+    searchParams.set("mode", params.mode);
   }
   if (params.version != null && params.version > 0) {
     searchParams.set("v", String(params.version));
@@ -938,17 +942,17 @@ export function updateTocExpandedParam(
 
 /**
  * Update corpus detail view selection in URL
- * Used for switching between landing view and details view on corpus home.
+ * Used for switching between landing, details, and discussions views on corpus home.
  * Pushes a new history entry so browser back/forward navigates between views.
  * @param location - React Router location object
  * @param navigate - React Router navigate function
- * @param view - View identifier ("landing" or "details")
+ * @param view - View identifier ("landing", "details", or "discussions")
  *               Pass "landing" or null to clear and use default (landing)
  */
 export function updateDetailViewParam(
   location: LocationLike,
   navigate: NavigateFn,
-  view: "landing" | "details" | null
+  view: "landing" | "details" | "discussions" | null
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (view && view !== "landing") {
@@ -958,6 +962,24 @@ export function updateDetailViewParam(
     searchParams.delete("view");
   }
   // Push (not replace) so browser back returns to the previous view
+  navigate({ search: searchParams.toString() });
+}
+
+/**
+ * Navigate to a specific thread within the discussions view.
+ * Sets both view=discussions and thread=threadId in a single history entry.
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param threadId - Thread/conversation ID to open
+ */
+export function navigateToDiscussionThread(
+  location: LocationLike,
+  navigate: NavigateFn,
+  threadId: string
+) {
+  const searchParams = new URLSearchParams(location.search);
+  searchParams.set("view", "discussions");
+  searchParams.set("thread", threadId);
   navigate({ search: searchParams.toString() });
 }
 
@@ -1001,6 +1023,32 @@ export function navigateToThreadWithMessage(
     searchParams.set("message", messageId);
   }
   navigate({ search: searchParams.toString() }, { replace: true });
+}
+
+/**
+ * Update corpus view mode in URL.
+ * Used for toggling between the clean landing experience and power user mode.
+ * Pushes a new history entry so browser back/forward navigates between modes.
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param mode - "power" to enable sidebar+tabs, or null to clear (default clean view)
+ */
+export function updateModeParam(
+  location: LocationLike,
+  navigate: NavigateFn,
+  mode: "power" | null
+) {
+  const searchParams = new URLSearchParams(location.search);
+  if (mode) {
+    searchParams.set("mode", mode);
+  } else {
+    searchParams.delete("mode");
+  }
+  // Clear view-specific params when switching modes to avoid stale state
+  // (e.g., ?view=discussions&mode=power is an invalid combination)
+  searchParams.delete("view");
+  searchParams.delete("thread");
+  navigate({ search: searchParams.toString() });
 }
 
 // ═══════════════════════════════════════════════════════════════

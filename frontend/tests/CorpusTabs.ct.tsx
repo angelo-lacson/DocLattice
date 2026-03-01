@@ -647,9 +647,14 @@ const createAllTabMocks = (corpus: CorpusType): MockedResponse[] => [
 const mountCorpuses = (
   mount: any,
   corpus: CorpusType,
-  options: { tab?: string; authenticated?: boolean } = {}
+  options: {
+    tab?: string;
+    authenticated?: boolean;
+    /** Set to false to test the clean landing view without sidebar */
+    powerUserMode?: boolean;
+  } = {}
 ) => {
-  const { tab, authenticated = true } = options;
+  const { tab, authenticated = true, powerUserMode = true } = options;
   const mocks = createAllTabMocks(corpus);
 
   // Set up initial corpus before mount
@@ -658,9 +663,17 @@ const mountCorpuses = (
     selectedTab(tab);
   }
 
-  const initialUrl = tab
-    ? `/c/tester/test-corpus?tab=${tab}`
-    : `/c/tester/test-corpus`;
+  // Power user mode adds ?mode=power to show the sidebar+tabs layout.
+  // Default to power user mode since tab tests exercise that layout.
+  const params = new URLSearchParams();
+  if (powerUserMode) {
+    params.set("mode", "power");
+  }
+  if (tab) {
+    params.set("tab", tab);
+  }
+  const qs = params.toString();
+  const initialUrl = `/c/tester/test-corpus${qs ? `?${qs}` : ""}`;
 
   return mount(
     <CorpusesTestWrapper
@@ -1350,5 +1363,92 @@ test.describe("Corpus Tabs - Analytics", () => {
 
     await docScreenshot(page, "corpus--analytics--dashboard");
     await releaseScreenshot(page, "v3.0.0.b3", "analytics");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Tests: Power User Mode Toggle                                               */
+/* -------------------------------------------------------------------------- */
+
+test.describe("Corpus - Power User Mode", () => {
+  test.use({ viewport: { width: 1200, height: 800 } });
+  test.setTimeout(30000);
+
+  test("should show clean landing view without sidebar by default", async ({
+    mount,
+    page,
+  }) => {
+    const corpus = createMockCorpus();
+    await mountCorpuses(mount, corpus, { powerUserMode: false });
+
+    // Landing view should be visible
+    const landing = page.getByTestId("corpus-home-landing");
+    await expect(landing).toBeVisible({ timeout: 10000 });
+
+    // Sidebar should NOT be visible (clean view)
+    await expect(page.getByTestId("navigation-sidebar")).toBeHidden();
+
+    // Power User toggle should be visible (user has CAN_UPDATE)
+    const toggle = page.getByTestId("power-user-toggle");
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toContainText("Power User");
+
+    await docScreenshot(page, "corpus--landing--clean-view");
+  });
+
+  test("should hide power user toggle for read-only users", async ({
+    mount,
+    page,
+  }) => {
+    const corpus = createReadOnlyCorpus();
+    await mountCorpuses(mount, corpus, { powerUserMode: false });
+
+    // Landing view should be visible
+    const landing = page.getByTestId("corpus-home-landing");
+    await expect(landing).toBeVisible({ timeout: 10000 });
+
+    // Power User toggle should NOT be visible (no CAN_UPDATE permission)
+    await expect(page.getByTestId("power-user-toggle")).toBeHidden();
+  });
+
+  test("should show sidebar and exit button in power user mode", async ({
+    mount,
+    page,
+  }) => {
+    const corpus = createMockCorpus();
+    await mountCorpuses(mount, corpus, { powerUserMode: true });
+
+    // Sidebar should be visible
+    await expect(page.getByTestId("navigation-sidebar")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Exit Power User button should be visible in sidebar
+    const exitBtn = page.getByTestId("exit-power-user");
+    await expect(exitBtn).toBeVisible();
+
+    await docScreenshot(page, "corpus--power-user--with-sidebar");
+  });
+
+  test("should toggle to power user mode when toggle is clicked", async ({
+    mount,
+    page,
+  }) => {
+    // Start in clean view (no ?mode=power)
+    const corpus = createMockCorpus();
+    await mountCorpuses(mount, corpus, { powerUserMode: false });
+
+    // Sidebar should NOT be visible, power user toggle should be
+    await expect(page.getByTestId("navigation-sidebar")).not.toBeVisible({
+      timeout: 10000,
+    });
+    const powerToggle = page.getByTestId("power-user-toggle");
+    await expect(powerToggle).toBeVisible();
+
+    // Click Power User toggle - sidebar should appear
+    await powerToggle.click();
+    await expect(page.getByTestId("navigation-sidebar")).toBeVisible({
+      timeout: 10000,
+    });
   });
 });
