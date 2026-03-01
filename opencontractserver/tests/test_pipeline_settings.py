@@ -525,11 +525,16 @@ class EnabledComponentsMutationTestCase(TestCase):
 
     def test_set_enabled_components(self):
         """Setting enabled_components should store the list successfully."""
-        components = self._get_real_component_paths()
-        if not components:
-            self.skipTest("Need at least 1 registered component for this test")
+        from opencontractserver.pipeline.registry import get_registry
 
-        component_list = list(components.values())
+        registry = get_registry()
+        # Include ALL registered components to avoid conflicts with filetype defaults
+        component_list = [
+            c.class_name
+            for c in registry.parsers + registry.embedders + registry.thumbnailers
+        ]
+        if not component_list:
+            self.skipTest("Need at least 1 registered component for this test")
 
         mutation = """
             mutation UpdatePipelineSettings($enabledComponents: [String]) {
