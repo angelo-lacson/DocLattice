@@ -145,7 +145,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
     );
 
     return (
-      <Section>
+      <Section data-testid="filetype-defaults">
         <SectionHeader>
           <SectionTitle>
             <Settings />

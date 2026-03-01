@@ -141,7 +141,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
     );
 
     return (
-      <Section>
+      <Section data-testid="component-library">
         <SectionHeader>
           <SectionTitle>
             <Package />
