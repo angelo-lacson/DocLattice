@@ -2,7 +2,11 @@ import React, { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
 import { Button, Modal } from "semantic-ui-react";
-import { ErrorMessage, LoadingState } from "../../widgets/feedback";
+import {
+  ErrorMessage,
+  SuccessMessage,
+  LoadingState,
+} from "../../widgets/feedback";
 import { formatDistanceToNow, format, isValid } from "date-fns";
 import {
   Trash2,
@@ -652,21 +656,16 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
       {restoreSuccess && (
         <div
           style={{
-            padding: "1rem",
-            border: "1px solid #bbf7d0",
-            borderRadius: "8px",
-            background: "#f0fdf4",
-            color: "#166534",
             marginBottom: "16px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
+            gap: "0.5rem",
           }}
         >
-          <div>
-            <strong>Success</strong>
-            <p style={{ margin: "0.25em 0 0" }}>{restoreSuccess}</p>
-          </div>
+          <SuccessMessage title="Success" style={{ flex: 1 }}>
+            {restoreSuccess}
+          </SuccessMessage>
           <button
             onClick={() => setRestoreSuccess(null)}
             aria-label="Dismiss"
@@ -674,7 +673,8 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: "inherit",
+              color: "#166534",
+              padding: "0.75rem 0.25rem 0",
               display: "flex",
               alignItems: "center",
             }}

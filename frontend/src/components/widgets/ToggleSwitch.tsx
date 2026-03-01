@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 export const ToggleSwitch = styled.label`
   position: relative;
@@ -20,7 +21,7 @@ export const ToggleSwitch = styled.label`
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #e2e8f0;
+    background-color: ${OS_LEGAL_COLORS.border};
     border-radius: 20px;
     transition: 0.2s;
 
@@ -43,5 +44,10 @@ export const ToggleSwitch = styled.label`
 
   input:checked + span:before {
     transform: translateX(16px);
+  }
+
+  input:focus-visible + span {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+    outline: 2px solid transparent;
   }
 `;

@@ -115,6 +115,12 @@ export const OS_LEGAL_COLORS = {
   successHover: "#15803d",
   /** Success background - light green tint. */
   successLight: "rgba(22, 163, 74, 0.1)",
+  /** Success surface background - very light green for panels/messages. */
+  successSurface: "#f0fdf4",
+  /** Success border color - light green for subtle borders. */
+  successBorder: "#bbf7d0",
+  /** Success text color - dark green for text on success surfaces. */
+  successText: "#166534",
 
   // Info colors - blue theme for informational messages
   /** Info surface background - very light blue. */

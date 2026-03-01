@@ -8,6 +8,7 @@ import { Input, Spinner } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { BadgeConfigurator, BadgeConfig } from "../agents/BadgeConfigurator";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
+import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
 import { StyledTextArea } from "../widgets/modals/styled";
 
 // GraphQL Queries and Mutations
@@ -178,32 +179,6 @@ const HelperText = styled.p`
   font-size: 0.875rem;
   margin: 0.5rem 0 1.5rem 0;
   line-height: 1.5;
-`;
-
-const StatusBadge = styled.span<{ $active: boolean }>`
-  display: inline-block;
-  padding: 0.2em 0.6em;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 4px;
-  background: ${(props) => (props.$active ? "#dcfce7" : "#fef3c7")};
-  color: ${(props) => (props.$active ? "#166534" : "#92400e")};
-`;
-
-const ToolsList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-`;
-
-const ToolBadge = styled.span`
-  display: inline-block;
-  font-size: 0.7rem;
-  background: #f1f5f9;
-  color: #475569;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
 `;
 
 const EmptyState = styled.div`

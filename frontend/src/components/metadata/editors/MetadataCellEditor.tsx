@@ -5,6 +5,7 @@ import { CheckCircle, AlertCircle } from "lucide-react";
 import { Input } from "@os-legal/ui";
 import { MetadataColumn, MetadataDataType } from "../../../types/metadata";
 import { validateMetadataValue } from "../../../types/metadata";
+import { StyledTextArea as BaseStyledTextArea } from "../../widgets/modals/styled";
 
 interface MetadataCellEditorProps {
   column: MetadataColumn;
@@ -79,21 +80,10 @@ const ErrorLabel = styled.span`
   }
 `;
 
-const StyledTextArea = styled.textarea`
-  width: 100%;
-  padding: 0.5rem;
+const StyledTextArea = styled(BaseStyledTextArea)`
+  min-height: auto;
   font-size: 0.875rem;
-  border: 1px solid #d4d4d8;
-  border-radius: 6px;
-  resize: vertical;
-  font-family: inherit;
   line-height: 1.4;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-  }
 
   &[readOnly] {
     background: #f9fafb;
