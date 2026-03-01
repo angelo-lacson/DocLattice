@@ -520,12 +520,13 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 # style attributes).  'self' covers same-origin WebSocket connections
 # (wss:// when served over HTTPS) so no extra wss: source is needed here.
 #
-# NOTE: If using Auth0 (REACT_APP_USE_AUTH0=true), extend connect-src and
-# script-src with the Auth0 tenant domain, e.g.:
-#   "https://<your-tenant>.auth0.com"
+# NOTE: Auth0 CSP extension is handled automatically below — when AUTH0_DOMAIN
+# is set, connect-src and script-src are extended with the tenant domain.
 SECURE_CSP_DIRECTIVES = {
     "default-src": ["'self'"],
-    "script-src": ["'self'"],
+    # blob: required for PDF.js web workers in CSP Level 2 browsers
+    # that fall back from worker-src to script-src
+    "script-src": ["'self'", "blob:"],
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": ["'self'", "data:"],
@@ -539,6 +540,12 @@ SECURE_CSP_DIRECTIVES = {
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
 }
+
+# Auth0 integration: extend CSP when AUTH0_DOMAIN is configured
+_auth0_domain = env("AUTH0_DOMAIN", default=None)
+if _auth0_domain and SECURE_CSP_DIRECTIVES:
+    SECURE_CSP_DIRECTIVES["connect-src"].append(f"https://{_auth0_domain}")
+    SECURE_CSP_DIRECTIVES["script-src"].append(f"https://{_auth0_domain}")
 
 # Permissions-Policy — opt out of browser features not needed by the app.
 SECURE_PERMISSIONS_POLICY = {

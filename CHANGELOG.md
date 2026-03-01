@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSP directives configured via `SECURE_CSP_DIRECTIVES` dict in `config/settings/base.py` — covers `default-src`, `script-src`, `style-src`, `img-src`, `font-src`, `connect-src` (including WebSocket), `worker-src`, `object-src`, `frame-ancestors`, `base-uri`, and `form-action`
 - Permissions-Policy disables `camera`, `microphone`, `geolocation`, `payment`, `usb`, `magnetometer`, `gyroscope`, and `accelerometer` via `SECURE_PERMISSIONS_POLICY`
 - Header values are pre-built once at middleware init for zero per-request overhead
-- Tests in `opencontractserver/tests/test_security_headers_middleware.py`
+- Auth0 CSP extension: when `AUTH0_DOMAIN` is set, `connect-src` and `script-src` are automatically extended with the tenant domain (`config/settings/base.py`)
+- Added `blob:` to `script-src` for PDF.js web worker compatibility in CSP Level 2 browsers that fall back from `worker-src` to `script-src`
+- Integration tests verifying headers appear on real responses through the full middleware stack (`opencontractserver/tests/test_security_headers_middleware.py`)
 
 - Expanded corpus forking test suite with field-level data integrity checks (Closes #998)
 
