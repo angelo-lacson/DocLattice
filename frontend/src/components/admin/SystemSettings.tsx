@@ -276,6 +276,8 @@ export const SystemSettings: React.FC = () => {
           ...componentsByStage.thumbnailers,
         ].map((c) => c.className);
 
+        if (allPaths.length === 0) return; // Components not loaded yet
+
         newEnabled = enabled
           ? allPaths
           : allPaths.filter((p) => p !== className);
@@ -552,7 +554,9 @@ export const SystemSettings: React.FC = () => {
       {/* Component Library */}
       <ComponentLibrary
         components={componentsByStage}
-        enabledComponents={(settings?.enabledComponents?.filter(Boolean) as string[]) ?? []}
+        enabledComponents={
+          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+        }
         updating={updating}
         onToggleEnabled={handleToggleEnabled}
         onAddSecrets={handleAddSecrets}
@@ -565,7 +569,9 @@ export const SystemSettings: React.FC = () => {
       {/* Filetype Defaults */}
       <FiletypeDefaults
         components={componentsByStage}
-        enabledComponents={(settings?.enabledComponents?.filter(Boolean) as string[]) ?? []}
+        enabledComponents={
+          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+        }
         preferredParsers={
           (settings?.preferredParsers as Record<string, string>) || {}
         }

@@ -176,7 +176,9 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
           {/* Component list */}
           {filteredComponents.length > 0 ? (
             filteredComponents.map(({ component, stage }) => {
-              const isEnabled = enabledComponents.includes(component.className);
+              const isEnabled =
+                enabledComponents.length === 0 ||
+                enabledComponents.includes(component.className);
               const stageConfig = STAGE_CONFIG[stage];
               const displayName = getComponentDisplayName(
                 component.className,

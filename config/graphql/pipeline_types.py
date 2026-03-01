@@ -94,7 +94,7 @@ class PipelineComponentType(graphene.ObjectType):
     )
     enabled = graphene.Boolean(
         description="Whether this component is enabled for use in pipeline configuration.",
-        required=False,
+        required=True,
     )
 
 
