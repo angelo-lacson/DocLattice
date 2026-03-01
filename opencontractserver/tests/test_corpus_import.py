@@ -145,6 +145,8 @@ class TestCorpusImport(TransactionTestCase):
 
     def _get_corpus_document(self, corpus: Corpus) -> Document:
         """Return the document linked to the corpus via its annotations."""
+        # Note: relies on Annotation.document's related_query_name='doc_annotation'
+        # (defined in opencontractserver/annotations/models.py)
         doc = (
             Document.objects.filter(doc_annotation__corpus=corpus)
             .distinct()
@@ -183,9 +185,10 @@ class TestCorpusImport(TransactionTestCase):
             self.assertEqual(
                 AnnotationLabel.objects.count(), EXPECTED_TOTAL_LABEL_COUNT
             )
-            # Assert the imported corpus exists (avoid relying on total count
-            # which depends on signal-created personal corpus).
-            self.assertEqual(Corpus.objects.filter(title="New Import").count(), 1)
+            # Assert the imported corpus exists by PK (the import task
+            # overwrites the seed corpus title with the value from data.json).
+            self.assertIsNotNone(corpus)
+            self.assertTrue(Corpus.objects.filter(pk=corpus.pk).exists())
             # 1 standalone document + 1 corpus-isolated copy
             self.assertEqual(Document.objects.count(), 2)
             # 5 text annotations + 1 doc-level annotation
@@ -209,6 +212,7 @@ class TestCorpusImport(TransactionTestCase):
                 self.assertEqual(label.color, expected["color"])
                 self.assertEqual(label.icon, expected["icon"])
                 self.assertEqual(label.description, expected["description"])
+                self.assertEqual(label.label_type, expected["label_type"])
                 self.assertEqual(label.creator, self.user)
 
         # -- Doc label fields --
@@ -220,6 +224,7 @@ class TestCorpusImport(TransactionTestCase):
                 self.assertEqual(label.color, expected["color"])
                 self.assertEqual(label.icon, expected["icon"])
                 self.assertEqual(label.description, expected["description"])
+                self.assertEqual(label.label_type, expected["label_type"])
                 self.assertEqual(label.creator, self.user)
 
         # -- Labels belong to corpus labelset --
@@ -287,7 +292,15 @@ class TestCorpusImport(TransactionTestCase):
                     document=doc,
                     annotation_label__text=label_text,
                 ).order_by("page", "id")
-                if raw_text:
+                if raw_text is None:
+                    # Can't filter by raw_text, so verify exactly one
+                    # annotation exists for this label to avoid ambiguity.
+                    self.assertEqual(
+                        qs.count(),
+                        1,
+                        f"Expected exactly 1 annotation for {label_text}",
+                    )
+                else:
                     qs = qs.filter(raw_text=raw_text)
                 annot = qs.first()
                 self.assertIsNotNone(annot, f"Missing annotation for {label_text}")
@@ -363,6 +376,8 @@ class TestCorpusImport(TransactionTestCase):
     def test_relationship_import(self):
         """Validate import_relationships: single links, multiple sources/targets,
         and structural flag preservation."""
+        # NOTE: subtests share corpus state. Assert specific relationships by label
+        # rather than using global counts, which would include earlier subtests' data.
         corpus = self._run_import()
         doc = self._get_corpus_document(corpus)
 
