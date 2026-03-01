@@ -3,7 +3,10 @@ import { useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { corpusDetailView } from "../../graphql/cache";
-import { updateDetailViewParam } from "../../utils/navigationUtils";
+import {
+  updateDetailViewParam,
+  navigateToDiscussionThread,
+} from "../../utils/navigationUtils";
 import { CorpusType } from "../../types/graphql-api";
 import { CorpusLandingView } from "./CorpusHome/CorpusLandingView";
 import { CorpusDetailsView } from "./CorpusHome/CorpusDetailsView";
@@ -66,9 +69,12 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     updateDetailViewParam(location, navigate, "details");
   };
 
-  // Handle switching back to landing view
+  // Handle switching back to landing view (also clears thread param to prevent stale state)
   const handleBackToLanding = () => {
-    updateDetailViewParam(location, navigate, "landing");
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.delete("view");
+    searchParams.delete("thread");
+    navigate({ search: searchParams.toString() });
   };
 
   // Handle switching to discussions view
@@ -78,10 +84,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
 
   // Handle clicking a specific thread from the landing page feed
   const handleThreadClick = (threadId: string) => {
-    const searchParams = new URLSearchParams(location.search);
-    searchParams.set("view", "discussions");
-    searchParams.set("thread", threadId);
-    navigate({ search: searchParams.toString() });
+    navigateToDiscussionThread(location, navigate, threadId);
   };
 
   // Render the appropriate view
@@ -98,14 +101,10 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   }
 
   if (currentView === "discussions") {
-    const searchParams = new URLSearchParams(location.search);
-    const initialThreadId = searchParams.get("thread");
-
     return (
       <CorpusDiscussionsInlineView
         corpus={corpus}
         onBack={handleBackToLanding}
-        initialThreadId={initialThreadId}
         testId="corpus-home-discussions"
       />
     );

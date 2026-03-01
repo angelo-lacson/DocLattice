@@ -93,8 +93,6 @@ export interface CorpusDiscussionsInlineViewProps {
   corpus: CorpusType;
   /** Callback to go back to the landing page */
   onBack: () => void;
-  /** Optional initial thread ID to open directly (unused; kept for API compat) */
-  initialThreadId?: string | null;
   /** Test ID prefix */
   testId?: string;
 }

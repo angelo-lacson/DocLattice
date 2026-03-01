@@ -212,7 +212,15 @@ const mountCorpuses = (mount: any, initialCorpus?: CorpusType | null) => {
 /* -------------------------------------------------------------------------- */
 
 test("sidebar expands and tab navigation works", async ({ mount, page }) => {
-  await mountCorpuses(mount, dummyCorpus);
+  // Sidebar is only visible in power user mode (?mode=power)
+  openedCorpus(dummyCorpus);
+  await mount(
+    <CorpusesTestWrapper
+      mocks={mocks}
+      initialCorpus={dummyCorpus}
+      initialEntries={[`/corpuses/${dummyCorpus.id}?mode=power`]}
+    />
+  );
 
   const sidebar = page.locator('[data-testid="navigation-sidebar"]');
   await expect(sidebar).toBeVisible();

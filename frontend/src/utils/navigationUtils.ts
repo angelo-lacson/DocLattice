@@ -46,6 +46,7 @@ export interface QueryParams {
   homeView?: string | null; // "about" | "toc" - corpus home view selection
   tocExpanded?: boolean; // true to expand all TOC nodes
   view?: string | null; // "landing" | "details" - corpus detail view selection
+  mode?: string | null; // "power" - corpus power user mode
   version?: number | null; // Document version number (null = current version)
   showStructural?: boolean;
   showSelectedOnly?: boolean;
@@ -257,6 +258,9 @@ export function buildQueryParams(params: QueryParams): string {
   if (params.view && params.view !== "landing") {
     // Only add to URL if not default value
     searchParams.set("view", params.view);
+  }
+  if (params.mode) {
+    searchParams.set("mode", params.mode);
   }
   if (params.version != null && params.version > 0) {
     searchParams.set("v", String(params.version));
@@ -958,6 +962,24 @@ export function updateDetailViewParam(
     searchParams.delete("view");
   }
   // Push (not replace) so browser back returns to the previous view
+  navigate({ search: searchParams.toString() });
+}
+
+/**
+ * Navigate to a specific thread within the discussions view.
+ * Sets both view=discussions and thread=threadId in a single history entry.
+ * @param location - React Router location object
+ * @param navigate - React Router navigate function
+ * @param threadId - Thread/conversation ID to open
+ */
+export function navigateToDiscussionThread(
+  location: LocationLike,
+  navigate: NavigateFn,
+  threadId: string
+) {
+  const searchParams = new URLSearchParams(location.search);
+  searchParams.set("view", "discussions");
+  searchParams.set("thread", threadId);
   navigate({ search: searchParams.toString() });
 }
 
