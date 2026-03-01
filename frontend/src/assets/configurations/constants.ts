@@ -297,6 +297,10 @@ export const FAILURE_COLORS = {
   SHADOW: "rgba(220, 38, 38, 0.3)",
 } as const;
 
+// Corpus landing page constants
+/** Number of recent discussion threads shown on the corpus landing page */
+export const RECENT_THREAD_LIMIT = 3;
+
 /**
  * Known acronyms that should be preserved in display names.
  * Used by getComponentDisplayName to properly capitalize technology names.
