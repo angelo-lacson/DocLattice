@@ -5,6 +5,10 @@ export const TABLET_BREAKPOINT = 768;
 // Desktop breakpoint - minimum width for desktop-only features (TABLET_BREAKPOINT + 1)
 export const DESKTOP_BREAKPOINT = 769;
 
+// Icon defaults
+/** Default pixel size for DynamicIcon width and height */
+export const DYNAMIC_ICON_DEFAULT_SIZE = 16;
+
 // Mention search configuration
 // Debounce delay before firing search queries (ms)
 export const MENTION_SEARCH_DEBOUNCE_MS = 300;
