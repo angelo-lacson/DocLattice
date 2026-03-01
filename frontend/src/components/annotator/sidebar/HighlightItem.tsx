@@ -1,5 +1,5 @@
 import React from "react";
-import { Label, Button, Popup, Icon } from "semantic-ui-react";
+import { Label, Button, Popup, Icon, SemanticICONS } from "semantic-ui-react";
 import styled from "styled-components";
 import { Trash2, ArrowRight, ArrowLeft } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -223,7 +223,7 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
         )}
         <AnnotationLabel $labelColor={annotation.annotationLabel.color}>
           {annotation.annotationLabel.icon && (
-            <Icon name={annotation.annotationLabel.icon} />
+            <Icon name={annotation.annotationLabel.icon as SemanticICONS} />
           )}
           {annotation.annotationLabel.text}
         </AnnotationLabel>

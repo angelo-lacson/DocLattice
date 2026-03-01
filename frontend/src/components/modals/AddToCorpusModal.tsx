@@ -1,19 +1,18 @@
 import React, { useState, useCallback, useEffect } from "react";
-import {
-  Modal,
-  Button,
-  List,
-  Loader,
-  Message,
-  Icon,
-  Input,
-  Card,
-  Label,
-  Segment,
-} from "semantic-ui-react";
+import { Modal, Button, Card } from "semantic-ui-react";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
+import {
+  Folder,
+  ArrowLeft,
+  Check,
+  ArrowRight,
+  FileText,
+  Tags,
+} from "lucide-react";
+import { Input } from "@os-legal/ui";
+import { Spinner } from "@os-legal/ui";
 import {
   GET_CORPUSES,
   GetCorpusesInputs,
@@ -72,10 +71,72 @@ const StyledCard = styled(Card)`
   }
 `;
 
-const DocumentList = styled(List)`
+const DocumentList = styled.ul`
   max-height: 200px;
   overflow-y: auto;
-  margin-bottom: 1rem !important;
+  margin-bottom: 1rem;
+  list-style: none;
+  padding: 0;
+`;
+
+const DocumentListItem = styled.li`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const MetaLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.2em 0.5em;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #475569;
+  margin-right: 0.5rem;
+`;
+
+const ErrorMessage = styled.div`
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+
+  strong {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  p {
+    margin: 0;
+  }
+`;
+
+const InfoMessage = styled.div`
+  padding: 0.75rem 1rem;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  color: #0369a1;
+
+  strong {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  p {
+    margin: 0;
+  }
 `;
 
 interface AddToCorpusModalProps {
@@ -238,33 +299,34 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
   const renderCorpusList = () => {
     if (loading) {
       return (
-        <Segment basic padded="very" textAlign="center">
-          <Loader active inline="centered">
+        <div style={{ padding: "2rem", textAlign: "center" }}>
+          <Spinner size="md" />
+          <p style={{ marginTop: "0.75rem", color: "#64748b" }}>
             Loading your corpuses...
-          </Loader>
-        </Segment>
+          </p>
+        </div>
       );
     }
 
     if (error) {
       return (
-        <Message negative>
-          <Message.Header>Error loading corpuses</Message.Header>
+        <ErrorMessage>
+          <strong>Error loading corpuses</strong>
           <p>{error.message}</p>
-        </Message>
+        </ErrorMessage>
       );
     }
 
     if (corpuses.length === 0) {
       return (
-        <Message info>
-          <Message.Header>No corpuses available</Message.Header>
+        <InfoMessage>
+          <strong>No corpuses available</strong>
           <p>
             {searchTerm
               ? `No corpuses found matching "${searchTerm}". Try a different search term.`
               : "You don't have any corpuses with edit permissions."}
           </p>
-        </Message>
+        </InfoMessage>
       );
     }
 
@@ -285,7 +347,12 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
             data-testid={`corpus-item-${corpus.id}`}
           >
             <Card.Content>
-              {corpus.icon && <Icon name="folder" floated="right" />}
+              {corpus.icon && (
+                <Folder
+                  size={16}
+                  style={{ float: "right", color: "#64748b" }}
+                />
+              )}
               <Card.Header data-testid={`corpus-title-${corpus.id}`}>
                 {corpus.title || "Untitled Corpus"}
               </Card.Header>
@@ -295,15 +362,15 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
               )}
             </Card.Content>
             <Card.Content extra>
-              <Label size="small">
-                <Icon name="file" />
+              <MetaLabel>
+                <FileText size={12} />
                 {corpus.documentCount || 0} documents
-              </Label>
+              </MetaLabel>
               {corpus.labelSet?.title && (
-                <Label size="small">
-                  <Icon name="tags" />
+                <MetaLabel>
+                  <Tags size={12} />
                   {corpus.labelSet.title}
-                </Label>
+                </MetaLabel>
               )}
               {!multiStep && (
                 <Button
@@ -338,17 +405,17 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
             <strong>{selectedCorpus?.title}</strong>:
           </p>
           {selectedDocs.length > 0 && (
-            <DocumentList divided relaxed>
+            <DocumentList>
               {selectedDocs.map((doc) => (
-                <List.Item key={doc.id}>
-                  <List.Icon name="file" size="large" verticalAlign="middle" />
-                  <List.Content>
-                    <List.Header>{doc.title}</List.Header>
-                    <List.Description>
+                <DocumentListItem key={doc.id}>
+                  <FileText size={20} color="#64748b" />
+                  <div>
+                    <strong>{doc.title}</strong>
+                    <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
                       by {doc.creator?.email || "Unknown"}
-                    </List.Description>
-                  </List.Content>
-                </List.Item>
+                    </div>
+                  </div>
+                </DocumentListItem>
               ))}
             </DocumentList>
           )}
@@ -360,10 +427,11 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
       <>
         <SearchWrapper>
           <Input
-            fluid
-            icon="search"
+            fullWidth
             placeholder="Search corpuses..."
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              handleSearchChange(e.target.value)
+            }
             data-testid="corpus-search-input"
           />
         </SearchWrapper>
@@ -384,7 +452,10 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
       data-testid="add-to-corpus-modal"
     >
       <Modal.Header>
-        <Icon name="folder" />
+        <Folder
+          size={16}
+          style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+        />
         {multiStep && view === "CONFIRM" ? "Confirm Selection" : title}
       </Modal.Header>
       <Modal.Content data-testid="add-to-corpus-modal-content">
@@ -394,7 +465,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
         {multiStep && view === "CONFIRM" ? (
           <>
             <Button onClick={() => setView("SELECT")} data-testid="back-button">
-              <Icon name="arrow left" />
+              <ArrowLeft size={14} style={{ marginRight: "0.5rem" }} />
               Back
             </Button>
             <Button onClick={onClose} data-testid="cancel-button">
@@ -407,7 +478,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
               disabled={!selectedCorpus || addingToCorpusId !== null}
               data-testid="confirm-add-button"
             >
-              <Icon name="check" />
+              <Check size={14} style={{ marginRight: "0.5rem" }} />
               Add to Corpus
             </Button>
           </>
@@ -423,7 +494,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
                 data-testid="next-button"
               >
                 Next
-                <Icon name="arrow right" />
+                <ArrowRight size={14} style={{ marginLeft: "0.5rem" }} />
               </Button>
             )}
           </>

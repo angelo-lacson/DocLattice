@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useEffect } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Form, Button, Message } from "semantic-ui-react";
+import { Modal, Form, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X } from "lucide-react";
 import {
@@ -306,17 +306,37 @@ export const EditFolderModal: React.FC = () => {
           </Form.Field>
 
           {validationError && (
-            <Message error>
-              <Message.Header>Validation Error</Message.Header>
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                border: "1px solid #fca5a5",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                color: "#991b1b",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                Validation Error
+              </div>
               <p>{validationError}</p>
-            </Message>
+            </div>
           )}
 
           {error && (
-            <Message error>
-              <Message.Header>Error Updating Folder</Message.Header>
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                border: "1px solid #fca5a5",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                color: "#991b1b",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                Error Updating Folder
+              </div>
               <p>{error.message}</p>
-            </Message>
+            </div>
           )}
         </Form>
       </Modal.Content>

@@ -1,22 +1,27 @@
 import React, { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import {
-  Segment,
-  Header,
-  Icon,
   Table,
   Dropdown,
-  Checkbox,
   Button,
   Modal,
   Form,
-  Message,
-  Label,
-  Loader,
-  Dimmer,
   Statistic,
-  Grid,
 } from "semantic-ui-react";
+import {
+  Shield,
+  BarChart3,
+  Filter,
+  List,
+  Undo2,
+  Plus,
+  AlertTriangle,
+  Settings,
+  User,
+  MessageSquare,
+  MessagesSquare,
+} from "lucide-react";
+import { Spinner } from "@os-legal/ui";
 import { toast } from "react-toastify";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -247,18 +252,56 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
 
   return (
     <div style={{ padding: "1rem" }}>
-      <Header as="h2" dividing>
-        <Icon name="shield" />
-        <Header.Content>
+      <div
+        style={{
+          borderBottom: "1px solid #e2e8f0",
+          paddingBottom: "1rem",
+          marginBottom: "1rem",
+        }}
+      >
+        <h2
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: 0,
+          }}
+        >
+          <Shield size={24} />
           Moderation Dashboard
-          {corpusTitle && <Header.Subheader>{corpusTitle}</Header.Subheader>}
-        </Header.Content>
-      </Header>
+        </h2>
+        {corpusTitle && (
+          <div
+            style={{
+              color: "#64748b",
+              fontSize: "0.9rem",
+              marginTop: "0.25rem",
+            }}
+          >
+            {corpusTitle}
+          </div>
+        )}
+      </div>
 
       {/* Metrics Section */}
-      <Segment>
-        <Header as="h4">
-          <Icon name="chart bar" />
+      <div
+        style={{
+          padding: "1rem",
+          border: "1px solid #e2e8f0",
+          borderRadius: "8px",
+          background: "white",
+          marginBottom: "1rem",
+        }}
+      >
+        <h4
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: "0 0 0.5rem 0",
+          }}
+        >
+          <BarChart3 size={16} />
           Moderation Metrics
           <Dropdown
             inline
@@ -267,63 +310,110 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             onChange={(_, { value }) => setTimeRangeHours(value as number)}
             style={{ marginLeft: "1rem" }}
           />
-        </Header>
+        </h4>
         {metricsLoading ? (
-          <Loader active inline="centered" />
+          <div style={{ textAlign: "center", padding: "1rem" }}>
+            <Spinner size="sm" />
+          </div>
         ) : metricsError ? (
-          <Message negative>
-            <Message.Header>Error loading metrics</Message.Header>
-            <p>{metricsError.message}</p>
-          </Message>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "6px",
+              color: "#991b1b",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+              Error loading metrics
+            </strong>
+            <p style={{ margin: 0 }}>{metricsError.message}</p>
+          </div>
         ) : metrics ? (
           <>
             {metrics.isAboveThreshold && (
-              <Message warning>
-                <Icon name="warning sign" />
+              <div
+                style={{
+                  padding: "0.75rem 1rem",
+                  background: "#fefce8",
+                  border: "1px solid #fde68a",
+                  borderRadius: "6px",
+                  color: "#854d0e",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <AlertTriangle size={16} />
                 High moderation activity detected! Threshold exceeded for:{" "}
                 {metrics.thresholdExceededTypes.join(", ")}
-              </Message>
+              </div>
             )}
-            <Grid columns={4} stackable>
-              <Grid.Column>
-                <Statistic size="small">
-                  <Statistic.Value>{metrics.totalActions}</Statistic.Value>
-                  <Statistic.Label>Total Actions</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-              <Grid.Column>
-                <Statistic size="small" color="blue">
-                  <Statistic.Value>{metrics.automatedActions}</Statistic.Value>
-                  <Statistic.Label>Automated</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-              <Grid.Column>
-                <Statistic size="small" color="green">
-                  <Statistic.Value>{metrics.manualActions}</Statistic.Value>
-                  <Statistic.Label>Manual</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-              <Grid.Column>
-                <Statistic size="small">
-                  <Statistic.Value>
-                    {metrics.hourlyActionRate.toFixed(1)}
-                  </Statistic.Value>
-                  <Statistic.Label>Actions/Hour</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-            </Grid>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                gap: "1rem",
+              }}
+            >
+              <Statistic size="small">
+                <Statistic.Value>{metrics.totalActions}</Statistic.Value>
+                <Statistic.Label>Total Actions</Statistic.Label>
+              </Statistic>
+              <Statistic size="small" color="blue">
+                <Statistic.Value>{metrics.automatedActions}</Statistic.Value>
+                <Statistic.Label>Automated</Statistic.Label>
+              </Statistic>
+              <Statistic size="small" color="green">
+                <Statistic.Value>{metrics.manualActions}</Statistic.Value>
+                <Statistic.Label>Manual</Statistic.Label>
+              </Statistic>
+              <Statistic size="small">
+                <Statistic.Value>
+                  {metrics.hourlyActionRate.toFixed(1)}
+                </Statistic.Value>
+                <Statistic.Label>Actions/Hour</Statistic.Label>
+              </Statistic>
+            </div>
           </>
         ) : (
-          <Message info>No metrics available</Message>
+          <div
+            style={{
+              padding: "0.5rem 0.75rem",
+              background: "#f0f9ff",
+              border: "1px solid #bae6fd",
+              borderRadius: "6px",
+              color: "#0369a1",
+            }}
+          >
+            No metrics available
+          </div>
         )}
-      </Segment>
+      </div>
 
       {/* Filters */}
-      <Segment>
-        <Header as="h4">
-          <Icon name="filter" />
+      <div
+        style={{
+          padding: "1rem",
+          border: "1px solid #e2e8f0",
+          borderRadius: "8px",
+          background: "white",
+          marginBottom: "1rem",
+        }}
+      >
+        <h4
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: "0 0 0.5rem 0",
+          }}
+        >
+          <Filter size={16} />
           Filters
-        </Header>
+        </h4>
         <Form>
           <Form.Group inline>
             <Form.Field>
@@ -338,33 +428,88 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
               />
             </Form.Field>
             <Form.Field>
-              <Checkbox
-                label="Automated actions only"
-                checked={automatedOnly}
-                onChange={(_, { checked }) => setAutomatedOnly(!!checked)}
-              />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={automatedOnly}
+                  onChange={(e) => setAutomatedOnly(e.target.checked)}
+                />
+                Automated actions only
+              </label>
             </Form.Field>
           </Form.Group>
         </Form>
-      </Segment>
+      </div>
 
       {/* Actions Table */}
-      <Segment>
-        <Header as="h4">
-          <Icon name="list" />
+      <div
+        style={{
+          padding: "1rem",
+          border: "1px solid #e2e8f0",
+          borderRadius: "8px",
+          background: "white",
+          marginBottom: "1rem",
+        }}
+      >
+        <h4
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: "0 0 0.5rem 0",
+          }}
+        >
+          <List size={16} />
           Moderation Actions
-        </Header>
+        </h4>
         {actionsLoading ? (
-          <Dimmer active inverted>
-            <Loader>Loading actions...</Loader>
-          </Dimmer>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "2rem",
+            }}
+          >
+            <Spinner size="md" />
+            <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
+              Loading actions...
+            </span>
+          </div>
         ) : actionsError ? (
-          <Message negative>
-            <Message.Header>Error loading actions</Message.Header>
-            <p>{actionsError.message}</p>
-          </Message>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "6px",
+              color: "#991b1b",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+              Error loading actions
+            </strong>
+            <p style={{ margin: 0 }}>{actionsError.message}</p>
+          </div>
         ) : actions.length === 0 ? (
-          <Message info>No moderation actions found</Message>
+          <div
+            style={{
+              padding: "0.5rem 0.75rem",
+              background: "#f0f9ff",
+              border: "1px solid #bae6fd",
+              borderRadius: "6px",
+              color: "#0369a1",
+            }}
+          >
+            No moderation actions found
+          </div>
         ) : (
           <>
             <Table celled striped>
@@ -382,39 +527,107 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                 {actions.map(({ node }) => (
                   <Table.Row key={node.id}>
                     <Table.Cell>
-                      <Label color={getActionColor(node.actionType)}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "0.2em 0.5em",
+                          fontSize: "0.8rem",
+                          fontWeight: 500,
+                          borderRadius: "4px",
+                          background: node.actionType.includes("delete")
+                            ? "#fef2f2"
+                            : node.actionType.includes("restore")
+                            ? "#f0fdf4"
+                            : node.actionType.includes("lock")
+                            ? "#fefce8"
+                            : node.actionType.includes("pin")
+                            ? "#f0f9ff"
+                            : "#f8fafc",
+                          color: node.actionType.includes("delete")
+                            ? "#991b1b"
+                            : node.actionType.includes("restore")
+                            ? "#166534"
+                            : node.actionType.includes("lock")
+                            ? "#854d0e"
+                            : node.actionType.includes("pin")
+                            ? "#1e40af"
+                            : "#475569",
+                          border: "1px solid currentColor",
+                          borderColor: "inherit",
+                        }}
+                      >
                         {formatActionType(node.actionType)}
-                      </Label>
+                      </span>
                       {node.isAutomated && (
-                        <Label size="tiny" color="purple">
-                          <Icon name="cog" />
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            marginLeft: "0.5rem",
+                            padding: "0.15em 0.4em",
+                            fontSize: "0.7rem",
+                            fontWeight: 500,
+                            background: "#f3e8ff",
+                            color: "#7e22ce",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          <Settings size={10} />
                           Auto
-                        </Label>
+                        </span>
                       )}
                     </Table.Cell>
                     <Table.Cell>
                       {node.conversation && (
-                        <div>
-                          <Icon name="comments" />
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <MessagesSquare size={14} />
                           {node.conversation.title}
                         </div>
                       )}
                       {node.message && (
-                        <div style={{ fontSize: "0.9em", color: "#666" }}>
-                          <Icon name="comment" />
+                        <div
+                          style={{
+                            fontSize: "0.9em",
+                            color: "#666",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <MessageSquare size={12} />
                           {node.message.content.substring(0, 50)}...
                         </div>
                       )}
                     </Table.Cell>
                     <Table.Cell>
                       {node.moderator ? (
-                        <span>
-                          <Icon name="user" />
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <User size={14} />
                           {node.moderator.username}
                         </span>
                       ) : (
-                        <span style={{ color: "#888" }}>
-                          <Icon name="cog" />
+                        <span
+                          style={{
+                            color: "#888",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <Settings size={14} />
                           System
                         </span>
                       )}
@@ -440,7 +653,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                           color="orange"
                           onClick={() => openRollbackModal(node)}
                         >
-                          <Icon name="undo" />
+                          <Undo2 size={14} />
                           Rollback
                         </Button>
                       )}
@@ -456,14 +669,14 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                   loading={isLoadingMore}
                   disabled={isLoadingMore}
                 >
-                  <Icon name="plus" />
+                  <Plus size={14} />
                   Load More
                 </Button>
               </div>
             )}
           </>
         )}
-      </Segment>
+      </div>
 
       {/* Rollback Confirmation Modal */}
       <Modal
@@ -472,7 +685,10 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         size="small"
       >
         <Modal.Header>
-          <Icon name="undo" />
+          <Undo2
+            size={16}
+            style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+          />
           Confirm Rollback
         </Modal.Header>
         <Modal.Content>
@@ -509,7 +725,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             loading={rollbackLoading}
             disabled={rollbackLoading}
           >
-            <Icon name="undo" />
+            <Undo2 size={14} />
             Rollback
           </Button>
         </Modal.Actions>

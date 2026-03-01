@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button, Message } from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, AlertTriangle } from "lucide-react";
 import { toast } from "react-toastify";
@@ -204,10 +204,21 @@ export const RemoveDocumentsModal: React.FC = () => {
         </InfoBox>
 
         {error && (
-          <Message error style={{ marginTop: "16px" }}>
-            <Message.Header>Error Removing Documents</Message.Header>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              border: "1px solid #fca5a5",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              color: "#991b1b",
+              marginTop: "16px",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+              Error Removing Documents
+            </div>
             <p>{error.message}</p>
-          </Message>
+          </div>
         )}
       </Modal.Content>
 

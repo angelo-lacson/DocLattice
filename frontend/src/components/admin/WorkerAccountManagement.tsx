@@ -1,21 +1,11 @@
 import React, { useState } from "react";
 import { gql, useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  Table,
-  Message,
-  Dimmer,
-  Loader,
-  Modal,
-  Form,
-  Input,
-  TextArea,
-  Confirm,
-} from "semantic-ui-react";
+import { Button, Table, Modal, Form, Confirm } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Upload, ArrowLeft } from "lucide-react";
+import { Input, Spinner } from "@os-legal/ui";
 
 import {
   OS_LEGAL_COLORS,
@@ -273,10 +263,22 @@ export const WorkerAccountManagement: React.FC = () => {
   if (!isSuperuser) {
     return (
       <Container>
-        <Message warning>
-          <Message.Header>Access Denied</Message.Header>
-          <p>Only administrators can manage worker accounts.</p>
-        </Message>
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            background: "#fefce8",
+            border: "1px solid #fde68a",
+            borderRadius: "6px",
+            color: "#854d0e",
+          }}
+        >
+          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+            Access Denied
+          </strong>
+          <p style={{ margin: 0 }}>
+            Only administrators can manage worker accounts.
+          </p>
+        </div>
       </Container>
     );
   }
@@ -284,9 +286,20 @@ export const WorkerAccountManagement: React.FC = () => {
   if (loading) {
     return (
       <Container>
-        <Dimmer active inverted>
-          <Loader>Loading worker accounts...</Loader>
-        </Dimmer>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "3rem",
+          }}
+        >
+          <Spinner size="md" />
+          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
+            Loading worker accounts...
+          </span>
+        </div>
       </Container>
     );
   }
@@ -294,10 +307,20 @@ export const WorkerAccountManagement: React.FC = () => {
   if (error) {
     return (
       <Container>
-        <Message negative>
-          <Message.Header>Error loading worker accounts</Message.Header>
-          <p>{error.message}</p>
-        </Message>
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "6px",
+            color: "#991b1b",
+          }}
+        >
+          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+            Error loading worker accounts
+          </strong>
+          <p style={{ margin: 0 }}>{error.message}</p>
+        </div>
       </Container>
     );
   }
@@ -333,13 +356,23 @@ export const WorkerAccountManagement: React.FC = () => {
 
       <StyledSegment>
         {accounts.length === 0 ? (
-          <Message info>
-            <Message.Header>No Worker Accounts</Message.Header>
-            <p>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              background: "#f0f9ff",
+              border: "1px solid #bae6fd",
+              borderRadius: "6px",
+              color: "#0369a1",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+              No Worker Accounts
+            </strong>
+            <p style={{ margin: 0 }}>
               Create your first worker account to enable automated document
               upload pipelines.
             </p>
-          </Message>
+          </div>
         ) : (
           <Table basic="very" celled>
             <Table.Header>
@@ -400,22 +433,32 @@ export const WorkerAccountManagement: React.FC = () => {
             <Form.Field required>
               <label>Name</label>
               <Input
+                fullWidth
                 placeholder="Worker account name"
                 value={formState.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
             </Form.Field>
             <Form.Field>
               <label>Description</label>
-              <TextArea
+              <textarea
                 placeholder="Optional description of this worker account"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={3}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "inherit",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
           </Form>

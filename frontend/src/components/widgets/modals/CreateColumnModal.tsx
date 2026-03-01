@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { Modal, Form, Grid, Button } from "semantic-ui-react";
+import { Modal, Form, Button } from "semantic-ui-react";
 import { BasicConfigSection } from "./sections/BasicConfigSection";
 import { OutputTypeSection } from "./sections/OutputTypeSection";
 import { ExtractionConfigSection } from "./sections/ExtractionConfigSection";
@@ -25,8 +25,10 @@ interface RequiredFields {
   name: string;
 }
 
-const StyledGrid = styled(Grid)`
-  margin: 0 !important;
+const StyledGrid = styled.div`
+  display: grid;
+  gap: 1rem;
+  margin: 0;
 `;
 
 const ModalWrapper = styled.div`

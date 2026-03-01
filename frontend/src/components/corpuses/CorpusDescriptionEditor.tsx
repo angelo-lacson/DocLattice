@@ -1,12 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Modal,
-  Header,
-  Button,
-  Icon,
-  Message,
-  Loader,
-} from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "@apollo/client";
@@ -895,8 +888,7 @@ export const CorpusDescriptionEditor: React.FC<
   return (
     <StyledModal open={isOpen} onClose={handleClose} closeIcon>
       <ModalHeader>
-        <Header
-          as="h2"
+        <h2
           style={{
             margin: 0,
             display: "flex",
@@ -936,7 +928,7 @@ export const CorpusDescriptionEditor: React.FC<
               Editing from v{editingFromVersion}
             </EditingIndicator>
           )}
-        </Header>
+        </h2>
       </ModalHeader>
 
       <ModalContent>

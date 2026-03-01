@@ -1,12 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import styled, { createGlobalStyle, keyframes } from "styled-components";
-import {
-  Button,
-  Icon,
-  SemanticICONS,
-  ButtonProps,
-  Modal,
-} from "semantic-ui-react";
+import { Button, ButtonProps, Modal } from "semantic-ui-react";
+import { DynamicIcon } from "../icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
@@ -129,7 +124,7 @@ const GlobalStyle = createGlobalStyle`
 `;
 
 export interface CloudButtonItem {
-  name: SemanticICONS;
+  name: string;
   color: string;
   tooltip: string;
   protected_message?: string | null;
@@ -307,7 +302,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
               $delay={index * 0.1}
               $position={buttonPositions[index]}
             >
-              <Icon name={btn.name} />
+              <DynamicIcon name={btn.name} size={14} />
             </CloudButton>
           ))}
         </CloudContainer>

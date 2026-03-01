@@ -25,7 +25,8 @@ import React, {
 import { useLazyQuery, useQuery, useReactiveVar } from "@apollo/client";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Send, Home } from "lucide-react";
-import { Button, Loader } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
 
 import {
@@ -1117,7 +1118,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                       }}
                     >
                       <div className="pulse-dot" />
-                      <Loader active inline size="small" inverted />
+                      <Spinner size="sm" />
                       <span>AI Assistant is thinking...</span>
                       <div
                         className="pulse-dot"

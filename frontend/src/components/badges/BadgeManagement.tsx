@@ -1,21 +1,8 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-import {
-  Button,
-  Table,
-  Header,
-  Message,
-  Dimmer,
-  Loader,
-  Segment,
-  Icon,
-  Modal,
-  Form,
-  Input,
-  TextArea,
-  Dropdown,
-  Checkbox,
-} from "semantic-ui-react";
+import { Button, Table, Modal, Form, Dropdown } from "semantic-ui-react";
+import { Plus, Check, X, Trash2 } from "lucide-react";
+import { Input, Spinner } from "@os-legal/ui";
 import styled from "styled-components";
 import { Badge } from "./Badge";
 import { BadgeCriteriaConfig } from "./BadgeCriteriaConfig";
@@ -40,13 +27,12 @@ const Container = styled.div`
   padding: 2em;
 `;
 
-const StyledSegment = styled(Segment)`
-  &.ui.segment {
-    border-radius: 16px;
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
+const StyledSegment = styled.div`
+  padding: 1rem;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
 
 // Get list of available lucide icons for dropdown
@@ -164,9 +150,20 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
   if (loading) {
     return (
       <Container>
-        <Dimmer active inverted>
-          <Loader>Loading badges...</Loader>
-        </Dimmer>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "3rem",
+          }}
+        >
+          <Spinner size="md" />
+          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
+            Loading badges...
+          </span>
+        </div>
       </Container>
     );
   }
@@ -174,10 +171,20 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
   if (error) {
     return (
       <Container>
-        <Message negative>
-          <Message.Header>Error loading badges</Message.Header>
-          <p>{error.message}</p>
-        </Message>
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "6px",
+            color: "#991b1b",
+          }}
+        >
+          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+            Error loading badges
+          </strong>
+          <p style={{ margin: 0 }}>{error.message}</p>
+        </div>
       </Container>
     );
   }
@@ -199,14 +206,14 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
             marginBottom: "1em",
           }}
         >
-          <Header as="h2">Badge Management</Header>
+          <h2>Badge Management</h2>
           <Button
             primary
             onClick={() => setShowCreateModal(true)}
             icon
             labelPosition="left"
           >
-            <Icon name="plus" />
+            <Plus size={14} />
             Create Badge
           </Button>
         </div>
@@ -241,9 +248,9 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                 <Table.Cell>{badge.description}</Table.Cell>
                 <Table.Cell>
                   {badge.isAutoAwarded ? (
-                    <Icon name="check" color="green" />
+                    <Check size={16} color="#21ba45" />
                   ) : (
-                    <Icon name="close" color="red" />
+                    <X size={16} color="#db2828" />
                   )}
                 </Table.Cell>
                 <Table.Cell>
@@ -256,7 +263,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                       setDeleteModalOpen(true);
                     }}
                   >
-                    <Icon name="trash" />
+                    <Trash2 size={14} />
                   </Button>
                 </Table.Cell>
               </Table.Row>
@@ -277,19 +284,31 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
             <Form.Field required>
               <label>Badge Name</label>
               <Input
+                fullWidth
                 placeholder="e.g., First Post"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setName(e.target.value)
+                }
               />
             </Form.Field>
 
             <Form.Field required>
               <label>Description</label>
-              <TextArea
+              <textarea
                 placeholder="Describe what this badge represents"
                 value={description}
-                onChange={(e) => setDescription(e.target.value as string)}
+                onChange={(e) => setDescription(e.target.value)}
                 rows={3}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "inherit",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
 
@@ -306,7 +325,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
 
             <Form.Field required>
               <label>Color</label>
-              <Input
+              <input
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
@@ -335,17 +354,27 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
             </Form.Field>
 
             <Form.Field>
-              <Checkbox
-                label="Auto-award this badge"
-                checked={isAutoAwarded}
-                onChange={(_, { checked }) => {
-                  setIsAutoAwarded(checked || false);
-                  if (!checked) {
-                    setCriteriaConfig(null);
-                    setCriteriaValid(false);
-                  }
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
                 }}
-              />
+              >
+                <input
+                  type="checkbox"
+                  checked={isAutoAwarded}
+                  onChange={(e) => {
+                    setIsAutoAwarded(e.target.checked);
+                    if (!e.target.checked) {
+                      setCriteriaConfig(null);
+                      setCriteriaValid(false);
+                    }
+                  }}
+                />
+                Auto-award this badge
+              </label>
             </Form.Field>
 
             {/* Show criteria configuration when auto-award is enabled */}

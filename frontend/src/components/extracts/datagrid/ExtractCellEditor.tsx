@@ -1,12 +1,6 @@
 import React, { useState } from "react";
-import {
-  Input,
-  Checkbox,
-  Modal,
-  Button,
-  InputOnChangeData,
-  CheckboxProps,
-} from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
 import { JSONSchema7 } from "json-schema";
 import JsonView from "@uiw/react-json-view";
 import { darkTheme } from "@uiw/react-json-view/dark";
@@ -35,25 +29,17 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
   /**
    * Handles input change events for string and number types.
    * @param event - The input change event.
-   * @param data - The input onChange data.
    */
-  const handleInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-    data: InputOnChangeData
-  ) => {
-    setValue(data.value);
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(event.target.value);
   };
 
   /**
    * Handles checkbox change events for boolean types.
    * @param event - The checkbox change event.
-   * @param data - The checkbox onChange data.
    */
-  const handleCheckboxChange = (
-    event: React.FormEvent<HTMLInputElement>,
-    data: CheckboxProps
-  ) => {
-    setValue(data.checked);
+  const handleCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(event.target.checked);
   };
 
   const handleJsonChange = (updatedValue: any) => {
@@ -154,13 +140,18 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
     switch (type) {
       case "string":
         return (
-          <Input fluid value={value} onChange={handleInputChange} autoFocus />
+          <Input
+            fullWidth
+            value={value}
+            onChange={handleInputChange}
+            autoFocus
+          />
         );
 
       case "number":
         return (
           <Input
-            fluid
+            fullWidth
             type="number"
             value={value}
             onChange={handleInputChange}
@@ -170,13 +161,18 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
 
       case "boolean":
         return (
-          <Checkbox checked={value} onChange={handleCheckboxChange} autoFocus />
+          <input
+            type="checkbox"
+            checked={value}
+            onChange={handleCheckboxChange}
+            autoFocus
+          />
         );
 
       default:
         return (
           <Input
-            fluid
+            fullWidth
             value={String(value)}
             onChange={handleInputChange}
             autoFocus

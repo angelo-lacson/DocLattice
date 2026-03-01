@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import { Form, Input, Checkbox, TextArea } from "semantic-ui-react";
+import { Form } from "semantic-ui-react";
 
 export const FormSection = styled.div`
   margin-bottom: 2rem;
@@ -28,15 +28,18 @@ export const StyledFormField = styled(Form.Field)`
   }
 `;
 
-export const StyledInput = styled(Input)`
-  &.ui.input > input {
-    border-color: #e2e8f0;
-    border-radius: 6px;
+export const StyledInput = styled.input`
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
-    &:focus {
-      border-color: #2185d0;
-      box-shadow: 0 0 0 1px #2185d0;
-    }
+  &:focus {
+    border-color: #2185d0;
+    box-shadow: 0 0 0 1px #2185d0;
   }
 `;
 
@@ -61,14 +64,25 @@ export const TaskSelectorWrapper = styled.div`
   }
 `;
 
-export const StyledCheckbox = styled(Checkbox)`
-  margin-bottom: 1rem !important;
-
-  label {
-    font-weight: normal !important;
-  }
+export const StyledCheckbox = styled.input.attrs({ type: "checkbox" })`
+  margin-bottom: 1rem;
+  cursor: pointer;
 `;
 
-export const StyledTextArea = styled(TextArea)`
-  min-height: 100px !important;
+export const StyledTextArea = styled.textarea`
+  min-height: 100px;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    border-color: #2185d0;
+    box-shadow: 0 0 0 1px #2185d0;
+  }
 `;

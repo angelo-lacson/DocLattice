@@ -9,17 +9,16 @@ import React, {
 } from "react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
+import { Button, Popup, Modal, Table } from "semantic-ui-react";
 import {
-  Button,
-  Icon,
-  Popup,
-  Dimmer,
-  Loader,
-  Modal,
-  Message,
-  Checkbox,
-  Table,
-} from "semantic-ui-react";
+  Trash2,
+  FileText,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  Edit,
+} from "lucide-react";
+import { Spinner } from "@os-legal/ui";
 import {
   REQUEST_APPROVE_DATACELL,
   REQUEST_EDIT_DATACELL,
@@ -813,26 +812,26 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
 
         <div {...getRootProps()} ref={gridRef} style={styles.gridWrapper}>
           {loading && (
-            <Dimmer
-              active
-              inverted
+            <div
               style={{
                 position: "absolute",
-                margin: 0,
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(255,255,255,0.85)",
                 borderRadius: "16px",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
                 zIndex: 100,
               }}
             >
-              <Loader>
+              <Spinner size="md" />
+              <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
                 {extract.started && !extract.finished
                   ? "Processing..."
                   : "Loading..."}
-              </Loader>
-            </Dimmer>
+              </span>
+            </div>
           )}
           <input {...getInputProps()} />
 
@@ -859,7 +858,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                 loading={isDeleting}
                 disabled={isDeleting}
               >
-                <Icon name="trash" />
+                <Trash2 size={14} />
                 Delete Selected ({selectedRows.size})
               </Button>
             </div>
@@ -868,7 +867,10 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
           <div style={styles.tableContainer}>
             {gridRows.length === 0 ? (
               <div style={styles.emptyState}>
-                <Icon name="file pdf outline" style={styles.emptyStateIcon} />
+                <FileText
+                  size={48}
+                  style={{ color: "#cbd5e1", marginBottom: "16px" }}
+                />
                 <h3 style={styles.emptyStateTitle}>No documents yet</h3>
                 <p style={styles.emptyStateText}>
                   Drop PDF documents here or click the button below to add
@@ -887,15 +889,19 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                           width: "50px",
                         }}
                       >
-                        <Checkbox
+                        <input
+                          type="checkbox"
                           checked={
                             selectedRows.size === gridRows.length &&
                             gridRows.length > 0
                           }
-                          indeterminate={
-                            selectedRows.size > 0 &&
-                            selectedRows.size < gridRows.length
-                          }
+                          ref={(el) => {
+                            if (el) {
+                              el.indeterminate =
+                                selectedRows.size > 0 &&
+                                selectedRows.size < gridRows.length;
+                            }
+                          }}
                           onChange={handleSelectAll}
                           disabled={loading}
                         />
@@ -910,16 +916,18 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                       onClick={() => handleSort("documentTitle")}
                     >
                       Document
-                      {sortConfig?.columnId === "documentTitle" && (
-                        <Icon
-                          name={
-                            sortConfig.direction === "ASC"
-                              ? "angle up"
-                              : "angle down"
-                          }
-                          style={{ marginLeft: "8px", opacity: 0.6 }}
-                        />
-                      )}
+                      {sortConfig?.columnId === "documentTitle" &&
+                        (sortConfig.direction === "ASC" ? (
+                          <ChevronUp
+                            size={14}
+                            style={{ marginLeft: "8px", opacity: 0.6 }}
+                          />
+                        ) : (
+                          <ChevronDown
+                            size={14}
+                            style={{ marginLeft: "8px", opacity: 0.6 }}
+                          />
+                        ))}
                     </Table.HeaderCell>
                     {columns.map((column) => (
                       <Table.HeaderCell
@@ -938,16 +946,18 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                             style={{ display: "flex", alignItems: "center" }}
                           >
                             {column.name}
-                            {sortConfig?.columnId === column.id && (
-                              <Icon
-                                name={
-                                  sortConfig.direction === "ASC"
-                                    ? "angle up"
-                                    : "angle down"
-                                }
-                                style={{ marginLeft: "8px", opacity: 0.6 }}
-                              />
-                            )}
+                            {sortConfig?.columnId === column.id &&
+                              (sortConfig.direction === "ASC" ? (
+                                <ChevronUp
+                                  size={14}
+                                  style={{ marginLeft: "8px", opacity: 0.6 }}
+                                />
+                              ) : (
+                                <ChevronDown
+                                  size={14}
+                                  style={{ marginLeft: "8px", opacity: 0.6 }}
+                                />
+                              ))}
                           </span>
                           {!extract.started && (
                             <span style={styles.headerControls}>
@@ -965,10 +975,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                                     }}
                                     disabled={loading}
                                   >
-                                    <Icon
-                                      name="edit"
-                                      style={{ margin: 0, fontSize: "12px" }}
-                                    />
+                                    <Edit size={12} />
                                   </button>
                                 }
                               />
@@ -987,10 +994,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                                     }}
                                     disabled={loading}
                                   >
-                                    <Icon
-                                      name="trash"
-                                      style={{ margin: 0, fontSize: "12px" }}
-                                    />
+                                    <Trash2 size={12} />
                                   </button>
                                 }
                               />
@@ -1011,7 +1015,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                               style={styles.addColumnButton}
                               disabled={loading}
                             >
-                              <Icon name="plus" style={{ margin: 0 }} />
+                              <Plus size={14} />
                             </button>
                           }
                         />
@@ -1037,7 +1041,8 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                               ...styles.frozenColumn,
                             }}
                           >
-                            <Checkbox
+                            <input
+                              type="checkbox"
                               checked={isSelected}
                               onChange={() => handleRowSelect(row.id)}
                               disabled={loading}
@@ -1114,7 +1119,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
 
           {!extract.started && (
             <Button
-              icon="file outline"
+              icon
               circular
               onClick={() => setOpenSelectDocumentsModal(true)}
               style={{
@@ -1125,7 +1130,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               }}
               disabled={loading}
             >
-              <Icon name="plus" corner="top right" />
+              <Plus size={16} />
             </Button>
           )}
 
@@ -1168,13 +1173,24 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               {deleteModalState.columnToDelete?.name}"?
             </p>
             {extract.fieldset?.inUse && (
-              <Message warning>
-                <Message.Header>Note:</Message.Header>
-                <p>
+              <div
+                style={{
+                  padding: "0.75rem 1rem",
+                  background: "#fefce8",
+                  border: "1px solid #fde68a",
+                  borderRadius: "6px",
+                  color: "#854d0e",
+                  marginTop: "0.5rem",
+                }}
+              >
+                <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+                  Note:
+                </strong>
+                <p style={{ margin: 0 }}>
                   This fieldset is used in multiple places. Deleting this column
                   will create a new copy of the fieldset for this extract only.
                 </p>
-              </Message>
+              </div>
             )}
           </Modal.Content>
           <Modal.Actions
