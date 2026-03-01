@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Fix My Documents Corpus Not Navigable Due to Missing Slugs
+- **Root cause**: Migration 0038 created personal corpuses using historical models which bypass `Corpus.save()` slug auto-generation, leaving `slug=NULL`. The frontend requires both `corpus.slug` and `creator.slug` to build navigation URLs (`/c/<user>/<corpus>`), so clicking "My Documents" logged "Cannot navigate to corpus without slugs" and did nothing.
+- **Fix (model)**: `Corpus.get_or_create_personal_corpus()` now detects when a returned corpus lacks a slug and triggers `save()` to backfill it on access (`opencontractserver/corpuses/models.py:518-521`).
+- **Fix (migration)**: Added data migration `0043_backfill_corpus_slugs` that backfills slugs for all existing corpuses and users missing them (`opencontractserver/corpuses/migrations/0043_backfill_corpus_slugs.py`).
+
 #### Skip redundant document re-parsing during corpus import
 - Set `processing_started` on standalone documents created via `create_document_from_export_data()` to prevent the post_save signal from triggering `ingest_doc` (`opencontractserver/utils/importing.py:323`)
 - Imported documents already have PAWLS data from the export; re-parsing wasted resources and failed in environments without a parser service
