@@ -944,3 +944,103 @@ export const FileTypeBadge = styled.span`
   background: #f1f5f9;
   color: #64748b;
 `;
+
+// ============================================================================
+// Filetype Defaults Styled Components
+// ============================================================================
+
+export const DefaultsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+export const DefaultsHeaderRow = styled.div`
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr 1fr;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`;
+
+export const FiletypeRow = styled.div`
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+`;
+
+export const FiletypeLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #1e293b;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: #64748b;
+  }
+`;
+
+export const StageDropdownLabel = styled.label`
+  display: none;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+
+  @media (max-width: 768px) {
+    display: block;
+  }
+`;
+
+export const StyledSelect = styled.select<{ $warning?: boolean }>`
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: #1e293b;
+  background: white;
+  border: 1px solid ${(props) => (props.$warning ? "#f59e0b" : "#e2e8f0")};
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  appearance: auto;
+
+  &:hover {
+    border-color: ${(props) =>
+      props.$warning ? "#d97706" : PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+    box-shadow: 0 0 0 2px ${PIPELINE_UI.PRIMARY_ACCENT_COLOR}20;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
