@@ -515,6 +515,23 @@ class Corpus(TreeNode):
                 logger.info(f"Created personal corpus {corpus.pk} for user {user.pk}")
                 # Grant full permissions to the user
                 set_permissions_for_obj_to_user(user, corpus, [PermissionTypes.ALL])
+            elif not corpus.slug:
+                # Backfill slug for corpuses created before slug auto-generation
+                # (e.g. by migration 0038 which used historical models).
+                # Use QuerySet.update() to avoid firing Django signals.
+                scope = cls.objects.filter(creator_id=user.pk).exclude(pk=corpus.pk)
+                new_slug = generate_unique_slug(
+                    base_value=corpus.title or "corpus",
+                    scope_qs=scope,
+                    slug_field="slug",
+                    max_length=128,
+                    fallback_prefix="corpus",
+                )
+                now = timezone.now()
+                cls.objects.filter(pk=corpus.pk).update(slug=new_slug, modified=now)
+                # Update in-memory object so callers see the new slug
+                corpus.slug = new_slug
+                corpus.modified = now
 
         return corpus
 
