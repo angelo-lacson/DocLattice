@@ -836,3 +836,111 @@ export const FormHelperText = styled.p`
   color: #6b7280;
   margin: 0.375rem 0 0 0;
 `;
+
+// ============================================================================
+// Component Library Styled Components
+// ============================================================================
+
+export const LibraryContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+export const FilterBar = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+export const FilterChip = styled.button<{ $active: boolean }>`
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid
+    ${(props) => (props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#e2e8f0")};
+  background: ${(props) =>
+    props.$active ? `${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10` : "white"};
+  color: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#64748b"};
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+    color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+  }
+`;
+
+export const SearchInputWrapper = styled.div`
+  flex: 1;
+  min-width: 200px;
+`;
+
+export const ComponentListItem = styled.div<{ $disabled: boolean }>`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+  transition: all 0.2s ease;
+  opacity: ${(props) => (props.$disabled ? 0.5 : 1)};
+
+  &:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  }
+`;
+
+export const ComponentInfo = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+export const ComponentTitle = styled.span`
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+`;
+
+export const ComponentDescription = styled.span`
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.4;
+`;
+
+export const BadgeRow = styled.div`
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  margin-top: 0.375rem;
+`;
+
+export const StageBadge = styled.span<{ $color: string }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 9999px;
+  background: ${(props) => `${props.$color}15`};
+  color: ${(props) => props.$color};
+`;
+
+export const FileTypeBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #64748b;
+`;
