@@ -9,6 +9,21 @@ the SECURE_REFERRER_POLICY setting and is NOT duplicated here.
 """
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+
+
+def validate_csp_domain(domain):
+    """
+    Validate that *domain* is safe to embed in a CSP header value.
+
+    Raises ``ImproperlyConfigured`` if the domain contains characters
+    that would break or inject into the CSP header (spaces split
+    directive values; semicolons delimit directives).
+    """
+    if " " in domain or ";" in domain:
+        raise ImproperlyConfigured(
+            f"AUTH0_DOMAIN contains invalid characters for CSP: {domain!r}"
+        )
 
 
 class SecurityHeadersMiddleware:
