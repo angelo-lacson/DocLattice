@@ -402,6 +402,13 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                         pipeline_settings=None,
                     )
 
+                if any(p is None for p in enabled_components):
+                    return UpdatePipelineSettingsMutation(
+                        ok=False,
+                        message="enabled_components must not contain null values.",
+                        pipeline_settings=None,
+                    )
+
                 for comp_path in enabled_components:
                     error = validate_component_path(comp_path)
                     if error:
