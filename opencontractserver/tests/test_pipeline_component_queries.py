@@ -457,3 +457,126 @@ class TestPostProcessor(BasePostProcessor):
         # Our test embedder should be included
         embedder_titles = [embedder["title"] for embedder in embedders]
         self.assertIn("Test Embedder", embedder_titles)
+
+    def test_enabled_field_all_enabled_when_empty(self):
+        """When enabled_components is empty (default), all components should have enabled: true."""
+        # Ensure enabled_components is empty (the default)
+        settings_instance = PipelineSettings.get_instance(use_cache=False)
+        settings_instance.enabled_components = []
+        settings_instance.save()
+
+        query = """
+        query {
+            pipelineComponents {
+                parsers {
+                    name
+                    className
+                    enabled
+                }
+                embedders {
+                    name
+                    className
+                    enabled
+                }
+                thumbnailers {
+                    name
+                    className
+                    enabled
+                }
+                postProcessors {
+                    name
+                    className
+                    enabled
+                }
+            }
+        }
+        """
+
+        # Use superuser client to see all components (not filtered by configured)
+        result = self.superuser_client.execute(query)
+        self.assertIsNone(result.get("errors"))
+
+        data = result["data"]["pipelineComponents"]
+
+        # Every component across all categories should have enabled=True
+        for category in ["parsers", "embedders", "thumbnailers", "postProcessors"]:
+            components = data[category]
+            self.assertGreater(
+                len(components), 0, f"Expected at least one component in {category}"
+            )
+            for component in components:
+                self.assertTrue(
+                    component["enabled"],
+                    f"Component {component['name']} in {category} should be enabled "
+                    f"when enabled_components is empty, but got enabled=False",
+                )
+
+    def test_enabled_field_reflects_enabled_list(self):
+        """When enabled_components has specific paths, only those should have enabled: true."""
+        # Pick the test parser as the only enabled component
+        enabled_path = "opencontractserver.pipeline.parsers.test_parser.TestParser"
+
+        settings_instance = PipelineSettings.get_instance(use_cache=False)
+        settings_instance.enabled_components = [enabled_path]
+        settings_instance.save()
+
+        query = """
+        query {
+            pipelineComponents {
+                parsers {
+                    name
+                    className
+                    enabled
+                }
+                embedders {
+                    name
+                    className
+                    enabled
+                }
+                thumbnailers {
+                    name
+                    className
+                    enabled
+                }
+                postProcessors {
+                    name
+                    className
+                    enabled
+                }
+            }
+        }
+        """
+
+        # Use superuser client to see all components
+        result = self.superuser_client.execute(query)
+        self.assertIsNone(result.get("errors"))
+
+        data = result["data"]["pipelineComponents"]
+
+        # TestParser should be enabled
+        parsers = data["parsers"]
+        test_parser = next((p for p in parsers if p["name"] == "TestParser"), None)
+        self.assertIsNotNone(test_parser, "TestParser should be in the results")
+        self.assertTrue(
+            test_parser["enabled"],
+            "TestParser should be enabled since it's in the enabled_components list",
+        )
+
+        # All other parsers should be disabled
+        for parser in parsers:
+            if parser["name"] != "TestParser":
+                self.assertFalse(
+                    parser["enabled"],
+                    f"Parser {parser['name']} should be disabled since it's "
+                    f"not in the enabled_components list",
+                )
+
+        # All embedders, thumbnailers, and post processors should be disabled
+        for category in ["embedders", "thumbnailers", "postProcessors"]:
+            components = data[category]
+            for component in components:
+                self.assertFalse(
+                    component["enabled"],
+                    f"Component {component['name']} in {category} should be disabled "
+                    f"since it's not in the enabled_components list",
+                )
