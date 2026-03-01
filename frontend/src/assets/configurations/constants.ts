@@ -5,6 +5,15 @@ export const TABLET_BREAKPOINT = 768;
 // Desktop breakpoint - minimum width for desktop-only features (TABLET_BREAKPOINT + 1)
 export const DESKTOP_BREAKPOINT = 769;
 
+// Icon defaults
+/** Default pixel size for DynamicIcon width and height */
+export const DYNAMIC_ICON_DEFAULT_SIZE = 16;
+
+// Mention search configuration
+// Debounce delay before firing search queries (ms)
+export const MENTION_SEARCH_DEBOUNCE_MS = 300;
+// Minimum characters required before triggering a search
+export const MENTION_SEARCH_MIN_CHARS = 2;
 // Mention preview character limit (Issue #689)
 // Used for truncating annotation text in mention chips and pickers
 export const MENTION_PREVIEW_LENGTH = 24;
@@ -57,6 +66,12 @@ export const STATUS_FILTERS = {
 } as const;
 
 export type StatusFilter = (typeof STATUS_FILTERS)[keyof typeof STATUS_FILTERS];
+
+// Selection action menu approximate dimensions (used for viewport clamping)
+export const SELECTION_MENU = {
+  APPROX_WIDTH: 200,
+  APPROX_HEIGHT: 200,
+} as const;
 
 // Debounce timing constants
 export const DEBOUNCE = {
@@ -118,6 +133,18 @@ export const EXTRACT_STATUS_COLORS = {
 
 // Tool usage UI constants (used by chat ToolUsageIndicator)
 export const TOOL_UNKNOWN_LABEL = "Unknown Tool";
+
+// Tool popover positioning constants (used by ToolUsageIndicator portal)
+/** Z-index for the fixed-position tool popover rendered via portal */
+export const POPOVER_Z_INDEX = 100002;
+/** Gap in pixels between the badge and the popover */
+export const POPOVER_GAP = 8;
+/**
+ * Maximum height of the tool popover in pixels.
+ * Must match ToolPopoverBody max-height (400px) + header height (~100px).
+ * If ToolPopoverBody max-height changes, update this value accordingly.
+ */
+export const POPOVER_MAX_HEIGHT = 500;
 
 // Conversation type constants (matches backend ConversationTypeChoices)
 export const CONVERSATION_TYPE = {
