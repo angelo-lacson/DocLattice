@@ -11,6 +11,20 @@ from django.test import RequestFactory, TestCase, override_settings
 from config.middleware import SecurityHeadersMiddleware
 
 
+class SecurityHeadersIntegrationTest(TestCase):
+    """Verify middleware is properly wired in the MIDDLEWARE stack."""
+
+    def test_csp_header_present_on_real_response(self):
+        """Ensure CSP header appears on responses from the full middleware stack."""
+        response = self.client.get("/")
+        self.assertIn("Content-Security-Policy", response)
+
+    def test_permissions_policy_header_present_on_real_response(self):
+        """Ensure Permissions-Policy header appears on responses."""
+        response = self.client.get("/")
+        self.assertIn("Permissions-Policy", response)
+
+
 def _dummy_response(request):
     """Minimal WSGI-style response stub."""
     return HttpResponse("ok")

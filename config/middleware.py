@@ -57,10 +57,10 @@ class SecurityHeadersMiddleware:
             {
                 "default-src": ["'self'"],
                 "script-src":  ["'self'"],
-                "connect-src": ["'self'", "wss:"],
+                "connect-src": ["'self'"],
             }
 
-        Returns ``"default-src 'self'; script-src 'self'; connect-src 'self' wss:"``
+        Returns ``"default-src 'self'; script-src 'self'; connect-src 'self'"``
         or ``None`` if *directives* is falsy.
         """
         if not directives:
