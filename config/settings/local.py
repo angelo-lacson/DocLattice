@@ -61,8 +61,11 @@ SESSION_COOKIE_HTTPONLY = False
 CSRF_COOKIE_HTTPONLY = False
 # https://docs.djangoproject.com
 
-# Allow plaintext WebSocket (ws:) in development only.
-# Production base.py restricts connect-src to 'self' and wss: only.
+# Allow plaintext WebSocket (ws:) and explicit wss: in development only.
+# Production base.py restricts connect-src to 'self' only (which covers
+# same-origin wss:// when served over HTTPS).
+# Shallow copy is safe here because we assign new lists rather than mutating
+# existing ones. If appending to existing lists, use a deep copy instead.
 _csp = SECURE_CSP_DIRECTIVES.copy() if SECURE_CSP_DIRECTIVES else {}
 _csp["connect-src"] = ["'self'", "wss:", "ws:"]
 SECURE_CSP_DIRECTIVES = _csp

@@ -515,16 +515,21 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # Content-Security-Policy — defence-in-depth against XSS / injection.
 # Uses 'self' as the baseline; blob: and data: are needed by PDF.js;
-# wss: allows WebSocket connections; 'unsafe-inline' is required for
-# React's runtime-injected styles (Vite injects <style> tags in dev,
-# and hashed CSS chunks still require inline style attributes).
+# 'unsafe-inline' is required for React's runtime-injected styles (Vite
+# injects <style> tags in dev, and hashed CSS chunks still require inline
+# style attributes).  'self' covers same-origin WebSocket connections
+# (wss:// when served over HTTPS) so no extra wss: source is needed here.
+#
+# NOTE: If using Auth0 (REACT_APP_USE_AUTH0=true), extend connect-src and
+# script-src with the Auth0 tenant domain, e.g.:
+#   "https://<your-tenant>.auth0.com"
 SECURE_CSP_DIRECTIVES = {
     "default-src": ["'self'"],
     "script-src": ["'self'"],
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:"],
     "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", "wss:"],
+    "connect-src": ["'self'"],
     "worker-src": ["'self'", "blob:"],
     "object-src": ["'none'"],
     # frame-ancestors 'none' is the modern CSP2 mechanism for blocking framing.
