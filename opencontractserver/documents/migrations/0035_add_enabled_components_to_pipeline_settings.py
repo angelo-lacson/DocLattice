@@ -4,25 +4,13 @@ import opencontractserver.shared.fields
 
 
 def populate_enabled_components(apps, schema_editor):
-    """Auto-populate enabled_components from currently assigned components."""
-    PipelineSettings = apps.get_model("documents", "PipelineSettings")
-    try:
-        instance = PipelineSettings.objects.get(pk=1)
-    except PipelineSettings.DoesNotExist:
-        return
+    """No-op: empty list means all components are enabled.
 
-    enabled = set()
-    for mapping in [
-        instance.preferred_parsers or {},
-        instance.preferred_embedders or {},
-        instance.preferred_thumbnailers or {},
-    ]:
-        enabled.update(mapping.values())
-    if instance.default_embedder:
-        enabled.add(instance.default_embedder)
-
-    instance.enabled_components = sorted(enabled)
-    instance.save(update_fields=["enabled_components"])
+    Existing deployments should not have their available components
+    restricted based on current assignments — that is a deliberate
+    post-migration admin action.
+    """
+    pass
 
 
 class Migration(migrations.Migration):

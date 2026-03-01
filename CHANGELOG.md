@@ -11,8 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Pipeline Component Management Redesign**: Separated component management from filetype default assignment in the Pipeline Configuration UI. New `enabled_components` JSON field on `PipelineSettings` tracks which components are available. Frontend splits into two sections: ComponentLibrary (flat filterable list with enable/disable toggles, search, stage filter chips) and FiletypeDefaults (MIME type rows with parser/embedder/thumbnailer dropdowns). Removed old stage-centric layout with MIME type filter buttons. (`opencontractserver/documents/models.py`, `config/graphql/pipeline_types.py`, `config/graphql/pipeline_queries.py`, `config/graphql/pipeline_settings_mutations.py`, `frontend/src/components/admin/SystemSettings.tsx`, `frontend/src/components/admin/system_settings/ComponentLibrary.tsx`, `frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
 
-### Added
-
 #### Security Headers Middleware (CSP, Referrer-Policy, Permissions-Policy)
 - Added `SecurityHeadersMiddleware` in `config/middleware.py` that attaches `Content-Security-Policy` and `Permissions-Policy` headers to every HTTP response; Referrer-Policy is handled by Django's built-in `SecurityMiddleware` via `SECURE_REFERRER_POLICY`
 - Middleware positioned after `SecurityMiddleware` so it is the final authority on security headers in the response phase

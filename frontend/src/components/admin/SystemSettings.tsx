@@ -552,7 +552,7 @@ export const SystemSettings: React.FC = () => {
       {/* Component Library */}
       <ComponentLibrary
         components={componentsByStage}
-        enabledComponents={(settings?.enabledComponents as string[]) || []}
+        enabledComponents={(settings?.enabledComponents?.filter(Boolean) as string[]) ?? []}
         updating={updating}
         onToggleEnabled={handleToggleEnabled}
         onAddSecrets={handleAddSecrets}
@@ -565,7 +565,7 @@ export const SystemSettings: React.FC = () => {
       {/* Filetype Defaults */}
       <FiletypeDefaults
         components={componentsByStage}
-        enabledComponents={(settings?.enabledComponents as string[]) || []}
+        enabledComponents={(settings?.enabledComponents?.filter(Boolean) as string[]) ?? []}
         preferredParsers={
           (settings?.preferredParsers as Record<string, string>) || {}
         }
