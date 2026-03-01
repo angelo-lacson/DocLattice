@@ -12,11 +12,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name="corpus",
-            new_name="corpuses_co_creator_c32eb3_idx",
-            old_name="corpuses_co_creator_0e8c8f_idx",
-        ),
         migrations.AlterField(
             model_name="corpus",
             name="preferred_embedder",
