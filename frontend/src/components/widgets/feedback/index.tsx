@@ -83,6 +83,22 @@ export const WarningMessage: React.FC<MessageProps> = ({
   </MessageBase>
 );
 
+export const SuccessMessage: React.FC<MessageProps> = ({
+  title,
+  children,
+  style,
+}) => (
+  <MessageBase
+    $bg={OS_LEGAL_COLORS.successSurface}
+    $border={OS_LEGAL_COLORS.successBorder}
+    $color={OS_LEGAL_COLORS.successText}
+    style={style}
+  >
+    {title && <MessageTitle>{title}</MessageTitle>}
+    <MessageBody>{children}</MessageBody>
+  </MessageBase>
+);
+
 // ─── Loading State ───────────────────────────────────────────────────────────
 
 const LoadingContainer = styled.div`

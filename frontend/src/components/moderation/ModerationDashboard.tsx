@@ -28,6 +28,7 @@ import {
   WarningMessage,
   LoadingState,
 } from "../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { toast } from "react-toastify";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -125,12 +126,24 @@ const formatActionType = (actionType: string): string => {
 };
 
 const ACTION_COLOR_MAP: Record<string, { bg: string; color: string }> = {
-  delete: { bg: "#fef2f2", color: "#991b1b" },
-  restore: { bg: "#f0fdf4", color: "#166534" },
-  lock: { bg: "#fefce8", color: "#854d0e" },
-  pin: { bg: "#f0f9ff", color: "#1e40af" },
+  delete: {
+    bg: OS_LEGAL_COLORS.dangerSurface,
+    color: OS_LEGAL_COLORS.dangerText,
+  },
+  restore: {
+    bg: OS_LEGAL_COLORS.successSurface,
+    color: OS_LEGAL_COLORS.successText,
+  },
+  lock: {
+    bg: OS_LEGAL_COLORS.warningSurface,
+    color: OS_LEGAL_COLORS.warningText,
+  },
+  pin: { bg: OS_LEGAL_COLORS.infoSurface, color: OS_LEGAL_COLORS.infoText },
 };
-const DEFAULT_ACTION_COLORS = { bg: "#f8fafc", color: "#475569" };
+const DEFAULT_ACTION_COLORS = {
+  bg: OS_LEGAL_COLORS.surfaceHover,
+  color: OS_LEGAL_COLORS.textSecondary,
+};
 
 const getActionColors = (actionType: string): { bg: string; color: string } => {
   for (const [key, value] of Object.entries(ACTION_COLOR_MAP)) {
@@ -476,126 +489,131 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {actions.map(({ node }) => (
-                  <Table.Row key={node.id}>
-                    <Table.Cell>
-                      <span
-                        className="action-badge"
-                        style={{
-                          display: "inline-block",
-                          padding: "0.2em 0.5em",
-                          fontSize: "0.8rem",
-                          fontWeight: 500,
-                          borderRadius: "4px",
-                          background: getActionColors(node.actionType).bg,
-                          color: getActionColors(node.actionType).color,
-                          border: "1px solid currentColor",
-                        }}
-                      >
-                        {formatActionType(node.actionType)}
-                      </span>
-                      {node.isAutomated && (
+                {actions.map(({ node }) => {
+                  const { bg: actionBg, color: actionColor } = getActionColors(
+                    node.actionType
+                  );
+                  return (
+                    <Table.Row key={node.id}>
+                      <Table.Cell>
                         <span
+                          className="action-badge"
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            marginLeft: "0.5rem",
-                            padding: "0.15em 0.4em",
-                            fontSize: "0.7rem",
+                            display: "inline-block",
+                            padding: "0.2em 0.5em",
+                            fontSize: "0.8rem",
                             fontWeight: 500,
-                            background: "#f3e8ff",
-                            color: "#7e22ce",
                             borderRadius: "4px",
+                            background: actionBg,
+                            color: actionColor,
+                            border: "1px solid currentColor",
                           }}
                         >
-                          <Settings size={10} />
-                          Auto
+                          {formatActionType(node.actionType)}
                         </span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.conversation && (
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                          }}
-                        >
-                          <MessagesSquare size={14} />
-                          {node.conversation.title}
-                        </div>
-                      )}
-                      {node.message && (
-                        <div
-                          style={{
-                            fontSize: "0.9em",
-                            color: "#666",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                          }}
-                        >
-                          <MessageSquare size={12} />
-                          {node.message.content.substring(0, 50)}...
-                        </div>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.moderator ? (
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                          }}
-                        >
-                          <User size={14} />
-                          {node.moderator.username}
+                        {node.isAutomated && (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              marginLeft: "0.5rem",
+                              padding: "0.15em 0.4em",
+                              fontSize: "0.7rem",
+                              fontWeight: 500,
+                              background: "#f3e8ff",
+                              color: "#7e22ce",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            <Settings size={10} />
+                            Auto
+                          </span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.conversation && (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <MessagesSquare size={14} />
+                            {node.conversation.title}
+                          </div>
+                        )}
+                        {node.message && (
+                          <div
+                            style={{
+                              fontSize: "0.9em",
+                              color: "#666",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <MessageSquare size={12} />
+                            {node.message.content.substring(0, 50)}...
+                          </div>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.moderator ? (
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <User size={14} />
+                            {node.moderator.username}
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              color: "#888",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <Settings size={14} />
+                            System
+                          </span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.reason || (
+                          <span style={{ color: "#888" }}>
+                            No reason provided
+                          </span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span title={format(new Date(node.created), "PPpp")}>
+                          {formatDistanceToNow(new Date(node.created), {
+                            addSuffix: true,
+                          })}
                         </span>
-                      ) : (
-                        <span
-                          style={{
-                            color: "#888",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                          }}
-                        >
-                          <Settings size={14} />
-                          System
-                        </span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.reason || (
-                        <span style={{ color: "#888" }}>
-                          No reason provided
-                        </span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span title={format(new Date(node.created), "PPpp")}>
-                        {formatDistanceToNow(new Date(node.created), {
-                          addSuffix: true,
-                        })}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.canRollback && (
-                        <Button
-                          size="tiny"
-                          color="orange"
-                          onClick={() => openRollbackModal(node)}
-                        >
-                          <Undo2 size={14} />
-                          Rollback
-                        </Button>
-                      )}
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.canRollback && (
+                          <Button
+                            size="tiny"
+                            color="orange"
+                            onClick={() => openRollbackModal(node)}
+                          >
+                            <Undo2 size={14} />
+                            Rollback
+                          </Button>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
               </Table.Body>
             </Table>
             {actionsData?.moderationActions?.pageInfo?.hasNextPage && (

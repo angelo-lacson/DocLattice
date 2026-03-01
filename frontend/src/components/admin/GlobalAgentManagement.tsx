@@ -9,6 +9,7 @@ import { Input } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { StyledTextArea } from "../widgets/modals/styled";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
+import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
 import { AgentConfigurationType } from "../../types/graphql-api";
 
 // GraphQL Queries and Mutations
@@ -149,32 +150,6 @@ const StyledSegment = styled.div`
   background: white;
   border: 1px solid rgba(226, 232, 240, 0.8);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-`;
-
-const StatusBadge = styled.span<{ $active: boolean }>`
-  display: inline-block;
-  padding: 0.2em 0.6em;
-  font-size: 0.8rem;
-  font-weight: 500;
-  border-radius: 4px;
-  background: ${(props) => (props.$active ? "#dcfce7" : "#fef3c7")};
-  color: ${(props) => (props.$active ? "#166534" : "#92400e")};
-`;
-
-const ToolsList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-`;
-
-const ToolBadge = styled.span`
-  display: inline-block;
-  padding: 0.15em 0.4em;
-  font-size: 0.75rem;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
 `;
 
 interface AgentNode {
