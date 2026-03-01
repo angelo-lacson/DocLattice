@@ -263,7 +263,9 @@ export const SystemSettings: React.FC = () => {
   // Toggle component enabled state
   const handleToggleEnabled = useCallback(
     (className: string, enabled: boolean) => {
-      const currentEnabled: string[] = settings?.enabledComponents || [];
+      const currentEnabled: string[] = (settings?.enabledComponents || []).filter(
+        (s): s is string => s != null
+      );
       let newEnabled: string[];
 
       if (currentEnabled.length === 0) {
