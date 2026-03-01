@@ -678,11 +678,11 @@ test.describe("Metadata Workflow Integration", () => {
       <CorpusesTestWrapper
         mocks={mocks}
         initialCorpus={corpus}
-        initialEntries={[`/corpuses/${corpusId}`]}
+        initialEntries={[`/corpuses/${corpusId}?mode=power`]}
       />
     );
 
-    // Wait for the navigation sidebar rendered in the corpus view
+    // Wait for the navigation sidebar rendered in power user mode
     await expect(
       page.locator('[data-testid="navigation-sidebar"]')
     ).toBeVisible({ timeout: 10000 });

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clean corpus landing page with Power User mode toggle**: Default corpus view is now a full-page landing without sidebar navigation, providing a cleaner experience for anonymous browsers and casual users. Users with edit permissions see a "Power User" toggle (`?mode=power` URL param) to access the full sidebar+tabs layout (`frontend/src/views/Corpuses.tsx`)
+- **Recent discussions feed on corpus landing page**: New `RecentDiscussions` component shows 2-3 latest discussion threads below the "View Details" button, making community activity visible even to anonymous users (`frontend/src/components/corpuses/CorpusHome/RecentDiscussions.tsx`)
+- **Inline discussions view**: New `?view=discussions` URL state enables viewing the full discussion thread list and thread detail directly from the corpus home, without switching to the Discussions tab (`frontend/src/components/corpuses/CorpusHome/CorpusDiscussionsInlineView.tsx`)
+- `updateModeParam` navigation utility for managing the `?mode=` URL parameter (`frontend/src/utils/navigationUtils.ts`)
+- Extended `CorpusDetailViewType` to include `"discussions"` alongside `"landing"` and `"details"` (`frontend/src/graphql/cache.ts`)
+- Screenshot tests for new landing view states: clean view, discussion feed, empty discussions, and power user mode (`frontend/tests/CorpusHome.ct.tsx`, `frontend/tests/CorpusTabs.ct.tsx`)
+
 #### Security Headers Middleware (CSP, Referrer-Policy, Permissions-Policy)
 - Added `SecurityHeadersMiddleware` in `config/middleware.py` that attaches `Content-Security-Policy` and `Permissions-Policy` headers to every HTTP response; Referrer-Policy is handled by Django's built-in `SecurityMiddleware` via `SECURE_REFERRER_POLICY`
 - Middleware positioned after `SecurityMiddleware` so it is the final authority on security headers in the response phase
