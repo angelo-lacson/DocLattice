@@ -42,7 +42,7 @@ User = get_user_model()
 @celery_app.task()
 def import_corpus(
     temporary_file_handle_id: str | int, user_id: int, seed_corpus_id: Optional[int]
-) -> Optional[str]:
+) -> Optional[int]:
     """
     Import a corpus from a V1-format export ZIP.
 

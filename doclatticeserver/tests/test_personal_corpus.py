@@ -148,6 +148,36 @@ class TestGetOrCreatePersonalCorpus(TestCase):
             Corpus.objects.filter(creator=self.user, is_personal=True).count(), 1
         )
 
+    def test_backfills_slug_when_empty(self):
+        """Calling get_or_create on a corpus with an empty slug should
+        backfill a valid slug via QuerySet.update() (no signals fired)."""
+        # Create the personal corpus first
+        corpus = Corpus.get_or_create_personal_corpus(self.user)
+        original_pk = corpus.pk
+        self.assertTrue(corpus.slug)  # should have a slug after creation
+
+        # Simulate a corpus that was created by migration 0038 without a slug
+        Corpus.objects.filter(pk=original_pk).update(slug="")
+
+        # Re-fetch and verify slug is indeed empty
+        corpus.refresh_from_db()
+        self.assertEqual(corpus.slug, "")
+
+        # Call get_or_create_personal_corpus again - should backfill the slug
+        backfilled = Corpus.get_or_create_personal_corpus(self.user)
+
+        # Should be the same corpus
+        self.assertEqual(backfilled.pk, original_pk)
+
+        # The returned in-memory object should have a valid slug
+        self.assertTrue(backfilled.slug)
+        self.assertNotEqual(backfilled.slug, "")
+
+        # Verify the slug was persisted to the database
+        corpus.refresh_from_db()
+        self.assertTrue(corpus.slug)
+        self.assertEqual(corpus.slug, backfilled.slug)
+
 
 class TestUniqueConstraint(TestCase):
     """Tests for the unique constraint on personal corpuses."""
