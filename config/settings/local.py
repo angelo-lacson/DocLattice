@@ -61,13 +61,20 @@ SESSION_COOKIE_HTTPONLY = False
 CSRF_COOKIE_HTTPONLY = False
 # https://docs.djangoproject.com
 
-# Allow plaintext WebSocket (ws:) and explicit wss: in development only.
-# Production base.py restricts connect-src to 'self' only (which covers
-# same-origin wss:// when served over HTTPS).
+# Allow WebSocket connections to the local Vite HMR / Django Channels dev
+# server.  Scoped to localhost to avoid opening connections to arbitrary
+# external hosts.  Production base.py restricts connect-src to 'self' only
+# (which covers same-origin wss:// when served over HTTPS).
+#
+# NOTE: This intentionally replaces the connect-src list, discarding any
+# Auth0 domain appended by base.py.  If USE_AUTH0=True in local dev, Auth0
+# auth flows may fail with CSP violations — add the Auth0 domain manually
+# here if needed.
+#
 # Shallow copy is safe here because we assign new lists rather than mutating
 # existing ones. If appending to existing lists, use a deep copy instead.
 _csp = SECURE_CSP_DIRECTIVES.copy() if SECURE_CSP_DIRECTIVES else {}
-_csp["connect-src"] = ["'self'", "wss:", "ws:"]
+_csp["connect-src"] = ["'self'", "ws://localhost:*", "wss://localhost:*"]
 SECURE_CSP_DIRECTIVES = _csp
 
 # Your stuff...

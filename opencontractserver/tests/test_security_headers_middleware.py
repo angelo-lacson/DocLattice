@@ -149,35 +149,30 @@ class SecurityHeadersMiddlewareTests(SimpleTestCase):
         self.assertIn("Permissions-Policy", response)
 
 
-class Auth0CSPValidationTests(SimpleTestCase):
-    """Verify AUTH0_DOMAIN sanitization in CSP directives."""
+class ValidateCSPDomainTests(SimpleTestCase):
+    """Test config.middleware.validate_csp_domain (production code)."""
 
-    def test_build_csp_rejects_spaces_in_domain(self):
-        """A domain containing spaces would break the CSP header."""
+    def test_rejects_spaces(self):
+        """A domain containing spaces would split CSP directive values."""
         from django.core.exceptions import ImproperlyConfigured
 
-        with self.assertRaises(ImproperlyConfigured):
-            _auth0_domain = "evil.com script-src *"
-            if " " in _auth0_domain or ";" in _auth0_domain:
-                raise ImproperlyConfigured(
-                    f"AUTH0_DOMAIN contains invalid characters for CSP: "
-                    f"{_auth0_domain!r}"
-                )
+        from config.middleware import validate_csp_domain
 
-    def test_build_csp_rejects_semicolons_in_domain(self):
+        with self.assertRaises(ImproperlyConfigured):
+            validate_csp_domain("evil.com script-src *")
+
+    def test_rejects_semicolons(self):
         """A domain containing semicolons would inject new CSP directives."""
         from django.core.exceptions import ImproperlyConfigured
 
-        with self.assertRaises(ImproperlyConfigured):
-            _auth0_domain = "evil.com; script-src *"
-            if " " in _auth0_domain or ";" in _auth0_domain:
-                raise ImproperlyConfigured(
-                    f"AUTH0_DOMAIN contains invalid characters for CSP: "
-                    f"{_auth0_domain!r}"
-                )
+        from config.middleware import validate_csp_domain
 
-    def test_valid_auth0_domain_passes(self):
-        """A well-formed domain should not raise."""
-        _auth0_domain = "myapp.us.auth0.com"
-        self.assertNotIn(" ", _auth0_domain)
-        self.assertNotIn(";", _auth0_domain)
+        with self.assertRaises(ImproperlyConfigured):
+            validate_csp_domain("evil.com; script-src *")
+
+    def test_accepts_valid_domain(self):
+        """A well-formed Auth0 domain should not raise."""
+        from config.middleware import validate_csp_domain
+
+        # Should not raise
+        validate_csp_domain("myapp.us.auth0.com")

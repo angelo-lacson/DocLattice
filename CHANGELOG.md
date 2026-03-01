@@ -13,10 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `SecurityHeadersMiddleware` in `config/middleware.py` that attaches `Content-Security-Policy` and `Permissions-Policy` headers to every HTTP response; Referrer-Policy is handled by Django's built-in `SecurityMiddleware` via `SECURE_REFERRER_POLICY`
 - Middleware positioned after `SecurityMiddleware` so it is the final authority on security headers in the response phase
 - CSP directives configured via `SECURE_CSP_DIRECTIVES` dict in `config/settings/base.py` — covers `default-src`, `script-src` (with `blob:` for PDF.js worker fallback), `style-src`, `img-src`, `font-src`, `connect-src`, `worker-src`, `object-src`, `frame-ancestors`, `base-uri`, and `form-action`
-- When `USE_AUTH0=True`, the Auth0 tenant domain is automatically added to `connect-src` and `script-src` with input sanitization (rejects domains containing spaces or semicolons to prevent CSP injection)
+- When `USE_AUTH0=True`, the Auth0 tenant domain is automatically added to `connect-src` and `script-src` with input sanitization via `validate_csp_domain()` (rejects domains containing spaces or semicolons to prevent CSP injection)
+- Auth0 domain validation extracted into `config.middleware.validate_csp_domain()` for independent testability
 - Permissions-Policy disables `camera`, `microphone`, `geolocation`, `payment`, `usb`, `magnetometer`, `gyroscope`, and `accelerometer` via `SECURE_PERMISSIONS_POLICY`
 - Header values are pre-built once at middleware init for zero per-request overhead
-- Tests in `opencontractserver/tests/test_security_headers_middleware.py` — unit tests, integration test against `/api/health/`, and Auth0 domain sanitization tests
+- Local dev CSP (`config/settings/local.py`) scopes WebSocket `connect-src` to `localhost` instead of bare `wss:`/`ws:` scheme sources, with documented Auth0 domain interaction
+- Tests in `opencontractserver/tests/test_security_headers_middleware.py` — unit tests, integration test against `/api/health/`, and `validate_csp_domain()` tests
 
 #### Expand Corpus Import Test Coverage (Closes #999)
 - Rewrote `test_corpus_import.py` with proper `TransactionTestCase` base class (previously `ImportCorpusTestCase` with no parent, never discovered by test runners)

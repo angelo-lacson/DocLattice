@@ -544,16 +544,11 @@ SECURE_CSP_DIRECTIVES = {
 # When Auth0 is enabled, the browser must be able to load scripts from and
 # connect to the Auth0 tenant domain for authentication flows.
 if USE_AUTH0:
-    _auth0_domain = AUTH0_DOMAIN
-    if " " in _auth0_domain or ";" in _auth0_domain:
-        from django.core.exceptions import ImproperlyConfigured
+    from config.middleware import validate_csp_domain
 
-        raise ImproperlyConfigured(
-            f"AUTH0_DOMAIN contains invalid characters for CSP: {_auth0_domain!r}"
-        )
-    SECURE_CSP_DIRECTIVES["connect-src"].append(f"https://{_auth0_domain}")
-    SECURE_CSP_DIRECTIVES["script-src"].append(f"https://{_auth0_domain}")
-    del _auth0_domain
+    validate_csp_domain(AUTH0_DOMAIN)
+    SECURE_CSP_DIRECTIVES["connect-src"].append(f"https://{AUTH0_DOMAIN}")
+    SECURE_CSP_DIRECTIVES["script-src"].append(f"https://{AUTH0_DOMAIN}")
 
 # Permissions-Policy — opt out of browser features not needed by the app.
 SECURE_PERMISSIONS_POLICY = {
