@@ -490,6 +490,205 @@ class PipelineSettingsGraphQLTestCase(TestCase):
             )
 
 
+class EnabledComponentsMutationTestCase(TestCase):
+    """Tests for enabled_components validation in UpdatePipelineSettingsMutation."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        # Clear cache to ensure clean state between tests
+        cache.delete(PipelineSettings.CACHE_KEY)
+
+        self.superuser = User.objects.create_superuser(
+            username="ps_ec_admin", password="admin", email="ps_ec_admin@test.com"
+        )
+        self.superuser_client = Client(
+            schema, context_value=TestContext(self.superuser)
+        )
+
+        # Ensure the singleton exists
+        PipelineSettings.get_instance()
+
+    def _get_real_component_paths(self):
+        """Return a dict with real component paths from the registry."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        result = {}
+        if registry.parsers:
+            result["parser"] = registry.parsers[0].class_name
+        if registry.embedders:
+            result["embedder"] = registry.embedders[0].class_name
+        if registry.thumbnailers:
+            result["thumbnailer"] = registry.thumbnailers[0].class_name
+        return result
+
+    def test_set_enabled_components(self):
+        """Setting enabled_components should store the list successfully."""
+        components = self._get_real_component_paths()
+        if not components:
+            self.skipTest("Need at least 1 registered component for this test")
+
+        component_list = list(components.values())
+
+        mutation = """
+            mutation UpdatePipelineSettings($enabledComponents: [String]) {
+                updatePipelineSettings(enabledComponents: $enabledComponents) {
+                    ok
+                    message
+                    pipelineSettings {
+                        enabledComponents
+                    }
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation, variables={"enabledComponents": component_list}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updatePipelineSettings"]
+        self.assertTrue(data["ok"], data.get("message"))
+        self.assertEqual(
+            sorted(data["pipelineSettings"]["enabledComponents"]),
+            sorted(component_list),
+        )
+
+        # Verify persisted to DB
+        instance = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(sorted(instance.enabled_components), sorted(component_list))
+
+    def test_cannot_disable_assigned_component(self):
+        """A component assigned as a preferred parser cannot be removed from enabled_components."""
+        components = self._get_real_component_paths()
+        if "parser" not in components:
+            self.skipTest("Need at least 1 registered parser for this test")
+
+        parser_path = components["parser"]
+
+        # First assign the parser as preferred for application/pdf
+        assign_mutation = """
+            mutation UpdatePipelineSettings($preferredParsers: GenericScalar) {
+                updatePipelineSettings(preferredParsers: $preferredParsers) {
+                    ok
+                    message
+                }
+            }
+        """
+        result = self.superuser_client.execute(
+            assign_mutation,
+            variables={"preferredParsers": {"application/pdf": parser_path}},
+        )
+        self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Now try to set enabled_components WITHOUT the assigned parser
+        other_paths = [v for k, v in components.items() if k != "parser"]
+        if not other_paths:
+            # If the parser is the only component, use an empty enabled list
+            # that should fail because the parser is assigned
+            other_paths = []
+
+        # Use a different real component (or empty list if none available).
+        # The key point: the assigned parser is NOT in the list.
+        enable_mutation = """
+            mutation UpdatePipelineSettings($enabledComponents: [String]) {
+                updatePipelineSettings(enabledComponents: $enabledComponents) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        # If other_paths is empty, we need at least one component in the list
+        # to make it non-empty (empty list means "all enabled" and would succeed).
+        # We'll use whatever other components are available, or fabricate the
+        # scenario by passing only a non-parser component.
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        all_paths = [
+            c.class_name
+            for c in registry.parsers + registry.embedders + registry.thumbnailers
+        ]
+        enabled_without_parser = [p for p in all_paths if p != parser_path]
+
+        if not enabled_without_parser:
+            self.skipTest("Need at least 2 registered components to test disabling one")
+
+        result = self.superuser_client.execute(
+            enable_mutation,
+            variables={"enabledComponents": enabled_without_parser},
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updatePipelineSettings"]
+        self.assertFalse(data["ok"])
+        self.assertIn("Cannot disable", data["message"])
+        self.assertIn(parser_path, data["message"])
+
+    def test_invalid_component_path_rejected(self):
+        """Nonexistent component paths in enabled_components should be rejected."""
+        mutation = """
+            mutation UpdatePipelineSettings($enabledComponents: [String]) {
+                updatePipelineSettings(enabledComponents: $enabledComponents) {
+                    ok
+                    message
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation,
+            variables={"enabledComponents": ["nonexistent.module.FakeComponent"]},
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updatePipelineSettings"]
+        self.assertFalse(data["ok"])
+        self.assertIn("not found in registry", data["message"])
+
+    def test_empty_enabled_components_always_succeeds(self):
+        """Empty list (meaning 'all enabled') should always succeed regardless of assignments."""
+        components = self._get_real_component_paths()
+
+        # First assign a parser so there's an active assignment
+        if "parser" in components:
+            assign_mutation = """
+                mutation UpdatePipelineSettings($preferredParsers: GenericScalar) {
+                    updatePipelineSettings(preferredParsers: $preferredParsers) {
+                        ok
+                        message
+                    }
+                }
+            """
+            result = self.superuser_client.execute(
+                assign_mutation,
+                variables={
+                    "preferredParsers": {"application/pdf": components["parser"]}
+                },
+            )
+            self.assertTrue(result["data"]["updatePipelineSettings"]["ok"])
+
+        # Now set enabled_components to empty list — should succeed
+        mutation = """
+            mutation UpdatePipelineSettings($enabledComponents: [String]) {
+                updatePipelineSettings(enabledComponents: $enabledComponents) {
+                    ok
+                    message
+                    pipelineSettings {
+                        enabledComponents
+                    }
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation, variables={"enabledComponents": []}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updatePipelineSettings"]
+        self.assertTrue(data["ok"], data.get("message"))
+        self.assertEqual(data["pipelineSettings"]["enabledComponents"], [])
+
+
 class PipelineSettingsSecretsTestCase(TestCase):
     """Tests for encrypted secrets storage in PipelineSettings."""
 
