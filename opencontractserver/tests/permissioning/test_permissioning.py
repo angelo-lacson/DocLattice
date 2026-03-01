@@ -46,7 +46,7 @@ class TestContext:
 class PermissioningTestCase(TestCase):
     """
     Tests that permissioning system works and those who should be able to see things, can, and those
-    who whould not, cannot. TODO - improve the granularity of test cases.
+    who should not, cannot.
     """
 
     fixtures_path = pathlib.Path(__file__).parent / "fixtures"
@@ -379,7 +379,6 @@ class PermissioningTestCase(TestCase):
         for ann in user_one_corpus_response["data"]["corpuses"]["edges"][0]["node"][
             "annotations"
         ]["edges"]:
-            print("Ann response in __test_user_retrieval_permissions: ", ann)
             ann_permissions = ann["node"]["myPermissions"]
             # Annotations inherit minimum of document (READ) and corpus (ALL) = READ
             self.assertIn(

@@ -2,11 +2,12 @@
 Base settings to build other settings files upon.
 """
 
-import pathlib
 from datetime import timedelta
 from pathlib import Path
 
 import environ
+
+from opencontractserver.constants.document_processing import MAX_FILE_UPLOAD_SIZE_BYTES
 
 ROOT_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # opencontractserver/
@@ -62,7 +63,7 @@ CALLBACK_ROOT_URL_FOR_ANALYZER = env.str("CALLBACK_ROOT_URL_FOR_ANALYZER", None)
 ALLOW_GRAPHQL_DEBUG = env.bool("ALLOW_GRAPHQL_DEBUG", default=False)
 
 # Set max file upload size to 5 GB for large corpuses
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880000
+DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_FILE_UPLOAD_SIZE_BYTES
 # Local time zone. Choices are
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
 # though not all of them may be available with every OS.
@@ -272,6 +273,7 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "config.middleware.SecurityHeadersMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -508,6 +510,58 @@ CSRF_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
 
+# Referrer-Policy header — controls how much referrer info is sent.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+# Content-Security-Policy — defence-in-depth against XSS / injection.
+# Uses 'self' as the baseline; blob: and data: are needed by PDF.js;
+# 'unsafe-inline' is required for React's runtime-injected styles (Vite
+# injects <style> tags in dev, and hashed CSS chunks still require inline
+# style attributes).  'self' covers same-origin WebSocket connections
+# (wss:// when served over HTTPS) so no extra wss: source is needed here.
+#
+# NOTE: Auth0 CSP extension is handled automatically below — when AUTH0_DOMAIN
+# is set, connect-src and script-src are extended with the tenant domain.
+SECURE_CSP_DIRECTIVES = {
+    "default-src": ["'self'"],
+    # blob: required for PDF.js web workers in CSP Level 2 browsers
+    # that fall back from worker-src to script-src
+    "script-src": ["'self'", "blob:"],
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "data:", "blob:"],
+    "font-src": ["'self'", "data:"],
+    "connect-src": ["'self'"],
+    "worker-src": ["'self'", "blob:"],
+    "object-src": ["'none'"],
+    # frame-ancestors 'none' is the modern CSP2 mechanism for blocking framing.
+    # X_FRAME_OPTIONS = "DENY" (above) is the legacy fallback for older browsers.
+    # Both are set intentionally for maximum browser coverage.
+    "frame-ancestors": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+}
+
+# When Auth0 is enabled, the browser must be able to load scripts from and
+# connect to the Auth0 tenant domain for authentication flows.
+if USE_AUTH0:
+    from config.middleware import validate_csp_domain
+
+    validate_csp_domain(AUTH0_DOMAIN)
+    SECURE_CSP_DIRECTIVES["connect-src"].append(f"https://{AUTH0_DOMAIN}")
+    SECURE_CSP_DIRECTIVES["script-src"].append(f"https://{AUTH0_DOMAIN}")
+
+# Permissions-Policy — opt out of browser features not needed by the app.
+SECURE_PERMISSIONS_POLICY = {
+    "camera": [],
+    "microphone": [],
+    "geolocation": [],
+    "payment": [],
+    "usb": [],
+    "magnetometer": [],
+    "gyroscope": [],
+    "accelerometer": [],
+}
+
 # EMAIL
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
@@ -571,11 +625,11 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 # http://docs.celeryproject.org/en/latest/userguide/configuration.html#std:setting-result_serializer
 CELERY_RESULT_SERIALIZER = "json"
+# Celery task time limits are intentionally unset — document processing tasks
+# can run for extended periods depending on document size and parser backend.
 # http://docs.celeryproject.org/en/latest/userguide/configuration.html#task-time-limit
-# TODO: set to whatever value is adequate in your circumstances
 # CELERY_TASK_TIME_LIMIT = 5 * 3600
 # http://docs.celeryproject.org/en/latest/userguide/configuration.html#task-soft-time-limit
-# TODO: set to whatever value is adequate in your circumstances
 # CELERY_TASK_SOFT_TIME_LIMIT = 3600
 # http://docs.celeryproject.org/en/latest/userguide/configuration.html#beat-scheduler
 # Uses database scheduler - periodic tasks defined in CELERY_BEAT_SCHEDULE below
@@ -657,8 +711,8 @@ REST_FRAMEWORK = {
 
 # Base configuration
 BASE_PATH = "./"
-DATA_PATH = pathlib.Path(BASE_PATH, "data")
-MODEL_PATH = pathlib.Path(BASE_PATH, "model")
+DATA_PATH = Path(BASE_PATH, "data")
+MODEL_PATH = Path(BASE_PATH, "model")
 
 # Graphene
 # ------------------------------------------------------------------------------
@@ -716,7 +770,9 @@ RESERVED_USER_SLUGS = {
 # Constants for Permissioning
 DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 
-# Embeddings / Semantic Search - TODO move to EMBEDDER_KWARGS and use like PARSER_KWARGS
+# Embeddings / Semantic Search
+# NOTE(deferred): These could be consolidated into an EMBEDDER_KWARGS dict
+# (similar to PARSER_KWARGS) once all embedder backends are pluggable.
 # Microservice URLs - read from environment with defaults
 EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
 VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")

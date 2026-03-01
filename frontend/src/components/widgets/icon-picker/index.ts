@@ -1,2 +1,2 @@
-export { default as IconDropdown } from "./IconDropdown";
-export { default as IconPickerModal } from "./IconPickerModal";
+export { DynamicIcon } from "./DynamicIcon";
+export type { DynamicIconProps } from "./DynamicIcon";

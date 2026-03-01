@@ -6,6 +6,7 @@ import mimetypes
 from typing import TYPE_CHECKING
 
 from django.core.files.base import ContentFile, File
+from django.utils import timezone
 
 if TYPE_CHECKING:
     from opencontractserver.documents.models import Document
@@ -319,6 +320,8 @@ def create_document_from_export_data(
         backend_lock=True,
         creator=user_obj,
         page_count=doc_data.get("page_count") or len(doc_data["pawls_file_content"]),
+        # Already has PAWLS data from export — skip the ingest signal
+        processing_started=timezone.now(),
     )
 
     set_permissions_for_obj_to_user(user_obj, doc_obj, [PermissionTypes.ALL])
