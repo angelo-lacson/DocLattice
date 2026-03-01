@@ -296,8 +296,8 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
         {/* Recent discussions feed */}
         <RecentDiscussions
           corpusId={corpus.id}
-          onThreadClick={onThreadClick || (() => {})}
-          onViewAll={onViewDiscussions || (() => {})}
+          onThreadClick={onThreadClick}
+          onViewAll={onViewDiscussions}
           testId={`${testId}-discussions`}
         />
       </LandingContent>

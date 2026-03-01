@@ -43,10 +43,10 @@ export interface QueryParams {
   folderId?: string | null;
   tab?: string | null;
   messageId?: string | null;
-  homeView?: string | null; // "about" | "toc" - corpus home view selection
+  homeView?: "about" | "toc" | null; // corpus home view selection
   tocExpanded?: boolean; // true to expand all TOC nodes
-  view?: string | null; // "landing" | "details" - corpus detail view selection
-  mode?: string | null; // "power" - corpus power user mode
+  view?: "landing" | "details" | "discussions" | null; // corpus detail view selection
+  mode?: "power" | null; // corpus power user mode
   version?: number | null; // Document version number (null = current version)
   showStructural?: boolean;
   showSelectedOnly?: boolean;

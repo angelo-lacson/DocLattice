@@ -17,8 +17,11 @@ import {
   mediaQuery,
 } from "../../corpuses/styles/corpusDesignTokens";
 import { ConversationType } from "../../../types/graphql-api";
-
-const RECENT_THREAD_LIMIT = 3;
+import {
+  CONVERSATION_TYPE,
+  RECENT_THREAD_LIMIT,
+} from "../../../assets/configurations/constants";
+import { formatUsername } from "../../threads/userUtils";
 
 // ============================================================================
 // STYLED COMPONENTS
@@ -180,9 +183,9 @@ export interface RecentDiscussionsProps {
   /** Corpus ID to fetch discussions for */
   corpusId: string;
   /** Callback when a thread is clicked */
-  onThreadClick: (threadId: string) => void;
+  onThreadClick?: (threadId: string) => void;
   /** Callback when "View All" / header is clicked */
-  onViewAll: () => void;
+  onViewAll?: () => void;
   /** Test ID prefix */
   testId?: string;
 }
@@ -200,13 +203,13 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
   const variables = useMemo(
     () => ({
       corpusId,
-      conversationType: "THREAD" as const,
+      conversationType: CONVERSATION_TYPE.THREAD,
       limit: RECENT_THREAD_LIMIT,
     }),
     [corpusId]
   );
 
-  const { data, loading } = useQuery<
+  const { data, loading, error } = useQuery<
     GetConversationsOutputs,
     GetConversationsInputs
   >(GET_CONVERSATIONS, {
@@ -218,21 +221,16 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
     if (!data?.conversations?.edges) return [];
     return data.conversations.edges
       .map((e) => e?.node)
-      .filter((n): n is ConversationType => n != null && !n.deletedAt)
-      .slice(0, RECENT_THREAD_LIMIT);
+      .filter((n): n is ConversationType => n != null && !n.deletedAt);
   }, [data]);
 
-  // Show a placeholder during initial load to prevent layout shift
-  if (loading && threads.length === 0) {
-    return (
-      <FeedContainer data-testid={testId} style={{ minHeight: "120px" }} />
-    );
-  }
+  // Don't render anything while loading with no cached data, or on error with no data
+  if ((loading || error) && threads.length === 0) return null;
 
   return (
     <FeedContainer data-testid={testId}>
       <FeedHeader
-        onClick={onViewAll}
+        onClick={() => onViewAll?.()}
         data-testid={`${testId}-header`}
         aria-label="View all discussions"
       >
@@ -251,22 +249,25 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
           {threads.map((thread) => (
             <ThreadItem
               key={thread.id}
-              onClick={() => onThreadClick(thread.id)}
+              onClick={() => onThreadClick?.(thread.id)}
               data-testid={`${testId}-thread-${thread.id}`}
             >
               <ThreadTitle>{thread.title || "Untitled Discussion"}</ThreadTitle>
               <ThreadMeta>
                 <MetaItem>
                   <User />
-                  {thread.creator?.username ||
-                    thread.creator?.email?.split("@")[0] ||
-                    "Unknown"}
+                  {formatUsername(
+                    thread.creator?.username,
+                    thread.creator?.email
+                  )}
                 </MetaItem>
                 <MetaItem>
                   <Clock />
-                  {formatDistanceToNow(new Date(thread.createdAt), {
-                    addSuffix: true,
-                  })}
+                  {thread.createdAt
+                    ? formatDistanceToNow(new Date(thread.createdAt), {
+                        addSuffix: true,
+                      })
+                    : "recently"}
                 </MetaItem>
                 <MetaItem>
                   <MessageSquare />
