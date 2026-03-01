@@ -273,6 +273,7 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "config.middleware.SecurityHeadersMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -508,6 +509,58 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
+
+# Referrer-Policy header — controls how much referrer info is sent.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+# Content-Security-Policy — defence-in-depth against XSS / injection.
+# Uses 'self' as the baseline; blob: and data: are needed by PDF.js;
+# 'unsafe-inline' is required for React's runtime-injected styles (Vite
+# injects <style> tags in dev, and hashed CSS chunks still require inline
+# style attributes).  'self' covers same-origin WebSocket connections
+# (wss:// when served over HTTPS) so no extra wss: source is needed here.
+#
+# NOTE: Auth0 CSP extension is handled automatically below — when AUTH0_DOMAIN
+# is set, connect-src and script-src are extended with the tenant domain.
+SECURE_CSP_DIRECTIVES = {
+    "default-src": ["'self'"],
+    # blob: required for PDF.js web workers in CSP Level 2 browsers
+    # that fall back from worker-src to script-src
+    "script-src": ["'self'", "blob:"],
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "data:", "blob:"],
+    "font-src": ["'self'", "data:"],
+    "connect-src": ["'self'"],
+    "worker-src": ["'self'", "blob:"],
+    "object-src": ["'none'"],
+    # frame-ancestors 'none' is the modern CSP2 mechanism for blocking framing.
+    # X_FRAME_OPTIONS = "DENY" (above) is the legacy fallback for older browsers.
+    # Both are set intentionally for maximum browser coverage.
+    "frame-ancestors": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+}
+
+# When Auth0 is enabled, the browser must be able to load scripts from and
+# connect to the Auth0 tenant domain for authentication flows.
+if USE_AUTH0:
+    from config.middleware import validate_csp_domain
+
+    validate_csp_domain(AUTH0_DOMAIN)
+    SECURE_CSP_DIRECTIVES["connect-src"].append(f"https://{AUTH0_DOMAIN}")
+    SECURE_CSP_DIRECTIVES["script-src"].append(f"https://{AUTH0_DOMAIN}")
+
+# Permissions-Policy — opt out of browser features not needed by the app.
+SECURE_PERMISSIONS_POLICY = {
+    "camera": [],
+    "microphone": [],
+    "geolocation": [],
+    "payment": [],
+    "usb": [],
+    "magnetometer": [],
+    "gyroscope": [],
+    "accelerometer": [],
+}
 
 # EMAIL
 # ------------------------------------------------------------------------------
