@@ -417,44 +417,46 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                             pipeline_settings=None,
                         )
 
-                # Validate that all currently assigned components are in the enabled list
+                # Validate that all currently assigned components are in the enabled list.
+                # Empty list means "all enabled" — skip the assigned-component check.
                 enabled_set = set(enabled_components)
-                assigned_parsers = (
-                    preferred_parsers
-                    if preferred_parsers is not None
-                    else settings_instance.preferred_parsers or {}
-                )
-                assigned_embedders = (
-                    preferred_embedders
-                    if preferred_embedders is not None
-                    else settings_instance.preferred_embedders or {}
-                )
-                assigned_thumbnailers = (
-                    preferred_thumbnailers
-                    if preferred_thumbnailers is not None
-                    else settings_instance.preferred_thumbnailers or {}
-                )
-                assigned_default = (
-                    default_embedder
-                    if default_embedder is not None
-                    else settings_instance.default_embedder or ""
-                )
-
-                all_assigned = set()
-                all_assigned.update(assigned_parsers.values())
-                all_assigned.update(assigned_embedders.values())
-                all_assigned.update(assigned_thumbnailers.values())
-                if assigned_default:
-                    all_assigned.add(assigned_default)
-
-                disabled_but_assigned = all_assigned - enabled_set
-                if disabled_but_assigned:
-                    names = ", ".join(sorted(disabled_but_assigned))
-                    return UpdatePipelineSettingsMutation(
-                        ok=False,
-                        message=f"Cannot disable components that are assigned as filetype defaults: {names}",
-                        pipeline_settings=None,
+                if enabled_set:
+                    assigned_parsers = (
+                        preferred_parsers
+                        if preferred_parsers is not None
+                        else settings_instance.preferred_parsers or {}
                     )
+                    assigned_embedders = (
+                        preferred_embedders
+                        if preferred_embedders is not None
+                        else settings_instance.preferred_embedders or {}
+                    )
+                    assigned_thumbnailers = (
+                        preferred_thumbnailers
+                        if preferred_thumbnailers is not None
+                        else settings_instance.preferred_thumbnailers or {}
+                    )
+                    assigned_default = (
+                        default_embedder
+                        if default_embedder is not None
+                        else settings_instance.default_embedder or ""
+                    )
+
+                    all_assigned = set()
+                    all_assigned.update(assigned_parsers.values())
+                    all_assigned.update(assigned_embedders.values())
+                    all_assigned.update(assigned_thumbnailers.values())
+                    if assigned_default:
+                        all_assigned.add(assigned_default)
+
+                    disabled_but_assigned = all_assigned - enabled_set
+                    if disabled_but_assigned:
+                        names = ", ".join(sorted(disabled_but_assigned))
+                        return UpdatePipelineSettingsMutation(
+                            ok=False,
+                            message=f"Cannot disable components that are assigned as filetype defaults: {names}",
+                            pipeline_settings=None,
+                        )
 
                 settings_instance.enabled_components = enabled_components
 
