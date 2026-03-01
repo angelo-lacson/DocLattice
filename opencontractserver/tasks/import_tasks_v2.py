@@ -54,7 +54,7 @@ def import_corpus_v2(
     temporary_file_handle_id: str | int,
     user_id: int,
     seed_corpus_id: int | None,
-) -> str | None:
+) -> int | None:
     """
     Import corpus with support for both V1 and V2 export formats.
 
@@ -225,7 +225,7 @@ def _import_corpus(
     user_obj,
     seed_corpus_id: int | None,
     version: str = "1.0",
-) -> str | None:
+) -> int | None:
     """
     Unified import handler for both V1 and V2 formats.
 
