@@ -5,8 +5,10 @@ import styled from "styled-components";
 import { gql } from "@apollo/client";
 import { toast } from "react-toastify";
 import { Plus, Edit, Trash2, Cpu } from "lucide-react";
-import { Input, Spinner } from "@os-legal/ui";
+import { Input } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
+import { StyledTextArea } from "../widgets/modals/styled";
+import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import { AgentConfigurationType } from "../../types/graphql-api";
 
 // GraphQL Queries and Mutations
@@ -375,20 +377,7 @@ export const GlobalAgentManagement: React.FC = () => {
   if (loading) {
     return (
       <Container>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "3rem",
-          }}
-        >
-          <Spinner size="md" />
-          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-            Loading agents...
-          </span>
-        </div>
+        <LoadingState message="Loading agents..." />
       </Container>
     );
   }
@@ -396,20 +385,9 @@ export const GlobalAgentManagement: React.FC = () => {
   if (error) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "6px",
-            color: "#991b1b",
-          }}
-        >
-          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-            Error loading agents
-          </strong>
-          <p style={{ margin: 0 }}>{error.message}</p>
-        </div>
+        <ErrorMessage title="Error loading agents">
+          {error.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -436,23 +414,10 @@ export const GlobalAgentManagement: React.FC = () => {
 
       <StyledSegment>
         {agents.length === 0 ? (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-            }}
-          >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              No Global Agents
-            </strong>
-            <p style={{ margin: 0 }}>
-              Create your first global agent to make it available across all
-              corpuses.
-            </p>
-          </div>
+          <InfoMessage title="No Global Agents">
+            Create your first global agent to make it available across all
+            corpuses.
+          </InfoMessage>
         ) : (
           <Table basic="very" celled>
             <Table.Header>
@@ -556,27 +521,19 @@ export const GlobalAgentManagement: React.FC = () => {
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <textarea
+              <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={2}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "inherit",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ minHeight: "auto" }}
               />
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <textarea
+              <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -586,15 +543,7 @@ export const GlobalAgentManagement: React.FC = () => {
                   })
                 }
                 rows={6}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "monospace",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>
@@ -624,22 +573,14 @@ export const GlobalAgentManagement: React.FC = () => {
             </Form.Field>
             <Form.Field>
               <label>Badge Config (JSON)</label>
-              <textarea
+              <StyledTextArea
                 placeholder='{"icon": "robot", "color": "#6366f1", "label": "AI"}'
                 value={formState.badgeConfig}
                 onChange={(e) =>
                   setFormState({ ...formState, badgeConfig: e.target.value })
                 }
                 rows={3}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "monospace",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>
@@ -713,27 +654,19 @@ export const GlobalAgentManagement: React.FC = () => {
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <textarea
+              <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={2}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "inherit",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ minHeight: "auto" }}
               />
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <textarea
+              <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -743,15 +676,7 @@ export const GlobalAgentManagement: React.FC = () => {
                   })
                 }
                 rows={6}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "monospace",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>
@@ -781,22 +706,14 @@ export const GlobalAgentManagement: React.FC = () => {
             </Form.Field>
             <Form.Field>
               <label>Badge Config (JSON)</label>
-              <textarea
+              <StyledTextArea
                 placeholder='{"icon": "robot", "color": "#6366f1", "label": "AI"}'
                 value={formState.badgeConfig}
                 onChange={(e) =>
                   setFormState({ ...formState, badgeConfig: e.target.value })
                 }
                 rows={3}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "monospace",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
+                style={{ fontFamily: "monospace" }}
               />
             </Form.Field>
             <Form.Field>

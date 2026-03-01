@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
-import { Form, Dropdown, Input } from "semantic-ui-react";
+import { Form, Dropdown } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
 import {
   GET_BADGE_CRITERIA_TYPES,
   GetBadgeCriteriaTypesInput,
@@ -8,6 +9,7 @@ import {
   CriteriaTypeDefinition,
   CriteriaField,
 } from "../../graphql/queries";
+import { ErrorMessage, InfoMessage, WarningMessage } from "../widgets/feedback";
 
 interface BadgeCriteriaConfigProps {
   badgeType: "GLOBAL" | "CORPUS";
@@ -176,40 +178,18 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
   // Show loading state
   if (loading) {
     return (
-      <div
-        style={{
-          padding: "0.75rem 1rem",
-          border: "1px solid #93c5fd",
-          borderRadius: "8px",
-          background: "#eff6ff",
-          color: "#1e40af",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-          Loading Criteria Types
-        </div>
-        <p>Fetching available auto-award criteria...</p>
-      </div>
+      <InfoMessage title="Loading Criteria Types">
+        Fetching available auto-award criteria...
+      </InfoMessage>
     );
   }
 
   // Show error state
   if (error) {
     return (
-      <div
-        style={{
-          padding: "0.75rem 1rem",
-          border: "1px solid #fca5a5",
-          borderRadius: "8px",
-          background: "#fef2f2",
-          color: "#991b1b",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-          Error Loading Criteria Types
-        </div>
-        <p>{error.message}</p>
-      </div>
+      <ErrorMessage title="Error Loading Criteria Types">
+        {error.message}
+      </ErrorMessage>
     );
   }
 
@@ -218,23 +198,10 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
   if (implementedTypes.length === 0) {
     return (
-      <div
-        style={{
-          padding: "0.75rem 1rem",
-          border: "1px solid #fcd34d",
-          borderRadius: "8px",
-          background: "#fffbeb",
-          color: "#92400e",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-          No Criteria Types Available
-        </div>
-        <p>
-          There are no criteria types available for {badgeType.toLowerCase()}{" "}
-          badges yet.
-        </p>
-      </div>
+      <WarningMessage title="No Criteria Types Available">
+        There are no criteria types available for {badgeType.toLowerCase()}{" "}
+        badges yet.
+      </WarningMessage>
     );
   }
 
@@ -263,20 +230,9 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
       {currentType && (
         <>
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              border: "1px solid #93c5fd",
-              borderRadius: "8px",
-              background: "#eff6ff",
-              color: "#1e40af",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              {currentType.name}
-            </div>
-            <p>{currentType.description}</p>
-          </div>
+          <InfoMessage title={currentType.name}>
+            {currentType.description}
+          </InfoMessage>
 
           {currentType.fields.map((field) => (
             <Form.Field
@@ -306,11 +262,12 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
               {field.fieldType === "number" && (
                 <Input
+                  fullWidth
                   type="number"
                   min={field.minValue}
                   max={field.maxValue}
                   value={fieldValues[field.name] ?? ""}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     handleFieldChange(
                       field.name,
                       e.target.value === ""
@@ -325,9 +282,10 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
               {field.fieldType === "text" && !field.allowedValues && (
                 <Input
+                  fullWidth
                   type="text"
                   value={fieldValues[field.name] ?? ""}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     handleFieldChange(field.name, e.target.value)
                   }
                   placeholder={`Enter ${field.label.toLowerCase()}`}
@@ -373,24 +331,13 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
           ))}
 
           {Object.keys(validationErrors).length > 0 && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                border: "1px solid #fca5a5",
-                borderRadius: "8px",
-                background: "#fef2f2",
-                color: "#991b1b",
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-                Validation Errors
-              </div>
+            <ErrorMessage title="Validation Errors">
               <ul>
                 {Object.values(validationErrors).map((error, idx) => (
                   <li key={idx}>{error}</li>
                 ))}
               </ul>
-            </div>
+            </ErrorMessage>
           )}
         </>
       )}

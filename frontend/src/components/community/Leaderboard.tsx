@@ -13,7 +13,7 @@ import {
   Star,
   User,
 } from "lucide-react";
-import { Spinner } from "@os-legal/ui";
+import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import {
   GET_LEADERBOARD,
   GET_COMMUNITY_STATS,
@@ -248,20 +248,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
   if (leaderboardError) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "6px",
-            color: "#991b1b",
-          }}
-        >
-          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-            Error Loading Leaderboard
-          </strong>
-          <p style={{ margin: 0 }}>{leaderboardError.message}</p>
-        </div>
+        <ErrorMessage title="Error Loading Leaderboard">
+          {leaderboardError.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -349,30 +338,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
         </FilterBar>
 
         {leaderboardLoading ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "3rem",
-            }}
-          >
-            <Spinner size="md" />
-            <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-              Loading leaderboard...
-            </span>
-          </div>
+          <LoadingState message="Loading leaderboard..." />
         ) : leaderboard && leaderboard.entries.length > 0 ? (
           <>
             {leaderboard.currentUserRank && (
-              <div
+              <InfoMessage
                 style={{
-                  padding: "0.75rem 1rem",
-                  background: "#f0f9ff",
-                  border: "1px solid #bae6fd",
-                  borderRadius: "6px",
-                  color: "#0369a1",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
@@ -382,7 +353,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                 <User size={16} />
                 Your rank: <strong>#{leaderboard.currentUserRank}</strong> out
                 of {leaderboard.totalUsers} users
-              </div>
+              </InfoMessage>
             )}
 
             <TableWrapper>
@@ -475,23 +446,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
             </TableWrapper>
           </>
         ) : (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-            }}
-          >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              No Data Available
-            </strong>
-            <p style={{ margin: 0 }}>
-              There are no users in this leaderboard yet. Be the first to
-              contribute!
-            </p>
-          </div>
+          <InfoMessage title="No Data Available">
+            There are no users in this leaderboard yet. Be the first to
+            contribute!
+          </InfoMessage>
         )}
       </LeaderboardCard>
 

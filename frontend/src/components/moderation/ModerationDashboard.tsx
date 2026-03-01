@@ -22,6 +22,12 @@ import {
   MessagesSquare,
 } from "lucide-react";
 import { Spinner } from "@os-legal/ui";
+import {
+  ErrorMessage,
+  InfoMessage,
+  WarningMessage,
+  LoadingState,
+} from "../widgets/feedback";
 import { toast } from "react-toastify";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -316,30 +322,14 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             <Spinner size="sm" />
           </div>
         ) : metricsError ? (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "6px",
-              color: "#991b1b",
-            }}
-          >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              Error loading metrics
-            </strong>
-            <p style={{ margin: 0 }}>{metricsError.message}</p>
-          </div>
+          <ErrorMessage title="Error loading metrics">
+            {metricsError.message}
+          </ErrorMessage>
         ) : metrics ? (
           <>
             {metrics.isAboveThreshold && (
-              <div
+              <WarningMessage
                 style={{
-                  padding: "0.75rem 1rem",
-                  background: "#fefce8",
-                  border: "1px solid #fde68a",
-                  borderRadius: "6px",
-                  color: "#854d0e",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
@@ -349,7 +339,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                 <AlertTriangle size={16} />
                 High moderation activity detected! Threshold exceeded for:{" "}
                 {metrics.thresholdExceededTypes.join(", ")}
-              </div>
+              </WarningMessage>
             )}
             <div
               style={{
@@ -379,17 +369,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             </div>
           </>
         ) : (
-          <div
-            style={{
-              padding: "0.5rem 0.75rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-            }}
-          >
-            No metrics available
-          </div>
+          <InfoMessage>No metrics available</InfoMessage>
         )}
       </div>
 
@@ -470,46 +450,13 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
           Moderation Actions
         </h4>
         {actionsLoading ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "2rem",
-            }}
-          >
-            <Spinner size="md" />
-            <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-              Loading actions...
-            </span>
-          </div>
+          <LoadingState message="Loading actions..." />
         ) : actionsError ? (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "6px",
-              color: "#991b1b",
-            }}
-          >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              Error loading actions
-            </strong>
-            <p style={{ margin: 0 }}>{actionsError.message}</p>
-          </div>
+          <ErrorMessage title="Error loading actions">
+            {actionsError.message}
+          </ErrorMessage>
         ) : actions.length === 0 ? (
-          <div
-            style={{
-              padding: "0.5rem 0.75rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-            }}
-          >
-            No moderation actions found
-          </div>
+          <InfoMessage>No moderation actions found</InfoMessage>
         ) : (
           <>
             <Table celled striped>

@@ -11,8 +11,6 @@ import {
   Search,
   ArrowRight,
   ArrowLeft,
-  AlertCircle,
-  Info,
   Target,
 } from "lucide-react";
 import { Input } from "@os-legal/ui";
@@ -37,6 +35,7 @@ import {
   MUTATION_BATCH_SIZE,
   DEBOUNCE,
 } from "../../assets/configurations/constants";
+import { ErrorMessage, WarningMessage } from "../widgets/feedback";
 
 // ============================================================================
 // TYPES
@@ -669,29 +668,12 @@ export const DocumentRelationshipModal: React.FC<
       </Modal.Header>
       <ModalContent>
         {!hasCorpus && (
-          <div
-            style={{
-              marginBottom: "1.5rem",
-              padding: "1rem",
-              background: "#fef2f2",
-              border: "2px solid #ef4444",
-              borderRadius: "8px",
-              color: "#991b1b",
-            }}
+          <ErrorMessage
+            title="No Corpus Context"
+            style={{ marginBottom: "1.5rem" }}
           >
-            <AlertCircle
-              size={16}
-              style={{
-                display: "inline",
-                verticalAlign: "middle",
-                marginRight: "0.5rem",
-              }}
-            />
-            <strong>No Corpus Context</strong>
-            <p style={{ marginTop: "0.5rem", marginBottom: 0 }}>
-              Document relationships require a corpus context.
-            </p>
-          </div>
+            Document relationships require a corpus context.
+          </ErrorMessage>
         )}
 
         {/* Two-Column Source/Target Layout */}
@@ -895,28 +877,10 @@ export const DocumentRelationshipModal: React.FC<
           {mode === "RELATIONSHIP" && (
             <>
               {!hasLabelset && (
-                <div
-                  style={{
-                    marginTop: "1rem",
-                    padding: "0.75rem",
-                    background: "#fef3c7",
-                    border: "1px solid #fbbf24",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    color: "#92400e",
-                  }}
-                >
-                  <Info
-                    size={14}
-                    style={{
-                      display: "inline",
-                      verticalAlign: "middle",
-                      marginRight: "0.5rem",
-                    }}
-                  />
+                <WarningMessage style={{ marginTop: "1rem" }}>
                   <strong>No labelset found.</strong> Creating a label will
                   automatically create a labelset for this corpus.
-                </div>
+                </WarningMessage>
               )}
 
               {!selectedLabel ? (

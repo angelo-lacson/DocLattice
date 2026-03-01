@@ -4,6 +4,7 @@ import { Button, Dropdown, Modal } from "semantic-ui-react";
 import { toast } from "react-toastify";
 
 import { CORPUS_DOCUMENTS_TOC_LIMIT } from "../../assets/configurations/constants";
+import { ErrorMessage, InfoMessage } from "../widgets/feedback";
 import {
   GET_CORPUS_DOCUMENTS_FOR_TOC,
   GetCorpusDocumentsForTocOutput,
@@ -91,20 +92,9 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
       <Modal.Content>
         <p>Select a document to run this action against:</p>
         {docsError && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              border: "1px solid #fca5a5",
-              borderRadius: "8px",
-              background: "#fef2f2",
-              color: "#991b1b",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              Failed to load documents
-            </div>
-            <p>Please try again or check your permissions for this corpus.</p>
-          </div>
+          <ErrorMessage title="Failed to load documents">
+            Please try again or check your permissions for this corpus.
+          </ErrorMessage>
         )}
         <Dropdown
           placeholder="Select document..."
@@ -117,19 +107,10 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
           onChange={(_, { value }) => setSelectedDocId(value as string)}
         />
         {isLimitExceeded && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              border: "1px solid #93c5fd",
-              borderRadius: "8px",
-              background: "#eff6ff",
-              color: "#1e40af",
-              fontSize: "0.875rem",
-            }}
-          >
+          <InfoMessage>
             Showing first {CORPUS_DOCUMENTS_TOC_LIMIT} of {totalCount}{" "}
             documents. Use the search box above to filter.
-          </div>
+          </InfoMessage>
         )}
       </Modal.Content>
       <Modal.Actions>

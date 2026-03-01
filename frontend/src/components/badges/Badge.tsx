@@ -4,15 +4,15 @@ import styled from "styled-components";
 import { computePosition, flip, shift, offset, arrow } from "@floating-ui/dom";
 
 const StyledBadge = styled.span<{ $badgeColor: string }>`
-  display: inline-flex !important;
+  display: inline-flex;
   align-items: center;
   gap: 0.4em;
   padding: 0.4em 0.75em;
   border-radius: 20px;
   font-weight: 600;
   font-size: 0.85em;
-  background: ${(props) => props.$badgeColor} !important;
-  color: #ffffff !important;
+  background: ${(props) => props.$badgeColor};
+  color: #ffffff;
   border: 2px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   transition: all 0.2s ease;

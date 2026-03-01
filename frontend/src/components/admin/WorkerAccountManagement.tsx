@@ -5,7 +5,14 @@ import { Button, Table, Modal, Form, Confirm } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Upload, ArrowLeft } from "lucide-react";
-import { Input, Spinner } from "@os-legal/ui";
+import { Input } from "@os-legal/ui";
+import { StyledTextArea } from "../widgets/modals/styled";
+import {
+  ErrorMessage,
+  InfoMessage,
+  WarningMessage,
+  LoadingState,
+} from "../widgets/feedback";
 
 import {
   OS_LEGAL_COLORS,
@@ -263,22 +270,9 @@ export const WorkerAccountManagement: React.FC = () => {
   if (!isSuperuser) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#fefce8",
-            border: "1px solid #fde68a",
-            borderRadius: "6px",
-            color: "#854d0e",
-          }}
-        >
-          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-            Access Denied
-          </strong>
-          <p style={{ margin: 0 }}>
-            Only administrators can manage worker accounts.
-          </p>
-        </div>
+        <WarningMessage title="Access Denied">
+          Only administrators can manage worker accounts.
+        </WarningMessage>
       </Container>
     );
   }
@@ -286,20 +280,7 @@ export const WorkerAccountManagement: React.FC = () => {
   if (loading) {
     return (
       <Container>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "3rem",
-          }}
-        >
-          <Spinner size="md" />
-          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-            Loading worker accounts...
-          </span>
-        </div>
+        <LoadingState message="Loading worker accounts..." />
       </Container>
     );
   }
@@ -307,20 +288,9 @@ export const WorkerAccountManagement: React.FC = () => {
   if (error) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "6px",
-            color: "#991b1b",
-          }}
-        >
-          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-            Error loading worker accounts
-          </strong>
-          <p style={{ margin: 0 }}>{error.message}</p>
-        </div>
+        <ErrorMessage title="Error loading worker accounts">
+          {error.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -356,23 +326,10 @@ export const WorkerAccountManagement: React.FC = () => {
 
       <StyledSegment>
         {accounts.length === 0 ? (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
-              borderRadius: "6px",
-              color: "#0369a1",
-            }}
-          >
-            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-              No Worker Accounts
-            </strong>
-            <p style={{ margin: 0 }}>
-              Create your first worker account to enable automated document
-              upload pipelines.
-            </p>
-          </div>
+          <InfoMessage title="No Worker Accounts">
+            Create your first worker account to enable automated document upload
+            pipelines.
+          </InfoMessage>
         ) : (
           <Table basic="very" celled>
             <Table.Header>
@@ -443,22 +400,13 @@ export const WorkerAccountManagement: React.FC = () => {
             </Form.Field>
             <Form.Field>
               <label>Description</label>
-              <textarea
+              <StyledTextArea
                 placeholder="Optional description of this worker account"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={3}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "inherit",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
               />
             </Form.Field>
           </Form>

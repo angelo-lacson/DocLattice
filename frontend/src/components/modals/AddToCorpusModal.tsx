@@ -12,7 +12,7 @@ import {
   Tags,
 } from "lucide-react";
 import { Input } from "@os-legal/ui";
-import { Spinner } from "@os-legal/ui";
+import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import {
   GET_CORPUSES,
   GetCorpusesInputs,
@@ -103,40 +103,6 @@ const MetaLabel = styled.span`
   border-radius: 4px;
   color: #475569;
   margin-right: 0.5rem;
-`;
-
-const ErrorMessage = styled.div`
-  padding: 0.75rem 1rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  color: #991b1b;
-
-  strong {
-    display: block;
-    margin-bottom: 0.25rem;
-  }
-
-  p {
-    margin: 0;
-  }
-`;
-
-const InfoMessage = styled.div`
-  padding: 0.75rem 1rem;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-radius: 6px;
-  color: #0369a1;
-
-  strong {
-    display: block;
-    margin-bottom: 0.25rem;
-  }
-
-  p {
-    margin: 0;
-  }
 `;
 
 interface AddToCorpusModalProps {
@@ -298,34 +264,23 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
 
   const renderCorpusList = () => {
     if (loading) {
-      return (
-        <div style={{ padding: "2rem", textAlign: "center" }}>
-          <Spinner size="md" />
-          <p style={{ marginTop: "0.75rem", color: "#64748b" }}>
-            Loading your corpuses...
-          </p>
-        </div>
-      );
+      return <LoadingState message="Loading your corpuses..." />;
     }
 
     if (error) {
       return (
-        <ErrorMessage>
-          <strong>Error loading corpuses</strong>
-          <p>{error.message}</p>
+        <ErrorMessage title="Error loading corpuses">
+          {error.message}
         </ErrorMessage>
       );
     }
 
     if (corpuses.length === 0) {
       return (
-        <InfoMessage>
-          <strong>No corpuses available</strong>
-          <p>
-            {searchTerm
-              ? `No corpuses found matching "${searchTerm}". Try a different search term.`
-              : "You don't have any corpuses with edit permissions."}
-          </p>
+        <InfoMessage title="No corpuses available">
+          {searchTerm
+            ? `No corpuses found matching "${searchTerm}". Try a different search term.`
+            : "You don't have any corpuses with edit permissions."}
         </InfoMessage>
       );
     }

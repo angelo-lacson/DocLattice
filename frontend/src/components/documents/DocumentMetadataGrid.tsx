@@ -7,7 +7,6 @@ import React, {
 } from "react";
 import { Table, Button, Popup } from "semantic-ui-react";
 import { Loader2, Circle } from "lucide-react";
-import { Spinner } from "@os-legal/ui";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -39,6 +38,7 @@ import { DocumentType, PageInfo } from "../../types/graphql-api";
 import { MetadataCellEditor } from "../metadata/editors/MetadataCellEditor";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { DEBOUNCE } from "../../assets/configurations/constants";
+import { InfoMessage, LoadingState } from "../widgets/feedback";
 
 interface DocumentMetadataGridProps {
   corpusId: string;
@@ -519,20 +519,7 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
   if (loading) {
     return (
       <GridContainer>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "3rem",
-          }}
-        >
-          <Spinner size="md" />
-          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-            Loading metadata...
-          </span>
-        </div>
+        <LoadingState message="Loading metadata..." />
       </GridContainer>
     );
   }
@@ -540,24 +527,13 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
   if (columns.length === 0) {
     return (
       <GridContainer>
-        <div
-          style={{
-            padding: "1rem",
-            background: "#f0f9ff",
-            border: "1px solid #bae6fd",
-            borderRadius: "6px",
-            color: "#0369a1",
-            margin: "1rem",
-          }}
+        <InfoMessage
+          title="No Metadata Fields Defined"
+          style={{ margin: "1rem" }}
         >
-          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-            No Metadata Fields Defined
-          </strong>
-          <p style={{ margin: 0 }}>
-            This corpus doesn't have any metadata fields yet. Go to corpus
-            settings to create metadata fields.
-          </p>
-        </div>
+          This corpus doesn't have any metadata fields yet. Go to corpus
+          settings to create metadata fields.
+        </InfoMessage>
       </GridContainer>
     );
   }

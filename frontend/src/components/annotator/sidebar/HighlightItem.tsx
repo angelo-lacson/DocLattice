@@ -1,7 +1,14 @@
 import React from "react";
-import { Label, Button, Popup, Icon, SemanticICONS } from "semantic-ui-react";
+import { Label, Button, Popup } from "semantic-ui-react";
 import styled from "styled-components";
-import { Trash2, ArrowRight, ArrowLeft } from "lucide-react";
+import {
+  Trash2,
+  ArrowRight,
+  ArrowLeft,
+  CheckSquare,
+  Square,
+} from "lucide-react";
+import { DynamicIcon } from "../../widgets/icon-picker/DynamicIcon";
 import { useLocation, useNavigate } from "react-router-dom";
 import { HorizontallyJustifiedDiv } from "./common";
 import { useAnnotationRefs } from "../hooks/useAnnotationRefs";
@@ -208,22 +215,23 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
     >
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
         {onToggleMultiSelect && (
-          <Icon
-            name={isMultiSelected ? "check square" : "square outline"}
-            size="large"
+          <span
             style={{
               cursor: "pointer",
               color: isMultiSelected ? "#3b82f6" : "#94a3b8",
+              display: "inline-flex",
             }}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onToggleMultiSelect();
             }}
-          />
+          >
+            {isMultiSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+          </span>
         )}
         <AnnotationLabel $labelColor={annotation.annotationLabel.color}>
           {annotation.annotationLabel.icon && (
-            <Icon name={annotation.annotationLabel.icon as SemanticICONS} />
+            <DynamicIcon name={annotation.annotationLabel.icon} size={14} />
           )}
           {annotation.annotationLabel.text}
         </AnnotationLabel>

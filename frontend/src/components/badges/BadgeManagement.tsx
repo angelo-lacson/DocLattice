@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import { Button, Table, Modal, Form, Dropdown } from "semantic-ui-react";
 import { Plus, Check, X, Trash2 } from "lucide-react";
-import { Input, Spinner } from "@os-legal/ui";
+import { Input } from "@os-legal/ui";
 import styled from "styled-components";
+import { StyledTextArea } from "../widgets/modals/styled";
+import { ErrorMessage, LoadingState } from "../widgets/feedback";
 import { Badge } from "./Badge";
 import { BadgeCriteriaConfig } from "./BadgeCriteriaConfig";
 import {
@@ -150,20 +152,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
   if (loading) {
     return (
       <Container>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "3rem",
-          }}
-        >
-          <Spinner size="md" />
-          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
-            Loading badges...
-          </span>
-        </div>
+        <LoadingState message="Loading badges..." />
       </Container>
     );
   }
@@ -171,20 +160,9 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
   if (error) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "6px",
-            color: "#991b1b",
-          }}
-        >
-          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
-            Error loading badges
-          </strong>
-          <p style={{ margin: 0 }}>{error.message}</p>
-        </div>
+        <ErrorMessage title="Error loading badges">
+          {error.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -295,20 +273,11 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
 
             <Form.Field required>
               <label>Description</label>
-              <textarea
+              <StyledTextArea
                 placeholder="Describe what this badge represents"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                style={{
-                  width: "100%",
-                  padding: "0.5rem",
-                  fontFamily: "inherit",
-                  fontSize: "0.875rem",
-                  border: "1px solid #d4d4d8",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                }}
               />
             </Form.Field>
 

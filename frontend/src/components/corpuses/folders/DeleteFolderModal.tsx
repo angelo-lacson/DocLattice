@@ -19,6 +19,7 @@ import {
   DeleteCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
+import { ErrorMessage } from "../../widgets/feedback";
 
 /**
  * DeleteFolderModal - Confirmation modal for deleting folders
@@ -244,20 +245,9 @@ export const DeleteFolderModal: React.FC = () => {
         </FolderInfo>
 
         {error && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              border: "1px solid #fca5a5",
-              borderRadius: "8px",
-              background: "#fef2f2",
-              color: "#991b1b",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-              Error Deleting Folder
-            </div>
-            <p>{error.message}</p>
-          </div>
+          <ErrorMessage title="Error Deleting Folder">
+            {error.message}
+          </ErrorMessage>
         )}
       </Modal.Content>
 

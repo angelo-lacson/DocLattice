@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
 import { Button, Modal } from "semantic-ui-react";
-import { Spinner } from "@os-legal/ui";
+import { ErrorMessage, LoadingState } from "../../widgets/feedback";
 import { formatDistanceToNow, format, isValid } from "date-fns";
 import {
   Trash2,
@@ -591,12 +591,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
   if (loading && !data) {
     return (
       <Container>
-        <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <Spinner size="lg" />
-          <div style={{ marginTop: "12px", color: "#64748b" }}>
-            Loading trash...
-          </div>
-        </div>
+        <LoadingState message="Loading trash..." size="lg" />
       </Container>
     );
   }
@@ -604,18 +599,9 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
   if (error) {
     return (
       <Container>
-        <div
-          style={{
-            padding: "1rem",
-            border: "1px solid #fecaca",
-            borderRadius: "8px",
-            background: "#fef2f2",
-            color: "#991b1b",
-          }}
-        >
-          <strong>Failed to load trash</strong>
-          <p>{error.message}</p>
-        </div>
+        <ErrorMessage title="Failed to load trash">
+          {error.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -698,21 +684,16 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
       {restoreError && (
         <div
           style={{
-            padding: "1rem",
-            border: "1px solid #fecaca",
-            borderRadius: "8px",
-            background: "#fef2f2",
-            color: "#991b1b",
             marginBottom: "16px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
+            gap: "0.5rem",
           }}
         >
-          <div>
-            <strong>Restore Failed</strong>
-            <p style={{ margin: "0.25em 0 0" }}>{restoreError}</p>
-          </div>
+          <ErrorMessage title="Restore Failed" style={{ flex: 1 }}>
+            {restoreError}
+          </ErrorMessage>
           <button
             onClick={() => setRestoreError(null)}
             style={{
@@ -720,7 +701,8 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               border: "none",
               cursor: "pointer",
               fontSize: "18px",
-              color: "inherit",
+              color: "#991b1b",
+              padding: "0.75rem 0.25rem 0",
             }}
           >
             &times;
@@ -899,34 +881,23 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           Empty Trash - Permanent Deletion
         </Modal.Header>
         <Modal.Content>
-          <div
-            style={{
-              padding: "1rem",
-              border: "1px solid #fecaca",
-              borderRadius: "8px",
-              background: "#fef2f2",
-              color: "#991b1b",
-            }}
-          >
-            <strong>This action cannot be undone!</strong>
-            <p>
+          <ErrorMessage title="This action cannot be undone!">
+            <>
               You are about to permanently delete{" "}
               <strong>{deletedDocuments.length}</strong>{" "}
               {deletedDocuments.length === 1 ? "document" : "documents"} from
               the trash. This will remove:
-            </p>
-            <ul>
-              <li>All document history and versions in this corpus</li>
-              <li>All annotations you created on these documents</li>
-              <li>All relationships involving those annotations</li>
-              <li>All document summary revisions</li>
-            </ul>
-            <p>
+              <ul>
+                <li>All document history and versions in this corpus</li>
+                <li>All annotations you created on these documents</li>
+                <li>All relationships involving those annotations</li>
+                <li>All document summary revisions</li>
+              </ul>
               <strong>
                 Documents that exist in other corpuses will NOT be affected.
               </strong>
-            </p>
-          </div>
+            </>
+          </ErrorMessage>
         </Modal.Content>
         <Modal.Actions>
           <Button onClick={() => setConfirmEmptyTrash(false)}>Cancel</Button>

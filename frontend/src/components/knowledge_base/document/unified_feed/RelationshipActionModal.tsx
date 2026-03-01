@@ -2,7 +2,6 @@ import React, { useState, useMemo } from "react";
 import { Modal, Button, Form, Dropdown, Radio } from "semantic-ui-react";
 import { Input } from "@os-legal/ui";
 import {
-  AlertCircle,
   ArrowRight,
   Target,
   Check,
@@ -23,6 +22,7 @@ import {
   SmartLabelSearchOrCreateInputs,
   SmartLabelSearchOrCreateOutputs,
 } from "../../../../graphql/mutations";
+import { ErrorMessage, WarningMessage } from "../../../widgets/feedback";
 
 interface RelationshipActionModalProps {
   open: boolean;
@@ -352,30 +352,13 @@ export const RelationshipActionModal: React.FC<
       </Modal.Header>
       <ModalContent>
         {!hasCorpus && (
-          <div
-            style={{
-              marginBottom: "1.5rem",
-              padding: "1rem",
-              background: "#fef2f2",
-              border: "2px solid #ef4444",
-              borderRadius: "8px",
-              color: "#991b1b",
-            }}
+          <ErrorMessage
+            title="No Corpus Selected"
+            style={{ marginBottom: "1.5rem" }}
           >
-            <AlertCircle
-              size={16}
-              style={{
-                display: "inline",
-                verticalAlign: "middle",
-                marginRight: "0.5rem",
-              }}
-            />
-            <strong>No Corpus Selected</strong>
-            <p style={{ marginTop: "0.5rem", marginBottom: 0 }}>
-              You must select a corpus to create or manage relationships.
-              Relationships require a corpus context and labelset.
-            </p>
-          </div>
+            You must select a corpus to create or manage relationships.
+            Relationships require a corpus context and labelset.
+          </ErrorMessage>
         )}
         <Form>
           {/* Mode Selection */}
@@ -470,28 +453,10 @@ export const RelationshipActionModal: React.FC<
                 {!newLabelId ? (
                   <>
                     {!hasLabelset && (
-                      <div
-                        style={{
-                          marginTop: "1rem",
-                          padding: "0.75rem",
-                          background: "#fef3c7",
-                          border: "1px solid #fbbf24",
-                          borderRadius: "6px",
-                          fontSize: "0.875rem",
-                          color: "#92400e",
-                        }}
-                      >
-                        <Info
-                          size={14}
-                          style={{
-                            display: "inline",
-                            verticalAlign: "middle",
-                            marginRight: "0.5rem",
-                          }}
-                        />
+                      <WarningMessage style={{ marginTop: "1rem" }}>
                         <strong>No labelset found.</strong> Creating a label
                         will automatically create a labelset for this corpus.
-                      </div>
+                      </WarningMessage>
                     )}
 
                     {!showCreateLabel ? (
