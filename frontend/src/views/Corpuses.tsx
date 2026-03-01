@@ -2746,15 +2746,9 @@ export const Corpuses = () => {
         {/* Navigation Sidebar */}
         <NavigationSidebar
           data-testid="navigation-sidebar"
-          $isExpanded={
-            use_mobile_layout ? mobileSidebarOpen : sidebarExpanded
-          }
+          $isExpanded={use_mobile_layout ? mobileSidebarOpen : sidebarExpanded}
           initial={{
-            width: use_mobile_layout
-              ? "0"
-              : sidebarExpanded
-              ? "280px"
-              : "80px",
+            width: use_mobile_layout ? "0" : sidebarExpanded ? "280px" : "80px",
           }}
           animate={{
             width: use_mobile_layout
@@ -2861,9 +2855,7 @@ export const Corpuses = () => {
                       </CollapsedBadge>
                     )}
                 </div>
-                {(use_mobile_layout
-                  ? mobileSidebarOpen
-                  : sidebarExpanded) && (
+                {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
                   <>
                     <span style={{ flex: "1", textAlign: "left" }}>
                       {item.label}
