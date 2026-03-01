@@ -5,18 +5,9 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import {
-  Table,
-  Loader,
-  Dimmer,
-  Button,
-  Icon,
-  Popup,
-  Input,
-  Checkbox,
-  Dropdown,
-  Message,
-} from "semantic-ui-react";
+import { Table, Button, Popup } from "semantic-ui-react";
+import { Loader2, Circle } from "lucide-react";
+import { Spinner } from "@os-legal/ui";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -528,9 +519,20 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
   if (loading) {
     return (
       <GridContainer>
-        <Dimmer active inverted>
-          <Loader>Loading metadata...</Loader>
-        </Dimmer>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "3rem",
+          }}
+        >
+          <Spinner size="md" />
+          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
+            Loading metadata...
+          </span>
+        </div>
       </GridContainer>
     );
   }
@@ -538,13 +540,24 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
   if (columns.length === 0) {
     return (
       <GridContainer>
-        <Message info>
-          <Message.Header>No Metadata Fields Defined</Message.Header>
-          <p>
+        <div
+          style={{
+            padding: "1rem",
+            background: "#f0f9ff",
+            border: "1px solid #bae6fd",
+            borderRadius: "6px",
+            color: "#0369a1",
+            margin: "1rem",
+          }}
+        >
+          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+            No Metadata Fields Defined
+          </strong>
+          <p style={{ margin: 0 }}>
             This corpus doesn't have any metadata fields yet. Go to corpus
             settings to create metadata fields.
           </p>
-        </Message>
+        </div>
       </GridContainer>
     );
   }
@@ -616,20 +629,21 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                               <span>
                                 {formatMetadataValue(value, column.dataType)}
                                 {isSaving && (
-                                  <Icon
-                                    name="spinner"
-                                    loading
-                                    size="tiny"
-                                    color="blue"
-                                    style={{ marginLeft: "0.5rem" }}
+                                  <Loader2
+                                    size={12}
+                                    color="#3b82f6"
+                                    style={{
+                                      marginLeft: "0.5rem",
+                                      animation: "spin 1s linear infinite",
+                                    }}
                                     data-testid="saving-indicator"
                                   />
                                 )}
                                 {isDirty && !isSaving && (
-                                  <Icon
-                                    name="circle"
-                                    size="tiny"
-                                    color="blue"
+                                  <Circle
+                                    size={8}
+                                    color="#3b82f6"
+                                    fill="#3b82f6"
                                     style={{ marginLeft: "0.5rem" }}
                                   />
                                 )}

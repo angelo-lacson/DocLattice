@@ -1,4 +1,5 @@
-import { Icon, Button } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
+import { DynamicIcon } from "../../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
 import { X } from "lucide-react";
 
@@ -128,10 +129,7 @@ export const RelationHighlightItem = ({
             }}
           >
             {annotation.annotationLabel.icon && (
-              <Icon
-                name={annotation.annotationLabel.icon}
-                style={{ margin: 0, fontSize: "0.85em" }}
-              />
+              <DynamicIcon name={annotation.annotationLabel.icon} size={12} />
             )}
             {annotation.annotationLabel.text}
           </AnnotationPill>

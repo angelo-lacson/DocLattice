@@ -1,15 +1,7 @@
 import React, { useState, useEffect } from "react";
-import {
-  Modal,
-  Form,
-  Button,
-  Icon,
-  Message,
-  Segment,
-  Label,
-  TextArea,
-} from "semantic-ui-react";
+import { Modal, Form, Button } from "semantic-ui-react";
 import styled from "styled-components";
+import { Database, Plus, Trash2, Save } from "lucide-react";
 import {
   MetadataColumn,
   MetadataDataType,
@@ -48,11 +40,11 @@ const dataTypeOptions = [
   { key: "JSON", value: "JSON", text: "JSON Data", icon: "code" },
 ];
 
-const ValidationSection = styled(Segment)`
-  &.ui.segment {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-  }
+const ValidationSection = styled.div`
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
 `;
 
 const ChoiceInput = styled.div`
@@ -68,6 +60,52 @@ const ChoiceInput = styled.div`
 
 const ChoiceList = styled.div`
   margin-top: 1rem;
+`;
+
+const ErrorChip = styled.span`
+  display: inline-block;
+  margin-left: 0.5em;
+  padding: 0.15em 0.5em;
+  font-size: 0.75rem;
+  color: #db2828;
+  background: #fff6f6;
+  border: 1px solid #e0b4b4;
+  border-radius: 4px;
+`;
+
+const InfoMessage = styled.div`
+  padding: 0.75rem 1rem;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  color: #0369a1;
+
+  strong {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+`;
+
+const HelpTextArea = styled.textarea`
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  }
 `;
 
 export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
@@ -281,11 +319,7 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
           <div>
             <label>
               <strong>Choices</strong>
-              {errors.choices && (
-                <Label pointing basic color="red" size="tiny">
-                  {errors.choices}
-                </Label>
-              )}
+              {errors.choices && <ErrorChip>{errors.choices}</ErrorChip>}
             </label>
             <ChoiceList>
               {choices.map((choice, index) => (
@@ -296,16 +330,18 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
                     placeholder={`Choice ${index + 1}`}
                   />
                   <Button
-                    icon="trash"
+                    icon
                     size="tiny"
                     negative
                     disabled={choices.length === 1}
                     onClick={() => removeChoice(index)}
-                  />
+                  >
+                    <Trash2 size={14} />
+                  </Button>
                 </ChoiceInput>
               ))}
               <Button size="small" onClick={addChoice}>
-                <Icon name="plus" />
+                <Plus size={14} style={{ marginRight: "0.5rem" }} />
                 Add Choice
               </Button>
             </ChoiceList>
@@ -329,7 +365,10 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
   return (
     <Modal open={open} onClose={onClose} size="small">
       <Modal.Header>
-        <Icon name="database" />
+        <Database
+          size={16}
+          style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+        />
         {column ? "Edit Metadata Field" : "Create Metadata Field"}
       </Modal.Header>
       <Modal.Content>
@@ -356,10 +395,12 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 
           <Form.Field>
             <label htmlFor="metadata-help-text">Help Text</label>
-            <TextArea
+            <HelpTextArea
               id="metadata-help-text"
               value={helpText}
-              onChange={(e, { value }) => setHelpText(value as string)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setHelpText(e.target.value)
+              }
               placeholder="Provide guidance for users filling out this field..."
               rows={2}
             />
@@ -378,20 +419,20 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 
           {dataType !== MetadataDataType.BOOLEAN &&
             !["CHOICE", "MULTI_CHOICE"].includes(dataType) && (
-              <Message info>
-                <Message.Header>Default Value</Message.Header>
+              <InfoMessage>
+                <strong>Default Value</strong>
                 <p>
                   You can set default values for individual documents when
                   editing metadata.
                 </p>
-              </Message>
+              </InfoMessage>
             )}
         </Form>
       </Modal.Content>
       <Modal.Actions>
         <Button onClick={onClose}>Cancel</Button>
         <Button primary onClick={handleSave}>
-          <Icon name="save" />
+          <Save size={14} style={{ marginRight: "0.5rem" }} />
           {column ? "Update Field" : "Create Field"}
         </Button>
       </Modal.Actions>

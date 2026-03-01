@@ -2,7 +2,7 @@
  * CorpusActionsSection - Corpus actions list with add/edit/delete functionality
  */
 import React from "react";
-import { Button, Icon } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
 import {
   Plus,
   Play,
@@ -90,8 +90,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
       <SettingsCardHeader>
         <SettingsCardTitle>Corpus Actions</SettingsCardTitle>
         <Button primary size="small" onClick={onAddAction}>
-          <Icon name="plus" />
-          Add Action
+          <Plus size={14} /> Add Action
         </Button>
       </SettingsCardHeader>
 
@@ -244,7 +243,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                         }
                         onClick={() => onRunAction?.(action)}
                       >
-                        <Icon name="play" />
+                        <Play size={14} />
                       </Button>
                     )}
 
@@ -256,7 +255,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       }
                       title="Edit action"
                     >
-                      <Icon name="edit" />
+                      <Edit size={14} />
                     </Button>
 
                     <Button
@@ -266,7 +265,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       onClick={() => onDeleteAction(action.id)}
                       title="Delete action"
                     >
-                      <Icon name="trash" />
+                      <Trash2 size={14} />
                     </Button>
                   </div>
                 </div>

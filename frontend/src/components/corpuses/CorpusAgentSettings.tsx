@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Form, Button, Message, TextArea, Header } from "semantic-ui-react";
+import { Form, Button } from "semantic-ui-react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -116,19 +116,33 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
   if (!canUpdate) {
     return (
       <Container>
-        <Message info>
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            border: "1px solid #93c5fd",
+            borderRadius: "8px",
+            background: "#eff6ff",
+            color: "#1e40af",
+          }}
+        >
           You do not have permission to update agent instructions for this
           corpus.
-        </Message>
+        </div>
       </Container>
     );
   }
 
   return (
     <Container>
-      <Header as="h3" style={{ marginTop: 0 }}>
+      <h3
+        style={{
+          margin: "0 0 0.5rem 0",
+          fontSize: "1.25rem",
+          fontWeight: 600,
+        }}
+      >
         Agent Instructions
-      </Header>
+      </h3>
       <HelperText>
         Customize how AI agents behave when analyzing this corpus and its
         documents. Leave blank to use system defaults.
@@ -137,7 +151,15 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
       <Form>
         <Section>
           <SectionHeader>
-            <Header as="h4">Corpus Agent Instructions</Header>
+            <h4
+              style={{
+                margin: "0 0 0.5rem 0",
+                fontSize: "1.1rem",
+                fontWeight: 600,
+              }}
+            >
+              Corpus Agent Instructions
+            </h4>
             <HelperText>
               Controls how the corpus-level agent behaves when answering
               questions about the collection of documents. Default instructions
@@ -145,7 +167,7 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
               description is empty.
             </HelperText>
           </SectionHeader>
-          <TextArea
+          <Form.TextArea
             placeholder="Leave blank to use default instructions..."
             value={corpusInstructions}
             onChange={(e) => handleCorpusInstructionsChange(e.target.value)}
@@ -156,14 +178,22 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
 
         <Section>
           <SectionHeader>
-            <Header as="h4">Document Agent Instructions</Header>
+            <h4
+              style={{
+                margin: "0 0 0.5rem 0",
+                fontSize: "1.1rem",
+                fontWeight: 600,
+              }}
+            >
+              Document Agent Instructions
+            </h4>
             <HelperText>
               Controls how document-level agents behave when analyzing
               individual documents in this corpus. Default instructions
               emphasize using tools and citing sources with page numbers.
             </HelperText>
           </SectionHeader>
-          <TextArea
+          <Form.TextArea
             placeholder="Leave blank to use default instructions..."
             value={documentInstructions}
             onChange={(e) => handleDocumentInstructionsChange(e.target.value)}

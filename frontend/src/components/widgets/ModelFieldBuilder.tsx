@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Form, Grid } from "semantic-ui-react";
+import { Button, Form } from "semantic-ui-react";
 import { motion, AnimatePresence } from "framer-motion";
 import styled from "styled-components";
 
@@ -146,51 +146,56 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
         <AnimatePresence>
           {fields.map((field, index) => (
             <FieldRow key={field.id} variants={fieldVariants} layout>
-              <Grid>
-                <Grid.Row verticalAlign="middle">
-                  <Grid.Column width={6}>
-                    <Form.Input
-                      placeholder="Field Name"
-                      value={field.fieldName}
-                      onChange={(e, { value }) =>
-                        updateField(index, "fieldName", value)
-                      }
-                      required
-                      fluid
-                      label="Field Name"
-                    />
-                  </Grid.Column>
-                  <Grid.Column width={6}>
-                    <Form.Select
-                      placeholder="Field Type"
-                      value={field.fieldType}
-                      options={[
-                        { key: "int", text: "Integer", value: "int" },
-                        { key: "float", text: "Float", value: "float" },
-                        { key: "str", text: "String", value: "str" },
-                        { key: "bool", text: "Boolean", value: "bool" },
-                      ]}
-                      onChange={(e, data) =>
-                        updateField(index, "fieldType", data.value as string)
-                      }
-                      required
-                      fluid
-                      label="Field Type"
-                    />
-                  </Grid.Column>
-                  <Grid.Column width={4} textAlign="center">
-                    <DeleteButton
-                      icon="trash"
-                      color="red"
-                      circular
-                      onClick={() => removeField(index)}
-                      as={motion.button}
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.95 }}
-                    />
-                  </Grid.Column>
-                </Grid.Row>
-              </Grid>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "6fr 6fr 4fr",
+                  gap: "1rem",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <Form.Input
+                    placeholder="Field Name"
+                    value={field.fieldName}
+                    onChange={(e, { value }) =>
+                      updateField(index, "fieldName", value)
+                    }
+                    required
+                    fluid
+                    label="Field Name"
+                  />
+                </div>
+                <div>
+                  <Form.Select
+                    placeholder="Field Type"
+                    value={field.fieldType}
+                    options={[
+                      { key: "int", text: "Integer", value: "int" },
+                      { key: "float", text: "Float", value: "float" },
+                      { key: "str", text: "String", value: "str" },
+                      { key: "bool", text: "Boolean", value: "bool" },
+                    ]}
+                    onChange={(e, data) =>
+                      updateField(index, "fieldType", data.value as string)
+                    }
+                    required
+                    fluid
+                    label="Field Type"
+                  />
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <DeleteButton
+                    icon="trash"
+                    color="red"
+                    circular
+                    onClick={() => removeField(index)}
+                    as={motion.button}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                  />
+                </div>
+              </div>
             </FieldRow>
           ))}
         </AnimatePresence>

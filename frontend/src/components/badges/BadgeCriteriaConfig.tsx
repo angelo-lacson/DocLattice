@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
-import { Form, Dropdown, Input, Message } from "semantic-ui-react";
+import { Form, Dropdown, Input } from "semantic-ui-react";
 import {
   GET_BADGE_CRITERIA_TYPES,
   GetBadgeCriteriaTypesInput,
@@ -176,20 +176,40 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
   // Show loading state
   if (loading) {
     return (
-      <Message info>
-        <Message.Header>Loading Criteria Types</Message.Header>
+      <div
+        style={{
+          padding: "0.75rem 1rem",
+          border: "1px solid #93c5fd",
+          borderRadius: "8px",
+          background: "#eff6ff",
+          color: "#1e40af",
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+          Loading Criteria Types
+        </div>
         <p>Fetching available auto-award criteria...</p>
-      </Message>
+      </div>
     );
   }
 
   // Show error state
   if (error) {
     return (
-      <Message negative>
-        <Message.Header>Error Loading Criteria Types</Message.Header>
+      <div
+        style={{
+          padding: "0.75rem 1rem",
+          border: "1px solid #fca5a5",
+          borderRadius: "8px",
+          background: "#fef2f2",
+          color: "#991b1b",
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+          Error Loading Criteria Types
+        </div>
         <p>{error.message}</p>
-      </Message>
+      </div>
     );
   }
 
@@ -198,13 +218,23 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
   if (implementedTypes.length === 0) {
     return (
-      <Message warning>
-        <Message.Header>No Criteria Types Available</Message.Header>
+      <div
+        style={{
+          padding: "0.75rem 1rem",
+          border: "1px solid #fcd34d",
+          borderRadius: "8px",
+          background: "#fffbeb",
+          color: "#92400e",
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+          No Criteria Types Available
+        </div>
         <p>
           There are no criteria types available for {badgeType.toLowerCase()}{" "}
           badges yet.
         </p>
-      </Message>
+      </div>
     );
   }
 
@@ -233,10 +263,20 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
       {currentType && (
         <>
-          <Message info>
-            <Message.Header>{currentType.name}</Message.Header>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              border: "1px solid #93c5fd",
+              borderRadius: "8px",
+              background: "#eff6ff",
+              color: "#1e40af",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+              {currentType.name}
+            </div>
             <p>{currentType.description}</p>
-          </Message>
+          </div>
 
           {currentType.fields.map((field) => (
             <Form.Field
@@ -333,14 +373,24 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
           ))}
 
           {Object.keys(validationErrors).length > 0 && (
-            <Message negative>
-              <Message.Header>Validation Errors</Message.Header>
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                border: "1px solid #fca5a5",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                color: "#991b1b",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                Validation Errors
+              </div>
               <ul>
                 {Object.values(validationErrors).map((error, idx) => (
                   <li key={idx}>{error}</li>
                 ))}
               </ul>
-            </Message>
+            </div>
           )}
         </>
       )}

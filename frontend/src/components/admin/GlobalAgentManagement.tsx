@@ -1,24 +1,11 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-import {
-  Button,
-  Table,
-  Header,
-  Message,
-  Dimmer,
-  Loader,
-  Segment,
-  Icon,
-  Modal,
-  Form,
-  Input,
-  TextArea,
-  Checkbox,
-  Label,
-} from "semantic-ui-react";
+import { Button, Table, Modal, Form } from "semantic-ui-react";
 import styled from "styled-components";
 import { gql } from "@apollo/client";
 import { toast } from "react-toastify";
+import { Plus, Edit, Trash2, Cpu } from "lucide-react";
+import { Input, Spinner } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { AgentConfigurationType } from "../../types/graphql-api";
 
@@ -146,28 +133,30 @@ const PageHeader = styled.div`
   margin-bottom: 2rem;
 `;
 
-const PageTitle = styled(Header)`
-  &.ui.header {
-    margin: 0;
-    color: #1e293b;
-  }
+const PageTitle = styled.h1`
+  margin: 0;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
-const StyledSegment = styled(Segment)`
-  &.ui.segment {
-    border-radius: 12px;
-    background: white;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
+const StyledSegment = styled.div`
+  padding: 1rem;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
 
-const StatusBadge = styled(Label)<{ $active: boolean }>`
-  &.ui.label {
-    background: ${(props) => (props.$active ? "#dcfce7" : "#fef3c7")};
-    color: ${(props) => (props.$active ? "#166534" : "#92400e")};
-    font-weight: 500;
-  }
+const StatusBadge = styled.span<{ $active: boolean }>`
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 4px;
+  background: ${(props) => (props.$active ? "#dcfce7" : "#fef3c7")};
+  color: ${(props) => (props.$active ? "#166534" : "#92400e")};
 `;
 
 const ToolsList = styled.div`
@@ -176,12 +165,14 @@ const ToolsList = styled.div`
   gap: 0.25rem;
 `;
 
-const ToolBadge = styled(Label)`
-  &.ui.label {
-    font-size: 0.75rem;
-    background: #f1f5f9;
-    color: #475569;
-  }
+const ToolBadge = styled.span`
+  display: inline-block;
+  padding: 0.15em 0.4em;
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
 `;
 
 interface AgentNode {
@@ -384,9 +375,20 @@ export const GlobalAgentManagement: React.FC = () => {
   if (loading) {
     return (
       <Container>
-        <Dimmer active inverted>
-          <Loader>Loading agents...</Loader>
-        </Dimmer>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "3rem",
+          }}
+        >
+          <Spinner size="md" />
+          <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
+            Loading agents...
+          </span>
+        </div>
       </Container>
     );
   }
@@ -394,10 +396,20 @@ export const GlobalAgentManagement: React.FC = () => {
   if (error) {
     return (
       <Container>
-        <Message negative>
-          <Message.Header>Error loading agents</Message.Header>
-          <p>{error.message}</p>
-        </Message>
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "6px",
+            color: "#991b1b",
+          }}
+        >
+          <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+            Error loading agents
+          </strong>
+          <p style={{ margin: 0 }}>{error.message}</p>
+        </div>
       </Container>
     );
   }
@@ -405,8 +417,8 @@ export const GlobalAgentManagement: React.FC = () => {
   return (
     <Container>
       <PageHeader>
-        <PageTitle as="h1">
-          <Icon name="microchip" /> Global Agent Management
+        <PageTitle>
+          <Cpu size={24} /> Global Agent Management
         </PageTitle>
         <Button
           primary
@@ -417,20 +429,30 @@ export const GlobalAgentManagement: React.FC = () => {
             setShowCreateModal(true);
           }}
         >
-          <Icon name="plus" />
+          <Plus size={14} />
           Create Agent
         </Button>
       </PageHeader>
 
       <StyledSegment>
         {agents.length === 0 ? (
-          <Message info>
-            <Message.Header>No Global Agents</Message.Header>
-            <p>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              background: "#f0f9ff",
+              border: "1px solid #bae6fd",
+              borderRadius: "6px",
+              color: "#0369a1",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: "0.25rem" }}>
+              No Global Agents
+            </strong>
+            <p style={{ margin: 0 }}>
               Create your first global agent to make it available across all
               corpuses.
             </p>
-          </Message>
+          </div>
         ) : (
           <Table basic="very" celled>
             <Table.Header>
@@ -464,15 +486,13 @@ export const GlobalAgentManagement: React.FC = () => {
                       )
                         .slice(0, 3)
                         .map((tool) => (
-                          <ToolBadge key={tool} size="tiny">
-                            {tool}
-                          </ToolBadge>
+                          <ToolBadge key={tool}>{tool}</ToolBadge>
                         ))}
                       {(Array.isArray(agent.availableTools)
                         ? agent.availableTools
                         : []
                       ).length > 3 && (
-                        <ToolBadge size="tiny">
+                        <ToolBadge>
                           +
                           {(Array.isArray(agent.availableTools)
                             ? agent.availableTools
@@ -493,7 +513,7 @@ export const GlobalAgentManagement: React.FC = () => {
                       size="tiny"
                       onClick={() => openEditModal(agent)}
                     >
-                      <Icon name="edit" />
+                      <Edit size={14} />
                     </Button>
                     <Button
                       icon
@@ -504,7 +524,7 @@ export const GlobalAgentManagement: React.FC = () => {
                         setDeleteModalOpen(true);
                       }}
                     >
-                      <Icon name="trash" />
+                      <Trash2 size={14} />
                     </Button>
                   </Table.Cell>
                 </Table.Row>
@@ -526,27 +546,37 @@ export const GlobalAgentManagement: React.FC = () => {
             <Form.Field required>
               <label>Name</label>
               <Input
+                fullWidth
                 placeholder="Agent name"
                 value={formState.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <TextArea
+              <textarea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={2}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "inherit",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <TextArea
+              <textarea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -556,15 +586,24 @@ export const GlobalAgentManagement: React.FC = () => {
                   })
                 }
                 rows={6}
-                style={{ fontFamily: "monospace" }}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "monospace",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
             <Form.Field>
               <label>Available Tools (comma-separated)</label>
               <Input
+                fullWidth
                 placeholder="similarity_search, load_document_text, search_exact_text"
                 value={formState.availableTools}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, availableTools: e.target.value })
                 }
               />
@@ -572,9 +611,10 @@ export const GlobalAgentManagement: React.FC = () => {
             <Form.Field>
               <label>Permission Required Tools (comma-separated)</label>
               <Input
+                fullWidth
                 placeholder="Tools that require explicit permission"
                 value={formState.permissionRequiredTools}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({
                     ...formState,
                     permissionRequiredTools: e.target.value,
@@ -584,34 +624,53 @@ export const GlobalAgentManagement: React.FC = () => {
             </Form.Field>
             <Form.Field>
               <label>Badge Config (JSON)</label>
-              <TextArea
+              <textarea
                 placeholder='{"icon": "robot", "color": "#6366f1", "label": "AI"}'
                 value={formState.badgeConfig}
                 onChange={(e) =>
                   setFormState({ ...formState, badgeConfig: e.target.value })
                 }
                 rows={3}
-                style={{ fontFamily: "monospace" }}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "monospace",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
             <Form.Field>
               <label>Avatar URL</label>
               <Input
+                fullWidth
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
               />
             </Form.Field>
             <Form.Field>
-              <Checkbox
-                label="Publicly visible"
-                checked={formState.isPublic}
-                onChange={(_, data) =>
-                  setFormState({ ...formState, isPublic: !!data.checked })
-                }
-              />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formState.isPublic}
+                  onChange={(e) =>
+                    setFormState({ ...formState, isPublic: e.target.checked })
+                  }
+                />
+                Publicly visible
+              </label>
             </Form.Field>
           </Form>
         </Modal.Content>
@@ -644,27 +703,37 @@ export const GlobalAgentManagement: React.FC = () => {
             <Form.Field required>
               <label>Name</label>
               <Input
+                fullWidth
                 placeholder="Agent name"
                 value={formState.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <TextArea
+              <textarea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
                   setFormState({ ...formState, description: e.target.value })
                 }
                 rows={2}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "inherit",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <TextArea
+              <textarea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -674,15 +743,24 @@ export const GlobalAgentManagement: React.FC = () => {
                   })
                 }
                 rows={6}
-                style={{ fontFamily: "monospace" }}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "monospace",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
             <Form.Field>
               <label>Available Tools (comma-separated)</label>
               <Input
+                fullWidth
                 placeholder="similarity_search, load_document_text, search_exact_text"
                 value={formState.availableTools}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, availableTools: e.target.value })
                 }
               />
@@ -690,9 +768,10 @@ export const GlobalAgentManagement: React.FC = () => {
             <Form.Field>
               <label>Permission Required Tools (comma-separated)</label>
               <Input
+                fullWidth
                 placeholder="Tools that require explicit permission"
                 value={formState.permissionRequiredTools}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({
                     ...formState,
                     permissionRequiredTools: e.target.value,
@@ -702,44 +781,73 @@ export const GlobalAgentManagement: React.FC = () => {
             </Form.Field>
             <Form.Field>
               <label>Badge Config (JSON)</label>
-              <TextArea
+              <textarea
                 placeholder='{"icon": "robot", "color": "#6366f1", "label": "AI"}'
                 value={formState.badgeConfig}
                 onChange={(e) =>
                   setFormState({ ...formState, badgeConfig: e.target.value })
                 }
                 rows={3}
-                style={{ fontFamily: "monospace" }}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontFamily: "monospace",
+                  fontSize: "0.875rem",
+                  border: "1px solid #d4d4d8",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                }}
               />
             </Form.Field>
             <Form.Field>
               <label>Avatar URL</label>
               <Input
+                fullWidth
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
               />
             </Form.Field>
             <Form.Group>
               <Form.Field>
-                <Checkbox
-                  label="Active"
-                  checked={formState.isActive}
-                  onChange={(_, data) =>
-                    setFormState({ ...formState, isActive: !!data.checked })
-                  }
-                />
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formState.isActive}
+                    onChange={(e) =>
+                      setFormState({ ...formState, isActive: e.target.checked })
+                    }
+                  />
+                  Active
+                </label>
               </Form.Field>
               <Form.Field>
-                <Checkbox
-                  label="Publicly visible"
-                  checked={formState.isPublic}
-                  onChange={(_, data) =>
-                    setFormState({ ...formState, isPublic: !!data.checked })
-                  }
-                />
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formState.isPublic}
+                    onChange={(e) =>
+                      setFormState({ ...formState, isPublic: e.target.checked })
+                    }
+                  />
+                  Publicly visible
+                </label>
               </Form.Field>
             </Form.Group>
           </Form>

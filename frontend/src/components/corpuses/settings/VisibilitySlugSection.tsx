@@ -6,7 +6,7 @@
  * - #corpus-slug-input
  */
 import React from "react";
-import { Button, Icon } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
 import { Save, AlertTriangle } from "lucide-react";
 import {
   SettingsCard,
@@ -117,7 +117,7 @@ export const VisibilitySlugSection: React.FC<VisibilitySlugSectionProps> = ({
               cursor: hasNoPermissions ? "not-allowed" : undefined,
             }}
           >
-            <Icon name="save" /> Save Changes
+            <Save size={16} /> Save Changes
           </Button>
         </div>
       </SettingsCardContent>

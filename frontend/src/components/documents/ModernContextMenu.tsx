@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import styled, { keyframes } from "styled-components";
-import { Icon } from "semantic-ui-react";
+import { DynamicIcon } from "../widgets/icon-picker/DynamicIcon";
 
 const slideIn = keyframes`
   from {
@@ -204,7 +204,7 @@ export const ModernContextMenu: React.FC<ModernContextMenuProps> = ({
             }}
             disabled={item.disabled}
           >
-            <Icon name={item.icon as any} className="icon" />
+            <DynamicIcon name={item.icon} size={16} className="icon" />
             {item.label}
           </MenuItem>
           {item.dividerAfter && <MenuDivider />}

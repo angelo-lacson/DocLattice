@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Dropdown, DropdownProps, Header } from "semantic-ui-react";
+import { Dropdown, DropdownProps } from "semantic-ui-react";
 import { useQuery } from "@apollo/client";
 import _ from "lodash";
 import {
@@ -113,7 +113,19 @@ export const ExtractTaskDropdown: React.FC<ExtractTaskDropdownProps> = ({
         key: task.name,
         text: task.name,
         value: task.name,
-        content: <Header content={task.name} subheader={task.description} />,
+        content: (
+          <div>
+            <div className="header" style={{ fontWeight: 600 }}>
+              {task.name}
+            </div>
+            <div
+              className="sub header"
+              style={{ fontSize: "0.8em", color: "rgba(0, 0, 0, 0.6)" }}
+            >
+              {task.description}
+            </div>
+          </div>
+        ),
       })),
     [tasks]
   );

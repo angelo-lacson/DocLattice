@@ -11,16 +11,13 @@ import {
   Button,
   Modal,
   Form,
-  Input,
   Table,
   Dropdown,
-  Dimmer,
-  Loader,
-  Message,
   Confirm,
-  Icon,
 } from "semantic-ui-react";
-import { Copy, Check, Key } from "lucide-react";
+import { Input } from "@os-legal/ui";
+import { Spinner } from "@os-legal/ui";
+import { Copy, Check, Key, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 import styled from "styled-components";
 
@@ -387,10 +384,18 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
 
   if (numericCorpusId === null) {
     return (
-      <Message negative>
-        <Message.Header>Invalid corpus ID</Message.Header>
+      <div
+        style={{
+          padding: "1rem",
+          border: "1px solid #fecaca",
+          borderRadius: "8px",
+          background: "#fef2f2",
+          color: "#991b1b",
+        }}
+      >
+        <strong>Invalid corpus ID</strong>
         <p>Unable to parse the corpus identifier.</p>
-      </Message>
+      </div>
     );
   }
 
@@ -408,7 +413,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
               size="small"
               onClick={() => setShowCreateModal(true)}
             >
-              <Icon name="plus" />
+              <Plus size={14} style={{ marginRight: "4px" }} />
               Create Token
             </Button>
           )}
@@ -423,27 +428,46 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
           </InfoNote>
 
           {loadingTokens && (
-            <Dimmer active inverted>
-              <Loader>Loading tokens...</Loader>
-            </Dimmer>
+            <div style={{ textAlign: "center", padding: "2rem" }}>
+              <Spinner size="md" />
+              <div style={{ marginTop: "12px", color: "#64748b" }}>
+                Loading tokens...
+              </div>
+            </div>
           )}
 
           {tokensError && (
-            <Message negative>
-              <Message.Header>Error loading tokens</Message.Header>
+            <div
+              style={{
+                padding: "1rem",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                color: "#991b1b",
+              }}
+            >
+              <strong>Error loading tokens</strong>
               <p>{tokensError.message}</p>
-            </Message>
+            </div>
           )}
 
           {!loadingTokens && !tokensError && tokens.length === 0 && (
-            <Message info>
-              <Message.Header>No Access Tokens</Message.Header>
+            <div
+              style={{
+                padding: "1rem",
+                border: "1px solid #bfdbfe",
+                borderRadius: "8px",
+                background: "#eff6ff",
+                color: "#1e40af",
+              }}
+            >
+              <strong>No Access Tokens</strong>
               <p>
                 {isSuperuser || isCreator
                   ? "Create a token to allow a worker account to upload documents to this corpus."
                   : "No access tokens have been created for this corpus yet. Contact an administrator to create one."}
               </p>
-            </Message>
+            </div>
           )}
 
           {!loadingTokens && !tokensError && tokens.length > 0 && (
@@ -541,9 +565,12 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
         <Modal.Header>Create Access Token</Modal.Header>
         <Modal.Content>
           {loadingAccounts ? (
-            <Dimmer active inverted>
-              <Loader>Loading worker accounts...</Loader>
-            </Dimmer>
+            <div style={{ textAlign: "center", padding: "2rem" }}>
+              <Spinner size="md" />
+              <div style={{ marginTop: "12px", color: "#64748b" }}>
+                Loading worker accounts...
+              </div>
+            </div>
           ) : (
             <Form>
               <Form.Field required>
@@ -566,8 +593,9 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
                 <label>Expiry Date (optional)</label>
                 <Input
                   type="datetime-local"
+                  fullWidth
                   value={formState.expiresAt}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormState({ ...formState, expiresAt: e.target.value })
                   }
                 />
@@ -576,9 +604,10 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
                 <label>Rate Limit (requests/min, 0 = unlimited)</label>
                 <Input
                   type="number"
+                  fullWidth
                   min={0}
                   value={formState.rateLimitPerMinute}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormState({
                       ...formState,
                       rateLimitPerMinute: parseInt(e.target.value, 10) || 0,

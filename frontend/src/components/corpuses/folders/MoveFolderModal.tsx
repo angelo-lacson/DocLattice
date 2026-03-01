@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button, Message, Dropdown } from "semantic-ui-react";
+import { Modal, Button, Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, Folder, Home } from "lucide-react";
 import {
@@ -276,17 +276,37 @@ export const MoveFolderModal: React.FC = () => {
         </div>
 
         {validationError && (
-          <Message error>
-            <Message.Header>Cannot Move Folder</Message.Header>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              border: "1px solid #fca5a5",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              color: "#991b1b",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+              Cannot Move Folder
+            </div>
             <p>{validationError}</p>
-          </Message>
+          </div>
         )}
 
         {error && (
-          <Message error>
-            <Message.Header>Error Moving Folder</Message.Header>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              border: "1px solid #fca5a5",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              color: "#991b1b",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+              Error Moving Folder
+            </div>
             <p>{error.message}</p>
-          </Message>
+          </div>
         )}
       </Modal.Content>
 

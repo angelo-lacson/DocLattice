@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Form, Button, Message } from "semantic-ui-react";
+import { Modal, Form, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X } from "lucide-react";
 import {
@@ -238,9 +238,18 @@ export const CreateFolderModal: React.FC = () => {
       <Modal.Content>
         <Form onSubmit={handleSubmit} error={!!validationError || !!error}>
           {parentFolder && (
-            <Message info>
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                border: "1px solid #93c5fd",
+                borderRadius: "8px",
+                background: "#eff6ff",
+                color: "#1e40af",
+                marginBottom: "1rem",
+              }}
+            >
               Creating folder inside: <strong>{parentFolder.name}</strong>
-            </Message>
+            </div>
           )}
 
           <Form.Field required>
@@ -321,17 +330,37 @@ export const CreateFolderModal: React.FC = () => {
           </Form.Field>
 
           {validationError && (
-            <Message error>
-              <Message.Header>Validation Error</Message.Header>
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                border: "1px solid #fca5a5",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                color: "#991b1b",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                Validation Error
+              </div>
               <p>{validationError}</p>
-            </Message>
+            </div>
           )}
 
           {error && (
-            <Message error>
-              <Message.Header>Error Creating Folder</Message.Header>
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                border: "1px solid #fca5a5",
+                borderRadius: "8px",
+                background: "#fef2f2",
+                color: "#991b1b",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                Error Creating Folder
+              </div>
               <p>{error.message}</p>
-            </Message>
+            </div>
           )}
         </Form>
       </Modal.Content>

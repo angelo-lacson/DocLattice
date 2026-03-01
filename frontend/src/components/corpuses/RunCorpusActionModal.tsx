@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
-import { Button, Dropdown, Message, Modal } from "semantic-ui-react";
+import { Button, Dropdown, Modal } from "semantic-ui-react";
 import { toast } from "react-toastify";
 
 import { CORPUS_DOCUMENTS_TOC_LIMIT } from "../../assets/configurations/constants";
@@ -91,10 +91,20 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
       <Modal.Content>
         <p>Select a document to run this action against:</p>
         {docsError && (
-          <Message negative>
-            <Message.Header>Failed to load documents</Message.Header>
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              border: "1px solid #fca5a5",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              color: "#991b1b",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+              Failed to load documents
+            </div>
             <p>Please try again or check your permissions for this corpus.</p>
-          </Message>
+          </div>
         )}
         <Dropdown
           placeholder="Select document..."
@@ -107,10 +117,19 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
           onChange={(_, { value }) => setSelectedDocId(value as string)}
         />
         {isLimitExceeded && (
-          <Message info size="small">
+          <div
+            style={{
+              padding: "0.75rem 1rem",
+              border: "1px solid #93c5fd",
+              borderRadius: "8px",
+              background: "#eff6ff",
+              color: "#1e40af",
+              fontSize: "0.875rem",
+            }}
+          >
             Showing first {CORPUS_DOCUMENTS_TOC_LIMIT} of {totalCount}{" "}
             documents. Use the search box above to filter.
-          </Message>
+          </div>
         )}
       </Modal.Content>
       <Modal.Actions>

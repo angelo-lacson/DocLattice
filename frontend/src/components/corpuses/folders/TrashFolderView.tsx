@@ -1,16 +1,21 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
-import {
-  Icon,
-  Button,
-  Loader,
-  Message,
-  Checkbox,
-  Modal,
-} from "semantic-ui-react";
+import { Button, Modal } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import { formatDistanceToNow, format, isValid } from "date-fns";
-import { Trash2, RotateCcw, Archive, FolderOpen } from "lucide-react";
+import {
+  Trash2,
+  RotateCcw,
+  Archive,
+  FolderOpen,
+  ArrowLeft,
+  Undo2,
+  AlertTriangle,
+  Calendar,
+  User,
+  FileText,
+} from "lucide-react";
 import {
   GET_DELETED_DOCUMENTS_IN_CORPUS,
   DeletedDocumentPathType,
@@ -587,9 +592,10 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
     return (
       <Container>
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <Loader active inline="centered" size="large">
+          <Spinner size="lg" />
+          <div style={{ marginTop: "12px", color: "#64748b" }}>
             Loading trash...
-          </Loader>
+          </div>
         </div>
       </Container>
     );
@@ -598,10 +604,18 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
   if (error) {
     return (
       <Container>
-        <Message negative>
-          <Message.Header>Failed to load trash</Message.Header>
+        <div
+          style={{
+            padding: "1rem",
+            border: "1px solid #fecaca",
+            borderRadius: "8px",
+            background: "#fef2f2",
+            color: "#991b1b",
+          }}
+        >
+          <strong>Failed to load trash</strong>
           <p>{error.message}</p>
-        </Message>
+        </div>
       </Container>
     );
   }
@@ -628,8 +642,8 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         <ActionBar>
           {onBack && (
             <Button basic onClick={onBack} title="Back to Folders">
-              <Icon name="arrow left" />
-              <span className="hide-mobile-text">Back</span>
+              <ArrowLeft size={16} />
+              <span className="hide-mobile-text"> Back</span>
             </Button>
           )}
           {deletedDocuments.length > 0 && (
@@ -641,33 +655,77 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               loading={emptyTrashLoading}
               title="Permanently delete all items in trash"
             >
-              <Icon name="trash" />
-              <span className="hide-mobile-text">Empty Trash</span>
+              <Trash2 size={16} />
+              <span className="hide-mobile-text"> Empty Trash</span>
             </Button>
           )}
         </ActionBar>
       </Header>
 
       {restoreSuccess && (
-        <Message
-          positive
-          onDismiss={() => setRestoreSuccess(null)}
-          style={{ marginBottom: "16px" }}
+        <div
+          style={{
+            padding: "1rem",
+            border: "1px solid #bbf7d0",
+            borderRadius: "8px",
+            background: "#f0fdf4",
+            color: "#166534",
+            marginBottom: "16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
         >
-          <Message.Header>Success</Message.Header>
-          <p>{restoreSuccess}</p>
-        </Message>
+          <div>
+            <strong>Success</strong>
+            <p style={{ margin: "0.25em 0 0" }}>{restoreSuccess}</p>
+          </div>
+          <button
+            onClick={() => setRestoreSuccess(null)}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "18px",
+              color: "inherit",
+            }}
+          >
+            &times;
+          </button>
+        </div>
       )}
 
       {restoreError && (
-        <Message
-          negative
-          onDismiss={() => setRestoreError(null)}
-          style={{ marginBottom: "16px" }}
+        <div
+          style={{
+            padding: "1rem",
+            border: "1px solid #fecaca",
+            borderRadius: "8px",
+            background: "#fef2f2",
+            color: "#991b1b",
+            marginBottom: "16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
         >
-          <Message.Header>Restore Failed</Message.Header>
-          <p>{restoreError}</p>
-        </Message>
+          <div>
+            <strong>Restore Failed</strong>
+            <p style={{ margin: "0.25em 0 0" }}>{restoreError}</p>
+          </div>
+          <button
+            onClick={() => setRestoreError(null)}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "18px",
+              color: "inherit",
+            }}
+          >
+            &times;
+          </button>
+        </div>
       )}
 
       {selectedDocuments.size > 0 && (
@@ -691,7 +749,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               loading={restoreLoading}
               disabled={restoreLoading}
             >
-              <Icon name="undo" />
+              <Undo2 size={14} style={{ marginRight: "4px" }} />
               Restore Selected
             </Button>
           </div>
@@ -717,15 +775,28 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               gap: "8px",
             }}
           >
-            <Checkbox
-              label="Select all"
-              checked={selectedDocuments.size === deletedDocuments.length}
-              indeterminate={
-                selectedDocuments.size > 0 &&
-                selectedDocuments.size < deletedDocuments.length
-              }
-              onChange={handleSelectAll}
-            />
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedDocuments.size === deletedDocuments.length}
+                ref={(el) => {
+                  if (el) {
+                    el.indeterminate =
+                      selectedDocuments.size > 0 &&
+                      selectedDocuments.size < deletedDocuments.length;
+                  }
+                }}
+                onChange={handleSelectAll}
+              />
+              Select all
+            </label>
           </div>
 
           <DocumentGrid>
@@ -762,7 +833,8 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                         {docPath.document?.fileType || "Unknown"}
                       </span>
                     </CardTitle>
-                    <Checkbox
+                    <input
+                      type="checkbox"
                       checked={isSelected}
                       onClick={(e) => e.stopPropagation()}
                       onChange={() => handleSelectDocument(docPath.id)}
@@ -771,15 +843,15 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
 
                   <CardMeta>
                     <div className="meta-row">
-                      <Icon name="trash" className="icon" />
+                      <Trash2 size={12} className="icon" />
                       Deleted {safeFormatDistanceToNow(docPath.modified)}
                     </div>
                     <div className="meta-row hide-mobile">
-                      <Icon name="calendar" className="icon" />
+                      <Calendar size={12} className="icon" />
                       {safeFormat(docPath.modified, "MMM d, yyyy h:mm a")}
                     </div>
                     <div className="meta-row hide-mobile">
-                      <Icon name="user" className="icon" />
+                      <User size={12} className="icon" />
                       Deleted by {docPath.creator?.username || "Unknown user"}
                     </div>
                     {docPath.folder && (
@@ -789,7 +861,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                       </div>
                     )}
                     <div className="meta-row">
-                      <Icon name="file outline" className="icon" />
+                      <FileText size={12} className="icon" />
                       {docPath.document?.pageCount || 0} pages
                     </div>
                   </CardMeta>
@@ -823,12 +895,20 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         onClose={() => setConfirmEmptyTrash(false)}
       >
         <Modal.Header>
-          <Icon name="warning sign" color="red" />
+          <AlertTriangle size={16} color="red" style={{ marginRight: "6px" }} />
           Empty Trash - Permanent Deletion
         </Modal.Header>
         <Modal.Content>
-          <Message negative>
-            <Message.Header>This action cannot be undone!</Message.Header>
+          <div
+            style={{
+              padding: "1rem",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              color: "#991b1b",
+            }}
+          >
+            <strong>This action cannot be undone!</strong>
             <p>
               You are about to permanently delete{" "}
               <strong>{deletedDocuments.length}</strong>{" "}
@@ -846,7 +926,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                 Documents that exist in other corpuses will NOT be affected.
               </strong>
             </p>
-          </Message>
+          </div>
         </Modal.Content>
         <Modal.Actions>
           <Button onClick={() => setConfirmEmptyTrash(false)}>Cancel</Button>
@@ -860,7 +940,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               });
             }}
           >
-            <Icon name="trash" />
+            <Trash2 size={14} style={{ marginRight: "4px" }} />
             Permanently Delete All
           </Button>
         </Modal.Actions>

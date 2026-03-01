@@ -1,16 +1,23 @@
 import React, { useRef, useState, MouseEvent } from "react";
-import {
-  Icon,
-  Card,
-  Popup,
-  Menu,
-  Label,
-  Dimmer,
-  Loader,
-  Button,
-} from "semantic-ui-react";
+import { Card, Popup, Button } from "semantic-ui-react";
 import _ from "lodash";
 import styled, { keyframes } from "styled-components";
+import {
+  Check,
+  AlertTriangle,
+  FileText,
+  Globe,
+  Lock,
+  BookOpen,
+  Eye,
+  Download,
+  Loader2,
+  Edit,
+  XCircle,
+  RotateCw,
+} from "lucide-react";
+import { Spinner } from "@os-legal/ui";
+import { DynamicIcon } from "../widgets/icon-picker/DynamicIcon";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -686,16 +693,37 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       {isProcessing && (
-        <Dimmer active inverted style={{ borderRadius: "12px" }}>
-          <Loader size="small">Processing...</Loader>
-        </Dimmer>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(255,255,255,0.85)",
+            borderRadius: "12px",
+            zIndex: 20,
+          }}
+        >
+          <Spinner size="sm" />
+          <span
+            style={{
+              marginTop: "0.5rem",
+              fontSize: "0.8rem",
+              color: "#64748b",
+            }}
+          >
+            Processing...
+          </span>
+        </div>
       )}
 
       <SelectionControl
         className={`selection-control ${is_selected ? "selected" : ""}`}
         onClick={handleCheckboxClick}
       >
-        {is_selected && <Icon name="check" />}
+        {is_selected && <Check size={12} color="white" />}
       </SelectionControl>
 
       <CardHeader className="card-header">
@@ -716,7 +744,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         {isFailed && (
           <ThumbnailFailureOverlay role="alert" aria-label="Processing failed">
             <FailureIconCircle aria-hidden="true">
-              <Icon name="warning sign" />
+              <AlertTriangle size={20} />
             </FailureIconCircle>
           </ThumbnailFailureOverlay>
         )}
@@ -738,21 +766,21 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
           {isFailed && <FailureBadge>Processing Failed</FailureBadge>}
           {pageCount && (
             <MetaPill>
-              <Icon name="file outline" />
+              <FileText size={11} />
               {pageCount} pages
             </MetaPill>
           )}
 
           {isPublic && (
             <MetaPill className="success">
-              <Icon name="globe" />
+              <Globe size={11} />
               Public
             </MetaPill>
           )}
 
           {!canEdit && (
             <MetaPill className="warning">
-              <Icon name="lock" />
+              <Lock size={11} />
               Read-only
             </MetaPill>
           )}
@@ -761,9 +789,10 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             <TagsContainer>
               {doc_label_objs.slice(0, 2).map((label, index) => (
                 <Tag key={`doc_${id}_label${index}`}>
-                  <Icon
-                    name={(label.icon as any) || "tag"}
-                    style={{ color: label.color }}
+                  <DynamicIcon
+                    name={(label.icon as string) || "tag"}
+                    size={11}
+                    color={label.color || undefined}
                   />
                   {label.text}
                 </Tag>
@@ -779,7 +808,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             disabled={backendLock}
             title="Open Knowledge Base"
           >
-            <Icon name="book" />
+            <BookOpen size={13} />
           </ActionButton>
 
           <ActionButton
@@ -788,7 +817,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             disabled={backendLock}
             title="View Details"
           >
-            <Icon name="eye" />
+            <Eye size={13} />
           </ActionButton>
 
           {pdfFile && (
@@ -798,10 +827,11 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               disabled={backendLock || isDownloading}
               title={isDownloading ? "Downloading..." : download_caption}
             >
-              <Icon
-                name={isDownloading ? "spinner" : "download"}
-                className={isDownloading ? "loading" : ""}
-              />
+              {isDownloading ? (
+                <Loader2 size={13} className="loading" />
+              ) : (
+                <Download size={13} />
+              )}
             </ActionButton>
           )}
 
@@ -811,7 +841,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               onClick={handleEdit}
               title={edit_caption}
             >
-              <Icon name="edit" />
+              <Edit size={13} />
             </ActionButton>
           )}
 
@@ -821,7 +851,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               onClick={handleRemoveFromCorpus}
               title="Remove from Corpus"
             >
-              <Icon name="remove circle" />
+              <XCircle size={13} />
             </ActionButton>
           )}
 
@@ -831,7 +861,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               disabled={retryLoading}
               aria-label="Retry processing this document"
             >
-              <Icon name="redo" style={{ margin: 0 }} aria-hidden="true" />
+              <RotateCw size={13} aria-hidden="true" />
               {retryLoading ? "Retrying..." : "Retry"}
             </ClassicRetryButton>
           )}

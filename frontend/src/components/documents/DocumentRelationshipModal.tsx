@@ -1,13 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import {
-  Modal,
-  Form,
-  Radio,
-  Icon,
-  Input,
-  Dropdown,
-  Button,
-} from "semantic-ui-react";
+import { Modal, Form, Radio, Dropdown, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -19,7 +11,11 @@ import {
   Search,
   ArrowRight,
   ArrowLeft,
+  AlertCircle,
+  Info,
+  Target,
 } from "lucide-react";
+import { Input } from "@os-legal/ui";
 
 import { useCorpusState } from "../annotator/context/CorpusAtom";
 import { LabelType, DocumentType } from "../../types/graphql-api";
@@ -683,7 +679,14 @@ export const DocumentRelationshipModal: React.FC<
               color: "#991b1b",
             }}
           >
-            <Icon name="warning circle" />
+            <AlertCircle
+              size={16}
+              style={{
+                display: "inline",
+                verticalAlign: "middle",
+                marginRight: "0.5rem",
+              }}
+            />
             <strong>No Corpus Context</strong>
             <p style={{ marginTop: "0.5rem", marginBottom: 0 }}>
               Document relationships require a corpus context.
@@ -697,7 +700,7 @@ export const DocumentRelationshipModal: React.FC<
           <DocumentSection>
             <ColumnHeader>
               <div className="column-title">
-                <Icon name="arrow right" color="blue" size="small" />
+                <ArrowRight size={14} color="#3b82f6" />
                 Source Documents
               </div>
               <span className="column-count">{sourceIds.length}</span>
@@ -746,7 +749,7 @@ export const DocumentRelationshipModal: React.FC<
               }
               style={{ marginTop: "0.5rem" }}
             >
-              <Icon name={addingToSide === "source" ? "close" : "plus"} />
+              {addingToSide === "source" ? <X size={14} /> : <Plus size={14} />}
               {addingToSide === "source" ? "Cancel" : "Add Source"}
             </Button>
           </DocumentSection>
@@ -755,7 +758,7 @@ export const DocumentRelationshipModal: React.FC<
           <DocumentSection>
             <ColumnHeader>
               <div className="column-title">
-                <Icon name="bullseye" color="green" size="small" />
+                <Target size={14} color="#22c55e" />
                 Target Documents
               </div>
               <span className="column-count">{targetIds.length}</span>
@@ -800,7 +803,7 @@ export const DocumentRelationshipModal: React.FC<
               }
               style={{ marginTop: "0.5rem" }}
             >
-              <Icon name={addingToSide === "target" ? "close" : "plus"} />
+              {addingToSide === "target" ? <X size={14} /> : <Plus size={14} />}
               {addingToSide === "target" ? "Cancel" : "Add Target"}
             </Button>
           </DocumentSection>
@@ -815,11 +818,12 @@ export const DocumentRelationshipModal: React.FC<
             </div>
             <Form.Field>
               <Input
-                fluid
-                icon="search"
+                fullWidth
                 placeholder="Search documents in corpus..."
                 value={documentSearchTerm}
-                onChange={(e) => setDocumentSearchTerm(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setDocumentSearchTerm(e.target.value)
+                }
                 autoFocus
               />
             </Form.Field>
@@ -902,7 +906,14 @@ export const DocumentRelationshipModal: React.FC<
                     color: "#92400e",
                   }}
                 >
-                  <Icon name="info circle" />
+                  <Info
+                    size={14}
+                    style={{
+                      display: "inline",
+                      verticalAlign: "middle",
+                      marginRight: "0.5rem",
+                    }}
+                  />
                   <strong>No labelset found.</strong> Creating a label will
                   automatically create a labelset for this corpus.
                 </div>
@@ -970,10 +981,12 @@ export const DocumentRelationshipModal: React.FC<
                     <Form.Field style={{ marginTop: "1rem" }}>
                       <label>Create New Label</label>
                       <Input
-                        fluid
+                        fullWidth
                         placeholder="Enter label name"
                         value={newLabelText}
-                        onChange={(e) => setNewLabelText(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setNewLabelText(e.target.value)
+                        }
                         autoFocus
                       />
                     </Form.Field>
@@ -981,7 +994,7 @@ export const DocumentRelationshipModal: React.FC<
                     <Form.Group widths="equal">
                       <Form.Field>
                         <label>Color</label>
-                        <Input
+                        <input
                           type="color"
                           value={newLabelColor}
                           onChange={(e) => setNewLabelColor(e.target.value)}
@@ -992,10 +1005,10 @@ export const DocumentRelationshipModal: React.FC<
                       <Form.Field>
                         <label>Description (optional)</label>
                         <Input
-                          fluid
+                          fullWidth
                           placeholder="Enter description"
                           value={newLabelDescription}
-                          onChange={(e) =>
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                             setNewLabelDescription(e.target.value)
                           }
                         />

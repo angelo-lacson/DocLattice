@@ -1,13 +1,17 @@
 import React, { useState, useMemo } from "react";
+import { Modal, Button, Form, Dropdown, Radio } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
 import {
-  Modal,
-  Button,
-  Form,
-  Dropdown,
-  Radio,
-  Icon,
-  Input,
-} from "semantic-ui-react";
+  AlertCircle,
+  ArrowRight,
+  Target,
+  Check,
+  Info,
+  Plus,
+  Search,
+  Link,
+} from "lucide-react";
+import { DynamicIcon } from "../../../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -340,7 +344,10 @@ export const RelationshipActionModal: React.FC<
   return (
     <Modal open={open} onClose={onClose} size="small">
       <Modal.Header>
-        <Icon name="linkify" />
+        <Link
+          size={16}
+          style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+        />
         Add Annotations to Relationship
       </Modal.Header>
       <ModalContent>
@@ -355,7 +362,14 @@ export const RelationshipActionModal: React.FC<
               color: "#991b1b",
             }}
           >
-            <Icon name="warning circle" />
+            <AlertCircle
+              size={16}
+              style={{
+                display: "inline",
+                verticalAlign: "middle",
+                marginRight: "0.5rem",
+              }}
+            />
             <strong>No Corpus Selected</strong>
             <p style={{ marginTop: "0.5rem", marginBottom: 0 }}>
               You must select a corpus to create or manage relationships.
@@ -393,16 +407,21 @@ export const RelationshipActionModal: React.FC<
                           onClick={() => setSelectedRelationshipId(rel.id)}
                         >
                           <div className="relationship-label">
-                            {rel.label.icon && <Icon name={rel.label.icon} />}
+                            {rel.label.icon && (
+                              <DynamicIcon
+                                name={rel.label.icon as string}
+                                size={14}
+                              />
+                            )}
                             {rel.label.text}
                           </div>
                           <div className="relationship-stats">
                             <span>
-                              <Icon name="arrow right" /> Sources:{" "}
+                              <ArrowRight size={12} /> Sources:{" "}
                               {rel.sourceIds.length}
                             </span>
                             <span>
-                              <Icon name="bullseye" /> Targets:{" "}
+                              <Target size={12} /> Targets:{" "}
                               {rel.targetIds.length}
                             </span>
                           </div>
@@ -462,7 +481,14 @@ export const RelationshipActionModal: React.FC<
                           color: "#92400e",
                         }}
                       >
-                        <Icon name="info circle" />
+                        <Info
+                          size={14}
+                          style={{
+                            display: "inline",
+                            verticalAlign: "middle",
+                            marginRight: "0.5rem",
+                          }}
+                        />
                         <strong>No labelset found.</strong> Creating a label
                         will automatically create a labelset for this corpus.
                       </div>
@@ -473,11 +499,12 @@ export const RelationshipActionModal: React.FC<
                         <Form.Field style={{ marginTop: "1rem" }}>
                           <label>Search or Create Relationship Label</label>
                           <Input
-                            fluid
-                            icon="search"
+                            fullWidth
                             placeholder="Search for a relationship label..."
                             value={labelSearchTerm}
-                            onChange={(e) => setLabelSearchTerm(e.target.value)}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setLabelSearchTerm(e.target.value)}
                           />
                         </Form.Field>
 
@@ -525,7 +552,7 @@ export const RelationshipActionModal: React.FC<
                             }}
                             style={{ marginTop: "0.5rem" }}
                           >
-                            <Icon name="plus" />
+                            <Plus size={14} />
                             Create "{labelSearchTerm}" label
                           </Button>
                         )}
@@ -535,16 +562,18 @@ export const RelationshipActionModal: React.FC<
                         <Form.Field style={{ marginTop: "1rem" }}>
                           <label>Label Name</label>
                           <Input
-                            fluid
+                            fullWidth
                             placeholder="Enter label name"
                             value={newLabelText}
-                            onChange={(e) => setNewLabelText(e.target.value)}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setNewLabelText(e.target.value)}
                           />
                         </Form.Field>
 
                         <Form.Field>
                           <label>Color</label>
-                          <Input
+                          <input
                             type="color"
                             value={newLabelColor}
                             onChange={(e) => setNewLabelColor(e.target.value)}
@@ -554,12 +583,12 @@ export const RelationshipActionModal: React.FC<
                         <Form.Field>
                           <label>Description (optional)</label>
                           <Input
-                            fluid
+                            fullWidth
                             placeholder="Enter description"
                             value={newLabelDescription}
-                            onChange={(e) =>
-                              setNewLabelDescription(e.target.value)
-                            }
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setNewLabelDescription(e.target.value)}
                           />
                         </Form.Field>
 
@@ -617,7 +646,7 @@ export const RelationshipActionModal: React.FC<
 
                     <AssignmentSection>
                       <div className="section-title">
-                        <Icon name="arrow right" color="blue" />
+                        <ArrowRight size={14} color="#3b82f6" />
                         Source Annotations
                       </div>
                       <div className="pills-container">
@@ -649,7 +678,7 @@ export const RelationshipActionModal: React.FC<
                                 }
                               }}
                             >
-                              {role === "source" && <Icon name="check" />}
+                              {role === "source" && <Check size={12} />}
                               {getAnnotationPreview(annId)}
                             </AnnotationPill>
                           );
@@ -659,7 +688,7 @@ export const RelationshipActionModal: React.FC<
 
                     <AssignmentSection>
                       <div className="section-title">
-                        <Icon name="bullseye" color="green" />
+                        <Target size={14} color="#22c55e" />
                         Target Annotations
                       </div>
                       <div className="pills-container">
@@ -691,7 +720,7 @@ export const RelationshipActionModal: React.FC<
                                 }
                               }}
                             >
-                              {role === "target" && <Icon name="check" />}
+                              {role === "target" && <Check size={12} />}
                               {getAnnotationPreview(annId)}
                             </AnnotationPill>
                           );
@@ -719,7 +748,14 @@ export const RelationshipActionModal: React.FC<
 
         <InfoBox>
           <strong>
-            <Icon name="info circle" />
+            <Info
+              size={14}
+              style={{
+                display: "inline",
+                verticalAlign: "middle",
+                marginRight: "0.5rem",
+              }}
+            />
             Selected: {selectedAnnotationIds.length} annotation
             {selectedAnnotationIds.length !== 1 ? "s" : ""}
           </strong>
