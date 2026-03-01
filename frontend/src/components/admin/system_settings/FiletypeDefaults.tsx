@@ -115,10 +115,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
     const availableComponents = useMemo(() => {
       const result: Record<
         StageType,
-        Record<
-          string,
-          (PipelineComponentType & { className: string })[]
-        >
+        Record<string, (PipelineComponentType & { className: string })[]>
       > = {
         parsers: {},
         embedders: {},
@@ -128,8 +125,8 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
       for (const mime of SUPPORTED_MIME_TYPES) {
         const shortLabel = MIME_TO_SHORT_LABEL[mime.value] || "";
         for (const stage of STAGES) {
-          result[stage.key][mime.value] = components[stage.key].filter(
-            (comp) => isComponentAvailable(comp, shortLabel, enabledComponents)
+          result[stage.key][mime.value] = components[stage.key].filter((comp) =>
+            isComponentAvailable(comp, shortLabel, enabledComponents)
           );
         }
       }
@@ -180,9 +177,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
 
                   return (
                     <div key={stage.key}>
-                      <StageDropdownLabel>
-                        {stage.label}
-                      </StageDropdownLabel>
+                      <StageDropdownLabel>{stage.label}</StageDropdownLabel>
                       <StyledSelect
                         value={currentValue}
                         $warning={isUnassigned && !hasNoOptions}
@@ -231,9 +226,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
                     <ComponentName>
                       {getComponentDisplayName(defaultEmbedder)}
                     </ComponentName>
-                    <DefaultEmbedderPath>
-                      {defaultEmbedder}
-                    </DefaultEmbedderPath>
+                    <DefaultEmbedderPath>{defaultEmbedder}</DefaultEmbedderPath>
                   </DefaultEmbedderInfo>
                 ) : (
                   <EmptyValue>Using system default</EmptyValue>

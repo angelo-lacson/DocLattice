@@ -263,9 +263,9 @@ export const SystemSettings: React.FC = () => {
   // Toggle component enabled state
   const handleToggleEnabled = useCallback(
     (className: string, enabled: boolean) => {
-      const currentEnabled: string[] = (settings?.enabledComponents || []).filter(
-        (s): s is string => s != null
-      );
+      const currentEnabled: string[] = (
+        settings?.enabledComponents || []
+      ).filter((s): s is string => s != null);
       let newEnabled: string[];
 
       if (currentEnabled.length === 0) {
@@ -552,9 +552,7 @@ export const SystemSettings: React.FC = () => {
       {/* Component Library */}
       <ComponentLibrary
         components={componentsByStage}
-        enabledComponents={
-          (settings?.enabledComponents as string[]) || []
-        }
+        enabledComponents={(settings?.enabledComponents as string[]) || []}
         updating={updating}
         onToggleEnabled={handleToggleEnabled}
         onAddSecrets={handleAddSecrets}
@@ -567,9 +565,7 @@ export const SystemSettings: React.FC = () => {
       {/* Filetype Defaults */}
       <FiletypeDefaults
         components={componentsByStage}
-        enabledComponents={
-          (settings?.enabledComponents as string[]) || []
-        }
+        enabledComponents={(settings?.enabledComponents as string[]) || []}
         preferredParsers={
           (settings?.preferredParsers as Record<string, string>) || {}
         }
