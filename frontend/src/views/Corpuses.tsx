@@ -637,7 +637,7 @@ const CorpusViewContainer = styled.div`
   flex: 1;
   align-items: stretch;
   min-height: 0;
-  max-height: 100vh;
+  max-height: 100dvh;
   height: 100%;
 `;
 
@@ -675,7 +675,8 @@ const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
       -50%,
       ${(props) => (props.$isExpanded ? "0" : "100%")}
     );
-    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    transition:
+      transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
       height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 200;
     background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
@@ -745,7 +746,9 @@ const NavigationToggle = styled(motion.button)`
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.06);
   position: relative;
   overflow: hidden;
 
@@ -764,7 +767,9 @@ const NavigationToggle = styled(motion.button)`
       transparent 70%
     );
     transform: translate(-50%, -50%);
-    transition: width 0.4s, height 0.4s;
+    transition:
+      width 0.4s,
+      height 0.4s;
   }
 
   &:hover {
@@ -776,7 +781,9 @@ const NavigationToggle = styled(motion.button)`
     border-color: rgba(74, 144, 226, 0.3);
     color: #4a90e2;
     transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(74, 144, 226, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 4px 6px rgba(74, 144, 226, 0.1),
+      0 2px 4px rgba(0, 0, 0, 0.06);
 
     &::before {
       width: 80px;
@@ -909,8 +916,8 @@ const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
     props.$isZero
       ? "transparent"
       : props.isActive
-      ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
-      : "#e2e8f0"};
+        ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
+        : "#e2e8f0"};
   color: ${(props) =>
     props.$isZero ? "#94a3b8" : props.isActive ? "white" : "#64748b"};
   border: ${(props) => (props.$isZero ? "1px dashed #cbd5e1" : "none")};
@@ -919,8 +926,8 @@ const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
     props.$isZero
       ? "none"
       : props.isActive
-      ? "0 2px 4px rgba(74, 144, 226, 0.3)"
-      : "0 1px 2px rgba(0, 0, 0, 0.05)"};
+        ? "0 2px 4px rgba(74, 144, 226, 0.3)"
+        : "0 1px 2px rgba(0, 0, 0, 0.05)"};
 `;
 
 const NavigationItem = styled(motion.button)<{
@@ -1052,7 +1059,9 @@ const NavigationItem = styled(motion.button)<{
     opacity: ${(props) => (props.$isExpanded ? "1" : "0")};
     width: ${(props) => (props.$isExpanded ? "auto" : "0")};
     overflow: hidden;
-    transition: opacity 0.3s ease, width 0.3s ease;
+    transition:
+      opacity 0.3s ease,
+      width 0.3s ease;
     z-index: 1;
   }
 
@@ -1064,7 +1073,9 @@ const NavigationItem = styled(motion.button)<{
 
   /* Respect reduced motion preferences */
   @media (prefers-reduced-motion: reduce) {
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
 
     &:hover {
       transform: none;
@@ -1311,7 +1322,8 @@ const NotificationBadge = styled.div`
   justify-content: center;
   font-size: 0.7rem;
   font-weight: 700;
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3),
+  box-shadow:
+    0 2px 4px rgba(239, 68, 68, 0.3),
     0 0 0 2px rgba(255, 255, 255, 0.9);
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   z-index: 2;
@@ -1432,7 +1444,7 @@ const ExtractsTabContent: React.FC<{
   const debouncedSearch = useRef(
     _.debounce((searchTerm: string) => {
       analysisSearchTerm(searchTerm);
-    }, DEBOUNCE.EXTRACT_SEARCH_MS)
+    }, DEBOUNCE.EXTRACT_SEARCH_MS),
   );
 
   // Cleanup debounce on unmount
@@ -1581,7 +1593,7 @@ const CleanViewContainer = styled.div`
   width: 100%;
   height: 100%;
   min-height: 0;
-  max-height: 100vh;
+  max-height: 100dvh;
   overflow: hidden;
 `;
 
@@ -1598,10 +1610,10 @@ export const Corpuses = () => {
   const use_mobile_layout = width <= MOBILE_VIEW_BREAKPOINT;
 
   const show_remove_docs_from_corpus_modal = useReactiveVar(
-    showRemoveDocsFromCorpusModal
+    showRemoveDocsFromCorpusModal,
   );
   const selected_metadata_id_to_filter_on = useReactiveVar(
-    selectedMetaAnnotationId
+    selectedMetaAnnotationId,
   );
 
   // CRITICAL: Only call useCorpusState ONCE to avoid infinite re-renders
@@ -1657,7 +1669,7 @@ export const Corpuses = () => {
   const [documentSearchCache, setDocumentSearchCache] =
     useState<string>(document_search_term);
   const [annotationSearchCache, setAnnotationSearchCache] = useState<string>(
-    annotation_search_term
+    annotation_search_term,
   );
 
   // View mode state for the Documents tab
@@ -1689,7 +1701,7 @@ export const Corpuses = () => {
       if (!opened_corpus.slug || !opened_corpus.creator?.slug) {
         console.warn(
           "Cannot navigate to source: corpus missing slug data",
-          opened_corpus
+          opened_corpus,
         );
         return;
       }
@@ -1702,14 +1714,14 @@ export const Corpuses = () => {
         typeof source.endIndex === "number"
       ) {
         textBlock = encodeTextBlock(
-          textBlockFromSpan(source.startIndex, source.endIndex)
+          textBlockFromSpan(source.startIndex, source.endIndex),
         );
       } else if (
         source.tokensByPage &&
         Object.keys(source.tokensByPage).length > 0
       ) {
         textBlock = encodeTextBlock(
-          textBlockFromTokensByPage(source.tokensByPage)
+          textBlockFromTokensByPage(source.tokensByPage),
         );
       }
 
@@ -1726,10 +1738,10 @@ export const Corpuses = () => {
       const queryString = buildQueryParams({ textBlock });
 
       navigate(
-        `/d/${opened_corpus.creator.slug}/${opened_corpus.slug}/${docGraphQLId}${queryString}`
+        `/d/${opened_corpus.creator.slug}/${opened_corpus.slug}/${docGraphQLId}${queryString}`,
       );
     },
-    [opened_corpus, navigate]
+    [opened_corpus, navigate],
   );
 
   const handleViewModeChange = useCallback((mode: ViewMode) => {
@@ -1749,25 +1761,25 @@ export const Corpuses = () => {
   const debouncedCorpusSearch = useRef(
     _.debounce((searchTerm) => {
       corpusSearchTerm(searchTerm);
-    }, 1000)
+    }, 1000),
   );
 
   const debouncedDocumentSearch = useRef(
     _.debounce((searchTerm) => {
       documentSearchTerm(searchTerm);
-    }, 1000)
+    }, 1000),
   );
 
   const debouncedAnnotationSearch = useRef(
     _.debounce((searchTerm) => {
       annotationContentSearchTerm(searchTerm);
-    }, 1000)
+    }, 1000),
   );
 
   const debouncedAnalysisSearch = useRef(
     _.debounce((searchTerm) => {
       analysisSearchTerm(searchTerm);
-    }, 1000)
+    }, 1000),
   );
 
   const handleCorpusSearchChange = (value: string) => {
@@ -1869,7 +1881,7 @@ export const Corpuses = () => {
       refetch: refetchMetadata,
     },
   ] = useLazyQuery<GetCorpusMetadataOutputs, GetCorpusMetadataInputs>(
-    GET_CORPUS_METADATA
+    GET_CORPUS_METADATA,
   );
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1896,7 +1908,7 @@ export const Corpuses = () => {
         ...(document_search_term ? { textSearch: document_search_term } : {}),
       },
       notifyOnNetworkStatusChange: true, // necessary in order to trigger loading signal on fetchMore
-    }
+    },
   );
   if (documents_error) {
     toast.error("ERROR\nCould not fetch documents for corpus.");
@@ -1963,7 +1975,7 @@ export const Corpuses = () => {
       } else {
         console.warn(
           "Skipping metadata fetch - invalid corpus ID:",
-          opened_corpus.id
+          opened_corpus.id,
         );
       }
     } else {
@@ -2126,7 +2138,7 @@ export const Corpuses = () => {
       reader.onload = async (e) => {
         if (event?.target?.files?.item(0) != null) {
           var base64FileString = await toBase64(
-            event.target.files.item(0) as File
+            event.target.files.item(0) as File,
           );
           if (
             typeof base64FileString === "string" ||
@@ -2326,8 +2338,8 @@ export const Corpuses = () => {
     if (index < 0) {
       console.warn(
         `[Corpuses] Invalid tab ID "${urlTab}" in URL, defaulting to home. Valid tabs: ${TAB_IDS.join(
-          ", "
-        )}`
+          ", ",
+        )}`,
       );
     }
     return index >= 0 ? index : 0;
@@ -2735,7 +2747,7 @@ export const Corpuses = () => {
     // Determine the content to display in the main area
     const mainContent = isPowerUserMode
       ? currentView?.component
-      : navigationItems[0]?.component;
+      : navigationItems.find((item) => item.id === "home")?.component;
 
     content = isPowerUserMode ? (
       <CorpusViewContainer id="corpus-view-container">
@@ -2764,8 +2776,8 @@ export const Corpuses = () => {
                 ? "280px"
                 : "0"
               : sidebarExpanded
-              ? "280px"
-              : "80px",
+                ? "280px"
+                : "80px",
           }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
           onMouseEnter={() => !use_mobile_layout && setSidebarExpanded(true)}
