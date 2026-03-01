@@ -613,9 +613,22 @@ export const tocExpandAll = makeVar<boolean>(false);
  * URL Examples:
  *   /c/user/corpus                    → corpusDetailView("landing") = default landing
  *   /c/user/corpus?view=details       → corpusDetailView("details")
+ *   /c/user/corpus?view=discussions   → corpusDetailView("discussions")
  */
-export type CorpusDetailViewType = "landing" | "details";
+export type CorpusDetailViewType = "landing" | "details" | "discussions";
 export const corpusDetailView = makeVar<CorpusDetailViewType>("landing");
+
+/**
+ * Corpus power user mode (URL-driven state - set by CentralRouteManager Phase 2)
+ *
+ * When true, the corpus view shows the full sidebar+tabs layout ("power user" mode).
+ * When false (default), the corpus view shows the clean landing page experience.
+ *
+ * URL Examples:
+ *   /c/user/corpus               → corpusPowerUserMode(false) = clean landing
+ *   /c/user/corpus?mode=power    → corpusPowerUserMode(true) = sidebar+tabs
+ */
+export const corpusPowerUserMode = makeVar<boolean>(false);
 
 /**
  * Text block deep linking (URL-driven state - set by CentralRouteManager Phase 2)
