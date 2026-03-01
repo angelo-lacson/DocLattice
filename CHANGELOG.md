@@ -5,7 +5,11 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-27
+## [Unreleased] - 2026-03-01
+
+### Added
+
+- **Pipeline Component Management Redesign**: Separated component management from filetype default assignment in the Pipeline Configuration UI. New `enabled_components` JSON field on `PipelineSettings` tracks which components are available. Frontend splits into two sections: ComponentLibrary (flat filterable list with enable/disable toggles, search, stage filter chips) and FiletypeDefaults (MIME type rows with parser/embedder/thumbnailer dropdowns). Removed old stage-centric layout with MIME type filter buttons. (`opencontractserver/documents/models.py`, `config/graphql/pipeline_types.py`, `config/graphql/pipeline_queries.py`, `config/graphql/pipeline_settings_mutations.py`, `frontend/src/components/admin/SystemSettings.tsx`, `frontend/src/components/admin/system_settings/ComponentLibrary.tsx`, `frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
 
 ### Changed
 
