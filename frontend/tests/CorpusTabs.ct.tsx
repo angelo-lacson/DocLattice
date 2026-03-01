@@ -1429,4 +1429,26 @@ test.describe("Corpus - Power User Mode", () => {
 
     await docScreenshot(page, "corpus--power-user--with-sidebar");
   });
+
+  test("should toggle to power user mode when toggle is clicked", async ({
+    mount,
+    page,
+  }) => {
+    // Start in clean view (no ?mode=power)
+    const corpus = createMockCorpus();
+    await mountCorpuses(mount, corpus, { powerUserMode: false });
+
+    // Sidebar should NOT be visible, power user toggle should be
+    await expect(page.getByTestId("navigation-sidebar")).not.toBeVisible({
+      timeout: 10000,
+    });
+    const powerToggle = page.getByTestId("power-user-toggle");
+    await expect(powerToggle).toBeVisible();
+
+    // Click Power User toggle - sidebar should appear
+    await powerToggle.click();
+    await expect(page.getByTestId("navigation-sidebar")).toBeVisible({
+      timeout: 10000,
+    });
+  });
 });

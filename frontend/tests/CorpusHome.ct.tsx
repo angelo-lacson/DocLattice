@@ -13,6 +13,7 @@ import {
 import {
   DOCUMENT_RELATIONSHIP_TOC_LIMIT,
   CORPUS_DOCUMENTS_TOC_LIMIT,
+  CONVERSATION_TYPE,
   RECENT_THREAD_LIMIT,
 } from "../src/assets/configurations/constants";
 import { PermissionTypes } from "../src/components/types";
@@ -216,7 +217,7 @@ const conversationsMock: MockedResponse = {
     query: GET_CONVERSATIONS,
     variables: {
       corpusId: dummyCorpus.id,
-      conversationType: "THREAD",
+      conversationType: CONVERSATION_TYPE.THREAD,
       limit: RECENT_THREAD_LIMIT,
     },
   },
@@ -227,7 +228,7 @@ const conversationsMock: MockedResponse = {
           {
             node: {
               id: "thread-1",
-              conversationType: "THREAD",
+              conversationType: CONVERSATION_TYPE.THREAD,
               title: "How do I interpret Section 4.2?",
               description: "Question about the interpretation",
               createdAt: new Date(
@@ -269,7 +270,7 @@ const conversationsMock: MockedResponse = {
           {
             node: {
               id: "thread-2",
-              conversationType: "THREAD",
+              conversationType: CONVERSATION_TYPE.THREAD,
               title: "Suggestion: Add cross-reference annotations",
               description: "Idea for improvement",
               createdAt: new Date(
@@ -331,7 +332,7 @@ const emptyConversationsMock: MockedResponse = {
     query: GET_CONVERSATIONS,
     variables: {
       corpusId: dummyCorpus.id,
-      conversationType: "THREAD",
+      conversationType: CONVERSATION_TYPE.THREAD,
       limit: RECENT_THREAD_LIMIT,
     },
   },
@@ -727,7 +728,7 @@ test("discussions view shows when view=discussions URL param is set", async ({
         query: GET_CONVERSATIONS,
         variables: {
           corpusId: dummyCorpus.id,
-          conversationType: "THREAD",
+          conversationType: CONVERSATION_TYPE.THREAD,
           limit: 100,
         },
       },
@@ -738,7 +739,7 @@ test("discussions view shows when view=discussions URL param is set", async ({
         query: GET_CONVERSATIONS,
         variables: {
           corpusId: dummyCorpus.id,
-          conversationType: "THREAD",
+          conversationType: CONVERSATION_TYPE.THREAD,
           limit: 100,
         },
       },

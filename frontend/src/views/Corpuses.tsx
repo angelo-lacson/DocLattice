@@ -152,6 +152,7 @@ import {
   CORPUS_RADII,
   CORPUS_SHADOWS,
   CORPUS_TRANSITIONS,
+  mediaQuery as corpusMediaQuery,
 } from "../components/corpuses/styles/corpusDesignTokens";
 
 // Add these styled components near your other styled components
@@ -1564,7 +1565,7 @@ const PowerUserToggle = styled(motion.button)`
     outline-offset: 2px;
   }
 
-  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+  ${corpusMediaQuery.tablet} {
     padding: 0.375rem 0.625rem;
     font-size: 0.75rem;
     top: 0.75rem;
@@ -1582,6 +1583,13 @@ const CleanViewContainer = styled.div`
   min-height: 0;
   max-height: 100vh;
   overflow: hidden;
+`;
+
+// Wrapper for the "Simple View" exit button at the bottom of the sidebar
+const ExitPowerUserWrapper = styled.div`
+  padding: 0.75rem;
+  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
+  flex-shrink: 0;
 `;
 
 export const Corpuses = () => {
@@ -2875,13 +2883,7 @@ export const Corpuses = () => {
           </NavigationItems>
 
           {/* Exit Power User Mode button */}
-          <div
-            style={{
-              padding: "0.75rem",
-              borderTop: "1px solid #e2e8f0",
-              flexShrink: 0,
-            }}
-          >
+          <ExitPowerUserWrapper>
             <NavigationItem
               isActive={false}
               $isExpanded={
@@ -2900,7 +2902,7 @@ export const Corpuses = () => {
                 </span>
               )}
             </NavigationItem>
-          </div>
+          </ExitPowerUserWrapper>
         </NavigationSidebar>
 
         {/* Main content area */}
