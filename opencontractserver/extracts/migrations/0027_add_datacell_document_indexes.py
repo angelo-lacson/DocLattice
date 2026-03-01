@@ -12,12 +12,12 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddIndex(
             model_name="datacell",
-            index=models.Index(fields=["document"], name="extracts_da_documen_2ce84c_idx"),
+            index=models.Index(fields=["document"], name="extracts_da_documen_b8c4f5_idx"),
         ),
         migrations.AddIndex(
             model_name="datacell",
             index=models.Index(
-                fields=["document", "column"], name="extracts_da_documen_a86c47_idx"
+                fields=["document", "column"], name="extracts_da_documen_7f2e3a_idx"
             ),
         ),
     ]

@@ -87,12 +87,12 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="workeraccount",
-            index=models.Index(fields=["name"], name="worker_uplo_name_7f93db_idx"),
+            index=models.Index(fields=["name"], name="worker_uplo_name_8c3b2d_idx"),
         ),
         migrations.AddIndex(
             model_name="workeraccount",
             index=models.Index(
-                fields=["is_active"], name="worker_uplo_is_acti_f924a9_idx"
+                fields=["is_active"], name="worker_uplo_is_acti_a1b2c3_idx"
             ),
         ),
         migrations.CreateModel(
@@ -175,14 +175,14 @@ class Migration(migrations.Migration):
             model_name="corpusaccesstoken",
             index=models.Index(
                 fields=["worker_account", "corpus"],
-                name="worker_uplo_worker__316c0e_idx",
+                name="worker_uplo_worker__d4e5f6_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="corpusaccesstoken",
             index=models.Index(
                 fields=["is_active", "expires_at"],
-                name="worker_uplo_is_acti_73f6ba_idx",
+                name="worker_uplo_is_acti_g7h8i9_idx",
             ),
         ),
         migrations.CreateModel(
@@ -286,21 +286,21 @@ class Migration(migrations.Migration):
             model_name="workerdocumentupload",
             index=models.Index(
                 fields=["status", "created"],
-                name="worker_uplo_status_a9c908_idx",
+                name="worker_uplo_status_j1k2l3_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="workerdocumentupload",
             index=models.Index(
                 fields=["corpus", "status"],
-                name="worker_uplo_corpus__ecd8cb_idx",
+                name="worker_uplo_corpus__m4n5o6_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="workerdocumentupload",
             index=models.Index(
                 fields=["corpus_access_token"],
-                name="worker_uplo_corpus__c75c7b_idx",
+                name="worker_uplo_corpus__p7q8r9_idx",
             ),
         ),
     ]

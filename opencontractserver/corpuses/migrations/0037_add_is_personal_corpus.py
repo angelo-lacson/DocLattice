@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
             model_name="corpus",
             index=models.Index(
                 fields=["creator", "is_personal"],
-                name="corpuses_co_creator_c32eb3_idx",
+                name="corpuses_co_creator_0e8c8f_idx",
             ),
         ),
         # Add unique constraint for one personal corpus per user
