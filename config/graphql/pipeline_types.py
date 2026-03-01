@@ -92,6 +92,10 @@ class PipelineComponentType(graphene.ObjectType):
     supports_images = graphene.Boolean(
         description="Whether this embedder supports image input.", required=False
     )
+    enabled = graphene.Boolean(
+        description="Whether this component is enabled for use in pipeline configuration.",
+        required=False,
+    )
 
 
 class PipelineComponentsType(graphene.ObjectType):
@@ -153,6 +157,12 @@ class PipelineSettingsType(graphene.ObjectType):
         graphene.String,
         description="List of component paths that have encrypted secrets configured. "
         "Actual secret values are never exposed via GraphQL.",
+    )
+
+    # Enabled components filter
+    enabled_components = graphene.List(
+        graphene.String,
+        description="List of enabled component class paths. Empty means all enabled.",
     )
 
     # Audit fields
