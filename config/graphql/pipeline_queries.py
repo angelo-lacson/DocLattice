@@ -111,10 +111,10 @@ class PipelineQueryMixin:
             }
 
         # Convert PipelineComponentDefinition objects to GraphQL types
-        enabled_list = settings_instance.enabled_components or []
+        enabled_set = set(settings_instance.enabled_components or [])
 
         def to_graphql_type(defn, component_type: str) -> PipelineComponentType:
-            is_enabled = (not enabled_list) or (defn.class_name in enabled_list)
+            is_enabled = (not enabled_set) or (defn.class_name in enabled_set)
             settings_schema = None
             if user.is_superuser:
                 # Get schema augmented with has_value/current_value from DB

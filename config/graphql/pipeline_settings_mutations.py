@@ -442,10 +442,15 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                         else settings_instance.default_embedder or ""
                     )
 
-                    all_assigned = set()
-                    all_assigned.update(assigned_parsers.values())
-                    all_assigned.update(assigned_embedders.values())
-                    all_assigned.update(assigned_thumbnailers.values())
+                    all_assigned = {
+                        path
+                        for path in (
+                            *assigned_parsers.values(),
+                            *assigned_embedders.values(),
+                            *assigned_thumbnailers.values(),
+                        )
+                        if path
+                    }
                     if assigned_default:
                         all_assigned.add(assigned_default)
 
