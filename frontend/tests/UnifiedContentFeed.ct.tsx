@@ -371,12 +371,10 @@ test.describe("UnifiedContentFeed - Read-only Mode", () => {
 
     // Get the PostItNote button
     const firstNote = page.locator("button").filter({ hasText: "Test Note 1" });
+    await expect(firstNote).toBeVisible();
 
-    // Check cursor style
-    const cursor = await firstNote.evaluate(
-      (el) => window.getComputedStyle(el).cursor
-    );
-    expect(cursor).toBe("pointer");
+    // Wait for styled-components CSS injection to settle
+    await expect(firstNote).toHaveCSS("cursor", "pointer");
   });
 
   test("editable: edit indicators show on hover", async ({ mount, page }) => {
@@ -386,23 +384,17 @@ test.describe("UnifiedContentFeed - Read-only Mode", () => {
 
     // Get the first note
     const firstNote = page.locator("button").filter({ hasText: "Test Note 1" });
+    await expect(firstNote).toBeVisible();
 
     // Initially edit indicator should be hidden
     const editIndicator = firstNote.locator(".edit-indicator");
-    const initialOpacity = await editIndicator.evaluate(
-      (el) => window.getComputedStyle(el).opacity
-    );
-    expect(initialOpacity).toBe("0");
+    await expect(editIndicator).toHaveCSS("opacity", "0");
 
     // Hover over the note
     await firstNote.hover();
-    await page.waitForTimeout(300); // Wait for transition
 
-    // Edit indicator should be visible
-    const hoverOpacity = await editIndicator.evaluate(
-      (el) => window.getComputedStyle(el).opacity
-    );
-    expect(hoverOpacity).toBe("1");
+    // Edit indicator should become visible (uses Playwright's auto-retry)
+    await expect(editIndicator).toHaveCSS("opacity", "1");
   });
 });
 
