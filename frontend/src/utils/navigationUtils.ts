@@ -67,7 +67,7 @@ export type LocationLike = { search: string };
  */
 export type NavigateFn = (
   to: { search: string },
-  options?: { replace?: boolean }
+  options?: { replace?: boolean },
 ) => void;
 
 /**
@@ -186,7 +186,7 @@ export function parseQueryParam(param: string | null): string[] {
 export function buildCanonicalPath(
   document?: DocumentType | null,
   corpus?: CorpusType | null,
-  extract?: ExtractType | null
+  extract?: ExtractType | null,
 ): string {
   // Extract (ID-based since extracts don't have slugs yet)
   if (extract?.id && extract?.creator?.slug) {
@@ -303,7 +303,7 @@ export function getCorpusUrl(
   corpus: Pick<CorpusType, "id" | "slug"> & {
     creator?: Pick<UserType, "id" | "slug"> | null;
   },
-  queryParams?: QueryParams
+  queryParams?: QueryParams,
 ): string {
   // Always use slug-based URL with /c/ prefix
   // If slugs are missing, we can't generate a valid URL
@@ -335,7 +335,7 @@ export function getDocumentUrl(
         creator?: Pick<UserType, "id" | "slug"> | null;
       })
     | null,
-  queryParams?: QueryParams
+  queryParams?: QueryParams,
 ): string {
   let basePath: string;
 
@@ -357,7 +357,7 @@ export function getDocumentUrl(
     console.warn(
       "Cannot generate document URL without slugs:",
       document,
-      corpus
+      corpus,
     );
     return "#"; // Return a safe fallback that won't navigate
   }
@@ -378,13 +378,13 @@ export function getExtractUrl(
   extract: Pick<ExtractType, "id" | "name"> & {
     creator?: Pick<UserType, "id" | "slug"> | null;
   },
-  queryParams?: QueryParams
+  queryParams?: QueryParams,
 ): string {
   // Extracts don't have slugs yet, so we use ID-based URLs
   if (!extract.id || !extract.creator?.slug) {
     console.warn(
       "Cannot generate extract URL without id and creator slug:",
-      extract
+      extract,
     );
     return "#"; // Return a safe fallback that won't navigate
   }
@@ -421,7 +421,7 @@ export function getLabelsetUrl(labelset: Pick<LabelSetType, "id">): string {
 export function navigateToLabelset(
   labelset: Pick<LabelSetType, "id">,
   navigate: (path: string, options?: { replace?: boolean }) => void,
-  currentPath?: string
+  currentPath?: string,
 ) {
   const targetPath = getLabelsetUrl(labelset);
 
@@ -446,7 +446,7 @@ export function navigateToLabelset(
  */
 export function isCanonicalPath(
   currentPath: string,
-  canonicalPath: string
+  canonicalPath: string,
 ): boolean {
   // Normalize paths (remove trailing slashes, query params)
   const normalize = (path: string) => {
@@ -472,7 +472,7 @@ export function navigateToCorpus(
   },
   navigate: (path: string, options?: { replace?: boolean }) => void,
   currentPath?: string,
-  queryParams?: QueryParams
+  queryParams?: QueryParams,
 ) {
   const targetPath = getCorpusUrl(corpus, queryParams);
 
@@ -512,7 +512,7 @@ export function navigateToDocument(
     | null,
   navigate: (path: string, options?: { replace?: boolean }) => void,
   currentPath?: string,
-  queryParams?: QueryParams
+  queryParams?: QueryParams,
 ) {
   const targetPath = getDocumentUrl(document, corpus, queryParams);
 
@@ -546,7 +546,7 @@ export function navigateToExtract(
   },
   navigate: (path: string, options?: { replace?: boolean }) => void,
   currentPath?: string,
-  queryParams?: QueryParams
+  queryParams?: QueryParams,
 ) {
   const targetPath = getExtractUrl(extract, queryParams);
 
@@ -604,7 +604,7 @@ export function buildRequestKey(
   documentIdent?: string,
   extractIdent?: string,
   threadIdent?: string,
-  labelsetIdent?: string
+  labelsetIdent?: string,
 ): string {
   const parts = [
     type,
@@ -641,7 +641,7 @@ export function updateAnnotationDisplayParams(
     showSelectedOnly?: boolean;
     showBoundingBoxes?: boolean;
     labelDisplay?: string;
-  }
+  },
 ) {
   const searchParams = new URLSearchParams(location.search);
 
@@ -701,7 +701,7 @@ export function updateAnnotationSelectionParams(
     annotationIds?: string[];
     analysisIds?: string[];
     extractIds?: string[];
-  }
+  },
 ) {
   const searchParams = new URLSearchParams(location.search);
 
@@ -743,7 +743,7 @@ export function updateAnnotationSelectionParams(
  */
 export function clearAnnotationSelection(
   location: { search: string },
-  navigate: (to: { search: string }, options?: { replace?: boolean }) => void
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
 ) {
   updateAnnotationSelectionParams(location, navigate, {
     annotationIds: [],
@@ -770,7 +770,7 @@ export function getCorpusThreadUrl(
     creator?: { slug?: string | null } | null;
     slug?: string | null;
   },
-  threadId: string
+  threadId: string,
 ): string {
   if (!corpus.creator?.slug || !corpus.slug) {
     console.warn("Corpus missing slug data:", corpus);
@@ -793,7 +793,7 @@ export function navigateToCorpusThread(
   },
   threadId: string,
   navigate: (path: string) => void,
-  currentPath: string
+  currentPath: string,
 ) {
   const url = getCorpusThreadUrl(corpus, threadId);
   if (url !== "#" && currentPath !== url) {
@@ -811,7 +811,7 @@ export function navigateToCorpusThread(
 export function navigateToDocumentThread(
   threadId: string,
   location: { search: string },
-  navigate: (to: { search: string }, options?: { replace?: boolean }) => void
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
 ) {
   const searchParams = new URLSearchParams(location.search);
   searchParams.set("thread", threadId);
@@ -825,7 +825,7 @@ export function navigateToDocumentThread(
  */
 export function clearThreadSelection(
   location: { search: string },
-  navigate: (to: { search: string }, options?: { replace?: boolean }) => void
+  navigate: (to: { search: string }, options?: { replace?: boolean }) => void,
 ) {
   const searchParams = new URLSearchParams(location.search);
   searchParams.delete("thread");
@@ -847,7 +847,7 @@ export function clearThreadSelection(
 export function updateTabParam(
   location: LocationLike,
   navigate: NavigateFn,
-  tabId: string | null
+  tabId: string | null,
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (tabId) {
@@ -877,7 +877,7 @@ export function updateThreadParam(
   location: LocationLike,
   navigate: NavigateFn,
   threadId: string | null,
-  options?: { replace?: boolean }
+  options?: { replace?: boolean },
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (threadId) {
@@ -906,7 +906,7 @@ export function updateThreadParam(
 export function updateHomeViewParam(
   location: LocationLike,
   navigate: NavigateFn,
-  homeView: "about" | "toc" | null
+  homeView: "about" | "toc" | null,
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (homeView && homeView !== "about") {
@@ -929,7 +929,7 @@ export function updateHomeViewParam(
 export function updateTocExpandedParam(
   location: LocationLike,
   navigate: NavigateFn,
-  expanded: boolean
+  expanded: boolean,
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (expanded) {
@@ -952,7 +952,7 @@ export function updateTocExpandedParam(
 export function updateDetailViewParam(
   location: LocationLike,
   navigate: NavigateFn,
-  view: "landing" | "details" | "discussions" | null
+  view: "landing" | "details" | "discussions" | null,
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (view && view !== "landing") {
@@ -975,7 +975,7 @@ export function updateDetailViewParam(
 export function navigateToDiscussionThread(
   location: LocationLike,
   navigate: NavigateFn,
-  threadId: string
+  threadId: string,
 ) {
   const searchParams = new URLSearchParams(location.search);
   searchParams.set("view", "discussions");
@@ -993,7 +993,7 @@ export function navigateToDiscussionThread(
 export function updateMessageParam(
   location: LocationLike,
   navigate: NavigateFn,
-  messageId: string | null
+  messageId: string | null,
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (messageId) {
@@ -1015,7 +1015,7 @@ export function navigateToThreadWithMessage(
   location: LocationLike,
   navigate: NavigateFn,
   threadId: string,
-  messageId?: string
+  messageId?: string,
 ) {
   const searchParams = new URLSearchParams(location.search);
   searchParams.set("thread", threadId);
@@ -1036,7 +1036,7 @@ export function navigateToThreadWithMessage(
 export function updateModeParam(
   location: LocationLike,
   navigate: NavigateFn,
-  mode: "power" | null
+  mode: "power" | null,
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (mode) {
@@ -1044,6 +1044,10 @@ export function updateModeParam(
   } else {
     searchParams.delete("mode");
   }
+  // Clear view-specific params when switching modes to avoid stale state
+  // (e.g., ?view=discussions&mode=power is an invalid combination)
+  searchParams.delete("view");
+  searchParams.delete("thread");
   navigate({ search: searchParams.toString() });
 }
 
@@ -1079,7 +1083,7 @@ export function navigateToRelationshipDocument(
     creator?: { slug?: string | null } | null;
   } | null,
   navigate: (path: string, options?: { replace?: boolean }) => void,
-  currentPath?: string
+  currentPath?: string,
 ) {
   if (!corpus) {
     console.warn("Cannot navigate to document - no corpus context");
@@ -1096,8 +1100,8 @@ export function navigateToRelationshipDocument(
     creator: document.creator?.slug
       ? { id: "", slug: document.creator.slug }
       : corpus.creator?.slug
-      ? { id: "", slug: corpus.creator.slug }
-      : undefined,
+        ? { id: "", slug: corpus.creator.slug }
+        : undefined,
   };
 
   const corpusForNav: Parameters<typeof navigateToDocument>[1] = {
@@ -1126,7 +1130,7 @@ export function navigateToRelationshipDocument(
 export function updateTextBlockParam(
   location: LocationLike,
   navigate: NavigateFn,
-  textBlock: string | null
+  textBlock: string | null,
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (textBlock) {
