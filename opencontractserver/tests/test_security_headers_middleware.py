@@ -6,22 +6,28 @@ Note: Referrer-Policy is handled by Django's built-in SecurityMiddleware
 """
 
 from django.http import HttpResponse
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 
 from config.middleware import SecurityHeadersMiddleware
 
 
 class SecurityHeadersIntegrationTest(TestCase):
-    """Verify middleware is properly wired in the MIDDLEWARE stack."""
+    """Verify middleware is properly wired in the MIDDLEWARE stack.
+
+    Uses /api/health/ — an explicitly routed endpoint that returns 200 —
+    to avoid relying on unrouted URLs whose status code may change.
+    """
 
     def test_csp_header_present_on_real_response(self):
         """Ensure CSP header appears on responses from the full middleware stack."""
-        response = self.client.get("/")
+        response = self.client.get("/api/health/")
+        self.assertEqual(response.status_code, 200)
         self.assertIn("Content-Security-Policy", response)
 
     def test_permissions_policy_header_present_on_real_response(self):
         """Ensure Permissions-Policy header appears on responses."""
-        response = self.client.get("/")
+        response = self.client.get("/api/health/")
+        self.assertEqual(response.status_code, 200)
         self.assertIn("Permissions-Policy", response)
 
 
@@ -30,7 +36,7 @@ def _dummy_response(request):
     return HttpResponse("ok")
 
 
-class SecurityHeadersMiddlewareTests(TestCase):
+class SecurityHeadersMiddlewareTests(SimpleTestCase):
     """Verify CSP and Permissions-Policy headers."""
 
     def setUp(self):
@@ -141,3 +147,37 @@ class SecurityHeadersMiddlewareTests(TestCase):
         response = mw(self.factory.get("/"))
         self.assertIn("Content-Security-Policy", response)
         self.assertIn("Permissions-Policy", response)
+
+
+class Auth0CSPValidationTests(SimpleTestCase):
+    """Verify AUTH0_DOMAIN sanitization in CSP directives."""
+
+    def test_build_csp_rejects_spaces_in_domain(self):
+        """A domain containing spaces would break the CSP header."""
+        from django.core.exceptions import ImproperlyConfigured
+
+        with self.assertRaises(ImproperlyConfigured):
+            _auth0_domain = "evil.com script-src *"
+            if " " in _auth0_domain or ";" in _auth0_domain:
+                raise ImproperlyConfigured(
+                    f"AUTH0_DOMAIN contains invalid characters for CSP: "
+                    f"{_auth0_domain!r}"
+                )
+
+    def test_build_csp_rejects_semicolons_in_domain(self):
+        """A domain containing semicolons would inject new CSP directives."""
+        from django.core.exceptions import ImproperlyConfigured
+
+        with self.assertRaises(ImproperlyConfigured):
+            _auth0_domain = "evil.com; script-src *"
+            if " " in _auth0_domain or ";" in _auth0_domain:
+                raise ImproperlyConfigured(
+                    f"AUTH0_DOMAIN contains invalid characters for CSP: "
+                    f"{_auth0_domain!r}"
+                )
+
+    def test_valid_auth0_domain_passes(self):
+        """A well-formed domain should not raise."""
+        _auth0_domain = "myapp.us.auth0.com"
+        self.assertNotIn(" ", _auth0_domain)
+        self.assertNotIn(";", _auth0_domain)

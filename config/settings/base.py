@@ -273,6 +273,7 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "config.middleware.SecurityHeadersMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -282,7 +283,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.common.BrokenLinkEmailsMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "config.middleware.SecurityHeadersMiddleware",
 ]
 
 # STATIC
@@ -541,11 +541,19 @@ SECURE_CSP_DIRECTIVES = {
     "form-action": ["'self'"],
 }
 
-# Auth0 integration: extend CSP when AUTH0_DOMAIN is configured
-_auth0_domain = env("AUTH0_DOMAIN", default=None)
-if _auth0_domain and SECURE_CSP_DIRECTIVES:
+# When Auth0 is enabled, the browser must be able to load scripts from and
+# connect to the Auth0 tenant domain for authentication flows.
+if USE_AUTH0:
+    _auth0_domain = AUTH0_DOMAIN
+    if " " in _auth0_domain or ";" in _auth0_domain:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured(
+            f"AUTH0_DOMAIN contains invalid characters for CSP: {_auth0_domain!r}"
+        )
     SECURE_CSP_DIRECTIVES["connect-src"].append(f"https://{_auth0_domain}")
     SECURE_CSP_DIRECTIVES["script-src"].append(f"https://{_auth0_domain}")
+    del _auth0_domain
 
 # Permissions-Policy — opt out of browser features not needed by the app.
 SECURE_PERMISSIONS_POLICY = {
