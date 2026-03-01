@@ -824,6 +824,13 @@ class PipelineSettings(django.db.models.Model):
         help_text="Mapping of component class paths to settings overrides",
     )
 
+    # Enabled components list
+    enabled_components = NullableJSONField(
+        default=list,
+        blank=True,
+        help_text="List of enabled component class paths. Empty list means all components are enabled.",
+    )
+
     # Default embedder when no MIME-specific one is found
     default_embedder = django.db.models.CharField(
         max_length=512,
@@ -1082,6 +1089,24 @@ class PipelineSettings(django.db.models.Model):
             Default embedder class path.
         """
         return self.default_embedder or ""
+
+    def is_component_enabled(self, class_path: str) -> bool:
+        """Check if a component is enabled.
+
+        An empty enabled_components list means all components are enabled
+        (backward compatibility).
+        """
+        enabled = self.enabled_components or []
+        if not enabled:
+            return True
+        return class_path in enabled
+
+    def get_enabled_components(self) -> list[str]:
+        """Return the list of enabled component class paths.
+
+        Returns empty list if all are enabled (no filtering).
+        """
+        return self.enabled_components or []
 
     # =====================================================================
     # Encrypted Secrets Management

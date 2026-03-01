@@ -191,6 +191,50 @@ class PipelineSettingsModelTestCase(TestCase):
         self.assertEqual(instance.modified_by, self.superuser)
 
 
+class TestEnabledComponents(TestCase):
+    """Tests for the enabled_components field and helper methods."""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.delete(PipelineSettings.CACHE_KEY)
+
+    def test_empty_list_means_all_enabled(self):
+        """Empty enabled_components should treat all components as enabled."""
+        instance = PipelineSettings.get_instance()
+        instance.enabled_components = []
+        instance.save()
+        self.assertTrue(instance.is_component_enabled("any.component.path"))
+
+    def test_non_empty_list_filters(self):
+        """Non-empty list should only allow listed components."""
+        instance = PipelineSettings.get_instance()
+        instance.enabled_components = ["comp.A", "comp.B"]
+        instance.save()
+        self.assertTrue(instance.is_component_enabled("comp.A"))
+        self.assertTrue(instance.is_component_enabled("comp.B"))
+        self.assertFalse(instance.is_component_enabled("comp.C"))
+
+    def test_get_enabled_components_returns_list(self):
+        """get_enabled_components should return the stored list."""
+        instance = PipelineSettings.get_instance()
+        instance.enabled_components = ["comp.X"]
+        instance.save()
+        self.assertEqual(instance.get_enabled_components(), ["comp.X"])
+
+    def test_null_enabled_components_treated_as_empty(self):
+        """None/null in memory should behave same as empty list.
+
+        The DB column has a NOT NULL constraint, so None cannot be persisted.
+        However, the helper methods should still handle None gracefully at the
+        Python level (e.g. if the field default hasn't been applied yet).
+        """
+        instance = PipelineSettings.get_instance()
+        instance.enabled_components = None  # set in memory only
+        self.assertTrue(instance.is_component_enabled("any.path"))
+        self.assertEqual(instance.get_enabled_components(), [])
+
+
 class PipelineSettingsGraphQLTestCase(TestCase):
     """Tests for the PipelineSettings GraphQL endpoints."""
 
