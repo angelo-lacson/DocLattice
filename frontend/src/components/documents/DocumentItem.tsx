@@ -46,6 +46,7 @@ import fallback_doc_icon from "../../assets/images/defaults/default_doc_icon.jpg
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import { FAILURE_COLORS } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Animations
 const shimmer = keyframes`
@@ -81,7 +82,7 @@ const slideIn = keyframes`
 const StyledCard = styled.div`
   position: relative;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: visible;
   transition: all 0.2s ease;
@@ -116,7 +117,7 @@ const StyledCard = styled.div`
   }
 
   &.is-selected {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1),
       0 10px 15px -3px rgba(0, 0, 0, 0.1);
   }
@@ -141,10 +142,10 @@ const StyledCard = styled.div`
 const CardHeader = styled.div`
   position: relative;
   height: 140px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 12px 12px 0 0;
   overflow: hidden;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   transition: background 0.2s ease;
 
   img {
@@ -211,7 +212,7 @@ const Title = styled.h3`
 const Description = styled.p`
   margin: 0;
   font-size: 0.8125rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -234,11 +235,11 @@ const MetaPill = styled.div`
   align-items: center;
   gap: 3px;
   padding: 3px 8px;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 4px;
   font-size: 0.6875rem;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   transition: background 0.15s ease;
 
   .icon {
@@ -247,7 +248,7 @@ const MetaPill = styled.div`
   }
 
   &:hover {
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 
   &.success {
@@ -277,7 +278,7 @@ const ActionButton = styled.button`
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   cursor: pointer;
@@ -285,14 +286,14 @@ const ActionButton = styled.button`
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   position: relative;
 
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     border-color: #cbd5e1;
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   &:active {
@@ -300,8 +301,8 @@ const ActionButton = styled.button`
   }
 
   &.primary {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
 
     &:hover {
@@ -323,8 +324,8 @@ const ActionButton = styled.button`
   }
 
   &.downloading {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
     animation: pulse 1.5s ease-in-out infinite;
 
@@ -367,13 +368,13 @@ const SelectionControl = styled.div`
   z-index: 10;
 
   &:hover {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   &.selected {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
 
     .icon {
       color: white;
@@ -409,12 +410,12 @@ const Tag = styled.span`
   align-items: center;
   gap: 3px;
   padding: 3px 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   .icon {
     font-size: 0.65rem;
@@ -711,7 +712,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             style={{
               marginTop: "0.5rem",
               fontSize: "0.8rem",
-              color: "#64748b",
+              color: OS_LEGAL_COLORS.textSecondary,
             }}
           >
             Processing...
@@ -732,7 +733,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         ) : (
           <>
             <div
-              style={{ width: "100%", height: "100%", background: "#f8fafc" }}
+              style={{ width: "100%", height: "100%", background: OS_LEGAL_COLORS.surfaceHover }}
             />
             <img
               src={fallback_doc_icon}

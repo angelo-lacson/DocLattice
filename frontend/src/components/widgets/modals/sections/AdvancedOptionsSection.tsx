@@ -1,5 +1,6 @@
 import React from "react";
-import { Icon, Popup } from "semantic-ui-react";
+import { Popup } from "semantic-ui-react";
+import { HelpCircle } from "lucide-react";
 import {
   FormSection,
   StyledFormField,
@@ -43,7 +44,7 @@ export const AdvancedOptionsSection: React.FC<AdvancedOptionsSectionProps> = ({
           <label>
             Limit Search to Label
             <Popup
-              trigger={<Icon name="question circle outline" />}
+              trigger={<HelpCircle size={14} style={{ marginLeft: 4, verticalAlign: "middle", cursor: "help" }} />}
               content="Specify a label name to limit the search scope"
             />
           </label>

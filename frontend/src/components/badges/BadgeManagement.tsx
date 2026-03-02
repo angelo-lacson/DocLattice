@@ -24,17 +24,11 @@ import {
 } from "../../graphql/mutations";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import * as LucideIcons from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { GradientSegment as StyledSegment } from "../layout/SharedSegments";
 
 const Container = styled.div`
   padding: 2em;
-`;
-
-const StyledSegment = styled.div`
-  padding: 1rem;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
 
 // Get list of available lucide icons for dropdown
@@ -228,7 +222,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                   {badge.isAutoAwarded ? (
                     <Check size={16} color="#21ba45" />
                   ) : (
-                    <X size={16} color="#db2828" />
+                    <X size={16} color={OS_LEGAL_COLORS.danger} />
                   )}
                 </Table.Cell>
                 <Table.Cell>

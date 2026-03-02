@@ -36,6 +36,7 @@ import {
   DEBOUNCE,
 } from "../../assets/configurations/constants";
 import { ErrorMessage, WarningMessage } from "../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // ============================================================================
 // TYPES
@@ -72,13 +73,13 @@ const ModalContent = styled(Modal.Content)`
     width: 8px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   &::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 4px;
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -102,7 +103,7 @@ const DocumentPill = styled.div<{ $variant?: "source" | "target" }>`
   background: ${(props) =>
     props.$variant === "source" ? "#dbeafe" : "#dcfce7"};
   border: 2px solid
-    ${(props) => (props.$variant === "source" ? "#3b82f6" : "#22c55e")};
+    ${(props) => (props.$variant === "source" ? OS_LEGAL_COLORS.primaryBlue : "#22c55e")};
   color: ${(props) => (props.$variant === "source" ? "#1e40af" : "#166534")};
 `;
 
@@ -144,7 +145,7 @@ const ColumnHeader = styled.div`
 
   .column-title {
     font-weight: 600;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -153,8 +154,8 @@ const ColumnHeader = styled.div`
 
   .column-count {
     font-size: 0.75rem;
-    color: #64748b;
-    background: #f1f5f9;
+    color: ${OS_LEGAL_COLORS.textSecondary};
+    background: ${OS_LEGAL_COLORS.surfaceLight};
     padding: 2px 8px;
     border-radius: 10px;
   }
@@ -169,7 +170,7 @@ const DocumentSection = styled.div`
 
   .section-title {
     font-weight: 600;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     margin-bottom: 0.75rem;
     display: flex;
     align-items: center;
@@ -190,7 +191,7 @@ const DocumentSection = styled.div`
 const SearchResultItem = styled.div<{ $selected: boolean }>`
   padding: 0.75rem;
   margin: 0.25rem 0;
-  border: 1px solid ${(props) => (props.$selected ? "#3b82f6" : "#e5e7eb")};
+  border: 1px solid ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
@@ -200,8 +201,8 @@ const SearchResultItem = styled.div<{ $selected: boolean }>`
   gap: 0.75rem;
 
   &:hover {
-    border-color: #3b82f6;
-    background: #f8fafc;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   .doc-icon {
@@ -214,7 +215,7 @@ const SearchResultItem = styled.div<{ $selected: boolean }>`
 
     .doc-title {
       font-weight: 500;
-      color: #1e293b;
+      color: ${OS_LEGAL_COLORS.textPrimary};
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -225,18 +226,18 @@ const SearchResultItem = styled.div<{ $selected: boolean }>`
 const EmptyState = styled.div`
   text-align: center;
   padding: 2rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-style: italic;
 `;
 
 const InfoBox = styled.div`
   margin-top: 1rem;
   padding: 0.75rem;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 6px;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid ${OS_LEGAL_COLORS.primaryBlue};
   font-size: 0.875rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 // ============================================================================
@@ -682,7 +683,7 @@ export const DocumentRelationshipModal: React.FC<
           <DocumentSection>
             <ColumnHeader>
               <div className="column-title">
-                <ArrowRight size={14} color="#3b82f6" />
+                <ArrowRight size={14} color={OS_LEGAL_COLORS.primaryBlue} />
                 Source Documents
               </div>
               <span className="column-count">{sourceIds.length}</span>
@@ -712,11 +713,11 @@ export const DocumentRelationshipModal: React.FC<
                   </DocumentPill>
                 ))
               ) : documentsLoading ? (
-                <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                <span style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
                   Loading...
                 </span>
               ) : (
-                <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                <span style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
                   No source documents
                 </span>
               )}
@@ -770,7 +771,7 @@ export const DocumentRelationshipModal: React.FC<
                   </DocumentPill>
                 ))
               ) : (
-                <span style={{ color: "#64748b", fontStyle: "italic" }}>
+                <span style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
                   No target documents
                 </span>
               )}
@@ -826,12 +827,12 @@ export const DocumentRelationshipModal: React.FC<
                     onClick={() => addDocument(doc.id, addingToSide)}
                   >
                     <div className="doc-icon">
-                      <FileText size={16} color="#64748b" />
+                      <FileText size={16} color={OS_LEGAL_COLORS.textSecondary} />
                     </div>
                     <div className="doc-info">
                       <div className="doc-title">{doc.title}</div>
                     </div>
-                    <Plus size={16} color="#64748b" />
+                    <Plus size={16} color={OS_LEGAL_COLORS.textSecondary} />
                   </SearchResultItem>
                 ))
               ) : (
@@ -1002,8 +1003,8 @@ export const DocumentRelationshipModal: React.FC<
                   <div
                     style={{
                       padding: "0.75rem",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
+                      background: OS_LEGAL_COLORS.surfaceHover,
+                      border: `1px solid ${OS_LEGAL_COLORS.border}`,
                       borderRadius: "6px",
                       display: "flex",
                       alignItems: "center",

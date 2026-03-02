@@ -28,6 +28,7 @@ import { AlertCircle, ArrowLeft, Send, Home } from "lucide-react";
 import { Button } from "semantic-ui-react";
 import { Spinner } from "@os-legal/ui";
 import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 import {
   GET_CORPUS_CONVERSATIONS,
@@ -1187,7 +1188,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     alignItems: "center",
                     gap: "0.5rem",
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: OS_LEGAL_COLORS.textSecondary,
                     flexShrink: 0,
                   }}
                 >
@@ -1197,7 +1198,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                       flex: 1,
                       height: 4,
                       borderRadius: 2,
-                      background: "#e2e8f0",
+                      background: OS_LEGAL_COLORS.border,
                       overflow: "hidden",
                     }}
                   >

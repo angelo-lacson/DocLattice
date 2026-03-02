@@ -29,6 +29,7 @@ import {
   AgentPromptBox,
   InfoNote,
 } from "../styles/corpusSettingsStyles";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface CorpusAction {
   id: string;
@@ -133,7 +134,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       <h3
                         style={{
                           margin: 0,
-                          color: "#1e293b",
+                          color: OS_LEGAL_COLORS.textPrimary,
                           fontSize: "1.125rem",
                           fontWeight: 600,
                         }}
@@ -149,7 +150,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       style={{
                         display: "flex",
                         gap: "1.5rem",
-                        color: "#64748b",
+                        color: OS_LEGAL_COLORS.textSecondary,
                         fontSize: "0.9rem",
                         flexWrap: "wrap",
                       }}

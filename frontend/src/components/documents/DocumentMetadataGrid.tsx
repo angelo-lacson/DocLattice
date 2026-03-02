@@ -39,6 +39,7 @@ import { MetadataCellEditor } from "../metadata/editors/MetadataCellEditor";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { DEBOUNCE } from "../../assets/configurations/constants";
 import { InfoMessage, LoadingState } from "../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface DocumentMetadataGridProps {
   corpusId: string;
@@ -83,9 +84,9 @@ const StyledTable = styled(Table)`
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 
       th {
-        background: #f8fafc;
+        background: ${OS_LEGAL_COLORS.surfaceHover};
         font-weight: 600;
-        color: #475569;
+        color: ${OS_LEGAL_COLORS.textTertiary};
         text-transform: uppercase;
         font-size: 0.75rem;
         letter-spacing: 0.05em;
@@ -96,7 +97,7 @@ const StyledTable = styled(Table)`
           position: sticky;
           left: 0;
           z-index: 11;
-          background: #f8fafc;
+          background: ${OS_LEGAL_COLORS.surfaceHover};
           box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
         }
       }
@@ -107,12 +108,12 @@ const StyledTable = styled(Table)`
         transition: background-color 0.2s ease;
 
         &:hover {
-          background-color: #f8fafc;
+          background-color: ${OS_LEGAL_COLORS.surfaceHover};
         }
 
         td {
           padding: 0.5rem;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 
           &:first-child {
             position: sticky;
@@ -122,7 +123,7 @@ const StyledTable = styled(Table)`
             z-index: 5;
             font-weight: 600;
             cursor: pointer;
-            color: #3b82f6;
+            color: ${OS_LEGAL_COLORS.primaryBlue};
 
             &:hover {
               color: #2563eb;
@@ -152,10 +153,10 @@ const EditableCell = styled.div.attrs<{
     props.isEditing ? "#f0f9ff" : props.hasError ? "#fef2f2" : "transparent"};
   border: 1px solid
     ${(props) =>
-      props.isEditing ? "#3b82f6" : props.hasError ? "#ef4444" : "transparent"};
+      props.isEditing ? OS_LEGAL_COLORS.primaryBlue : props.hasError ? "#ef4444" : "transparent"};
 
   &:hover {
-    background: ${(props) => (props.isEditing ? "#f0f9ff" : "#f8fafc")};
+    background: ${(props) => (props.isEditing ? "#f0f9ff" : OS_LEGAL_COLORS.surfaceHover)};
   }
 `;
 
@@ -178,12 +179,12 @@ const PaginationFooter = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const PaginationInfo = styled.div`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
 `;
 
@@ -607,7 +608,7 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                                 {isSaving && (
                                   <Loader2
                                     size={12}
-                                    color="#3b82f6"
+                                    color={OS_LEGAL_COLORS.primaryBlue}
                                     style={{
                                       marginLeft: "0.5rem",
                                       animation: "spin 1s linear infinite",
@@ -618,8 +619,8 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                                 {isDirty && !isSaving && (
                                   <Circle
                                     size={8}
-                                    color="#3b82f6"
-                                    fill="#3b82f6"
+                                    color={OS_LEGAL_COLORS.primaryBlue}
+                                    fill={OS_LEGAL_COLORS.primaryBlue}
                                     style={{ marginLeft: "0.5rem" }}
                                   />
                                 )}

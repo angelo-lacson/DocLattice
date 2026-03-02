@@ -34,6 +34,7 @@ import {
   EmptyTrashOutput,
 } from "../../../graphql/mutations";
 import fallback_doc_icon from "../../../assets/images/defaults/default_doc_icon.jpg";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // Message auto-dismiss durations (in milliseconds)
 const SUCCESS_MESSAGE_DURATION = 5000;
@@ -90,7 +91,7 @@ const Header = styled.div`
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   flex-wrap: wrap;
   gap: 8px;
 
@@ -110,7 +111,7 @@ const Title = styled.h2`
   font-weight: 600;
 
   svg {
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     flex-shrink: 0;
   }
 
@@ -156,14 +157,14 @@ const DocumentGrid = styled.div`
 
 const DocumentCard = styled.div<{ $isSelected: boolean }>`
   background: white;
-  border: 1px solid ${(props) => (props.$isSelected ? "#3b82f6" : "#e2e8f0")};
+  border: 1px solid ${(props) => (props.$isSelected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border)};
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s ease;
   cursor: pointer;
 
   &:hover {
-    border-color: #94a3b8;
+    border-color: ${OS_LEGAL_COLORS.textMuted};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 
@@ -196,7 +197,7 @@ const Thumbnail = styled.div`
   height: 48px;
   border-radius: 6px;
   overflow: hidden;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   flex-shrink: 0;
   position: relative;
 
@@ -243,7 +244,7 @@ const CardTitle = styled.div`
 
   .file-type {
     font-size: 11px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     text-transform: uppercase;
     font-weight: 500;
   }
@@ -251,7 +252,7 @@ const CardTitle = styled.div`
 
 const CardMeta = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-bottom: 12px;
 
   .meta-row {
@@ -284,7 +285,7 @@ const CardActions = styled.div`
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
 
   @media (max-width: 480px) {
     padding-top: 8px;
@@ -294,7 +295,7 @@ const CardActions = styled.div`
 const EmptyState = styled.div`
   text-align: center;
   padding: 60px 20px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   svg {
     margin-bottom: 16px;
@@ -302,7 +303,7 @@ const EmptyState = styled.div`
   }
 
   h3 {
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
     margin-bottom: 8px;
     font-size: 18px;
   }
@@ -316,7 +317,7 @@ const EmptyState = styled.div`
 
 const SelectionBar = styled.div`
   background: #eff6ff;
-  border: 1px solid #3b82f6;
+  border: 1px solid ${OS_LEGAL_COLORS.primaryBlue};
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -557,7 +558,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         ) : (
           <>
             <div
-              style={{ width: "100%", height: "100%", background: "#f8fafc" }}
+              style={{ width: "100%", height: "100%", background: OS_LEGAL_COLORS.surfaceHover }}
             />
             <img
               src={fallback_doc_icon}
@@ -622,7 +623,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               style={{
                 fontSize: "16px",
                 fontWeight: "normal",
-                color: "#64748b",
+                color: OS_LEGAL_COLORS.textSecondary,
               }}
             >
               ({deletedDocuments.length}{" "}
@@ -804,7 +805,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                           style={{
                             width: "100%",
                             height: "100%",
-                            background: "#f8fafc",
+                            background: OS_LEGAL_COLORS.surfaceHover,
                           }}
                         />
                         <img

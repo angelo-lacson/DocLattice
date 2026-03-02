@@ -20,6 +20,7 @@ import {
   parseCorpusFolderTags,
 } from "../../../graphql/queries/folders";
 import { ErrorMessage } from "../../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * EditFolderModal - Modal for editing existing folders
@@ -41,8 +42,8 @@ const ModalHeader = styled(Modal.Header)`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const CloseButton = styled.button`
@@ -56,12 +57,12 @@ const CloseButton = styled.button`
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   transition: all 0.15s ease;
 
   &:hover {
-    background: #e2e8f0;
-    color: #1e293b;
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -77,7 +78,7 @@ const ColorPreview = styled.div<{ $color: string }>`
   height: 40px;
   border-radius: 8px;
   background-color: ${(props) => props.$color};
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   cursor: pointer;
   transition: all 0.15s ease;
 
@@ -97,7 +98,7 @@ const ColorInput = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 `;
@@ -286,7 +287,7 @@ export const EditFolderModal: React.FC = () => {
               maxLength={50}
             />
             <div
-              style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}
+              style={{ fontSize: "12px", color: OS_LEGAL_COLORS.textSecondary, marginTop: "4px" }}
             >
               Use Lucide React icon names (e.g., folder, file-text, star)
             </div>
@@ -300,7 +301,7 @@ export const EditFolderModal: React.FC = () => {
               onChange={(e) => setTags(e.target.value)}
             />
             <div
-              style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}
+              style={{ fontSize: "12px", color: OS_LEGAL_COLORS.textSecondary, marginTop: "4px" }}
             >
               Comma-separated tags for organization
             </div>

@@ -3,6 +3,7 @@ import { Form, Button } from "semantic-ui-react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { InfoMessage } from "../widgets/feedback";
 import {
   UPDATE_CORPUS,
@@ -37,7 +38,7 @@ const SectionHeader = styled.div`
 `;
 
 const HelperText = styled.p`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
   margin: 0.5rem 0;
   line-height: 1.5;

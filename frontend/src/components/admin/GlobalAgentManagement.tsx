@@ -11,6 +11,8 @@ import { StyledTextArea } from "../widgets/modals/styled";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
 import { AgentConfigurationType } from "../../types/graphql-api";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { CardSegment as StyledSegment } from "../layout/SharedSegments";
 
 // GraphQL Queries and Mutations
 const GET_GLOBAL_AGENTS = gql`
@@ -138,18 +140,10 @@ const PageHeader = styled.div`
 
 const PageTitle = styled.h1`
   margin: 0;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.5rem;
-`;
-
-const StyledSegment = styled.div`
-  padding: 1rem;
-  border-radius: 12px;
-  background: white;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
 
 interface AgentNode {

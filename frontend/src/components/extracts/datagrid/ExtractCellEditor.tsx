@@ -4,6 +4,7 @@ import { Input } from "@os-legal/ui";
 import { JSONSchema7 } from "json-schema";
 import JsonView from "@uiw/react-json-view";
 import { darkTheme } from "@uiw/react-json-view/dark";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface ExtractCellEditorProps {
   row: any;
@@ -63,8 +64,8 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
     >
       <Modal.Header
         style={{
-          background: "#f8fafc",
-          borderBottom: "1px solid #e2e8f0",
+          background: OS_LEGAL_COLORS.surfaceHover,
+          borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
           padding: "16px 24px",
           fontSize: "1.1rem",
           color: "#0f172a",
@@ -99,8 +100,8 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
       </Modal.Content>
       <Modal.Actions
         style={{
-          background: "#f8fafc",
-          borderTop: "1px solid #e2e8f0",
+          background: OS_LEGAL_COLORS.surfaceHover,
+          borderTop: `1px solid ${OS_LEGAL_COLORS.border}`,
           padding: "16px 24px",
         }}
       >
@@ -108,8 +109,8 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
           onClick={() => setIsJsonModalOpen(false)}
           style={{
             marginRight: "12px",
-            background: "#f1f5f9",
-            color: "#64748b",
+            background: OS_LEGAL_COLORS.surfaceLight,
+            color: OS_LEGAL_COLORS.textSecondary,
             border: "none",
             borderRadius: "6px",
             padding: "8px 16px",
@@ -121,7 +122,7 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
           primary
           onClick={handleCommit}
           style={{
-            background: "#3b82f6",
+            background: OS_LEGAL_COLORS.primaryBlue,
             color: "#fff",
             border: "none",
             borderRadius: "6px",

@@ -19,7 +19,7 @@ export const ToolBadge = styled.span`
   display: inline-block;
   padding: 0.15em 0.4em;
   font-size: 0.75rem;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   color: ${OS_LEGAL_COLORS.textSecondary};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;

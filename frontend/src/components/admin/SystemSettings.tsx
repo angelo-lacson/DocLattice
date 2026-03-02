@@ -25,6 +25,7 @@ import {
   CircleAlert,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { PipelineComponentType } from "../../types/graphql-api";
 import { getComponentDisplayName } from "./PipelineIcons";
 import {
@@ -124,7 +125,7 @@ export const SystemSettings: React.FC = () => {
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
   const [secretsValues, setSecretsValues] = useState<Record<string, string>>(
-    {}
+    {},
   );
   const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
     useState(false);
@@ -175,7 +176,7 @@ export const SystemSettings: React.FC = () => {
             const allSettings = getComponentSettingsSchema(pending.className);
             const hasAnySettings = allSettings.length > 0;
             const hasAnyMissing = allSettings.some(
-              (s) => s.required && !s.hasValue
+              (s) => s.required && !s.hasValue,
             );
 
             if (hasAnySettings && hasAnyMissing) {
@@ -188,7 +189,7 @@ export const SystemSettings: React.FC = () => {
           }
         } else {
           toast.error(
-            data.updatePipelineSettings?.message || "Failed to update settings"
+            data.updatePipelineSettings?.message || "Failed to update settings",
           );
           pendingAutoExpandRef.current = null;
         }
@@ -197,7 +198,7 @@ export const SystemSettings: React.FC = () => {
         toast.error(`Error updating settings: ${err.message}`);
         pendingAutoExpandRef.current = null;
       },
-    }
+    },
   );
 
   const [resetSettings, { loading: resetting }] = useMutation(
@@ -210,14 +211,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.resetPipelineSettings?.message || "Failed to reset settings"
+            data.resetPipelineSettings?.message || "Failed to reset settings",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error resetting settings: ${err.message}`);
       },
-    }
+    },
   );
 
   const [updateSecrets, { loading: updatingSecrets }] = useMutation(
@@ -233,14 +234,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.updateComponentSecrets?.message || "Failed to update secrets"
+            data.updateComponentSecrets?.message || "Failed to update secrets",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating secrets: ${err.message}`);
       },
-    }
+    },
   );
 
   const [deleteSecrets, { loading: deletingSecrets }] = useMutation(
@@ -253,14 +254,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.deleteComponentSecrets?.message || "Failed to delete secrets"
+            data.deleteComponentSecrets?.message || "Failed to delete secrets",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error deleting secrets: ${err.message}`);
       },
-    }
+    },
   );
 
   const settings = settingsData?.pipelineSettings;
@@ -269,15 +270,15 @@ export const SystemSettings: React.FC = () => {
   const componentsByStage = useMemo(() => {
     const parsers = (components?.parsers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className)
+        Boolean(comp?.className),
     );
     const embedders = (components?.embedders || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className)
+        Boolean(comp?.className),
     );
     const thumbnailers = (components?.thumbnailers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className)
+        Boolean(comp?.className),
     );
 
     return { parsers, embedders, thumbnailers };
@@ -331,7 +332,7 @@ export const SystemSettings: React.FC = () => {
     (stage: StageType, mimeType: string): string | null => {
       return currentSelections[stage]?.[mimeType] ?? null;
     },
-    [currentSelections]
+    [currentSelections],
   );
 
   // Get components for a stage, filtered by MIME type support
@@ -358,39 +359,39 @@ export const SystemSettings: React.FC = () => {
         }
         // Check if the MIME type matches any supported file type
         return fileTypes.some(
-          (ft) => ft === mimeShortLower || ft === mimeTypeLower
+          (ft) => ft === mimeShortLower || ft === mimeTypeLower,
         );
       });
     },
-    [componentsByStage, normalizedSupportedFileTypes]
+    [componentsByStage, normalizedSupportedFileTypes],
   );
 
   const getComponentSettingsSchema = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       const component = componentByClassName.get(className);
       return (component?.settingsSchema || []).filter(
-        (entry): entry is SettingsSchemaEntry => Boolean(entry)
+        (entry): entry is SettingsSchemaEntry => Boolean(entry),
       );
     },
-    [componentByClassName]
+    [componentByClassName],
   );
 
   const getSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType === "secret"
+        (entry) => entry.settingType === "secret",
       );
     },
-    [getComponentSettingsSchema]
+    [getComponentSettingsSchema],
   );
 
   const getNonSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType !== "secret"
+        (entry) => entry.settingType !== "secret",
       );
     },
-    [getComponentSettingsSchema]
+    [getComponentSettingsSchema],
   );
 
   // Look up a component's display name by className from loaded components data
@@ -399,7 +400,7 @@ export const SystemSettings: React.FC = () => {
       const component = componentByClassName.get(className);
       return getComponentDisplayName(className, component?.title || undefined);
     },
-    [componentByClassName]
+    [componentByClassName],
   );
 
   // Handle component selection
@@ -423,7 +424,7 @@ export const SystemSettings: React.FC = () => {
         },
       });
     },
-    [settings, updateSettings]
+    [settings, updateSettings],
   );
 
   // Handle MIME type change for a stage
@@ -434,7 +435,7 @@ export const SystemSettings: React.FC = () => {
         [stage]: mimeType,
       }));
     },
-    []
+    [],
   );
 
   // Toggle advanced settings
@@ -451,12 +452,12 @@ export const SystemSettings: React.FC = () => {
       setSecretsComponentPath(componentPath);
       const secretSettings = getSecretSettingsForComponent(componentPath);
       const template = Object.fromEntries(
-        secretSettings.map((entry) => [entry.name, ""])
+        secretSettings.map((entry) => [entry.name, ""]),
       );
       setSecretsValues(template);
       setShowSecretsModal(true);
     },
-    [getSecretSettingsForComponent]
+    [getSecretSettingsForComponent],
   );
 
   const handleSaveSecrets = useCallback(() => {
@@ -489,7 +490,7 @@ export const SystemSettings: React.FC = () => {
     const secretsBytes = new TextEncoder().encode(secretsJson).length;
     if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
       toast.error(
-        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
+        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`,
       );
       return;
     }
@@ -503,7 +504,7 @@ export const SystemSettings: React.FC = () => {
     });
     if (missingRequired.length > 0) {
       const missingLabels = missingRequired.map((entry) =>
-        formatSettingLabel(entry.name, entry.description)
+        formatSettingLabel(entry.name, entry.description),
       );
       toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
       return;
@@ -579,7 +580,7 @@ export const SystemSettings: React.FC = () => {
         },
       });
     },
-    [settings, getNonSecretSettingsForComponent, updateSettings]
+    [settings, getNonSecretSettingsForComponent, updateSettings],
   );
 
   // Handle default embedder
@@ -626,7 +627,7 @@ export const SystemSettings: React.FC = () => {
       // Filter to ensure components have className defined
       const filteredComponents = stageComponents.filter(
         (comp): comp is PipelineComponentType & { className: string } =>
-          Boolean(comp?.className)
+          Boolean(comp?.className),
       );
 
       return (
@@ -666,7 +667,7 @@ export const SystemSettings: React.FC = () => {
       handleDeleteSecretsClick,
       handleSaveComponentSettings,
       updating,
-    ]
+    ],
   );
 
   // Loading state
@@ -877,7 +878,7 @@ export const SystemSettings: React.FC = () => {
       >
         <ModalHeader
           title={`Configure Secrets \u2014 ${getComponentDisplayNameByClassName(
-            secretsComponentPath
+            secretsComponentPath,
           )}`}
           onClose={() => setShowSecretsModal(false)}
         />
@@ -941,7 +942,7 @@ export const SystemSettings: React.FC = () => {
                     </FormHelperText>
                   )}
                 </SecretFieldRow>
-              )
+              ),
             )}
           </SecretFieldGroup>
         </ModalBody>
@@ -997,7 +998,7 @@ export const SystemSettings: React.FC = () => {
               {components.embedders
                 .filter(
                   (e): e is PipelineComponentType & { className: string } =>
-                    Boolean(e?.className)
+                    Boolean(e?.className),
                 )
                 .map((e) => (
                   <div
@@ -1011,25 +1012,30 @@ export const SystemSettings: React.FC = () => {
                       background:
                         defaultEmbedderValue === e.className
                           ? "#e0e7ff"
-                          : "#f8fafc",
+                          : OS_LEGAL_COLORS.surfaceHover,
                       border: `1px solid ${
                         defaultEmbedderValue === e.className
                           ? "#6366f1"
-                          : "#e2e8f0"
+                          : OS_LEGAL_COLORS.border
                       }`,
                     }}
                     onClick={() => setDefaultEmbedderValue(e.className)}
                   >
                     <strong>{e.title || e.name}</strong>
                     {e.vectorSize && (
-                      <span style={{ color: "#64748b", marginLeft: "0.5rem" }}>
+                      <span
+                        style={{
+                          color: OS_LEGAL_COLORS.textSecondary,
+                          marginLeft: "0.5rem",
+                        }}
+                      >
                         ({e.vectorSize}d)
                       </span>
                     )}
                     <div
                       style={{
                         fontSize: "0.75rem",
-                        color: "#64748b",
+                        color: OS_LEGAL_COLORS.textSecondary,
                         fontFamily: "monospace",
                         marginTop: "0.25rem",
                       }}

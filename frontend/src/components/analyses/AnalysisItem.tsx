@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { useMutation } from "@apollo/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -92,10 +93,10 @@ const StyledLabel = styled.span`
   padding: 0.25em 0.6em;
   font-size: 0.85em;
   font-weight: 500;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 const DeleteButton = styled(Button)`
@@ -185,7 +186,7 @@ export const AnalysisItem = ({
       if (cache_data) {
         const new_cache_data = _.cloneDeep(cache_data);
         new_cache_data.analyses.edges = new_cache_data.analyses.edges.filter(
-          (edge) => edge.node.id !== analysis.id
+          (edge) => edge.node.id !== analysis.id,
         );
         cache.writeQuery({
           query: GET_ANALYSES,
@@ -211,7 +212,7 @@ export const AnalysisItem = ({
   };
 
   const my_permissions = getPermissions(
-    analysis.myPermissions ? analysis.myPermissions : []
+    analysis.myPermissions ? analysis.myPermissions : [],
   );
   const can_delete = my_permissions.includes(PermissionTypes.CAN_REMOVE);
 
@@ -276,7 +277,7 @@ export const AnalysisItem = ({
               style={{
                 marginTop: "0.5rem",
                 fontSize: "0.8rem",
-                color: "#64748b",
+                color: OS_LEGAL_COLORS.textSecondary,
               }}
             >
               Processing...
@@ -304,7 +305,7 @@ export const AnalysisItem = ({
               {isOverflowing && !showFullDescription && (
                 <ReadMoreLink
                   onClick={(
-                    e: React.MouseEvent<HTMLSpanElement, MouseEvent>
+                    e: React.MouseEvent<HTMLSpanElement, MouseEvent>,
                   ) => {
                     e.stopPropagation();
                     setShowFullDescription(true);

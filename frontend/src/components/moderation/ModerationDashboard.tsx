@@ -182,7 +182,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         first: MODERATION_PAGE_SIZE,
       },
       fetchPolicy: "cache-and-network",
-    }
+    },
   );
 
   // Handle loading more actions with cursor-based pagination
@@ -232,7 +232,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         timeRangeHours,
       },
       fetchPolicy: "cache-and-network",
-    }
+    },
   );
 
   // Rollback mutation
@@ -278,7 +278,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
     <div style={{ padding: "1rem" }}>
       <div
         style={{
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
           paddingBottom: "1rem",
           marginBottom: "1rem",
         }}
@@ -297,7 +297,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         {corpusTitle && (
           <div
             style={{
-              color: "#64748b",
+              color: OS_LEGAL_COLORS.textSecondary,
               fontSize: "0.9rem",
               marginTop: "0.25rem",
             }}
@@ -311,7 +311,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
       <div
         style={{
           padding: "1rem",
-          border: "1px solid #e2e8f0",
+          border: `1px solid ${OS_LEGAL_COLORS.border}`,
           borderRadius: "8px",
           background: "white",
           marginBottom: "1rem",
@@ -395,7 +395,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
       <div
         style={{
           padding: "1rem",
-          border: "1px solid #e2e8f0",
+          border: `1px solid ${OS_LEGAL_COLORS.border}`,
           borderRadius: "8px",
           background: "white",
           marginBottom: "1rem",
@@ -450,7 +450,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
       <div
         style={{
           padding: "1rem",
-          border: "1px solid #e2e8f0",
+          border: `1px solid ${OS_LEGAL_COLORS.border}`,
           borderRadius: "8px",
           background: "white",
           marginBottom: "1rem",
@@ -491,7 +491,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
               <Table.Body>
                 {actions.map(({ node }) => {
                   const { bg: actionBg, color: actionColor } = getActionColors(
-                    node.actionType
+                    node.actionType,
                   );
                   return (
                     <Table.Row key={node.id}>

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import * as LucideIcons from "lucide-react";
 import styled from "styled-components";
 import { computePosition, flip, shift, offset, arrow } from "@floating-ui/dom";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 const StyledBadge = styled.span<{ $badgeColor: string }>`
   display: inline-flex;
@@ -46,7 +47,7 @@ const PopupContainer = styled.div<{ $show: boolean }>`
   padding: 1em;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   opacity: ${(props) => (props.$show ? 1 : 0)};
   pointer-events: ${(props) => (props.$show ? "auto" : "none")};
   transition: opacity 0.2s ease;
@@ -73,20 +74,20 @@ const BadgeContent = styled.div`
 const BadgeTitle = styled.div`
   font-weight: 700;
   font-size: 1.1em;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const BadgeDescription = styled.div`
   font-size: 0.9em;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.4;
 `;
 
 const BadgeMetadata = styled.div`
   font-size: 0.8em;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 0.3em;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
   padding-top: 0.5em;
 `;
 

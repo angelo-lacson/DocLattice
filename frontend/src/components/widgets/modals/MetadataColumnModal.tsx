@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Form, Button } from "semantic-ui-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { Database, Plus, Trash2, Save } from "lucide-react";
 import {
   MetadataColumn,
@@ -8,6 +9,7 @@ import {
   getDefaultValueForDataType,
 } from "../../../types/metadata";
 import { InfoMessage } from "../feedback";
+import { StyledTextArea } from "./styled";
 
 interface MetadataColumnModalProps {
   open: boolean;
@@ -43,9 +45,9 @@ const dataTypeOptions = [
 
 const ValidationSection = styled.div`
   padding: 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const ChoiceInput = styled.div`
@@ -68,28 +70,12 @@ const ErrorChip = styled.span`
   margin-left: 0.5em;
   padding: 0.15em 0.5em;
   font-size: 0.75rem;
-  color: #db2828;
+  color: ${OS_LEGAL_COLORS.danger};
   background: #fff6f6;
   border: 1px solid #e0b4b4;
   border-radius: 4px;
 `;
 
-const HelpTextArea = styled.textarea`
-  width: 100%;
-  padding: 0.5rem;
-  font-size: 0.875rem;
-  border: 1px solid #d4d4d8;
-  border-radius: 6px;
-  resize: vertical;
-  font-family: inherit;
-  line-height: 1.4;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-  }
-`;
 
 export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
   open,
@@ -99,7 +85,7 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 }) => {
   const [name, setName] = useState("");
   const [dataType, setDataType] = useState<MetadataDataType>(
-    MetadataDataType.STRING
+    MetadataDataType.STRING,
   );
   const [helpText, setHelpText] = useState("");
   const [required, setRequired] = useState(false);
@@ -378,7 +364,7 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 
           <Form.Field>
             <label htmlFor="metadata-help-text">Help Text</label>
-            <HelpTextArea
+            <StyledTextArea
               id="metadata-help-text"
               value={helpText}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>

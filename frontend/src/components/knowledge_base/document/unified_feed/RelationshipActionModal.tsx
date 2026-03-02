@@ -23,6 +23,7 @@ import {
   SmartLabelSearchOrCreateOutputs,
 } from "../../../../graphql/mutations";
 import { ErrorMessage, WarningMessage } from "../../../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 interface RelationshipActionModalProps {
   open: boolean;
@@ -52,13 +53,13 @@ const ModalContent = styled(Modal.Content)`
     width: 8px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   &::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 4px;
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -66,26 +67,26 @@ const ModalContent = styled(Modal.Content)`
 const RelationshipOption = styled.div<{ $selected: boolean }>`
   padding: 1rem;
   margin: 0.5rem 0;
-  border: 2px solid ${(props) => (props.$selected ? "#3b82f6" : "#e5e7eb")};
+  border: 2px solid ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   background: ${(props) => (props.$selected ? "#eff6ff" : "white")};
 
   &:hover {
-    border-color: #3b82f6;
-    background: #f8fafc;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   .relationship-label {
     font-weight: 600;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     margin-bottom: 0.25rem;
   }
 
   .relationship-stats {
     font-size: 0.875rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     display: flex;
     gap: 1rem;
   }
@@ -94,12 +95,12 @@ const RelationshipOption = styled.div<{ $selected: boolean }>`
 const InfoBox = styled.div`
   margin-top: 1rem;
   padding: 0.75rem;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 6px;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid ${OS_LEGAL_COLORS.primaryBlue};
 
   strong {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -128,11 +129,11 @@ const AnnotationPill = styled.div<{
       ? "#dbeafe"
       : props.$role === "target"
       ? "#dcfce7"
-      : "#f1f5f9"};
+      : OS_LEGAL_COLORS.surfaceLight};
   border: 2px solid
     ${(props) =>
       props.$role === "source"
-        ? "#3b82f6"
+        ? OS_LEGAL_COLORS.primaryBlue
         : props.$role === "target"
         ? "#22c55e"
         : "#e5e7eb"};
@@ -141,7 +142,7 @@ const AnnotationPill = styled.div<{
       ? "#1e40af"
       : props.$role === "target"
       ? "#166534"
-      : "#64748b"};
+      : OS_LEGAL_COLORS.textSecondary};
 
   &:hover {
     transform: translateY(-1px);
@@ -158,7 +159,7 @@ const AssignmentSection = styled.div`
 
   .section-title {
     font-weight: 600;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     margin-bottom: 0.75rem;
     display: flex;
     align-items: center;
@@ -378,7 +379,7 @@ export const RelationshipActionModal: React.FC<
                 <Form.Field style={{ marginTop: "1rem" }}>
                   <label>Select Relationship</label>
                   {editableRelationships.length === 0 ? (
-                    <p style={{ color: "#64748b", fontStyle: "italic" }}>
+                    <p style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
                       No editable relationships found. Create a new one instead.
                     </p>
                   ) : (
@@ -497,7 +498,7 @@ export const RelationshipActionModal: React.FC<
                         ) : (
                           <p
                             style={{
-                              color: "#64748b",
+                              color: OS_LEGAL_COLORS.textSecondary,
                               fontStyle: "italic",
                               margin: "0.5rem 0",
                             }}
@@ -582,8 +583,8 @@ export const RelationshipActionModal: React.FC<
                       <div
                         style={{
                           padding: "0.75rem",
-                          background: "#f8fafc",
-                          border: "1px solid #e2e8f0",
+                          background: OS_LEGAL_COLORS.surfaceHover,
+                          border: `1px solid ${OS_LEGAL_COLORS.border}`,
                           borderRadius: "6px",
                           display: "flex",
                           alignItems: "center",
@@ -611,7 +612,7 @@ export const RelationshipActionModal: React.FC<
 
                     <AssignmentSection>
                       <div className="section-title">
-                        <ArrowRight size={14} color="#3b82f6" />
+                        <ArrowRight size={14} color={OS_LEGAL_COLORS.primaryBlue} />
                         Source Annotations
                       </div>
                       <div className="pills-container">
@@ -696,7 +697,7 @@ export const RelationshipActionModal: React.FC<
                     <p
                       style={{
                         fontSize: "0.875rem",
-                        color: "#64748b",
+                        color: OS_LEGAL_COLORS.textSecondary,
                         marginTop: "1rem",
                         fontStyle: "italic",
                       }}
