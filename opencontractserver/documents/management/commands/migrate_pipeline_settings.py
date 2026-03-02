@@ -15,7 +15,7 @@ import logging
 from typing import Any
 
 from django.conf import settings as django_settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,10 @@ class Command(BaseCommand):
         sync_preferences = options.get("sync_preferences", False)
         init_only = options.get("init_only", False)
         list_components = options.get("list_components", False)
+
+        # Validate flag combinations
+        if init_only and not sync_preferences:
+            raise CommandError("--init-only requires --sync-preferences")
 
         # Handle --list-components first (doesn't need the header)
         if list_components:

@@ -5,6 +5,7 @@ Tests for the migrate_pipeline_settings management command.
 from io import StringIO
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
 from opencontractserver.documents.models import PipelineSettings
@@ -332,6 +333,17 @@ class InitOnlyTestCase(TestCase):
         self.assertTrue(args.init_only)
         self.assertTrue(args.sync_preferences)
 
+    def test_init_only_without_sync_preferences_raises_error(self):
+        """Test --init-only without --sync-preferences raises CommandError."""
+        out = StringIO()
+        with self.assertRaises(CommandError) as ctx:
+            call_command(
+                "migrate_pipeline_settings",
+                "--init-only",
+                stdout=out,
+            )
+        self.assertIn("--sync-preferences", str(ctx.exception))
+
     @override_settings(
         PREFERRED_PARSERS={"application/pdf": "settings.parser.Path"},
         PREFERRED_EMBEDDERS={"application/pdf": "settings.embedder.Path"},
@@ -361,7 +373,7 @@ class InitOnlyTestCase(TestCase):
         DEFAULT_EMBEDDER="settings.embedder.Default",
     )
     def test_init_only_summary_shows_preserved_count(self):
-        """Test --init-only summary shows count of preserved fields."""
+        """Test --init-only summary shows correct count of preserved fields."""
         out = StringIO()
 
         call_command(
@@ -372,7 +384,9 @@ class InitOnlyTestCase(TestCase):
         )
 
         output = out.getvalue()
-        self.assertIn("Fields preserved (already configured):", output)
+        # setUp has 5 non-empty fields: preferred_parsers, preferred_embedders,
+        # parser_kwargs, default_embedder, enabled_components
+        self.assertIn("Fields preserved (already configured): 5", output)
 
 
 class ListComponentsTestCase(TestCase):
