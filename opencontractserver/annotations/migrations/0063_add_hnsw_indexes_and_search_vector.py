@@ -8,15 +8,18 @@ This migration:
 4. Creates a database trigger to auto-populate search_vector on INSERT/UPDATE
 5. Backfills search_vector for existing annotations
 
-Uses AddIndexConcurrently for HNSW indexes to avoid locking tables during creation.
-Requires atomic = False for concurrent index creation.
+Uses SeparateDatabaseAndState so Django's migration state tracks the HnswIndex
+objects (matching model Meta) while the actual database operations use raw SQL
+with CREATE INDEX CONCURRENTLY ... USING hnsw. This is necessary because Django's
+AddIndexConcurrently generates B-tree indexes rather than HNSW indexes.
+
+Requires atomic = False for CONCURRENTLY operations.
 """
 
 import django.contrib.postgres.indexes
 import django.contrib.postgres.search
-import django.db.models
-from django.contrib.postgres.operations import AddIndexConcurrently
 from django.db import migrations
+from pgvector.django import HnswIndex
 
 from opencontractserver.constants.search import (
     FTS_CONFIG,
@@ -24,9 +27,61 @@ from opencontractserver.constants.search import (
     HNSW_M,
 )
 
+# HNSW index definitions: (index_name, column_name)
+HNSW_INDEXES = [
+    ("emb_hnsw_384", "vector_384"),
+    ("emb_hnsw_768", "vector_768"),
+    ("emb_hnsw_1024", "vector_1024"),
+    ("emb_hnsw_1536", "vector_1536"),
+    ("emb_hnsw_2048", "vector_2048"),
+    ("emb_hnsw_3072", "vector_3072"),
+    ("emb_hnsw_4096", "vector_4096"),
+]
+
+
+def _hnsw_operations():
+    """Generate SeparateDatabaseAndState ops for each HNSW index.
+
+    - state_operations: AddIndex with HnswIndex so Django tracks the index
+    - database_operations: RunSQL with CREATE INDEX CONCURRENTLY ... USING hnsw
+    """
+    ops = []
+    for index_name, column in HNSW_INDEXES:
+        ops.append(
+            migrations.SeparateDatabaseAndState(
+                state_operations=[
+                    migrations.AddIndex(
+                        model_name="embedding",
+                        index=HnswIndex(
+                            name=index_name,
+                            fields=[column],
+                            m=HNSW_M,
+                            ef_construction=HNSW_EF_CONSTRUCTION,
+                            opclasses=["vector_cosine_ops"],
+                        ),
+                    ),
+                ],
+                database_operations=[
+                    migrations.RunSQL(
+                        sql=(
+                            f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {index_name} "
+                            f"ON annotations_embedding USING hnsw "
+                            f"({column} vector_cosine_ops) "
+                            f"WITH (m = {HNSW_M}, "
+                            f"ef_construction = {HNSW_EF_CONSTRUCTION});"
+                        ),
+                        reverse_sql=(
+                            f"DROP INDEX CONCURRENTLY IF EXISTS {index_name};"
+                        ),
+                    ),
+                ],
+            )
+        )
+    return ops
+
 
 class Migration(migrations.Migration):
-    atomic = False  # Required for AddIndexConcurrently
+    atomic = False  # Required for CREATE INDEX CONCURRENTLY
 
     dependencies = [
         ("annotations", "0062_update_checkconstraint_check_to_condition"),
@@ -36,62 +91,7 @@ class Migration(migrations.Migration):
         # =================================================================
         # Phase 1: HNSW indexes on Embedding vector columns
         # =================================================================
-        AddIndexConcurrently(
-            model_name="embedding",
-            index=django.db.models.Index(
-                fields=["vector_384"],
-                name="emb_hnsw_384",
-                opclasses=["vector_cosine_ops"],
-            ),
-        ),
-        AddIndexConcurrently(
-            model_name="embedding",
-            index=django.db.models.Index(
-                fields=["vector_768"],
-                name="emb_hnsw_768",
-                opclasses=["vector_cosine_ops"],
-            ),
-        ),
-        AddIndexConcurrently(
-            model_name="embedding",
-            index=django.db.models.Index(
-                fields=["vector_1024"],
-                name="emb_hnsw_1024",
-                opclasses=["vector_cosine_ops"],
-            ),
-        ),
-        AddIndexConcurrently(
-            model_name="embedding",
-            index=django.db.models.Index(
-                fields=["vector_1536"],
-                name="emb_hnsw_1536",
-                opclasses=["vector_cosine_ops"],
-            ),
-        ),
-        AddIndexConcurrently(
-            model_name="embedding",
-            index=django.db.models.Index(
-                fields=["vector_2048"],
-                name="emb_hnsw_2048",
-                opclasses=["vector_cosine_ops"],
-            ),
-        ),
-        AddIndexConcurrently(
-            model_name="embedding",
-            index=django.db.models.Index(
-                fields=["vector_3072"],
-                name="emb_hnsw_3072",
-                opclasses=["vector_cosine_ops"],
-            ),
-        ),
-        AddIndexConcurrently(
-            model_name="embedding",
-            index=django.db.models.Index(
-                fields=["vector_4096"],
-                name="emb_hnsw_4096",
-                opclasses=["vector_cosine_ops"],
-            ),
-        ),
+        *_hnsw_operations(),
         # =================================================================
         # Phase 2: SearchVectorField on Annotation
         # =================================================================
@@ -101,12 +101,29 @@ class Migration(migrations.Migration):
             field=django.contrib.postgres.search.SearchVectorField(null=True),
         ),
         # GIN index for fast full-text search
-        AddIndexConcurrently(
-            model_name="annotation",
-            index=django.contrib.postgres.indexes.GinIndex(
-                fields=["search_vector"],
-                name="annotation_search_vector_gin",
-            ),
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AddIndex(
+                    model_name="annotation",
+                    index=django.contrib.postgres.indexes.GinIndex(
+                        fields=["search_vector"],
+                        name="annotation_search_vector_gin",
+                    ),
+                ),
+            ],
+            database_operations=[
+                migrations.RunSQL(
+                    sql=(
+                        "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
+                        "annotation_search_vector_gin "
+                        "ON annotations_annotation USING gin (search_vector);"
+                    ),
+                    reverse_sql=(
+                        "DROP INDEX CONCURRENTLY IF EXISTS "
+                        "annotation_search_vector_gin;"
+                    ),
+                ),
+            ],
         ),
         # =================================================================
         # Phase 3: Database trigger to auto-populate search_vector
