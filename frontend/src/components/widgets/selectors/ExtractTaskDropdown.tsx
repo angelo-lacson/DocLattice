@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Dropdown, DropdownProps, Header } from "semantic-ui-react";
+import { Dropdown, DropdownProps } from "semantic-ui-react";
 import { useQuery } from "@apollo/client";
 import _ from "lodash";
 import {
@@ -29,27 +29,9 @@ const StyledDropdown = styled(Dropdown)`
 
     // Style the dropdown menu
     .menu {
-      width: max-content; // Allow menu to be wider than the dropdown
-      min-width: 100%; // But at least as wide as the dropdown
-      max-width: 80vw; // Prevent extremely wide menus
-
-      // Style the menu items
-      > .item {
-        .header {
-          white-space: normal;
-          word-break: break-word;
-          font-size: 0.9em;
-          margin-bottom: 0.2em;
-        }
-
-        .sub.header {
-          white-space: normal;
-          word-break: break-word;
-          font-size: 0.8em;
-          color: rgba(0, 0, 0, 0.6);
-          line-height: 1.3;
-        }
-      }
+      width: max-content;
+      min-width: 100%;
+      max-width: 80vw;
     }
   }
 `;
@@ -113,7 +95,32 @@ export const ExtractTaskDropdown: React.FC<ExtractTaskDropdownProps> = ({
         key: task.name,
         text: task.name,
         value: task.name,
-        content: <Header content={task.name} subheader={task.description} />,
+        content: (
+          <div>
+            <div
+              style={{
+                fontWeight: 600,
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                fontSize: "0.9em",
+                marginBottom: "0.2em",
+              }}
+            >
+              {task.name}
+            </div>
+            <div
+              style={{
+                fontSize: "0.8em",
+                color: "rgba(0, 0, 0, 0.6)",
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                lineHeight: 1.3,
+              }}
+            >
+              {task.description}
+            </div>
+          </div>
+        ),
       })),
     [tasks]
   );

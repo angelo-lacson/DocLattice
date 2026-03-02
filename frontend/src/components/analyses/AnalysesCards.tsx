@@ -1,4 +1,4 @@
-import { Card } from "semantic-ui-react";
+import { Card, SemanticWIDTHS } from "semantic-ui-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import _ from "lodash";
@@ -143,7 +143,11 @@ export const AnalysesCards = ({
       }}
     >
       <LoadingOverlay active={loading} content={loading_message} />
-      <Card.Group stackable itemsPerRow={card_cols} style={comp_style}>
+      <Card.Group
+        stackable
+        itemsPerRow={card_cols as SemanticWIDTHS}
+        style={comp_style}
+      >
         {analysis_items}
       </Card.Group>
       <FetchMoreOnVisible fetchNextPage={handleUpdate} />

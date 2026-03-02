@@ -1,12 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Modal,
-  Header,
-  Button,
-  Icon,
-  Message,
-  Loader,
-} from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "@apollo/client";
@@ -41,6 +34,7 @@ import {
   NoteRevision,
 } from "../../../graphql/types/NoteTypes";
 import { SafeMarkdown } from "../markdown/SafeMarkdown";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // Styled Components
 const StyledModal = styled(Modal)`
@@ -70,7 +64,7 @@ const ModalHeader = styled(Modal.Header)`
   &&& {
     padding: 1.5rem 2rem !important;
     background: white;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -86,7 +80,7 @@ const ModalContent = styled(Modal.Content)`
     padding: 0 !important;
     flex: 1 !important;
     overflow: hidden !important;
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     min-height: 0 !important;
     max-height: calc(
       85vh - 60px - 70px
@@ -122,14 +116,18 @@ const EditorContainer = styled.div`
 
 const EditorHeader = styled.div`
   padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: linear-gradient(
+    to right,
+    ${OS_LEGAL_COLORS.surfaceHover},
+    ${OS_LEGAL_COLORS.surfaceLight}
+  );
   flex-shrink: 0;
 
   h3 {
     margin: 0 0 0.5rem 0;
     font-size: 1.25rem;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -139,7 +137,7 @@ const EditorHeader = styled.div`
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     font-size: 0.875rem;
     flex-wrap: wrap;
 
@@ -158,8 +156,8 @@ const TitleInput = styled.input`
   font-weight: 600;
   border: 2px solid transparent;
   border-radius: 8px;
-  background: #f1f5f9;
-  color: #1e293b;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textPrimary};
   transition: all 0.2s;
 
   &:focus {
@@ -187,11 +185,11 @@ const Editor = styled.textarea`
   font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
   font-size: 0.875rem;
   line-height: 1.6;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   resize: none;
   background: #fafbfc;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   transition: all 0.2s;
   overflow-y: auto;
   min-height: 0;
@@ -206,14 +204,14 @@ const Editor = styled.textarea`
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
 const Preview = styled.div`
   flex: 1;
   padding: 1.5rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   background: white;
   overflow-y: auto;
@@ -228,7 +226,7 @@ const Preview = styled.div`
 const HistoryPanel = styled(motion.div)`
   width: min(400px, 40vw); /* Responsive width: 400px or 40% of viewport */
   background: white;
-  border-left: 1px solid #e2e8f0;
+  border-left: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -239,14 +237,18 @@ const HistoryPanel = styled(motion.div)`
 
 const HistoryHeader = styled.div`
   padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: linear-gradient(
+    to right,
+    ${OS_LEGAL_COLORS.surfaceHover},
+    ${OS_LEGAL_COLORS.surfaceLight}
+  );
   flex-shrink: 0;
 
   h4 {
     margin: 0;
     font-size: 1.125rem;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -255,7 +257,7 @@ const HistoryHeader = styled.div`
   .version-count {
     margin-top: 0.375rem;
     font-size: 0.875rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -272,7 +274,7 @@ const HistoryList = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
     border-radius: 3px;
   }
 
@@ -281,7 +283,7 @@ const HistoryList = styled.div`
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -326,7 +328,11 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
   padding: 1rem;
   border: 1px solid
     ${(props) =>
-      props.$isActive ? "#4a90e2" : props.$isViewing ? "#a78bfa" : "#e2e8f0"};
+      props.$isActive
+        ? "#4a90e2"
+        : props.$isViewing
+        ? "#a78bfa"
+        : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   background: ${(props) =>
     props.$isActive ? "#eff6ff" : props.$isViewing ? "#f3f4f6" : "white"};
@@ -350,7 +356,11 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
     .version-number {
       font-weight: 600;
       color: ${(props) =>
-        props.$isActive ? "#4a90e2" : props.$isViewing ? "#7c3aed" : "#1e293b"};
+        props.$isActive
+          ? "#4a90e2"
+          : props.$isViewing
+          ? "#7c3aed"
+          : OS_LEGAL_COLORS.textPrimary};
       display: flex;
       align-items: center;
       gap: 0.375rem;
@@ -362,9 +372,15 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
       font-size: 0.75rem;
       font-weight: 500;
       background: ${(props) =>
-        props.$isActive ? "#4a90e2" : props.$isViewing ? "#a78bfa" : "#e2e8f0"};
+        props.$isActive
+          ? "#4a90e2"
+          : props.$isViewing
+          ? "#a78bfa"
+          : OS_LEGAL_COLORS.border};
       color: ${(props) =>
-        props.$isActive || props.$isViewing ? "white" : "#64748b"};
+        props.$isActive || props.$isViewing
+          ? "white"
+          : OS_LEGAL_COLORS.textSecondary};
     }
   }
 
@@ -373,7 +389,7 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
     flex-direction: column;
     gap: 0.25rem;
     font-size: 0.8125rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
 
     .meta-row {
       display: flex;
@@ -388,8 +404,8 @@ const ActionBar = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   flex-shrink: 0;
   min-width: 0;
   gap: 1rem;
@@ -438,10 +454,10 @@ const StyledButton = styled(Button)<StyledButtonProps>`
       props.$variant === "secondary" &&
       `
       background: white;
-      color: #64748b;
-      border: 1px solid #e2e8f0;
+      color: ${OS_LEGAL_COLORS.textSecondary};
+      border: 1px solid ${OS_LEGAL_COLORS.border};
       &:hover {
-        background: #f8fafc;
+        background: ${OS_LEGAL_COLORS.surfaceHover};
         border-color: #cbd5e1;
       }
     `}
@@ -672,8 +688,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   return (
     <StyledModal open={isOpen} onClose={handleClose} closeIcon>
       <ModalHeader>
-        <Header
-          as="h2"
+        <h2
           style={{
             margin: 0,
             display: "flex",
@@ -713,7 +728,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               Editing from v{editingFromVersion}
             </EditingIndicator>
           )}
-        </Header>
+        </h2>
       </ModalHeader>
 
       <ModalContent>
@@ -831,7 +846,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                               <div
                                 style={{
                                   fontSize: "0.875rem",
-                                  color: "#64748b",
+                                  color: OS_LEGAL_COLORS.textSecondary,
                                   marginBottom: "0.5rem",
                                 }}
                               >

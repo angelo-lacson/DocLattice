@@ -27,7 +27,7 @@ import {
   X,
   AlertCircle,
 } from "lucide-react";
-import { Menu, Checkbox } from "semantic-ui-react";
+import { Menu } from "semantic-ui-react";
 
 import {
   DeleteMultipleDocumentsInputs,
@@ -1444,7 +1444,8 @@ export const Documents = () => {
                         $visible={selected_document_ids.includes(doc.id)}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Checkbox
+                        <input
+                          type="checkbox"
                           aria-label={`Select ${doc.title || "Untitled"}`}
                           checked={selected_document_ids.includes(doc.id)}
                           onChange={() => handleSelect(doc.id)}
@@ -1525,7 +1526,8 @@ export const Documents = () => {
               {viewMode === VIEW_MODES.LIST && (
                 <DocumentsListView role="table" aria-label="Documents list">
                   <ListHeader role="rowgroup">
-                    <Checkbox
+                    <input
+                      type="checkbox"
                       aria-label="Select all documents"
                       checked={
                         selected_document_ids.length ===
@@ -1558,7 +1560,8 @@ export const Documents = () => {
                       }}
                     >
                       <div onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
+                        <input
+                          type="checkbox"
                           aria-label={`Select ${doc.title || "Untitled"}`}
                           checked={selected_document_ids.includes(doc.id)}
                           onChange={() => handleSelect(doc.id)}
@@ -1621,7 +1624,8 @@ export const Documents = () => {
                       }}
                     >
                       <div onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
+                        <input
+                          type="checkbox"
                           aria-label={`Select ${doc.title || "Untitled"}`}
                           checked={selected_document_ids.includes(doc.id)}
                           onChange={() => handleSelect(doc.id)}
