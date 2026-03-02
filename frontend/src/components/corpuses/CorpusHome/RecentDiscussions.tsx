@@ -250,7 +250,9 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
               onClick={() => onThreadClick?.(thread.id)}
               data-testid={`${testId}-thread-${thread.id}`}
             >
-              <ThreadTitle className="thread-title">{thread.title || "Untitled Discussion"}</ThreadTitle>
+              <ThreadTitle className="thread-title">
+                {thread.title || "Untitled Discussion"}
+              </ThreadTitle>
               <ThreadMeta>
                 <MetaItem>
                   <User />

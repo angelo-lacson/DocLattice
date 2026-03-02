@@ -1350,9 +1350,7 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   height: 16px;
   padding: 0 4px;
   background: ${(props) =>
-    props.$isZero
-      ? CORPUS_COLORS.slate[400]
-      : CORPUS_COLORS.teal[700]};
+    props.$isZero ? CORPUS_COLORS.slate[400] : CORPUS_COLORS.teal[700]};
   color: ${CORPUS_COLORS.white};
   border-radius: 8px;
   display: flex;
@@ -2708,9 +2706,7 @@ export const Corpuses = () => {
       : navigationItems.find((item) => item.id === "home")?.component;
 
     content = isPowerUserMode ? (
-          <CorpusViewContainer
-            id="corpus-view-container"
-          >
+      <CorpusViewContainer id="corpus-view-container">
         {/* Mobile backdrop */}
         <AnimatePresence>
           {mobileSidebarOpen && (
@@ -2869,9 +2865,7 @@ export const Corpuses = () => {
             >
               <ArrowLeft />
               {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-                <span style={{ flex: "1", textAlign: "left" }}>
-                  Focus Mode
-                </span>
+                <span style={{ flex: "1", textAlign: "left" }}>Focus Mode</span>
               )}
             </NavigationItem>
           </ExitPowerUserWrapper>
@@ -2884,13 +2878,11 @@ export const Corpuses = () => {
         >
           {mainContent}
         </MainContentArea>
-          </CorpusViewContainer>
+      </CorpusViewContainer>
     ) : (
-          <CleanViewContainer
-            id="corpus-clean-view"
-          >
-            {mainContent}
-          </CleanViewContainer>
+      <CleanViewContainer id="corpus-clean-view">
+        {mainContent}
+      </CleanViewContainer>
     );
   } else if (
     opened_corpus !== null &&
