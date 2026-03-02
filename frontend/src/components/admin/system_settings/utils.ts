@@ -12,7 +12,7 @@ import { PipelineComponentType } from "../../../types/graphql-api";
  * evaluate enablement on the client (e.g. during the optimistic
  * toggle-transition before the mutation response arrives).
  */
-export const isComponentEnabled = (
+const isComponentEnabled = (
   className: string,
   enabledComponents: string[]
 ): boolean =>

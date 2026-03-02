@@ -496,7 +496,10 @@ class EnabledComponentsMutationTestCase(TestCase):
     def setUp(self):
         from django.core.cache import cache
 
-        # Clear cache to ensure clean state between tests
+        # Clear cache to ensure clean state between tests.
+        # With pytest-xdist, parallel workers share the same Redis cache
+        # but have separate databases, so stale cache entries from other
+        # workers can leak into this test.
         cache.delete(PipelineSettings.CACHE_KEY)
 
         self.superuser = User.objects.create_superuser(
@@ -506,8 +509,17 @@ class EnabledComponentsMutationTestCase(TestCase):
             schema, context_value=TestContext(self.superuser)
         )
 
-        # Ensure the singleton exists
-        PipelineSettings.get_instance()
+        # Ensure the singleton exists and clear filetype default assignments.
+        # This prevents validation conflicts when tests set enabled_components,
+        # since the mutation rejects lists that omit assigned-default components.
+        instance = PipelineSettings.get_instance(use_cache=False)
+        instance.preferred_parsers = {}
+        instance.preferred_embedders = {}
+        instance.preferred_thumbnailers = {}
+        instance.default_embedder = ""
+        instance.enabled_components = []
+        instance.save()
+        cache.delete(PipelineSettings.CACHE_KEY)
 
     def _get_real_component_paths(self):
         """Return a dict with real component paths from the registry."""
@@ -709,16 +721,7 @@ class EnabledComponentsMutationTestCase(TestCase):
         if len(all_paths) < 2:
             self.skipTest("Need at least 2 registered components")
 
-        # Ensure we start from the "all enabled" state (empty list)
-        instance = PipelineSettings.get_instance(use_cache=False)
-        instance.enabled_components = []
-        instance.preferred_parsers = {}
-        instance.preferred_embedders = {}
-        instance.preferred_thumbnailers = {}
-        instance.default_embedder = ""
-        instance.save()
-
-        # Pick one component to disable
+        # Pick one component to disable (setUp already clears filetype defaults)
         target = all_paths[0]
         new_enabled = [p for p in all_paths if p != target]
 
@@ -793,14 +796,7 @@ class EnabledComponentsMutationTestCase(TestCase):
         if not registry.parsers:
             self.skipTest("Need at least 1 registered parser")
 
-        # Clear assignments to avoid "cannot disable assigned" errors
-        instance = PipelineSettings.get_instance(use_cache=False)
-        instance.preferred_parsers = {}
-        instance.preferred_embedders = {}
-        instance.preferred_thumbnailers = {}
-        instance.default_embedder = ""
-        instance.save()
-
+        # setUp already clears filetype defaults to avoid "cannot disable assigned" errors
         path = registry.parsers[0].class_name
         mutation = """
             mutation UpdatePipelineSettings($enabledComponents: [String]) {
