@@ -2,11 +2,12 @@
 Add HNSW indexes on Embedding vector columns and SearchVectorField on Annotation.
 
 This migration:
+0. Enables hnsw.iterative_scan for filtered ANN queries on existing databases
 1. Creates HNSW indexes on Embedding vector columns (dims ≤ 2000) for O(log n) ANN search
 2. Adds a search_vector (tsvector) column to Annotation for full-text search
 3. Creates a GIN index on search_vector for fast full-text lookups
 4. Creates a database trigger to auto-populate search_vector on INSERT/UPDATE
-5. Backfills search_vector for existing annotations
+5. Backfills search_vector for existing annotations (may take minutes on large tables)
 
 pgvector HNSW has a hard 2000-dimension limit, so only 384/768/1024/1536 get
 HNSW indexes. Higher dims (2048, 3072, 4096) fall back to sequential scan.
@@ -91,6 +92,36 @@ class Migration(migrations.Migration):
 
     operations = [
         # =================================================================
+        # Phase 0: Enable iterative scan for filtered ANN queries
+        # =================================================================
+        # init.sql only runs on fresh databases. This ensures existing
+        # deployments also get hnsw.iterative_scan='relaxed_order', which
+        # prevents result loss when combining HNSW search with WHERE clauses
+        # (e.g., embedder_path filtering). Requires pgvector >= 0.8.
+        migrations.RunSQL(
+            sql="""
+                DO $$
+                BEGIN
+                    EXECUTE 'ALTER DATABASE '
+                        || current_database()
+                        || $q$ SET hnsw.iterative_scan = 'relaxed_order'$q$;
+                EXCEPTION WHEN OTHERS THEN
+                    RAISE NOTICE 'hnsw.iterative_scan not available (pgvector < 0.8): %',
+                        SQLERRM;
+                END $$;
+            """,
+            reverse_sql="""
+                DO $$
+                BEGIN
+                    EXECUTE 'ALTER DATABASE '
+                        || current_database()
+                        || ' RESET hnsw.iterative_scan';
+                EXCEPTION WHEN OTHERS THEN
+                    NULL;
+                END $$;
+            """,
+        ),
+        # =================================================================
         # Phase 1: HNSW indexes on Embedding vector columns
         # =================================================================
         *_hnsw_operations(),
@@ -156,6 +187,9 @@ class Migration(migrations.Migration):
         # =================================================================
         # Phase 4: Backfill search_vector for existing annotations
         # =================================================================
+        # WARNING: On tables with millions of annotations this UPDATE may
+        # take several minutes and holds a row-level lock while running.
+        # Schedule during a maintenance window for large deployments.
         migrations.RunSQL(
             sql=f"""
                 UPDATE annotations_annotation

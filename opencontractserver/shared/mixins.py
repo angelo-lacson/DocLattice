@@ -1,4 +1,12 @@
+import logging
+
 from pgvector.django import CosineDistance
+
+_logger = logging.getLogger(__name__)
+
+# Dimensions that have HNSW indexes (pgvector limit: 2000 dims).
+# Higher dims fall back to sequential scan.
+_HNSW_INDEXED_MAX_DIM = 1536
 
 
 class VectorSearchViaEmbeddingMixin:
@@ -59,9 +67,17 @@ class VectorSearchViaEmbeddingMixin:
         guarantees at most one Embedding per parent object per embedder, so
         no DISTINCT ON deduplication is needed.
 
-        Returns a list of model instances annotated with 'similarity_score'.
+        Returns a **list** (not a QuerySet) of model instances annotated
+        with 'similarity_score'. Do not chain QuerySet methods on the result.
         """
         dimension = len(query_vector)
+        if dimension > _HNSW_INDEXED_MAX_DIM:
+            _logger.warning(
+                "Embedding dimension %d exceeds HNSW index limit (%d); "
+                "query will use sequential scan.",
+                dimension,
+                _HNSW_INDEXED_MAX_DIM,
+            )
         vector_field = self._dimension_to_field(dimension)
 
         # JOIN to Embedding rows matching the embedder and non-null vector
