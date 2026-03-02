@@ -42,7 +42,6 @@ interface ComponentLibraryProps {
     embedders: (PipelineComponentType & { className: string })[];
     thumbnailers: (PipelineComponentType & { className: string })[];
   };
-  enabledComponents: string[];
   updating: boolean;
   onToggleEnabled: (className: string, enabled: boolean) => void;
   onAddSecrets: (componentPath: string) => void;
@@ -70,7 +69,6 @@ const FILTER_OPTIONS: { value: FilterCategory; label: string }[] = [
 export const ComponentLibrary = memo<ComponentLibraryProps>(
   ({
     components,
-    enabledComponents,
     updating,
     onToggleEnabled,
     onAddSecrets,
@@ -176,9 +174,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
           {/* Component list */}
           {filteredComponents.length > 0 ? (
             filteredComponents.map(({ component, stage }) => {
-              const isEnabled =
-                enabledComponents.length === 0 ||
-                enabledComponents.includes(component.className);
+              const isEnabled = component.enabled ?? true;
               const stageConfig = STAGE_CONFIG[stage];
               const displayName = getComponentDisplayName(
                 component.className,

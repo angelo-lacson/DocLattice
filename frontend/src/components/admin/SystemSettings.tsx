@@ -263,6 +263,11 @@ export const SystemSettings: React.FC = () => {
   // Toggle component enabled state
   const handleToggleEnabled = useCallback(
     (className: string, enabled: boolean) => {
+      if (componentsLoading) {
+        toast.warning("Components are still loading. Please wait.");
+        return;
+      }
+
       const currentEnabled: string[] = (
         settings?.enabledComponents || []
       ).filter((s): s is string => s != null);
@@ -276,14 +281,20 @@ export const SystemSettings: React.FC = () => {
           ...componentsByStage.thumbnailers,
         ].map((c) => c.className);
 
-        if (allPaths.length === 0) return; // Components not loaded yet
+        if (allPaths.length === 0) {
+          toast.warning("Components are still loading. Please wait.");
+          return;
+        }
+
+        // Deduplicate paths in case a className appears across stages
+        const uniquePaths = [...new Set(allPaths)];
 
         newEnabled = enabled
-          ? allPaths
-          : allPaths.filter((p) => p !== className);
+          ? uniquePaths
+          : uniquePaths.filter((p) => p !== className);
       } else {
         newEnabled = enabled
-          ? [...currentEnabled, className]
+          ? [...new Set([...currentEnabled, className])]
           : currentEnabled.filter((p: string) => p !== className);
       }
 
@@ -291,7 +302,7 @@ export const SystemSettings: React.FC = () => {
         variables: { enabledComponents: newEnabled },
       });
     },
-    [settings, componentsByStage, updateSettings]
+    [settings, componentsByStage, componentsLoading, updateSettings]
   );
 
   // Assign a component to a filetype default
@@ -554,9 +565,6 @@ export const SystemSettings: React.FC = () => {
       {/* Component Library */}
       <ComponentLibrary
         components={componentsByStage}
-        enabledComponents={
-          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-        }
         updating={updating}
         onToggleEnabled={handleToggleEnabled}
         onAddSecrets={handleAddSecrets}
