@@ -111,7 +111,10 @@ class PipelineQueryMixin:
             }
 
         # Convert PipelineComponentDefinition objects to GraphQL types
+        enabled_set = set(settings_instance.enabled_components or [])
+
         def to_graphql_type(defn, component_type: str) -> PipelineComponentType:
+            is_enabled = (not enabled_set) or (defn.class_name in enabled_set)
             settings_schema = None
             if user.is_superuser:
                 # Get schema augmented with has_value/current_value from DB
@@ -146,6 +149,7 @@ class PipelineQueryMixin:
                 component_type=component_type,
                 input_schema=defn.input_schema,
                 settings_schema=settings_schema,
+                enabled=is_enabled,
             )
             if defn.vector_size is not None:
                 component_info.vector_size = defn.vector_size
@@ -200,6 +204,7 @@ class PipelineQueryMixin:
             component_settings=settings_instance.component_settings or {},
             default_embedder=settings_instance.default_embedder or "",
             components_with_secrets=components_with_secrets,
+            enabled_components=settings_instance.enabled_components or [],
             modified=settings_instance.modified,
             modified_by=settings_instance.modified_by,
         )

@@ -30,6 +30,7 @@ export const GET_PIPELINE_SETTINGS = gql`
       componentSettings
       defaultEmbedder
       componentsWithSecrets
+      enabledComponents
       modified
       modifiedBy {
         id
@@ -59,6 +60,7 @@ export const GET_PIPELINE_COMPONENTS = gql`
           hasValue
           currentValue
         }
+        enabled
       }
       embedders {
         name
@@ -78,6 +80,7 @@ export const GET_PIPELINE_COMPONENTS = gql`
           hasValue
           currentValue
         }
+        enabled
       }
       thumbnailers {
         name
@@ -96,6 +99,26 @@ export const GET_PIPELINE_COMPONENTS = gql`
           hasValue
           currentValue
         }
+        enabled
+      }
+      postProcessors {
+        name
+        title
+        description
+        className
+        supportedFileTypes
+        settingsSchema {
+          name
+          settingType
+          pythonType
+          required
+          description
+          default
+          envVar
+          hasValue
+          currentValue
+        }
+        enabled
       }
     }
   }
@@ -109,6 +132,7 @@ export const UPDATE_PIPELINE_SETTINGS = gql`
     $parserKwargs: GenericScalar
     $componentSettings: GenericScalar
     $defaultEmbedder: String
+    $enabledComponents: [String]
   ) {
     updatePipelineSettings(
       preferredParsers: $preferredParsers
@@ -117,6 +141,7 @@ export const UPDATE_PIPELINE_SETTINGS = gql`
       parserKwargs: $parserKwargs
       componentSettings: $componentSettings
       defaultEmbedder: $defaultEmbedder
+      enabledComponents: $enabledComponents
     ) {
       ok
       message
@@ -128,6 +153,7 @@ export const UPDATE_PIPELINE_SETTINGS = gql`
         componentSettings
         defaultEmbedder
         componentsWithSecrets
+        enabledComponents
         modified
         modifiedBy {
           id
@@ -151,6 +177,7 @@ export const RESET_PIPELINE_SETTINGS = gql`
         componentSettings
         defaultEmbedder
         componentsWithSecrets
+        enabledComponents
         modified
         modifiedBy {
           id
