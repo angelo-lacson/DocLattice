@@ -416,6 +416,20 @@ function kebabToPascal(name: string): string {
 }
 
 /**
+ * Check whether a value looks like a Lucide icon component.
+ *
+ * Lucide icons created via `createLucideIcon` use `React.forwardRef`,
+ * which returns an object (`typeof` → "object") rather than a plain
+ * function.  We check for a `render` property (forwardRef signature)
+ * or fall back to a function check for future-proofing.
+ */
+function isIconComponent(value: unknown): value is LucideIcon {
+  if (typeof value === "function") return true;
+  if (value && typeof value === "object" && "render" in value) return true;
+  return false;
+}
+
+/**
  * Look up a Lucide icon component by its kebab-case name.
  *
  * Checks the explicit KNOWN_ICONS map first (fast path), then falls
@@ -429,11 +443,10 @@ function lookupIcon(kebabName: string): LucideIcon | undefined {
   // Dynamic fallback: try PascalCase conversion against full export
   const pascal = kebabToPascal(kebabName);
   const candidate = (AllLucideIcons as Record<string, unknown>)[pascal];
-  if (typeof candidate === "function") {
+  if (isIconComponent(candidate)) {
     // Cache for future lookups
-    const icon = candidate as LucideIcon;
-    KNOWN_ICONS[kebabName] = icon;
-    return icon;
+    KNOWN_ICONS[kebabName] = candidate;
+    return candidate;
   }
 
   return undefined;
