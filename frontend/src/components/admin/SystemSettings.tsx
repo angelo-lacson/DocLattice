@@ -86,7 +86,14 @@ export const SystemSettings: React.FC = () => {
     useState(false);
   const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
 
-  // GraphQL queries
+  // GraphQL queries.
+  //
+  // NOTE: ComponentLibrary reads `component.enabled` from GET_PIPELINE_COMPONENTS,
+  // while FiletypeDefaults reads `enabledComponents` from GET_PIPELINE_SETTINGS.
+  // Both are refetched after each mutation (see onCompleted handlers below), but
+  // they are independent network calls. In the brief window between one resolving
+  // and the other, the two panels may show transiently inconsistent enabled state.
+  // The server enforces consistency, so this is cosmetic only.
   const {
     data: settingsData,
     loading: settingsLoading,
@@ -272,6 +279,11 @@ export const SystemSettings: React.FC = () => {
         settings?.enabledComponents || []
       ).filter((s): s is string => s != null);
       let newEnabled: string[];
+
+      if (currentEnabled.length === 0 && enabled) {
+        // Already in "all enabled" state and trying to enable — no-op
+        return;
+      }
 
       if (currentEnabled.length === 0) {
         // Transitioning from "all enabled" -- build full list from loaded components
