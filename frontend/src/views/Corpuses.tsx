@@ -29,7 +29,6 @@ import {
   BarChart3,
   MoreVertical,
   Link2,
-  Zap,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -150,8 +149,6 @@ import { CorpusDocumentRelationships } from "../components/corpuses/CorpusDocume
 import {
   CORPUS_COLORS,
   CORPUS_RADII,
-  CORPUS_SHADOWS,
-  CORPUS_TRANSITIONS,
   mediaQuery as corpusMediaQuery,
 } from "../components/corpuses/styles/corpusDesignTokens";
 
@@ -376,6 +373,8 @@ const CorpusQueryView = ({
   statsLoading,
   onOpenMobileMenu,
   onSourceNavigate,
+  onModeToggle,
+  isPowerUserMode,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
@@ -392,6 +391,8 @@ const CorpusQueryView = ({
   statsLoading: boolean;
   onOpenMobileMenu?: () => void;
   onSourceNavigate?: (source: ChatMessageSource) => void;
+  onModeToggle?: () => void;
+  isPowerUserMode?: boolean;
 }) => {
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -580,6 +581,8 @@ const CorpusQueryView = ({
               onViewChatHistory={openHistoryView}
               onNavigateToCorpuses={onBack}
               onOpenMobileMenu={onOpenMobileMenu}
+              onModeToggle={onModeToggle}
+              isPowerUserMode={isPowerUserMode}
             />
           </ContentWrapper>
         </DashboardContainer>
@@ -1090,7 +1093,6 @@ const MainContentArea = styled.div<{ $sidebarExpanded: boolean }>`
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     margin-left: 0;
-    /* No extra padding needed - FAB is compact and positioned absolutely */
   }
 `;
 
@@ -1527,62 +1529,13 @@ const ExtractsTabContent: React.FC<{
   );
 };
 
-// Power user mode toggle - subtle, positioned at top-right of clean view
-const PowerUserToggle = styled(motion.button)`
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  color: ${CORPUS_COLORS.slate[500]};
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all ${CORPUS_TRANSITIONS.normal};
-  z-index: 10;
-  box-shadow: ${CORPUS_SHADOWS.sm};
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    background: ${CORPUS_COLORS.teal[50]};
-    border-color: ${CORPUS_COLORS.teal[200]};
-    color: ${CORPUS_COLORS.teal[700]};
-    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.12);
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: 2px;
-  }
-
-  ${corpusMediaQuery.tablet} {
-    padding: 0.375rem 0.625rem;
-    font-size: 0.75rem;
-    top: 0.75rem;
-    right: 0.75rem;
-  }
-`;
-
 // Container for the clean landing view (no sidebar)
+// Does NOT scroll — the parent ScrollableSegment (from CardLayout) handles scrolling.
 const CleanViewContainer = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  max-height: 100dvh;
-  overflow: hidden;
 `;
 
 // Wrapper for the "Simple View" exit button at the bottom of the sidebar
@@ -2353,6 +2306,17 @@ export const Corpuses = () => {
             statsLoading={effectiveStatsLoading}
             onOpenMobileMenu={() => setMobileSidebarOpen(true)}
             onSourceNavigate={handleSourceNavigate}
+            isPowerUserMode={isPowerUserMode}
+            onModeToggle={
+              canUpdateCorpus
+                ? () =>
+                    updateModeParam(
+                      location,
+                      navigate,
+                      isPowerUserMode ? null : "power"
+                    )
+                : undefined
+            }
           />
         ),
       },
@@ -2699,6 +2663,7 @@ export const Corpuses = () => {
     documentsViewMode, // Required for view mode toggle to work
     chatInConversation, // Required for chat tab header visibility
     currentSelectedThreadId, // Required for discussions tab header visibility (URL-driven)
+    isPowerUserMode, // Required for mode toggle button label and callback
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);
@@ -2738,7 +2703,9 @@ export const Corpuses = () => {
       : navigationItems.find((item) => item.id === "home")?.component;
 
     content = isPowerUserMode ? (
-      <CorpusViewContainer id="corpus-view-container">
+          <CorpusViewContainer
+            id="corpus-view-container"
+          >
         {/* Mobile backdrop */}
         <AnimatePresence>
           {mobileSidebarOpen && (
@@ -2898,7 +2865,7 @@ export const Corpuses = () => {
               <ArrowLeft />
               {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
                 <span style={{ flex: "1", textAlign: "left" }}>
-                  Simple View
+                  Focus Mode
                 </span>
               )}
             </NavigationItem>
@@ -2912,24 +2879,13 @@ export const Corpuses = () => {
         >
           {mainContent}
         </MainContentArea>
-      </CorpusViewContainer>
+          </CorpusViewContainer>
     ) : (
-      <CleanViewContainer id="corpus-clean-view">
-        {/* Power User toggle - only shown for users with edit rights */}
-        {canUpdateCorpus && (
-          <PowerUserToggle
-            onClick={() => updateModeParam(location, navigate, "power")}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            data-testid="power-user-toggle"
-            title="Switch to full corpus management view"
+          <CleanViewContainer
+            id="corpus-clean-view"
           >
-            <Zap />
-            Power User
-          </PowerUserToggle>
-        )}
-        {mainContent}
-      </CleanViewContainer>
+            {mainContent}
+          </CleanViewContainer>
     );
   } else if (
     opened_corpus !== null &&

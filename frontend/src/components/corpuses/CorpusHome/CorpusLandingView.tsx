@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Plus,
   MoreVertical,
+  Zap,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -40,6 +41,7 @@ import {
   MetadataItem,
   MetadataSeparator,
   AccessBadge,
+  PowerUserMetaButton,
   ChatSection,
   ViewDetailsButton,
   HeaderRow,
@@ -66,6 +68,10 @@ export interface CorpusLandingViewProps {
   onViewDiscussions?: () => void;
   /** Callback when a specific thread is clicked from the feed */
   onThreadClick?: (threadId: string) => void;
+  /** Callback when mode toggle is clicked (only shown when present) */
+  onModeToggle?: () => void;
+  /** Whether the power user mode is active (changes toggle label) */
+  isPowerUserMode?: boolean;
   /** Test ID for the component */
   testId?: string;
 }
@@ -94,6 +100,8 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onOpenMobileMenu,
   onViewDiscussions,
   onThreadClick,
+  onModeToggle,
+  isPowerUserMode = false,
   testId = "corpus-landing",
 }) => {
   const [mdContent, setMdContent] = React.useState<string | null>(null);
@@ -264,6 +272,24 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                     {docCount} {docCount === 1 ? "document" : "documents"}
                   </span>
                 </MetadataItem>
+              </>
+            )}
+
+            {onModeToggle && (
+              <>
+                <MetadataSeparator />
+                <PowerUserMetaButton
+                  onClick={onModeToggle}
+                  title={
+                    isPowerUserMode
+                      ? "Switch to focused view"
+                      : "Switch to full corpus management view"
+                  }
+                  data-testid={`${testId}-mode-toggle`}
+                >
+                  <Zap aria-hidden="true" />
+                  {isPowerUserMode ? "Focus Mode" : "Power User"}
+                </PowerUserMetaButton>
               </>
             )}
           </CenteredMetadataRow>
