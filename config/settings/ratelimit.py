@@ -57,6 +57,14 @@ RATE_LIMIT_OVERRIDES = {k: v for k, v in RATE_LIMIT_OVERRIDES.items() if v is no
 # This is important when running behind Traefik or other reverse proxies
 RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"
 
+# Number of trusted reverse proxies in front of the application.
+# Controls which entry in X-Forwarded-For is used for rate limit keying:
+#   0 (default): leftmost entry (backwards-compatible, but client-spoofable)
+#   1: rightmost entry (single proxy, e.g. Traefik/nginx)
+#   2: second from right (two proxies, e.g. CDN + load balancer)
+# Set this to match your deployment's proxy chain depth.
+RATELIMIT_PROXIES_COUNT = env.int("RATELIMIT_PROXIES_COUNT", default=0)
+
 # Whether to group IPv6 addresses by subnet for rate limiting
 # This prevents users from bypassing rate limits by using different IPv6 addresses
 # in the same subnet

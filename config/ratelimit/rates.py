@@ -14,6 +14,7 @@ from typing import Any, Callable
 from django.conf import settings
 
 from config.ratelimit.engine import parse_rate
+from config.ratelimit.keys import _is_authenticated
 
 
 class _RateLimits:
@@ -46,6 +47,7 @@ class _RateLimits:
         "IMPORT": "10/h",
         # Admin operations
         "ADMIN_OPERATION": "100/m",
+        "ADMIN_LOGIN_PAGE": "20/m",
         # WebSocket-specific
         "WS_CONNECT": "10/m",
         "WS_HEARTBEAT": "120/m",
@@ -129,11 +131,3 @@ def get_user_tier_rate(operation_type: str) -> Callable:
         return get_tier_adjusted_rate(user, base_rate)
 
     return get_rate
-
-
-def _is_authenticated(user: Any) -> bool:
-    """Check if a user is authenticated, handling property and method forms."""
-    is_auth = getattr(user, "is_authenticated", False)
-    if callable(is_auth):
-        return is_auth()
-    return bool(is_auth)

@@ -21,6 +21,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_protect
 
 from config.ratelimit.decorators import view_ratelimit
+from config.ratelimit.engine import UNKNOWN_IP
 from config.ratelimit.rates import RateLimits
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def _ratelimit_ip_key(group: str, request) -> str:
     forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "unknown")
+    return request.META.get("REMOTE_ADDR", UNKNOWN_IP)
 
 
 def _get_login_url():

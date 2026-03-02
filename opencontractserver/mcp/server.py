@@ -187,7 +187,10 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
     The ASGI scope is accessed through ``_mcp_asgi_scope`` ContextVar
     (set by the ASGI app before dispatching).
     """
-    # Per-tool rate limit check
+    # Per-tool rate limit check — scope is only available when called via
+    # the ASGI app (set by _create_asgi_app).  When called outside ASGI
+    # context (e.g. stdio transport, tests), rate limiting is intentionally
+    # skipped since there is no network-level identity to key on.
     scope = _mcp_asgi_scope.get()
     if scope:
         is_limited, error_msg = await check_mcp_rate_limit(scope, tool_name=name)
@@ -196,6 +199,10 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
                 name, success=False, error_type="RateLimitExceeded"
             )
             raise ValueError(error_msg)
+    else:
+        logger.debug(
+            "MCP rate limiting skipped for tool %s: no ASGI scope available", name
+        )
 
     handler = TOOL_HANDLERS.get(name)
     if not handler:
@@ -697,7 +704,8 @@ def create_scoped_mcp_server(corpus_slug: str) -> Server:
         if corpus becomes private between manager creation and tool execution.
         Includes per-tool rate limiting via the shared engine.
         """
-        # Per-tool rate limit check
+        # Per-tool rate limit — intentionally skipped outside ASGI context
+        # (see call_tool_handler docstring for rationale).
         scope = _mcp_asgi_scope.get()
         if scope:
             is_limited, error_msg = await check_mcp_rate_limit(scope, tool_name=name)
