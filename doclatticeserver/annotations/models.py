@@ -514,8 +514,10 @@ class Embedding(BaseOCModel):
             django.db.models.Index(fields=["modified"]),
             # HNSW indexes for approximate nearest neighbor search.
             # These turn O(n) sequential scans into O(log n) ANN lookups.
-            # Each index uses a WHERE condition to skip NULL vectors (partial index),
-            # keeping the index compact since only 1-2 dimensions are populated per row.
+            # pgvector HNSW has a hard 2000-dimension limit, so only dims ≤ 2000
+            # get HNSW indexes. Higher dims (2048, 3072, 4096) fall back to
+            # sequential scan — a future optimization could use halfvec casting
+            # (which raises the limit to 4000) at the cost of query-side changes.
             HnswIndex(
                 name="emb_hnsw_384",
                 fields=["vector_384"],
@@ -540,27 +542,6 @@ class Embedding(BaseOCModel):
             HnswIndex(
                 name="emb_hnsw_1536",
                 fields=["vector_1536"],
-                m=HNSW_M,
-                ef_construction=HNSW_EF_CONSTRUCTION,
-                opclasses=["vector_cosine_ops"],
-            ),
-            HnswIndex(
-                name="emb_hnsw_2048",
-                fields=["vector_2048"],
-                m=HNSW_M,
-                ef_construction=HNSW_EF_CONSTRUCTION,
-                opclasses=["vector_cosine_ops"],
-            ),
-            HnswIndex(
-                name="emb_hnsw_3072",
-                fields=["vector_3072"],
-                m=HNSW_M,
-                ef_construction=HNSW_EF_CONSTRUCTION,
-                opclasses=["vector_cosine_ops"],
-            ),
-            HnswIndex(
-                name="emb_hnsw_4096",
-                fields=["vector_4096"],
                 m=HNSW_M,
                 ef_construction=HNSW_EF_CONSTRUCTION,
                 opclasses=["vector_cosine_ops"],
