@@ -141,6 +141,7 @@ export const SystemSettings: React.FC = () => {
           toast.success("Settings reset to defaults");
           setShowResetConfirm(false);
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.resetPipelineSettings?.message || "Failed to reset settings"
