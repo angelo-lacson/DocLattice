@@ -1,16 +1,23 @@
 import React, { useRef, useState, MouseEvent } from "react";
-import {
-  Icon,
-  Card,
-  Popup,
-  Menu,
-  Label,
-  Dimmer,
-  Loader,
-  Button,
-} from "semantic-ui-react";
+import { Card, Popup, Button } from "semantic-ui-react";
 import _ from "lodash";
 import styled, { keyframes } from "styled-components";
+import {
+  Check,
+  AlertTriangle,
+  FileText,
+  Globe,
+  Lock,
+  BookOpen,
+  Eye,
+  Download,
+  Loader2,
+  Edit,
+  XCircle,
+  RotateCw,
+} from "lucide-react";
+import { Spinner } from "@os-legal/ui";
+import { DynamicIcon } from "../widgets/icon-picker/DynamicIcon";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -39,6 +46,7 @@ import fallback_doc_icon from "../../assets/images/defaults/default_doc_icon.jpg
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import { FAILURE_COLORS } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Animations
 const shimmer = keyframes`
@@ -74,7 +82,7 @@ const slideIn = keyframes`
 const StyledCard = styled.div`
   position: relative;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: visible;
   transition: all 0.2s ease;
@@ -109,7 +117,7 @@ const StyledCard = styled.div`
   }
 
   &.is-selected {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1),
       0 10px 15px -3px rgba(0, 0, 0, 0.1);
   }
@@ -134,10 +142,10 @@ const StyledCard = styled.div`
 const CardHeader = styled.div`
   position: relative;
   height: 140px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 12px 12px 0 0;
   overflow: hidden;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   transition: background 0.2s ease;
 
   img {
@@ -204,7 +212,7 @@ const Title = styled.h3`
 const Description = styled.p`
   margin: 0;
   font-size: 0.8125rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -227,11 +235,11 @@ const MetaPill = styled.div`
   align-items: center;
   gap: 3px;
   padding: 3px 8px;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 4px;
   font-size: 0.6875rem;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   transition: background 0.15s ease;
 
   .icon {
@@ -240,7 +248,7 @@ const MetaPill = styled.div`
   }
 
   &:hover {
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 
   &.success {
@@ -270,7 +278,7 @@ const ActionButton = styled.button`
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   cursor: pointer;
@@ -278,14 +286,14 @@ const ActionButton = styled.button`
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   position: relative;
 
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     border-color: #cbd5e1;
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   &:active {
@@ -293,8 +301,8 @@ const ActionButton = styled.button`
   }
 
   &.primary {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
 
     &:hover {
@@ -316,8 +324,8 @@ const ActionButton = styled.button`
   }
 
   &.downloading {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
     animation: pulse 1.5s ease-in-out infinite;
 
@@ -360,13 +368,13 @@ const SelectionControl = styled.div`
   z-index: 10;
 
   &:hover {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   &.selected {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
 
     .icon {
       color: white;
@@ -402,12 +410,12 @@ const Tag = styled.span`
   align-items: center;
   gap: 3px;
   padding: 3px 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   .icon {
     font-size: 0.65rem;
@@ -686,16 +694,37 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       {isProcessing && (
-        <Dimmer active inverted style={{ borderRadius: "12px" }}>
-          <Loader size="small">Processing...</Loader>
-        </Dimmer>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(255,255,255,0.85)",
+            borderRadius: "12px",
+            zIndex: 20,
+          }}
+        >
+          <Spinner size="sm" />
+          <span
+            style={{
+              marginTop: "0.5rem",
+              fontSize: "0.8rem",
+              color: OS_LEGAL_COLORS.textSecondary,
+            }}
+          >
+            Processing...
+          </span>
+        </div>
       )}
 
       <SelectionControl
         className={`selection-control ${is_selected ? "selected" : ""}`}
         onClick={handleCheckboxClick}
       >
-        {is_selected && <Icon name="check" />}
+        {is_selected && <Check size={12} color="white" />}
       </SelectionControl>
 
       <CardHeader className="card-header">
@@ -704,7 +733,11 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         ) : (
           <>
             <div
-              style={{ width: "100%", height: "100%", background: "#f8fafc" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                background: OS_LEGAL_COLORS.surfaceHover,
+              }}
             />
             <img
               src={fallback_doc_icon}
@@ -716,7 +749,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         {isFailed && (
           <ThumbnailFailureOverlay role="alert" aria-label="Processing failed">
             <FailureIconCircle aria-hidden="true">
-              <Icon name="warning sign" />
+              <AlertTriangle size={20} />
             </FailureIconCircle>
           </ThumbnailFailureOverlay>
         )}
@@ -738,21 +771,21 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
           {isFailed && <FailureBadge>Processing Failed</FailureBadge>}
           {pageCount && (
             <MetaPill>
-              <Icon name="file outline" />
+              <FileText size={11} />
               {pageCount} pages
             </MetaPill>
           )}
 
           {isPublic && (
             <MetaPill className="success">
-              <Icon name="globe" />
+              <Globe size={11} />
               Public
             </MetaPill>
           )}
 
           {!canEdit && (
             <MetaPill className="warning">
-              <Icon name="lock" />
+              <Lock size={11} />
               Read-only
             </MetaPill>
           )}
@@ -761,9 +794,10 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             <TagsContainer>
               {doc_label_objs.slice(0, 2).map((label, index) => (
                 <Tag key={`doc_${id}_label${index}`}>
-                  <Icon
-                    name={(label.icon as any) || "tag"}
-                    style={{ color: label.color }}
+                  <DynamicIcon
+                    name={(label.icon as string) || "tag"}
+                    size={11}
+                    color={label.color || undefined}
                   />
                   {label.text}
                 </Tag>
@@ -779,7 +813,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             disabled={backendLock}
             title="Open Knowledge Base"
           >
-            <Icon name="book" />
+            <BookOpen size={13} />
           </ActionButton>
 
           <ActionButton
@@ -788,7 +822,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
             disabled={backendLock}
             title="View Details"
           >
-            <Icon name="eye" />
+            <Eye size={13} />
           </ActionButton>
 
           {pdfFile && (
@@ -798,10 +832,11 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               disabled={backendLock || isDownloading}
               title={isDownloading ? "Downloading..." : download_caption}
             >
-              <Icon
-                name={isDownloading ? "spinner" : "download"}
-                className={isDownloading ? "loading" : ""}
-              />
+              {isDownloading ? (
+                <Loader2 size={13} className="loading" />
+              ) : (
+                <Download size={13} />
+              )}
             </ActionButton>
           )}
 
@@ -811,7 +846,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               onClick={handleEdit}
               title={edit_caption}
             >
-              <Icon name="edit" />
+              <Edit size={13} />
             </ActionButton>
           )}
 
@@ -821,7 +856,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               onClick={handleRemoveFromCorpus}
               title="Remove from Corpus"
             >
-              <Icon name="remove circle" />
+              <XCircle size={13} />
             </ActionButton>
           )}
 
@@ -831,7 +866,7 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
               disabled={retryLoading}
               aria-label="Retry processing this document"
             >
-              <Icon name="redo" style={{ margin: 0 }} aria-hidden="true" />
+              <RotateCw size={13} aria-hidden="true" />
               {retryLoading ? "Retrying..." : "Retry"}
             </ClassicRetryButton>
           )}

@@ -49,11 +49,17 @@ export const OS_LEGAL_COLORS = {
   /** Light accent background. Use for selected items and subtle highlights. */
   accentLight: "rgba(15, 118, 110, 0.1)",
 
+  // Interactive colors - blue theme
+  /** Primary interactive blue - buttons, focus rings, toggles, active states. */
+  primaryBlue: "#3b82f6",
+
   // Text colors - slate scale
   /** Primary text color - dark slate. Use for headings and main content. */
   textPrimary: "#1e293b",
   /** Secondary text color - medium slate. Use for supporting text and metadata. */
   textSecondary: "#64748b",
+  /** Tertiary text color - dark medium slate. Between primary and secondary. */
+  textTertiary: "#475569",
   /** Muted text color - light slate. Use sparingly; does not meet WCAG AA for small text. */
   textMuted: "#94a3b8",
 
@@ -64,6 +70,8 @@ export const OS_LEGAL_COLORS = {
   surface: "white",
   /** Hover state for surfaces - very light gray. */
   surfaceHover: "#f8fafc",
+  /** Light surface - subtle gray for badges, tags, and secondary surfaces. */
+  surfaceLight: "#f1f5f9",
 
   // Border colors
   /** Default border color - light gray for subtle separation. */
@@ -115,6 +123,28 @@ export const OS_LEGAL_COLORS = {
   successHover: "#15803d",
   /** Success background - light green tint. */
   successLight: "rgba(22, 163, 74, 0.1)",
+  /** Success surface background - very light green for panels/messages. */
+  successSurface: "#f0fdf4",
+  /** Success border color - light green for subtle borders. */
+  successBorder: "#bbf7d0",
+  /** Success text color - dark green for text on success surfaces. */
+  successText: "#166534",
+
+  // Info colors - blue theme for informational messages
+  /** Info surface background - very light blue. */
+  infoSurface: "#f0f9ff",
+  /** Info border color - light blue. */
+  infoBorder: "#bae6fd",
+  /** Info text color - dark blue. */
+  infoText: "#0369a1",
+
+  // Warning colors - amber theme for caution messages
+  /** Warning surface background - very light amber. */
+  warningSurface: "#fefce8",
+  /** Warning border color - amber. */
+  warningBorder: "#fde68a",
+  /** Warning text color - dark amber. */
+  warningText: "#854d0e",
 } as const;
 
 /**

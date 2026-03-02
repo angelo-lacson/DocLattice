@@ -1,13 +1,16 @@
 import React, { useState, useMemo } from "react";
+import { Modal, Button, Form, Dropdown, Radio } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
 import {
-  Modal,
-  Button,
-  Form,
-  Dropdown,
-  Radio,
-  Icon,
-  Input,
-} from "semantic-ui-react";
+  ArrowRight,
+  Target,
+  Check,
+  Info,
+  Plus,
+  Search,
+  Link,
+} from "lucide-react";
+import { DynamicIcon } from "../../../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -19,6 +22,8 @@ import {
   SmartLabelSearchOrCreateInputs,
   SmartLabelSearchOrCreateOutputs,
 } from "../../../../graphql/mutations";
+import { ErrorMessage, WarningMessage } from "../../../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 interface RelationshipActionModalProps {
   open: boolean;
@@ -48,13 +53,13 @@ const ModalContent = styled(Modal.Content)`
     width: 8px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   &::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 4px;
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -62,26 +67,27 @@ const ModalContent = styled(Modal.Content)`
 const RelationshipOption = styled.div<{ $selected: boolean }>`
   padding: 1rem;
   margin: 0.5rem 0;
-  border: 2px solid ${(props) => (props.$selected ? "#3b82f6" : "#e5e7eb")};
+  border: 2px solid
+    ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   background: ${(props) => (props.$selected ? "#eff6ff" : "white")};
 
   &:hover {
-    border-color: #3b82f6;
-    background: #f8fafc;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   .relationship-label {
     font-weight: 600;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     margin-bottom: 0.25rem;
   }
 
   .relationship-stats {
     font-size: 0.875rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     display: flex;
     gap: 1rem;
   }
@@ -90,12 +96,12 @@ const RelationshipOption = styled.div<{ $selected: boolean }>`
 const InfoBox = styled.div`
   margin-top: 1rem;
   padding: 0.75rem;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 6px;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid ${OS_LEGAL_COLORS.primaryBlue};
 
   strong {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -124,11 +130,11 @@ const AnnotationPill = styled.div<{
       ? "#dbeafe"
       : props.$role === "target"
       ? "#dcfce7"
-      : "#f1f5f9"};
+      : OS_LEGAL_COLORS.surfaceLight};
   border: 2px solid
     ${(props) =>
       props.$role === "source"
-        ? "#3b82f6"
+        ? OS_LEGAL_COLORS.primaryBlue
         : props.$role === "target"
         ? "#22c55e"
         : "#e5e7eb"};
@@ -137,7 +143,7 @@ const AnnotationPill = styled.div<{
       ? "#1e40af"
       : props.$role === "target"
       ? "#166534"
-      : "#64748b"};
+      : OS_LEGAL_COLORS.textSecondary};
 
   &:hover {
     transform: translateY(-1px);
@@ -154,7 +160,7 @@ const AssignmentSection = styled.div`
 
   .section-title {
     font-weight: 600;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     margin-bottom: 0.75rem;
     display: flex;
     align-items: center;
@@ -340,28 +346,21 @@ export const RelationshipActionModal: React.FC<
   return (
     <Modal open={open} onClose={onClose} size="small">
       <Modal.Header>
-        <Icon name="linkify" />
+        <Link
+          size={16}
+          style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+        />
         Add Annotations to Relationship
       </Modal.Header>
       <ModalContent>
         {!hasCorpus && (
-          <div
-            style={{
-              marginBottom: "1.5rem",
-              padding: "1rem",
-              background: "#fef2f2",
-              border: "2px solid #ef4444",
-              borderRadius: "8px",
-              color: "#991b1b",
-            }}
+          <ErrorMessage
+            title="No Corpus Selected"
+            style={{ marginBottom: "1.5rem" }}
           >
-            <Icon name="warning circle" />
-            <strong>No Corpus Selected</strong>
-            <p style={{ marginTop: "0.5rem", marginBottom: 0 }}>
-              You must select a corpus to create or manage relationships.
-              Relationships require a corpus context and labelset.
-            </p>
-          </div>
+            You must select a corpus to create or manage relationships.
+            Relationships require a corpus context and labelset.
+          </ErrorMessage>
         )}
         <Form>
           {/* Mode Selection */}
@@ -381,7 +380,12 @@ export const RelationshipActionModal: React.FC<
                 <Form.Field style={{ marginTop: "1rem" }}>
                   <label>Select Relationship</label>
                   {editableRelationships.length === 0 ? (
-                    <p style={{ color: "#64748b", fontStyle: "italic" }}>
+                    <p
+                      style={{
+                        color: OS_LEGAL_COLORS.textSecondary,
+                        fontStyle: "italic",
+                      }}
+                    >
                       No editable relationships found. Create a new one instead.
                     </p>
                   ) : (
@@ -393,16 +397,21 @@ export const RelationshipActionModal: React.FC<
                           onClick={() => setSelectedRelationshipId(rel.id)}
                         >
                           <div className="relationship-label">
-                            {rel.label.icon && <Icon name={rel.label.icon} />}
+                            {rel.label.icon && (
+                              <DynamicIcon
+                                name={rel.label.icon as string}
+                                size={14}
+                              />
+                            )}
                             {rel.label.text}
                           </div>
                           <div className="relationship-stats">
                             <span>
-                              <Icon name="arrow right" /> Sources:{" "}
+                              <ArrowRight size={12} /> Sources:{" "}
                               {rel.sourceIds.length}
                             </span>
                             <span>
-                              <Icon name="bullseye" /> Targets:{" "}
+                              <Target size={12} /> Targets:{" "}
                               {rel.targetIds.length}
                             </span>
                           </div>
@@ -451,21 +460,10 @@ export const RelationshipActionModal: React.FC<
                 {!newLabelId ? (
                   <>
                     {!hasLabelset && (
-                      <div
-                        style={{
-                          marginTop: "1rem",
-                          padding: "0.75rem",
-                          background: "#fef3c7",
-                          border: "1px solid #fbbf24",
-                          borderRadius: "6px",
-                          fontSize: "0.875rem",
-                          color: "#92400e",
-                        }}
-                      >
-                        <Icon name="info circle" />
+                      <WarningMessage style={{ marginTop: "1rem" }}>
                         <strong>No labelset found.</strong> Creating a label
                         will automatically create a labelset for this corpus.
-                      </div>
+                      </WarningMessage>
                     )}
 
                     {!showCreateLabel ? (
@@ -473,11 +471,12 @@ export const RelationshipActionModal: React.FC<
                         <Form.Field style={{ marginTop: "1rem" }}>
                           <label>Search or Create Relationship Label</label>
                           <Input
-                            fluid
-                            icon="search"
+                            fullWidth
                             placeholder="Search for a relationship label..."
                             value={labelSearchTerm}
-                            onChange={(e) => setLabelSearchTerm(e.target.value)}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setLabelSearchTerm(e.target.value)}
                           />
                         </Form.Field>
 
@@ -505,7 +504,7 @@ export const RelationshipActionModal: React.FC<
                         ) : (
                           <p
                             style={{
-                              color: "#64748b",
+                              color: OS_LEGAL_COLORS.textSecondary,
                               fontStyle: "italic",
                               margin: "0.5rem 0",
                             }}
@@ -525,7 +524,7 @@ export const RelationshipActionModal: React.FC<
                             }}
                             style={{ marginTop: "0.5rem" }}
                           >
-                            <Icon name="plus" />
+                            <Plus size={14} />
                             Create "{labelSearchTerm}" label
                           </Button>
                         )}
@@ -535,16 +534,18 @@ export const RelationshipActionModal: React.FC<
                         <Form.Field style={{ marginTop: "1rem" }}>
                           <label>Label Name</label>
                           <Input
-                            fluid
+                            fullWidth
                             placeholder="Enter label name"
                             value={newLabelText}
-                            onChange={(e) => setNewLabelText(e.target.value)}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setNewLabelText(e.target.value)}
                           />
                         </Form.Field>
 
                         <Form.Field>
                           <label>Color</label>
-                          <Input
+                          <input
                             type="color"
                             value={newLabelColor}
                             onChange={(e) => setNewLabelColor(e.target.value)}
@@ -554,12 +555,12 @@ export const RelationshipActionModal: React.FC<
                         <Form.Field>
                           <label>Description (optional)</label>
                           <Input
-                            fluid
+                            fullWidth
                             placeholder="Enter description"
                             value={newLabelDescription}
-                            onChange={(e) =>
-                              setNewLabelDescription(e.target.value)
-                            }
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setNewLabelDescription(e.target.value)}
                           />
                         </Form.Field>
 
@@ -588,8 +589,8 @@ export const RelationshipActionModal: React.FC<
                       <div
                         style={{
                           padding: "0.75rem",
-                          background: "#f8fafc",
-                          border: "1px solid #e2e8f0",
+                          background: OS_LEGAL_COLORS.surfaceHover,
+                          border: `1px solid ${OS_LEGAL_COLORS.border}`,
                           borderRadius: "6px",
                           display: "flex",
                           alignItems: "center",
@@ -617,7 +618,10 @@ export const RelationshipActionModal: React.FC<
 
                     <AssignmentSection>
                       <div className="section-title">
-                        <Icon name="arrow right" color="blue" />
+                        <ArrowRight
+                          size={14}
+                          color={OS_LEGAL_COLORS.primaryBlue}
+                        />
                         Source Annotations
                       </div>
                       <div className="pills-container">
@@ -649,7 +653,7 @@ export const RelationshipActionModal: React.FC<
                                 }
                               }}
                             >
-                              {role === "source" && <Icon name="check" />}
+                              {role === "source" && <Check size={12} />}
                               {getAnnotationPreview(annId)}
                             </AnnotationPill>
                           );
@@ -659,7 +663,7 @@ export const RelationshipActionModal: React.FC<
 
                     <AssignmentSection>
                       <div className="section-title">
-                        <Icon name="bullseye" color="green" />
+                        <Target size={14} color="#22c55e" />
                         Target Annotations
                       </div>
                       <div className="pills-container">
@@ -691,7 +695,7 @@ export const RelationshipActionModal: React.FC<
                                 }
                               }}
                             >
-                              {role === "target" && <Icon name="check" />}
+                              {role === "target" && <Check size={12} />}
                               {getAnnotationPreview(annId)}
                             </AnnotationPill>
                           );
@@ -702,7 +706,7 @@ export const RelationshipActionModal: React.FC<
                     <p
                       style={{
                         fontSize: "0.875rem",
-                        color: "#64748b",
+                        color: OS_LEGAL_COLORS.textSecondary,
                         marginTop: "1rem",
                         fontStyle: "italic",
                       }}
@@ -719,7 +723,14 @@ export const RelationshipActionModal: React.FC<
 
         <InfoBox>
           <strong>
-            <Icon name="info circle" />
+            <Info
+              size={14}
+              style={{
+                display: "inline",
+                verticalAlign: "middle",
+                marginRight: "0.5rem",
+              }}
+            />
             Selected: {selectedAnnotationIds.length} annotation
             {selectedAnnotationIds.length !== 1 ? "s" : ""}
           </strong>

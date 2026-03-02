@@ -1,7 +1,7 @@
 import React from "react";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
-import { Icon } from "semantic-ui-react";
+import { Check } from "lucide-react";
 import {
   GET_CORPUS_CATEGORIES,
   GetCorpusCategoriesOutput,
@@ -72,9 +72,8 @@ const CategoryChip = styled.button<{ $selected: boolean; $color?: string }>`
     transform: translateY(0);
   }
 
-  .icon {
-    margin: 0 !important;
-    font-size: 0.875rem;
+  svg {
+    flex-shrink: 0;
   }
 
   @media (max-width: 768px) {
@@ -178,7 +177,7 @@ export const CategorySelector: React.FC<CategorySelectorProps> = ({
               title={category.description}
             >
               {!isSelected && <ColorDot $color={category.color} />}
-              {isSelected && <Icon name="check" />}
+              {isSelected && <Check size={14} />}
               {category.name}
             </CategoryChip>
           );

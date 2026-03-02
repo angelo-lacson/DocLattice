@@ -4,7 +4,6 @@ import {
   LabelDisplayBehavior,
 } from "../types/graphql-api";
 import { PDFPageInfo } from "./annotator/types/pdf";
-import { SemanticICONS } from "semantic-ui-react";
 
 /**
  * Type-related functions
@@ -164,7 +163,7 @@ export interface LabelsetOptionProps {
 export interface ActionDropdownItem {
   key: string;
   title: string;
-  icon: SemanticICONS;
+  icon: string;
   color: string;
   action_function: (props: any) => void;
 }

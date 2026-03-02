@@ -1,24 +1,16 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
-import {
-  Button,
-  Table,
-  Header,
-  Message,
-  Dimmer,
-  Loader,
-  Icon,
-  Modal,
-  Form,
-  Input,
-  TextArea,
-  Checkbox,
-  Label,
-} from "semantic-ui-react";
+import { Button, Table, Modal, Form } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
+import { Plus, Edit, Trash2, Cpu } from "lucide-react";
+import { Input, Spinner } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { BadgeConfigurator, BadgeConfig } from "../agents/BadgeConfigurator";
+import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
+import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
+import { StyledTextArea } from "../widgets/modals/styled";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // GraphQL Queries and Mutations
 const GET_CORPUS_AGENTS = gql`
@@ -174,51 +166,28 @@ const SectionHeader = styled.div`
   margin-bottom: 1.5rem;
 `;
 
-const SectionTitle = styled(Header)`
-  &.ui.header {
-    margin: 0;
-    color: #1e293b;
-    font-size: 1.25rem;
-  }
+const SectionTitle = styled.h3`
+  margin: 0;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
 const HelperText = styled.p`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
   margin: 0.5rem 0 1.5rem 0;
   line-height: 1.5;
 `;
 
-const StatusBadge = styled(Label)<{ $active: boolean }>`
-  &.ui.label {
-    background: ${(props) => (props.$active ? "#dcfce7" : "#fef3c7")};
-    color: ${(props) => (props.$active ? "#166534" : "#92400e")};
-    font-weight: 500;
-    font-size: 0.75rem;
-  }
-`;
-
-const ToolsList = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-`;
-
-const ToolBadge = styled(Label)`
-  &.ui.label {
-    font-size: 0.7rem;
-    background: #f1f5f9;
-    color: #475569;
-    padding: 0.25rem 0.5rem;
-  }
-`;
-
 const EmptyState = styled.div`
   text-align: center;
   padding: 3rem 1.5rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 8px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
 `;
 
 const EmptyStateIcon = styled.div`
@@ -231,6 +200,7 @@ const EmptyStateIcon = styled.div`
   align-items: center;
   justify-content: center;
 
+  svg,
   i.icon {
     color: white;
     margin: 0;
@@ -240,13 +210,13 @@ const EmptyStateIcon = styled.div`
 const EmptyStateTitle = styled.h3`
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 0.5rem 0;
 `;
 
 const EmptyStateDescription = styled.p`
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0 0 1.5rem 0;
   max-width: 400px;
   margin-left: auto;
@@ -256,21 +226,21 @@ const EmptyStateDescription = styled.p`
 // Tool Selection UI Components
 const ToolSelectionContainer = styled.div`
   margin-top: 0.5rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   max-height: 300px;
   overflow-y: auto;
 `;
 
 const ToolCategoryHeader = styled.div`
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   padding: 0.5rem 1rem;
   font-weight: 600;
   font-size: 0.8rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   position: sticky;
   top: 0;
   z-index: 1;
@@ -280,13 +250,14 @@ const ToolItem = styled.div<{ $selected: boolean }>`
   display: flex;
   align-items: flex-start;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   cursor: pointer;
   transition: background 0.15s ease;
   background: ${(props) => (props.$selected ? "#eff6ff" : "transparent")};
 
   &:hover {
-    background: ${(props) => (props.$selected ? "#dbeafe" : "#f8fafc")};
+    background: ${(props) =>
+      props.$selected ? "#dbeafe" : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:last-child {
@@ -297,14 +268,16 @@ const ToolItem = styled.div<{ $selected: boolean }>`
 const ToolCheckbox = styled.div<{ $checked: boolean }>`
   width: 18px;
   height: 18px;
-  border: 2px solid ${(props) => (props.$checked ? "#3b82f6" : "#cbd5e1")};
+  border: 2px solid
+    ${(props) => (props.$checked ? OS_LEGAL_COLORS.primaryBlue : "#cbd5e1")};
   border-radius: 4px;
   margin-right: 0.75rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${(props) => (props.$checked ? "#3b82f6" : "white")};
+  background: ${(props) =>
+    props.$checked ? OS_LEGAL_COLORS.primaryBlue : "white"};
   transition: all 0.15s ease;
 
   &::after {
@@ -322,7 +295,7 @@ const ToolInfo = styled.div`
 
 const ToolName = styled.div`
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-size: 0.875rem;
   font-family: monospace;
   display: flex;
@@ -332,7 +305,7 @@ const ToolName = styled.div`
 
 const ToolDescription = styled.div`
   font-size: 0.8rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.25rem;
   line-height: 1.4;
 `;
@@ -380,7 +353,7 @@ const SelectedToolPill = styled.span`
 
 const ToolHelpText = styled.small`
   display: block;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.5rem;
 `;
 
@@ -622,9 +595,9 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   if (!canUpdate) {
     return (
       <Container>
-        <Message info>
+        <InfoMessage>
           You do not have permission to manage agents for this corpus.
-        </Message>
+        </InfoMessage>
       </Container>
     );
   }
@@ -632,9 +605,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   if (loading) {
     return (
       <Container>
-        <Dimmer active inverted>
-          <Loader>Loading agents...</Loader>
-        </Dimmer>
+        <LoadingState message="Loading agents..." />
       </Container>
     );
   }
@@ -642,10 +613,9 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   if (error) {
     return (
       <Container>
-        <Message negative>
-          <Message.Header>Error loading agents</Message.Header>
-          <p>{error.message}</p>
-        </Message>
+        <ErrorMessage title="Error loading agents">
+          {error.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -656,8 +626,8 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
   return (
     <Container>
       <SectionHeader>
-        <SectionTitle as="h3">
-          <Icon name="microchip" /> Agent Configurations
+        <SectionTitle>
+          <Cpu size={18} /> Agent Configurations
         </SectionTitle>
         <Button
           primary
@@ -669,7 +639,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             setShowCreateModal(true);
           }}
         >
-          <Icon name="plus" />
+          <Plus size={14} />
           Create Agent
         </Button>
       </SectionHeader>
@@ -697,7 +667,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
       {agents.length === 0 ? (
         <EmptyState>
           <EmptyStateIcon>
-            <Icon name="microchip" size="large" />
+            <Cpu size={28} color="white" />
           </EmptyStateIcon>
           <EmptyStateTitle>No Agent Configurations</EmptyStateTitle>
           <EmptyStateDescription>
@@ -713,7 +683,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
               setShowCreateModal(true);
             }}
           >
-            <Icon name="plus" />
+            <Plus size={14} />
             Create Agent
           </Button>
         </EmptyState>
@@ -734,7 +704,12 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 <Table.Cell>
                   <strong>{agent.name}</strong>
                   {agent.slug && (
-                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: OS_LEGAL_COLORS.textSecondary,
+                      }}
+                    >
                       <code>{agent.slug}</code>
                     </div>
                   )}
@@ -753,15 +728,13 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                     )
                       .slice(0, 2)
                       .map((tool) => (
-                        <ToolBadge key={tool} size="tiny">
-                          {tool}
-                        </ToolBadge>
+                        <ToolBadge key={tool}>{tool}</ToolBadge>
                       ))}
                     {(Array.isArray(agent.availableTools)
                       ? agent.availableTools
                       : []
                     ).length > 2 && (
-                      <ToolBadge size="tiny">
+                      <ToolBadge>
                         +
                         {(Array.isArray(agent.availableTools)
                           ? agent.availableTools
@@ -778,7 +751,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 </Table.Cell>
                 <Table.Cell>
                   <Button icon size="tiny" onClick={() => openEditModal(agent)}>
-                    <Icon name="edit" />
+                    <Edit size={14} />
                   </Button>
                   <Button
                     icon
@@ -789,7 +762,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                       setDeleteModalOpen(true);
                     }}
                   >
-                    <Icon name="trash" />
+                    <Trash2 size={14} />
                   </Button>
                 </Table.Cell>
               </Table.Row>
@@ -806,29 +779,33 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
       >
         <Modal.Header>Create Agent Configuration</Modal.Header>
         <Modal.Content scrolling>
-          <Message info size="small" style={{ marginBottom: "1rem" }}>
-            <Message.Header>How Agent Scope Works</Message.Header>
-            <p style={{ marginTop: "0.5rem" }}>
-              This configuration defines the agent's capabilities. When used:
-            </p>
-            <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
-              <li>
-                In <strong>Corpus Actions</strong>: Agent processes individual
-                documents automatically
-              </li>
-              <li>
-                In <strong>Chat</strong>: Agent scope depends on the
-                conversation context (document or corpus)
-              </li>
-            </ul>
-          </Message>
+          <InfoMessage
+            title="How Agent Scope Works"
+            style={{ marginBottom: "1rem" }}
+          >
+            <>
+              This configuration defines the agent&apos;s capabilities. When
+              used:
+              <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
+                <li>
+                  In <strong>Corpus Actions</strong>: Agent processes individual
+                  documents automatically
+                </li>
+                <li>
+                  In <strong>Chat</strong>: Agent scope depends on the
+                  conversation context (document or corpus)
+                </li>
+              </ul>
+            </>
+          </InfoMessage>
           <Form>
             <Form.Field required>
               <label>Name</label>
               <Input
+                fullWidth
                 placeholder="Agent name"
                 value={formState.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
@@ -836,20 +813,21 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             <Form.Field>
               <label>Slug (for @mentions)</label>
               <Input
+                fullWidth
                 placeholder="my-agent (auto-generated from name if empty)"
                 value={formState.slug}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, slug: e.target.value })
                 }
               />
-              <small style={{ color: "#64748b" }}>
+              <small style={{ color: OS_LEGAL_COLORS.textSecondary }}>
                 URL-friendly identifier used in @mentions (e.g.,
                 @agent:my-agent)
               </small>
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <TextArea
+              <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
@@ -860,7 +838,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <TextArea
+              <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -876,7 +854,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             <Form.Field>
               <label>Available Tools</label>
               {toolsLoading ? (
-                <Loader active inline size="small" />
+                <Spinner size="sm" />
               ) : (
                 <>
                   <ToolSelectionContainer>
@@ -939,10 +917,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 as permission-required.
               </ToolHelpText>
               {formState.availableTools.length === 0 ? (
-                <Message size="small" info>
+                <InfoMessage>
                   Select available tools first to configure permission
                   requirements.
-                </Message>
+                </InfoMessage>
               ) : (
                 <ToolSelectionContainer style={{ maxHeight: "150px" }}>
                   {formState.availableTools.map((toolName) => {
@@ -988,15 +966,16 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             <Form.Field>
               <label>Avatar URL (optional)</label>
               <Input
+                fullWidth
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
               />
               <small
                 style={{
-                  color: "#64748b",
+                  color: OS_LEGAL_COLORS.textSecondary,
                   marginTop: "0.25rem",
                   display: "block",
                 }}
@@ -1006,13 +985,23 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
               </small>
             </Form.Field>
             <Form.Field>
-              <Checkbox
-                label="Publicly visible (visible to users with corpus access)"
-                checked={formState.isPublic}
-                onChange={(_, data) =>
-                  setFormState({ ...formState, isPublic: !!data.checked })
-                }
-              />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formState.isPublic}
+                  onChange={(e) =>
+                    setFormState({ ...formState, isPublic: e.target.checked })
+                  }
+                />
+                Publicly visible (visible to users with corpus access)
+              </label>
             </Form.Field>
           </Form>
         </Modal.Content>
@@ -1047,9 +1036,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             <Form.Field required>
               <label>Name</label>
               <Input
+                fullWidth
                 placeholder="Agent name"
                 value={formState.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
@@ -1057,20 +1047,21 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             <Form.Field>
               <label>Slug (for @mentions)</label>
               <Input
+                fullWidth
                 placeholder="my-agent"
                 value={formState.slug}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, slug: e.target.value })
                 }
               />
-              <small style={{ color: "#64748b" }}>
+              <small style={{ color: OS_LEGAL_COLORS.textSecondary }}>
                 URL-friendly identifier used in @mentions (e.g.,
                 @agent:my-agent)
               </small>
             </Form.Field>
             <Form.Field required>
               <label>Description</label>
-              <TextArea
+              <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
                 onChange={(e) =>
@@ -1081,7 +1072,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             </Form.Field>
             <Form.Field required>
               <label>System Instructions</label>
-              <TextArea
+              <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
                 onChange={(e) =>
@@ -1097,7 +1088,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             <Form.Field>
               <label>Available Tools</label>
               {toolsLoading ? (
-                <Loader active inline size="small" />
+                <Spinner size="sm" />
               ) : (
                 <>
                   <ToolSelectionContainer>
@@ -1160,10 +1151,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 as permission-required.
               </ToolHelpText>
               {formState.availableTools.length === 0 ? (
-                <Message size="small" info>
+                <InfoMessage>
                   Select available tools first to configure permission
                   requirements.
-                </Message>
+                </InfoMessage>
               ) : (
                 <ToolSelectionContainer style={{ maxHeight: "150px" }}>
                   {formState.availableTools.map((toolName) => {
@@ -1209,15 +1200,16 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             <Form.Field>
               <label>Avatar URL (optional)</label>
               <Input
+                fullWidth
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
               />
               <small
                 style={{
-                  color: "#64748b",
+                  color: OS_LEGAL_COLORS.textSecondary,
                   marginTop: "0.25rem",
                   display: "block",
                 }}
@@ -1228,22 +1220,42 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             </Form.Field>
             <Form.Group>
               <Form.Field>
-                <Checkbox
-                  label="Active"
-                  checked={formState.isActive}
-                  onChange={(_, data) =>
-                    setFormState({ ...formState, isActive: !!data.checked })
-                  }
-                />
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formState.isActive}
+                    onChange={(e) =>
+                      setFormState({ ...formState, isActive: e.target.checked })
+                    }
+                  />
+                  Active
+                </label>
               </Form.Field>
               <Form.Field>
-                <Checkbox
-                  label="Publicly visible"
-                  checked={formState.isPublic}
-                  onChange={(_, data) =>
-                    setFormState({ ...formState, isPublic: !!data.checked })
-                  }
-                />
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formState.isPublic}
+                    onChange={(e) =>
+                      setFormState({ ...formState, isPublic: e.target.checked })
+                    }
+                  />
+                  Publicly visible
+                </label>
               </Form.Field>
             </Form.Group>
           </Form>
