@@ -5,6 +5,7 @@ Tests for the PipelineSettings singleton model and GraphQL endpoints.
 from dataclasses import dataclass, field
 from unittest.mock import patch
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -15,6 +16,10 @@ from config.graphql.schema import schema
 from opencontractserver.documents.models import PipelineSettings
 
 User = get_user_model()
+
+# All test classes in this module manipulate PipelineSettings cache in setUp,
+# which can race with parallel pytest-xdist workers sharing the same cache backend.
+pytestmark = pytest.mark.serial
 
 
 class TestContext:
