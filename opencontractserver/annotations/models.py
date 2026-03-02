@@ -10,6 +10,8 @@ from typing import Optional, Union, cast
 import django
 from django.contrib.auth import get_user_model
 from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -23,8 +25,9 @@ from django.utils.translation import gettext_lazy as _
 # using django-tree-queries down the road but shouldn't affect each other on
 # separate models.
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
-from pgvector.django import VectorField
+from pgvector.django import HnswIndex, VectorField
 
+from opencontractserver.constants.search import HNSW_EF_CONSTRUCTION, HNSW_M
 from opencontractserver.shared.defaults import (
     empty_bounding_box,
     jsonfield_default_value,
@@ -509,6 +512,59 @@ class Embedding(BaseOCModel):
             django.db.models.Index(fields=["embedder_path"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
+            # HNSW indexes for approximate nearest neighbor search.
+            # These turn O(n) sequential scans into O(log n) ANN lookups.
+            # Each index uses a WHERE condition to skip NULL vectors (partial index),
+            # keeping the index compact since only 1-2 dimensions are populated per row.
+            HnswIndex(
+                name="emb_hnsw_384",
+                fields=["vector_384"],
+                m=HNSW_M,
+                ef_construction=HNSW_EF_CONSTRUCTION,
+                opclasses=["vector_cosine_ops"],
+            ),
+            HnswIndex(
+                name="emb_hnsw_768",
+                fields=["vector_768"],
+                m=HNSW_M,
+                ef_construction=HNSW_EF_CONSTRUCTION,
+                opclasses=["vector_cosine_ops"],
+            ),
+            HnswIndex(
+                name="emb_hnsw_1024",
+                fields=["vector_1024"],
+                m=HNSW_M,
+                ef_construction=HNSW_EF_CONSTRUCTION,
+                opclasses=["vector_cosine_ops"],
+            ),
+            HnswIndex(
+                name="emb_hnsw_1536",
+                fields=["vector_1536"],
+                m=HNSW_M,
+                ef_construction=HNSW_EF_CONSTRUCTION,
+                opclasses=["vector_cosine_ops"],
+            ),
+            HnswIndex(
+                name="emb_hnsw_2048",
+                fields=["vector_2048"],
+                m=HNSW_M,
+                ef_construction=HNSW_EF_CONSTRUCTION,
+                opclasses=["vector_cosine_ops"],
+            ),
+            HnswIndex(
+                name="emb_hnsw_3072",
+                fields=["vector_3072"],
+                m=HNSW_M,
+                ef_construction=HNSW_EF_CONSTRUCTION,
+                opclasses=["vector_cosine_ops"],
+            ),
+            HnswIndex(
+                name="emb_hnsw_4096",
+                fields=["vector_4096"],
+                m=HNSW_M,
+                ef_construction=HNSW_EF_CONSTRUCTION,
+                opclasses=["vector_cosine_ops"],
+            ),
         ]
         # Partial unique constraints to prevent duplicate embeddings per parent object
         # Each parent type (document, annotation, etc.) can have only one embedding
@@ -806,6 +862,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
     page = django.db.models.IntegerField(default=1, blank=False)
     raw_text = django.db.models.TextField(null=True, blank=True)
+    search_vector = SearchVectorField(null=True)
     tokens_jsons = NullableJSONField(
         default=jsonfield_empty_array, null=True, blank=True
     )
@@ -1110,6 +1167,10 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
             django.db.models.Index(fields=["modified"]),
+            GinIndex(
+                fields=["search_vector"],
+                name="annotation_search_vector_gin",
+            ),
         ]
 
         constraints = [

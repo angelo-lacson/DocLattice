@@ -5,9 +5,25 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-01
+## [Unreleased] - 2026-03-02
 
 ### Added
+
+#### Optimize Vector Search and Index Scalability for Million-Scale Corpora
+- **HNSW indexes on all Embedding vector columns** (384–4096 dimensions): Approximate nearest neighbor search reduces vector queries from O(n) sequential scan to O(log n). Created via `AddIndexConcurrently` to avoid table locks during index creation (`opencontractserver/annotations/models.py`, `opencontractserver/annotations/migrations/0063_add_hnsw_indexes_and_search_vector.py`)
+- **Eliminated Python-side materialization** in `VectorSearchViaEmbeddingMixin.search_by_embedding()`: Previously materialized ALL matching rows into Python, sorted, and sliced. Now uses PostgreSQL `ORDER BY + LIMIT` so only top-k rows cross the wire. The unique constraint from migration 0059 guarantees no JOIN duplicates, removing the need for `DISTINCT ON` (`opencontractserver/shared/mixins.py`)
+- **PostgreSQL full-text search** on Annotation: Added `search_vector` (`SearchVectorField`) with GIN index and a database trigger that auto-populates tsvector from `raw_text` on INSERT/UPDATE. Replaces `LIKE '%term%'` (`icontains`) with indexed tsvector matching for 100x+ faster text search at scale (`opencontractserver/annotations/models.py`)
+- **Hybrid search with Reciprocal Rank Fusion (RRF)**: New `CoreAnnotationVectorStore.hybrid_search()` method runs vector similarity and full-text search in parallel, then fuses results using RRF (k=60). Semantic search GraphQL resolver now uses hybrid search for improved result quality (`opencontractserver/llms/vector_stores/core_vector_stores.py`, `config/graphql/search_queries.py`)
+- **RRF utility function** (`opencontractserver/utils/search.py`): Generic `reciprocal_rank_fusion()` that merges any number of ranked lists
+- **Search constants** (`opencontractserver/constants/search.py`): `HNSW_M`, `HNSW_EF_CONSTRUCTION`, `RRF_K`, `HYBRID_SEARCH_OVERSAMPLE_FACTOR`, `FTS_CONFIG`
+- **pgvector upgraded to 0.8.0**: Enables iterative index scans for filtered ANN queries (prevents result loss when combining vector search with `WHERE` clauses like `embedder_path` filtering). Database default set via `ALTER DATABASE ... SET hnsw.iterative_scan = 'relaxed_order'` in `init.sql` (`compose/production/postgres/Dockerfile`, `compose/production/postgres/init.sql`)
+- **PostgreSQL tuning for vector workloads**: Added `shared_buffers`, `maintenance_work_mem`, `effective_cache_size`, `work_mem`, `max_parallel_maintenance_workers`, `random_page_cost`, and `effective_io_concurrency` to all Docker Compose files. Added `shm_size` for parallel HNSW index builds (`local.yml`, `production.yml`, `test.yml`)
+- **Pinned pgvector Python package** to `>=0.4.0` for `HnswIndex` and `HalfVectorField` support (`requirements/base.txt`)
+- **Expanded valid embedding dimensions** in `CoreAnnotationVectorStore`: Search methods now accept 1024 and 2048 dimensions in addition to existing 384, 768, 1536, 3072, 4096
+- **Added 2048-dimension support** to conversation and message vector search methods (`opencontractserver/conversations/models.py`)
+- **GraphQL annotation mention search** now uses full-text search via `SearchQuery` on GIN-indexed `search_vector` instead of `raw_text__icontains` (`config/graphql/search_queries.py`)
+
+
 
 - **Pipeline Component Management Redesign**: Separated component management from filetype default assignment in the Pipeline Configuration UI. New `enabled_components` JSON field on `PipelineSettings` tracks which components are available. Frontend splits into two sections: ComponentLibrary (flat filterable list with enable/disable toggles, search, stage filter chips) and FiletypeDefaults (MIME type rows with parser/embedder/thumbnailer dropdowns). Removed old stage-centric layout with MIME type filter buttons. (`opencontractserver/documents/models.py`, `config/graphql/pipeline_types.py`, `config/graphql/pipeline_queries.py`, `config/graphql/pipeline_settings_mutations.py`, `frontend/src/components/admin/SystemSettings.tsx`, `frontend/src/components/admin/system_settings/ComponentLibrary.tsx`, `frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
 - **Clean corpus landing page with Power User mode toggle**: Default corpus view is now a full-page landing without sidebar navigation, providing a cleaner experience for anonymous browsers and casual users. Users with edit permissions see a "Power User" toggle (`?mode=power` URL param) to access the full sidebar+tabs layout (`frontend/src/views/Corpuses.tsx`)

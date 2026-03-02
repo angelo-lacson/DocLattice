@@ -293,12 +293,17 @@ class SearchQueryMixin:
             qs = qs.filter(corpus_id=int(corpus_pk))
 
         if text_search:
-            # Search priority:
-            # 1. annotation_label.text (indexed CharField - fast)
-            # 2. raw_text (TextField - slower but comprehensive)
+            # Use PostgreSQL full-text search on search_vector (GIN-indexed)
+            # for raw_text matching, combined with B-tree index on label text.
+            # Falls back to icontains for annotations without search_vector yet.
+            from django.contrib.postgres.search import SearchQuery
+
+            from opencontractserver.constants.search import FTS_CONFIG
+
+            search_query = SearchQuery(text_search, config=FTS_CONFIG)
             qs = qs.filter(
                 Q(annotation_label__text__icontains=text_search)
-                | Q(raw_text__icontains=text_search)
+                | Q(search_vector=search_query)
             )
 
         # Select related for efficient queries
@@ -586,7 +591,9 @@ class SearchQueryMixin:
                 filters={"annotation_label": label_text} if label_text else None,
             )
 
-            results = vector_store.search(search_query)
+            # Use hybrid search (vector + full-text with RRF fusion)
+            # when a text query is provided, fall back to vector-only otherwise.
+            results = vector_store.hybrid_search(search_query)
 
             # Apply pagination
             paginated_results = results[offset : offset + limit]
