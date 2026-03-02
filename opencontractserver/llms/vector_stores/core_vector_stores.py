@@ -169,7 +169,9 @@ class CoreAnnotationVectorStore:
         _logger.debug(f"Configured embedder path: {self.embedder_path}")
 
         # Validate or fallback dimension
-        if self.embed_dim not in [384, 768, 1024, 1536, 2048, 3072, 4096]:
+        from opencontractserver.constants.search import VALID_EMBEDDING_DIMS
+
+        if self.embed_dim not in VALID_EMBEDDING_DIMS:
             self.embed_dim = getattr(embedder_class, "vector_size", 768)
 
     async def _build_base_queryset(self) -> QuerySet[Annotation]:
@@ -528,11 +530,10 @@ class CoreAnnotationVectorStore:
         if vector is None and query.query_text is not None:
             vector = self._generate_query_embedding(query.query_text)
 
-        # All supported embedding dimensions
-        valid_dims = {384, 768, 1024, 1536, 2048, 3072, 4096}
-
         # Perform vector search if we have a valid embedding
-        if vector is not None and len(vector) in valid_dims:
+        from opencontractserver.constants.search import VALID_EMBEDDING_DIMS
+
+        if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
             _logger.debug(f"Using vector search with dimension: {len(vector)}")
             _logger.debug(
                 f"Performing vector search with embedder: {self.embedder_path}"
@@ -621,6 +622,7 @@ class CoreAnnotationVectorStore:
         from opencontractserver.constants.search import (
             FTS_CONFIG,
             HYBRID_SEARCH_OVERSAMPLE_FACTOR,
+            VALID_EMBEDDING_DIMS,
         )
         from opencontractserver.utils.search import reciprocal_rank_fusion
 
@@ -635,9 +637,8 @@ class CoreAnnotationVectorStore:
         if vector is None and query.query_text is not None:
             vector = self._generate_query_embedding(query.query_text)
 
-        valid_dims = {384, 768, 1024, 1536, 2048, 3072, 4096}
         vector_results = []
-        if vector is not None and len(vector) in valid_dims:
+        if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
             vector_results = queryset.search_by_embedding(
                 query_vector=vector,
                 embedder_path=self.embedder_path,
@@ -693,6 +694,23 @@ class CoreAnnotationVectorStore:
         else:
             _logger.warning("Hybrid search: no results from either arm")
             return []
+
+    async def async_hybrid_search(
+        self, query: VectorSearchQuery
+    ) -> list[VectorSearchResult]:
+        """Async version of hybrid_search.
+
+        Uses Reciprocal Rank Fusion (RRF) to merge results from vector
+        similarity search and full-text search. Falls back to single-arm
+        search when one signal is unavailable.
+
+        Args:
+            query: The search query containing text/embedding and filters
+
+        Returns:
+            List of search results with annotations and RRF-fused scores
+        """
+        return await sync_to_async(self.hybrid_search)(query)
 
     @classmethod
     def global_search(
@@ -877,11 +895,10 @@ class CoreAnnotationVectorStore:
         if vector is None and query.query_text is not None:
             vector = await self._agenerate_query_embedding(query.query_text)
 
-        # All supported embedding dimensions
-        valid_dims = {384, 768, 1024, 1536, 2048, 3072, 4096}
-
         # Perform vector search if we have a valid embedding
-        if vector is not None and len(vector) in valid_dims:
+        from opencontractserver.constants.search import VALID_EMBEDDING_DIMS
+
+        if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
             _logger.debug(f"Using vector search with dimension: {len(vector)}")
             _logger.debug(
                 f"Performing vector search with embedder: {self.embedder_path}"

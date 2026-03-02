@@ -25,22 +25,12 @@ class VectorSearchViaEmbeddingMixin:
         Given the dimension of the query vector, return the appropriate field
         on the Embedding model (vector_384, vector_768, etc.).
         """
-        if dimension == 384:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_384"
-        elif dimension == 768:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_768"
-        elif dimension == 1024:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_1024"
-        elif dimension == 1536:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
-        elif dimension == 2048:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_2048"
-        elif dimension == 3072:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
-        elif dimension == 4096:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_4096"
-        else:
+        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
+
+        field_name = DIM_TO_FIELD_MAP.get(dimension)
+        if not field_name:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
+        return f"{self.EMBEDDING_RELATED_NAME}__{field_name}"
 
     def search_by_embedding(
         self,
@@ -138,23 +128,10 @@ class HasEmbeddingMixin:
         """
         # Late import to avoid circular import
         from opencontractserver.annotations.models import Embedding
+        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
 
-        # Get the appropriate vector field name
-        if dimension == 384:
-            vector_field = "vector_384"
-        elif dimension == 768:
-            vector_field = "vector_768"
-        elif dimension == 1024:
-            vector_field = "vector_1024"
-        elif dimension == 1536:
-            vector_field = "vector_1536"
-        elif dimension == 2048:
-            vector_field = "vector_2048"
-        elif dimension == 3072:
-            vector_field = "vector_3072"
-        elif dimension == 4096:
-            vector_field = "vector_4096"
-        else:
+        vector_field = DIM_TO_FIELD_MAP.get(dimension)
+        if not vector_field:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
 
         kwargs = self.get_embedding_reference_kwargs()  # e.g. {"document_id": self.pk}

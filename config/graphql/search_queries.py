@@ -295,7 +295,8 @@ class SearchQueryMixin:
         if text_search:
             # Use PostgreSQL full-text search on search_vector (GIN-indexed)
             # for raw_text matching, combined with B-tree index on label text.
-            # Falls back to icontains for annotations without search_vector yet.
+            # The OR means annotations matching either label text or full-text
+            # search are returned; search_vector is populated by a DB trigger.
             from django.contrib.postgres.search import SearchQuery
 
             from opencontractserver.constants.search import FTS_CONFIG

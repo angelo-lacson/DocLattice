@@ -299,19 +299,10 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         """
         from pgvector.django import CosineDistance
 
-        dimension = len(query_vector)
+        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
 
-        # Map dimension to vector field
-        dim_map = {
-            384: "vector_384",
-            768: "vector_768",
-            1024: "vector_1024",
-            1536: "vector_1536",
-            2048: "vector_2048",
-            3072: "vector_3072",
-            4096: "vector_4096",
-        }
-        field_name = dim_map.get(dimension)
+        dimension = len(query_vector)
+        field_name = DIM_TO_FIELD_MAP.get(dimension)
         if not field_name:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
         vector_field = f"{self.EMBEDDING_RELATED_NAME}__{field_name}"
@@ -465,19 +456,10 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
         """
         from pgvector.django import CosineDistance
 
-        dimension = len(query_vector)
+        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
 
-        # Map dimension to vector field
-        dim_map = {
-            384: "vector_384",
-            768: "vector_768",
-            1024: "vector_1024",
-            1536: "vector_1536",
-            2048: "vector_2048",
-            3072: "vector_3072",
-            4096: "vector_4096",
-        }
-        field_name = dim_map.get(dimension)
+        dimension = len(query_vector)
+        field_name = DIM_TO_FIELD_MAP.get(dimension)
         if not field_name:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
         vector_field = f"{self.EMBEDDING_RELATED_NAME}__{field_name}"

@@ -25,11 +25,11 @@ import django.contrib.postgres.search
 from django.db import migrations
 from pgvector.django import HnswIndex
 
-from opencontractserver.constants.search import (
-    FTS_CONFIG,
-    HNSW_EF_CONSTRUCTION,
-    HNSW_M,
-)
+# Frozen constants — do NOT import from application code in migrations.
+# Values at time of migration creation (2026-02-28).
+HNSW_M = 16
+HNSW_EF_CONSTRUCTION = 64
+FTS_CONFIG = "english"
 
 # HNSW index definitions: (index_name, column_name)
 # Only dimensions ≤ 2000 — pgvector HNSW hard limit.
