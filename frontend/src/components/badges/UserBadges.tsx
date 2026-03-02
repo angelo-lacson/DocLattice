@@ -4,6 +4,8 @@ import { Spinner } from "@os-legal/ui";
 import styled from "styled-components";
 import { ErrorMessage } from "../widgets/feedback";
 import { Badge, BadgeData } from "./Badge";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { GradientSegment } from "../layout/SharedSegments";
 import {
   GET_USER_BADGES,
   GetUserBadgesInput,
@@ -28,12 +30,7 @@ const BadgesContainer = styled.div`
   }
 `;
 
-const StyledSegment = styled.div`
-  padding: 1rem;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+const StyledSegment = styled(GradientSegment)`
   position: relative;
 
   @media (max-width: 768px) {
@@ -52,7 +49,7 @@ const StyledSegment = styled.div`
 const EmptyState = styled.div`
   text-align: center;
   padding: 3em 1em;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 1.1em;
 
   @media (max-width: 768px) {

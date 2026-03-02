@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { Input } from "@os-legal/ui";
 import { MetadataColumn, MetadataDataType } from "../../../types/metadata";
@@ -60,7 +61,7 @@ const ErrorLabel = styled.span`
   margin-top: 0.25rem;
   font-size: 0.75rem;
   z-index: 1000;
-  color: #db2828;
+  color: ${OS_LEGAL_COLORS.danger};
   background: #fff6f6;
   border: 1px solid #e0b4b4;
   border-radius: 4px;
@@ -174,7 +175,7 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
     return (
       <AlertCircle
         size={16}
-        color="#db2828"
+        color={OS_LEGAL_COLORS.danger}
         data-testid="validation-icon-error"
         className="validation-icon"
         style={{ visibility: "visible", opacity: 1 }}

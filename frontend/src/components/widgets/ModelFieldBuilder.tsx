@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Button, Form } from "semantic-ui-react";
 import { motion, AnimatePresence } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 export interface FieldType {
   fieldName: string;
@@ -55,7 +56,7 @@ const FieldRow = styled(motion.div)`
 `;
 
 const AddFieldButton = styled(motion.button)`
-  background: #2185d0;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   border: none;
   border-radius: 20px;
@@ -105,7 +106,7 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
   initialFields = [],
 }) => {
   const [fields, setFields] = useState<FieldType[]>(
-    initialFields.map((f) => ({ ...f, id: Math.random().toString() }))
+    initialFields.map((f) => ({ ...f, id: Math.random().toString() })),
   );
 
   const addField = () => {
@@ -127,7 +128,7 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
   const updateField = (
     index: number,
     key: "fieldName" | "fieldType",
-    value: string
+    value: string,
   ) => {
     const newFields = [...fields];
     newFields[index][key] = value;

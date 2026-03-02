@@ -57,6 +57,7 @@ import { CreateColumnModal } from "../../widgets/modals/CreateColumnModal";
 import { SelectDocumentsModal } from "../../widgets/modals/SelectDocumentsModal";
 import { REQUEST_GET_EXTRACT } from "../../../graphql/queries";
 import { WarningMessage } from "../../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface DragState {
   isDragging: boolean;
@@ -101,11 +102,11 @@ const styles = {
     position: "sticky",
     top: 0,
     zIndex: 10,
-    backgroundColor: "#f8fafc",
-    borderBottom: "2px solid #e2e8f0",
+    backgroundColor: OS_LEGAL_COLORS.surfaceHover,
+    borderBottom: `2px solid ${OS_LEGAL_COLORS.border}`,
   } as React.CSSProperties,
   headerCell: {
-    backgroundColor: "#f8fafc !important",
+    backgroundColor: `${OS_LEGAL_COLORS.surfaceHover} !important`,
     fontWeight: "700 !important",
     color: "#0f172a !important",
     position: "relative",
@@ -128,7 +129,7 @@ const styles = {
     borderRadius: "10px",
     border: "2px dashed #cbd5e1",
     background: "rgba(59, 130, 246, 0.05)",
-    color: "#3b82f6",
+    color: OS_LEGAL_COLORS.primaryBlue,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -136,18 +137,18 @@ const styles = {
     transition: "all 0.2s ease",
     "&:hover": {
       background: "rgba(59, 130, 246, 0.1)",
-      borderColor: "#3b82f6",
+      borderColor: OS_LEGAL_COLORS.primaryBlue,
       transform: "scale(1.05)",
     },
   } as React.CSSProperties,
   tableCell: {
     padding: "1rem 1.25rem !important",
-    borderBottom: "1px solid #f1f5f9 !important",
+    borderBottom: `1px solid ${OS_LEGAL_COLORS.surfaceLight} !important`,
     fontSize: "0.9375rem !important",
     color: "#334155 !important",
     transition: "background-color 0.15s ease",
     "&:hover": {
-      backgroundColor: "#f8fafc",
+      backgroundColor: OS_LEGAL_COLORS.surfaceHover,
     },
   } as React.CSSProperties,
   dropOverlay: {
@@ -169,7 +170,7 @@ const styles = {
     backgroundColor: "rgba(255, 255, 255, 0.98)",
     borderRadius: "20px",
     boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
-    border: "3px dashed #3b82f6",
+    border: `3px dashed ${OS_LEGAL_COLORS.primaryBlue}`,
     fontSize: "1.125rem",
     fontWeight: "600",
     color: "#0f172a",
@@ -177,7 +178,7 @@ const styles = {
   },
   placeholderRow: {
     textAlign: "center" as const,
-    color: "#94a3b8",
+    color: OS_LEGAL_COLORS.textMuted,
     fontStyle: "italic",
     padding: "60px 20px",
     fontSize: "0.9375rem",
@@ -189,15 +190,15 @@ const styles = {
     backgroundColor: "#ffffff",
     zIndex: 5,
     boxShadow: "3px 0 6px rgba(0,0,0,0.05)",
-    borderRight: "1px solid #e2e8f0",
+    borderRight: `1px solid ${OS_LEGAL_COLORS.border}`,
   },
   frozenHeaderColumn: {
     position: "sticky" as const,
     left: 0,
-    backgroundColor: "#f8fafc !important",
+    backgroundColor: `${OS_LEGAL_COLORS.surfaceHover} !important`,
     zIndex: 11,
     boxShadow: "3px 0 6px rgba(0,0,0,0.05)",
-    borderRight: "1px solid #e2e8f0",
+    borderRight: `1px solid ${OS_LEGAL_COLORS.border}`,
   },
   statusCell: {
     display: "flex",
@@ -223,15 +224,15 @@ const styles = {
     boxShadow: "0 0 0 3px rgba(245, 158, 11, 0.1)",
   } as React.CSSProperties,
   emptyDot: {
-    backgroundColor: "#e2e8f0",
+    backgroundColor: OS_LEGAL_COLORS.border,
     border: "2px solid #cbd5e1",
   } as React.CSSProperties,
   actionButton: {
     padding: "6px 12px",
     borderRadius: "8px",
-    border: "1px solid #e2e8f0",
+    border: `1px solid ${OS_LEGAL_COLORS.border}`,
     background: "white",
-    color: "#64748b",
+    color: OS_LEGAL_COLORS.textSecondary,
     fontSize: "0.875rem",
     fontWeight: "500",
     cursor: "pointer",
@@ -240,7 +241,7 @@ const styles = {
     alignItems: "center",
     gap: "6px",
     "&:hover": {
-      background: "#f8fafc",
+      background: OS_LEGAL_COLORS.surfaceHover,
       borderColor: "#cbd5e1",
       color: "#334155",
       transform: "translateY(-1px)",
@@ -266,7 +267,7 @@ const styles = {
   } as React.CSSProperties,
   emptyStateText: {
     fontSize: "0.9375rem",
-    color: "#64748b",
+    color: OS_LEGAL_COLORS.textSecondary,
     maxWidth: "400px",
     margin: "0 auto",
   } as React.CSSProperties,
@@ -827,7 +828,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               }}
             >
               <Spinner size="md" />
-              <span style={{ marginTop: "0.75rem", color: "#64748b" }}>
+              <span style={{ marginTop: "0.75rem", color: OS_LEGAL_COLORS.textSecondary }}>
                 {extract.started && !extract.finished
                   ? "Processing..."
                   : "Loading..."}
@@ -840,11 +841,11 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
             <div
               style={{
                 padding: "0.75rem 1rem",
-                borderBottom: "1px solid #e2e8f0",
+                borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                backgroundColor: "#f8fafc",
+                backgroundColor: OS_LEGAL_COLORS.surfaceHover,
                 position: "sticky",
                 top: 0,
                 zIndex: 9,
@@ -1164,12 +1165,12 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
           style={{ borderRadius: "12px", padding: "1.5rem" }}
         >
           <Modal.Header
-            style={{ borderBottom: "1px solid #f1f5f9", paddingBottom: "1rem" }}
+            style={{ borderBottom: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`, paddingBottom: "1rem" }}
           >
             Confirm Delete
           </Modal.Header>
           <Modal.Content>
-            <p style={{ color: "#475569" }}>
+            <p style={{ color: OS_LEGAL_COLORS.textTertiary }}>
               Are you sure you want to delete the column "
               {deleteModalState.columnToDelete?.name}"?
             </p>
@@ -1181,7 +1182,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
             )}
           </Modal.Content>
           <Modal.Actions
-            style={{ borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}
+            style={{ borderTop: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`, paddingTop: "1rem" }}
           >
             <Button
               basic
@@ -1191,7 +1192,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               style={{
                 borderRadius: "6px",
                 boxShadow: "none",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
               }}
             >
               Cancel

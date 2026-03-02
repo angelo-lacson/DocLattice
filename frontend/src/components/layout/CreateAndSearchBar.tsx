@@ -4,6 +4,7 @@ import { Filter, Plus } from "lucide-react";
 import { DynamicIcon } from "../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
 import Dropdown from "../common/Dropdown";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 /**
  * Props for each dropdown action item.
@@ -178,7 +179,7 @@ const StyledButton = styled(
   background: linear-gradient(
     135deg,
     var(--background-subtle, #f0f2f5) 0%,
-    var(--background-hover, #e2e8f0) 100%
+    var(--background-hover, ${OS_LEGAL_COLORS.border}) 100%
   );
   background-size: 200% 200%;
   background-position: 0% 0%;

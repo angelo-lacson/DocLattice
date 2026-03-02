@@ -279,12 +279,12 @@ test(
     await expect(table.locator("th", { hasText: /^Moderator$/ })).toBeVisible();
     await expect(table.locator("th", { hasText: /^Reason$/ })).toBeVisible();
 
-    // Check action data - action badges are now styled spans with .action-badge class
+    // Check action data - action badges use data-testid
     await expect(
-      table.locator(".action-badge").filter({ hasText: "Lock Thread" })
+      table.locator('[data-testid="action-badge"]').filter({ hasText: "Lock Thread" })
     ).toBeVisible();
     await expect(
-      table.locator(".action-badge").filter({ hasText: "Delete Message" })
+      table.locator('[data-testid="action-badge"]').filter({ hasText: "Delete Message" })
     ).toBeVisible();
 
     // Check thread titles

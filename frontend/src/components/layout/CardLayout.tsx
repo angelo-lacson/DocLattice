@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface CardLayoutProps {
   children?: React.ReactChild | React.ReactChild[];
@@ -114,7 +115,7 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       <SearchBarWrapper>{SearchBar}</SearchBarWrapper>
       {BreadCrumbs && (!use_mobile || width > 768) && (
         <StyledSegment
-          style={{ borderBottom: "1px solid #e2e8f0", background: "#f8f9fa" }}
+          style={{ borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`, background: "#f8f9fa" }}
         >
           {BreadCrumbs}
         </StyledSegment>

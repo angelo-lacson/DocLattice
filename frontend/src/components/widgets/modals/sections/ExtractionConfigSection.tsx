@@ -1,5 +1,6 @@
 import React from "react";
-import { Icon, Popup } from "semantic-ui-react";
+import { Popup } from "semantic-ui-react";
+import { HelpCircle } from "lucide-react";
 import { FormSection, StyledFormField, StyledTextArea } from "../styled";
 import { SectionTitle } from "../styled";
 
@@ -49,7 +50,7 @@ export const ExtractionConfigSection: React.FC<
           <label>
             Representative Example
             <Popup
-              trigger={<Icon name="question circle outline" />}
+              trigger={<HelpCircle size={14} style={{ marginLeft: 4, verticalAlign: "middle", cursor: "help" }} />}
               content="Find text that is semantically similar to this example FIRST if provided."
             />
           </label>

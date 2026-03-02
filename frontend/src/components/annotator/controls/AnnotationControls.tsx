@@ -1,5 +1,6 @@
 import React, { memo, useCallback } from "react";
 import styled, { css } from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { Dropdown } from "semantic-ui-react";
 import { User, Square, Layers, Eye, Tags } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -27,9 +28,9 @@ const ControlsContainer = styled.div<{ $variant: "floating" | "sidebar" }>`
         `
       : css`
           padding: 1rem;
-          background: #f8fafc;
+          background: ${OS_LEGAL_COLORS.surfaceHover};
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid ${OS_LEGAL_COLORS.border};
         `}
 `;
 
@@ -42,7 +43,10 @@ const ControlItem = styled.div<{ $compact?: boolean }>`
   transition: background 0.2s ease;
 
   &:hover {
-    background: ${(props) => (props.$compact ? "#f8fafc" : "#f1f5f9")};
+    background: ${(props) =>
+      props.$compact
+        ? OS_LEGAL_COLORS.surfaceHover
+        : OS_LEGAL_COLORS.surfaceLight};
   }
 
   &:not(:last-child) {
@@ -56,12 +60,12 @@ const ControlLabel = styled.div<{ $compact?: boolean }>`
   gap: ${(props) => (props.$compact ? "0.5rem" : "0.75rem")};
   font-size: ${(props) => (props.$compact ? "0.8125rem" : "0.875rem")};
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 
   svg {
     width: ${(props) => (props.$compact ? "16px" : "18px")};
     height: ${(props) => (props.$compact ? "16px" : "18px")};
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -73,13 +77,14 @@ const SectionHeader = styled.div<{ $compact?: boolean }>`
   padding: ${(props) => (props.$compact ? "0.5rem" : "0.75rem")};
   font-size: ${(props) => (props.$compact ? "0.875rem" : "0.9375rem")};
   font-weight: 600;
-  color: #1e293b;
-  border-bottom: ${(props) => (props.$compact ? "none" : "1px solid #f1f5f9")};
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  border-bottom: ${(props) =>
+    props.$compact ? "none" : `1px solid ${OS_LEGAL_COLORS.surfaceLight}`};
 
   svg {
     width: ${(props) => (props.$compact ? "18px" : "20px")};
     height: ${(props) => (props.$compact ? "18px" : "20px")};
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 `;
 
@@ -89,12 +94,12 @@ const LabelDisplayDropdown = styled(Dropdown)`
     min-width: 100%;
 
     &.ui.dropdown {
-      border: 1px solid #e2e8f0;
+      border: 1px solid ${OS_LEGAL_COLORS.border};
       border-radius: 6px;
       padding: 0.625rem 0.875rem;
       background: white;
       font-weight: 500;
-      color: #1e293b;
+      color: ${OS_LEGAL_COLORS.textPrimary};
 
       &:hover {
         border-color: #cbd5e1;
@@ -103,7 +108,7 @@ const LabelDisplayDropdown = styled(Dropdown)`
 
     .menu {
       border-radius: 6px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid ${OS_LEGAL_COLORS.border};
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     }
 
@@ -122,7 +127,7 @@ const FilterHeader = styled.div`
   margin-top: 0.75rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   svg {
     width: 16px;
@@ -171,7 +176,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           showSelectedOnly: checked,
         });
       },
-      [location, navigate]
+      [location, navigate],
     );
 
     const handleShowStructuralChange = useCallback(
@@ -180,7 +185,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           showStructural: checked,
         });
       },
-      [location, navigate]
+      [location, navigate],
     );
 
     const handleShowBoundingBoxesChange = useCallback(
@@ -189,7 +194,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           showBoundingBoxes: checked,
         });
       },
-      [location, navigate]
+      [location, navigate],
     );
 
     const handleLabelBehaviorChange = useCallback(
@@ -198,7 +203,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           labelDisplay: value,
         });
       },
-      [location, navigate]
+      [location, navigate],
     );
 
     const labelDisplayOptions = [
@@ -308,7 +313,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
         )}
       </ControlsContainer>
     );
-  }
+  },
 );
 
 AnnotationControls.displayName = "AnnotationControls";

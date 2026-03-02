@@ -19,6 +19,7 @@ import {
   StyledInput,
   PermissionBanner,
 } from "../styles/corpusSettingsStyles";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface VisibilitySlugSectionProps {
   publicDraft: boolean;
@@ -113,7 +114,7 @@ export const VisibilitySlugSection: React.FC<VisibilitySlugSectionProps> = ({
             disabled={hasNoPermissions || !hasChanges}
             onClick={onSave}
             style={{
-              background: hasNoPermissions ? "#e2e8f0" : undefined,
+              background: hasNoPermissions ? OS_LEGAL_COLORS.border : undefined,
               cursor: hasNoPermissions ? "not-allowed" : undefined,
             }}
           >

@@ -25,6 +25,7 @@ import {
 } from "../../graphql/mutations";
 import { CorpusType, DocumentType } from "../../types/graphql-api";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Styled components for better UI
 const SearchWrapper = styled.div`
@@ -84,7 +85,7 @@ const DocumentListItem = styled.li`
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
 
   &:last-child {
     border-bottom: none;
@@ -98,10 +99,10 @@ const MetaLabel = styled.span`
   padding: 0.2em 0.5em;
   font-size: 0.8rem;
   font-weight: 500;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin-right: 0.5rem;
 `;
 
@@ -139,15 +140,15 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
   const documentIds = isSingleDocument
     ? [documentId]
     : selectedDocumentIds.length
-    ? selectedDocumentIds
-    : documents.map((d) => d.id);
+      ? selectedDocumentIds
+      : documents.map((d) => d.id);
 
   const selectedDocs = documents.filter((d) => documentIds.includes(d.id));
 
   // Debounced search function
   const debouncedSetSearchTerm = useCallback(
     _.debounce(setSearchTerm, 300),
-    []
+    [],
   );
 
   // Query for corpuses with search
@@ -216,7 +217,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
         toast.success(
           `Document${
             documentIds.length > 1 ? "s" : ""
-          } added to corpus successfully!`
+          } added to corpus successfully!`,
         );
         onSuccess(selectedCorpus?.id || addingToCorpusId || "", selectedCorpus);
         onClose();
@@ -259,7 +260,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
         (corpus): corpus is CorpusType =>
           corpus !== null &&
           corpus !== undefined &&
-          (corpus.myPermissions?.includes("update_corpus") ?? false)
+          (corpus.myPermissions?.includes("update_corpus") ?? false),
       ) || [];
 
   const renderCorpusList = () => {
@@ -305,7 +306,10 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
               {corpus.icon && (
                 <Folder
                   size={16}
-                  style={{ float: "right", color: "#64748b" }}
+                  style={{
+                    float: "right",
+                    color: OS_LEGAL_COLORS.textSecondary,
+                  }}
                 />
               )}
               <Card.Header data-testid={`corpus-title-${corpus.id}`}>
@@ -363,10 +367,15 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
             <DocumentList>
               {selectedDocs.map((doc) => (
                 <DocumentListItem key={doc.id}>
-                  <FileText size={20} color="#64748b" />
+                  <FileText size={20} color={OS_LEGAL_COLORS.textSecondary} />
                   <div>
                     <strong>{doc.title}</strong>
-                    <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                    <div
+                      style={{
+                        fontSize: "0.85rem",
+                        color: OS_LEGAL_COLORS.textSecondary,
+                      }}
+                    >
                       by {doc.creator?.email || "Unknown"}
                     </div>
                   </div>

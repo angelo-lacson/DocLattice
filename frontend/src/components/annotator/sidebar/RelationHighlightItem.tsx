@@ -1,6 +1,7 @@
 import { Button } from "semantic-ui-react";
 import { DynamicIcon } from "../../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { X } from "lucide-react";
 
 import source_icon from "../../../assets/icons/noun-bow-and-arrow-559923.png";
@@ -55,7 +56,7 @@ const AnnotationPill = styled.span<AnnotationPillProps>`
 
 const PageLabel = styled.span`
   font-size: 0.7rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-weight: 500;
   margin-left: 0.5rem;
   white-space: nowrap;
@@ -145,7 +146,7 @@ export const RelationHighlightItem = ({
             style={{
               marginTop: "0.375rem",
               fontSize: "0.85rem",
-              color: "#475569",
+              color: OS_LEGAL_COLORS.textTertiary,
             }}
           />
         ) : null}

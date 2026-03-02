@@ -39,7 +39,7 @@ export const ToggleSwitch = styled.label`
   }
 
   input:checked + span {
-    background-color: #3b82f6;
+    background-color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 
   input:checked + span:before {

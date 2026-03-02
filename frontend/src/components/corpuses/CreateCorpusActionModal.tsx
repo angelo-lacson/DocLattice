@@ -7,6 +7,7 @@ import { InfoMessage } from "../widgets/feedback";
 import { StyledTextArea } from "../widgets/modals/styled";
 import { toast } from "react-toastify";
 import _ from "lodash";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 import {
   CREATE_CORPUS_ACTION,
@@ -660,9 +661,9 @@ export const CreateCorpusActionModal: React.FC<
             <div
               style={{
                 padding: "1rem",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
                 borderRadius: "8px",
-                background: "#f8fafc",
+                background: OS_LEGAL_COLORS.surfaceHover,
               }}
             >
               <h4
@@ -701,9 +702,9 @@ export const CreateCorpusActionModal: React.FC<
             <div
               style={{
                 padding: "1rem",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
                 borderRadius: "8px",
-                background: "#f8fafc",
+                background: OS_LEGAL_COLORS.surfaceHover,
               }}
             >
               <h4
@@ -742,9 +743,9 @@ export const CreateCorpusActionModal: React.FC<
             <div
               style={{
                 padding: "1rem",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
                 borderRadius: "8px",
-                background: "#f8fafc",
+                background: OS_LEGAL_COLORS.surfaceHover,
               }}
             >
               <h4
@@ -851,10 +852,10 @@ export const CreateCorpusActionModal: React.FC<
                               padding: "0.15em 0.4em",
                               fontSize: "0.7rem",
                               fontWeight: 500,
-                              background: "#f1f5f9",
-                              color: "#475569",
+                              background: OS_LEGAL_COLORS.surfaceLight,
+                              color: OS_LEGAL_COLORS.textTertiary,
                               borderRadius: "4px",
-                              border: "1px solid #e2e8f0",
+                              border: `1px solid ${OS_LEGAL_COLORS.border}`,
                             }}
                           >
                             Optional
@@ -1076,8 +1077,8 @@ export const CreateCorpusActionModal: React.FC<
                           <div
                             style={{
                               padding: "0.75rem 1rem",
-                              background: "#f8fafc",
-                              border: "1px solid #e2e8f0",
+                              background: OS_LEGAL_COLORS.surfaceHover,
+                              border: `1px solid ${OS_LEGAL_COLORS.border}`,
                               borderRadius: "6px",
                               marginBottom: "0.5em",
                             }}
@@ -1192,8 +1193,8 @@ export const CreateCorpusActionModal: React.FC<
                       <div
                         style={{
                           padding: "0.75rem 1rem",
-                          background: "#f8fafc",
-                          border: "1px solid #e2e8f0",
+                          background: OS_LEGAL_COLORS.surfaceHover,
+                          border: `1px solid ${OS_LEGAL_COLORS.border}`,
                           borderRadius: "6px",
                           marginBottom: "0.5em",
                         }}

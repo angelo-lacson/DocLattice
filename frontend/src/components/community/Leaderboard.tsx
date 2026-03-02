@@ -26,6 +26,8 @@ import {
   LeaderboardEntry,
 } from "../../types/leaderboard";
 import { Badge } from "../badges/Badge";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { GradientSegment as StyledSegment } from "../layout/SharedSegments";
 
 const Container = styled.div`
   padding: 2em;
@@ -41,18 +43,10 @@ const Container = styled.div`
   }
 `;
 
-const StyledSegment = styled.div`
-  padding: 1rem;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-`;
-
 const LeaderboardCard = styled.div`
   border-radius: 12px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   padding: 1.5em;
   margin-bottom: 1em;
@@ -430,7 +424,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <div style={{ fontSize: "0.9em", color: "#64748b" }}>
+                        <div
+                          style={{
+                            fontSize: "0.9em",
+                            color: OS_LEGAL_COLORS.textSecondary,
+                          }}
+                        >
                           {entry.badgeCount !== undefined &&
                             `${entry.badgeCount} badges `}
                           {entry.messageCount !== undefined &&
@@ -476,7 +475,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                   key={dist.badge.id}
                   style={{
                     padding: "1rem",
-                    border: "1px solid #e2e8f0",
+                    border: `1px solid ${OS_LEGAL_COLORS.border}`,
                     borderRadius: "8px",
                     background: "white",
                   }}
@@ -493,7 +492,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                       <div>
                         <strong>{dist.badge.name}</strong>
                       </div>
-                      <div style={{ fontSize: "0.9em", color: "#64748b" }}>
+                      <div
+                        style={{
+                          fontSize: "0.9em",
+                          color: OS_LEGAL_COLORS.textSecondary,
+                        }}
+                      >
                         Awarded {dist.awardCount} times to{" "}
                         {dist.uniqueRecipients} users
                       </div>

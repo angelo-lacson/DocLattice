@@ -10,6 +10,7 @@ import { BadgeConfigurator, BadgeConfig } from "../agents/BadgeConfigurator";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
 import { StyledTextArea } from "../widgets/modals/styled";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // GraphQL Queries and Mutations
 const GET_CORPUS_AGENTS = gql`
@@ -167,7 +168,7 @@ const SectionHeader = styled.div`
 
 const SectionTitle = styled.h3`
   margin: 0;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-size: 1.25rem;
   display: flex;
   align-items: center;
@@ -175,7 +176,7 @@ const SectionTitle = styled.h3`
 `;
 
 const HelperText = styled.p`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
   margin: 0.5rem 0 1.5rem 0;
   line-height: 1.5;
@@ -184,9 +185,9 @@ const HelperText = styled.p`
 const EmptyState = styled.div`
   text-align: center;
   padding: 3rem 1.5rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 8px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
 `;
 
 const EmptyStateIcon = styled.div`
@@ -209,13 +210,13 @@ const EmptyStateIcon = styled.div`
 const EmptyStateTitle = styled.h3`
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 0.5rem 0;
 `;
 
 const EmptyStateDescription = styled.p`
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0 0 1.5rem 0;
   max-width: 400px;
   margin-left: auto;
@@ -225,21 +226,21 @@ const EmptyStateDescription = styled.p`
 // Tool Selection UI Components
 const ToolSelectionContainer = styled.div`
   margin-top: 0.5rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   max-height: 300px;
   overflow-y: auto;
 `;
 
 const ToolCategoryHeader = styled.div`
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   padding: 0.5rem 1rem;
   font-weight: 600;
   font-size: 0.8rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   position: sticky;
   top: 0;
   z-index: 1;
@@ -249,13 +250,13 @@ const ToolItem = styled.div<{ $selected: boolean }>`
   display: flex;
   align-items: flex-start;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   cursor: pointer;
   transition: background 0.15s ease;
   background: ${(props) => (props.$selected ? "#eff6ff" : "transparent")};
 
   &:hover {
-    background: ${(props) => (props.$selected ? "#dbeafe" : "#f8fafc")};
+    background: ${(props) => (props.$selected ? "#dbeafe" : OS_LEGAL_COLORS.surfaceHover)};
   }
 
   &:last-child {
@@ -266,14 +267,14 @@ const ToolItem = styled.div<{ $selected: boolean }>`
 const ToolCheckbox = styled.div<{ $checked: boolean }>`
   width: 18px;
   height: 18px;
-  border: 2px solid ${(props) => (props.$checked ? "#3b82f6" : "#cbd5e1")};
+  border: 2px solid ${(props) => (props.$checked ? OS_LEGAL_COLORS.primaryBlue : "#cbd5e1")};
   border-radius: 4px;
   margin-right: 0.75rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${(props) => (props.$checked ? "#3b82f6" : "white")};
+  background: ${(props) => (props.$checked ? OS_LEGAL_COLORS.primaryBlue : "white")};
   transition: all 0.15s ease;
 
   &::after {
@@ -291,7 +292,7 @@ const ToolInfo = styled.div`
 
 const ToolName = styled.div`
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-size: 0.875rem;
   font-family: monospace;
   display: flex;
@@ -301,7 +302,7 @@ const ToolName = styled.div`
 
 const ToolDescription = styled.div`
   font-size: 0.8rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.25rem;
   line-height: 1.4;
 `;
@@ -349,7 +350,7 @@ const SelectedToolPill = styled.span`
 
 const ToolHelpText = styled.small`
   display: block;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.5rem;
 `;
 
@@ -700,7 +701,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 <Table.Cell>
                   <strong>{agent.name}</strong>
                   {agent.slug && (
-                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    <div style={{ fontSize: "0.75rem", color: OS_LEGAL_COLORS.textSecondary }}>
                       <code>{agent.slug}</code>
                     </div>
                   )}
@@ -811,7 +812,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   setFormState({ ...formState, slug: e.target.value })
                 }
               />
-              <small style={{ color: "#64748b" }}>
+              <small style={{ color: OS_LEGAL_COLORS.textSecondary }}>
                 URL-friendly identifier used in @mentions (e.g.,
                 @agent:my-agent)
               </small>
@@ -966,7 +967,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
               />
               <small
                 style={{
-                  color: "#64748b",
+                  color: OS_LEGAL_COLORS.textSecondary,
                   marginTop: "0.25rem",
                   display: "block",
                 }}
@@ -1045,7 +1046,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   setFormState({ ...formState, slug: e.target.value })
                 }
               />
-              <small style={{ color: "#64748b" }}>
+              <small style={{ color: OS_LEGAL_COLORS.textSecondary }}>
                 URL-friendly identifier used in @mentions (e.g.,
                 @agent:my-agent)
               </small>
@@ -1200,7 +1201,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
               />
               <small
                 style={{
-                  color: "#64748b",
+                  color: OS_LEGAL_COLORS.textSecondary,
                   marginTop: "0.25rem",
                   display: "block",
                 }}

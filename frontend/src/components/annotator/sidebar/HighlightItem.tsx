@@ -1,6 +1,7 @@
 import React from "react";
 import { Label, Button, Popup } from "semantic-ui-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   Trash2,
   ArrowRight,
@@ -94,16 +95,16 @@ const DeleteButton = styled(Button)`
 const BlockQuote = styled.blockquote`
   margin: 0.75rem 0;
   padding: 0.75rem 1rem;
-  background-color: #f8fafc;
-  border-left: 3px solid #e2e8f0;
+  background-color: ${OS_LEGAL_COLORS.surfaceHover};
+  border-left: 3px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
   font-style: italic;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   font-size: 0.9rem;
   line-height: 1.5;
 
   &:hover {
-    background-color: #f1f5f9;
+    background-color: ${OS_LEGAL_COLORS.surfaceLight};
   }
 `;
 
@@ -120,7 +121,7 @@ const RelationshipLabel = styled(Label)`
 
     &[pointing="right"] {
       background-color: #eff6ff;
-      color: #3b82f6;
+      color: ${OS_LEGAL_COLORS.primaryBlue};
       border: 1px solid #bfdbfe;
     }
 
@@ -134,7 +135,7 @@ const RelationshipLabel = styled(Label)`
 
 const LocationText = styled.div`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.75rem;
   font-weight: 500;
 `;
@@ -170,15 +171,15 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   // Fetch images if annotation has IMAGE modality
   const { images, loading, error } = useAnnotationImages(
     annotation.id,
-    contentModalities
+    contentModalities,
   );
   const selected = selectedAnnotations.includes(annotation.id);
 
   const my_output_relationships = relations.filter((relation) =>
-    relation.sourceIds.includes(annotation.id)
+    relation.sourceIds.includes(annotation.id),
   );
   const my_input_relationships = relations.filter((relation) =>
-    relation.targetIds.includes(annotation.id)
+    relation.targetIds.includes(annotation.id),
   );
   const handleClick = () => {
     // Only use scrollIntoView for PDF token annotations. Text annotations
@@ -218,7 +219,9 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           <span
             style={{
               cursor: "pointer",
-              color: isMultiSelected ? "#3b82f6" : "#94a3b8",
+              color: isMultiSelected
+                ? OS_LEGAL_COLORS.primaryBlue
+                : OS_LEGAL_COLORS.textMuted,
               display: "inline-flex",
             }}
             onClick={(e: React.MouseEvent) => {

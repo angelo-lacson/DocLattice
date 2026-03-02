@@ -1,5 +1,6 @@
 import styled, { css, keyframes } from "styled-components";
 import { Modal, Button } from "semantic-ui-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // Breakpoints for responsive design
 const breakpoints = {
@@ -171,14 +172,14 @@ export const Step = styled.div<{ $active?: boolean; $completed?: boolean }>`
           color: white;
         `
       : $completed
-      ? css`
-          background: #e8f5e9;
-          color: #2e7d32;
-        `
-      : css`
-          background: #f1f3f5;
-          color: #868e96;
-        `}
+        ? css`
+            background: #e8f5e9;
+            color: #2e7d32;
+          `
+        : css`
+            background: #f1f3f5;
+            color: #868e96;
+          `}
 `;
 
 export const StepConnector = styled.div<{ $completed?: boolean }>`
@@ -397,8 +398,8 @@ export const FileItemIcon = styled.div<{ $status?: string }>`
     $status === "SUCCESS"
       ? "#2e7d32"
       : $status === "FAILED"
-      ? "#c62828"
-      : "#667eea"};
+        ? "#c62828"
+        : "#667eea"};
   flex-shrink: 0;
 `;
 
@@ -528,7 +529,8 @@ export const UploadProgress = styled.div<{ $percent?: number }>`
     justify-content: center;
     font-size: 0.75rem;
     font-weight: 600;
-    color: ${({ $percent }) => (($percent ?? 0) > 50 ? "#fff" : "#475569")};
+    color: ${({ $percent }) =>
+      ($percent ?? 0) > 50 ? "#fff" : OS_LEGAL_COLORS.textTertiary};
     z-index: 1;
     line-height: 20px;
   }

@@ -99,13 +99,13 @@ const WarningContent = styled.div`
 
 const InfoBox = styled.div`
   padding: 12px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 6px;
   font-size: 14px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   strong {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-weight: 600;
   }
 `;
