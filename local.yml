@@ -43,12 +43,13 @@ services:
       - ./compose/production/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     env_file:
       - ./.envs/.local/.postgres
+    # Dev-friendly memory settings (production uses 2GB/128MB respectively)
     command: >
       postgres
       -c shared_buffers=512MB
-      -c maintenance_work_mem=1GB
+      -c maintenance_work_mem=256MB
       -c effective_cache_size=2GB
-      -c work_mem=64MB
+      -c work_mem=16MB
       -c max_parallel_maintenance_workers=4
       -c random_page_cost=1.1
       -c effective_io_concurrency=200

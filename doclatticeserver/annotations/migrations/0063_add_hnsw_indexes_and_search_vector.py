@@ -30,6 +30,8 @@ from pgvector.django import HnswIndex
 # Values at time of migration creation (2026-02-28).
 HNSW_M = 16
 HNSW_EF_CONSTRUCTION = 64
+# TODO: FTS_CONFIG hardcodes English. Multilingual corpora will need
+# per-corpus or per-document text search configuration in a follow-up.
 FTS_CONFIG = "english"
 
 # HNSW index definitions: (index_name, column_name)
@@ -92,12 +94,13 @@ class Migration(migrations.Migration):
 
     operations = [
         # =================================================================
-        # Phase 0: Enable iterative scan for filtered ANN queries
+        # Phase 0: Enable iterative scan and ef_search for filtered ANN queries
         # =================================================================
         # init.sql only runs on fresh databases. This ensures existing
-        # deployments also get hnsw.iterative_scan='relaxed_order', which
-        # prevents result loss when combining HNSW search with WHERE clauses
-        # (e.g., embedder_path filtering). Requires pgvector >= 0.8.
+        # deployments also get hnsw.iterative_scan='relaxed_order' and
+        # hnsw.ef_search=40, which prevent result loss when combining
+        # HNSW search with WHERE clauses (e.g., embedder_path filtering).
+        # Requires pgvector >= 0.8.
         migrations.RunSQL(
             sql="""
                 DO $$
@@ -105,8 +108,11 @@ class Migration(migrations.Migration):
                     EXECUTE 'ALTER DATABASE '
                         || current_database()
                         || $q$ SET hnsw.iterative_scan = 'relaxed_order'$q$;
+                    EXECUTE 'ALTER DATABASE '
+                        || current_database()
+                        || ' SET hnsw.ef_search = 40';
                 EXCEPTION WHEN OTHERS THEN
-                    RAISE NOTICE 'hnsw.iterative_scan not available (pgvector < 0.8): %',
+                    RAISE NOTICE 'hnsw settings not available (pgvector < 0.8): %',
                         SQLERRM;
                 END $$;
             """,
@@ -116,6 +122,9 @@ class Migration(migrations.Migration):
                     EXECUTE 'ALTER DATABASE '
                         || current_database()
                         || ' RESET hnsw.iterative_scan';
+                    EXECUTE 'ALTER DATABASE '
+                        || current_database()
+                        || ' RESET hnsw.ef_search';
                 EXCEPTION WHEN OTHERS THEN
                     NULL;
                 END $$;
@@ -187,9 +196,10 @@ class Migration(migrations.Migration):
         # =================================================================
         # Phase 4: Backfill search_vector for existing annotations
         # =================================================================
-        # WARNING: On tables with millions of annotations this UPDATE may
-        # take several minutes and holds a row-level lock while running.
-        # Schedule during a maintenance window for large deployments.
+        # WARNING: For tables with >1M rows, this UPDATE should be run
+        # during a maintenance window or chunked into batches (e.g.,
+        # UPDATE ... WHERE id BETWEEN x AND y) to avoid long-running
+        # row-level locks that block concurrent writes.
         migrations.RunSQL(
             sql=f"""
                 UPDATE annotations_annotation

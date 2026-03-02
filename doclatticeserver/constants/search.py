@@ -53,8 +53,20 @@ DIM_TO_FIELD_MAP: dict[int, str] = {
 }
 
 # =============================================================================
+# HNSW Index Dimension Limit
+# =============================================================================
+# pgvector HNSW indexes have a hard 2000-dimension limit. Dimensions above
+# this threshold fall back to sequential scan. This value is also frozen
+# into migration 0063 (as a local constant, per Django migration best practice).
+# Dimensions 384, 768, 1024, 1536 have HNSW indexes; dimensions > 1536
+# (2048, 3072, 4096) fall back to sequential scan.
+HNSW_MAX_INDEXED_DIM = 1536
+
+# =============================================================================
 # Full-Text Search Configuration
 # =============================================================================
 # PostgreSQL text search configuration name for tsvector generation.
 # "english" provides stemming and stop-word removal for English text.
+# TODO: This hardcodes English for full-text search. Multilingual corpora
+# will need per-corpus or per-document FTS config. See follow-up issue.
 FTS_CONFIG = "english"
