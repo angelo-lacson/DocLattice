@@ -1,19 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
-import {
-  Table,
-  Header,
-  Message,
-  Dimmer,
-  Loader,
-  Segment,
-  Icon,
-  Dropdown,
-  Label,
-  Button,
-  Grid,
-  Statistic,
-} from "semantic-ui-react";
+import { Table, Dropdown, Button, Statistic } from "semantic-ui-react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import {
@@ -24,7 +11,9 @@ import {
   MessageSquare,
   Target,
   Star,
+  User,
 } from "lucide-react";
+import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import {
   GET_LEADERBOARD,
   GET_COMMUNITY_STATS,
@@ -37,6 +26,8 @@ import {
   LeaderboardEntry,
 } from "../../types/leaderboard";
 import { Badge } from "../badges/Badge";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { GradientSegment as StyledSegment } from "../layout/SharedSegments";
 
 const Container = styled.div`
   padding: 2em;
@@ -52,24 +43,13 @@ const Container = styled.div`
   }
 `;
 
-const StyledSegment = styled(Segment)`
-  &.ui.segment {
-    border-radius: 16px;
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
-`;
-
-const LeaderboardCard = styled(Segment)`
-  &.ui.segment {
-    border-radius: 12px;
-    background: white;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    padding: 1.5em;
-    margin-bottom: 1em;
-  }
+const LeaderboardCard = styled.div`
+  border-radius: 12px;
+  background: white;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 1.5em;
+  margin-bottom: 1em;
 `;
 
 const StatsCard = styled.div`
@@ -262,10 +242,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
   if (leaderboardError) {
     return (
       <Container>
-        <Message error>
-          <Message.Header>Error Loading Leaderboard</Message.Header>
-          <p>{leaderboardError.message}</p>
-        </Message>
+        <ErrorMessage title="Error Loading Leaderboard">
+          {leaderboardError.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -275,55 +254,54 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
 
   return (
     <Container>
-      <Header as="h1">
-        <Icon name="chart line" />
+      <h1 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <TrendingUp size={28} />
         Community Leaderboard
-      </Header>
+      </h1>
 
       {/* Community Stats Overview */}
       {stats && (
-        <Grid columns={4} stackable style={{ marginBottom: "2em" }}>
-          <Grid.Column>
-            <StatsCard>
-              <Statistic inverted size="small">
-                <Statistic.Value>
-                  {stats.totalUsers.toLocaleString()}
-                </Statistic.Value>
-                <Statistic.Label>Active Users</Statistic.Label>
-              </Statistic>
-            </StatsCard>
-          </Grid.Column>
-          <Grid.Column>
-            <StatsCard>
-              <Statistic inverted size="small">
-                <Statistic.Value>
-                  {stats.totalMessages.toLocaleString()}
-                </Statistic.Value>
-                <Statistic.Label>Messages</Statistic.Label>
-              </Statistic>
-            </StatsCard>
-          </Grid.Column>
-          <Grid.Column>
-            <StatsCard>
-              <Statistic inverted size="small">
-                <Statistic.Value>
-                  {stats.totalBadgesAwarded.toLocaleString()}
-                </Statistic.Value>
-                <Statistic.Label>Badges Awarded</Statistic.Label>
-              </Statistic>
-            </StatsCard>
-          </Grid.Column>
-          <Grid.Column>
-            <StatsCard>
-              <Statistic inverted size="small">
-                <Statistic.Value>
-                  {stats.activeUsersThisWeek.toLocaleString()}
-                </Statistic.Value>
-                <Statistic.Label>Active This Week</Statistic.Label>
-              </Statistic>
-            </StatsCard>
-          </Grid.Column>
-        </Grid>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "1rem",
+            marginBottom: "2em",
+          }}
+        >
+          <StatsCard>
+            <Statistic inverted size="small">
+              <Statistic.Value>
+                {stats.totalUsers.toLocaleString()}
+              </Statistic.Value>
+              <Statistic.Label>Active Users</Statistic.Label>
+            </Statistic>
+          </StatsCard>
+          <StatsCard>
+            <Statistic inverted size="small">
+              <Statistic.Value>
+                {stats.totalMessages.toLocaleString()}
+              </Statistic.Value>
+              <Statistic.Label>Messages</Statistic.Label>
+            </Statistic>
+          </StatsCard>
+          <StatsCard>
+            <Statistic inverted size="small">
+              <Statistic.Value>
+                {stats.totalBadgesAwarded.toLocaleString()}
+              </Statistic.Value>
+              <Statistic.Label>Badges Awarded</Statistic.Label>
+            </Statistic>
+          </StatsCard>
+          <StatsCard>
+            <Statistic inverted size="small">
+              <Statistic.Value>
+                {stats.activeUsersThisWeek.toLocaleString()}
+              </Statistic.Value>
+              <Statistic.Label>Active This Week</Statistic.Label>
+            </Statistic>
+          </StatsCard>
+        </div>
       )}
 
       {/* Leaderboard Controls */}
@@ -354,17 +332,22 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
         </FilterBar>
 
         {leaderboardLoading ? (
-          <Dimmer active inverted>
-            <Loader inverted>Loading leaderboard...</Loader>
-          </Dimmer>
+          <LoadingState message="Loading leaderboard..." />
         ) : leaderboard && leaderboard.entries.length > 0 ? (
           <>
             {leaderboard.currentUserRank && (
-              <Message info>
-                <Icon name="user" />
+              <InfoMessage
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <User size={16} />
                 Your rank: <strong>#{leaderboard.currentUserRank}</strong> out
                 of {leaderboard.totalUsers} users
-              </Message>
+              </InfoMessage>
             )}
 
             <TableWrapper>
@@ -408,13 +391,23 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                         >
                           <strong>{entry.user.username}</strong>
                           {entry.isRisingStar && (
-                            <Label size="tiny" color="orange">
-                              <TrendingUp
-                                size={12}
-                                style={{ marginRight: "4px" }}
-                              />
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "0.15em 0.5em",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                background: "#fff7ed",
+                                border: "1px solid #fed7aa",
+                                borderRadius: "4px",
+                                color: "#c2410c",
+                              }}
+                            >
+                              <TrendingUp size={12} />
                               Rising Star
-                            </Label>
+                            </span>
                           )}
                         </div>
                       </Table.Cell>
@@ -431,7 +424,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <div style={{ fontSize: "0.9em", color: "#64748b" }}>
+                        <div
+                          style={{
+                            fontSize: "0.9em",
+                            color: OS_LEGAL_COLORS.textSecondary,
+                          }}
+                        >
                           {entry.badgeCount !== undefined &&
                             `${entry.badgeCount} badges `}
                           {entry.messageCount !== undefined &&
@@ -447,13 +445,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
             </TableWrapper>
           </>
         ) : (
-          <Message info>
-            <Message.Header>No Data Available</Message.Header>
-            <p>
-              There are no users in this leaderboard yet. Be the first to
-              contribute!
-            </p>
-          </Message>
+          <InfoMessage title="No Data Available">
+            There are no users in this leaderboard yet. Be the first to
+            contribute!
+          </InfoMessage>
         )}
       </LeaderboardCard>
 
@@ -462,36 +457,55 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
         stats.badgeDistribution &&
         stats.badgeDistribution.length > 0 && (
           <StyledSegment>
-            <Header as="h3">
-              <Icon name="trophy" />
+            <h3
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
+              <Trophy size={20} />
               Badge Distribution
-            </Header>
-            <Grid columns={2} stackable>
+            </h3>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gap: "1rem",
+              }}
+            >
               {stats.badgeDistribution.map((dist) => (
-                <Grid.Column key={dist.badge.id}>
-                  <Segment>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "1em",
-                      }}
-                    >
-                      <Badge badge={dist.badge} size="medium" />
-                      <div style={{ flex: 1 }}>
-                        <div>
-                          <strong>{dist.badge.name}</strong>
-                        </div>
-                        <div style={{ fontSize: "0.9em", color: "#64748b" }}>
-                          Awarded {dist.awardCount} times to{" "}
-                          {dist.uniqueRecipients} users
-                        </div>
+                <div
+                  key={dist.badge.id}
+                  style={{
+                    padding: "1rem",
+                    border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                    borderRadius: "8px",
+                    background: "white",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "1em",
+                    }}
+                  >
+                    <Badge badge={dist.badge} size="medium" />
+                    <div style={{ flex: 1 }}>
+                      <div>
+                        <strong>{dist.badge.name}</strong>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.9em",
+                          color: OS_LEGAL_COLORS.textSecondary,
+                        }}
+                      >
+                        Awarded {dist.awardCount} times to{" "}
+                        {dist.uniqueRecipients} users
                       </div>
                     </div>
-                  </Segment>
-                </Grid.Column>
+                  </div>
+                </div>
               ))}
-            </Grid>
+            </div>
           </StyledSegment>
         )}
     </Container>

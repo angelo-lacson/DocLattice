@@ -1,15 +1,10 @@
 import React, { useState } from "react";
-import {
-  Input,
-  Checkbox,
-  Modal,
-  Button,
-  InputOnChangeData,
-  CheckboxProps,
-} from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
 import { JSONSchema7 } from "json-schema";
 import JsonView from "@uiw/react-json-view";
 import { darkTheme } from "@uiw/react-json-view/dark";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface ExtractCellEditorProps {
   row: any;
@@ -35,25 +30,17 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
   /**
    * Handles input change events for string and number types.
    * @param event - The input change event.
-   * @param data - The input onChange data.
    */
-  const handleInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-    data: InputOnChangeData
-  ) => {
-    setValue(data.value);
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(event.target.value);
   };
 
   /**
    * Handles checkbox change events for boolean types.
    * @param event - The checkbox change event.
-   * @param data - The checkbox onChange data.
    */
-  const handleCheckboxChange = (
-    event: React.FormEvent<HTMLInputElement>,
-    data: CheckboxProps
-  ) => {
-    setValue(data.checked);
+  const handleCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(event.target.checked);
   };
 
   const handleJsonChange = (updatedValue: any) => {
@@ -77,8 +64,8 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
     >
       <Modal.Header
         style={{
-          background: "#f8fafc",
-          borderBottom: "1px solid #e2e8f0",
+          background: OS_LEGAL_COLORS.surfaceHover,
+          borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
           padding: "16px 24px",
           fontSize: "1.1rem",
           color: "#0f172a",
@@ -113,8 +100,8 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
       </Modal.Content>
       <Modal.Actions
         style={{
-          background: "#f8fafc",
-          borderTop: "1px solid #e2e8f0",
+          background: OS_LEGAL_COLORS.surfaceHover,
+          borderTop: `1px solid ${OS_LEGAL_COLORS.border}`,
           padding: "16px 24px",
         }}
       >
@@ -122,8 +109,8 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
           onClick={() => setIsJsonModalOpen(false)}
           style={{
             marginRight: "12px",
-            background: "#f1f5f9",
-            color: "#64748b",
+            background: OS_LEGAL_COLORS.surfaceLight,
+            color: OS_LEGAL_COLORS.textSecondary,
             border: "none",
             borderRadius: "6px",
             padding: "8px 16px",
@@ -135,7 +122,7 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
           primary
           onClick={handleCommit}
           style={{
-            background: "#3b82f6",
+            background: OS_LEGAL_COLORS.primaryBlue,
             color: "#fff",
             border: "none",
             borderRadius: "6px",
@@ -154,13 +141,18 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
     switch (type) {
       case "string":
         return (
-          <Input fluid value={value} onChange={handleInputChange} autoFocus />
+          <Input
+            fullWidth
+            value={value}
+            onChange={handleInputChange}
+            autoFocus
+          />
         );
 
       case "number":
         return (
           <Input
-            fluid
+            fullWidth
             type="number"
             value={value}
             onChange={handleInputChange}
@@ -170,13 +162,18 @@ export const ExtractCellEditor: React.FC<ExtractCellEditorProps> = ({
 
       case "boolean":
         return (
-          <Checkbox checked={value} onChange={handleCheckboxChange} autoFocus />
+          <input
+            type="checkbox"
+            checked={value}
+            onChange={handleCheckboxChange}
+            autoFocus
+          />
         );
 
       default:
         return (
           <Input
-            fluid
+            fullWidth
             value={String(value)}
             onChange={handleInputChange}
             autoFocus

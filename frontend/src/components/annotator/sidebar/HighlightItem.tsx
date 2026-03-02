@@ -1,7 +1,15 @@
 import React from "react";
-import { Label, Button, Popup, Icon } from "semantic-ui-react";
+import { Label, Button, Popup } from "semantic-ui-react";
 import styled from "styled-components";
-import { Trash2, ArrowRight, ArrowLeft } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import {
+  Trash2,
+  ArrowRight,
+  ArrowLeft,
+  CheckSquare,
+  Square,
+} from "lucide-react";
+import { DynamicIcon } from "../../widgets/icon-picker/DynamicIcon";
 import { useLocation, useNavigate } from "react-router-dom";
 import { HorizontallyJustifiedDiv } from "./common";
 import { useAnnotationRefs } from "../hooks/useAnnotationRefs";
@@ -87,16 +95,16 @@ const DeleteButton = styled(Button)`
 const BlockQuote = styled.blockquote`
   margin: 0.75rem 0;
   padding: 0.75rem 1rem;
-  background-color: #f8fafc;
-  border-left: 3px solid #e2e8f0;
+  background-color: ${OS_LEGAL_COLORS.surfaceHover};
+  border-left: 3px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
   font-style: italic;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   font-size: 0.9rem;
   line-height: 1.5;
 
   &:hover {
-    background-color: #f1f5f9;
+    background-color: ${OS_LEGAL_COLORS.surfaceLight};
   }
 `;
 
@@ -113,7 +121,7 @@ const RelationshipLabel = styled(Label)`
 
     &[pointing="right"] {
       background-color: #eff6ff;
-      color: #3b82f6;
+      color: ${OS_LEGAL_COLORS.primaryBlue};
       border: 1px solid #bfdbfe;
     }
 
@@ -127,7 +135,7 @@ const RelationshipLabel = styled(Label)`
 
 const LocationText = styled.div`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.75rem;
   font-weight: 500;
 `;
@@ -208,22 +216,25 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
     >
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
         {onToggleMultiSelect && (
-          <Icon
-            name={isMultiSelected ? "check square" : "square outline"}
-            size="large"
+          <span
             style={{
               cursor: "pointer",
-              color: isMultiSelected ? "#3b82f6" : "#94a3b8",
+              color: isMultiSelected
+                ? OS_LEGAL_COLORS.primaryBlue
+                : OS_LEGAL_COLORS.textMuted,
+              display: "inline-flex",
             }}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onToggleMultiSelect();
             }}
-          />
+          >
+            {isMultiSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+          </span>
         )}
         <AnnotationLabel $labelColor={annotation.annotationLabel.color}>
           {annotation.annotationLabel.icon && (
-            <Icon name={annotation.annotationLabel.icon} />
+            <DynamicIcon name={annotation.annotationLabel.icon} size={14} />
           )}
           {annotation.annotationLabel.text}
         </AnnotationLabel>

@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button, Message } from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, AlertTriangle } from "lucide-react";
 import { toast } from "react-toastify";
@@ -18,6 +18,7 @@ import {
   RemoveDocumentsFromCorpusOutputs,
 } from "../../../graphql/mutations";
 import { selectedDocumentIds as selectedDocumentIdsReactiveVar } from "../../../graphql/cache";
+import { ErrorMessage } from "../../widgets/feedback";
 
 /**
  * RemoveDocumentsModal - Confirmation modal for bulk removing documents from corpus
@@ -98,13 +99,13 @@ const WarningContent = styled.div`
 
 const InfoBox = styled.div`
   padding: 12px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 6px;
   font-size: 14px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   strong {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-weight: 600;
   }
 `;
@@ -204,10 +205,12 @@ export const RemoveDocumentsModal: React.FC = () => {
         </InfoBox>
 
         {error && (
-          <Message error style={{ marginTop: "16px" }}>
-            <Message.Header>Error Removing Documents</Message.Header>
-            <p>{error.message}</p>
-          </Message>
+          <ErrorMessage
+            title="Error Removing Documents"
+            style={{ marginTop: "16px" }}
+          >
+            {error.message}
+          </ErrorMessage>
         )}
       </Modal.Content>
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button, Message, Dropdown } from "semantic-ui-react";
+import { Modal, Button, Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, Folder, Home } from "lucide-react";
 import {
@@ -18,6 +18,8 @@ import {
   MoveCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
+import { ErrorMessage } from "../../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * MoveFolderModal - Modal for moving folders to different parents
@@ -39,8 +41,8 @@ const ModalHeader = styled(Modal.Header)`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const CloseButton = styled.button`
@@ -54,38 +56,38 @@ const CloseButton = styled.button`
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   transition: all 0.15s ease;
 
   &:hover {
-    background: #e2e8f0;
-    color: #1e293b;
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
 const CurrentLocationBox = styled.div`
   padding: 12px;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 6px;
   margin-bottom: 16px;
   font-size: 14px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   strong {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
 const FolderIcon = styled(Folder)`
   vertical-align: middle;
   margin-right: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const HomeIcon = styled(Home)`
   vertical-align: middle;
   margin-right: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 export const MoveFolderModal: React.FC = () => {
@@ -276,17 +278,15 @@ export const MoveFolderModal: React.FC = () => {
         </div>
 
         {validationError && (
-          <Message error>
-            <Message.Header>Cannot Move Folder</Message.Header>
-            <p>{validationError}</p>
-          </Message>
+          <ErrorMessage title="Cannot Move Folder">
+            {validationError}
+          </ErrorMessage>
         )}
 
         {error && (
-          <Message error>
-            <Message.Header>Error Moving Folder</Message.Header>
-            <p>{error.message}</p>
-          </Message>
+          <ErrorMessage title="Error Moving Folder">
+            {error.message}
+          </ErrorMessage>
         )}
       </Modal.Content>
 

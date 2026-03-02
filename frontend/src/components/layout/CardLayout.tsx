@@ -1,7 +1,7 @@
 import React from "react";
-import { Segment } from "semantic-ui-react";
 import styled from "styled-components";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface CardLayoutProps {
   children?: React.ReactChild | React.ReactChild[];
@@ -11,42 +11,41 @@ interface CardLayoutProps {
   style?: React.CSSProperties;
 }
 
-const StyledSegment = styled(Segment)`
-  &.ui.segment {
-    border: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 1rem;
-    border-radius: 12px !important;
-    background: #ffffff !important;
-    transition: all 0.2s ease;
+const StyledSegment = styled.div`
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 1rem;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background: #ffffff !important;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  &:hover {
+    background: #ffffff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Style for breadcrumb links */
+  .breadcrumb {
+    a {
+      color: var(--text-primary, #1a2433);
+      opacity: 0.85;
+      transition: all 0.2s ease;
+
+      &:hover {
+        opacity: 1;
+        transform: translateY(-1px);
+      }
     }
 
-    /* Style for breadcrumb links */
-    .breadcrumb {
-      a {
-        color: var(--text-primary, #1a2433);
-        opacity: 0.85;
-        transition: all 0.2s ease;
+    .active {
+      color: var(--text-primary, #1a2433);
+      font-weight: 500;
+    }
 
-        &:hover {
-          opacity: 1;
-          transform: translateY(-1px);
-        }
-      }
-
-      .active {
-        color: var(--text-primary, #1a2433);
-        font-weight: 500;
-      }
-
-      .divider {
-        opacity: 0.5;
-        margin: 0 0.5em;
-      }
+    .divider {
+      opacity: 0.5;
+      margin: 0 0.5em;
     }
   }
 `;
@@ -57,46 +56,41 @@ const SearchBarWrapper = styled.div`
 `;
 
 const ScrollableSegment = styled(StyledSegment)`
-  &.ui.segment {
-    flex: 1;
-    min-height: 0;
-    max-height: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    width: 100%;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #888 #f1f1f1;
-    border-radius: 12px !important;
-    background: #ffffff !important;
-    margin: 0;
-    margin-top: 0;
-    margin-left: 0;
-    margin-right: 0;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  width: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #888 #f1f1f1;
+  border-radius: 12px;
+  background: #ffffff;
+  margin: 0;
 
-    &:hover {
-      background: #ffffff !important;
-    }
+  &:hover {
+    background: #ffffff;
+  }
 
-    &::-webkit-scrollbar {
-      width: 8px;
-    }
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
 
-    &::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 4px;
-    }
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
 
-    &::-webkit-scrollbar-thumb {
-      background: #888;
-      border-radius: 4px;
-    }
+  &::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+  }
 
-    &::-webkit-scrollbar-thumb:hover {
-      background: #555;
-    }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #555;
   }
 `;
 
@@ -120,7 +114,12 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       {Modals}
       <SearchBarWrapper>{SearchBar}</SearchBarWrapper>
       {BreadCrumbs && (!use_mobile || width > 768) && (
-        <StyledSegment attached secondary>
+        <StyledSegment
+          style={{
+            borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
+            background: "#f8f9fa",
+          }}
+        >
           {BreadCrumbs}
         </StyledSegment>
       )}
@@ -131,8 +130,8 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
           flex: 1,
           minHeight: 0,
           marginBottom: use_mobile ? "8px" : use_responsive ? "12px" : "20px",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
         }}
-        raised
         className="CardHolder"
       >
         {children}

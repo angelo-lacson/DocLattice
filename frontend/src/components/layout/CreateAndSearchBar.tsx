@@ -1,19 +1,16 @@
 import React, { forwardRef } from "react";
-import {
-  Form,
-  Popup,
-  InputOnChangeData,
-  Icon,
-  SemanticICONS,
-} from "semantic-ui-react";
+import { Form, Popup, InputOnChangeData } from "semantic-ui-react";
+import { Filter, Plus } from "lucide-react";
+import { DynamicIcon } from "../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
 import Dropdown from "../common/Dropdown";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 /**
  * Props for each dropdown action item.
  */
 export interface DropdownActionProps {
-  icon: SemanticICONS;
+  icon: string;
   title: string;
   key: string;
   color: string;
@@ -50,7 +47,7 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
     <Dropdown.Item
       key={action.key}
       onClick={action.action_function}
-      icon={<Icon name={action.icon} />}
+      icon={<DynamicIcon name={action.icon} size={16} />}
       text={action.title}
     />
   ));
@@ -83,7 +80,7 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
           <Popup
             trigger={
               <StyledButton aria-label="Filter">
-                <Icon name="filter" />
+                <Filter size={16} />
               </StyledButton>
             }
             content={<FilterPopoverContent>{filters}</FilterPopoverContent>}
@@ -110,7 +107,7 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
               align="right"
               trigger={
                 <StyledButton aria-label="Add">
-                  <Icon name="plus" />
+                  <Plus size={16} />
                 </StyledButton>
               }
             >
@@ -166,6 +163,7 @@ const StyledButton = styled(
   transform-origin: center;
 
   /* Icon styling */
+  svg,
   i.icon {
     margin: 0 !important;
     font-size: 1em;
@@ -181,7 +179,7 @@ const StyledButton = styled(
   background: linear-gradient(
     135deg,
     var(--background-subtle, #f0f2f5) 0%,
-    var(--background-hover, #e2e8f0) 100%
+    var(--background-hover, ${OS_LEGAL_COLORS.border}) 100%
   );
   background-size: 200% 200%;
   background-position: 0% 0%;
@@ -197,6 +195,7 @@ const StyledButton = styled(
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2),
       0 4px 8px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.1);
 
+    svg,
     i.icon {
       opacity: 1;
       transform: scale(1.1) rotate(8deg);
@@ -224,6 +223,7 @@ const StyledButton = styled(
     box-shadow: 0 2px 4px rgba(66, 133, 244, 0.2),
       0 4px 8px rgba(66, 133, 244, 0.1);
 
+    svg,
     i.icon {
       opacity: 1;
     }

@@ -541,7 +541,7 @@ test.describe("Documents View - Selection", () => {
 
     // Verify list header has the select all checkbox
     const listHeader = page.locator('[role="rowgroup"]');
-    await expect(listHeader.locator(".ui.checkbox")).toBeVisible();
+    await expect(listHeader.locator('input[type="checkbox"]')).toBeVisible();
 
     authToken(null);
     userObj(null);

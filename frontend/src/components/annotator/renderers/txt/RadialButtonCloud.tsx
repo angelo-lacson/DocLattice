@@ -1,7 +1,8 @@
 // src/RadialButtonCloud.tsx
 import React, { useState, useRef, useEffect } from "react";
 import styled, { createGlobalStyle, css, keyframes } from "styled-components";
-import { Button, Icon, SemanticICONS, Modal } from "semantic-ui-react";
+import { Button, Modal } from "semantic-ui-react";
+import { DynamicIcon } from "../../../widgets/icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
 
 // Helper function to ensure valid hex color
@@ -187,6 +188,7 @@ const CloudButton = styled(Button).attrs<CloudButtonProps>((props) => {
     transform: translate(var(--x), var(--y)) scale(0.95) !important;
   }
 
+  svg,
   i.icon {
     margin: 0 !important;
     font-size: 1rem !important;
@@ -204,7 +206,7 @@ const GlobalStyle = createGlobalStyle`
 `;
 
 export interface CloudButtonItem {
-  name: SemanticICONS;
+  name: string;
   color: string;
   tooltip: string;
   protected_message?: string | null;
@@ -314,7 +316,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
               position={buttonPositions[index]}
               backgroundColor={buttonColors[index % buttonColors.length]}
             >
-              <Icon name={btn.name} />
+              <DynamicIcon name={btn.name} size={16} />
             </CloudButton>
           ))}
         </CloudContainer>
