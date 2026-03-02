@@ -149,6 +149,8 @@ import { CorpusDocumentRelationships } from "../components/corpuses/CorpusDocume
 import {
   CORPUS_COLORS,
   CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
   mediaQuery as corpusMediaQuery,
 } from "../components/corpuses/styles/corpusDesignTokens";
 
@@ -912,18 +914,23 @@ const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
     props.$isZero
       ? "transparent"
       : props.isActive
-      ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
-      : "#e2e8f0"};
+      ? CORPUS_COLORS.teal[700]
+      : CORPUS_COLORS.slate[200]};
   color: ${(props) =>
-    props.$isZero ? "#94a3b8" : props.isActive ? "white" : "#64748b"};
-  border: ${(props) => (props.$isZero ? "1px dashed #cbd5e1" : "none")};
-  transition: all 0.2s ease;
+    props.$isZero
+      ? CORPUS_COLORS.slate[400]
+      : props.isActive
+      ? CORPUS_COLORS.white
+      : CORPUS_COLORS.slate[600]};
+  border: ${(props) =>
+    props.$isZero ? `1px dashed ${CORPUS_COLORS.slate[300]}` : "none"};
+  transition: all ${CORPUS_TRANSITIONS.normal};
   box-shadow: ${(props) =>
     props.$isZero
       ? "none"
       : props.isActive
-      ? "0 2px 4px rgba(74, 144, 226, 0.3)"
-      : "0 1px 2px rgba(0, 0, 0, 0.05)"};
+      ? `0 2px 4px rgba(15, 118, 110, 0.25)`
+      : CORPUS_SHADOWS.sm};
 `;
 
 const NavigationItem = styled(motion.button)<{
@@ -1345,10 +1352,8 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   height: 16px;
   padding: 0 4px;
   background: ${(props) =>
-    props.$isZero
-      ? "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)"
-      : "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"};
-  color: white;
+    props.$isZero ? CORPUS_COLORS.slate[400] : CORPUS_COLORS.teal[700]};
+  color: ${CORPUS_COLORS.white};
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1356,7 +1361,7 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   font-size: 0.6rem;
   font-weight: 700;
   z-index: 2;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: ${CORPUS_SHADOWS.sm};
 `;
 
 // Split view container for extracts tab
@@ -2703,9 +2708,7 @@ export const Corpuses = () => {
       : navigationItems.find((item) => item.id === "home")?.component;
 
     content = isPowerUserMode ? (
-          <CorpusViewContainer
-            id="corpus-view-container"
-          >
+      <CorpusViewContainer id="corpus-view-container">
         {/* Mobile backdrop */}
         <AnimatePresence>
           {mobileSidebarOpen && (
@@ -2864,9 +2867,7 @@ export const Corpuses = () => {
             >
               <ArrowLeft />
               {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-                <span style={{ flex: "1", textAlign: "left" }}>
-                  Focus Mode
-                </span>
+                <span style={{ flex: "1", textAlign: "left" }}>Focus Mode</span>
               )}
             </NavigationItem>
           </ExitPowerUserWrapper>
@@ -2879,13 +2880,11 @@ export const Corpuses = () => {
         >
           {mainContent}
         </MainContentArea>
-          </CorpusViewContainer>
+      </CorpusViewContainer>
     ) : (
-          <CleanViewContainer
-            id="corpus-clean-view"
-          >
-            {mainContent}
-          </CleanViewContainer>
+      <CleanViewContainer id="corpus-clean-view">
+        {mainContent}
+      </CleanViewContainer>
     );
   } else if (
     opened_corpus !== null &&
