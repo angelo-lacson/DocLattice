@@ -990,6 +990,11 @@ PARSER_KWARGS = {
     },
 }
 
+# Enabled pipeline components. An empty list means all registered components are enabled.
+# To restrict to specific components, list their full class paths, e.g.:
+#   ENABLED_COMPONENTS = ["opencontractserver.pipeline.parsers.docling_parser.DoclingParser"]
+ENABLED_COMPONENTS: list[str] = []
+
 # Analyzers
 # ------------------------------------------------------------------------------
 ANALYZER_KWARGS = {
