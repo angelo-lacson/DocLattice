@@ -2,7 +2,7 @@
  * CorpusActionsSection - Corpus actions list with add/edit/delete functionality
  */
 import React from "react";
-import { Button, Icon } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
 import {
   Plus,
   Play,
@@ -29,6 +29,7 @@ import {
   AgentPromptBox,
   InfoNote,
 } from "../styles/corpusSettingsStyles";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface CorpusAction {
   id: string;
@@ -90,8 +91,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
       <SettingsCardHeader>
         <SettingsCardTitle>Corpus Actions</SettingsCardTitle>
         <Button primary size="small" onClick={onAddAction}>
-          <Icon name="plus" />
-          Add Action
+          <Plus size={14} /> Add Action
         </Button>
       </SettingsCardHeader>
 
@@ -134,7 +134,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       <h3
                         style={{
                           margin: 0,
-                          color: "#1e293b",
+                          color: OS_LEGAL_COLORS.textPrimary,
                           fontSize: "1.125rem",
                           fontWeight: 600,
                         }}
@@ -150,7 +150,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       style={{
                         display: "flex",
                         gap: "1.5rem",
-                        color: "#64748b",
+                        color: OS_LEGAL_COLORS.textSecondary,
                         fontSize: "0.9rem",
                         flexWrap: "wrap",
                       }}
@@ -244,7 +244,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                         }
                         onClick={() => onRunAction?.(action)}
                       >
-                        <Icon name="play" />
+                        <Play size={14} />
                       </Button>
                     )}
 
@@ -256,7 +256,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       }
                       title="Edit action"
                     >
-                      <Icon name="edit" />
+                      <Edit size={14} />
                     </Button>
 
                     <Button
@@ -266,7 +266,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       onClick={() => onDeleteAction(action.id)}
                       title="Delete action"
                     >
-                      <Icon name="trash" />
+                      <Trash2 size={14} />
                     </Button>
                   </div>
                 </div>

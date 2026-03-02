@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import styled, { keyframes } from "styled-components";
-import { Icon } from "semantic-ui-react";
+import { DynamicIcon } from "../widgets/icon-picker/DynamicIcon";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 const slideIn = keyframes`
   from {
@@ -49,7 +50,7 @@ const MenuItem = styled.button<{ variant?: "danger" | "primary" }>`
     props.variant === "danger"
       ? "#ef4444"
       : props.variant === "primary"
-      ? "#3b82f6"
+      ? OS_LEGAL_COLORS.primaryBlue
       : "#0f172a"};
   font-weight: 500;
   text-align: left;
@@ -60,7 +61,7 @@ const MenuItem = styled.button<{ variant?: "danger" | "primary" }>`
         ? "#fee2e2"
         : props.variant === "primary"
         ? "#eff6ff"
-        : "#f8fafc"};
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:active {
@@ -86,7 +87,7 @@ const MenuItem = styled.button<{ variant?: "danger" | "primary" }>`
 
 const MenuDivider = styled.div`
   height: 1px;
-  background: #e2e8f0;
+  background: ${OS_LEGAL_COLORS.border};
   margin: 4px 8px;
 `;
 
@@ -94,7 +95,7 @@ const MenuLabel = styled.div`
   padding: 6px 12px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   max-width: 100%;
@@ -204,7 +205,7 @@ export const ModernContextMenu: React.FC<ModernContextMenuProps> = ({
             }}
             disabled={item.disabled}
           >
-            <Icon name={item.icon as any} className="icon" />
+            <DynamicIcon name={item.icon} size={16} className="icon" />
             {item.label}
           </MenuItem>
           {item.dividerAfter && <MenuDivider />}

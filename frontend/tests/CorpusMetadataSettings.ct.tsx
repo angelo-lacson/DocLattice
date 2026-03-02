@@ -267,7 +267,7 @@ test.describe("CorpusMetadataSettings", () => {
     const firstRow = page
       .locator('[data-testid="metadata-column-row"]')
       .first();
-    const moveDownBtn = firstRow.locator("button:has(i.chevron.down.icon)");
+    const moveDownBtn = firstRow.locator("button").nth(1);
 
     await expect(moveDownBtn).toBeVisible();
     await moveDownBtn.click();
@@ -353,7 +353,7 @@ test.describe("CorpusMetadataSettings", () => {
       .filter({
         hasText: "Contract Value",
       });
-    await valueRow.locator("button:has(i.edit.icon)").click({ force: true });
+    await valueRow.locator("button").nth(2).click({ force: true });
     await page.waitForTimeout(500); // Wait for modal animation
 
     // Modal should show with existing values
@@ -417,7 +417,7 @@ test.describe("CorpusMetadataSettings", () => {
       .filter({
         hasText: "Contract Value",
       });
-    await valueRow.locator("button:has(i.trash.icon)").click();
+    await valueRow.locator("button").nth(3).click();
 
     // Confirm deletion
     await page.getByRole("button", { name: "Delete Field" }).click();

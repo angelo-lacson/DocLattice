@@ -1,22 +1,14 @@
 import React, { useMemo, useState, useCallback } from "react";
-import {
-  Modal,
-  Form,
-  Button,
-  Dropdown,
-  Message,
-  TextArea,
-  Segment,
-  Header,
-  Icon,
-  Label,
-  Checkbox,
-  Menu,
-  Loader,
-} from "semantic-ui-react";
+import { Modal, Form, Button, Dropdown, Menu } from "semantic-ui-react";
+import { Info, Settings, Cpu, FileText } from "lucide-react";
+import { Spinner } from "@os-legal/ui";
 import { useMutation, useQuery } from "@apollo/client";
+import { InfoMessage } from "../widgets/feedback";
+import { StyledTextArea } from "../widgets/modals/styled";
 import { toast } from "react-toastify";
 import _ from "lodash";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { InlineBadge } from "../agents/AgentBadges";
 
 import {
   CREATE_CORPUS_ACTION,
@@ -583,7 +575,6 @@ export const CreateCorpusActionModal: React.FC<
   return (
     <Modal open={open} onClose={onClose} size="small">
       <Modal.Header>
-        <Icon name={isEditMode ? "edit" : "lightning"} />{" "}
         {isEditMode ? "Edit Corpus Action" : "Create New Corpus Action"}
       </Modal.Header>
       <Modal.Content>
@@ -668,15 +659,29 @@ export const CreateCorpusActionModal: React.FC<
           </Form.Field>
 
           {actionType === "fieldset" && (
-            <Segment>
-              <Header as="h4">
-                <Icon name="table" />
-                <Header.Content>Fieldset Configuration</Header.Content>
-              </Header>
-              <Message info size="small">
+            <div
+              style={{
+                padding: "1rem",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                borderRadius: "8px",
+                background: OS_LEGAL_COLORS.surfaceHover,
+              }}
+            >
+              <h4
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  margin: "0 0 0.5rem 0",
+                }}
+              >
+                <FileText size={16} />
+                Fieldset Configuration
+              </h4>
+              <InfoMessage style={{ marginBottom: "0.75rem" }}>
                 Select a fieldset to automatically extract data from documents
                 when they are {trigger === "add_document" ? "added" : "edited"}.
-              </Message>
+              </InfoMessage>
               <Form.Field required>
                 <label>Fieldset</label>
                 <Dropdown
@@ -691,19 +696,33 @@ export const CreateCorpusActionModal: React.FC<
                   placeholder="Select fieldset"
                 />
               </Form.Field>
-            </Segment>
+            </div>
           )}
 
           {actionType === "analyzer" && (
-            <Segment>
-              <Header as="h4">
-                <Icon name="cogs" />
-                <Header.Content>Analyzer Configuration</Header.Content>
-              </Header>
-              <Message info size="small">
+            <div
+              style={{
+                padding: "1rem",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                borderRadius: "8px",
+                background: OS_LEGAL_COLORS.surfaceHover,
+              }}
+            >
+              <h4
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  margin: "0 0 0.5rem 0",
+                }}
+              >
+                <Settings size={16} />
+                Analyzer Configuration
+              </h4>
+              <InfoMessage style={{ marginBottom: "0.75rem" }}>
                 Select an analyzer to automatically run analysis on documents
                 when they are {trigger === "add_document" ? "added" : "edited"}.
-              </Message>
+              </InfoMessage>
               <Form.Field required>
                 <label>Analyzer</label>
                 <Dropdown
@@ -718,22 +737,43 @@ export const CreateCorpusActionModal: React.FC<
                   placeholder="Select analyzer"
                 />
               </Form.Field>
-            </Segment>
+            </div>
           )}
 
           {actionType === "agent" && (
-            <Segment>
-              <Header as="h4">
-                <Icon name="microchip" />
-                <Header.Content>Agent Configuration</Header.Content>
-              </Header>
+            <div
+              style={{
+                padding: "1rem",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                borderRadius: "8px",
+                background: OS_LEGAL_COLORS.surfaceHover,
+              }}
+            >
+              <h4
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  margin: "0 0 0.5rem 0",
+                }}
+              >
+                <Cpu size={16} />
+                Agent Configuration
+              </h4>
 
               {/* Create mode: Show mode toggle for inline vs existing agent */}
               {!isEditMode && (
                 <>
-                  <Message info size="small">
-                    <p>
-                      <Icon name={isThreadTrigger ? "comments" : "file text"} />
+                  <InfoMessage style={{ marginBottom: "0.75rem" }}>
+                    <>
+                      <Info
+                        size={14}
+                        style={{
+                          display: "inline",
+                          verticalAlign: "middle",
+                          marginRight: "0.5rem",
+                        }}
+                      />
                       Configure an AI agent for{" "}
                       <strong>
                         {isThreadTrigger
@@ -749,8 +789,8 @@ export const CreateCorpusActionModal: React.FC<
                         ? "a document is added to this corpus"
                         : "a document is edited in this corpus"}
                       .
-                    </p>
-                  </Message>
+                    </>
+                  </InfoMessage>
 
                   <Menu pointing secondary size="small">
                     <Menu.Item
@@ -774,13 +814,22 @@ export const CreateCorpusActionModal: React.FC<
                   {/* Inline Agent Creation Mode */}
                   {useInlineAgent && (
                     <>
-                      <Message positive size="small">
-                        <Icon name="lightning" />
+                      <div
+                        style={{
+                          padding: "0.5rem 0.75rem",
+                          background: OS_LEGAL_COLORS.successSurface,
+                          border: `1px solid ${OS_LEGAL_COLORS.successBorder}`,
+                          borderRadius: "6px",
+                          color: OS_LEGAL_COLORS.successText,
+                          fontSize: "0.875rem",
+                          marginBottom: "0.75rem",
+                        }}
+                      >
                         <strong>Quick Create:</strong>{" "}
                         {isThreadTrigger
                           ? "Creates a new moderator agent with all moderation tools enabled."
                           : "Creates a new agent with document processing tools enabled."}
-                      </Message>
+                      </div>
 
                       <Form.Field required>
                         <label>Agent Name</label>
@@ -797,10 +846,7 @@ export const CreateCorpusActionModal: React.FC<
 
                       <Form.Field>
                         <label>
-                          Agent Description{" "}
-                          <Label size="tiny" color="grey">
-                            Optional
-                          </Label>
+                          Agent Description <InlineBadge>Optional</InlineBadge>
                         </label>
                         <Form.Input
                           value={inlineAgentDescription}
@@ -821,10 +867,10 @@ export const CreateCorpusActionModal: React.FC<
                             ? "System Instructions"
                             : "Agent Role"}
                         </label>
-                        <TextArea
+                        <StyledTextArea
                           value={inlineAgentInstructions}
-                          onChange={(e, data) =>
-                            setInlineAgentInstructions(data.value as string)
+                          onChange={(e) =>
+                            setInlineAgentInstructions(e.target.value)
                           }
                           placeholder={
                             isThreadTrigger
@@ -848,11 +894,9 @@ export const CreateCorpusActionModal: React.FC<
 
                       <Form.Field required>
                         <label>Task Instructions</label>
-                        <TextArea
+                        <StyledTextArea
                           value={taskInstructions}
-                          onChange={(e, data) =>
-                            setTaskInstructions(data.value as string)
-                          }
+                          onChange={(e) => setTaskInstructions(e.target.value)}
                           placeholder={
                             isThreadTrigger
                               ? "e.g., 'Review this thread/message for policy compliance and take appropriate action'"
@@ -877,22 +921,15 @@ export const CreateCorpusActionModal: React.FC<
                           {isThreadTrigger
                             ? "Moderation Tools"
                             : "Document Tools"}{" "}
-                          <Label size="tiny" color="green">
+                          <InlineBadge $variant="success">
                             {isThreadTrigger
                               ? selectedModerationTools.length
                               : selectedDocumentTools.length}{" "}
                             selected
-                          </Label>
+                          </InlineBadge>
                           {(isThreadTrigger
                             ? toolsLoading
-                            : documentToolsLoading) && (
-                            <Loader
-                              active
-                              inline
-                              size="tiny"
-                              style={{ marginLeft: "0.5rem" }}
-                            />
-                          )}
+                            : documentToolsLoading) && <Spinner size="sm" />}
                         </label>
                         <div
                           style={{
@@ -915,43 +952,45 @@ export const CreateCorpusActionModal: React.FC<
                                 borderBottom: "1px solid #e9ecef",
                               }}
                             >
-                              <Checkbox
-                                checked={(isThreadTrigger
-                                  ? selectedModerationTools
-                                  : selectedDocumentTools
-                                ).includes(tool.name)}
-                                onChange={(_, data) => {
-                                  const setter = isThreadTrigger
-                                    ? setSelectedModerationTools
-                                    : setSelectedDocumentTools;
-                                  if (data.checked) {
-                                    setter((prev) => [...prev, tool.name]);
-                                  } else {
-                                    setter((prev) =>
-                                      prev.filter((t) => t !== tool.name)
-                                    );
-                                  }
+                              <label
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                  fontWeight: 500,
+                                  cursor: "pointer",
                                 }}
-                                label={
-                                  <label
-                                    style={{
-                                      fontWeight: 500,
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    {tool.name.replace(/_/g, " ")}
-                                    <span
-                                      style={{
-                                        color: "#666",
-                                        fontWeight: 400,
-                                        marginLeft: "0.5rem",
-                                      }}
-                                    >
-                                      - {tool.description}
-                                    </span>
-                                  </label>
-                                }
-                              />
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={(isThreadTrigger
+                                    ? selectedModerationTools
+                                    : selectedDocumentTools
+                                  ).includes(tool.name)}
+                                  onChange={(e) => {
+                                    const setter = isThreadTrigger
+                                      ? setSelectedModerationTools
+                                      : setSelectedDocumentTools;
+                                    if (e.target.checked) {
+                                      setter((prev) => [...prev, tool.name]);
+                                    } else {
+                                      setter((prev) =>
+                                        prev.filter((t) => t !== tool.name)
+                                      );
+                                    }
+                                  }}
+                                />
+                                {tool.name.replace(/_/g, " ")}
+                                <span
+                                  style={{
+                                    color: "#666",
+                                    fontWeight: 400,
+                                    marginLeft: "0.5rem",
+                                  }}
+                                >
+                                  - {tool.description}
+                                </span>
+                              </label>
                             </div>
                           ))}
                         </div>
@@ -1012,19 +1051,32 @@ export const CreateCorpusActionModal: React.FC<
 
                       {selectedAgentConfig && (
                         <>
-                          <Message size="small">
-                            <Message.Header>
+                          <div
+                            style={{
+                              padding: "0.75rem 1rem",
+                              background: OS_LEGAL_COLORS.surfaceHover,
+                              border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                              borderRadius: "6px",
+                              marginBottom: "0.5em",
+                            }}
+                          >
+                            <strong
+                              style={{
+                                display: "block",
+                                marginBottom: "0.25rem",
+                              }}
+                            >
                               {selectedAgentConfig.name}
-                            </Message.Header>
+                            </strong>
                             <p>{selectedAgentConfig.description}</p>
-                          </Message>
+                          </div>
 
                           <Form.Field required>
                             <label>Task Instructions</label>
-                            <TextArea
+                            <StyledTextArea
                               value={taskInstructions}
-                              onChange={(e, data) =>
-                                setTaskInstructions(data.value as string)
+                              onChange={(e) =>
+                                setTaskInstructions(e.target.value)
                               }
                               placeholder="Enter the task prompt for the agent"
                               rows={4}
@@ -1035,9 +1087,9 @@ export const CreateCorpusActionModal: React.FC<
                             <Form.Field>
                               <label>
                                 Pre-authorized Tools{" "}
-                                <Label size="tiny" color="blue">
+                                <InlineBadge $variant="info">
                                   Optional
-                                </Label>
+                                </InlineBadge>
                               </label>
                               <Dropdown
                                 selection
@@ -1062,19 +1114,27 @@ export const CreateCorpusActionModal: React.FC<
               {/* Edit mode: Show existing agent selection only */}
               {isEditMode && (
                 <>
-                  <Message info size="small">
-                    <p>
+                  <InfoMessage style={{ marginBottom: "0.5em" }}>
+                    <>
                       Select an AI agent to perform custom actions on{" "}
                       <strong>individual documents</strong>. The agent will
                       execute automatically when documents are{" "}
                       {trigger === "add_document" ? "added" : "edited"}.
-                    </p>
-                    <p style={{ marginTop: "0.5em", marginBottom: 0 }}>
-                      <Icon name="info circle" />
-                      The agent will have access to document-scoped tools
-                      (read/update description, summary, notes, annotations).
-                    </p>
-                  </Message>
+                      <br />
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3em",
+                          marginTop: "0.5em",
+                        }}
+                      >
+                        <Info size={14} />
+                        The agent will have access to document-scoped tools
+                        (read/update description, summary, notes, annotations).
+                      </span>
+                    </>
+                  </InfoMessage>
 
                   <Form.Field required>
                     <label>Agent</label>
@@ -1097,20 +1157,28 @@ export const CreateCorpusActionModal: React.FC<
 
                   {selectedAgentConfig && (
                     <>
-                      <Message size="small">
-                        <Message.Header>
+                      <div
+                        style={{
+                          padding: "0.75rem 1rem",
+                          background: OS_LEGAL_COLORS.surfaceHover,
+                          border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                          borderRadius: "6px",
+                          marginBottom: "0.5em",
+                        }}
+                      >
+                        <strong
+                          style={{ display: "block", marginBottom: "0.25rem" }}
+                        >
                           {selectedAgentConfig.name}
-                        </Message.Header>
+                        </strong>
                         <p>{selectedAgentConfig.description}</p>
-                      </Message>
+                      </div>
 
                       <Form.Field required>
                         <label>Task Instructions</label>
-                        <TextArea
+                        <StyledTextArea
                           value={taskInstructions}
-                          onChange={(e, data) =>
-                            setTaskInstructions(data.value as string)
-                          }
+                          onChange={(e) => setTaskInstructions(e.target.value)}
                           placeholder="Enter the task prompt for the agent (e.g., 'Summarize this document and update its description')"
                           rows={4}
                         />
@@ -1120,9 +1188,7 @@ export const CreateCorpusActionModal: React.FC<
                         <Form.Field>
                           <label>
                             Pre-authorized Tools{" "}
-                            <Label size="tiny" color="blue">
-                              Optional
-                            </Label>
+                            <InlineBadge $variant="info">Optional</InlineBadge>
                           </label>
                           <Dropdown
                             selection
@@ -1152,23 +1218,43 @@ export const CreateCorpusActionModal: React.FC<
                   )}
                 </>
               )}
-            </Segment>
+            </div>
           )}
 
           <Form.Field>
-            <Form.Checkbox
-              label="Initially Disabled"
-              checked={disabled}
-              onChange={(_, data) => setDisabled(data.checked || false)}
-            />
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5em",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={disabled}
+                onChange={(e) => setDisabled(e.target.checked)}
+              />
+              Initially Disabled
+            </label>
           </Form.Field>
 
           <Form.Field>
-            <Form.Checkbox
-              label="Run on All Corpuses"
-              checked={runOnAllCorpuses}
-              onChange={(_, data) => setRunOnAllCorpuses(data.checked || false)}
-            />
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5em",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={runOnAllCorpuses}
+                onChange={(e) => setRunOnAllCorpuses(e.target.checked)}
+              />
+              Run on All Corpuses
+            </label>
           </Form.Field>
         </Form>
       </Modal.Content>

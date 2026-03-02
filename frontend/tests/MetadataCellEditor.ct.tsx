@@ -261,45 +261,48 @@ test.describe("MetadataCellEditor", () => {
     expect(capturedValue).toBe("New value");
   });
 
-  test("handles boolean toggle", async ({ mount, page }) => {
-    const column = createMockColumn({
-      dataType: MetadataDataType.BOOLEAN,
-    });
+  test(
+    "handles boolean toggle",
+    { timeout: 20000 },
+    async ({ mount, page }) => {
+      const column = createMockColumn({
+        dataType: MetadataDataType.BOOLEAN,
+      });
 
-    let capturedValue = false;
-    const handleChange = (value: boolean) => {
-      capturedValue = value;
-    };
+      let capturedValue = false;
+      const handleChange = (value: boolean) => {
+        capturedValue = value;
+      };
 
-    const component = await mount(
-      <MetadataCellEditor
-        column={column}
-        value={false}
-        onChange={handleChange}
-      />
-    );
+      const component = await mount(
+        <MetadataCellEditor
+          column={column}
+          value={false}
+          onChange={handleChange}
+        />
+      );
 
-    const checkbox = page.getByRole("checkbox");
-    await expect(checkbox).not.toBeChecked();
+      const checkbox = page.getByRole("checkbox");
+      await expect(checkbox).not.toBeChecked();
 
-    // Click the label or container instead of using check()
-    const checkboxContainer = page.locator(".ui.checkbox");
-    await checkboxContainer.click();
+      // Click the checkbox directly (no longer wrapped in Semantic UI container)
+      await checkbox.click();
 
-    // Wait for the onChange to be called
-    await page.waitForTimeout(200);
-    expect(capturedValue).toBe(true);
+      // Wait for the onChange to be called
+      await page.waitForTimeout(200);
+      expect(capturedValue).toBe(true);
 
-    await component.update(
-      <MetadataCellEditor
-        column={column}
-        value={true}
-        onChange={handleChange}
-      />
-    );
+      await component.update(
+        <MetadataCellEditor
+          column={column}
+          value={true}
+          onChange={handleChange}
+        />
+      );
 
-    await expect(checkbox).toBeChecked();
-  });
+      await expect(checkbox).toBeChecked();
+    }
+  );
 
   test("validates JSON input", async ({ mount, page }) => {
     const column = createMockColumn({

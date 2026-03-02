@@ -22,6 +22,7 @@ import {
   CircleAlert,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { PipelineComponentType } from "../../types/graphql-api";
 import { getComponentDisplayName } from "./PipelineIcons";
 import { PIPELINE_UI } from "../../assets/configurations/constants";
@@ -778,25 +779,30 @@ export const SystemSettings: React.FC = () => {
                       background:
                         defaultEmbedderValue === e.className
                           ? "#e0e7ff"
-                          : "#f8fafc",
+                          : OS_LEGAL_COLORS.surfaceHover,
                       border: `1px solid ${
                         defaultEmbedderValue === e.className
                           ? "#6366f1"
-                          : "#e2e8f0"
+                          : OS_LEGAL_COLORS.border
                       }`,
                     }}
                     onClick={() => setDefaultEmbedderValue(e.className)}
                   >
                     <strong>{e.title || e.name}</strong>
                     {e.vectorSize && (
-                      <span style={{ color: "#64748b", marginLeft: "0.5rem" }}>
+                      <span
+                        style={{
+                          color: OS_LEGAL_COLORS.textSecondary,
+                          marginLeft: "0.5rem",
+                        }}
+                      >
                         ({e.vectorSize}d)
                       </span>
                     )}
                     <div
                       style={{
                         fontSize: "0.75rem",
-                        color: "#64748b",
+                        color: OS_LEGAL_COLORS.textSecondary,
                         fontFamily: "monospace",
                         marginTop: "0.25rem",
                       }}
