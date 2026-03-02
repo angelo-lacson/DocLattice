@@ -9,7 +9,7 @@ export const CardSegment = styled.div`
   padding: 1rem;
   border-radius: 12px;
   background: white;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
 
@@ -25,6 +25,6 @@ export const GradientSegment = styled.div`
     #ffffff 0%,
     ${OS_LEGAL_COLORS.surfaceHover} 100%
   );
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `;
