@@ -593,8 +593,12 @@ class SearchQueryMixin:
             )
 
             # Use hybrid search (vector + full-text with RRF fusion)
-            # when a text query is provided, fall back to vector-only otherwise.
-            results = vector_store.hybrid_search(search_query)
+            # when a text query is provided. Skip the FTS overhead and use
+            # vector-only search when query is purely an embedding lookup.
+            if query and query.strip():
+                results = vector_store.hybrid_search(search_query)
+            else:
+                results = vector_store.search(search_query)
 
             # Apply pagination
             paginated_results = results[offset : offset + limit]

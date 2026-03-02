@@ -620,6 +620,11 @@ class CoreAnnotationVectorStore:
         Returns:
             List of search results with annotations and RRF-fused scores
         """
+        if _is_async_context():
+            _logger.warning(
+                "Sync method called from async context - this may cause issues"
+            )
+
         from django.contrib.postgres.search import SearchQuery, SearchRank
 
         from opencontractserver.constants.search import (
