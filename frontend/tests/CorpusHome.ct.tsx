@@ -8,10 +8,13 @@ import {
   GET_CORPUS_WITH_HISTORY,
   GET_DOCUMENT_RELATIONSHIPS,
   GET_CORPUS_DOCUMENTS_FOR_TOC,
+  GET_CONVERSATIONS,
 } from "../src/graphql/queries";
 import {
   DOCUMENT_RELATIONSHIP_TOC_LIMIT,
   CORPUS_DOCUMENTS_TOC_LIMIT,
+  CONVERSATION_TYPE,
+  RECENT_THREAD_LIMIT,
 } from "../src/assets/configurations/constants";
 import { PermissionTypes } from "../src/components/types";
 import { docScreenshot } from "./utils/docScreenshot";
@@ -208,6 +211,149 @@ const corpusHistoryMock: MockedResponse = {
   },
 };
 
+// Conversations mock for RecentDiscussions component
+const conversationsMock: MockedResponse = {
+  request: {
+    query: GET_CONVERSATIONS,
+    variables: {
+      corpusId: dummyCorpus.id,
+      conversationType: CONVERSATION_TYPE.THREAD,
+      limit: RECENT_THREAD_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      conversations: {
+        edges: [
+          {
+            node: {
+              id: "thread-1",
+              conversationType: CONVERSATION_TYPE.THREAD,
+              title: "How do I interpret Section 4.2?",
+              description: "Question about the interpretation",
+              createdAt: new Date(
+                Date.now() - 2 * 60 * 60 * 1000
+              ).toISOString(),
+              updatedAt: new Date(
+                Date.now() - 1 * 60 * 60 * 1000
+              ).toISOString(),
+              created: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+              modified: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+              creator: {
+                id: "USER_2",
+                username: "alice",
+                email: "alice@example.com",
+                __typename: "UserType",
+              },
+              chatWithCorpus: null,
+              chatWithDocument: null,
+              chatMessages: {
+                totalCount: 5,
+                __typename: "ChatMessageTypeConnection",
+              },
+              isPublic: true,
+              myPermissions: [],
+              upvoteCount: 3,
+              downvoteCount: 0,
+              userVote: null,
+              isLocked: false,
+              lockedBy: null,
+              lockedAt: null,
+              isPinned: false,
+              pinnedBy: null,
+              pinnedAt: null,
+              deletedAt: null,
+              __typename: "ConversationType",
+            },
+            __typename: "ConversationTypeEdge",
+          },
+          {
+            node: {
+              id: "thread-2",
+              conversationType: CONVERSATION_TYPE.THREAD,
+              title: "Suggestion: Add cross-reference annotations",
+              description: "Idea for improvement",
+              createdAt: new Date(
+                Date.now() - 24 * 60 * 60 * 1000
+              ).toISOString(),
+              updatedAt: new Date(
+                Date.now() - 12 * 60 * 60 * 1000
+              ).toISOString(),
+              created: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+              modified: new Date(
+                Date.now() - 12 * 60 * 60 * 1000
+              ).toISOString(),
+              creator: {
+                id: "USER_3",
+                username: "bob",
+                email: "bob@example.com",
+                __typename: "UserType",
+              },
+              chatWithCorpus: null,
+              chatWithDocument: null,
+              chatMessages: {
+                totalCount: 2,
+                __typename: "ChatMessageTypeConnection",
+              },
+              isPublic: true,
+              myPermissions: [],
+              upvoteCount: 1,
+              downvoteCount: 0,
+              userVote: null,
+              isLocked: false,
+              lockedBy: null,
+              lockedAt: null,
+              isPinned: false,
+              pinnedBy: null,
+              pinnedAt: null,
+              deletedAt: null,
+              __typename: "ConversationType",
+            },
+            __typename: "ConversationTypeEdge",
+          },
+        ],
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+          endCursor: null,
+          __typename: "PageInfo",
+        },
+        totalCount: 2,
+        __typename: "ConversationTypeConnection",
+      },
+    },
+  },
+};
+
+// Empty conversations mock (no discussions yet)
+const emptyConversationsMock: MockedResponse = {
+  request: {
+    query: GET_CONVERSATIONS,
+    variables: {
+      corpusId: dummyCorpus.id,
+      conversationType: CONVERSATION_TYPE.THREAD,
+      limit: RECENT_THREAD_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      conversations: {
+        edges: [],
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+          endCursor: null,
+          __typename: "PageInfo",
+        },
+        totalCount: 0,
+        __typename: "ConversationTypeConnection",
+      },
+    },
+  },
+};
+
 const mocks: MockedResponse[] = [
   {
     request: {
@@ -239,6 +385,9 @@ const mocks: MockedResponse[] = [
   // Corpus history mock
   corpusHistoryMock,
   { ...corpusHistoryMock },
+  // Conversations mock for RecentDiscussions
+  conversationsMock,
+  { ...conversationsMock },
 ];
 
 /**
@@ -495,4 +644,128 @@ test("landing view has centered breadcrumbs", async ({ mount, page }) => {
   await expect(breadcrumbs.locator(".current")).toContainText(
     dummyCorpus.title
   );
+});
+
+/* --------------------------------------------------------------------------
+ * Tests for Recent Discussions Feed
+ * -------------------------------------------------------------------------- */
+
+test("landing view shows recent discussions feed with threads", async ({
+  mount,
+  page,
+}) => {
+  await mountCorpusHome(mount);
+
+  // Wait for discussions feed to render
+  const feed = page.getByTestId("corpus-home-landing-discussions");
+  await expect(feed).toBeVisible({ timeout: 10000 });
+
+  // Header should show "Discussions" label and "View all" link
+  await expect(feed.locator("text=Discussions")).toBeVisible();
+  await expect(feed.locator("text=View all")).toBeVisible();
+
+  // Thread items should be visible
+  await expect(
+    page.getByTestId("corpus-home-landing-discussions-thread-thread-1")
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("corpus-home-landing-discussions-thread-thread-2")
+  ).toBeVisible();
+
+  // Thread titles should display
+  await expect(
+    page.locator("text=How do I interpret Section 4.2?")
+  ).toBeVisible();
+  await expect(
+    page.locator("text=Suggestion: Add cross-reference annotations")
+  ).toBeVisible();
+
+  // Screenshot of the full landing view with discussion feed
+  await docScreenshot(page, "corpus--landing--with-discussions", {
+    fullPage: true,
+  });
+});
+
+test("landing view shows empty state when no discussions exist", async ({
+  mount,
+  page,
+}) => {
+  // Mount with empty conversations mock
+  const emptyMocks: MockedResponse[] = [
+    ...mocks.filter((m) => m.request.query !== GET_CONVERSATIONS),
+    emptyConversationsMock,
+    { ...emptyConversationsMock },
+  ];
+
+  await mount(
+    <CorpusHomeTestWrapper mocks={emptyMocks} corpus={dummyCorpus} />
+  );
+
+  // Wait for empty state to render
+  const emptyState = page.getByTestId("corpus-home-landing-discussions-empty");
+  await expect(emptyState).toBeVisible({ timeout: 10000 });
+  await expect(emptyState).toContainText("No discussions yet");
+
+  await docScreenshot(page, "corpus--landing--no-discussions", {
+    fullPage: true,
+  });
+});
+
+/* --------------------------------------------------------------------------
+ * Tests for Discussions Inline View
+ * -------------------------------------------------------------------------- */
+
+test("discussions view shows when view=discussions URL param is set", async ({
+  mount,
+  page,
+}) => {
+  // Need additional mocks for the full CorpusDiscussionsView
+  // (it queries with limit: 100 for stats)
+  const discussionViewMocks: MockedResponse[] = [
+    ...mocks,
+    {
+      request: {
+        query: GET_CONVERSATIONS,
+        variables: {
+          corpusId: dummyCorpus.id,
+          conversationType: CONVERSATION_TYPE.THREAD,
+          limit: 100,
+        },
+      },
+      result: conversationsMock.result,
+    },
+    {
+      request: {
+        query: GET_CONVERSATIONS,
+        variables: {
+          corpusId: dummyCorpus.id,
+          conversationType: CONVERSATION_TYPE.THREAD,
+          limit: 100,
+        },
+      },
+      result: conversationsMock.result,
+    },
+  ];
+
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={discussionViewMocks}
+      corpus={dummyCorpus}
+      initialView="discussions"
+    />
+  );
+
+  // Discussions inline view should be visible
+  const discussionsView = page.getByTestId("corpus-home-discussions");
+  await expect(discussionsView).toBeVisible({ timeout: 10000 });
+
+  // Back button should show "Overview"
+  const backBtn = page.getByTestId("corpus-home-discussions-back-btn");
+  await expect(backBtn).toBeVisible();
+  await expect(backBtn).toContainText("Overview");
+
+  // Landing view should not be visible
+  await expect(page.getByTestId("corpus-home-landing")).toBeHidden();
+
+  await docScreenshot(page, "corpus--discussions-inline--thread-list");
 });

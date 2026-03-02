@@ -5,9 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-02-28
+## [Unreleased] - 2026-03-01
 
 ### Added
+
+- **Pipeline Component Management Redesign**: Separated component management from filetype default assignment in the Pipeline Configuration UI. New `enabled_components` JSON field on `PipelineSettings` tracks which components are available. Frontend splits into two sections: ComponentLibrary (flat filterable list with enable/disable toggles, search, stage filter chips) and FiletypeDefaults (MIME type rows with parser/embedder/thumbnailer dropdowns). Removed old stage-centric layout with MIME type filter buttons. (`opencontractserver/documents/models.py`, `config/graphql/pipeline_types.py`, `config/graphql/pipeline_queries.py`, `config/graphql/pipeline_settings_mutations.py`, `frontend/src/components/admin/SystemSettings.tsx`, `frontend/src/components/admin/system_settings/ComponentLibrary.tsx`, `frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
+- **Clean corpus landing page with Power User mode toggle**: Default corpus view is now a full-page landing without sidebar navigation, providing a cleaner experience for anonymous browsers and casual users. Users with edit permissions see a "Power User" toggle (`?mode=power` URL param) to access the full sidebar+tabs layout (`frontend/src/views/Corpuses.tsx`)
+- **Recent discussions feed on corpus landing page**: New `RecentDiscussions` component shows 2-3 latest discussion threads below the "View Details" button, making community activity visible even to anonymous users (`frontend/src/components/corpuses/CorpusHome/RecentDiscussions.tsx`)
+- **Inline discussions view**: New `?view=discussions` URL state enables viewing the full discussion thread list and thread detail directly from the corpus home, without switching to the Discussions tab (`frontend/src/components/corpuses/CorpusHome/CorpusDiscussionsInlineView.tsx`)
+- `updateModeParam` navigation utility for managing the `?mode=` URL parameter (`frontend/src/utils/navigationUtils.ts`)
+- Extended `CorpusDetailViewType` to include `"discussions"` alongside `"landing"` and `"details"` (`frontend/src/graphql/cache.ts`)
+- Screenshot tests for new landing view states: clean view, discussion feed, empty discussions, and power user mode (`frontend/tests/CorpusHome.ct.tsx`, `frontend/tests/CorpusTabs.ct.tsx`)
 
 #### Security Headers Middleware (CSP, Referrer-Policy, Permissions-Policy)
 - Added `SecurityHeadersMiddleware` in `config/middleware.py` that attaches `Content-Security-Policy` and `Permissions-Policy` headers to every HTTP response; Referrer-Policy is handled by Django's built-in `SecurityMiddleware` via `SECURE_REFERRER_POLICY`

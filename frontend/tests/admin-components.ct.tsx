@@ -8,6 +8,14 @@ import {
   CorpusAgentManagementWrapper,
   SystemSettingsWrapper,
 } from "./AdminComponentsTestWrapper";
+import {
+  GET_PIPELINE_SETTINGS,
+  GET_PIPELINE_COMPONENTS,
+  UPDATE_PIPELINE_SETTINGS,
+  RESET_PIPELINE_SETTINGS,
+  UPDATE_COMPONENT_SECRETS,
+  DELETE_COMPONENT_SECRETS,
+} from "../src/components/admin/system_settings/graphql";
 import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
 
 // GraphQL queries/mutations used by GlobalAgentManagement
@@ -495,177 +503,6 @@ test.describe("CorpusAgentManagement Component", () => {
   });
 });
 
-// GraphQL queries for SystemSettings
-const GET_PIPELINE_SETTINGS = gql`
-  query GetPipelineSettings {
-    pipelineSettings {
-      preferredParsers
-      preferredEmbedders
-      preferredThumbnailers
-      parserKwargs
-      componentSettings
-      defaultEmbedder
-      componentsWithSecrets
-      modified
-      modifiedBy {
-        id
-        username
-      }
-    }
-  }
-`;
-
-const GET_PIPELINE_COMPONENTS = gql`
-  query GetPipelineComponents {
-    pipelineComponents {
-      parsers {
-        name
-        title
-        description
-        className
-        supportedFileTypes
-        settingsSchema {
-          name
-          settingType
-          pythonType
-          required
-          description
-          default
-          envVar
-          hasValue
-          currentValue
-        }
-      }
-      embedders {
-        name
-        title
-        description
-        className
-        vectorSize
-        supportedFileTypes
-        settingsSchema {
-          name
-          settingType
-          pythonType
-          required
-          description
-          default
-          envVar
-          hasValue
-          currentValue
-        }
-      }
-      thumbnailers {
-        name
-        title
-        description
-        className
-        supportedFileTypes
-        settingsSchema {
-          name
-          settingType
-          pythonType
-          required
-          description
-          default
-          envVar
-          hasValue
-          currentValue
-        }
-      }
-    }
-  }
-`;
-
-// Mutations for SystemSettings
-const UPDATE_PIPELINE_SETTINGS = gql`
-  mutation UpdatePipelineSettings(
-    $preferredParsers: GenericScalar
-    $preferredEmbedders: GenericScalar
-    $preferredThumbnailers: GenericScalar
-    $parserKwargs: GenericScalar
-    $componentSettings: GenericScalar
-    $defaultEmbedder: String
-  ) {
-    updatePipelineSettings(
-      preferredParsers: $preferredParsers
-      preferredEmbedders: $preferredEmbedders
-      preferredThumbnailers: $preferredThumbnailers
-      parserKwargs: $parserKwargs
-      componentSettings: $componentSettings
-      defaultEmbedder: $defaultEmbedder
-    ) {
-      ok
-      message
-      pipelineSettings {
-        preferredParsers
-        preferredEmbedders
-        preferredThumbnailers
-        parserKwargs
-        componentSettings
-        defaultEmbedder
-        componentsWithSecrets
-        modified
-        modifiedBy {
-          id
-          username
-        }
-      }
-    }
-  }
-`;
-
-const RESET_PIPELINE_SETTINGS = gql`
-  mutation ResetPipelineSettings {
-    resetPipelineSettings {
-      ok
-      message
-      pipelineSettings {
-        preferredParsers
-        preferredEmbedders
-        preferredThumbnailers
-        parserKwargs
-        componentSettings
-        defaultEmbedder
-        componentsWithSecrets
-        modified
-        modifiedBy {
-          id
-          username
-        }
-      }
-    }
-  }
-`;
-
-const UPDATE_COMPONENT_SECRETS = gql`
-  mutation UpdateComponentSecrets(
-    $componentPath: String!
-    $secrets: GenericScalar!
-    $merge: Boolean
-  ) {
-    updateComponentSecrets(
-      componentPath: $componentPath
-      secrets: $secrets
-      merge: $merge
-    ) {
-      ok
-      message
-      componentsWithSecrets
-    }
-  }
-`;
-
-const DELETE_COMPONENT_SECRETS = gql`
-  mutation DeleteComponentSecrets($componentPath: String!) {
-    deleteComponentSecrets(componentPath: $componentPath) {
-      ok
-      message
-      componentsWithSecrets
-    }
-  }
-`;
-
 // Mock data for SystemSettings
 const mockPipelineSettings = {
   preferredParsers: {
@@ -680,6 +517,12 @@ const mockPipelineSettings = {
   componentsWithSecrets: [
     "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
   ],
+  enabledComponents: [
+    "opencontractserver.pipeline.parsers.docling.DoclingParser",
+    "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
+    "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+    "opencontractserver.pipeline.thumbnailers.pdf.PDFThumbnailer",
+  ],
   modified: "2024-01-15T10:30:00Z",
   modifiedBy: { id: "VXNlclR5cGU6MQ==", username: "admin" },
 };
@@ -691,7 +534,8 @@ const mockPipelineComponents = {
       title: "Docling Parser",
       description: "ML-based document parser",
       className: "opencontractserver.pipeline.parsers.docling.DoclingParser",
-      supportedFileTypes: ["application/pdf"],
+      supportedFileTypes: ["PDF"],
+      enabled: true,
       settingsSchema: [],
     },
     {
@@ -699,7 +543,8 @@ const mockPipelineComponents = {
       title: "LlamaParser",
       description: "LlamaIndex cloud-based parser",
       className: "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
-      supportedFileTypes: ["application/pdf"],
+      supportedFileTypes: ["PDF"],
+      enabled: true,
       settingsSchema: [
         {
           name: "api_key",
@@ -723,6 +568,7 @@ const mockPipelineComponents = {
       className: "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
       vectorSize: 1536,
       supportedFileTypes: null,
+      enabled: true,
       settingsSchema: [
         {
           name: "api_key",
@@ -744,10 +590,12 @@ const mockPipelineComponents = {
       title: "PDF Thumbnailer",
       description: "Generate thumbnails for PDF documents",
       className: "opencontractserver.pipeline.thumbnailers.pdf.PDFThumbnailer",
-      supportedFileTypes: ["application/pdf"],
+      supportedFileTypes: ["PDF"],
+      enabled: true,
       settingsSchema: [],
     },
   ],
+  postProcessors: [],
 };
 
 const mockPipelineComponentsWithConfiguredSecrets = {
@@ -796,7 +644,7 @@ test.describe("SystemSettings Component", () => {
     await component.unmount();
   });
 
-  test("should display settings page with all sections", async ({
+  test("should display settings page with both sections", async ({
     mount,
     page,
   }) => {
@@ -821,18 +669,20 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check pipeline stages are present (new visual flow design)
-    // Stage headers are h2 elements
-    await expect(page.locator("h2", { hasText: "Parser" })).toBeVisible();
-    await expect(page.locator("h2", { hasText: "Thumbnailer" })).toBeVisible();
-    await expect(
-      page.locator("h2", { hasText: "Embedder" }).first()
-    ).toBeVisible();
+    // Check both sections are visible
+    await expect(page.locator("text=Pipeline Components")).toBeVisible();
+    await expect(page.locator("text=Filetype Defaults")).toBeVisible();
 
-    // Check bottom sections
-    await expect(
-      page.locator("h2", { hasText: "Default Embedder" })
-    ).toBeVisible();
+    // Check component names are visible in ComponentLibrary section
+    const lib = page.locator('[data-testid="component-library"]');
+    await expect(lib.locator("text=Docling Parser")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(lib.locator("text=LlamaParser")).toBeVisible();
+    await expect(lib.locator("text=OpenAI Ada Embedder")).toBeVisible();
+    await expect(lib.locator("text=PDF Thumbnailer")).toBeVisible();
+
+    await docScreenshot(page, "admin--pipeline-settings--overview");
 
     await component.unmount();
   });
@@ -865,7 +715,7 @@ test.describe("SystemSettings Component", () => {
     await component.unmount();
   });
 
-  test("should display configured parser mappings with component cards", async ({
+  test("should display component library with items and checkboxes", async ({
     mount,
     page,
   }) => {
@@ -890,11 +740,23 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check MIME type selector buttons are displayed
-    await expect(page.locator("button:has-text('PDF')").first()).toBeVisible();
+    // All 4 components should be visible in the component library
+    const lib = page.locator('[data-testid="component-library"]');
+    await expect(lib.locator("text=Docling Parser")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(lib.locator("text=LlamaParser")).toBeVisible();
+    await expect(lib.locator("text=OpenAI Ada Embedder")).toBeVisible();
+    await expect(lib.locator("text=PDF Thumbnailer")).toBeVisible();
 
-    // Check component card is displayed with title (uses full title from mock data)
-    await expect(page.locator("text=Docling Parser")).toBeVisible();
+    // Checkboxes should exist and be checked
+    const checkboxes = page.locator(
+      'input[type="checkbox"][aria-label*="Disable"]'
+    );
+    await expect(checkboxes).toHaveCount(4);
+    for (let i = 0; i < 4; i++) {
+      await expect(checkboxes.nth(i)).toBeChecked();
+    }
 
     await component.unmount();
   });
@@ -902,17 +764,7 @@ test.describe("SystemSettings Component", () => {
   test("should display components with secrets", async ({ mount, page }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: {
-        data: {
-          pipelineSettings: {
-            ...mockPipelineSettings,
-            preferredEmbedders: {
-              "application/pdf":
-                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
-            },
-          },
-        },
-      },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
     };
 
     const componentsMock = {
@@ -1003,16 +855,11 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Advanced Settings toggle should be visible for selected component
-    await expect(
-      page.locator("button:has-text('Advanced Settings')").first()
-    ).toBeVisible();
-
-    // Click to expand
+    // Click first Advanced Settings button (LlamaParser has secrets settings)
     await page.locator("button:has-text('Advanced Settings')").first().click();
 
-    // Should show component path in expanded settings
-    await expect(page.locator("text=Component Path")).toBeVisible();
+    // Should show Secret Keys section
+    await expect(page.locator("text=Secret Keys")).toBeVisible();
 
     await component.unmount();
   });
@@ -1020,17 +867,7 @@ test.describe("SystemSettings Component", () => {
   test("should open secrets modal", async ({ mount, page }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: {
-        data: {
-          pipelineSettings: {
-            ...mockPipelineSettings,
-            preferredParsers: {
-              "application/pdf":
-                "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
-            },
-          },
-        },
-      },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
     };
 
     const componentsMock = {
@@ -1049,6 +886,7 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
+    // Expand first Advanced Settings (LlamaParser)
     const advancedSettingsButton = page
       .locator("button:has-text('Advanced Settings')")
       .first();
@@ -1065,6 +903,8 @@ test.describe("SystemSettings Component", () => {
     // Security notice should be visible
     await expect(page.locator("text=Security Notice")).toBeVisible();
 
+    await docScreenshot(page, "admin--pipeline-settings--secrets-modal");
+
     await component.unmount();
   });
 
@@ -1074,17 +914,7 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: {
-        data: {
-          pipelineSettings: {
-            ...mockPipelineSettings,
-            preferredEmbedders: {
-              "application/pdf":
-                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
-            },
-          },
-        },
-      },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
     };
 
     const componentsMock = {
@@ -1166,12 +996,6 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const emptySettings = {
       ...mockPipelineSettings,
-      preferredParsers: {
-        "application/pdf":
-          "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
-      },
-      preferredEmbedders: {},
-      preferredThumbnailers: {},
       componentsWithSecrets: [],
     };
 
@@ -1196,6 +1020,7 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
+    // Expand first Advanced Settings (LlamaParser has secrets)
     const advancedSettingsButton = page
       .locator("button:has-text('Advanced Settings')")
       .first();
@@ -1268,7 +1093,7 @@ test.describe("SystemSettings Component", () => {
     await component.unmount();
   });
 
-  test("should display visual pipeline flow stages", async ({
+  test("should display component library with filter chips", async ({
     mount,
     page,
   }) => {
@@ -1293,15 +1118,27 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check pipeline intake and output points
-    await expect(page.locator("text=Document Upload")).toBeVisible();
-    await expect(page.locator("text=Ready for Search")).toBeVisible();
-    await expect(page.locator("text=Pipeline complete")).toBeVisible();
+    // Check filter chips
+    const lib = page.locator('[data-testid="component-library"]');
+    await expect(lib.locator("text=All").first()).toBeVisible();
+    await expect(lib.locator("text=Parsers").first()).toBeVisible();
+    await expect(lib.locator("text=Embedders").first()).toBeVisible();
+    await expect(lib.locator("text=Thumbnailers").first()).toBeVisible();
+
+    // All components should be visible in the component library
+    await expect(lib.locator("text=Docling Parser")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(lib.locator("text=LlamaParser")).toBeVisible();
+    await expect(lib.locator("text=OpenAI Ada Embedder")).toBeVisible();
+    await expect(lib.locator("text=PDF Thumbnailer")).toBeVisible();
+
+    await docScreenshot(page, "admin--pipeline-settings--component-library");
 
     await component.unmount();
   });
 
-  test("should allow switching MIME types", async ({ mount, page }) => {
+  test("should filter component library by stage", async ({ mount, page }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
       result: { data: { pipelineSettings: mockPipelineSettings } },
@@ -1323,23 +1160,253 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // MIME type buttons should be visible (PDF is selected by default)
-    const pdfButton = page.locator("button:has-text('PDF')").first();
-    await expect(pdfButton).toBeVisible();
+    // Scope assertions to the component library section
+    const lib = page.locator('[data-testid="component-library"]');
 
-    // TXT and DOCX buttons should also be visible
-    await expect(page.locator("button:has-text('TXT')").first()).toBeVisible();
-    await expect(page.locator("button:has-text('DOCX')").first()).toBeVisible();
+    // Click "Parsers" filter chip
+    await lib.locator("[aria-pressed]", { hasText: "Parsers" }).first().click();
+
+    // Only parsers should be visible in the component library
+    await expect(lib.locator("text=Docling Parser")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(lib.locator("text=LlamaParser")).toBeVisible();
+    // Embedder and Thumbnailer should be hidden in the component library
+    await expect(lib.locator("text=OpenAI Ada Embedder")).not.toBeVisible();
+    await expect(lib.locator("text=PDF Thumbnailer")).not.toBeVisible();
+
+    await docScreenshot(page, "admin--pipeline-settings--stage-filter");
 
     await component.unmount();
   });
 
-  test("should filter components by MIME type - TXT and DOCX support", async ({
+  test("should search components by name", async ({ mount, page }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Scope assertions to the component library section
+    const lib = page.locator('[data-testid="component-library"]');
+
+    // Type in the search input
+    const searchInput = lib.locator(
+      'input[placeholder="Search components..."]'
+    );
+    await searchInput.fill("Docling");
+
+    // Only Docling Parser should be visible in the component library
+    await expect(lib.locator("text=Docling Parser")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(lib.locator("text=LlamaParser")).not.toBeVisible();
+    await expect(lib.locator("text=OpenAI Ada Embedder")).not.toBeVisible();
+    await expect(lib.locator("text=PDF Thumbnailer")).not.toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should display enable/disable checkboxes for components", async ({
     mount,
     page,
   }) => {
-    // Mock components with different MIME type support using short forms (PDF, TXT, DOCX)
-    // This tests the fix for the MIME_TO_SHORT_LABEL mapping
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Check checkboxes exist (at least 4 for our components)
+    const checkboxes = page.locator('input[type="checkbox"]');
+    const count = await checkboxes.count();
+    expect(count).toBeGreaterThanOrEqual(4);
+
+    // All should be checked since all are in enabledComponents
+    for (let i = 0; i < count; i++) {
+      await expect(checkboxes.nth(i)).toBeChecked();
+    }
+
+    await component.unmount();
+  });
+
+  test("should display filetype defaults with dropdowns", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Check Filetype Defaults section
+    await expect(page.locator("text=Filetype Defaults")).toBeVisible();
+
+    // Check MIME type labels
+    await expect(page.locator("text=PDF").first()).toBeVisible();
+    await expect(page.locator("text=TXT").first()).toBeVisible();
+    await expect(page.locator("text=DOCX").first()).toBeVisible();
+
+    // Check select dropdowns exist (3 MIME types x 3 stages = 9 minimum)
+    const selects = page.locator("select");
+    const selectCount = await selects.count();
+    expect(selectCount).toBeGreaterThanOrEqual(9);
+
+    await docScreenshot(page, "admin--pipeline-settings--filetype-defaults");
+
+    await component.unmount();
+  });
+
+  test("should show assigned component in filetype dropdown", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Check that the PDF parser dropdown has the Docling Parser selected
+    const pdfParserSelect = page.locator('select[aria-label="Parser for PDF"]');
+    await expect(pdfParserSelect).toHaveValue(
+      "opencontractserver.pipeline.parsers.docling.DoclingParser"
+    );
+
+    await component.unmount();
+  });
+
+  test("should display default embedder section in filetype defaults", async ({
+    mount,
+    page,
+  }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Check Default Embedder section
+    await expect(page.locator("text=Default Embedder")).toBeVisible();
+    await expect(page.locator("button:has-text('Edit')")).toBeVisible();
+    await expect(page.locator("text=Using system default")).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should display stage badges on components", async ({ mount, page }) => {
+    const settingsMock = {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    };
+
+    const componentsMock = {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    };
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
+    );
+
+    // Wait for page to load
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Check stage badges are visible (from STAGE_CONFIG titles)
+    await expect(page.locator("text=Parser").first()).toBeVisible();
+    await expect(page.locator("text=Embedder").first()).toBeVisible();
+    await expect(page.locator("text=Thumbnailer").first()).toBeVisible();
+
+    await docScreenshot(page, "admin--pipeline-settings--stage-badges");
+
+    await component.unmount();
+  });
+
+  test("should filter filetype default dropdowns by MIME type support", async ({
+    mount,
+    page,
+  }) => {
+    // Mock components with different MIME type support
     const multiMimeComponents = {
       parsers: [
         {
@@ -1348,7 +1415,8 @@ test.describe("SystemSettings Component", () => {
           description: "ML-based document parser (PDF only)",
           className:
             "opencontractserver.pipeline.parsers.docling.DoclingParser",
-          supportedFileTypes: ["PDF"], // Only PDF
+          supportedFileTypes: ["PDF"],
+          enabled: true,
           settingsSchema: [],
         },
         {
@@ -1357,7 +1425,8 @@ test.describe("SystemSettings Component", () => {
           description: "Plain text parser",
           className:
             "opencontractserver.pipeline.parsers.text_parser.TextParser",
-          supportedFileTypes: ["TXT"], // Only TXT - tests "text/plain" → "TXT" mapping
+          supportedFileTypes: ["TXT"],
+          enabled: true,
           settingsSchema: [],
         },
         {
@@ -1366,7 +1435,8 @@ test.describe("SystemSettings Component", () => {
           description: "Handles all document types",
           className:
             "opencontractserver.pipeline.parsers.universal.UniversalParser",
-          supportedFileTypes: ["PDF", "TXT", "DOCX"], // All types
+          supportedFileTypes: ["PDF", "TXT", "DOCX"],
+          enabled: true,
           settingsSchema: [],
         },
         {
@@ -1375,7 +1445,8 @@ test.describe("SystemSettings Component", () => {
           description: "Microsoft Word parser",
           className:
             "opencontractserver.pipeline.parsers.docx_parser.DocxParser",
-          supportedFileTypes: ["DOCX"], // Only DOCX - tests long MIME → "DOCX" mapping
+          supportedFileTypes: ["DOCX"],
+          enabled: true,
           settingsSchema: [],
         },
       ],
@@ -1387,20 +1458,9 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
           vectorSize: 1536,
-          supportedFileTypes: null, // Supports all
-          settingsSchema: [
-            {
-              name: "api_key",
-              settingType: "secret",
-              pythonType: "str",
-              required: true,
-              description: "OpenAI API Key",
-              default: "",
-              envVar: "OPENAI_API_KEY",
-              hasValue: false,
-              currentValue: null,
-            },
-          ],
+          supportedFileTypes: null,
+          enabled: true,
+          settingsSchema: [],
         },
       ],
       thumbnailers: [
@@ -1411,18 +1471,11 @@ test.describe("SystemSettings Component", () => {
           className:
             "opencontractserver.pipeline.thumbnailers.pdf.PDFThumbnailer",
           supportedFileTypes: ["PDF"],
-          settingsSchema: [],
-        },
-        {
-          name: "text_thumb",
-          title: "Text Thumbnailer",
-          description: "Generate thumbnails for text documents",
-          className:
-            "opencontractserver.pipeline.thumbnailers.text.TextThumbnailer",
-          supportedFileTypes: ["TXT"],
+          enabled: true,
           settingsSchema: [],
         },
       ],
+      postProcessors: [],
     };
 
     const settingsMock = {
@@ -1431,7 +1484,15 @@ test.describe("SystemSettings Component", () => {
         data: {
           pipelineSettings: {
             ...mockPipelineSettings,
-            preferredParsers: {}, // No selections yet
+            preferredParsers: {},
+            enabledComponents: [
+              "opencontractserver.pipeline.parsers.docling.DoclingParser",
+              "opencontractserver.pipeline.parsers.text_parser.TextParser",
+              "opencontractserver.pipeline.parsers.universal.UniversalParser",
+              "opencontractserver.pipeline.parsers.docx_parser.DocxParser",
+              "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
+              "opencontractserver.pipeline.thumbnailers.pdf.PDFThumbnailer",
+            ],
           },
         },
       },
@@ -1453,113 +1514,18 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // === Test PDF selection (default) ===
-    // Should show Docling Parser and Universal Parser (both support PDF)
-    await expect(page.locator("text=Docling Parser")).toBeVisible();
-    await expect(page.locator("text=Universal Parser")).toBeVisible();
-    // Should NOT show Text Parser or Word Document Parser (don't support PDF)
-    await expect(page.locator("text=Text Parser")).not.toBeVisible();
-    await expect(page.locator("text=Word Document Parser")).not.toBeVisible();
+    // PDF parser select should have: Unassigned + Docling + Universal + (OpenAI if embedder) = 3 parser options
+    const pdfParserSelect = page.locator('select[aria-label="Parser for PDF"]');
+    const pdfParserOptions = pdfParserSelect.locator("option");
+    // Unassigned + Docling Parser + Universal Parser = 3
+    await expect(pdfParserOptions).toHaveCount(3);
 
-    // === Test TXT selection ===
-    // Click TXT button in the Parser stage
-    const txtButton = page.locator("button:has-text('TXT')").first();
-    await txtButton.click();
-
-    // Should show Text Parser and Universal Parser (both support TXT)
-    await expect(page.locator("text=Text Parser")).toBeVisible();
-    await expect(page.locator("text=Universal Parser")).toBeVisible();
-    // Should NOT show Docling Parser or Word Document Parser
-    await expect(page.locator("text=Docling Parser")).not.toBeVisible();
-    await expect(page.locator("text=Word Document Parser")).not.toBeVisible();
-
-    // === Test DOCX selection ===
-    // Click DOCX button in the Parser stage
-    const docxButton = page.locator("button:has-text('DOCX')").first();
-    await docxButton.click();
-
-    // Should show Word Document Parser and Universal Parser (both support DOCX)
-    await expect(page.locator("text=Word Document Parser")).toBeVisible();
-    await expect(page.locator("text=Universal Parser")).toBeVisible();
-    // Should NOT show Docling Parser or Text Parser
-    await expect(page.locator("text=Docling Parser")).not.toBeVisible();
-    await expect(page.locator("text=Text Parser")).not.toBeVisible();
-
-    await component.unmount();
-  });
-
-  test("should call UPDATE_PIPELINE_SETTINGS when selecting a component", async ({
-    mount,
-    page,
-  }) => {
-    const settingsMock = {
-      request: { query: GET_PIPELINE_SETTINGS },
-      result: { data: { pipelineSettings: mockPipelineSettings } },
-    };
-
-    const componentsMock = {
-      request: { query: GET_PIPELINE_COMPONENTS },
-      result: { data: { pipelineComponents: mockPipelineComponents } },
-    };
-
-    // Mock the mutation response - match exact variables since variableMatcher seems unreliable
-    const updateSettingsMock = {
-      request: {
-        query: UPDATE_PIPELINE_SETTINGS,
-        variables: {
-          preferredParsers: {
-            "application/pdf":
-              "opencontractserver.pipeline.parsers.docling.DoclingParser",
-          },
-        },
-      },
-      result: {
-        data: {
-          updatePipelineSettings: {
-            ok: true,
-            message: "Settings updated successfully",
-            pipelineSettings: {
-              ...mockPipelineSettings,
-              preferredParsers: {
-                "application/pdf":
-                  "opencontractserver.pipeline.parsers.docling.DoclingParser",
-              },
-            },
-          },
-        },
-      },
-    };
-
-    // Refetch mock after mutation
-    const refetchMock = {
-      request: { query: GET_PIPELINE_SETTINGS },
-      result: { data: { pipelineSettings: mockPipelineSettings } },
-    };
-
-    const component = await mount(
-      <SystemSettingsWrapper
-        mocks={[settingsMock, componentsMock, updateSettingsMock, refetchMock]}
-      />
+    // TXT parser select should have: Unassigned + Text Parser + Universal Parser = 3
+    const txtParserSelect = page.locator(
+      'select[aria-label="Parser for Plain Text"]'
     );
-
-    // Wait for page to load
-    await expect(
-      page.locator("h1:has-text('Pipeline Configuration')")
-    ).toBeVisible({
-      timeout: 5000,
-    });
-
-    // Click on the Docling Parser card to select it
-    const doclingCard = page.locator("text=Docling Parser").first();
-    await expect(doclingCard).toBeVisible();
-    await doclingCard.click();
-
-    // Should show success toast (the mutation mock returns ok: true)
-    await expect(
-      page.locator("text=Settings updated successfully")
-    ).toBeVisible({
-      timeout: 5000,
-    });
+    const txtParserOptions = txtParserSelect.locator("option");
+    await expect(txtParserOptions).toHaveCount(3);
 
     await component.unmount();
   });
@@ -1593,6 +1559,7 @@ test.describe("SystemSettings Component", () => {
               componentSettings: {},
               defaultEmbedder: null,
               componentsWithSecrets: [],
+              enabledComponents: [],
               modified: "2024-01-15T11:00:00Z",
               modifiedBy: { id: "VXNlclR5cGU6MQ==", username: "admin" },
             },
@@ -1614,6 +1581,7 @@ test.describe("SystemSettings Component", () => {
             componentSettings: {},
             defaultEmbedder: null,
             componentsWithSecrets: [],
+            enabledComponents: [],
             modified: "2024-01-15T11:00:00Z",
             modifiedBy: { id: "VXNlclR5cGU6MQ==", username: "admin" },
           },
@@ -1664,17 +1632,7 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: {
-        data: {
-          pipelineSettings: {
-            ...mockPipelineSettings,
-            preferredParsers: {
-              "application/pdf":
-                "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
-            },
-          },
-        },
-      },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
     };
 
     const componentsMock = {
@@ -1717,10 +1675,6 @@ test.describe("SystemSettings Component", () => {
               "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
               "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
             ],
-            preferredParsers: {
-              "application/pdf":
-                "opencontractserver.pipeline.parsers.llamaparse.LlamaParser",
-            },
           },
         },
       },
@@ -1754,6 +1708,7 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
+    // Expand first Advanced Settings (LlamaParser)
     const advancedSettingsButton = page
       .locator("button:has-text('Advanced Settings')")
       .first();
@@ -1796,17 +1751,7 @@ test.describe("SystemSettings Component", () => {
   }) => {
     const settingsMock = {
       request: { query: GET_PIPELINE_SETTINGS },
-      result: {
-        data: {
-          pipelineSettings: {
-            ...mockPipelineSettings,
-            preferredEmbedders: {
-              "application/pdf":
-                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
-            },
-          },
-        },
-      },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
     };
 
     const componentsMock = {
@@ -1845,10 +1790,6 @@ test.describe("SystemSettings Component", () => {
           pipelineSettings: {
             ...mockPipelineSettings,
             componentsWithSecrets: [],
-            preferredEmbedders: {
-              "application/pdf":
-                "opencontractserver.pipeline.embedders.openai.OpenAIEmbedder",
-            },
           },
         },
       },

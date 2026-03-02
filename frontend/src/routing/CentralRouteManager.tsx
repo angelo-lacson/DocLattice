@@ -33,6 +33,7 @@ import {
   corpusHomeView,
   tocExpandAll,
   corpusDetailView,
+  corpusPowerUserMode,
   routeLoading,
   routeError,
   authStatusVar,
@@ -810,6 +811,7 @@ export function CentralRouteManager() {
     const homeViewParam = searchParams.get("homeView");
     const tocExpandedParam = searchParams.get("tocExpanded") === "true";
     const detailViewParam = searchParams.get("view");
+    const modeParam = searchParams.get("mode");
 
     // Text block deep link
     const textBlockParam = searchParams.get("tb");
@@ -858,6 +860,7 @@ export function CentralRouteManager() {
     const currentHomeView = corpusHomeView();
     const currentTocExpandAll = tocExpandAll();
     const currentDetailView = corpusDetailView();
+    const currentPowerUserMode = corpusPowerUserMode();
     const currentTextBlock = highlightedTextBlock();
     const currentDocVersion = selectedDocVersion();
     const currentStructural = showStructuralAnnotations();
@@ -879,9 +882,13 @@ export function CentralRouteManager() {
         ? homeViewParam
         : null;
 
-    // Parse detailView param (only valid value is "details", defaults to "landing")
+    // Parse detailView param (valid values: "details", "discussions"; defaults to "landing")
     const newDetailView: CorpusDetailViewType =
-      detailViewParam === "details" ? "details" : "landing";
+      detailViewParam === "details"
+        ? "details"
+        : detailViewParam === "discussions"
+        ? "discussions"
+        : "landing";
 
     // Collect all reactive var updates into a batch
     // This prevents cascading re-renders - all updates happen in one React tick
@@ -916,6 +923,10 @@ export function CentralRouteManager() {
     }
     if (currentDetailView !== newDetailView) {
       updates.push(() => corpusDetailView(newDetailView));
+    }
+    const newPowerUserMode = modeParam === "power";
+    if (currentPowerUserMode !== newPowerUserMode) {
+      updates.push(() => corpusPowerUserMode(newPowerUserMode));
     }
     if (currentDocVersion !== validDocVersion) {
       updates.push(() => selectedDocVersion(validDocVersion));
@@ -1077,7 +1088,7 @@ export function CentralRouteManager() {
   //
   // Vars synced: annotationIds, analysisIds, extractIds, threadId,
   // folderId, tab, messageId, homeView, tocExpanded, structural,
-  // selectedOnly, boundingBoxes, labels, textBlock
+  // selectedOnly, boundingBoxes, labels, textBlock, powerUserMode
   // ═══════════════════════════════════════════════════════════════
   const annIds = useReactiveVar(selectedAnnotationIds);
   const analysisIds = useReactiveVar(selectedAnalysesIds);
@@ -1090,6 +1101,7 @@ export function CentralRouteManager() {
   const homeView = useReactiveVar(corpusHomeView);
   const tocExpanded = useReactiveVar(tocExpandAll);
   const detailView = useReactiveVar(corpusDetailView);
+  const powerUserMode = useReactiveVar(corpusPowerUserMode);
   const structural = useReactiveVar(showStructuralAnnotations);
   const selectedOnly = useReactiveVar(showSelectedAnnotationOnly);
   const boundingBoxes = useReactiveVar(showAnnotationBoundingBoxes);
@@ -1176,6 +1188,7 @@ export function CentralRouteManager() {
       homeView,
       tocExpanded,
       view: detailView,
+      mode: powerUserMode ? "power" : null,
       showStructural: structural,
       showSelectedOnly: selectedOnly,
       showBoundingBoxes: boundingBoxes,
@@ -1212,6 +1225,7 @@ export function CentralRouteManager() {
     homeView,
     tocExpanded,
     detailView,
+    powerUserMode,
     structural,
     selectedOnly,
     boundingBoxes,

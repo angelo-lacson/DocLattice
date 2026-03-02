@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import {
@@ -16,11 +16,8 @@ import {
   Save,
   RotateCcw,
   AlertTriangle,
-  Cpu,
   Info,
-  Upload,
   Trash2,
-  Check,
   CircleCheck,
   CircleAlert,
 } from "lucide-react";
@@ -28,11 +25,7 @@ import { toast } from "react-toastify";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { PipelineComponentType } from "../../types/graphql-api";
 import { getComponentDisplayName } from "./PipelineIcons";
-import {
-  PIPELINE_UI,
-  SUPPORTED_MIME_TYPES,
-  MIME_TO_SHORT_LABEL,
-} from "../../assets/configurations/constants";
+import { PIPELINE_UI } from "../../assets/configurations/constants";
 import { formatSettingLabel } from "../../utils/formatters";
 
 // Sub-module imports
@@ -46,7 +39,7 @@ import {
   PipelineSettingsQueryResult,
   PipelineComponentsQueryResult,
 } from "./system_settings/graphql";
-import { StageType, SettingsSchemaEntry } from "./system_settings/types";
+import { SettingsSchemaEntry } from "./system_settings/types";
 import { STAGE_CONFIG } from "./system_settings/config";
 import {
   Container,
@@ -55,32 +48,6 @@ import {
   PageTitle,
   PageDescription,
   LastModified,
-  PipelineFlowContainer,
-  ChannelTrack,
-  ChannelGlow,
-  ChannelCenterLine,
-  PipelineContentColumn,
-  StageRow,
-  StageRowSpacer,
-  JunctionColumn,
-  ConnectorArm,
-  IntakeCard,
-  IntakeText,
-  IntakeNode,
-  IntakeNodeCenter,
-  OutputCheckmark,
-  OutputInfo,
-  OutputTitle,
-  OutputSubtitle,
-  Section,
-  SectionHeader,
-  SectionTitle,
-  SectionDescription,
-  DefaultEmbedderDisplay,
-  DefaultEmbedderInfo,
-  DefaultEmbedderPath,
-  ComponentName,
-  EmptyValue,
   ActionButtons,
   LoadingContainer,
   ErrorContainer,
@@ -96,8 +63,8 @@ import {
   FormLabel,
   FormHelperText,
 } from "./system_settings/styles";
-import { FlowParticles } from "./system_settings/FlowParticles";
-import { PipelineStageSection } from "./system_settings/PipelineStageSection";
+import { ComponentLibrary } from "./system_settings/ComponentLibrary";
+import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
 
 // ============================================================================
 // Component
@@ -106,26 +73,12 @@ import { PipelineStageSection } from "./system_settings/PipelineStageSection";
 export const SystemSettings: React.FC = () => {
   const navigate = useNavigate();
 
-  // Per-stage MIME type selection
-  const [selectedMimeTypes, setSelectedMimeTypes] = useState<
-    Record<StageType, string>
-  >({
-    parsers: "application/pdf",
-    embedders: "application/pdf",
-    thumbnailers: "application/pdf",
-  });
-
-  // Advanced settings expansion state
-  const [expandedSettings, setExpandedSettings] = useState<
-    Record<string, boolean>
-  >({});
-
   // Modal states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
   const [secretsValues, setSecretsValues] = useState<Record<string, string>>(
-    {},
+    {}
   );
   const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
     useState(false);
@@ -133,14 +86,6 @@ export const SystemSettings: React.FC = () => {
   const [showDeleteSecretsConfirm, setShowDeleteSecretsConfirm] =
     useState(false);
   const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
-
-  // Ref for tracking pending auto-expand after component selection
-  // This ensures auto-expand only happens after mutation succeeds
-  const pendingAutoExpandRef = useRef<{
-    stage: StageType;
-    mimeType: string;
-    className: string;
-  } | null>(null);
 
   // GraphQL queries
   const {
@@ -169,36 +114,16 @@ export const SystemSettings: React.FC = () => {
           toast.success("Settings updated successfully");
           refetchSettings();
           refetchComponents();
-
-          // Handle pending auto-expand for components requiring configuration
-          const pending = pendingAutoExpandRef.current;
-          if (pending) {
-            const allSettings = getComponentSettingsSchema(pending.className);
-            const hasAnySettings = allSettings.length > 0;
-            const hasAnyMissing = allSettings.some(
-              (s) => s.required && !s.hasValue,
-            );
-
-            if (hasAnySettings && hasAnyMissing) {
-              setExpandedSettings((prev) => ({
-                ...prev,
-                [`${pending.stage}-${pending.mimeType}`]: true,
-              }));
-            }
-            pendingAutoExpandRef.current = null;
-          }
         } else {
           toast.error(
-            data.updatePipelineSettings?.message || "Failed to update settings",
+            data.updatePipelineSettings?.message || "Failed to update settings"
           );
-          pendingAutoExpandRef.current = null;
         }
       },
       onError: (err) => {
         toast.error(`Error updating settings: ${err.message}`);
-        pendingAutoExpandRef.current = null;
       },
-    },
+    }
   );
 
   const [resetSettings, { loading: resetting }] = useMutation(
@@ -211,14 +136,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.resetPipelineSettings?.message || "Failed to reset settings",
+            data.resetPipelineSettings?.message || "Failed to reset settings"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error resetting settings: ${err.message}`);
       },
-    },
+    }
   );
 
   const [updateSecrets, { loading: updatingSecrets }] = useMutation(
@@ -234,14 +159,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.updateComponentSecrets?.message || "Failed to update secrets",
+            data.updateComponentSecrets?.message || "Failed to update secrets"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating secrets: ${err.message}`);
       },
-    },
+    }
   );
 
   const [deleteSecrets, { loading: deletingSecrets }] = useMutation(
@@ -254,14 +179,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.deleteComponentSecrets?.message || "Failed to delete secrets",
+            data.deleteComponentSecrets?.message || "Failed to delete secrets"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error deleting secrets: ${err.message}`);
       },
-    },
+    }
   );
 
   const settings = settingsData?.pipelineSettings;
@@ -270,15 +195,15 @@ export const SystemSettings: React.FC = () => {
   const componentsByStage = useMemo(() => {
     const parsers = (components?.parsers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className),
+        Boolean(comp?.className)
     );
     const embedders = (components?.embedders || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className),
+        Boolean(comp?.className)
     );
     const thumbnailers = (components?.thumbnailers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className),
+        Boolean(comp?.className)
     );
 
     return { parsers, embedders, thumbnailers };
@@ -299,99 +224,32 @@ export const SystemSettings: React.FC = () => {
     return map;
   }, [componentsByStage]);
 
-  const normalizedSupportedFileTypes = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const comp of componentByClassName.values()) {
-      const fileTypes = (comp.supportedFileTypes || [])
-        .filter((ft): ft is NonNullable<typeof ft> => Boolean(ft))
-        .map((ft) => String(ft).toLowerCase());
-      map.set(comp.className, fileTypes);
-    }
-    return map;
-  }, [componentByClassName]);
-
-  // Memoize all current selections to avoid repeated lookups during render
-  const currentSelections = useMemo(() => {
-    if (!settings) return {};
-    const selections: Record<string, Record<string, string | null>> = {};
-    for (const stage of Object.keys(STAGE_CONFIG) as StageType[]) {
-      const mapping = settings[STAGE_CONFIG[stage].settingsKey] as
-        | Record<string, string>
-        | null
-        | undefined;
-      selections[stage] = {};
-      for (const mime of SUPPORTED_MIME_TYPES) {
-        selections[stage][mime.value] = mapping?.[mime.value] ?? null;
-      }
-    }
-    return selections;
-  }, [settings]);
-
-  // Get current selection for a stage and MIME type (uses memoized cache)
-  const getCurrentSelection = useCallback(
-    (stage: StageType, mimeType: string): string | null => {
-      return currentSelections[stage]?.[mimeType] ?? null;
-    },
-    [currentSelections],
-  );
-
-  // Get components for a stage, filtered by MIME type support
-  const getComponentsForStage = useCallback(
-    (stage: StageType, mimeType: string): PipelineComponentType[] => {
-      const stageComponents = componentsByStage[stage] || [];
-
-      // Pre-compute normalized values for comparison
-      const mimeTypeLower = mimeType.toLowerCase();
-      // Use lookup map to get short label (e.g., "text/plain" -> "TXT")
-      const mimeShortLower = MIME_TO_SHORT_LABEL[mimeType]?.toLowerCase();
-
-      // Filter by supported file types if available
-      return stageComponents.filter((comp) => {
-        // If no supportedFileTypes specified, assume it supports all
-        const fileTypes =
-          normalizedSupportedFileTypes.get(comp.className) || [];
-        if (fileTypes.length === 0) {
-          return true;
-        }
-        // If MIME type is unknown (no short label mapping), exclude component
-        if (!mimeShortLower) {
-          return false;
-        }
-        // Check if the MIME type matches any supported file type
-        return fileTypes.some(
-          (ft) => ft === mimeShortLower || ft === mimeTypeLower,
-        );
-      });
-    },
-    [componentsByStage, normalizedSupportedFileTypes],
-  );
-
   const getComponentSettingsSchema = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       const component = componentByClassName.get(className);
       return (component?.settingsSchema || []).filter(
-        (entry): entry is SettingsSchemaEntry => Boolean(entry),
+        (entry): entry is SettingsSchemaEntry => Boolean(entry)
       );
     },
-    [componentByClassName],
+    [componentByClassName]
   );
 
   const getSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType === "secret",
+        (entry) => entry.settingType === "secret"
       );
     },
-    [getComponentSettingsSchema],
+    [getComponentSettingsSchema]
   );
 
   const getNonSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType !== "secret",
+        (entry) => entry.settingType !== "secret"
       );
     },
-    [getComponentSettingsSchema],
+    [getComponentSettingsSchema]
   );
 
   // Look up a component's display name by className from loaded components data
@@ -400,51 +258,67 @@ export const SystemSettings: React.FC = () => {
       const component = componentByClassName.get(className);
       return getComponentDisplayName(className, component?.title || undefined);
     },
-    [componentByClassName],
+    [componentByClassName]
   );
 
-  // Handle component selection
-  const handleSelectComponent = useCallback(
-    (stage: StageType, mimeType: string, className: string) => {
-      const currentMapping =
-        (settings?.[STAGE_CONFIG[stage].settingsKey] as
-          | Record<string, string>
-          | undefined) ?? {};
-      const newMapping = {
-        ...currentMapping,
-        [mimeType]: className,
-      };
+  // Toggle component enabled state
+  const handleToggleEnabled = useCallback(
+    (className: string, enabled: boolean) => {
+      const currentEnabled: string[] = (
+        settings?.enabledComponents || []
+      ).filter((s): s is string => s != null);
+      let newEnabled: string[];
 
-      // Store pending auto-expand info (will be processed in mutation onCompleted)
-      pendingAutoExpandRef.current = { stage, mimeType, className };
+      if (currentEnabled.length === 0) {
+        // Transitioning from "all enabled" -- build full list from loaded components
+        const allPaths = [
+          ...componentsByStage.parsers,
+          ...componentsByStage.embedders,
+          ...componentsByStage.thumbnailers,
+        ].map((c) => c.className);
+
+        if (allPaths.length === 0) return; // Components not loaded yet
+
+        newEnabled = enabled
+          ? allPaths
+          : allPaths.filter((p) => p !== className);
+      } else {
+        newEnabled = enabled
+          ? [...currentEnabled, className]
+          : currentEnabled.filter((p: string) => p !== className);
+      }
 
       updateSettings({
-        variables: {
-          [STAGE_CONFIG[stage].settingsKey]: newMapping,
-        },
+        variables: { enabledComponents: newEnabled },
       });
     },
-    [settings, updateSettings],
+    [settings, componentsByStage, updateSettings]
   );
 
-  // Handle MIME type change for a stage
-  const handleMimeTypeChange = useCallback(
-    (stage: StageType, mimeType: string) => {
-      setSelectedMimeTypes((prev) => ({
-        ...prev,
-        [stage]: mimeType,
-      }));
+  // Assign a component to a filetype default
+  const handleAssign = useCallback(
+    (
+      stage: "parsers" | "embedders" | "thumbnailers",
+      mimeType: string,
+      className: string
+    ) => {
+      const settingsKey = STAGE_CONFIG[stage].settingsKey;
+      const currentMapping =
+        (settings?.[settingsKey] as Record<string, string> | undefined) ?? {};
+      const newMapping = { ...currentMapping };
+
+      if (className) {
+        newMapping[mimeType] = className;
+      } else {
+        delete newMapping[mimeType];
+      }
+
+      updateSettings({
+        variables: { [settingsKey]: newMapping },
+      });
     },
-    [],
+    [settings, updateSettings]
   );
-
-  // Toggle advanced settings
-  const toggleAdvancedSettings = useCallback((key: string) => {
-    setExpandedSettings((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  }, []);
 
   // Handle secrets modal
   const handleAddSecrets = useCallback(
@@ -452,12 +326,12 @@ export const SystemSettings: React.FC = () => {
       setSecretsComponentPath(componentPath);
       const secretSettings = getSecretSettingsForComponent(componentPath);
       const template = Object.fromEntries(
-        secretSettings.map((entry) => [entry.name, ""]),
+        secretSettings.map((entry) => [entry.name, ""])
       );
       setSecretsValues(template);
       setShowSecretsModal(true);
     },
-    [getSecretSettingsForComponent],
+    [getSecretSettingsForComponent]
   );
 
   const handleSaveSecrets = useCallback(() => {
@@ -490,7 +364,7 @@ export const SystemSettings: React.FC = () => {
     const secretsBytes = new TextEncoder().encode(secretsJson).length;
     if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
       toast.error(
-        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`,
+        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
       );
       return;
     }
@@ -504,7 +378,7 @@ export const SystemSettings: React.FC = () => {
     });
     if (missingRequired.length > 0) {
       const missingLabels = missingRequired.map((entry) =>
-        formatSettingLabel(entry.name, entry.description),
+        formatSettingLabel(entry.name, entry.description)
       );
       toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
       return;
@@ -580,7 +454,7 @@ export const SystemSettings: React.FC = () => {
         },
       });
     },
-    [settings, getNonSecretSettingsForComponent, updateSettings],
+    [settings, getNonSecretSettingsForComponent, updateSettings]
   );
 
   // Handle default embedder
@@ -607,68 +481,6 @@ export const SystemSettings: React.FC = () => {
       return dateStr;
     }
   }, []);
-
-  // Render a pipeline stage using the extracted subcomponent
-  const renderStage = useCallback(
-    (stage: StageType, stageIndex: number) => {
-      const config = STAGE_CONFIG[stage];
-      const mimeType = selectedMimeTypes[stage];
-      const stageComponents = getComponentsForStage(stage, mimeType);
-      const currentSelection = getCurrentSelection(stage, mimeType);
-      const settingsKey = `${stage}-${mimeType}`;
-      const isExpanded = expandedSettings[settingsKey] || false;
-      const configSettings = currentSelection
-        ? getNonSecretSettingsForComponent(currentSelection)
-        : [];
-      const secretSettings = currentSelection
-        ? getSecretSettingsForComponent(currentSelection)
-        : [];
-
-      // Filter to ensure components have className defined
-      const filteredComponents = stageComponents.filter(
-        (comp): comp is PipelineComponentType & { className: string } =>
-          Boolean(comp?.className),
-      );
-
-      return (
-        <PipelineStageSection
-          key={stage}
-          stage={stage}
-          stageIndex={stageIndex}
-          config={config}
-          mimeType={mimeType}
-          components={filteredComponents}
-          currentSelection={currentSelection}
-          configSettings={configSettings}
-          secretSettings={secretSettings}
-          isExpanded={isExpanded}
-          settingsKey={settingsKey}
-          updating={updating}
-          onMimeTypeChange={handleMimeTypeChange}
-          onSelectComponent={handleSelectComponent}
-          onToggleSettings={toggleAdvancedSettings}
-          onAddSecrets={handleAddSecrets}
-          onDeleteSecrets={handleDeleteSecretsClick}
-          onSaveConfig={handleSaveComponentSettings}
-        />
-      );
-    },
-    [
-      selectedMimeTypes,
-      getComponentsForStage,
-      getCurrentSelection,
-      expandedSettings,
-      getNonSecretSettingsForComponent,
-      getSecretSettingsForComponent,
-      handleMimeTypeChange,
-      handleSelectComponent,
-      toggleAdvancedSettings,
-      handleAddSecrets,
-      handleDeleteSecretsClick,
-      handleSaveComponentSettings,
-      updating,
-    ],
-  );
 
   // Loading state
   if (settingsLoading || componentsLoading) {
@@ -740,86 +552,41 @@ export const SystemSettings: React.FC = () => {
         </WarningText>
       </WarningBanner>
 
-      {/* Pipeline Flow */}
-      <PipelineFlowContainer>
-        <ChannelTrack>
-          <ChannelGlow />
-          <ChannelCenterLine />
-          <FlowParticles />
-        </ChannelTrack>
+      {/* Component Library */}
+      <ComponentLibrary
+        components={componentsByStage}
+        enabledComponents={
+          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+        }
+        updating={updating}
+        onToggleEnabled={handleToggleEnabled}
+        onAddSecrets={handleAddSecrets}
+        onDeleteSecrets={handleDeleteSecretsClick}
+        onSaveConfig={handleSaveComponentSettings}
+        getConfigSettings={getNonSecretSettingsForComponent}
+        getSecretSettings={getSecretSettingsForComponent}
+      />
 
-        <PipelineContentColumn>
-          <StageRow $delay={0}>
-            <JunctionColumn $active>
-              <IntakeNode>
-                <IntakeNodeCenter />
-              </IntakeNode>
-            </JunctionColumn>
-            <ConnectorArm $active />
-            <IntakeCard>
-              <Upload />
-              <IntakeText>Document Upload</IntakeText>
-            </IntakeCard>
-          </StageRow>
-
-          <StageRowSpacer />
-          {renderStage("parsers", 0)}
-
-          <StageRowSpacer />
-          {renderStage("thumbnailers", 1)}
-
-          <StageRowSpacer />
-          {renderStage("embedders", 2)}
-
-          <StageRowSpacer />
-          <StageRow $delay={4}>
-            <JunctionColumn $active>
-              <OutputCheckmark>
-                <Check />
-              </OutputCheckmark>
-            </JunctionColumn>
-            <ConnectorArm />
-            <OutputInfo>
-              <OutputTitle>Ready for Search</OutputTitle>
-              <OutputSubtitle>Pipeline complete</OutputSubtitle>
-            </OutputInfo>
-          </StageRow>
-        </PipelineContentColumn>
-      </PipelineFlowContainer>
-
-      {/* Default Embedder Section */}
-      <Section>
-        <SectionHeader>
-          <SectionTitle>
-            <Cpu />
-            Default Embedder
-          </SectionTitle>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleEditDefaultEmbedder}
-          >
-            Edit
-          </Button>
-        </SectionHeader>
-        <SectionDescription>
-          Fallback embedder when no MIME-type-specific embedder is configured.
-        </SectionDescription>
-        <DefaultEmbedderDisplay>
-          {settings?.defaultEmbedder ? (
-            <DefaultEmbedderInfo>
-              <ComponentName>
-                {getComponentDisplayName(settings.defaultEmbedder)}
-              </ComponentName>
-              <DefaultEmbedderPath>
-                {settings.defaultEmbedder}
-              </DefaultEmbedderPath>
-            </DefaultEmbedderInfo>
-          ) : (
-            <EmptyValue>Using system default</EmptyValue>
-          )}
-        </DefaultEmbedderDisplay>
-      </Section>
+      {/* Filetype Defaults */}
+      <FiletypeDefaults
+        components={componentsByStage}
+        enabledComponents={
+          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+        }
+        preferredParsers={
+          (settings?.preferredParsers as Record<string, string>) || {}
+        }
+        preferredEmbedders={
+          (settings?.preferredEmbedders as Record<string, string>) || {}
+        }
+        preferredThumbnailers={
+          (settings?.preferredThumbnailers as Record<string, string>) || {}
+        }
+        defaultEmbedder={settings?.defaultEmbedder || ""}
+        updating={updating}
+        onAssign={handleAssign}
+        onEditDefaultEmbedder={handleEditDefaultEmbedder}
+      />
 
       {/* Reset to Defaults */}
       <ActionButtons>
@@ -878,7 +645,7 @@ export const SystemSettings: React.FC = () => {
       >
         <ModalHeader
           title={`Configure Secrets \u2014 ${getComponentDisplayNameByClassName(
-            secretsComponentPath,
+            secretsComponentPath
           )}`}
           onClose={() => setShowSecretsModal(false)}
         />
@@ -942,7 +709,7 @@ export const SystemSettings: React.FC = () => {
                     </FormHelperText>
                   )}
                 </SecretFieldRow>
-              ),
+              )
             )}
           </SecretFieldGroup>
         </ModalBody>
@@ -998,7 +765,7 @@ export const SystemSettings: React.FC = () => {
               {components.embedders
                 .filter(
                   (e): e is PipelineComponentType & { className: string } =>
-                    Boolean(e?.className),
+                    Boolean(e?.className)
                 )
                 .map((e) => (
                   <div
