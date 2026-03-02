@@ -8,6 +8,7 @@ import { StyledTextArea } from "../widgets/modals/styled";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { InlineBadge } from "../agents/AgentBadges";
 
 import {
   CREATE_CORPUS_ACTION,
@@ -816,10 +817,10 @@ export const CreateCorpusActionModal: React.FC<
                       <div
                         style={{
                           padding: "0.5rem 0.75rem",
-                          background: "#f0fdf4",
-                          border: "1px solid #bbf7d0",
+                          background: OS_LEGAL_COLORS.successSurface,
+                          border: `1px solid ${OS_LEGAL_COLORS.successBorder}`,
                           borderRadius: "6px",
-                          color: "#166534",
+                          color: OS_LEGAL_COLORS.successText,
                           fontSize: "0.875rem",
                           marginBottom: "0.75rem",
                         }}
@@ -845,21 +846,7 @@ export const CreateCorpusActionModal: React.FC<
 
                       <Form.Field>
                         <label>
-                          Agent Description{" "}
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "0.15em 0.4em",
-                              fontSize: "0.7rem",
-                              fontWeight: 500,
-                              background: OS_LEGAL_COLORS.surfaceLight,
-                              color: OS_LEGAL_COLORS.textTertiary,
-                              borderRadius: "4px",
-                              border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                            }}
-                          >
-                            Optional
-                          </span>
+                          Agent Description <InlineBadge>Optional</InlineBadge>
                         </label>
                         <Form.Input
                           value={inlineAgentDescription}
@@ -934,22 +921,12 @@ export const CreateCorpusActionModal: React.FC<
                           {isThreadTrigger
                             ? "Moderation Tools"
                             : "Document Tools"}{" "}
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "0.15em 0.4em",
-                              fontSize: "0.7rem",
-                              fontWeight: 500,
-                              background: "#dcfce7",
-                              color: "#166534",
-                              borderRadius: "4px",
-                            }}
-                          >
+                          <InlineBadge $variant="success">
                             {isThreadTrigger
                               ? selectedModerationTools.length
                               : selectedDocumentTools.length}{" "}
                             selected
-                          </span>
+                          </InlineBadge>
                           {(isThreadTrigger
                             ? toolsLoading
                             : documentToolsLoading) && <Spinner size="sm" />}
@@ -1110,19 +1087,9 @@ export const CreateCorpusActionModal: React.FC<
                             <Form.Field>
                               <label>
                                 Pre-authorized Tools{" "}
-                                <span
-                                  style={{
-                                    display: "inline-block",
-                                    padding: "0.15em 0.4em",
-                                    fontSize: "0.7rem",
-                                    fontWeight: 500,
-                                    background: "#dbeafe",
-                                    color: "#1e40af",
-                                    borderRadius: "4px",
-                                  }}
-                                >
+                                <InlineBadge $variant="info">
                                   Optional
-                                </span>
+                                </InlineBadge>
                               </label>
                               <Dropdown
                                 selection
@@ -1221,19 +1188,7 @@ export const CreateCorpusActionModal: React.FC<
                         <Form.Field>
                           <label>
                             Pre-authorized Tools{" "}
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "0.15em 0.4em",
-                                fontSize: "0.7rem",
-                                fontWeight: 500,
-                                background: "#dbeafe",
-                                color: "#1e40af",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              Optional
-                            </span>
+                            <InlineBadge $variant="info">Optional</InlineBadge>
                           </label>
                           <Dropdown
                             selection

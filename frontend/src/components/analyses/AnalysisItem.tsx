@@ -233,7 +233,7 @@ export const AnalysisItem = ({
             left: 0,
             right: 0,
             padding: "0.25em 0.5em",
-            background: "#16a34a",
+            background: OS_LEGAL_COLORS.success,
             color: "white",
             fontSize: "0.75em",
             fontWeight: 600,
