@@ -9,7 +9,7 @@ import { PipelineComponentType } from "../../../types/graphql-api";
  */
 const isComponentEnabled = (
   className: string,
-  enabledComponents: string[],
+  enabledComponents: string[]
 ): boolean =>
   enabledComponents.length === 0 || enabledComponents.includes(className);
 
@@ -27,7 +27,7 @@ const isComponentEnabled = (
 export const isComponentAvailable = (
   component: PipelineComponentType & { className: string },
   mimeShortLabel: string,
-  enabledComponents: string[],
+  enabledComponents: string[]
 ): boolean => {
   if (!isComponentEnabled(component.className, enabledComponents)) {
     return false;

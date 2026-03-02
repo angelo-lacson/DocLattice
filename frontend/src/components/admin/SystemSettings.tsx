@@ -78,7 +78,7 @@ export const SystemSettings: React.FC = () => {
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
   const [secretsValues, setSecretsValues] = useState<Record<string, string>>(
-    {},
+    {}
   );
   const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
     useState(false);
@@ -123,14 +123,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.updatePipelineSettings?.message || "Failed to update settings",
+            data.updatePipelineSettings?.message || "Failed to update settings"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating settings: ${err.message}`);
       },
-    },
+    }
   );
 
   const [resetSettings, { loading: resetting }] = useMutation(
@@ -143,14 +143,14 @@ export const SystemSettings: React.FC = () => {
           refetchSettings();
         } else {
           toast.error(
-            data.resetPipelineSettings?.message || "Failed to reset settings",
+            data.resetPipelineSettings?.message || "Failed to reset settings"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error resetting settings: ${err.message}`);
       },
-    },
+    }
   );
 
   const [updateSecrets, { loading: updatingSecrets }] = useMutation(
@@ -166,14 +166,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.updateComponentSecrets?.message || "Failed to update secrets",
+            data.updateComponentSecrets?.message || "Failed to update secrets"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating secrets: ${err.message}`);
       },
-    },
+    }
   );
 
   const [deleteSecrets, { loading: deletingSecrets }] = useMutation(
@@ -186,14 +186,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.deleteComponentSecrets?.message || "Failed to delete secrets",
+            data.deleteComponentSecrets?.message || "Failed to delete secrets"
           );
         }
       },
       onError: (err) => {
         toast.error(`Error deleting secrets: ${err.message}`);
       },
-    },
+    }
   );
 
   const settings = settingsData?.pipelineSettings;
@@ -202,15 +202,15 @@ export const SystemSettings: React.FC = () => {
   const componentsByStage = useMemo(() => {
     const parsers = (components?.parsers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className),
+        Boolean(comp?.className)
     );
     const embedders = (components?.embedders || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className),
+        Boolean(comp?.className)
     );
     const thumbnailers = (components?.thumbnailers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className),
+        Boolean(comp?.className)
     );
 
     return { parsers, embedders, thumbnailers };
@@ -235,28 +235,28 @@ export const SystemSettings: React.FC = () => {
     (className: string): SettingsSchemaEntry[] => {
       const component = componentByClassName.get(className);
       return (component?.settingsSchema || []).filter(
-        (entry): entry is SettingsSchemaEntry => Boolean(entry),
+        (entry): entry is SettingsSchemaEntry => Boolean(entry)
       );
     },
-    [componentByClassName],
+    [componentByClassName]
   );
 
   const getSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType === "secret",
+        (entry) => entry.settingType === "secret"
       );
     },
-    [getComponentSettingsSchema],
+    [getComponentSettingsSchema]
   );
 
   const getNonSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType !== "secret",
+        (entry) => entry.settingType !== "secret"
       );
     },
-    [getComponentSettingsSchema],
+    [getComponentSettingsSchema]
   );
 
   // Look up a component's display name by className from loaded components data
@@ -265,7 +265,7 @@ export const SystemSettings: React.FC = () => {
       const component = componentByClassName.get(className);
       return getComponentDisplayName(className, component?.title || undefined);
     },
-    [componentByClassName],
+    [componentByClassName]
   );
 
   // Toggle component enabled state
@@ -282,7 +282,9 @@ export const SystemSettings: React.FC = () => {
       let newEnabled: string[];
 
       if (currentEnabled.length === 0 && enabled) {
-        // Already in "all enabled" state and trying to enable — no-op
+        // Safe no-op: the checkbox's `checked` reflects `component.enabled ?? true`,
+        // so enabling when already in the "all enabled" (empty-list) state is
+        // unreachable via normal UI interaction. Guard kept for defensive safety.
         return;
       }
 
@@ -325,7 +327,7 @@ export const SystemSettings: React.FC = () => {
       componentsLoading,
       settingsLoading,
       updateSettings,
-    ],
+    ]
   );
 
   // Assign a component to a filetype default
@@ -333,7 +335,7 @@ export const SystemSettings: React.FC = () => {
     (
       stage: "parsers" | "embedders" | "thumbnailers",
       mimeType: string,
-      className: string,
+      className: string
     ) => {
       const settingsKey = STAGE_CONFIG[stage].settingsKey;
       const currentMapping =
@@ -350,7 +352,7 @@ export const SystemSettings: React.FC = () => {
         variables: { [settingsKey]: newMapping },
       });
     },
-    [settings, updateSettings],
+    [settings, updateSettings]
   );
 
   // Handle secrets modal
@@ -359,12 +361,12 @@ export const SystemSettings: React.FC = () => {
       setSecretsComponentPath(componentPath);
       const secretSettings = getSecretSettingsForComponent(componentPath);
       const template = Object.fromEntries(
-        secretSettings.map((entry) => [entry.name, ""]),
+        secretSettings.map((entry) => [entry.name, ""])
       );
       setSecretsValues(template);
       setShowSecretsModal(true);
     },
-    [getSecretSettingsForComponent],
+    [getSecretSettingsForComponent]
   );
 
   const handleSaveSecrets = useCallback(() => {
@@ -397,7 +399,7 @@ export const SystemSettings: React.FC = () => {
     const secretsBytes = new TextEncoder().encode(secretsJson).length;
     if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
       toast.error(
-        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`,
+        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
       );
       return;
     }
@@ -411,7 +413,7 @@ export const SystemSettings: React.FC = () => {
     });
     if (missingRequired.length > 0) {
       const missingLabels = missingRequired.map((entry) =>
-        formatSettingLabel(entry.name, entry.description),
+        formatSettingLabel(entry.name, entry.description)
       );
       toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
       return;
@@ -487,7 +489,7 @@ export const SystemSettings: React.FC = () => {
         },
       });
     },
-    [settings, getNonSecretSettingsForComponent, updateSettings],
+    [settings, getNonSecretSettingsForComponent, updateSettings]
   );
 
   // Handle default embedder
@@ -677,7 +679,7 @@ export const SystemSettings: React.FC = () => {
       >
         <ModalHeader
           title={`Configure Secrets \u2014 ${getComponentDisplayNameByClassName(
-            secretsComponentPath,
+            secretsComponentPath
           )}`}
           onClose={() => setShowSecretsModal(false)}
         />
@@ -741,7 +743,7 @@ export const SystemSettings: React.FC = () => {
                     </FormHelperText>
                   )}
                 </SecretFieldRow>
-              ),
+              )
             )}
           </SecretFieldGroup>
         </ModalBody>
@@ -797,7 +799,7 @@ export const SystemSettings: React.FC = () => {
               {components.embedders
                 .filter(
                   (e): e is PipelineComponentType & { className: string } =>
-                    Boolean(e?.className),
+                    Boolean(e?.className)
                 )
                 .map((e) => (
                   <div
