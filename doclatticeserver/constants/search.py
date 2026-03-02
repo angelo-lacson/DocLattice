@@ -34,6 +34,25 @@ RRF_K = 60
 HYBRID_SEARCH_OVERSAMPLE_FACTOR = 3
 
 # =============================================================================
+# Embedding Dimensions
+# =============================================================================
+# All supported vector embedding dimensions across the platform.
+# Used for validation in vector stores, mixins, and conversation models.
+VALID_EMBEDDING_DIMS = frozenset({384, 768, 1024, 1536, 2048, 3072, 4096})
+
+# Maps embedding dimension to the corresponding field name on the Embedding model.
+# Used by VectorSearchViaEmbeddingMixin and conversation QuerySets.
+DIM_TO_FIELD_MAP: dict[int, str] = {
+    384: "vector_384",
+    768: "vector_768",
+    1024: "vector_1024",
+    1536: "vector_1536",
+    2048: "vector_2048",
+    3072: "vector_3072",
+    4096: "vector_4096",
+}
+
+# =============================================================================
 # Full-Text Search Configuration
 # =============================================================================
 # PostgreSQL text search configuration name for tsvector generation.
