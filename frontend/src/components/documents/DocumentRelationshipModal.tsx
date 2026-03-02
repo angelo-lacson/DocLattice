@@ -103,7 +103,8 @@ const DocumentPill = styled.div<{ $variant?: "source" | "target" }>`
   background: ${(props) =>
     props.$variant === "source" ? "#dbeafe" : "#dcfce7"};
   border: 2px solid
-    ${(props) => (props.$variant === "source" ? OS_LEGAL_COLORS.primaryBlue : "#22c55e")};
+    ${(props) =>
+      props.$variant === "source" ? OS_LEGAL_COLORS.primaryBlue : "#22c55e"};
   color: ${(props) => (props.$variant === "source" ? "#1e40af" : "#166534")};
 `;
 
@@ -191,7 +192,8 @@ const DocumentSection = styled.div`
 const SearchResultItem = styled.div<{ $selected: boolean }>`
   padding: 0.75rem;
   margin: 0.25rem 0;
-  border: 1px solid ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
+  border: 1px solid
+    ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
@@ -713,11 +715,21 @@ export const DocumentRelationshipModal: React.FC<
                   </DocumentPill>
                 ))
               ) : documentsLoading ? (
-                <span style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
+                <span
+                  style={{
+                    color: OS_LEGAL_COLORS.textSecondary,
+                    fontStyle: "italic",
+                  }}
+                >
                   Loading...
                 </span>
               ) : (
-                <span style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
+                <span
+                  style={{
+                    color: OS_LEGAL_COLORS.textSecondary,
+                    fontStyle: "italic",
+                  }}
+                >
                   No source documents
                 </span>
               )}
@@ -771,7 +783,12 @@ export const DocumentRelationshipModal: React.FC<
                   </DocumentPill>
                 ))
               ) : (
-                <span style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
+                <span
+                  style={{
+                    color: OS_LEGAL_COLORS.textSecondary,
+                    fontStyle: "italic",
+                  }}
+                >
                   No target documents
                 </span>
               )}
@@ -827,7 +844,10 @@ export const DocumentRelationshipModal: React.FC<
                     onClick={() => addDocument(doc.id, addingToSide)}
                   >
                     <div className="doc-icon">
-                      <FileText size={16} color={OS_LEGAL_COLORS.textSecondary} />
+                      <FileText
+                        size={16}
+                        color={OS_LEGAL_COLORS.textSecondary}
+                      />
                     </div>
                     <div className="doc-info">
                       <div className="doc-title">{doc.title}</div>

@@ -115,7 +115,10 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       <SearchBarWrapper>{SearchBar}</SearchBarWrapper>
       {BreadCrumbs && (!use_mobile || width > 768) && (
         <StyledSegment
-          style={{ borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`, background: "#f8f9fa" }}
+          style={{
+            borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
+            background: "#f8f9fa",
+          }}
         >
           {BreadCrumbs}
         </StyledSegment>

@@ -50,7 +50,16 @@ export const ExtractionConfigSection: React.FC<
           <label>
             Representative Example
             <Popup
-              trigger={<HelpCircle size={14} style={{ marginLeft: 4, verticalAlign: "middle", cursor: "help" }} />}
+              trigger={
+                <HelpCircle
+                  size={14}
+                  style={{
+                    marginLeft: 4,
+                    verticalAlign: "middle",
+                    cursor: "help",
+                  }}
+                />
+              }
               content="Find text that is semantically similar to this example FIRST if provided."
             />
           </label>

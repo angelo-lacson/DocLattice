@@ -176,7 +176,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           showSelectedOnly: checked,
         });
       },
-      [location, navigate],
+      [location, navigate]
     );
 
     const handleShowStructuralChange = useCallback(
@@ -185,7 +185,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           showStructural: checked,
         });
       },
-      [location, navigate],
+      [location, navigate]
     );
 
     const handleShowBoundingBoxesChange = useCallback(
@@ -194,7 +194,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           showBoundingBoxes: checked,
         });
       },
-      [location, navigate],
+      [location, navigate]
     );
 
     const handleLabelBehaviorChange = useCallback(
@@ -203,7 +203,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
           labelDisplay: value,
         });
       },
-      [location, navigate],
+      [location, navigate]
     );
 
     const labelDisplayOptions = [
@@ -313,7 +313,7 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
         )}
       </ControlsContainer>
     );
-  },
+  }
 );
 
 AnnotationControls.displayName = "AnnotationControls";

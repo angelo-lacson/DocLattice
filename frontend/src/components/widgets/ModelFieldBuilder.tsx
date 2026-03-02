@@ -106,7 +106,7 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
   initialFields = [],
 }) => {
   const [fields, setFields] = useState<FieldType[]>(
-    initialFields.map((f) => ({ ...f, id: Math.random().toString() })),
+    initialFields.map((f) => ({ ...f, id: Math.random().toString() }))
   );
 
   const addField = () => {
@@ -128,7 +128,7 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
   const updateField = (
     index: number,
     key: "fieldName" | "fieldType",
-    value: string,
+    value: string
   ) => {
     const newFields = [...fields];
     newFields[index][key] = value;

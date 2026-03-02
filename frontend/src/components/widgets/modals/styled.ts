@@ -36,9 +36,7 @@ export const StyledInput = styled.input`
   border-radius: 6px;
   font-size: 1rem;
   outline: none;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
   &:focus {
     border-color: ${OS_LEGAL_COLORS.primaryBlue};
@@ -82,9 +80,7 @@ export const StyledTextArea = styled.textarea`
   font-family: inherit;
   resize: vertical;
   outline: none;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
   &:focus {
     border-color: ${OS_LEGAL_COLORS.primaryBlue};

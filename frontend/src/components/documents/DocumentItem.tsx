@@ -733,7 +733,11 @@ export const DocumentItem: React.FC<DocumentItemProps> = ({
         ) : (
           <>
             <div
-              style={{ width: "100%", height: "100%", background: OS_LEGAL_COLORS.surfaceHover }}
+              style={{
+                width: "100%",
+                height: "100%",
+                background: OS_LEGAL_COLORS.surfaceHover,
+              }}
             />
             <img
               src={fallback_doc_icon}

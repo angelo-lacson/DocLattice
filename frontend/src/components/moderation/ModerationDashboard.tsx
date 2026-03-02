@@ -182,7 +182,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         first: MODERATION_PAGE_SIZE,
       },
       fetchPolicy: "cache-and-network",
-    },
+    }
   );
 
   // Handle loading more actions with cursor-based pagination
@@ -232,7 +232,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         timeRangeHours,
       },
       fetchPolicy: "cache-and-network",
-    },
+    }
   );
 
   // Rollback mutation
@@ -491,7 +491,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
               <Table.Body>
                 {actions.map(({ node }) => {
                   const { bg: actionBg, color: actionColor } = getActionColors(
-                    node.actionType,
+                    node.actionType
                   );
                   return (
                     <Table.Row key={node.id}>

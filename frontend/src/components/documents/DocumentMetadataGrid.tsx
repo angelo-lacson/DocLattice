@@ -153,10 +153,15 @@ const EditableCell = styled.div.attrs<{
     props.isEditing ? "#f0f9ff" : props.hasError ? "#fef2f2" : "transparent"};
   border: 1px solid
     ${(props) =>
-      props.isEditing ? OS_LEGAL_COLORS.primaryBlue : props.hasError ? "#ef4444" : "transparent"};
+      props.isEditing
+        ? OS_LEGAL_COLORS.primaryBlue
+        : props.hasError
+        ? "#ef4444"
+        : "transparent"};
 
   &:hover {
-    background: ${(props) => (props.isEditing ? "#f0f9ff" : OS_LEGAL_COLORS.surfaceHover)};
+    background: ${(props) =>
+      props.isEditing ? "#f0f9ff" : OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
