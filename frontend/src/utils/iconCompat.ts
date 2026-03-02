@@ -1,8 +1,11 @@
 /**
  * Icon compatibility layer for Semantic UI → Lucide migration.
  *
- * Uses explicit imports (Option B) so only the ~100 icons actually
- * referenced are bundled — no barrel import from "lucide-react".
+ * Provides two resolution paths:
+ * 1. Explicit KNOWN_ICONS map for the ~100 icons originally migrated from SUI.
+ * 2. Dynamic fallback via the full lucide-react export (kebab-case → PascalCase
+ *    conversion).  Since Badge.tsx already barrel-imports lucide-react, the
+ *    full icon set is in the bundle regardless — this adds no extra cost.
  */
 
 import type { LucideIcon } from "lucide-react";
@@ -110,9 +113,12 @@ import {
   Zap,
 } from "lucide-react";
 
+// Wildcard import for dynamic fallback — already bundled via Badge.tsx.
+import * as AllLucideIcons from "lucide-react";
+
 /**
  * Map of known Lucide icon kebab-case names to their component.
- * Only icons actually referenced in this codebase are included.
+ * This covers the original SUI-migrated icons with explicit imports.
  */
 const KNOWN_ICONS: Record<string, LucideIcon> = {
   activity: Activity,
@@ -395,6 +401,45 @@ function normalize(name: string): string {
 }
 
 /**
+ * Convert a kebab-case Lucide icon name to its PascalCase export name.
+ *
+ * Examples:
+ *  - "file-text"  → "FileText"
+ *  - "bar-chart-2" → "BarChart2"
+ *  - "x"          → "X"
+ */
+function kebabToPascal(name: string): string {
+  return name
+    .split("-")
+    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
+    .join("");
+}
+
+/**
+ * Look up a Lucide icon component by its kebab-case name.
+ *
+ * Checks the explicit KNOWN_ICONS map first (fast path), then falls
+ * back to a dynamic lookup in the full lucide-react barrel export.
+ */
+function lookupIcon(kebabName: string): LucideIcon | undefined {
+  // Fast path: explicitly mapped icons
+  const known = KNOWN_ICONS[kebabName];
+  if (known) return known;
+
+  // Dynamic fallback: try PascalCase conversion against full export
+  const pascal = kebabToPascal(kebabName);
+  const candidate = (AllLucideIcons as Record<string, unknown>)[pascal];
+  if (typeof candidate === "function") {
+    // Cache for future lookups
+    const icon = candidate as LucideIcon;
+    KNOWN_ICONS[kebabName] = icon;
+    return icon;
+  }
+
+  return undefined;
+}
+
+/**
  * Resolve a Semantic UI icon name to the equivalent Lucide kebab-case name.
  *
  * - If `name` is a known SUI name it is mapped to the Lucide equivalent.
@@ -408,8 +453,8 @@ export function resolveIconName(name: string): string {
   const mapped = SEMANTIC_TO_LUCIDE[key];
   if (mapped) return mapped;
 
-  // Passthrough if already a known Lucide name
-  if (KNOWN_ICONS[key]) return key;
+  // Passthrough if already a known Lucide name (explicit or dynamic)
+  if (lookupIcon(key)) return key;
 
   // Fallback
   return "help-circle";
@@ -422,5 +467,5 @@ export function resolveIconName(name: string): string {
  */
 export function resolveIcon(name: string): LucideIcon {
   const lucideName = resolveIconName(name);
-  return KNOWN_ICONS[lucideName] ?? HelpCircle;
+  return lookupIcon(lucideName) ?? HelpCircle;
 }
