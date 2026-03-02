@@ -10,7 +10,12 @@ export const IconDropdownInteractiveWrapper: React.FC<{
   return (
     <div style={{ padding: 24 }}>
       <IconDropdown value={value} onChange={setValue} disabled={disabled} />
-      <span data-testid="current-value">{value}</span>
+      <span
+        data-testid="current-value"
+        style={{ position: "absolute", left: -9999 }}
+      >
+        {value}
+      </span>
     </div>
   );
 };
