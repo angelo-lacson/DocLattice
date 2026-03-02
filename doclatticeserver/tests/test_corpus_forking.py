@@ -39,6 +39,7 @@ class CorpusForkTestCase(TransactionTestCase):
         original_corpus, forked_corpus = self._import_and_fork_corpus()
         self.original_corpus_id = original_corpus.id
         self.forked_corpus_id = forked_corpus.id
+        self._label_map_cache = {}
 
     def _import_and_fork_corpus(self):
         """Import a test corpus and fork it. Returns (original_corpus, forked_corpus)."""
@@ -77,7 +78,7 @@ class CorpusForkTestCase(TransactionTestCase):
         return original_corpus, forked_corpus
 
     def _load_corpuses(self):
-        """Load fresh QuerySets from stored IDs."""
+        """Retrieve fresh Corpus instances from stored IDs."""
         original = Corpus.objects.get(id=self.original_corpus_id)
         forked = Corpus.objects.get(id=self.forked_corpus_id)
         return original, forked
@@ -116,10 +117,18 @@ class CorpusForkTestCase(TransactionTestCase):
         """Build a mapping from original label IDs to forked label IDs by
         matching on label text.
 
+        The result is cached by (original_corpus.id, forked_corpus.id) so
+        multiple test helpers can share the same label map without redundant
+        queries.  Each setUp creates fresh data and a fresh cache dict.
+
         Note: if multiple labels share the same ``text``, only the last one
         wins in the dict comprehension (silently dropped).  The assertions
         below guard against this in the test fixture.
         """
+        cache_key = (original_corpus.id, forked_corpus.id)
+        if cache_key in self._label_map_cache:
+            return self._label_map_cache[cache_key]
+
         original_labels = list(original_corpus.label_set.annotation_labels.all())
         forked_labels = list(forked_corpus.label_set.annotation_labels.all())
 
@@ -147,6 +156,7 @@ class CorpusForkTestCase(TransactionTestCase):
         missing = original_label_ids - set(label_map.keys())
         self.assertEqual(missing, set(), f"Labels dropped during fork: {missing}")
 
+        self._label_map_cache[cache_key] = label_map
         return label_map
 
     def test_forked_label_properties(self):
@@ -215,7 +225,14 @@ class CorpusForkTestCase(TransactionTestCase):
         self.assertEqual(len(forked_docs), len(original_docs))
 
         # Join forked documents by source_document_id for robust matching
-        forked_by_source = {d.source_document_id: d for d in forked_docs}
+        forked_by_source = {}
+        for d in forked_docs:
+            self.assertNotIn(
+                d.source_document_id,
+                forked_by_source,
+                f"Forked corpus has duplicate source_document_id: {d.source_document_id}",
+            )
+            forked_by_source[d.source_document_id] = d
 
         for orig_doc in original_docs:
             forked_doc = forked_by_source.get(orig_doc.id)
@@ -281,6 +298,17 @@ class CorpusForkTestCase(TransactionTestCase):
         )
         self.assertEqual(len(forked_annots), len(original_annots))
 
+        # Guard: ensure original annotations have unambiguous (raw_text, page) keys
+        original_by_key = {}
+        for annot in original_annots:
+            key = (annot.raw_text, annot.page)
+            self.assertNotIn(
+                key,
+                original_by_key,
+                f"Original corpus has duplicate (raw_text, page) pair: {key}",
+            )
+            original_by_key[key] = annot
+
         # Build dict-based lookup for forked annotations by (raw_text, page)
         forked_by_key = {}
         for annot in forked_annots:
@@ -294,8 +322,7 @@ class CorpusForkTestCase(TransactionTestCase):
 
         label_map = self._build_label_map(original_corpus, forked_corpus)
 
-        for orig in original_annots:
-            key = (orig.raw_text, orig.page)
+        for key, orig in original_by_key.items():
             forked = forked_by_key.get(key)
             self.assertIsNotNone(
                 forked,
@@ -419,7 +446,13 @@ class CorpusForkTestCase(TransactionTestCase):
             rel_label_text = (
                 rel.relationship_label.text if rel.relationship_label else None
             )
-            forked_rel_by_key[(rel_label_text, src_keys, tgt_keys)] = rel
+            composite_key = (rel_label_text, src_keys, tgt_keys)
+            self.assertNotIn(
+                composite_key,
+                forked_rel_by_key,
+                f"Forked corpus has duplicate relationship key: {composite_key}",
+            )
+            forked_rel_by_key[composite_key] = rel
 
         label_map = self._build_label_map(original_corpus, forked_corpus)
 
