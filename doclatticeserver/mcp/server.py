@@ -32,7 +32,7 @@ from starlette.applications import Starlette
 from starlette.responses import Response
 from starlette.routing import Mount, Route
 
-from config.ratelimit.decorators import check_mcp_rate_limit
+from config.ratelimit.decorators import MCPRateLimitError, check_mcp_rate_limit
 from config.ratelimit.keys import get_client_ip_from_scope
 
 from .resources import (
@@ -198,7 +198,7 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
             await arecord_mcp_tool_call(
                 name, success=False, error_type="RateLimitExceeded"
             )
-            raise ValueError(error_msg)
+            raise MCPRateLimitError(error_msg)
     else:
         logger.debug(
             "MCP rate limiting skipped for tool %s: no ASGI scope available", name
@@ -713,7 +713,7 @@ def create_scoped_mcp_server(corpus_slug: str) -> Server:
                 await arecord_mcp_tool_call(
                     name, success=False, error_type="RateLimitExceeded"
                 )
-                raise ValueError(error_msg)
+                raise MCPRateLimitError(error_msg)
 
         # Re-validate corpus is still accessible on every tool call
         # This prevents race condition where corpus becomes private after manager cached

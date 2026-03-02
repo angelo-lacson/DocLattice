@@ -116,8 +116,9 @@ class NotificationUpdatesConsumer(AsyncWebsocketConsumer):
             f"connect() called. Path: {self.scope['path']}"
         )
 
-        # Rate limit new connections
-        if await check_ws_rate_limit(self, "WS_CONNECT"):
+        # Rate limit new connections (skip JSON message — connection
+        # is about to be closed so the client won't see it)
+        if await check_ws_rate_limit(self, "WS_CONNECT", send_message=False):
             await self.close(code=4029)
             return
 
