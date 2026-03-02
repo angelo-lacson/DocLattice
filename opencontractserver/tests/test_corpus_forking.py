@@ -39,7 +39,7 @@ class CorpusForkTestCase(TransactionTestCase):
         original_corpus, forked_corpus = self._import_and_fork_corpus()
         self.original_corpus_id = original_corpus.id
         self.forked_corpus_id = forked_corpus.id
-        self._label_map_cache = None
+        self._label_map_cache = {}
 
     def _import_and_fork_corpus(self):
         """Import a test corpus and fork it. Returns (original_corpus, forked_corpus)."""
@@ -117,16 +117,17 @@ class CorpusForkTestCase(TransactionTestCase):
         """Build a mapping from original label IDs to forked label IDs by
         matching on label text.
 
-        The result is cached per test run (each setUp creates fresh data)
-        so multiple test helpers can share the same label map without
-        redundant queries.
+        The result is cached by (original_corpus.id, forked_corpus.id) so
+        multiple test helpers can share the same label map without redundant
+        queries.  Each setUp creates fresh data and a fresh cache dict.
 
         Note: if multiple labels share the same ``text``, only the last one
         wins in the dict comprehension (silently dropped).  The assertions
         below guard against this in the test fixture.
         """
-        if self._label_map_cache is not None:
-            return self._label_map_cache
+        cache_key = (original_corpus.id, forked_corpus.id)
+        if cache_key in self._label_map_cache:
+            return self._label_map_cache[cache_key]
 
         original_labels = list(original_corpus.label_set.annotation_labels.all())
         forked_labels = list(forked_corpus.label_set.annotation_labels.all())
@@ -155,7 +156,7 @@ class CorpusForkTestCase(TransactionTestCase):
         missing = original_label_ids - set(label_map.keys())
         self.assertEqual(missing, set(), f"Labels dropped during fork: {missing}")
 
-        self._label_map_cache = label_map
+        self._label_map_cache[cache_key] = label_map
         return label_map
 
     def test_forked_label_properties(self):
@@ -321,8 +322,7 @@ class CorpusForkTestCase(TransactionTestCase):
 
         label_map = self._build_label_map(original_corpus, forked_corpus)
 
-        for orig in original_annots:
-            key = (orig.raw_text, orig.page)
+        for key, orig in original_by_key.items():
             forked = forked_by_key.get(key)
             self.assertIsNotNone(
                 forked,
