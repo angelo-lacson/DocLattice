@@ -589,6 +589,8 @@ export const SystemSettings: React.FC = () => {
       <ComponentLibrary
         components={componentsByStage}
         updating={updating}
+        componentsLoading={componentsLoading}
+        settingsLoading={settingsLoading}
         onToggleEnabled={handleToggleEnabled}
         onAddSecrets={handleAddSecrets}
         onDeleteSecrets={handleDeleteSecretsClick}

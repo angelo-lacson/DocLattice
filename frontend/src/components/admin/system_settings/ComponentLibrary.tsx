@@ -43,6 +43,8 @@ interface ComponentLibraryProps {
     thumbnailers: (PipelineComponentType & { className: string })[];
   };
   updating: boolean;
+  componentsLoading: boolean;
+  settingsLoading: boolean;
   onToggleEnabled: (className: string, enabled: boolean) => void;
   onAddSecrets: (componentPath: string) => void;
   onDeleteSecrets: (componentPath: string) => void;
@@ -70,6 +72,8 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
   ({
     components,
     updating,
+    componentsLoading,
+    settingsLoading,
     onToggleEnabled,
     onAddSecrets,
     onDeleteSecrets,
@@ -80,7 +84,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
     const [filter, setFilter] = useState<FilterCategory>("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [expandedComponent, setExpandedComponent] = useState<string | null>(
-      null
+      null,
     );
 
     // Flatten all components into a single list with stage metadata
@@ -112,7 +116,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
         items = items.filter((item) => {
           const displayName = getComponentDisplayName(
             item.component.className,
-            item.component.title || undefined
+            item.component.title || undefined,
           ).toLowerCase();
           const description = (item.component.description || "").toLowerCase();
           const className = item.component.className.toLowerCase();
@@ -135,7 +139,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
       (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearchQuery(e.target.value);
       },
-      []
+      [],
     );
 
     return (
@@ -178,7 +182,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
               const stageConfig = STAGE_CONFIG[stage];
               const displayName = getComponentDisplayName(
                 component.className,
-                component.title || undefined
+                component.title || undefined,
               );
               const settingsKey = `library-${component.className}`;
               const isExpanded = expandedComponent === component.className;
@@ -195,7 +199,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
                     ft.split("/").pop()?.toUpperCase() ||
                     ft;
                   return label;
-                }
+                },
               );
 
               return (
@@ -206,7 +210,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
                   <input
                     type="checkbox"
                     checked={isEnabled}
-                    disabled={updating}
+                    disabled={updating || componentsLoading || settingsLoading}
                     onChange={(e) =>
                       onToggleEnabled(component.className, e.target.checked)
                     }
@@ -217,7 +221,10 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
                       width: 16,
                       height: 16,
                       marginTop: 2,
-                      cursor: updating ? "not-allowed" : "pointer",
+                      cursor:
+                        updating || componentsLoading || settingsLoading
+                          ? "not-allowed"
+                          : "pointer",
                       accentColor: stageConfig.color,
                     }}
                   />
@@ -268,7 +275,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
         </LibraryContainer>
       </Section>
     );
-  }
+  },
 );
 
 ComponentLibrary.displayName = "ComponentLibrary";

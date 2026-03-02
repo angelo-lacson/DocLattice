@@ -45,7 +45,7 @@ interface FiletypeDefaultsProps {
   onAssign: (
     stage: "parsers" | "embedders" | "thumbnailers",
     mimeType: string,
-    className: string
+    className: string,
   ) => void;
   onEditDefaultEmbedder: () => void;
 }
@@ -83,7 +83,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
         embedders: preferredEmbedders,
         thumbnailers: preferredThumbnailers,
       }),
-      [preferredParsers, preferredEmbedders, preferredThumbnailers]
+      [preferredParsers, preferredEmbedders, preferredThumbnailers],
     );
 
     // Pre-compute available components per stage per MIME type
@@ -101,7 +101,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
         const shortLabel = MIME_TO_SHORT_LABEL[mime.value] || mime.value;
         for (const stage of STAGES) {
           result[stage.key][mime.value] = components[stage.key].filter((comp) =>
-            isComponentAvailable(comp, shortLabel, enabledComponents)
+            isComponentAvailable(comp, shortLabel, enabledComponents),
           );
         }
       }
@@ -113,7 +113,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
       (stage: StageType, mimeType: string, value: string) => {
         onAssign(stage, mimeType, value);
       },
-      [onAssign]
+      [onAssign],
     );
 
     return (
@@ -174,7 +174,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
                               >
                                 {getComponentDisplayName(
                                   comp.className,
-                                  comp.title || undefined
+                                  comp.title || undefined,
                                 )}
                               </option>
                             ))}
@@ -219,7 +219,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
         </DefaultsContainer>
       </Section>
     );
-  }
+  },
 );
 
 FiletypeDefaults.displayName = "FiletypeDefaults";
