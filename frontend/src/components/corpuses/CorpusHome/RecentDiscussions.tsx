@@ -37,35 +37,6 @@ const FeedContainer = styled.div`
   }
 `;
 
-const FeedHeader = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 0;
-  margin-bottom: 0.75rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color ${CORPUS_TRANSITIONS.fast};
-
-  &:hover {
-    .view-all {
-      color: ${CORPUS_COLORS.teal[600]};
-    }
-
-    .view-all svg {
-      transform: translateX(3px);
-    }
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: 4px;
-    border-radius: ${CORPUS_RADII.sm};
-  }
-`;
-
 const FeedLabel = styled.span`
   display: flex;
   align-items: center;
@@ -100,9 +71,50 @@ const ViewAll = styled.span`
   }
 `;
 
+const FeedHeader = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color ${CORPUS_TRANSITIONS.fast};
+
+  &:hover {
+    ${ViewAll} {
+      color: ${CORPUS_COLORS.teal[600]};
+    }
+
+    ${ViewAll} svg {
+      transform: translateX(3px);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${CORPUS_COLORS.teal[500]};
+    outline-offset: 4px;
+    border-radius: ${CORPUS_RADII.sm};
+  }
+`;
+
 const ThreadList = styled.div`
   display: flex;
   flex-direction: column;
+`;
+
+const ThreadTitle = styled.span`
+  font-family: ${CORPUS_FONTS.sans};
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: ${CORPUS_COLORS.slate[800]};
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
 
 const ThreadItem = styled.button`
@@ -122,7 +134,7 @@ const ThreadItem = styled.button`
   }
 
   &:hover {
-    .thread-title {
+    ${ThreadTitle} {
       color: ${CORPUS_COLORS.teal[700]};
     }
   }
@@ -132,18 +144,6 @@ const ThreadItem = styled.button`
     outline-offset: 2px;
     border-radius: ${CORPUS_RADII.sm};
   }
-`;
-
-const ThreadTitle = styled.span`
-  font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: ${CORPUS_COLORS.slate[800]};
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 `;
 
 const ThreadMeta = styled.div`
@@ -236,7 +236,7 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
           <MessageSquare />
           Discussions
         </FeedLabel>
-        <ViewAll className="view-all">
+        <ViewAll>
           View all
           <ArrowRight />
         </ViewAll>
@@ -250,9 +250,7 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
               onClick={() => onThreadClick?.(thread.id)}
               data-testid={`${testId}-thread-${thread.id}`}
             >
-              <ThreadTitle className="thread-title">
-                {thread.title || "Untitled Discussion"}
-              </ThreadTitle>
+              <ThreadTitle>{thread.title || "Untitled Discussion"}</ThreadTitle>
               <ThreadMeta>
                 <MetaItem>
                   <User />

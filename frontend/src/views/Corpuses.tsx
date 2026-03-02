@@ -149,6 +149,8 @@ import { CorpusDocumentRelationships } from "../components/corpuses/CorpusDocume
 import {
   CORPUS_COLORS,
   CORPUS_RADII,
+  CORPUS_SHADOWS,
+  CORPUS_TRANSITIONS,
   mediaQuery as corpusMediaQuery,
 } from "../components/corpuses/styles/corpusDesignTokens";
 
@@ -922,13 +924,13 @@ const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
       : CORPUS_COLORS.slate[600]};
   border: ${(props) =>
     props.$isZero ? `1px dashed ${CORPUS_COLORS.slate[300]}` : "none"};
-  transition: all 0.2s ease;
+  transition: all ${CORPUS_TRANSITIONS.normal};
   box-shadow: ${(props) =>
     props.$isZero
       ? "none"
       : props.isActive
       ? `0 2px 4px rgba(15, 118, 110, 0.25)`
-      : "0 1px 2px rgba(0, 0, 0, 0.05)"};
+      : CORPUS_SHADOWS.sm};
 `;
 
 const NavigationItem = styled(motion.button)<{
@@ -1359,7 +1361,7 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   font-size: 0.6rem;
   font-weight: 700;
   z-index: 2;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  box-shadow: ${CORPUS_SHADOWS.sm};
 `;
 
 // Split view container for extracts tab

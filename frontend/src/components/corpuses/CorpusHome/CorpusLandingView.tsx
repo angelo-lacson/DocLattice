@@ -70,7 +70,11 @@ export interface CorpusLandingViewProps {
   onThreadClick?: (threadId: string) => void;
   /** Callback when mode toggle is clicked (only shown when present) */
   onModeToggle?: () => void;
-  /** Whether the power user mode is active (changes toggle label) */
+  /**
+   * Whether the view is rendered from the power-user sidebar's home tab
+   * (true) vs the clean/focus landing mode (false). Controls the toggle
+   * button label ("Focus Mode" vs "Power User").
+   */
   isPowerUserMode?: boolean;
   /** Test ID for the component */
   testId?: string;
@@ -285,7 +289,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                       ? "Switch to focused view"
                       : "Switch to full corpus management view"
                   }
-                  data-testid={`${testId}-mode-toggle`}
+                  data-testid="power-user-toggle"
                 >
                   <Zap aria-hidden="true" />
                   {isPowerUserMode ? "Focus Mode" : "Power User"}
