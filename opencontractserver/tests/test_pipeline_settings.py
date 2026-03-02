@@ -784,9 +784,9 @@ class EnabledComponentsMutationTestCase(TestCase):
                     f"Component {comp['className']} should still be enabled",
                 )
 
-    def test_toggle_rejects_duplicates_in_enabled_list(self):
+    def test_toggle_accepts_duplicates_in_enabled_list(self):
         """Verify that duplicate class names in enabled_components are accepted
-        gracefully (the mutation stores what's given; dedup is a frontend concern)."""
+        gracefully (the mutation deduplicates before storing)."""
         from opencontractserver.pipeline.registry import get_registry
 
         registry = get_registry()
@@ -817,6 +817,13 @@ class EnabledComponentsMutationTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         data = result["data"]["updatePipelineSettings"]
         self.assertTrue(data["ok"], data.get("message"))
+
+        stored = data["pipelineSettings"]["enabledComponents"]
+        self.assertEqual(
+            stored,
+            [path],
+            "Backend should deduplicate enabled_components before storing",
+        )
 
 
 class PipelineSettingsSecretsTestCase(TestCase):

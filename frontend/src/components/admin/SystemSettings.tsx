@@ -282,7 +282,7 @@ export const SystemSettings: React.FC = () => {
         ].map((c) => c.className);
 
         if (allPaths.length === 0) {
-          toast.warning("Components are still loading. Please wait.");
+          toast.warning("No components available.");
           return;
         }
 
