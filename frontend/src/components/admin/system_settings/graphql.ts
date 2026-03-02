@@ -101,25 +101,6 @@ export const GET_PIPELINE_COMPONENTS = gql`
         }
         enabled
       }
-      postProcessors {
-        name
-        title
-        description
-        className
-        supportedFileTypes
-        settingsSchema {
-          name
-          settingType
-          pythonType
-          required
-          description
-          default
-          envVar
-          hasValue
-          currentValue
-        }
-        enabled
-      }
     }
   }
 `;
