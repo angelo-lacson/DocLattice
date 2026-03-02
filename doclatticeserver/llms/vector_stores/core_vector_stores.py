@@ -611,6 +611,9 @@ class CoreAnnotationVectorStore:
         Falls back to vector-only search when no query text is available,
         or to text-only search when no embedding can be generated.
 
+        This is a sync-only method (calls ``async_to_sync`` internally).
+        From async contexts, use ``async_hybrid_search()`` instead.
+
         Args:
             query: The search query containing text/embedding and filters
 
