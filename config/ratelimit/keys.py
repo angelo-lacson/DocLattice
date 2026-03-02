@@ -52,11 +52,15 @@ def _mask_ipv6(ip_str: str) -> str:
 def _pick_xff_ip(xff_value: str) -> str:
     """Select the trusted IP from an ``X-Forwarded-For`` header value.
 
-    When ``RATELIMIT_PROXIES_COUNT`` is set to *N* (> 0), the entry at
-    position ``-N`` from the right is returned (the IP appended by the
-    Nth trusted proxy).  The default is ``1`` (rightmost entry = single
-    proxy).  Set to ``0`` only for backwards compatibility when the app
-    receives connections directly without a reverse proxy.
+    Returns the entry at position ``-RATELIMIT_PROXIES_COUNT`` from the
+    right (the IP appended by the Nth trusted proxy).  The default is
+    ``1`` (rightmost entry = single proxy such as Traefik/nginx).
+
+    .. important::
+        Callers **must** check ``RATELIMIT_PROXIES_COUNT > 0`` before
+        calling this function.  When ``proxies_count == 0`` the
+        ``X-Forwarded-For`` header should be ignored entirely (app
+        receives connections directly and XFF is client-controlled).
 
     Args:
         xff_value: The raw ``X-Forwarded-For`` header value (comma-separated IPs).
@@ -71,24 +75,20 @@ def _pick_xff_ip(xff_value: str) -> str:
         return UNKNOWN_IP
 
     proxies_count = getattr(settings, "RATELIMIT_PROXIES_COUNT", 1)
-    if proxies_count > 0:
-        # Trust the Nth entry from the right (1 = rightmost = single proxy)
-        index = -proxies_count
-        try:
-            return parts[index]
-        except IndexError:
-            # Fewer entries than proxies_count — use leftmost as safe fallback
-            logger.warning(
-                "RATELIMIT_PROXIES_COUNT=%d exceeds number of X-Forwarded-For "
-                "entries (%d). Using leftmost entry as fallback. Check your "
-                "proxy chain configuration.",
-                proxies_count,
-                len(parts),
-            )
-            return parts[0]
-
-    # proxies_count == 0: leftmost (client-set, backwards-compatible)
-    return parts[0]
+    # Trust the Nth entry from the right (1 = rightmost = single proxy)
+    index = -proxies_count
+    try:
+        return parts[index]
+    except IndexError:
+        # Fewer entries than proxies_count — use leftmost as safe fallback
+        logger.warning(
+            "RATELIMIT_PROXIES_COUNT=%d exceeds number of X-Forwarded-For "
+            "entries (%d). Using leftmost entry as fallback. Check your "
+            "proxy chain configuration.",
+            proxies_count,
+            len(parts),
+        )
+        return parts[0]
 
 
 def get_client_ip_from_http(request) -> str:

@@ -26,6 +26,9 @@ from config.ratelimit.rates import RateLimits
 logger = logging.getLogger(__name__)
 
 # Rate limits for admin login endpoints — read from shared RateLimits singleton.
+# NOTE: These are captured at import time since @view_ratelimit evaluates the
+# rate parameter at decoration time.  Calling RateLimits.reload() will NOT
+# affect admin login rates; a server restart is required.
 ADMIN_LOGIN_RATE = getattr(RateLimits, "AUTH_LOGIN", "5/m")
 ADMIN_LOGIN_PAGE_RATE = getattr(RateLimits, "ADMIN_LOGIN_PAGE", "20/m")
 

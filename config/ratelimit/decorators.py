@@ -253,6 +253,14 @@ async def check_ws_rate_limit(
     connection — the caller decides whether to close or just skip the
     operation.
 
+    .. note::
+        The rate limit budget is **shared** across all concurrent
+        WebSocket connections for the same user (or IP for anonymous
+        users).  For example, if a user has two browser tabs each with
+        an open WebSocket, operations from both tabs count against the
+        same counter.  This is intentional — it prevents circumventing
+        limits by opening multiple connections.
+
     Args:
         consumer: A Django Channels ``AsyncWebsocketConsumer`` instance.
         operation_type: ``RateLimits`` attribute name (e.g. ``"AI_QUERY"``).
@@ -417,6 +425,12 @@ def view_ratelimit(
             grp = group or func.__name__
             if callable(key):
                 limit_key = key(grp, request)
+            elif key is not None:
+                raise ValueError(
+                    f"view_ratelimit 'key' must be a callable or None, "
+                    f"got {type(key).__name__}: {key!r}. Use a callable "
+                    f"(group, request) -> str for custom keying."
+                )
             else:
                 limit_key = f"ip:{get_client_ip_from_http(request)}"
 

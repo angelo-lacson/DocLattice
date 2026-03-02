@@ -77,10 +77,8 @@ class _RateLimits:
             setattr(self, key, overrides.get(key, default_value))
 
     def __getattr__(self, name: str) -> str:
-        if name.startswith("_"):
-            raise AttributeError(name)
-        if name in self._defaults:
-            return self._defaults[name]
+        # After __init__ -> reload(), all _defaults keys exist as instance
+        # attributes, so __getattr__ is only reached for truly unknown names.
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{name}'"
         )
