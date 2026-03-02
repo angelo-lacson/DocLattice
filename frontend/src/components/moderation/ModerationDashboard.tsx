@@ -497,7 +497,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                     <Table.Row key={node.id}>
                       <Table.Cell>
                         <span
-                          className="action-badge"
+                          data-testid="action-badge"
                           style={{
                             display: "inline-block",
                             padding: "0.2em 0.5em",

@@ -125,7 +125,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
   size = "md",
   style,
 }) => (
-  <LoadingContainer style={style}>
+  <LoadingContainer role="status" style={style}>
     <Spinner size={size} />
     <LoadingText>{message}</LoadingText>
   </LoadingContainer>
