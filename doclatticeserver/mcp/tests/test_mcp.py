@@ -321,7 +321,7 @@ class MCPRateLimiterTest(TestCase):
         scope = {"headers": [], "client": ("10.0.0.1", 8080)}
 
         # First request should be allowed
-        is_limited, _ = asyncio.get_event_loop().run_until_complete(
+        is_limited, _ = asyncio.new_event_loop().run_until_complete(
             check_mcp_rate_limit(scope)
         )
         self.assertFalse(is_limited)
@@ -340,9 +340,9 @@ class MCPRateLimiterTest(TestCase):
             mock_time.time.return_value = 1000000.0
             # Exhaust the limit (MCP_GLOBAL = 100/m)
             for _ in range(100):
-                asyncio.get_event_loop().run_until_complete(check_mcp_rate_limit(scope))
+                asyncio.new_event_loop().run_until_complete(check_mcp_rate_limit(scope))
             # Next should be blocked
-            is_limited, _ = asyncio.get_event_loop().run_until_complete(
+            is_limited, _ = asyncio.new_event_loop().run_until_complete(
                 check_mcp_rate_limit(scope)
             )
             self.assertTrue(is_limited)
@@ -362,16 +362,16 @@ class MCPRateLimiterTest(TestCase):
             mock_time.time.return_value = 1000000.0
             # Exhaust client-a
             for _ in range(100):
-                asyncio.get_event_loop().run_until_complete(
+                asyncio.new_event_loop().run_until_complete(
                     check_mcp_rate_limit(scope_a)
                 )
-            is_limited_a, _ = asyncio.get_event_loop().run_until_complete(
+            is_limited_a, _ = asyncio.new_event_loop().run_until_complete(
                 check_mcp_rate_limit(scope_a)
             )
             self.assertTrue(is_limited_a)
 
             # client-b should still be fine
-            is_limited_b, _ = asyncio.get_event_loop().run_until_complete(
+            is_limited_b, _ = asyncio.new_event_loop().run_until_complete(
                 check_mcp_rate_limit(scope_b)
             )
             self.assertFalse(is_limited_b)

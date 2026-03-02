@@ -10,7 +10,12 @@ Usage:
     from config.ratelimit.decorators import graphql_ratelimit, check_ws_rate_limit
 """
 
-from config.ratelimit.engine import ais_rate_limited, is_rate_limited, parse_rate
+from config.ratelimit.engine import (
+    UNKNOWN_IP,
+    ais_rate_limited,
+    is_rate_limited,
+    parse_rate,
+)
 from config.ratelimit.keys import (
     get_client_ip_from_http,
     get_client_ip_from_scope,
@@ -23,6 +28,7 @@ from config.ratelimit.rates import (
 )
 
 __all__ = [
+    "UNKNOWN_IP",
     "ais_rate_limited",
     "get_client_ip_from_http",
     "get_client_ip_from_scope",

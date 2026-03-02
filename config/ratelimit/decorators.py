@@ -13,6 +13,7 @@ from __future__ import annotations
 import functools
 import json
 import logging
+import time
 from typing import Any, Callable
 
 from django.conf import settings
@@ -25,6 +26,7 @@ from config.ratelimit.engine import (
     parse_rate,
 )
 from config.ratelimit.keys import (
+    _is_authenticated,
     get_client_ip_from_http,
     get_client_ip_from_scope,
     get_rate_limit_key,
@@ -70,6 +72,66 @@ def _format_exceeded_message(rate: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _graphql_rate_limit_check(
+    func_name: str,
+    root: Any,
+    info: Any,
+    rate: str,
+    key: str | Callable | None,
+    block: bool,
+    group: str | None,
+    **kwargs: Any,
+) -> bool | None:
+    """Shared pre-check logic for GraphQL rate limiting decorators.
+
+    Returns ``None`` if the request should be let through without rate limiting
+    (missing context, disabled, anonymous with user-only key).
+    Returns ``True`` if rate limited and ``block=True`` (raises RateLimitExceeded).
+    Returns ``False`` if the request passed the rate limit check.
+    """
+    if not info or not hasattr(info, "context"):
+        if not getattr(settings, "TESTING", False):
+            logger.warning(
+                "Rate limiting skipped for %s: "
+                "info object is None or missing context.",
+                func_name,
+            )
+        return None
+
+    request = info.context
+
+    if not request or not hasattr(request, "META"):
+        if not getattr(settings, "TESTING", False):
+            logger.warning(
+                "Rate limiting skipped for %s: "
+                "context is not a Django request object (type=%s).",
+                func_name,
+                type(request).__name__,
+            )
+        return None
+
+    if getattr(settings, "RATELIMIT_DISABLE", False):
+        return None
+
+    limit_key = _resolve_graphql_key(key, root, info, request, block, **kwargs)
+    if limit_key is None:
+        return None
+
+    grp = group or func_name
+    is_limited = is_rate_limited(grp, limit_key, rate)
+
+    if is_limited and block:
+        logger.warning(
+            "Rate limit exceeded for %s — Key: %s, Rate: %s",
+            func_name,
+            limit_key,
+            rate,
+        )
+        raise RateLimitExceeded(_format_exceeded_message(rate))
+
+    return is_limited
+
+
 def graphql_ratelimit(
     key: str | Callable | None = None,
     rate: str = "10/m",
@@ -89,49 +151,9 @@ def graphql_ratelimit(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(root, info, *args, **kwargs):
-            if not info or not hasattr(info, "context"):
-                if not getattr(settings, "TESTING", False):
-                    logger.warning(
-                        "Rate limiting skipped for %s: "
-                        "info object is None or missing context.",
-                        func.__name__,
-                    )
-                return func(root, info, *args, **kwargs)
-
-            request = info.context
-
-            if not request or not hasattr(request, "META"):
-                if not getattr(settings, "TESTING", False):
-                    logger.warning(
-                        "Rate limiting skipped for %s: "
-                        "context is not a Django request object (type=%s).",
-                        func.__name__,
-                        type(request).__name__,
-                    )
-                return func(root, info, *args, **kwargs)
-
-            if getattr(settings, "RATELIMIT_DISABLE", False):
-                return func(root, info, *args, **kwargs)
-
-            # Resolve the rate limit key
-            limit_key = _resolve_graphql_key(key, root, info, request, block, **kwargs)
-            if limit_key is None:
-                # user key strategy with anonymous user and block=False
-                return func(root, info, *args, **kwargs)
-
-            grp = group or func.__name__
-
-            is_limited = is_rate_limited(grp, limit_key, rate)
-
-            if is_limited and block:
-                logger.warning(
-                    "Rate limit exceeded for %s — Key: %s, Rate: %s",
-                    func.__name__,
-                    limit_key,
-                    rate,
-                )
-                raise RateLimitExceeded(_format_exceeded_message(rate))
-
+            _graphql_rate_limit_check(
+                func.__name__, root, info, rate, key, block, group, **kwargs
+            )
             return func(root, info, *args, **kwargs)
 
         return wrapper
@@ -157,49 +179,10 @@ def graphql_ratelimit_dynamic(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(root, info, *args, **kwargs):
-            if not info or not hasattr(info, "context"):
-                if not getattr(settings, "TESTING", False):
-                    logger.warning(
-                        "Dynamic rate limiting skipped for %s: "
-                        "info object is None or missing context.",
-                        func.__name__,
-                    )
-                return func(root, info, *args, **kwargs)
-
-            request = info.context
-
-            if not request or not hasattr(request, "META"):
-                if not getattr(settings, "TESTING", False):
-                    logger.warning(
-                        "Dynamic rate limiting skipped for %s: "
-                        "context is not a Django request object (type=%s).",
-                        func.__name__,
-                        type(request).__name__,
-                    )
-                return func(root, info, *args, **kwargs)
-
-            if getattr(settings, "RATELIMIT_DISABLE", False):
-                return func(root, info, *args, **kwargs)
-
-            rate = get_rate(root, info)
-
-            limit_key = _resolve_graphql_key(key, root, info, request, block, **kwargs)
-            if limit_key is None:
-                return func(root, info, *args, **kwargs)
-
-            grp = group or func.__name__
-
-            is_limited = is_rate_limited(grp, limit_key, rate)
-
-            if is_limited and block:
-                logger.warning(
-                    "Rate limit exceeded for %s — Key: %s, Rate: %s",
-                    func.__name__,
-                    limit_key,
-                    rate,
-                )
-                raise RateLimitExceeded(_format_exceeded_message(rate))
-
+            resolved_rate = get_rate(root, info)
+            _graphql_rate_limit_check(
+                func.__name__, root, info, resolved_rate, key, block, group, **kwargs
+            )
             return func(root, info, *args, **kwargs)
 
         return wrapper
@@ -222,7 +205,7 @@ def _resolve_graphql_key(key, root, info, request, block: bool, **kwargs) -> str
         return get_rate_limit_key(ip=ip, strategy="ip")
 
     if key == "user":
-        if not request.user or not getattr(request.user, "is_authenticated", False):
+        if not request.user or not _is_authenticated(request.user):
             if block:
                 raise GraphQLError("Authentication required for this operation")
             return None
@@ -276,8 +259,10 @@ async def check_ws_rate_limit(
             count, period_seconds = parse_rate(rate)
             period_key = rate.split("/")[1]
             period_name = PERIOD_NAMES.get(period_key, "period")
+            # Remaining time in the current window, not the full period
+            retry_after = period_seconds - (int(time.time()) % period_seconds)
         except (ValueError, IndexError):
-            count, period_seconds, period_name = "?", 60, "period"
+            count, period_name, retry_after = "?", "period", 60
 
         await consumer.send(
             text_data=json.dumps(
@@ -287,7 +272,7 @@ async def check_ws_rate_limit(
                         f"Rate limit exceeded. "
                         f"Max {count} requests per {period_name}."
                     ),
-                    "retry_after": period_seconds,
+                    "retry_after": retry_after,
                 }
             )
         )

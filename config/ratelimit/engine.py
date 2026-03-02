@@ -22,6 +22,8 @@ PERIOD_MAP = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
 PERIOD_NAMES = {"s": "second", "m": "minute", "h": "hour", "d": "day"}
 
+UNKNOWN_IP = "unknown"
+
 
 def parse_rate(rate: str) -> tuple[int, int]:
     """Parse a rate string like ``'10/m'`` into ``(count, seconds)``.
@@ -86,20 +88,25 @@ def is_rate_limited(group: str, key: str, rate: str, increment: bool = True) -> 
         current = cache.get(cache_key, 0)
         return current >= count
 
-    # Atomic-ish: add() only sets if the key doesn't exist (with TTL),
-    # then incr() atomically increments.  +1 on TTL avoids edge-case
-    # expiry between add and incr.
+    # Incr-first pattern: attempt atomic increment, fall back to set() if
+    # the key doesn't exist yet.  This avoids the race between add() and
+    # incr() where concurrent requests could undercount.
     try:
-        cache.add(cache_key, 0, period + 1)
-        current = cache.incr(cache_key)
+        try:
+            current = cache.incr(cache_key)
+        except ValueError:
+            # Key doesn't exist yet — initialise with count=1 and TTL.
+            # +1 on TTL avoids edge-case expiry at window boundary.
+            cache.set(cache_key, 1, period + 1)
+            current = 1
     except Exception:
-        # Cache unavailable — honour fail-open/fail-closed setting
-        logger.warning(
-            "Rate limit cache operation failed for %s. " "RATELIMIT_FAIL_OPEN=%s",
-            cache_key,
-            getattr(settings, "RATELIMIT_FAIL_OPEN", False),
-        )
+        # Cache unavailable — honour fail-open/fail-closed setting.
         fail_open = getattr(settings, "RATELIMIT_FAIL_OPEN", False)
+        logger.warning(
+            "Rate limit cache operation failed for %s. RATELIMIT_FAIL_OPEN=%s",
+            cache_key,
+            fail_open,
+        )
         return not fail_open
 
     return current > count

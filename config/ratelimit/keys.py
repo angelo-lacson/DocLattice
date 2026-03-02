@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from config.ratelimit.engine import UNKNOWN_IP
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,11 +21,56 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _pick_xff_ip(xff_value: str) -> str:
+    """Select the trusted IP from an ``X-Forwarded-For`` header value.
+
+    When ``RATELIMIT_PROXIES_COUNT`` is set to *N* (> 0), the entry at
+    position ``-N`` from the right is returned (the IP appended by the
+    Nth trusted proxy).  When ``0`` (default), the leftmost entry is used
+    for backwards compatibility.
+
+    Args:
+        xff_value: The raw ``X-Forwarded-For`` header value (comma-separated IPs).
+
+    Returns:
+        The selected IP string, or :data:`UNKNOWN_IP` if the header is empty.
+    """
+    from django.conf import settings
+
+    parts = [p.strip() for p in xff_value.split(",") if p.strip()]
+    if not parts:
+        return UNKNOWN_IP
+
+    proxies_count = getattr(settings, "RATELIMIT_PROXIES_COUNT", 0)
+    if proxies_count > 0:
+        # Trust the Nth entry from the right (1 = rightmost = single proxy)
+        index = -proxies_count
+        try:
+            return parts[index]
+        except IndexError:
+            # Fewer entries than proxies_count — use leftmost as safe fallback
+            return parts[0]
+
+    # Default: leftmost (client-set, backwards-compatible)
+    return parts[0]
+
+
 def get_client_ip_from_http(request) -> str:
     """Extract client IP from a Django ``HttpRequest``.
 
     Checks ``HTTP_X_FORWARDED_FOR`` first (for reverse-proxy setups like
     Traefik/nginx), then falls back to ``REMOTE_ADDR``.
+
+    .. note::
+        By default the **rightmost** entry in ``X-Forwarded-For`` is used,
+        which is the IP appended by the nearest trusted proxy.  If
+        ``RATELIMIT_PROXIES_COUNT`` is set to *N*, the entry at position
+        ``-N`` from the right is used (e.g. ``1`` = rightmost = single
+        proxy, ``2`` = second from right = two proxies).  When set to
+        ``0`` (the default), the leftmost (first) entry is used for
+        backwards compatibility, but this is **client-spoofable** unless
+        the application sits behind exactly one trusted proxy that
+        overwrites the header.
 
     Args:
         request: A Django ``HttpRequest`` (or any object with a ``META`` dict).
@@ -33,16 +80,16 @@ def get_client_ip_from_http(request) -> str:
     """
     x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "unknown")
+        return _pick_xff_ip(x_forwarded_for)
+    return request.META.get("REMOTE_ADDR", UNKNOWN_IP)
 
 
 def get_client_ip_from_scope(scope: dict[str, Any]) -> str:
     """Extract client IP from an ASGI scope dict.
 
-    Used by both WebSocket consumers (Django Channels) and the MCP ASGI
-    application.  Checks ``x-forwarded-for`` and ``x-real-ip`` headers
-    before falling back to the direct ``client`` tuple.
+    Uses the same ``RATELIMIT_PROXIES_COUNT`` setting as
+    :func:`get_client_ip_from_http` to select the trusted entry from
+    ``X-Forwarded-For``.
 
     Args:
         scope: ASGI scope dictionary.
@@ -55,7 +102,7 @@ def get_client_ip_from_scope(scope: dict[str, Any]) -> str:
     # X-Forwarded-For (bytes in ASGI)
     xff = headers.get(b"x-forwarded-for")
     if xff:
-        return xff.decode().split(",")[0].strip()
+        return _pick_xff_ip(xff.decode())
 
     # X-Real-IP (common in nginx setups)
     x_real_ip = headers.get(b"x-real-ip")
@@ -67,7 +114,7 @@ def get_client_ip_from_scope(scope: dict[str, Any]) -> str:
     if client and len(client) >= 1:
         return client[0]
 
-    return "unknown"
+    return UNKNOWN_IP
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +125,7 @@ def get_client_ip_from_scope(scope: dict[str, Any]) -> str:
 def get_rate_limit_key(
     *,
     user: Any = None,
-    ip: str = "unknown",
+    ip: str = UNKNOWN_IP,
     strategy: str = "user_or_ip",
 ) -> str:
     """Build a rate limit cache key from user and/or IP.
