@@ -458,6 +458,7 @@ class Command(BaseCommand):
         - preferred_thumbnailers from PREFERRED_THUMBNAILERS (if defined)
         - parser_kwargs from PARSER_KWARGS
         - default_embedder from DEFAULT_EMBEDDER
+        - enabled_components from ENABLED_COMPONENTS (defaults to [] = all enabled)
         """
         from opencontractserver.documents.models import PipelineSettings
 
@@ -472,6 +473,7 @@ class Command(BaseCommand):
             ("preferred_thumbnailers", "PREFERRED_THUMBNAILERS", {}),
             ("parser_kwargs", "PARSER_KWARGS", {}),
             ("default_embedder", "DEFAULT_EMBEDDER", ""),
+            ("enabled_components", "ENABLED_COMPONENTS", []),
         ]
 
         changes = []

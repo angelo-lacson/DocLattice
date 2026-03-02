@@ -14,7 +14,7 @@ services:
     env_file:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
-    command: python manage.py migrate --noinput
+    command: /bin/bash -c "python manage.py migrate --noinput && python manage.py migrate_pipeline_settings --sync-preferences && python manage.py migrate_pipeline_settings"
     profiles:
       - migrate
 
