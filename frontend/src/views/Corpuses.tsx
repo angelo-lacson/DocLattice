@@ -912,17 +912,22 @@ const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
     props.$isZero
       ? "transparent"
       : props.isActive
-      ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
-      : "#e2e8f0"};
+      ? CORPUS_COLORS.teal[700]
+      : CORPUS_COLORS.slate[200]};
   color: ${(props) =>
-    props.$isZero ? "#94a3b8" : props.isActive ? "white" : "#64748b"};
-  border: ${(props) => (props.$isZero ? "1px dashed #cbd5e1" : "none")};
+    props.$isZero
+      ? CORPUS_COLORS.slate[400]
+      : props.isActive
+      ? CORPUS_COLORS.white
+      : CORPUS_COLORS.slate[600]};
+  border: ${(props) =>
+    props.$isZero ? `1px dashed ${CORPUS_COLORS.slate[300]}` : "none"};
   transition: all 0.2s ease;
   box-shadow: ${(props) =>
     props.$isZero
       ? "none"
       : props.isActive
-      ? "0 2px 4px rgba(74, 144, 226, 0.3)"
+      ? `0 2px 4px rgba(15, 118, 110, 0.25)`
       : "0 1px 2px rgba(0, 0, 0, 0.05)"};
 `;
 
@@ -1346,9 +1351,9 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   padding: 0 4px;
   background: ${(props) =>
     props.$isZero
-      ? "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)"
-      : "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"};
-  color: white;
+      ? CORPUS_COLORS.slate[400]
+      : CORPUS_COLORS.teal[700]};
+  color: ${CORPUS_COLORS.white};
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1356,7 +1361,7 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   font-size: 0.6rem;
   font-weight: 700;
   z-index: 2;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 `;
 
 // Split view container for extracts tab
