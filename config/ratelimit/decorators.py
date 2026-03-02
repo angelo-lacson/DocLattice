@@ -333,6 +333,8 @@ MCP_TOOL_RATE_MAP: dict[str, str] = {
 async def check_mcp_rate_limit(
     scope: dict[str, Any],
     tool_name: str | None = None,
+    *,
+    skip_global: bool = False,
 ) -> tuple[bool, str]:
     """Check MCP rate limits: global cap + optional per-tool limit.
 
@@ -341,6 +343,10 @@ async def check_mcp_rate_limit(
     Args:
         scope: ASGI scope dictionary (used for IP extraction).
         tool_name: Optional MCP tool name for per-tool rate limiting.
+        skip_global: If ``True``, skip the global cap check.  Used by
+            tool handlers that are called after the ASGI app has already
+            performed the global check, avoiding double-incrementing the
+            global counter.
 
     Returns:
         Tuple of ``(is_limited, error_message)``.  When ``is_limited`` is
@@ -349,10 +355,12 @@ async def check_mcp_rate_limit(
     ip = get_client_ip_from_scope(scope)
     limit_key = f"ip:{ip}"
 
-    # 1. Global cap
-    global_rate = getattr(RateLimits, "MCP_GLOBAL", "100/m")
-    if await ais_rate_limited("mcp:global", limit_key, global_rate):
-        return True, "Rate limit exceeded. Please wait before making more requests."
+    # 1. Global cap (skipped when called from tool handlers that already
+    #    passed through the ASGI-level global check).
+    if not skip_global:
+        global_rate = getattr(RateLimits, "MCP_GLOBAL", "100/m")
+        if await ais_rate_limited("mcp:global", limit_key, global_rate):
+            return True, "Rate limit exceeded. Please wait before making more requests."
 
     # 2. Per-tool limit
     if tool_name and tool_name in MCP_TOOL_RATE_MAP:

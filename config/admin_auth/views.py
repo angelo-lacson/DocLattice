@@ -21,7 +21,6 @@ from django.views import View
 from django.views.decorators.csrf import csrf_protect
 
 from config.ratelimit.decorators import view_ratelimit
-from config.ratelimit.engine import UNKNOWN_IP
 from config.ratelimit.rates import RateLimits
 
 logger = logging.getLogger(__name__)
@@ -29,19 +28,6 @@ logger = logging.getLogger(__name__)
 # Rate limits for admin login endpoints — read from shared RateLimits singleton.
 ADMIN_LOGIN_RATE = getattr(RateLimits, "AUTH_LOGIN", "5/m")
 ADMIN_LOGIN_PAGE_RATE = getattr(RateLimits, "ADMIN_LOGIN_PAGE", "20/m")
-
-
-def _ratelimit_ip_key(group: str, request) -> str:
-    """
-    Extract client IP for rate-limit keying.
-
-    Falls back to REMOTE_ADDR when the X-Forwarded-For header is absent
-    (e.g. in tests or direct connections without a reverse proxy).
-    """
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", UNKNOWN_IP)
 
 
 def _get_login_url():
@@ -165,9 +151,7 @@ class Auth0AdminLoginView(View):
     template_name = "admin/auth0_login.html"
 
     @method_decorator(csrf_protect)
-    @method_decorator(
-        view_ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_PAGE_RATE, block=False)
-    )
+    @method_decorator(view_ratelimit(rate=ADMIN_LOGIN_PAGE_RATE, block=False))
     def get(self, request):
         """Display the appropriate login form."""
         if getattr(request, "limited", False):
@@ -206,9 +190,7 @@ class Auth0AdminLoginView(View):
         return render(request, self.template_name, context)
 
     @method_decorator(csrf_protect)
-    @method_decorator(
-        view_ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_RATE, block=False)
-    )
+    @method_decorator(view_ratelimit(rate=ADMIN_LOGIN_RATE, block=False))
     def post(self, request):
         """Handle token-based login via POST or password authentication."""
         if getattr(request, "limited", False):

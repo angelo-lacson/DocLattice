@@ -23,6 +23,14 @@ class _RateLimits:
     All protocols share these categories.  WebSocket and MCP operations
     map to existing categories wherever possible (e.g. agent queries use
     ``AI_QUERY``, MCP search uses ``READ_HEAVY``).
+
+    .. note::
+        The singleton instance (``RateLimits``) is created at **import time**,
+        so ``RATE_LIMIT_OVERRIDES`` from Django settings are baked in once.
+        If you need to change rates at runtime (e.g. via admin UI), call
+        ``RateLimits.reload()`` after updating settings.  In tests, use
+        ``override_settings`` *and* reconstruct the instance or call
+        ``reload()`` to pick up changes.
     """
 
     _defaults: dict[str, str] = {
@@ -56,6 +64,14 @@ class _RateLimits:
     }
 
     def __init__(self) -> None:
+        self.reload()
+
+    def reload(self) -> None:
+        """Re-read ``RATE_LIMIT_OVERRIDES`` from Django settings.
+
+        Useful after ``override_settings`` in tests or after updating
+        settings at runtime via an admin UI.
+        """
         overrides = getattr(settings, "RATE_LIMIT_OVERRIDES", {})
         for key, default_value in self._defaults.items():
             setattr(self, key, overrides.get(key, default_value))
@@ -123,11 +139,21 @@ def get_user_tier_rate(operation_type: str) -> Callable:
 
     Returns:
         A function ``(root, info) -> str`` returning a rate string.
+
+    Raises:
+        AttributeError: If ``operation_type`` is not a valid rate category.
     """
+    # Validate at decoration time so typos are caught immediately rather
+    # than silently falling back to READ_MEDIUM at runtime.
+    if operation_type not in _RateLimits._defaults:
+        raise AttributeError(
+            f"Unknown rate limit category: {operation_type!r}. "
+            f"Valid categories: {', '.join(sorted(_RateLimits._defaults))}"
+        )
 
     def get_rate(root: Any, info: Any) -> str:
         user = info.context.user
-        base_rate = getattr(RateLimits, operation_type, RateLimits.READ_MEDIUM)
+        base_rate = getattr(RateLimits, operation_type)
         return get_tier_adjusted_rate(user, base_rate)
 
     return get_rate

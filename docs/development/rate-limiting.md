@@ -113,7 +113,9 @@ from config.ratelimit.decorators import check_ws_rate_limit
 
 class MyConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        if await check_ws_rate_limit(self, "WS_CONNECT"):
+        # send_message=False because the connection hasn't been accepted yet
+        # and sending a message would fail
+        if await check_ws_rate_limit(self, "WS_CONNECT", send_message=False):
             await self.close(code=4029)
             return
         await self.accept()

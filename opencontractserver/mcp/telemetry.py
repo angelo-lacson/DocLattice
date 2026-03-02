@@ -309,13 +309,33 @@ async def arecord_mcp_request(
 
 
 def get_client_ip_from_scope(scope: dict[str, Any]) -> str | None:
-    """Extract client IP address from an ASGI scope.
+    """Extract client IP address from an ASGI scope for telemetry purposes.
 
-    Delegates to :func:`config.ratelimit.keys.get_client_ip_from_scope`.
-    This wrapper preserves the original return type (``None`` instead of
-    ``"unknown"``) for backward compatibility with existing callers.
+    Unlike the rate-limiting IP extractor (which picks the rightmost trusted
+    proxy entry for anti-spoofing), this function returns the **leftmost**
+    ``X-Forwarded-For`` entry -- the claimed original client IP.  For
+    telemetry (hashed, privacy-preserving) this is the right choice: we want
+    to identify the true origin, even if it could be spoofed.
+
+    Returns ``None`` when no IP can be determined.
     """
-    from config.ratelimit.keys import get_client_ip_from_scope as _shared_impl
+    headers = dict(scope.get("headers", []))
 
-    result = _shared_impl(scope)
-    return None if result == "unknown" else result
+    # X-Forwarded-For: pick leftmost (original client claim)
+    xff = headers.get(b"x-forwarded-for")
+    if xff:
+        parts = [p.strip() for p in xff.decode().split(",") if p.strip()]
+        if parts:
+            return parts[0]
+
+    # X-Real-IP
+    x_real_ip = headers.get(b"x-real-ip")
+    if x_real_ip:
+        return x_real_ip.decode().strip()
+
+    # Direct client connection
+    client = scope.get("client")
+    if client and len(client) >= 1:
+        return client[0]
+
+    return None

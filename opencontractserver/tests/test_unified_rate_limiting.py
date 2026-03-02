@@ -855,7 +855,12 @@ class McpServerRateLimitIntegrationTestCase(TestCase):
 
     @patch("config.ratelimit.engine.time")
     def test_call_tool_handler_rate_limited(self, mock_time):
-        """Test that call_tool_handler raises MCPRateLimitError when rate limited."""
+        """Test that call_tool_handler raises MCPRateLimitError when per-tool limit exceeded.
+
+        Note: call_tool_handler uses skip_global=True because the ASGI app
+        already performs the global check before dispatching.  So we exhaust
+        the per-tool limit (search_corpus → READ_HEAVY = 10/m) instead.
+        """
         from config.ratelimit.decorators import MCPRateLimitError
         from opencontractserver.mcp.server import _mcp_asgi_scope, call_tool_handler
 
@@ -865,13 +870,17 @@ class McpServerRateLimitIntegrationTestCase(TestCase):
         # Set the ASGI scope ContextVar
         token = _mcp_asgi_scope.set(scope)
         try:
-            # Exhaust the global rate limit (MCP_GLOBAL = 100/m)
-            for _ in range(100):
-                asyncio.run(check_mcp_rate_limit(scope))
+            # Exhaust per-tool limit for search_corpus (READ_HEAVY = 10/m)
+            for _ in range(10):
+                asyncio.run(check_mcp_rate_limit(scope, tool_name="search_corpus"))
 
-            # Next tool call should be rate limited
+            # Next tool call should be rate limited (per-tool)
             with self.assertRaises(MCPRateLimitError) as ctx:
-                asyncio.run(call_tool_handler("list_public_corpuses", {}))
+                asyncio.run(
+                    call_tool_handler(
+                        "search_corpus", {"corpus_slug": "x", "query": "test"}
+                    )
+                )
             self.assertIn("Rate limit", str(ctx.exception))
         finally:
             _mcp_asgi_scope.reset(token)
@@ -881,8 +890,8 @@ class McpServerRateLimitIntegrationTestCase(TestCase):
         from config.ratelimit.decorators import MCPRateLimitError
         from opencontractserver.mcp.server import _mcp_asgi_scope, call_tool_handler
 
-        # Ensure ContextVar is empty (default={})
-        token = _mcp_asgi_scope.set({})
+        # Ensure ContextVar is None (no ASGI scope available)
+        token = _mcp_asgi_scope.set(None)
         try:
             # Should not raise rate limit errors — but may raise
             # other errors from the tool itself (e.g. DB access).

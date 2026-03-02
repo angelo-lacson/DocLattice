@@ -63,7 +63,10 @@ logger = logging.getLogger(__name__)
 
 # ContextVar to thread the ASGI scope into tool handlers for per-tool rate limiting.
 # Set at the ASGI app level before dispatching to the MCP session manager.
-_mcp_asgi_scope: ContextVar[dict[str, Any]] = ContextVar("mcp_asgi_scope", default={})
+# Default is None (not an empty dict) to avoid sharing a mutable default across contexts.
+_mcp_asgi_scope: ContextVar[dict[str, Any] | None] = ContextVar(
+    "mcp_asgi_scope", default=None
+)
 
 # Map tool names to implementations - at module level for testability
 TOOL_HANDLERS: dict[str, Callable[..., Any]] = {
@@ -192,8 +195,13 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
     # context (e.g. stdio transport, tests), rate limiting is intentionally
     # skipped since there is no network-level identity to key on.
     scope = _mcp_asgi_scope.get()
-    if scope:
-        is_limited, error_msg = await check_mcp_rate_limit(scope, tool_name=name)
+    if scope is not None:
+        # skip_global=True because the ASGI app already ran the global check
+        # before dispatching to the MCP handler.  Only per-tool limits are
+        # checked here to avoid double-incrementing the global counter.
+        is_limited, error_msg = await check_mcp_rate_limit(
+            scope, tool_name=name, skip_global=True
+        )
         if is_limited:
             await arecord_mcp_tool_call(
                 name, success=False, error_type="RateLimitExceeded"
@@ -706,9 +714,12 @@ def create_scoped_mcp_server(corpus_slug: str) -> Server:
         """
         # Per-tool rate limit — intentionally skipped outside ASGI context
         # (see call_tool_handler docstring for rationale).
+        # skip_global=True because the ASGI app already ran the global check.
         scope = _mcp_asgi_scope.get()
-        if scope:
-            is_limited, error_msg = await check_mcp_rate_limit(scope, tool_name=name)
+        if scope is not None:
+            is_limited, error_msg = await check_mcp_rate_limit(
+                scope, tool_name=name, skip_global=True
+            )
             if is_limited:
                 await arecord_mcp_tool_call(
                     name, success=False, error_type="RateLimitExceeded"
