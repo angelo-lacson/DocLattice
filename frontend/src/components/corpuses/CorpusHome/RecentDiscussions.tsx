@@ -37,35 +37,6 @@ const FeedContainer = styled.div`
   }
 `;
 
-const FeedHeader = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 0;
-  margin-bottom: 0.75rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: color ${CORPUS_TRANSITIONS.fast};
-
-  &:hover {
-    .view-all {
-      color: ${CORPUS_COLORS.teal[600]};
-    }
-
-    .view-all svg {
-      transform: translateX(3px);
-    }
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: 4px;
-    border-radius: ${CORPUS_RADII.sm};
-  }
-`;
-
 const FeedLabel = styled.span`
   display: flex;
   align-items: center;
@@ -100,35 +71,38 @@ const ViewAll = styled.span`
   }
 `;
 
-const ThreadList = styled.div`
+const FeedHeader = styled.button`
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  overflow: hidden;
-  background: ${CORPUS_COLORS.slate[200]};
-`;
-
-const ThreadItem = styled.button`
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  padding: 0.875rem 1rem;
-  background: ${CORPUS_COLORS.white};
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 0.75rem;
+  background: none;
   border: none;
   cursor: pointer;
-  text-align: left;
-  transition: background ${CORPUS_TRANSITIONS.fast};
+  transition: color ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    background: ${CORPUS_COLORS.slate[50]};
+    ${ViewAll} {
+      color: ${CORPUS_COLORS.teal[600]};
+    }
+
+    ${ViewAll} svg {
+      transform: translateX(3px);
+    }
   }
 
   &:focus-visible {
     outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: -2px;
+    outline-offset: 4px;
+    border-radius: ${CORPUS_RADII.sm};
   }
+`;
+
+const ThreadList = styled.div`
+  display: flex;
+  flex-direction: column;
 `;
 
 const ThreadTitle = styled.span`
@@ -141,6 +115,35 @@ const ThreadTitle = styled.span`
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+`;
+
+const ThreadItem = styled.button`
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.75rem 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
+  cursor: pointer;
+  text-align: left;
+  transition: color ${CORPUS_TRANSITIONS.fast};
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    ${ThreadTitle} {
+      color: ${CORPUS_COLORS.teal[700]};
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${CORPUS_COLORS.teal[500]};
+    outline-offset: 2px;
+    border-radius: ${CORPUS_RADII.sm};
+  }
 `;
 
 const ThreadMeta = styled.div`
@@ -164,12 +167,7 @@ const MetaItem = styled.span`
 `;
 
 const EmptyState = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem 1rem;
-  border: 1px dashed ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
+  padding: 0.75rem 0;
   font-family: ${CORPUS_FONTS.sans};
   font-size: 0.875rem;
   color: ${CORPUS_COLORS.slate[400]};
@@ -238,7 +236,7 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
           <MessageSquare />
           Discussions
         </FeedLabel>
-        <ViewAll className="view-all">
+        <ViewAll>
           View all
           <ArrowRight />
         </ViewAll>
