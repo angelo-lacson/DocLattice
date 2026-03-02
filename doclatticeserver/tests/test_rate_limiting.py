@@ -39,6 +39,11 @@ class RateLimitConfigurationTestCase(TestCase):
             "EXPORT": "5/h",
             "IMPORT": "10/h",
             "ADMIN_OPERATION": "100/m",
+            # WebSocket-specific
+            "WS_CONNECT": "10/m",
+            "WS_HEARTBEAT": "120/m",
+            # MCP global cap
+            "MCP_GLOBAL": "100/m",
         }
 
         for key, expected_value in expected_limits.items():
@@ -57,15 +62,15 @@ class RateLimitConfigurationTestCase(TestCase):
             # Need to reimport to pick up new settings
             from importlib import reload
 
-            import config.graphql.ratelimits as ratelimits_module
+            import config.ratelimit.rates as rates_module
 
-            reload(ratelimits_module)
+            reload(rates_module)
 
             # Check that overrides are applied
-            self.assertEqual(ratelimits_module.RateLimits.AUTH_LOGIN, "10/m")
-            self.assertEqual(ratelimits_module.RateLimits.READ_HEAVY, "20/m")
+            self.assertEqual(rates_module.RateLimits.AUTH_LOGIN, "10/m")
+            self.assertEqual(rates_module.RateLimits.READ_HEAVY, "20/m")
             # Other limits should remain default
-            self.assertEqual(ratelimits_module.RateLimits.WRITE_MEDIUM, "10/m")
+            self.assertEqual(rates_module.RateLimits.WRITE_MEDIUM, "10/m")
 
     def test_user_tier_rate_calculation(self):
         """Test that user tier rates are calculated correctly."""

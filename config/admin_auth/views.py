@@ -19,16 +19,15 @@ from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
-from django_ratelimit.decorators import ratelimit
+
+from config.ratelimit.decorators import view_ratelimit
+from config.ratelimit.rates import RateLimits
 
 logger = logging.getLogger(__name__)
 
-# Rate limits for admin login endpoints.
-# Can be overridden via RATELIMIT_AUTH_LOGIN and RATELIMIT_ADMIN_LOGIN_PAGE
-# environment variables through the RATE_LIMIT_OVERRIDES mechanism.
-_overrides = getattr(settings, "RATE_LIMIT_OVERRIDES", {})
-ADMIN_LOGIN_RATE = _overrides.get("AUTH_LOGIN", "5/m")
-ADMIN_LOGIN_PAGE_RATE = _overrides.get("ADMIN_LOGIN_PAGE", "20/m")
+# Rate limits for admin login endpoints — read from shared RateLimits singleton.
+ADMIN_LOGIN_RATE = getattr(RateLimits, "AUTH_LOGIN", "5/m")
+ADMIN_LOGIN_PAGE_RATE = getattr(RateLimits, "ADMIN_LOGIN_PAGE", "20/m")
 
 
 def _ratelimit_ip_key(group: str, request) -> str:
@@ -166,7 +165,7 @@ class Auth0AdminLoginView(View):
 
     @method_decorator(csrf_protect)
     @method_decorator(
-        ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_PAGE_RATE, block=False)
+        view_ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_PAGE_RATE, block=False)
     )
     def get(self, request):
         """Display the appropriate login form."""
@@ -207,7 +206,7 @@ class Auth0AdminLoginView(View):
 
     @method_decorator(csrf_protect)
     @method_decorator(
-        ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_RATE, block=False)
+        view_ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_RATE, block=False)
     )
     def post(self, request):
         """Handle token-based login via POST or password authentication."""
