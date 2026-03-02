@@ -88,17 +88,17 @@ def is_rate_limited(group: str, key: str, rate: str, increment: bool = True) -> 
         current = cache.get(cache_key, 0)
         return current >= count
 
-    # Incr-first pattern: attempt atomic increment, fall back to set() if
-    # the key doesn't exist yet.  This avoids the race between add() and
-    # incr() where concurrent requests could undercount.
+    # Atomic add-then-incr pattern: cache.add() is atomic and only succeeds
+    # for one caller when the key doesn't exist.  Subsequent callers see
+    # add() return False and use incr() which is also atomic.  This avoids
+    # the TOCTOU race where concurrent requests could both initialise the
+    # key and lose increments.
     try:
-        try:
-            current = cache.incr(cache_key)
-        except ValueError:
-            # Key doesn't exist yet — initialise with count=1 and TTL.
-            # +1 on TTL avoids edge-case expiry at window boundary.
-            cache.set(cache_key, 1, period + 1)
+        added = cache.add(cache_key, 1, period + 1)
+        if added:
             current = 1
+        else:
+            current = cache.incr(cache_key)
     except Exception:
         # Cache unavailable — honour fail-open/fail-closed setting.
         fail_open = getattr(settings, "RATELIMIT_FAIL_OPEN", False)

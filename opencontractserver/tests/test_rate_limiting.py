@@ -55,22 +55,24 @@ class RateLimitConfigurationTestCase(TestCase):
             )
 
     def test_rate_limit_overrides(self):
-        """Test that rate limits can be overridden via settings."""
+        """Test that rate limits can be overridden via settings.
+
+        Constructs a fresh _RateLimits instance under override_settings
+        instead of reloading the module, which avoids the stale-singleton
+        problem where other modules hold references to the old instance.
+        """
+        from config.ratelimit.rates import _RateLimits
+
         with self.settings(
             RATE_LIMIT_OVERRIDES={"AUTH_LOGIN": "10/m", "READ_HEAVY": "20/m"}
         ):
-            # Need to reimport to pick up new settings
-            from importlib import reload
-
-            import config.ratelimit.rates as rates_module
-
-            reload(rates_module)
+            overridden = _RateLimits()
 
             # Check that overrides are applied
-            self.assertEqual(rates_module.RateLimits.AUTH_LOGIN, "10/m")
-            self.assertEqual(rates_module.RateLimits.READ_HEAVY, "20/m")
+            self.assertEqual(overridden.AUTH_LOGIN, "10/m")
+            self.assertEqual(overridden.READ_HEAVY, "20/m")
             # Other limits should remain default
-            self.assertEqual(rates_module.RateLimits.WRITE_MEDIUM, "10/m")
+            self.assertEqual(overridden.WRITE_MEDIUM, "10/m")
 
     def test_user_tier_rate_calculation(self):
         """Test that user tier rates are calculated correctly."""

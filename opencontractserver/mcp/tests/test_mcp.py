@@ -321,9 +321,7 @@ class MCPRateLimiterTest(TestCase):
         scope = {"headers": [], "client": ("10.0.0.1", 8080)}
 
         # First request should be allowed
-        is_limited, _ = asyncio.new_event_loop().run_until_complete(
-            check_mcp_rate_limit(scope)
-        )
+        is_limited, _ = asyncio.run(check_mcp_rate_limit(scope))
         self.assertFalse(is_limited)
 
     @override_settings(RATELIMIT_DISABLE=False)
@@ -340,11 +338,9 @@ class MCPRateLimiterTest(TestCase):
             mock_time.time.return_value = 1000000.0
             # Exhaust the limit (MCP_GLOBAL = 100/m)
             for _ in range(100):
-                asyncio.new_event_loop().run_until_complete(check_mcp_rate_limit(scope))
+                asyncio.run(check_mcp_rate_limit(scope))
             # Next should be blocked
-            is_limited, _ = asyncio.new_event_loop().run_until_complete(
-                check_mcp_rate_limit(scope)
-            )
+            is_limited, _ = asyncio.run(check_mcp_rate_limit(scope))
             self.assertTrue(is_limited)
 
     @override_settings(RATELIMIT_DISABLE=False)
@@ -362,18 +358,12 @@ class MCPRateLimiterTest(TestCase):
             mock_time.time.return_value = 1000000.0
             # Exhaust client-a
             for _ in range(100):
-                asyncio.new_event_loop().run_until_complete(
-                    check_mcp_rate_limit(scope_a)
-                )
-            is_limited_a, _ = asyncio.new_event_loop().run_until_complete(
-                check_mcp_rate_limit(scope_a)
-            )
+                asyncio.run(check_mcp_rate_limit(scope_a))
+            is_limited_a, _ = asyncio.run(check_mcp_rate_limit(scope_a))
             self.assertTrue(is_limited_a)
 
             # client-b should still be fine
-            is_limited_b, _ = asyncio.new_event_loop().run_until_complete(
-                check_mcp_rate_limit(scope_b)
-            )
+            is_limited_b, _ = asyncio.run(check_mcp_rate_limit(scope_b))
             self.assertFalse(is_limited_b)
 
 
@@ -2034,8 +2024,9 @@ class MCPTelemetryTest(TestCase):
         }
 
         ip = get_client_ip_from_scope(scope)
-        # Should return first IP (original client)
-        self.assertEqual(ip, "203.0.113.195")
+        # Default RATELIMIT_PROXIES_COUNT=1 returns the rightmost
+        # (proxy-appended) entry for spoofing resistance
+        self.assertEqual(ip, "150.172.238.178")
 
     def test_get_client_ip_from_scope_x_real_ip(self):
         """Test extracting client IP from X-Real-IP header."""

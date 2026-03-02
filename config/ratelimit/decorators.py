@@ -37,12 +37,23 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-#  GraphQL error class (kept here as it's protocol-specific)
+#  Protocol-specific error classes
 # ---------------------------------------------------------------------------
 
 
 class RateLimitExceeded(GraphQLError):
     """Custom exception for rate limit exceeded errors in GraphQL."""
+
+    def __init__(self, message: str = "Rate limit exceeded. Please try again later."):
+        super().__init__(message)
+
+
+class MCPRateLimitError(Exception):
+    """Rate limit exceeded for an MCP tool call.
+
+    A named exception (instead of generic ``ValueError``) so callers and
+    tests can catch rate-limit rejections specifically.
+    """
 
     def __init__(self, message: str = "Rate limit exceeded. Please try again later."):
         super().__init__(message)
@@ -128,6 +139,12 @@ def _graphql_rate_limit_check(
             rate,
         )
         raise RateLimitExceeded(_format_exceeded_message(rate))
+
+    # Expose throttle state on the request so resolvers using block=False
+    # can detect when the limit was exceeded (analogous to view_ratelimit
+    # setting request.limited).
+    if hasattr(request, "META"):
+        request.limited = is_limited
 
     return is_limited
 
@@ -227,17 +244,24 @@ async def check_ws_rate_limit(
     consumer: Any,
     operation_type: str,
     group_suffix: str | None = None,
+    send_message: bool = True,
 ) -> bool:
     """Check rate limit for a WebSocket consumer.
 
     Sends a ``RATE_LIMITED`` error message to the client if the limit is
-    exceeded but does **not** close the connection (per design decision).
+    exceeded (unless ``send_message=False``).  Does **not** close the
+    connection — the caller decides whether to close or just skip the
+    operation.
 
     Args:
         consumer: A Django Channels ``AsyncWebsocketConsumer`` instance.
         operation_type: ``RateLimits`` attribute name (e.g. ``"AI_QUERY"``).
         group_suffix: Optional override for the cache group suffix.
                       Defaults to ``operation_type``.
+        send_message: Whether to send a JSON error frame to the client.
+                      Set to ``False`` for connection-phase checks where
+                      the connection will be closed immediately and the
+                      client won't see the message.
 
     Returns:
         ``True`` if rate limited (caller should abort processing),
@@ -255,27 +279,28 @@ async def check_ws_rate_limit(
     is_limited = await ais_rate_limited(grp, limit_key, rate)
 
     if is_limited:
-        try:
-            count, period_seconds = parse_rate(rate)
-            period_key = rate.split("/")[1]
-            period_name = PERIOD_NAMES.get(period_key, "period")
-            # Remaining time in the current window, not the full period
-            retry_after = period_seconds - (int(time.time()) % period_seconds)
-        except (ValueError, IndexError):
-            count, period_name, retry_after = "?", "period", 60
+        if send_message:
+            try:
+                count, period_seconds = parse_rate(rate)
+                period_key = rate.split("/")[1]
+                period_name = PERIOD_NAMES.get(period_key, "period")
+                # Remaining seconds in the current window (not the full period)
+                retry_after = period_seconds - (int(time.time()) % period_seconds)
+            except (ValueError, IndexError):
+                count, period_name, retry_after = "?", "period", 60
 
-        await consumer.send(
-            text_data=json.dumps(
-                {
-                    "type": "RATE_LIMITED",
-                    "error": (
-                        f"Rate limit exceeded. "
-                        f"Max {count} requests per {period_name}."
-                    ),
-                    "retry_after": retry_after,
-                }
+            await consumer.send(
+                text_data=json.dumps(
+                    {
+                        "type": "RATE_LIMITED",
+                        "error": (
+                            f"Rate limit exceeded. "
+                            f"Max {count} requests per {period_name}."
+                        ),
+                        "retry_after": retry_after,
+                    }
+                )
             )
-        )
         logger.warning(
             "WS rate limit exceeded: %s for key=%s, rate=%s",
             operation_type,

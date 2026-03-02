@@ -144,9 +144,10 @@ class GetClientIpFromHttpTestCase(TestCase):
     """Test IP extraction from Django HttpRequest."""
 
     def test_forwarded_for(self):
+        # Default RATELIMIT_PROXIES_COUNT=1 uses the rightmost (proxy-appended) entry
         request = MagicMock()
         request.META = {"HTTP_X_FORWARDED_FOR": "1.2.3.4, 5.6.7.8"}
-        self.assertEqual(get_client_ip_from_http(request), "1.2.3.4")
+        self.assertEqual(get_client_ip_from_http(request), "5.6.7.8")
 
     def test_remote_addr(self):
         request = MagicMock()
@@ -163,8 +164,9 @@ class GetClientIpFromScopeTestCase(TestCase):
     """Test IP extraction from ASGI scope."""
 
     def test_forwarded_for(self):
+        # Default RATELIMIT_PROXIES_COUNT=1 uses the rightmost (proxy-appended) entry
         scope = {"headers": [(b"x-forwarded-for", b"1.2.3.4, 5.6.7.8")]}
-        self.assertEqual(get_client_ip_from_scope(scope), "1.2.3.4")
+        self.assertEqual(get_client_ip_from_scope(scope), "5.6.7.8")
 
     def test_real_ip(self):
         scope = {"headers": [(b"x-real-ip", b"10.0.0.1")]}
@@ -356,9 +358,7 @@ class CheckWsRateLimitTestCase(TestCase):
     def test_allows_under_limit(self, mock_time):
         mock_time.time.return_value = 1000000.0
         consumer = self._make_consumer()
-        result = asyncio.new_event_loop().run_until_complete(
-            check_ws_rate_limit(consumer, "WS_CONNECT")
-        )
+        result = asyncio.run(check_ws_rate_limit(consumer, "WS_CONNECT"))
         self.assertFalse(result)
         consumer.send.assert_not_called()
 
@@ -369,14 +369,10 @@ class CheckWsRateLimitTestCase(TestCase):
 
         # Exhaust the limit (WS_CONNECT = 10/m, anonymous = 1x)
         for _ in range(10):
-            asyncio.new_event_loop().run_until_complete(
-                check_ws_rate_limit(consumer, "WS_CONNECT")
-            )
+            asyncio.run(check_ws_rate_limit(consumer, "WS_CONNECT"))
 
         # Next request should be limited
-        result = asyncio.new_event_loop().run_until_complete(
-            check_ws_rate_limit(consumer, "WS_CONNECT")
-        )
+        result = asyncio.run(check_ws_rate_limit(consumer, "WS_CONNECT"))
         self.assertTrue(result)
 
         # Should have sent a RATE_LIMITED message
@@ -406,19 +402,13 @@ class CheckWsRateLimitTestCase(TestCase):
 
         # Exhaust user1's limit (WS_CONNECT = 10/m, auth = 2x = 20/m)
         for _ in range(20):
-            asyncio.new_event_loop().run_until_complete(
-                check_ws_rate_limit(consumer1, "WS_CONNECT")
-            )
+            asyncio.run(check_ws_rate_limit(consumer1, "WS_CONNECT"))
         # user1 is now limited
-        result1 = asyncio.new_event_loop().run_until_complete(
-            check_ws_rate_limit(consumer1, "WS_CONNECT")
-        )
+        result1 = asyncio.run(check_ws_rate_limit(consumer1, "WS_CONNECT"))
         self.assertTrue(result1)
 
         # user2 should still be fine
-        result2 = asyncio.new_event_loop().run_until_complete(
-            check_ws_rate_limit(consumer2, "WS_CONNECT")
-        )
+        result2 = asyncio.run(check_ws_rate_limit(consumer2, "WS_CONNECT"))
         self.assertFalse(result2)
 
 
@@ -447,15 +437,11 @@ class CheckMcpRateLimitTestCase(TestCase):
 
         # Exhaust global limit (MCP_GLOBAL = 100/m)
         for _ in range(100):
-            result = asyncio.new_event_loop().run_until_complete(
-                check_mcp_rate_limit(scope)
-            )
+            result = asyncio.run(check_mcp_rate_limit(scope))
             self.assertFalse(result[0])
 
         # Next should be limited
-        is_limited, error_msg = asyncio.new_event_loop().run_until_complete(
-            check_mcp_rate_limit(scope)
-        )
+        is_limited, error_msg = asyncio.run(check_mcp_rate_limit(scope))
         self.assertTrue(is_limited)
         self.assertIn("Rate limit exceeded", error_msg)
 
@@ -466,12 +452,10 @@ class CheckMcpRateLimitTestCase(TestCase):
 
         # search_corpus maps to READ_HEAVY (10/m)
         for _ in range(10):
-            asyncio.new_event_loop().run_until_complete(
-                check_mcp_rate_limit(scope, tool_name="search_corpus")
-            )
+            asyncio.run(check_mcp_rate_limit(scope, tool_name="search_corpus"))
 
         # Next search_corpus should be per-tool limited
-        is_limited, error_msg = asyncio.new_event_loop().run_until_complete(
+        is_limited, error_msg = asyncio.run(
             check_mcp_rate_limit(scope, tool_name="search_corpus")
         )
         self.assertTrue(is_limited)
@@ -485,16 +469,12 @@ class CheckMcpRateLimitTestCase(TestCase):
 
         # Exhaust ip1
         for _ in range(100):
-            asyncio.new_event_loop().run_until_complete(check_mcp_rate_limit(scope1))
-        is_limited1, _ = asyncio.new_event_loop().run_until_complete(
-            check_mcp_rate_limit(scope1)
-        )
+            asyncio.run(check_mcp_rate_limit(scope1))
+        is_limited1, _ = asyncio.run(check_mcp_rate_limit(scope1))
         self.assertTrue(is_limited1)
 
         # ip2 should be fine
-        is_limited2, _ = asyncio.new_event_loop().run_until_complete(
-            check_mcp_rate_limit(scope2)
-        )
+        is_limited2, _ = asyncio.run(check_mcp_rate_limit(scope2))
         self.assertFalse(is_limited2)
 
     def test_tool_rate_map_covers_all_tools(self):
@@ -620,8 +600,8 @@ class FailOpenTestCase(TestCase):
     @patch("config.ratelimit.engine.cache")
     def test_fail_open_allows_on_cache_error(self, mock_cache, mock_time):
         mock_time.time.return_value = 1000000.0
+        mock_cache.add.side_effect = Exception("Redis down")
         mock_cache.incr.side_effect = Exception("Redis down")
-        mock_cache.set.side_effect = Exception("Redis down")
         # fail_open=True → should NOT be rate limited
         self.assertFalse(is_rate_limited("test", "key", "1/m"))
 
@@ -630,8 +610,8 @@ class FailOpenTestCase(TestCase):
     @patch("config.ratelimit.engine.cache")
     def test_fail_closed_blocks_on_cache_error(self, mock_cache, mock_time):
         mock_time.time.return_value = 1000000.0
+        mock_cache.add.side_effect = Exception("Redis down")
         mock_cache.incr.side_effect = Exception("Redis down")
-        mock_cache.set.side_effect = Exception("Redis down")
         # fail_open=False → should be rate limited
         self.assertTrue(is_rate_limited("test", "key", "1/m"))
 
@@ -875,7 +855,8 @@ class McpServerRateLimitIntegrationTestCase(TestCase):
 
     @patch("config.ratelimit.engine.time")
     def test_call_tool_handler_rate_limited(self, mock_time):
-        """Test that call_tool_handler raises ValueError when rate limited."""
+        """Test that call_tool_handler raises MCPRateLimitError when rate limited."""
+        from config.ratelimit.decorators import MCPRateLimitError
         from opencontractserver.mcp.server import _mcp_asgi_scope, call_tool_handler
 
         mock_time.time.return_value = 1000000.0
@@ -886,19 +867,18 @@ class McpServerRateLimitIntegrationTestCase(TestCase):
         try:
             # Exhaust the global rate limit (MCP_GLOBAL = 100/m)
             for _ in range(100):
-                asyncio.new_event_loop().run_until_complete(check_mcp_rate_limit(scope))
+                asyncio.run(check_mcp_rate_limit(scope))
 
             # Next tool call should be rate limited
-            with self.assertRaises(ValueError) as ctx:
-                asyncio.new_event_loop().run_until_complete(
-                    call_tool_handler("list_public_corpuses", {})
-                )
+            with self.assertRaises(MCPRateLimitError) as ctx:
+                asyncio.run(call_tool_handler("list_public_corpuses", {}))
             self.assertIn("Rate limit", str(ctx.exception))
         finally:
-            _mcp_asgi_scope.set(token)
+            _mcp_asgi_scope.reset(token)
 
     def test_call_tool_handler_no_scope_skips_rate_limiting(self):
         """Test that call_tool_handler skips rate limiting when no ASGI scope."""
+        from config.ratelimit.decorators import MCPRateLimitError
         from opencontractserver.mcp.server import _mcp_asgi_scope, call_tool_handler
 
         # Ensure ContextVar is empty (default={})
@@ -906,19 +886,17 @@ class McpServerRateLimitIntegrationTestCase(TestCase):
         try:
             # Should not raise rate limit errors — but may raise
             # other errors from the tool itself (e.g. DB access).
-            # We just verify it doesn't raise ValueError about rate limits.
+            # We just verify it doesn't raise MCPRateLimitError.
             try:
-                asyncio.new_event_loop().run_until_complete(
-                    call_tool_handler("list_public_corpuses", {})
-                )
-            except ValueError as e:
-                self.assertNotIn("Rate limit", str(e))
+                asyncio.run(call_tool_handler("list_public_corpuses", {}))
+            except MCPRateLimitError:
+                self.fail("MCPRateLimitError raised when no ASGI scope is set")
             except Exception:
                 # Other exceptions (DB, etc.) are fine — we only care
                 # that rate limiting was skipped.
                 pass
         finally:
-            _mcp_asgi_scope.set(token)
+            _mcp_asgi_scope.reset(token)
 
 
 # =============================================================================

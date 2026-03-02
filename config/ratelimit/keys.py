@@ -26,8 +26,9 @@ def _pick_xff_ip(xff_value: str) -> str:
 
     When ``RATELIMIT_PROXIES_COUNT`` is set to *N* (> 0), the entry at
     position ``-N`` from the right is returned (the IP appended by the
-    Nth trusted proxy).  When ``0`` (default), the leftmost entry is used
-    for backwards compatibility.
+    Nth trusted proxy).  The default is ``1`` (rightmost entry = single
+    proxy).  Set to ``0`` only for backwards compatibility when the app
+    receives connections directly without a reverse proxy.
 
     Args:
         xff_value: The raw ``X-Forwarded-For`` header value (comma-separated IPs).
@@ -41,7 +42,7 @@ def _pick_xff_ip(xff_value: str) -> str:
     if not parts:
         return UNKNOWN_IP
 
-    proxies_count = getattr(settings, "RATELIMIT_PROXIES_COUNT", 0)
+    proxies_count = getattr(settings, "RATELIMIT_PROXIES_COUNT", 1)
     if proxies_count > 0:
         # Trust the Nth entry from the right (1 = rightmost = single proxy)
         index = -proxies_count
@@ -62,15 +63,13 @@ def get_client_ip_from_http(request) -> str:
     Traefik/nginx), then falls back to ``REMOTE_ADDR``.
 
     .. note::
-        By default the **rightmost** entry in ``X-Forwarded-For`` is used,
-        which is the IP appended by the nearest trusted proxy.  If
-        ``RATELIMIT_PROXIES_COUNT`` is set to *N*, the entry at position
-        ``-N`` from the right is used (e.g. ``1`` = rightmost = single
-        proxy, ``2`` = second from right = two proxies).  When set to
-        ``0`` (the default), the leftmost (first) entry is used for
-        backwards compatibility, but this is **client-spoofable** unless
-        the application sits behind exactly one trusted proxy that
-        overwrites the header.
+        ``RATELIMIT_PROXIES_COUNT`` controls which ``X-Forwarded-For``
+        entry is used.  The default is ``1`` (rightmost entry = single
+        proxy such as Traefik/nginx).  ``2`` = second from right (two
+        proxies, e.g. CDN + load balancer).  Set to ``0`` only as a
+        backwards-compatible escape hatch when the app has no reverse
+        proxy — that mode uses the **leftmost** entry which is
+        **client-spoofable**.
 
     Args:
         request: A Django ``HttpRequest`` (or any object with a ``META`` dict).
@@ -162,7 +161,12 @@ def get_rate_limit_key(
 
 
 def _is_authenticated(user: Any) -> bool:
-    """Check if a user object is authenticated, handling both property and method forms."""
+    """Check if a user object is authenticated, handling both property and method forms.
+
+    The callable guard exists because ``is_authenticated`` was a method
+    (``CallableBool``) prior to Django 1.10 and some third-party user
+    models or test mocks may still use the legacy callable form.
+    """
     is_auth = getattr(user, "is_authenticated", False)
     if callable(is_auth):
         return is_auth()
