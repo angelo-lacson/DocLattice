@@ -10,6 +10,7 @@ from django.db import models
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
 from doclatticeserver.annotations.models import Annotation
+from doclatticeserver.constants.search import DIM_TO_FIELD_MAP
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.shared.defaults import jsonfield_default_value
@@ -299,8 +300,6 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         """
         from pgvector.django import CosineDistance
 
-        from doclatticeserver.constants.search import DIM_TO_FIELD_MAP
-
         dimension = len(query_vector)
         field_name = DIM_TO_FIELD_MAP.get(dimension)
         if not field_name:
@@ -455,8 +454,6 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
         Inherits from VectorSearchViaEmbeddingMixin pattern.
         """
         from pgvector.django import CosineDistance
-
-        from doclatticeserver.constants.search import DIM_TO_FIELD_MAP
 
         dimension = len(query_vector)
         field_name = DIM_TO_FIELD_MAP.get(dimension)

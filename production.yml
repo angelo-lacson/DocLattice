@@ -43,10 +43,14 @@ services:
       - production_postgres_data_backups:/backups:z
     env_file:
       - ./.envs/.production/.postgres
+    # NOTE: For the initial HNSW index build (migration 0063), temporarily
+    # increase maintenance_work_mem to 2GB for faster index creation:
+    #   -c maintenance_work_mem=2GB
+    # Revert to 512MB after the migration completes.
     command: >
       postgres
       -c shared_buffers=1GB
-      -c maintenance_work_mem=2GB
+      -c maintenance_work_mem=512MB
       -c effective_cache_size=4GB
       -c work_mem=128MB
       -c max_parallel_maintenance_workers=4

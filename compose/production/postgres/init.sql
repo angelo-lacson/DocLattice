@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 DO $$
 BEGIN
   EXECUTE 'ALTER DATABASE ' || current_database() || ' SET hnsw.iterative_scan = ''relaxed_order''';
-  EXECUTE 'ALTER DATABASE ' || current_database() || ' SET hnsw.ef_search = 40';
+  EXECUTE 'ALTER DATABASE ' || current_database() || ' SET hnsw.ef_search = 64';
 EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'pgvector 0.8+ settings not available, skipping: %', SQLERRM;
 END $$;

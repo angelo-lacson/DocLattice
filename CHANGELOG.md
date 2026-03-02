@@ -74,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### Deployment: migration 0063 backfill may need a maintenance window for large deployments
+- Operators with >1M annotations should consider running the search_vector backfill (Phase 4 of migration 0063) during a maintenance window. The migration now emits `RAISE NOTICE` progress messages so operators can monitor backfill progress in PostgreSQL logs.
+- Production `maintenance_work_mem` reduced from `2GB` to `512MB`. The higher value is only needed during the initial HNSW index build; operators should temporarily increase it for that migration, then revert (`production.yml`).
+- `hnsw.ef_search` increased from `40` to `64` to match `ef_construction`, improving recall for legal document search (`compose/production/postgres/init.sql`, migration 0063).
+
 #### Annotation text search now uses PostgreSQL full-text search with English stemming
 - The annotation mention search (`resolve_search_annotations_for_mention`) and the semantic search resolver now use `SearchQuery` on a GIN-indexed `search_vector` column instead of `raw_text__icontains`. This means text queries now match English-stemmed forms (e.g., searching "contract" also matches "contracting" and "contracted") rather than requiring exact substring matches. This is a semantic behavior change for users accustomed to exact substring matching on `raw_text`. See `config/graphql/search_queries.py`.
 
