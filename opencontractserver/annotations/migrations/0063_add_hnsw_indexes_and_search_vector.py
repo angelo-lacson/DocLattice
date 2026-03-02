@@ -2,11 +2,15 @@
 Add HNSW indexes on Embedding vector columns and SearchVectorField on Annotation.
 
 This migration:
-1. Creates HNSW indexes on all 7 Embedding vector columns for O(log n) ANN search
+1. Creates HNSW indexes on Embedding vector columns (dims ≤ 2000) for O(log n) ANN search
 2. Adds a search_vector (tsvector) column to Annotation for full-text search
 3. Creates a GIN index on search_vector for fast full-text lookups
 4. Creates a database trigger to auto-populate search_vector on INSERT/UPDATE
 5. Backfills search_vector for existing annotations
+
+pgvector HNSW has a hard 2000-dimension limit, so only 384/768/1024/1536 get
+HNSW indexes. Higher dims (2048, 3072, 4096) fall back to sequential scan.
+A future optimization could use halfvec casting (limit 4000) with query changes.
 
 Uses SeparateDatabaseAndState so Django's migration state tracks the HnswIndex
 objects (matching model Meta) while the actual database operations use raw SQL
@@ -28,14 +32,12 @@ from opencontractserver.constants.search import (
 )
 
 # HNSW index definitions: (index_name, column_name)
+# Only dimensions ≤ 2000 — pgvector HNSW hard limit.
 HNSW_INDEXES = [
     ("emb_hnsw_384", "vector_384"),
     ("emb_hnsw_768", "vector_768"),
     ("emb_hnsw_1024", "vector_1024"),
     ("emb_hnsw_1536", "vector_1536"),
-    ("emb_hnsw_2048", "vector_2048"),
-    ("emb_hnsw_3072", "vector_3072"),
-    ("emb_hnsw_4096", "vector_4096"),
 ]
 
 
