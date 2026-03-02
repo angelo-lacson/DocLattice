@@ -103,31 +103,34 @@ const ViewAll = styled.span`
 const ThreadList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  overflow: hidden;
-  background: ${CORPUS_COLORS.slate[200]};
 `;
 
 const ThreadItem = styled.button`
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
-  padding: 0.875rem 1rem;
-  background: ${CORPUS_COLORS.white};
+  padding: 0.75rem 0;
+  background: transparent;
   border: none;
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
   cursor: pointer;
   text-align: left;
-  transition: background ${CORPUS_TRANSITIONS.fast};
+  transition: color ${CORPUS_TRANSITIONS.fast};
+
+  &:last-child {
+    border-bottom: none;
+  }
 
   &:hover {
-    background: ${CORPUS_COLORS.slate[50]};
+    .thread-title {
+      color: ${CORPUS_COLORS.teal[700]};
+    }
   }
 
   &:focus-visible {
     outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: -2px;
+    outline-offset: 2px;
+    border-radius: ${CORPUS_RADII.sm};
   }
 `;
 
@@ -164,12 +167,7 @@ const MetaItem = styled.span`
 `;
 
 const EmptyState = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem 1rem;
-  border: 1px dashed ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
+  padding: 0.75rem 0;
   font-family: ${CORPUS_FONTS.sans};
   font-size: 0.875rem;
   color: ${CORPUS_COLORS.slate[400]};
@@ -252,7 +250,7 @@ export const RecentDiscussions: React.FC<RecentDiscussionsProps> = ({
               onClick={() => onThreadClick?.(thread.id)}
               data-testid={`${testId}-thread-${thread.id}`}
             >
-              <ThreadTitle>{thread.title || "Untitled Discussion"}</ThreadTitle>
+              <ThreadTitle className="thread-title">{thread.title || "Untitled Discussion"}</ThreadTitle>
               <ThreadMeta>
                 <MetaItem>
                   <User />
