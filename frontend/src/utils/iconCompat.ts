@@ -1,11 +1,10 @@
 /**
  * Icon compatibility layer for Semantic UI → Lucide migration.
  *
- * Provides two resolution paths:
- * 1. Explicit KNOWN_ICONS map for the ~100 icons originally migrated from SUI.
- * 2. Dynamic fallback via the full lucide-react export (kebab-case → PascalCase
- *    conversion).  Since Badge.tsx already barrel-imports lucide-react, the
- *    full icon set is in the bundle regardless — this adds no extra cost.
+ * Provides an explicit KNOWN_ICONS map for the ~100 icons originally migrated
+ * from SUI.  For dynamic resolution of the full Lucide catalog (used by the
+ * icon picker and DynamicIcon), see `resolvePickerIcon.ts` in the icon-picker
+ * feature directory.
  */
 
 import type { LucideIcon } from "lucide-react";
@@ -112,9 +111,6 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-
-// Wildcard import for dynamic fallback — already bundled via Badge.tsx.
-import * as AllLucideIcons from "lucide-react";
 
 /**
  * Map of known Lucide icon kebab-case names to their component.
@@ -396,60 +392,16 @@ export const SEMANTIC_TO_LUCIDE: Record<string, string> = {
 /**
  * Normalize an icon name: lowercase, trim, collapse whitespace.
  */
-function normalize(name: string): string {
+export function normalize(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 /**
- * Convert a kebab-case Lucide icon name to its PascalCase export name.
- *
- * Examples:
- *  - "file-text"  → "FileText"
- *  - "bar-chart-2" → "BarChart2"
- *  - "x"          → "X"
- */
-function kebabToPascal(name: string): string {
-  return name
-    .split("-")
-    .map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1))
-    .join("");
-}
-
-/**
- * Check whether a value looks like a Lucide icon component.
- *
- * Lucide icons created via `createLucideIcon` use `React.forwardRef`,
- * which returns an object (`typeof` → "object") rather than a plain
- * function.  We check for a `render` property (forwardRef signature)
- * or fall back to a function check for future-proofing.
- */
-function isIconComponent(value: unknown): value is LucideIcon {
-  if (typeof value === "function") return true;
-  if (value && typeof value === "object" && "render" in value) return true;
-  return false;
-}
-
-/**
- * Look up a Lucide icon component by its kebab-case name.
- *
- * Checks the explicit KNOWN_ICONS map first (fast path), then falls
- * back to a dynamic lookup in the full lucide-react barrel export.
+ * Look up a Lucide icon component by its kebab-case name
+ * in the explicit KNOWN_ICONS map.
  */
 function lookupIcon(kebabName: string): LucideIcon | undefined {
-  // Fast path: explicitly mapped icons
-  const known = KNOWN_ICONS[kebabName];
-  if (known) return known;
-
-  // Dynamic fallback: try PascalCase conversion against full export
-  const pascal = kebabToPascal(kebabName);
-  const candidate = (AllLucideIcons as Record<string, unknown>)[pascal];
-  if (isIconComponent(candidate)) {
-    // Cache for future lookups
-    KNOWN_ICONS[kebabName] = candidate;
-    return candidate;
-  }
-
-  return undefined;
+  return KNOWN_ICONS[kebabName];
 }
 
 /**

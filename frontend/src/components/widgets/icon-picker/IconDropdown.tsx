@@ -3,8 +3,8 @@ import styled from "styled-components";
 import { ChevronDown } from "lucide-react";
 
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
-import { resolveIcon } from "../../../utils/iconCompat";
 import { IconPickerModal } from "./IconPickerModal";
+import { resolvePickerIcon } from "./resolvePickerIcon";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -43,7 +43,7 @@ export const IconDropdown: React.FC<IconDropdownProps> = ({
 
   const handleClose = useCallback(() => setOpen(false), []);
 
-  const Icon = value ? resolveIcon(value) : null;
+  const Icon = value ? resolvePickerIcon(value) : null;
 
   return (
     <>
@@ -82,7 +82,7 @@ const Trigger = styled.button`
   gap: 8px;
   padding: 8px 12px;
   min-width: 160px;
-  background: #fff;
+  background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   cursor: pointer;
