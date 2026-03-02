@@ -10,8 +10,17 @@ export const IconPickerModalInteractiveWrapper: React.FC<{
 
   return (
     <div>
-      <span data-testid="selected-value">{lastSelected}</span>
-      <button data-testid="reopen" onClick={() => setOpen(true)}>
+      <span
+        data-testid="selected-value"
+        style={{ position: "absolute", left: -9999 }}
+      >
+        {lastSelected}
+      </span>
+      <button
+        data-testid="reopen"
+        onClick={() => setOpen(true)}
+        style={{ position: "absolute", left: -9999 }}
+      >
         Open
       </button>
       <IconPickerModal
