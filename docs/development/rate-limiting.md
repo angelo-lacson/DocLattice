@@ -4,8 +4,10 @@
 
 OpenContracts implements multi-layer rate limiting to protect the application from abuse and ensure fair resource usage:
 
-1. **Edge Rate Limiting** - Via Traefik reverse proxy (or, if you are using a different router, use its rate limiting)
-2. **Application Rate Limiting** - Via django-ratelimit in GraphQL resolvers
+1. **Edge Rate Limiting** - Via Traefik reverse proxy (or your own reverse proxy's rate limiting)
+2. **Application Rate Limiting** - Via the unified `config.ratelimit` package, covering **all** protocols: GraphQL, WebSocket, MCP, and Django views
+
+All protocols share the same engine, rate categories, tier multipliers, and identity resolution. This ensures consistent behavior and a single place to configure limits.
 
 ## Architecture
 
@@ -19,44 +21,69 @@ Traefik provides the first line of defense with IP-based rate limiting:
 
 Configuration: `compose/production/traefik/traefik.yml`
 
-### Application Rate Limiting (Django)
+### Application Rate Limiting (`config.ratelimit`)
 
-Django-ratelimit provides granular control at the resolver level with user-aware rate limiting.
+The `config/ratelimit/` package provides a protocol-agnostic rate limiting engine with thin adapters for each protocol. It uses Django's cache framework (Redis in production) as its counter store.
 
-#### Rate Limit Tiers
+#### Package Structure
 
-Different operations have different rate limits based on their resource intensity:
+```
+config/ratelimit/
+├── __init__.py       # Public API re-exports
+├── engine.py         # Fixed-window counter engine (sync + async)
+├── keys.py           # Identity resolution: IP extraction + key building
+├── rates.py          # Rate categories, tier multipliers, RateLimits singleton
+└── decorators.py     # Protocol-specific adapters
+```
 
-| Category | Operation Type | Default Limit | Description |
-|----------|---------------|---------------|-------------|
-| **Authentication** | AUTH_LOGIN | 5/m | Login attempts |
-| | AUTH_REGISTER | 3/m | Registration attempts |
-| | AUTH_PASSWORD_RESET | 3/h | Password reset requests |
-| **Read Operations** | READ_LIGHT | 100/m | Single object fetches |
-| | READ_MEDIUM | 30/m | Filtered lists, searches |
-| | READ_HEAVY | 10/m | Complex aggregations |
-| **Write Operations** | WRITE_LIGHT | 30/m | Updates, deletes |
-| | WRITE_MEDIUM | 10/m | Creates with validation |
+**Layer responsibilities:**
+
+| Layer | File | Role |
+|-------|------|------|
+| Engine | `engine.py` | `is_rate_limited()` / `ais_rate_limited()` — fixed-window counters via Django cache |
+| Keys | `keys.py` | `get_client_ip_from_http()`, `get_client_ip_from_scope()`, `get_rate_limit_key()` |
+| Rates | `rates.py` | `RateLimits` singleton, `get_tier_adjusted_rate()`, `get_user_tier_rate()` |
+| Decorators | `decorators.py` | `graphql_ratelimit`, `check_ws_rate_limit`, `check_mcp_rate_limit`, `view_ratelimit` |
+
+### Rate Limit Categories
+
+All protocols share the same rate categories:
+
+| Category | Operation Type | Default Limit | Used By |
+|----------|---------------|---------------|---------|
+| **Authentication** | AUTH_LOGIN | 5/m | Admin login view |
+| | AUTH_REGISTER | 3/m | Registration |
+| | AUTH_PASSWORD_RESET | 3/h | Password reset |
+| **Read Operations** | READ_LIGHT | 100/m | GraphQL single-object queries, MCP `list_public_corpuses` |
+| | READ_MEDIUM | 30/m | GraphQL filtered lists, MCP `list_documents`/`list_annotations`/etc. |
+| | READ_HEAVY | 10/m | Complex aggregations, MCP `search_corpus` |
+| **Write Operations** | WRITE_LIGHT | 30/m | GraphQL updates/deletes, WS tool approvals |
+| | WRITE_MEDIUM | 10/m | GraphQL creates with validation |
 | | WRITE_HEAVY | 5/m | Bulk operations, file uploads |
 | **AI Operations** | AI_ANALYSIS | 5/m | AI analysis requests |
 | | AI_EXTRACT | 10/m | AI extraction requests |
-| | AI_QUERY | 20/m | AI query requests |
+| | AI_QUERY | 20/m | AI query requests, WS agent chat |
 | **Import/Export** | EXPORT | 5/h | Export operations |
 | | IMPORT | 10/h | Import operations |
 | **Admin** | ADMIN_OPERATION | 100/m | Admin operations |
+| **WebSocket** | WS_CONNECT | 10/m | Connection rate per user |
+| | WS_HEARTBEAT | 120/m | Heartbeat/ping messages |
+| **MCP** | MCP_GLOBAL | 100/m | Global cap across all MCP tools |
 
-#### User Tier Multipliers
+### User Tier Multipliers
 
 Rate limits are adjusted based on user type:
 
 - **Superusers**: 10x base limit
 - **Authenticated Users**: 2x base limit
 - **Anonymous Users**: 1x base limit
-- **Usage-Capped Users**: 0.5x base limit
+- **Usage-Capped Users**: 0.5x multiplier on top of their tier
 
-## Implementation
+## Protocol-Specific Behavior
 
-### Adding Rate Limiting to a Mutation
+### GraphQL
+
+GraphQL resolvers use decorators that raise `RateLimitExceeded` (a `GraphQLError` subclass) when limits are hit:
 
 ```python
 from config.graphql.ratelimits import graphql_ratelimit, RateLimits
@@ -65,235 +92,240 @@ class MyMutation(graphene.Mutation):
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
     def mutate(root, info, **kwargs):
-        # Your mutation logic
         pass
 ```
 
-### Adding Dynamic Rate Limiting
-
-For user-tier-aware rate limiting:
-
-```python
-from config.graphql.ratelimits import graphql_ratelimit_dynamic, get_user_tier_rate
-
-class MyQuery:
-    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_HEAVY"))
-    def resolve_expensive_query(self, info, **kwargs):
-        # Your query logic
-        pass
+Error response:
+```json
+{
+  "errors": [{
+    "message": "Limit exceeded: Max 10 requests per minute. Please try again later."
+  }]
+}
 ```
 
-### Custom Rate Limits
+### WebSocket
+
+WebSocket consumers call `check_ws_rate_limit()` which sends a JSON error message but **keeps the connection open** (per design decision):
 
 ```python
-# Fixed custom rate
-@graphql_ratelimit(rate="10/h", key="user_or_ip")
-def my_resolver(root, info):
-    pass
+from config.ratelimit.decorators import check_ws_rate_limit
 
-# Dynamic custom rate
-def get_custom_rate(root, info):
-    if info.context.user.is_premium:
-        return "100/m"
-    return "10/m"
+class MyConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        if await check_ws_rate_limit(self, "WS_CONNECT"):
+            await self.close(code=4029)
+            return
+        await self.accept()
 
-@graphql_ratelimit_dynamic(get_rate=get_custom_rate)
-def my_resolver(root, info):
-    pass
+    async def receive(self, text_data=None):
+        if await check_ws_rate_limit(self, "AI_QUERY"):
+            return  # Error message already sent to client
+        # Process message...
+```
+
+Client receives:
+```json
+{
+  "type": "RATE_LIMITED",
+  "error": "Rate limit exceeded. Max 20 requests per minute.",
+  "retry_after": 60
+}
+```
+
+Rate-limited WebSocket consumers:
+- `UnifiedAgentConversationConsumer` — `WS_CONNECT` on connect, `AI_QUERY` on queries, `WRITE_LIGHT` on tool approvals
+- `NotificationConsumer` — `WS_CONNECT` on connect, `WS_HEARTBEAT` on messages
+- `ThreadUpdatesConsumer` — `WS_CONNECT` on connect, `WS_HEARTBEAT` on messages
+
+### MCP (Model Context Protocol)
+
+MCP uses a two-layer check: a **global cap** (`MCP_GLOBAL`) plus **per-tool limits** mapped to existing rate categories:
+
+```python
+# In MCP ASGI app (automatic — no manual wiring needed)
+# Global check runs on every request
+# Per-tool check maps tool names to categories:
+MCP_TOOL_RATE_MAP = {
+    "list_public_corpuses": "READ_LIGHT",
+    "list_documents": "READ_MEDIUM",
+    "get_document_text": "READ_MEDIUM",
+    "search_corpus": "READ_HEAVY",
+    ...
+}
+```
+
+MCP is always anonymous (no authentication), so no tier adjustment is applied. IP-based rate limiting is used exclusively.
+
+The ASGI scope is threaded into tool handlers via a `ContextVar` so that per-tool rate limits can access the client IP.
+
+### Django Views
+
+The `view_ratelimit` decorator is a drop-in replacement for `django_ratelimit.decorators.ratelimit`:
+
+```python
+from config.ratelimit.decorators import view_ratelimit
+from config.ratelimit.rates import RateLimits
+
+@view_ratelimit(rate=RateLimits.AUTH_LOGIN, block=False)
+def admin_login(request):
+    if request.limited:
+        # Show CAPTCHA or warning
+        pass
 ```
 
 ## Configuration
 
 ### Environment Variables
 
-Override default rate limits via environment variables:
+Override any rate limit category via environment variables:
 
 ```bash
 # Override specific rate limits
 RATELIMIT_AUTH_LOGIN=10/m
 RATELIMIT_READ_HEAVY=20/m
 RATELIMIT_AI_QUERY=50/m
+RATELIMIT_WS_CONNECT=20/m
+RATELIMIT_MCP_GLOBAL=200/m
+
+# Disable rate limiting entirely
+RATELIMIT_DISABLE=true
 ```
 
 ### Django Settings
 
-Configure in `config/settings/ratelimit.py`:
+Core settings in `config/settings/ratelimit.py`:
 
 ```python
-# Enable/disable rate limiting
-RATELIMIT_ENABLE = True
-
-# Disable in tests
-RATELIMIT_DISABLE = getattr(settings, "TESTING", False)
-
-# Cache backend
-RATELIMIT_USE_CACHE = "default"
-
-# Fail behavior when cache unavailable
-RATELIMIT_FAIL_OPEN = False  # Deny requests if cache is down
-
-# IP extraction for proxies
-RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"
-
-# IPv6 subnet grouping
-RATELIMIT_IPV6_MASK = 64
+RATELIMIT_ENABLE = True           # Enable rate limiting globally
+RATELIMIT_DISABLE = False         # Disable all rate limiting (env override)
+RATELIMIT_USE_CACHE = "default"   # Cache backend for counters
+RATELIMIT_FAIL_OPEN = False       # Deny requests if cache is down
+RATELIMIT_KEY_PREFIX = "rl"       # Cache key prefix
+RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"  # IP extraction header
+RATELIMIT_IPV6_MASK = 64          # Group by /64 subnet
 ```
+
+## Engine Details
+
+### Fixed-Window Counter Algorithm
+
+The engine uses a fixed-window counter algorithm:
+
+1. Each rate limit is identified by `{prefix}:{group}:{key}:{window}`
+2. `window = int(time.time()) // period` — integer division of current epoch by the period duration
+3. `cache.add()` atomically creates the key if absent (set to 1)
+4. `cache.incr()` atomically increments the counter
+5. If `counter > count`, the request is rate limited
+
+### Cache Key Format
+
+```
+rl:graphql:resolve_documents:user:42:28571428
+   ^   ^         ^             ^        ^
+   |   |         |             |        window (time // period)
+   |   |         |             rate limit key
+   |   |         group name
+   |   protocol prefix
+   RATELIMIT_KEY_PREFIX
+```
+
+### Fail Behavior
+
+When the cache is unavailable:
+- `RATELIMIT_FAIL_OPEN = True` → Allow all requests (fail open)
+- `RATELIMIT_FAIL_OPEN = False` → Deny all requests (fail closed, default)
 
 ## Monitoring
 
-### Rate Limit Headers
-
-The application adds rate limit information to response headers:
-
-- `X-RateLimit-Limit`: The rate limit for this endpoint
-- `X-RateLimit-Remaining`: Requests remaining (when available)
-
 ### Logging
 
-Rate limit violations are logged:
+Rate limit violations are logged at WARNING level:
 
-```python
-logger.warning(
-    f"Rate limit exceeded for {func.__name__} - Key: {limit_key}, Rate: {rate}"
-)
+```
+WARNING Rate limit exceeded for resolve_documents — Key: user:42, Rate: 30/m
+WARNING WS rate limit exceeded: AI_QUERY for key=user:42, rate=40/m
 ```
 
-### Metrics
+### Redis Monitoring
 
-Monitor rate limiting effectiveness through:
+Monitor rate limit counters directly:
 
-1. **Traefik Metrics**: Edge rate limit hits
-2. **Application Logs**: Django rate limit violations
-3. **Redis Monitoring**: Rate limit key patterns
-
-## Error Handling
-
-### GraphQL Errors
-
-Rate limit exceeded returns a GraphQL error:
-
-```json
-{
-  "errors": [{
-    "message": "Rate limit exceeded: Maximum 5 requests per minute. Please try again later.",
-    "extensions": {
-      "code": "RATE_LIMIT_EXCEEDED"
-    }
-  }]
-}
+```bash
+redis-cli KEYS "rl:*"
+redis-cli GET "rl:graphql:resolve_documents:user:42:28571428"
 ```
-
-### Client Handling
-
-Clients should:
-
-1. Respect rate limit errors
-2. Implement exponential backoff
-3. Cache responses when possible
-4. Batch requests efficiently
 
 ## Testing
 
-### Unit Tests
+### Disabling in Tests
 
-Test rate limiting in isolation:
-
-```python
-from django.test import TestCase, RequestFactory
-from config.graphql.ratelimits import graphql_ratelimit
-
-class RateLimitTests(TestCase):
-    def test_rate_limit_exceeded(self):
-        @graphql_ratelimit(rate="1/m")
-        def resolver(root, info):
-            return "success"
-
-        # First call succeeds
-        result = resolver(None, self.mock_info)
-
-        # Second call fails
-        with self.assertRaises(RateLimitExceeded):
-            resolver(None, self.mock_info)
-```
-
-### Integration Tests
-
-Test with actual GraphQL queries:
+Rate limiting is controlled by `RATELIMIT_DISABLE`. Set it in test settings or per-test:
 
 ```python
-def test_mutation_rate_limit(self):
-    # Make requests up to the limit
-    for _ in range(5):
-        response = self.client.post('/graphql', {
-            'query': 'mutation { createDocument(...) { ok } }'
-        })
-        self.assertEqual(response.status_code, 200)
-
-    # Next request should be rate limited
-    response = self.client.post('/graphql', {
-        'query': 'mutation { createDocument(...) { ok } }'
-    })
-    self.assertIn('Rate limit exceeded', response.json()['errors'][0]['message'])
+@override_settings(RATELIMIT_DISABLE=True)
+def test_my_feature(self):
+    # Rate limiting disabled for this test
+    pass
 ```
 
-### Load Testing
+### Testing Rate Limits Directly
 
-Use the test script:
+```python
+from config.ratelimit.engine import is_rate_limited
 
-```bash
-python scripts/test-django-ratelimit.py
+class RateLimitEngineTest(TestCase):
+    def test_basic_limiting(self):
+        for i in range(3):
+            self.assertFalse(is_rate_limited("test", "key", "3/m"))
+        self.assertTrue(is_rate_limited("test", "key", "3/m"))
 ```
+
+### Test Files
+
+- `opencontractserver/tests/test_rate_limiting.py` — Integration tests for GraphQL rate limiting
+- `opencontractserver/tests/test_unified_rate_limiting.py` — Comprehensive tests for all engine, key, rate, and adapter components
 
 ## Best Practices
 
-1. **Choose Appropriate Limits**: Balance security with usability
-2. **Use Dynamic Rates**: Adjust limits based on user tier
-3. **Cache Expensive Operations**: Reduce need for repeated queries
-4. **Monitor and Adjust**: Review logs and adjust limits as needed
-5. **Document Limits**: Inform API users of rate limits
-6. **Graceful Degradation**: Provide helpful error messages
+1. **Use existing categories** — Map new operations to existing categories (READ_LIGHT, WRITE_MEDIUM, etc.) rather than creating new ones
+2. **Use dynamic rates** — Apply `get_user_tier_rate()` for user-tier-aware limits on expensive operations
+3. **Cache expensive operations** — Reduce the need for repeated queries
+4. **Monitor and adjust** — Review logs and adjust limits based on production usage patterns
+5. **Document limits** — Inform API consumers of applicable rate limits
 
 ## Troubleshooting
 
 ### Rate Limits Not Working
 
-1. Check Redis connection:
+1. Check cache/Redis connection:
 ```python
 from django.core.cache import cache
 cache.set('test', 'value')
 print(cache.get('test'))
 ```
 
-2. Verify decorator order (login_required should be first):
+2. Check settings:
+```python
+from django.conf import settings
+print(settings.RATELIMIT_DISABLE)
+```
+
+3. Verify decorator order (login_required should come first):
 ```python
 @login_required  # First
 @graphql_ratelimit(...)  # Second
 def mutate(...):
 ```
 
-3. Check settings:
-```python
-from django.conf import settings
-print(settings.RATELIMIT_ENABLE)
-print(settings.RATELIMIT_DISABLE)
-```
-
 ### Too Restrictive
 
-- Increase limits for authenticated users
-- Implement caching to reduce requests
-- Consider pagination for large datasets
+- Increase limits via environment variables
+- Use tier-adjusted rates for authenticated users
+- Add caching to reduce request volume
 
 ### Bypassing Rate Limits
 
-- Ensure IPv6 subnet masking is configured
-- Monitor for distributed attacks
-- Implement additional security measures (CAPTCHA, etc.)
-
-## Future Enhancements
-
-1. **Sliding Window Algorithm**: More accurate rate limiting
-2. **Per-Organization Limits**: Team-based rate limits
-3. **Adaptive Rate Limiting**: Adjust based on system load
-4. **Rate Limit Quotas**: Daily/monthly quotas for heavy operations
-5. **WebSocket Rate Limiting**: Extend to real-time connections
+- Ensure IPv6 subnet masking is configured (`RATELIMIT_IPV6_MASK = 64`)
+- Monitor for distributed attacks at the Traefik edge layer
+- Consider additional security measures (CAPTCHA, etc.)

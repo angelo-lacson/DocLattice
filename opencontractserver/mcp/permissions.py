@@ -1,13 +1,13 @@
 """Permission utilities for the MCP server.
 
-This module provides input validation, user handling, and rate limiting
-for MCP server operations.
+This module provides input validation and user handling for MCP server
+operations.  Rate limiting has been moved to the shared
+:mod:`config.ratelimit` package.
 """
 
 import re
 
 from django.contrib.auth.models import AnonymousUser
-from django.core.cache import cache
 
 # Slug validation pattern - matches OpenContracts format (A-Z, a-z, 0-9, hyphen)
 SLUG_PATTERN = re.compile(r"^[A-Za-z0-9\-]+$")
@@ -54,36 +54,3 @@ def get_anonymous_user() -> AnonymousUser:
         AnonymousUser instance for use in permission checks
     """
     return AnonymousUser()
-
-
-class RateLimiter:
-    """Simple rate limiter for MCP requests using Django cache.
-
-    This limiter uses a sliding window approach stored in Django's cache backend.
-    """
-
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
-        """Initialize the rate limiter.
-
-        Args:
-            max_requests: Maximum number of requests allowed in the time window
-            window_seconds: Time window in seconds
-        """
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-
-    def check_rate_limit(self, client_id: str) -> bool:
-        """Check if a request is allowed based on rate limits.
-
-        Args:
-            client_id: Unique identifier for the client making the request
-
-        Returns:
-            True if request is allowed, False if rate limited
-        """
-        key = f"mcp:ratelimit:{client_id}"
-        current = cache.get(key, 0)
-        if current >= self.max_requests:
-            return False
-        cache.set(key, current + 1, self.window_seconds)
-        return True

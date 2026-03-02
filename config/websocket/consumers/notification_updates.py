@@ -34,6 +34,8 @@ import uuid
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 
+from config.ratelimit.decorators import check_ws_rate_limit
+
 logger = logging.getLogger(__name__)
 
 
@@ -82,10 +84,9 @@ class NotificationUpdatesConsumer(AsyncWebsocketConsumer):
         - heartbeat: Keep connection alive
 
     Rate Limiting:
-        This consumer is read-only with minimal client interaction.
-        Currently no rate limiting is implemented for ping/heartbeat messages.
-        If high-frequency client messages become a concern, consider adding
-        rate limiting via a simple counter or Redis-based throttling.
+        Uses the shared rate limiting engine (config.ratelimit):
+        - WS_CONNECT (10/m): Limits new connection attempts per user/IP.
+        - WS_HEARTBEAT (120/m): Limits client-initiated messages (ping/heartbeat).
     """
 
     user_id: int | None = None
@@ -114,6 +115,11 @@ class NotificationUpdatesConsumer(AsyncWebsocketConsumer):
             f"[NotificationUpdates {self.consumer_id} | Session {self.session_id}] "
             f"connect() called. Path: {self.scope['path']}"
         )
+
+        # Rate limit new connections
+        if await check_ws_rate_limit(self, "WS_CONNECT"):
+            await self.close(code=4029)
+            return
 
         # Extract user from scope (set by auth middleware)
         user = self.scope.get("user")
@@ -172,6 +178,9 @@ class NotificationUpdatesConsumer(AsyncWebsocketConsumer):
         - ping: Connection health check
         - heartbeat: Keep-alive message
         """
+        if await check_ws_rate_limit(self, "WS_HEARTBEAT"):
+            return
+
         try:
             data = json.loads(text_data)
             msg_type = data.get("type", "")

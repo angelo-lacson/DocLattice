@@ -299,44 +299,82 @@ class MCPConfigTest(TestCase):
 
 
 class MCPRateLimiterTest(TestCase):
-    """Tests for MCP rate limiter."""
+    """Tests for MCP rate limiting via the shared engine."""
 
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_allows_requests(self):
-        """Test that rate limiter allows requests under limit."""
-        from opencontractserver.mcp.permissions import RateLimiter
+        """Test that the shared engine allows requests under the MCP global limit."""
+        import asyncio
 
-        limiter = RateLimiter(max_requests=5, window_seconds=60)
+        from config.ratelimit.decorators import check_mcp_rate_limit
 
-        # First 5 requests should be allowed
-        for i in range(5):
-            self.assertTrue(limiter.check_rate_limit("test-client"))
+        scope = {"headers": [], "client": ("10.0.0.1", 8080)}
 
+        # First request should be allowed
+        is_limited, _ = asyncio.get_event_loop().run_until_complete(
+            check_mcp_rate_limit(scope)
+        )
+        self.assertFalse(is_limited)
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_blocks_excess_requests(self):
-        """Test that rate limiter blocks requests over limit."""
-        from opencontractserver.mcp.permissions import RateLimiter
+        """Test that the shared engine blocks requests over the MCP global limit."""
+        import asyncio
+        from unittest.mock import patch
 
-        limiter = RateLimiter(max_requests=2, window_seconds=60)
+        from config.ratelimit.decorators import check_mcp_rate_limit
 
-        # First 2 requests allowed
-        self.assertTrue(limiter.check_rate_limit("test-client-2"))
-        self.assertTrue(limiter.check_rate_limit("test-client-2"))
+        scope = {"headers": [], "client": ("10.0.0.2", 8080)}
 
-        # Third request blocked
-        self.assertFalse(limiter.check_rate_limit("test-client-2"))
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            # Exhaust the limit (MCP_GLOBAL = 100/m)
+            for _ in range(100):
+                asyncio.get_event_loop().run_until_complete(check_mcp_rate_limit(scope))
+            # Next should be blocked
+            is_limited, _ = asyncio.get_event_loop().run_until_complete(
+                check_mcp_rate_limit(scope)
+            )
+            self.assertTrue(is_limited)
 
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_separate_clients(self):
-        """Test that rate limiter tracks clients separately."""
-        from opencontractserver.mcp.permissions import RateLimiter
+        """Test that different IPs have independent rate limit buckets."""
+        import asyncio
+        from unittest.mock import patch
 
-        limiter = RateLimiter(max_requests=1, window_seconds=60)
+        from config.ratelimit.decorators import check_mcp_rate_limit
 
-        # Each client gets their own limit
-        self.assertTrue(limiter.check_rate_limit("client-a"))
-        self.assertTrue(limiter.check_rate_limit("client-b"))
+        scope_a = {"headers": [], "client": ("10.0.0.3", 8080)}
+        scope_b = {"headers": [], "client": ("10.0.0.4", 8080)}
 
-        # But each is limited individually
-        self.assertFalse(limiter.check_rate_limit("client-a"))
-        self.assertFalse(limiter.check_rate_limit("client-b"))
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            # Exhaust client-a
+            for _ in range(100):
+                asyncio.get_event_loop().run_until_complete(
+                    check_mcp_rate_limit(scope_a)
+                )
+            is_limited_a, _ = asyncio.get_event_loop().run_until_complete(
+                check_mcp_rate_limit(scope_a)
+            )
+            self.assertTrue(is_limited_a)
+
+            # client-b should still be fine
+            is_limited_b, _ = asyncio.get_event_loop().run_until_complete(
+                check_mcp_rate_limit(scope_b)
+            )
+            self.assertFalse(is_limited_b)
 
 
 class MCPToolsDocumentsTest(TestCase):

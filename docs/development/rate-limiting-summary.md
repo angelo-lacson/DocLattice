@@ -1,83 +1,45 @@
 # Rate Limiting Implementation Summary
 
 ## Overview
-Django-ratelimit has been successfully integrated into the OpenContracts GraphQL API to provide application-level rate limiting alongside existing Traefik edge rate limiting.
 
-## Implementation Status ✅
+OpenContracts uses a unified rate limiting package (`config/ratelimit/`) that serves all protocols: GraphQL, WebSocket, MCP, and Django views. The system replaced the previous `django-ratelimit` dependency with a custom fixed-window counter engine backed by Django's cache framework (Redis in production).
 
-### Core Components Implemented
-1. **Rate Limiting Infrastructure** (`config/graphql/ratelimits.py`)
-   - Custom decorators for GraphQL resolvers
-   - Dynamic rate limiting based on user tiers
-   - Configurable rate limits for different operation types
+## Implementation Status
 
-2. **GraphQL Integration**
-   - **Mutations** (`config/graphql/mutations.py`): Rate limits applied to 28 mutations
-   - **Queries** (`config/graphql/queries.py`): Rate limits applied to 21 query resolvers
+### Core Components
+1. **Rate Limiting Engine** (`config/ratelimit/engine.py`) — Fixed-window counter with sync and async APIs
+2. **Identity Resolution** (`config/ratelimit/keys.py`) — IP extraction from HTTP requests and ASGI scopes
+3. **Rate Categories** (`config/ratelimit/rates.py`) — `RateLimits` singleton with 17 categories and tier multipliers
+4. **Protocol Adapters** (`config/ratelimit/decorators.py`) — `graphql_ratelimit`, `check_ws_rate_limit`, `check_mcp_rate_limit`, `view_ratelimit`
 
-3. **Configuration** (`config/settings/ratelimit.py`)
-   - Environment variable support for rate limit overrides
-   - User tier multipliers (Superuser: 10x, Authenticated: 2x, Anonymous: 1x, Usage-capped: 0.5x)
+### Protocol Coverage
 
-### Test Coverage
-- **7 Integration Tests**: ✅ All passing
-  - GraphQL mutation rate limiting
-  - GraphQL query rate limiting
-  - Rate limit configuration
-  - User tier calculations
+| Protocol | Adapter | Behavior on Limit |
+|----------|---------|-------------------|
+| GraphQL | `graphql_ratelimit` / `graphql_ratelimit_dynamic` | Raises `RateLimitExceeded` (GraphQLError) |
+| WebSocket | `check_ws_rate_limit` | Sends JSON error message, keeps connection open |
+| MCP | `check_mcp_rate_limit` | Global cap + per-tool limits (IP-based, always anonymous) |
+| Django views | `view_ratelimit` | Sets `request.limited`, optionally returns HTTP 429 |
 
-- **Unit Tests**: Some edge cases with test isolation (not critical for production)
-
-## Key Features
-
-### Rate Limit Categories
-- **Authentication**: 3-5 requests/minute for login, registration, password reset
-- **Read Operations**: 10-100 requests/minute based on complexity
-- **Write Operations**: 5-30 requests/minute based on intensity
-- **AI Operations**: 5-20 requests/minute for analysis and extraction
-- **Export/Import**: 5-10 requests/hour for bulk operations
+### Rate-Limited Endpoints
+- **GraphQL**: 28 mutations + 21 query resolvers
+- **WebSocket**: 3 consumers (agent chat, notifications, thread updates)
+- **MCP**: Global cap + 8 tool-specific limits
+- **Django views**: Admin login page
 
 ### User Tiers
 - **Superusers**: 10x base rate limit
 - **Authenticated Users**: 2x base rate limit (or 1x if usage-capped)
 - **Anonymous Users**: 1x base rate limit
 
-### Rate Limiting Strategy
-- User-based limiting for authenticated users
-- IP-based limiting for anonymous users
-- Group rate limiting for related operations
-- Redis-backed for distributed systems
+### Test Coverage
+- `opencontractserver/tests/test_rate_limiting.py` — GraphQL integration tests
+- `opencontractserver/tests/test_unified_rate_limiting.py` — Comprehensive tests for engine, keys, rates, and all protocol adapters
 
-## Production Readiness
-The implementation is production-ready with:
-- ✅ Comprehensive rate limiting on all critical endpoints
-- ✅ Proper error messages and HTTP headers
-- ✅ Integration tests confirming functionality
-- ✅ Configuration via environment variables
-- ✅ Redis cache backend for distributed rate limiting
-
-## Usage Example
-```python
-# Automatic user-tier-based rate limiting
-@graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("WRITE_HEAVY"))
-class UploadDocument(graphene.Mutation):
-    # Superusers: 50/min, Authenticated: 10/min, Anonymous: 5/min
-    ...
-
-# Fixed rate limiting
-@graphql_ratelimit(rate=RateLimits.AI_ANALYSIS)  # 5/min
-def resolve_extract_text(self, info, doc_id):
-    ...
-```
-
-## Monitoring
-Rate limit violations are logged with:
-- Function name
-- User/IP key
-- Configured rate
-- Timestamp
-
-## Next Steps
-- Monitor rate limit metrics in production
-- Adjust limits based on usage patterns
-- Consider implementing sliding window algorithm for smoother limiting
+## Key Design Decisions
+1. **No external dependency** — Replaced `django-ratelimit` with a custom engine to support ASGI protocols (WebSocket, MCP) that don't have `HttpRequest` objects
+2. **Shared categories** — WebSocket and MCP operations map to existing rate categories (e.g., MCP `search_corpus` → `READ_HEAVY`, WS agent chat → `AI_QUERY`)
+3. **Keep connection open** — WebSocket rate limiting sends error messages but doesn't close the connection
+4. **Per-user scoping** — WebSocket limits are per-user (authenticated) or per-IP (anonymous)
+5. **MCP global + per-tool** — Two-layer rate limiting for MCP: global cap plus per-tool category limits
+6. **Backward-compatible re-exports** — `config/graphql/ratelimits.py` remains a valid import path for all 21+ files using it

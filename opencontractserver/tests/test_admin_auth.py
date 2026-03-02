@@ -983,7 +983,7 @@ class TestAdminLoginRateLimit(TestCase):
         # Clear the rate-limit cache before each test to ensure isolation
         cache.clear()
 
-    @patch("django_ratelimit.core.time")
+    @patch("config.ratelimit.engine.time")
     def test_post_rate_limit_returns_429(self, mock_time):
         """Login POST should return 429 after exceeding the rate limit."""
         # Pin time so all requests land in the same rate-limit window.
@@ -1006,7 +1006,7 @@ class TestAdminLoginRateLimit(TestCase):
         self.assertIn("error", data)
         self.assertIn("Too many login attempts", data["error"])
 
-    @patch("django_ratelimit.core.time")
+    @patch("config.ratelimit.engine.time")
     def test_post_rate_limit_json_content_type(self, mock_time):
         """Rate-limited POST should return application/json."""
         mock_time.time.return_value = 12345.0
@@ -1035,7 +1035,7 @@ class TestAdminLoginRateLimit(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.wsgi_request.user.is_authenticated)
 
-    @patch("django_ratelimit.core.time")
+    @patch("config.ratelimit.engine.time")
     def test_get_rate_limit_returns_429(self, mock_time):
         """Login page GET should return 429 after exceeding the rate limit."""
         mock_time.time.return_value = 12345.0
@@ -1051,7 +1051,7 @@ class TestAdminLoginRateLimit(TestCase):
             response.content.decode(),
         )
 
-    @patch("django_ratelimit.core.time")
+    @patch("config.ratelimit.engine.time")
     def test_get_rate_limit_plain_text(self, mock_time):
         """Rate-limited GET should return text/plain."""
         mock_time.time.return_value = 12345.0

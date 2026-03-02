@@ -5,9 +5,28 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-01
+## [Unreleased] - 2026-03-02
 
 ### Added
+
+#### Unified Rate Limiting for WebSocket and MCP (Closes #730, #745)
+- Replaced `django-ratelimit` with a custom protocol-agnostic rate limiting engine (`config/ratelimit/`) supporting GraphQL, WebSocket, MCP, and Django views through a single shared infrastructure
+- **Engine** (`config/ratelimit/engine.py`): Fixed-window counter algorithm using Django cache (Redis in production), with sync `is_rate_limited()` and async `ais_rate_limited()` APIs
+- **Identity resolution** (`config/ratelimit/keys.py`): Unified IP extraction from both `HttpRequest` (GraphQL/views) and ASGI scope (WebSocket/MCP), plus key building with `user_or_ip`, `ip`, and `user` strategies
+- **Rate categories** (`config/ratelimit/rates.py`): `RateLimits` singleton with 17 categories including new `WS_CONNECT` (10/m), `WS_HEARTBEAT` (120/m), and `MCP_GLOBAL` (100/m)
+- **WebSocket rate limiting**: All 3 consumers (`UnifiedAgentConversationConsumer`, `NotificationConsumer`, `ThreadUpdatesConsumer`) now enforce connection-rate and per-message limits. Rate-limited messages receive a JSON `RATE_LIMITED` error; the connection stays open
+- **MCP rate limiting**: Two-layer check — global cap (`MCP_GLOBAL`) plus per-tool limits mapped to existing categories (e.g., `search_corpus` → `READ_HEAVY`). ASGI scope threaded into tool handlers via `ContextVar`
+- **Django view adapter** (`view_ratelimit`): Drop-in replacement for `django_ratelimit.decorators.ratelimit`, used in admin login views
+- **Backward-compatible re-exports**: `config/graphql/ratelimits.py` remains a valid import path for all existing GraphQL files
+- Comprehensive test suite (`opencontractserver/tests/test_unified_rate_limiting.py`) covering engine, keys, rates, and all protocol adapters
+
+### Changed
+
+- Removed `django-ratelimit` dependency from `requirements/base.txt` — all rate limiting now handled by `config.ratelimit`
+- `config/admin_auth/views.py`: Replaced `django_ratelimit.decorators.ratelimit` with `config.ratelimit.decorators.view_ratelimit`
+- `opencontractserver/mcp/server.py`: Replaced custom `RateLimiter` class with unified `check_mcp_rate_limit`; added `ContextVar` for ASGI scope propagation
+- `opencontractserver/mcp/permissions.py`: Removed `RateLimiter` class (moved to shared package)
+- `opencontractserver/mcp/telemetry.py`: `get_client_ip_from_scope` now delegates to shared `config.ratelimit.keys`
 
 - **Pipeline Component Management Redesign**: Separated component management from filetype default assignment in the Pipeline Configuration UI. New `enabled_components` JSON field on `PipelineSettings` tracks which components are available. Frontend splits into two sections: ComponentLibrary (flat filterable list with enable/disable toggles, search, stage filter chips) and FiletypeDefaults (MIME type rows with parser/embedder/thumbnailer dropdowns). Removed old stage-centric layout with MIME type filter buttons. (`opencontractserver/documents/models.py`, `config/graphql/pipeline_types.py`, `config/graphql/pipeline_queries.py`, `config/graphql/pipeline_settings_mutations.py`, `frontend/src/components/admin/SystemSettings.tsx`, `frontend/src/components/admin/system_settings/ComponentLibrary.tsx`, `frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
 - **Clean corpus landing page with Power User mode toggle**: Default corpus view is now a full-page landing without sidebar navigation, providing a cleaner experience for anonymous browsers and casual users. Users with edit permissions see a "Power User" toggle (`?mode=power` URL param) to access the full sidebar+tabs layout (`frontend/src/views/Corpuses.tsx`)

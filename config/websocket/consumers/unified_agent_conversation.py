@@ -36,6 +36,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from graphql_relay import from_global_id
 
+from config.ratelimit.decorators import check_ws_rate_limit
 from config.websocket.middleware import WS_CLOSE_UNAUTHENTICATED
 from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from opencontractserver.agents.models import AgentConfiguration
@@ -103,6 +104,11 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
         )
 
         try:
+            # 0. Rate limit new connections
+            if await check_ws_rate_limit(self, "WS_CONNECT"):
+                await self.close(code=4029)
+                return
+
             # 1. Parse query parameters
             await self._parse_query_params()
 
@@ -374,7 +380,15 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
 
             # Handle approval workflow
             if "approval_decision" in payload:
+                if await check_ws_rate_limit(
+                    self, "WRITE_LIGHT", group_suffix="approval"
+                ):
+                    return
                 await self._handle_approval_decision(payload)
+                return
+
+            # Rate limit agent queries
+            if await check_ws_rate_limit(self, "AI_QUERY", group_suffix="agent_query"):
                 return
 
             # Handle user query

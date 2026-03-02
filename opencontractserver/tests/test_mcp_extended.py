@@ -31,7 +31,6 @@ from opencontractserver.mcp.formatters import (
     format_thread_summary,
 )
 from opencontractserver.mcp.permissions import (
-    RateLimiter,
     get_anonymous_user,
     sanitize_and_validate_slugs,
 )
@@ -367,35 +366,52 @@ class TestTTLLRUCache(TestCase):
 
 
 # --------------------------------------------------------------------------
-# RateLimiter tests
+# RateLimiter tests (now using shared engine)
 # --------------------------------------------------------------------------
 class TestRateLimiter(TestCase):
-    """Tests for the MCP RateLimiter."""
+    """Tests for MCP rate limiting via the shared config.ratelimit engine."""
 
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_allows_under_limit(self):
-        limiter = RateLimiter(max_requests=5, window_seconds=60)
-        for _ in range(5):
-            self.assertTrue(limiter.check_rate_limit("client1"))
+        from config.ratelimit.engine import is_rate_limited
 
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            for _ in range(5):
+                self.assertFalse(is_rate_limited("mcp:test", "client1", "5/m"))
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_blocks_over_limit(self):
-        limiter = RateLimiter(max_requests=3, window_seconds=60)
-        for _ in range(3):
-            limiter.check_rate_limit("client1")
-        self.assertFalse(limiter.check_rate_limit("client1"))
+        from config.ratelimit.engine import is_rate_limited
 
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            for _ in range(3):
+                is_rate_limited("mcp:test", "client1", "3/m")
+            self.assertTrue(is_rate_limited("mcp:test", "client1", "3/m"))
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_different_clients_independent(self):
-        limiter = RateLimiter(max_requests=2, window_seconds=60)
-        limiter.check_rate_limit("client1")
-        limiter.check_rate_limit("client1")
-        # client1 is at limit
-        self.assertFalse(limiter.check_rate_limit("client1"))
-        # client2 should still be allowed
-        self.assertTrue(limiter.check_rate_limit("client2"))
+        from config.ratelimit.engine import is_rate_limited
 
-    def test_default_values(self):
-        limiter = RateLimiter()
-        self.assertEqual(limiter.max_requests, RATE_LIMIT_REQUESTS)
-        self.assertEqual(limiter.window_seconds, RATE_LIMIT_WINDOW)
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            for _ in range(2):
+                is_rate_limited("mcp:test", "client1", "2/m")
+            # client1 is at limit
+            self.assertTrue(is_rate_limited("mcp:test", "client1", "2/m"))
+            # client2 should still be allowed
+            self.assertFalse(is_rate_limited("mcp:test", "client2", "2/m"))
 
 
 # --------------------------------------------------------------------------

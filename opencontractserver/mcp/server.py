@@ -19,6 +19,7 @@ import logging
 import re
 import time
 from collections import OrderedDict
+from contextvars import ContextVar
 from typing import Any, Callable
 
 from asgiref.sync import sync_to_async
@@ -31,7 +32,9 @@ from starlette.applications import Starlette
 from starlette.responses import Response
 from starlette.routing import Mount, Route
 
-from .permissions import RateLimiter
+from config.ratelimit.decorators import check_mcp_rate_limit
+from config.ratelimit.keys import get_client_ip_from_scope
+
 from .resources import (
     get_annotation_resource,
     get_corpus_resource,
@@ -43,7 +46,6 @@ from .telemetry import (
     arecord_mcp_resource_read,
     arecord_mcp_tool_call,
     clear_request_context,
-    get_client_ip_from_scope,
     set_request_context,
 )
 from .tools import (
@@ -58,6 +60,10 @@ from .tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ContextVar to thread the ASGI scope into tool handlers for per-tool rate limiting.
+# Set at the ASGI app level before dispatching to the MCP session manager.
+_mcp_asgi_scope: ContextVar[dict[str, Any]] = ContextVar("mcp_asgi_scope", default={})
 
 # Map tool names to implementations - at module level for testability
 TOOL_HANDLERS: dict[str, Callable[..., Any]] = {
@@ -176,7 +182,21 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
 
     This is the handler function for MCP tool calls.
     Exposed at module level for testability.
+
+    Includes per-tool rate limiting via the shared rate limiting engine.
+    The ASGI scope is accessed through ``_mcp_asgi_scope`` ContextVar
+    (set by the ASGI app before dispatching).
     """
+    # Per-tool rate limit check
+    scope = _mcp_asgi_scope.get()
+    if scope:
+        is_limited, error_msg = await check_mcp_rate_limit(scope, tool_name=name)
+        if is_limited:
+            await arecord_mcp_tool_call(
+                name, success=False, error_type="RateLimitExceeded"
+            )
+            raise ValueError(error_msg)
+
     handler = TOOL_HANDLERS.get(name)
     if not handler:
         await arecord_mcp_tool_call(name, success=False, error_type="UnknownTool")
@@ -378,11 +398,6 @@ def create_mcp_server() -> Server:
 
 # Create the global MCP server instance
 mcp_server = create_mcp_server()
-
-# Rate limiter for MCP endpoints (100 requests per minute per IP)
-# This provides defense-in-depth alongside infrastructure-level rate limiting
-mcp_rate_limiter = RateLimiter(max_requests=100, window_seconds=60)
-
 
 # =============================================================================
 # CORPUS-SCOPED MCP SERVER SUPPORT
@@ -680,7 +695,18 @@ def create_scoped_mcp_server(corpus_slug: str) -> Server:
 
         Validates corpus permissions on every call to prevent access
         if corpus becomes private between manager creation and tool execution.
+        Includes per-tool rate limiting via the shared engine.
         """
+        # Per-tool rate limit check
+        scope = _mcp_asgi_scope.get()
+        if scope:
+            is_limited, error_msg = await check_mcp_rate_limit(scope, tool_name=name)
+            if is_limited:
+                await arecord_mcp_tool_call(
+                    name, success=False, error_type="RateLimitExceeded"
+                )
+                raise ValueError(error_msg)
+
         # Re-validate corpus is still accessible on every tool call
         # This prevents race condition where corpus becomes private after manager cached
         is_valid = await sync_to_async(_validate_corpus_sync)()
@@ -1054,10 +1080,13 @@ def create_mcp_asgi_app():
         if scope["type"] != "http":
             return
 
-        # Rate limiting check (before any path processing)
-        client_ip = get_client_ip_from_scope(scope) or "unknown"
-        is_allowed = await sync_to_async(mcp_rate_limiter.check_rate_limit)(client_ip)
-        if not is_allowed:
+        # Store scope in ContextVar so tool handlers can access it
+        # for per-tool rate limiting
+        _mcp_asgi_scope.set(scope)
+
+        # Rate limiting check (global cap, before any path processing)
+        is_limited, error_msg = await check_mcp_rate_limit(scope)
+        if is_limited:
             await send(
                 {
                     "type": "http.response.start",
@@ -1073,7 +1102,7 @@ def create_mcp_asgi_app():
                     "type": "http.response.body",
                     "body": json.dumps(
                         {
-                            "error": "Too many requests",
+                            "error": error_msg,
                             "hint": "Please wait before making more requests",
                             "retry_after": 60,
                         }

@@ -1,7 +1,7 @@
 """
 Rate limiting configuration for OpenContracts.
 
-This module contains settings for django-ratelimit integration.
+This module contains settings consumed by the ``config.ratelimit`` package.
 """
 
 import os
@@ -13,10 +13,6 @@ env = environ.Env()
 # Django-ratelimit settings
 RATELIMIT_ENABLE = True  # Enable rate limiting globally
 RATELIMIT_USE_CACHE = "default"  # Use default cache backend
-RATELIMIT_VIEW = (
-    "config.graphql.ratelimits.RateLimitExceeded"  # Custom rate limit exceeded view
-)
-
 # Whether to disable rate limiting
 # By default, disable in test environments unless explicitly enabled
 RATELIMIT_DISABLE = env.bool("RATELIMIT_DISABLE", default=False)
@@ -47,6 +43,11 @@ RATE_LIMIT_OVERRIDES = {
     "EXPORT": os.environ.get("RATELIMIT_EXPORT"),
     "IMPORT": os.environ.get("RATELIMIT_IMPORT"),
     "ADMIN_OPERATION": os.environ.get("RATELIMIT_ADMIN_OPERATION"),
+    # WebSocket rate limits
+    "WS_CONNECT": os.environ.get("RATELIMIT_WS_CONNECT"),
+    "WS_HEARTBEAT": os.environ.get("RATELIMIT_WS_HEARTBEAT"),
+    # MCP rate limits
+    "MCP_GLOBAL": os.environ.get("RATELIMIT_MCP_GLOBAL"),
 }
 
 # Remove None values
