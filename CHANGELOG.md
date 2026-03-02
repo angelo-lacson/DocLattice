@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hybrid search with Reciprocal Rank Fusion (RRF)**: New `CoreAnnotationVectorStore.hybrid_search()` method runs vector similarity and full-text search in parallel, then fuses results using RRF (k=60). Semantic search GraphQL resolver now uses hybrid search for improved result quality (`opencontractserver/llms/vector_stores/core_vector_stores.py`, `config/graphql/search_queries.py`)
 - **RRF utility function** (`opencontractserver/utils/search.py`): Generic `reciprocal_rank_fusion()` that merges any number of ranked lists
 - **Search constants** (`opencontractserver/constants/search.py`): `HNSW_M`, `HNSW_EF_CONSTRUCTION`, `RRF_K`, `HYBRID_SEARCH_OVERSAMPLE_FACTOR`, `FTS_CONFIG`
-- **pgvector upgraded to 0.8.0**: Enables iterative index scans for filtered ANN queries (prevents result loss when combining vector search with `WHERE` clauses like `embedder_path` filtering). Database default set via `ALTER DATABASE ... SET hnsw.iterative_scan = 'relaxed_order'` in `init.sql` (`compose/production/postgres/Dockerfile`, `compose/production/postgres/init.sql`)
+- **pgvector PostgreSQL extension upgraded to 0.8.0** (installed via Docker, not the Python package): Enables iterative index scans for filtered ANN queries (prevents result loss when combining vector search with `WHERE` clauses like `embedder_path` filtering). Database default set via `ALTER DATABASE ... SET hnsw.iterative_scan = 'relaxed_order'` in `init.sql` (`compose/production/postgres/Dockerfile`, `compose/production/postgres/init.sql`)
 - **PostgreSQL tuning for vector workloads**: Added `shared_buffers`, `maintenance_work_mem`, `effective_cache_size`, `work_mem`, `max_parallel_maintenance_workers`, `random_page_cost`, and `effective_io_concurrency` to all Docker Compose files. Added `shm_size` for parallel HNSW index builds (`local.yml`, `production.yml`, `test.yml`)
 - **Pinned pgvector Python package** to `>=0.4.0` for `HnswIndex` and `HalfVectorField` support (`requirements/base.txt`)
 - **Expanded valid embedding dimensions** in `CoreAnnotationVectorStore`: Search methods now accept 1024 and 2048 dimensions in addition to existing 384, 768, 1536, 3072, 4096
@@ -54,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Missing embedding dimensions in VALID_EMBEDDING_DIMS
+- `VALID_EMBEDDING_DIMS` was missing dimensions 1024, 2048, and 4096, causing validation failures for embedders that produce these common dimensions (e.g., some OpenAI and Cohere models). Added missing entries to `VALID_EMBEDDING_DIMS` and `DIM_TO_FIELD_MAP` in `opencontractserver/constants/search.py`.
+
 #### Fix My Documents Corpus Not Navigable Due to Missing Slugs
 - **Root cause**: Migration 0038 created personal corpuses using historical models which bypass `Corpus.save()` slug auto-generation, leaving `slug=NULL`. The frontend requires both `corpus.slug` and `creator.slug` to build navigation URLs (`/c/<user>/<corpus>`), so clicking "My Documents" logged "Cannot navigate to corpus without slugs" and did nothing.
 - **Fix (model)**: `Corpus.get_or_create_personal_corpus()` now detects when a returned corpus lacks a slug and triggers `save()` to backfill it on access (`opencontractserver/corpuses/models.py:518-521`).
@@ -70,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Added**: `test_formfield_rejects_invalid_json` and `test_formfield_accepts_valid_json` integration tests on `NullableJSONFieldTests` to verify the model field's `formfield()` method produces a form field that properly validates JSON (`opencontractserver/tests/test_custom_fields.py:63-71`).
 
 ### Changed
+
+#### Annotation text search now uses PostgreSQL full-text search with English stemming
+- The annotation mention search (`resolve_search_annotations_for_mention`) and the semantic search resolver now use `SearchQuery` on a GIN-indexed `search_vector` column instead of `raw_text__icontains`. This means text queries now match English-stemmed forms (e.g., searching "contract" also matches "contracting" and "contracted") rather than requiring exact substring matches. This is a semantic behavior change for users accustomed to exact substring matching on `raw_text`. See `config/graphql/search_queries.py`.
 
 #### Triage and Clean Up TODO/FIXME Comments (Closes #971)
 - Removed 62 TODO/FIXME/HACK annotations across 43 backend and frontend files

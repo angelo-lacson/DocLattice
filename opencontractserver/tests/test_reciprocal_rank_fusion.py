@@ -88,6 +88,14 @@ class TestReciprocalRankFusion(TestCase):
         # k=0, rank=1 → score = 1/(0+1) = 1.0
         self.assertAlmostEqual(result[0][1], 1.0)
 
+    def test_top_n_exceeds_total_unique_items(self):
+        """When top_n is larger than the number of unique items, all items are returned."""
+        items = [_Item(i) for i in range(4)]
+        result = reciprocal_rank_fusion(items, top_n=100)
+        self.assertEqual(len(result), 4)
+        ids = [item.id for item, _ in result]
+        self.assertEqual(ids, [0, 1, 2, 3])
+
     def test_first_occurrence_item_used(self):
         """When same id appears in multiple lists, first instance is kept."""
         a1 = _Item(1)

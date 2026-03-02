@@ -5,6 +5,7 @@ GraphQL query mixin for search and mention queries.
 import logging
 
 import graphene
+from django.contrib.postgres.search import SearchQuery
 from django.db.models import Q
 from graphene_django.fields import DjangoConnectionField
 from graphql_jwt.decorators import login_required
@@ -21,6 +22,7 @@ from config.graphql.graphene_types import (
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
 from opencontractserver.annotations.models import Annotation
 from opencontractserver.constants.annotations import SEMANTIC_SEARCH_MAX_RESULTS
+from opencontractserver.constants.search import FTS_CONFIG
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 
@@ -297,10 +299,6 @@ class SearchQueryMixin:
             # for raw_text matching, combined with B-tree index on label text.
             # The OR means annotations matching either label text or full-text
             # search are returned; search_vector is populated by a DB trigger.
-            from django.contrib.postgres.search import SearchQuery
-
-            from opencontractserver.constants.search import FTS_CONFIG
-
             search_query = SearchQuery(text_search, config=FTS_CONFIG)
             qs = qs.filter(
                 Q(annotation_label__text__icontains=text_search)
@@ -504,6 +502,11 @@ class SearchQueryMixin:
             CoreAnnotationVectorStore,
         )
 
+        # Alias for clarity: `query` is the GraphQL argument name (raw user
+        # text), while `query_text` is used internally to avoid confusion with
+        # Django's SearchQuery or VectorSearchQuery objects created later.
+        query_text = query
+
         # N+1 OPTIMIZATION NOTE: The CoreAnnotationVectorStore already applies
         # select_related("annotation_label", "document", "corpus") to the base
         # queryset (see core_vector_stores.py:200-202 and :639-641). This means
@@ -587,7 +590,7 @@ class SearchQueryMixin:
             )
 
             search_query = VectorSearchQuery(
-                query_text=query,
+                query_text=query_text,
                 similarity_top_k=limit + offset,  # Fetch extra for pagination
                 filters={"annotation_label": label_text} if label_text else None,
             )
@@ -595,7 +598,7 @@ class SearchQueryMixin:
             # Use hybrid search (vector + full-text with RRF fusion)
             # when a text query is provided. Skip the FTS overhead and use
             # vector-only search when query is purely an embedding lookup.
-            if query and query.strip():
+            if query_text and query_text.strip():
                 results = vector_store.hybrid_search(search_query)
             else:
                 results = vector_store.search(search_query)
@@ -607,7 +610,7 @@ class SearchQueryMixin:
             # Then apply additional filters post-search
             results = CoreAnnotationVectorStore.global_search(
                 user_id=user.id,
-                query_text=query,
+                query_text=query_text,
                 top_k=(limit + offset) * 3,  # Fetch more for post-filtering
                 modalities=modalities,
             )
