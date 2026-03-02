@@ -196,7 +196,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     class Meta:
         model = Annotation
         interfaces = [relay.Node]
-        exclude = ("embedding",)
+        exclude = ("embedding", "search_vector")
         connection_class = CountableConnection
 
         # In order for filter options to show up in nested resolvers, you need to specify them
