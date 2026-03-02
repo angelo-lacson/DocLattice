@@ -75,6 +75,8 @@ const RouteParamInitializer: React.FC<{
     let newView: CorpusDetailViewType;
     if (viewParam === "details") {
       newView = "details";
+    } else if (viewParam === "discussions") {
+      newView = "discussions";
     } else {
       // "landing" param, no param, or any other value = landing
       newView = "landing";
@@ -128,8 +130,8 @@ export const CorpusHomeTestWrapper: React.FC<Props> = ({
 
   // Build initial route with query params if specified
   const params: string[] = [];
-  if (initialView === "details") {
-    params.push("view=details");
+  if (initialView && initialView !== "landing") {
+    params.push(`view=${initialView}`);
   }
   if (initialHomeView) {
     params.push(`homeView=${initialHomeView}`);

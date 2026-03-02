@@ -20,6 +20,7 @@ import {
   selectedFolderId,
   selectedExtractIds,
   corpusDetailView,
+  corpusPowerUserMode,
 } from "../src/graphql/cache";
 import { mergeArrayByIdFieldPolicy } from "../src/graphql/cache";
 import {
@@ -88,12 +89,16 @@ const UrlToStateSync: React.FC = () => {
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get("tab");
     const folderParam = searchParams.get("folder");
+    const modeParam = searchParams.get("mode");
 
     // Sync tab param to reactive var
     selectedTab(tabParam);
 
     // Sync folder param to reactive var
     selectedFolderId(folderParam);
+
+    // Sync power user mode param to reactive var
+    corpusPowerUserMode(modeParam === "power");
   }, [location.search]);
 
   return null;
@@ -316,6 +321,7 @@ export const CorpusesTestWrapper: React.FC<WrapperProps> = ({
       selectedFolderId(null);
       selectedExtractIds([]);
       corpusDetailView("landing");
+      corpusPowerUserMode(false);
     };
   }, []);
 

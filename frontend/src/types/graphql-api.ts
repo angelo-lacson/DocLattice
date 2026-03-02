@@ -1793,6 +1793,8 @@ export type PipelineComponentType = {
   inputSchema?: Record<any, any>;
   /** Schema for component configuration settings stored in PipelineSettings. */
   settingsSchema?: Maybe<Array<Maybe<ComponentSettingSchemaType>>>;
+  /** Whether this component is enabled in the current pipeline settings. */
+  enabled?: boolean;
 };
 
 /** Valid setting types for pipeline component configuration. */
@@ -1865,6 +1867,8 @@ export type PipelineSettingsType = {
   defaultEmbedder?: Maybe<Scalars["String"]>;
   /** List of components with encrypted secrets configured (actual secrets never exposed). */
   componentsWithSecrets?: Maybe<Array<Maybe<Scalars["String"]>>>;
+  /** List of enabled component class paths. */
+  enabledComponents?: Maybe<Array<Maybe<Scalars["String"]>>>;
   /** When settings were last modified. */
   modified?: Maybe<Scalars["DateTime"]>;
   /** User who last modified the settings. */
