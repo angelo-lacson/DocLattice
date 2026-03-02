@@ -2024,9 +2024,10 @@ class MCPTelemetryTest(TestCase):
         }
 
         ip = get_client_ip_from_scope(scope)
-        # Default RATELIMIT_PROXIES_COUNT=1 returns the rightmost
-        # (proxy-appended) entry for spoofing resistance
-        self.assertEqual(ip, "150.172.238.178")
+        # Telemetry uses leftmost (original client claim) for privacy-
+        # preserving analytics deduplication, unlike rate limiting which
+        # uses rightmost for anti-spoofing.
+        self.assertEqual(ip, "203.0.113.195")
 
     def test_get_client_ip_from_scope_x_real_ip(self):
         """Test extracting client IP from X-Real-IP header."""

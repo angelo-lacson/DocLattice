@@ -77,8 +77,9 @@ def is_rate_limited(group: str, key: str, rate: str, increment: bool = True) -> 
     try:
         count, period = parse_rate(rate)
     except ValueError:
-        logger.error(f"Invalid rate string: {rate!r}. Failing open.")
         fail_open = getattr(settings, "RATELIMIT_FAIL_OPEN", False)
+        behaviour = "open (allowing)" if fail_open else "closed (denying)"
+        logger.error("Invalid rate string: %r. Failing %s.", rate, behaviour)
         return not fail_open
 
     window = int(time.time()) // period
