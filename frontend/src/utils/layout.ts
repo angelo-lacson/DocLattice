@@ -1,10 +1,6 @@
-import { SemanticWIDTHSNUMBER } from "semantic-ui-react";
-
 import { SELECTION_MENU } from "../assets/configurations/constants";
 
-export const determineCardColCount = (
-  viewport_width: number
-): SemanticWIDTHSNUMBER => {
+export const determineCardColCount = (viewport_width: number): number => {
   // More responsive breakpoints for better card sizing
   if (viewport_width < 480) return 1; // Mobile
   if (viewport_width < 768) return 2; // Tablet portrait

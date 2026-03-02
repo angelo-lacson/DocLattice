@@ -3,15 +3,7 @@
  * Restyled to use OS-Legal design system
  */
 import React, { useState, useEffect } from "react";
-import {
-  Table,
-  Button,
-  Icon,
-  Popup,
-  Confirm,
-  Loader,
-  Message,
-} from "semantic-ui-react";
+import { Table, Button, Popup, Confirm } from "semantic-ui-react";
 import { useQuery, useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -40,6 +32,7 @@ import {
 } from "../../graphql/metadataOperations";
 import { MetadataColumn } from "../../types/metadata";
 import { MetadataColumnModal } from "../widgets/modals/MetadataColumnModal";
+import { ErrorMessage, LoadingState } from "../widgets/feedback";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
@@ -488,9 +481,9 @@ export const CorpusMetadataSettings = ({
   if (loading) {
     return (
       <Container>
-        <Loader active inline="centered" data-testid="metadata-loading">
-          Loading metadata fields...
-        </Loader>
+        <div data-testid="metadata-loading">
+          <LoadingState message="Loading metadata fields..." />
+        </div>
       </Container>
     );
   }
@@ -498,11 +491,15 @@ export const CorpusMetadataSettings = ({
   if (error) {
     return (
       <Container>
-        <Message negative>
-          <Message.Header>Failed to load metadata</Message.Header>
-          <p>{error.message}</p>
-          <Button onClick={() => refetch()}>Retry</Button>
-        </Message>
+        <ErrorMessage title="Failed to load metadata">
+          <>
+            {error.message}
+            <br />
+            <Button onClick={() => refetch()} style={{ marginTop: "0.5rem" }}>
+              Retry
+            </Button>
+          </>
+        </ErrorMessage>
       </Container>
     );
   }
@@ -518,7 +515,7 @@ export const CorpusMetadataSettings = ({
           </HelperText>
         </div>
         <AddFieldButton primary onClick={() => setIsModalOpen(true)}>
-          <Icon name="plus" />
+          <Plus size={16} style={{ marginRight: "0.5rem" }} />
           Add Field
         </AddFieldButton>
       </HeaderSection>
@@ -534,7 +531,7 @@ export const CorpusMetadataSettings = ({
             documents.
           </p>
           <AddFieldButton primary onClick={() => setIsModalOpen(true)}>
-            <Icon name="plus" />
+            <Plus size={16} style={{ marginRight: "0.5rem" }} />
             Create Your First Field
           </AddFieldButton>
         </EmptyState>
@@ -556,19 +553,23 @@ export const CorpusMetadataSettings = ({
                 <Table.Cell>
                   <OrderButtons>
                     <Button
-                      icon="chevron up"
+                      icon
                       size="mini"
                       basic
                       disabled={index === 0}
                       onClick={() => moveColumn(index, "up")}
-                    />
+                    >
+                      <ChevronUp size={14} />
+                    </Button>
                     <Button
-                      icon="chevron down"
+                      icon
                       size="mini"
                       basic
                       disabled={index === columns.length - 1}
                       onClick={() => moveColumn(index, "down")}
-                    />
+                    >
+                      <ChevronDown size={14} />
+                    </Button>
                   </OrderButtons>
                 </Table.Cell>
                 <Table.Cell>
@@ -617,23 +618,24 @@ export const CorpusMetadataSettings = ({
                     <Popup
                       content="Edit field"
                       trigger={
-                        <Button
-                          icon="edit"
-                          onClick={() => openEditModal(column)}
-                        />
+                        <Button icon onClick={() => openEditModal(column)}>
+                          <Edit size={14} />
+                        </Button>
                       }
                     />
                     <Popup
                       content="Delete field"
                       trigger={
                         <Button
-                          icon="trash"
+                          icon
                           negative
                           onClick={() => {
                             setColumnToDelete(column.id);
                             setDeleteConfirmOpen(true);
                           }}
-                        />
+                        >
+                          <Trash2 size={14} />
+                        </Button>
                       }
                     />
                   </ActionButtonGroup>

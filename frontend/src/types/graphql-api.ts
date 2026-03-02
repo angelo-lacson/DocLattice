@@ -1,4 +1,3 @@
-import { SemanticICONS } from "semantic-ui-react";
 import {
   ExportTypes,
   MultipageAnnotationJson,
@@ -66,7 +65,7 @@ export type AnnotationLabelType = Node & {
   analyzer?: Maybe<AnalyzerType>;
   color?: Scalars["String"];
   description?: Scalars["String"];
-  icon?: SemanticICONS;
+  icon?: string;
   text?: Scalars["String"];
   creator?: UserType;
   needed_by_analyzer_id?: Scalars["String"];

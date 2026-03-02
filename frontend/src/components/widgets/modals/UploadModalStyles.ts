@@ -1,5 +1,6 @@
 import styled, { css, keyframes } from "styled-components";
-import { Modal, Button, Segment, List, Progress } from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // Breakpoints for responsive design
 const breakpoints = {
@@ -299,91 +300,87 @@ export const DropZoneButton = styled(Button)`
 `;
 
 // File list container
-export const FileListContainer = styled(Segment)`
-  &.ui.segment {
-    border-radius: 12px !important;
-    border: 1px solid #e9ecef !important;
-    box-shadow: none !important;
-    max-height: 300px;
-    overflow-y: auto;
-    padding: 0.5rem !important;
-    margin: 0 !important;
+export const FileListContainer = styled.div`
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  margin: 0;
 
-    @media (max-width: ${breakpoints.mobile}) {
-      max-height: 250px;
-    }
+  @media (max-width: ${breakpoints.mobile}) {
+    max-height: 250px;
+  }
 
-    /* Custom scrollbar */
-    &::-webkit-scrollbar {
-      width: 6px;
-    }
+  /* Custom scrollbar */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
 
-    &::-webkit-scrollbar-track {
-      background: #f1f3f5;
-      border-radius: 3px;
-    }
+  &::-webkit-scrollbar-track {
+    background: #f1f3f5;
+    border-radius: 3px;
+  }
 
-    &::-webkit-scrollbar-thumb {
-      background: #ced4da;
-      border-radius: 3px;
-    }
+  &::-webkit-scrollbar-thumb {
+    background: #ced4da;
+    border-radius: 3px;
+  }
 
-    &::-webkit-scrollbar-thumb:hover {
-      background: #adb5bd;
-    }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
   }
 `;
 
 // File list item
-export const FileListItem = styled(List.Item)<{
+export const FileListItem = styled.li<{
   $selected?: boolean;
   $status?: string;
 }>`
-  &.item {
-    padding: 0.875rem 1rem !important;
-    margin: 0.25rem 0 !important;
-    border-radius: 8px !important;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    position: relative;
-    display: flex !important;
-    align-items: center !important;
-    min-height: 56px; /* Touch target size */
+  list-style: none;
+  padding: 0.875rem 1rem;
+  margin: 0.25rem 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 56px; /* Touch target size */
 
-    @media (max-width: ${breakpoints.mobile}) {
-      padding: 1rem !important;
-      min-height: 64px;
-    }
+  @media (max-width: ${breakpoints.mobile}) {
+    padding: 1rem;
+    min-height: 64px;
+  }
 
-    ${({ $selected }) =>
-      $selected &&
-      css`
-        background: linear-gradient(
-          135deg,
-          rgba(102, 126, 234, 0.1) 0%,
-          rgba(118, 75, 162, 0.1) 100%
-        ) !important;
-        border: 1px solid rgba(102, 126, 234, 0.3);
-      `}
+  ${({ $selected }) =>
+    $selected &&
+    css`
+      background: linear-gradient(
+        135deg,
+        rgba(102, 126, 234, 0.1) 0%,
+        rgba(118, 75, 162, 0.1) 100%
+      );
+      border: 1px solid rgba(102, 126, 234, 0.3);
+    `}
 
-    ${({ $status }) =>
-      $status === "SUCCESS" &&
-      css`
-        background: #e8f5e9 !important;
-        border: 1px solid #c8e6c9;
-      `}
+  ${({ $status }) =>
+    $status === "SUCCESS" &&
+    css`
+      background: #e8f5e9;
+      border: 1px solid #c8e6c9;
+    `}
 
-    ${({ $status }) =>
-      $status === "FAILED" &&
-      css`
-        background: #ffebee !important;
-        border: 1px solid #ffcdd2;
-      `}
+  ${({ $status }) =>
+    $status === "FAILED" &&
+    css`
+      background: #ffebee;
+      border: 1px solid #ffcdd2;
+    `}
 
-    &:hover {
-      background: ${({ $selected }) =>
-        $selected ? "rgba(102, 126, 234, 0.15)" : "#f8f9fa"};
-    }
+  &:hover {
+    background: ${({ $selected }) =>
+      $selected ? "rgba(102, 126, 234, 0.15)" : "#f8f9fa"};
   }
 `;
 
@@ -499,37 +496,53 @@ export const EditPanelHeader = styled.h4`
   border-bottom: 2px solid #667eea;
 `;
 
-export const FormContainer = styled(Segment)`
-  &.ui.segment {
-    border-radius: 12px !important;
-    border: 1px solid #e9ecef !important;
-    box-shadow: none !important;
-    padding: 1.5rem !important;
-    height: 100%;
+export const FormContainer = styled.div`
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+  padding: 1.5rem;
+  height: 100%;
+  background: #fff;
 
-    @media (max-width: ${breakpoints.mobile}) {
-      padding: 1rem !important;
-    }
+  @media (max-width: ${breakpoints.mobile}) {
+    padding: 1rem;
   }
 `;
 
 // Progress indicator
-export const UploadProgress = styled(Progress)`
-  &.ui.progress {
-    margin: 1rem 0 !important;
-    border-radius: 8px !important;
-    overflow: hidden;
+export const UploadProgress = styled.div<{ $percent?: number }>`
+  margin: 1rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e9ecef;
+  height: 20px;
+  position: relative;
 
-    .bar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-      border-radius: 8px !important;
-      min-width: 0 !important;
-    }
+  &::before {
+    content: "${({ $percent }) => Math.round($percent ?? 0)}%";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: ${({ $percent }) =>
+      ($percent ?? 0) > 50 ? "#fff" : OS_LEGAL_COLORS.textTertiary};
+    z-index: 1;
+    line-height: 20px;
+  }
 
-    .label {
-      font-size: 0.875rem !important;
-      color: #495057 !important;
-    }
+  &::after {
+    content: "";
+    display: block;
+    height: 100%;
+    width: ${({ $percent }) => $percent ?? 0}%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    transition: width 0.3s ease;
   }
 `;
 

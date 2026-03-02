@@ -1,12 +1,14 @@
 import React, { memo, useCallback } from "react";
 import styled, { css } from "styled-components";
-import { Checkbox, CheckboxProps, Dropdown } from "semantic-ui-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import { Dropdown } from "semantic-ui-react";
 import { User, Square, Layers, Eye, Tags } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAnnotationDisplay } from "../context/UISettingsAtom";
 import { updateAnnotationDisplayParams } from "../../../utils/navigationUtils";
 import { ViewLabelSelector } from "../labels/view_labels_selector/ViewLabelSelector";
 import { LabelDisplayBehavior } from "../../../types/graphql-api";
+import { ToggleSwitch } from "../../widgets/ToggleSwitch";
 
 interface AnnotationControlsProps {
   /** Display variant - affects styling and layout */
@@ -26,9 +28,9 @@ const ControlsContainer = styled.div<{ $variant: "floating" | "sidebar" }>`
         `
       : css`
           padding: 1rem;
-          background: #f8fafc;
+          background: ${OS_LEGAL_COLORS.surfaceHover};
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid ${OS_LEGAL_COLORS.border};
         `}
 `;
 
@@ -41,7 +43,10 @@ const ControlItem = styled.div<{ $compact?: boolean }>`
   transition: background 0.2s ease;
 
   &:hover {
-    background: ${(props) => (props.$compact ? "#f8fafc" : "#f1f5f9")};
+    background: ${(props) =>
+      props.$compact
+        ? OS_LEGAL_COLORS.surfaceHover
+        : OS_LEGAL_COLORS.surfaceLight};
   }
 
   &:not(:last-child) {
@@ -55,36 +60,12 @@ const ControlLabel = styled.div<{ $compact?: boolean }>`
   gap: ${(props) => (props.$compact ? "0.5rem" : "0.75rem")};
   font-size: ${(props) => (props.$compact ? "0.8125rem" : "0.875rem")};
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 
   svg {
     width: ${(props) => (props.$compact ? "16px" : "18px")};
     height: ${(props) => (props.$compact ? "16px" : "18px")};
-    color: #64748b;
-  }
-`;
-
-const StyledCheckbox = styled(Checkbox)`
-  &&& {
-    transform: scale(1.1);
-
-    label {
-      padding-left: 1.75rem !important;
-
-      &:before {
-        border-color: #e2e8f0 !important;
-        border-radius: 4px !important;
-      }
-
-      &:after {
-        border-radius: 2px !important;
-      }
-    }
-
-    &.checked label:before {
-      border-color: #3b82f6 !important;
-      background: #3b82f6 !important;
-    }
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -96,13 +77,14 @@ const SectionHeader = styled.div<{ $compact?: boolean }>`
   padding: ${(props) => (props.$compact ? "0.5rem" : "0.75rem")};
   font-size: ${(props) => (props.$compact ? "0.875rem" : "0.9375rem")};
   font-weight: 600;
-  color: #1e293b;
-  border-bottom: ${(props) => (props.$compact ? "none" : "1px solid #f1f5f9")};
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  border-bottom: ${(props) =>
+    props.$compact ? "none" : `1px solid ${OS_LEGAL_COLORS.surfaceLight}`};
 
   svg {
     width: ${(props) => (props.$compact ? "18px" : "20px")};
     height: ${(props) => (props.$compact ? "18px" : "20px")};
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 `;
 
@@ -112,12 +94,12 @@ const LabelDisplayDropdown = styled(Dropdown)`
     min-width: 100%;
 
     &.ui.dropdown {
-      border: 1px solid #e2e8f0;
+      border: 1px solid ${OS_LEGAL_COLORS.border};
       border-radius: 6px;
       padding: 0.625rem 0.875rem;
       background: white;
       font-weight: 500;
-      color: #1e293b;
+      color: ${OS_LEGAL_COLORS.textPrimary};
 
       &:hover {
         border-color: #cbd5e1;
@@ -126,7 +108,7 @@ const LabelDisplayDropdown = styled(Dropdown)`
 
     .menu {
       border-radius: 6px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid ${OS_LEGAL_COLORS.border};
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     }
 
@@ -145,7 +127,7 @@ const FilterHeader = styled.div`
   margin-top: 0.75rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   svg {
     width: 16px;
@@ -259,14 +241,15 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
             <User />
             Show Only Selected
           </ControlLabel>
-          <StyledCheckbox
-            toggle
-            onChange={(
-              _e: React.FormEvent<HTMLInputElement>,
-              data: CheckboxProps
-            ) => handleShowSelectedChange(data?.checked ?? false)}
-            checked={showSelectedOnly}
-          />
+          <ToggleSwitch>
+            <input
+              type="checkbox"
+              aria-label="Show Only Selected"
+              checked={showSelectedOnly}
+              onChange={(e) => handleShowSelectedChange(e.target.checked)}
+            />
+            <span />
+          </ToggleSwitch>
         </ControlItem>
 
         <ControlItem $compact={compact}>
@@ -274,14 +257,15 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
             <Square />
             Show Bounding Boxes
           </ControlLabel>
-          <StyledCheckbox
-            toggle
-            onChange={(
-              _e: React.FormEvent<HTMLInputElement>,
-              data: CheckboxProps
-            ) => handleShowBoundingBoxesChange(data?.checked ?? false)}
-            checked={showBoundingBoxes}
-          />
+          <ToggleSwitch>
+            <input
+              type="checkbox"
+              aria-label="Show Bounding Boxes"
+              checked={showBoundingBoxes}
+              onChange={(e) => handleShowBoundingBoxesChange(e.target.checked)}
+            />
+            <span />
+          </ToggleSwitch>
         </ControlItem>
 
         <ControlItem $compact={compact}>
@@ -289,14 +273,15 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
             <Layers />
             Show Structural
           </ControlLabel>
-          <StyledCheckbox
-            toggle
-            onChange={(
-              _e: React.FormEvent<HTMLInputElement>,
-              data: CheckboxProps
-            ) => handleShowStructuralChange(data?.checked ?? false)}
-            checked={showStructural}
-          />
+          <ToggleSwitch>
+            <input
+              type="checkbox"
+              aria-label="Show Structural"
+              checked={showStructural}
+              onChange={(e) => handleShowStructuralChange(e.target.checked)}
+            />
+            <span />
+          </ToggleSwitch>
         </ControlItem>
 
         {/* Label Display Behavior */}

@@ -1,18 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { useMutation } from "@apollo/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
-import {
-  Button,
-  Card,
-  Dimmer,
-  Icon,
-  Image,
-  Label,
-  Loader,
-  Popup,
-} from "semantic-ui-react";
+import { Button, Card, Image, Popup } from "semantic-ui-react";
+import { Settings, Tags, Pencil } from "lucide-react";
+import { Spinner } from "@os-legal/ui";
 import {
   RequestDeleteAnalysisInputType,
   RequestDeleteAnalysisOutputType,
@@ -91,9 +85,18 @@ const LabelContainer = styled.div`
   gap: 0.5em;
 `;
 
-const StyledLabel = styled(Label)`
-  margin: 0 !important;
-  font-size: 0.85em !important;
+const StyledLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0.25em 0.6em;
+  font-size: 0.85em;
+  font-weight: 500;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 4px;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 const DeleteButton = styled(Button)`
@@ -223,9 +226,26 @@ export const AnalysisItem = ({
       selected={selected}
     >
       {analysis.corpusAction && (
-        <Label attached="top" color="green" size="tiny">
-          <Icon name="cog" /> Action - {analysis.corpusAction.name}
-        </Label>
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            padding: "0.25em 0.5em",
+            background: OS_LEGAL_COLORS.success,
+            color: "white",
+            fontSize: "0.75em",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            borderRadius: "4px 4px 0 0",
+            zIndex: 1,
+          }}
+        >
+          <Settings size={12} /> Action - {analysis.corpusAction.name}
+        </div>
       )}
       <CardContent>
         {!read_only && can_delete && (
@@ -240,9 +260,29 @@ export const AnalysisItem = ({
           />
         )}
         {!analysis.analysisCompleted && (
-          <Dimmer active inverted>
-            <Loader inverted>Processing...</Loader>
-          </Dimmer>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255,255,255,0.85)",
+              zIndex: 20,
+            }}
+          >
+            <Spinner size="sm" />
+            <span
+              style={{
+                marginTop: "0.5rem",
+                fontSize: "0.8rem",
+                color: OS_LEGAL_COLORS.textSecondary,
+              }}
+            >
+              Processing...
+            </span>
+          </div>
         )}
         {analysis.analyzer.manifest?.label_set?.icon_data && (
           <Image
@@ -292,11 +332,11 @@ export const AnalysisItem = ({
       <ExtraContent extra>
         <LabelContainer>
           <StyledLabel>
-            <Icon name="tags" />
+            <Tags size={12} />
             {analysis?.analyzer?.annotationlabelSet?.totalCount || 0} Labels
           </StyledLabel>
           <StyledLabel>
-            <Icon name="pencil" /> {analysis.annotations.totalCount} Annot.
+            <Pencil size={12} /> {analysis.annotations.totalCount} Annot.
           </StyledLabel>
         </LabelContainer>
       </ExtraContent>
