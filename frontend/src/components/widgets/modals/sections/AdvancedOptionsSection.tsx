@@ -44,7 +44,16 @@ export const AdvancedOptionsSection: React.FC<AdvancedOptionsSectionProps> = ({
           <label>
             Limit Search to Label
             <Popup
-              trigger={<HelpCircle size={14} style={{ marginLeft: 4, verticalAlign: "middle", cursor: "help" }} />}
+              trigger={
+                <HelpCircle
+                  size={14}
+                  style={{
+                    marginLeft: 4,
+                    verticalAlign: "middle",
+                    cursor: "help",
+                  }}
+                />
+              }
               content="Specify a label name to limit the search scope"
             />
           </label>

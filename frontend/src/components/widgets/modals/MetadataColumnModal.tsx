@@ -76,7 +76,6 @@ const ErrorChip = styled.span`
   border-radius: 4px;
 `;
 
-
 export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
   open,
   onClose,
@@ -85,7 +84,7 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 }) => {
   const [name, setName] = useState("");
   const [dataType, setDataType] = useState<MetadataDataType>(
-    MetadataDataType.STRING,
+    MetadataDataType.STRING
   );
   const [helpText, setHelpText] = useState("");
   const [required, setRequired] = useState(false);

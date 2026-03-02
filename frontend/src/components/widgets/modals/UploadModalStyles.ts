@@ -172,14 +172,14 @@ export const Step = styled.div<{ $active?: boolean; $completed?: boolean }>`
           color: white;
         `
       : $completed
-        ? css`
-            background: #e8f5e9;
-            color: #2e7d32;
-          `
-        : css`
-            background: #f1f3f5;
-            color: #868e96;
-          `}
+      ? css`
+          background: #e8f5e9;
+          color: #2e7d32;
+        `
+      : css`
+          background: #f1f3f5;
+          color: #868e96;
+        `}
 `;
 
 export const StepConnector = styled.div<{ $completed?: boolean }>`
@@ -398,8 +398,8 @@ export const FileItemIcon = styled.div<{ $status?: string }>`
     $status === "SUCCESS"
       ? "#2e7d32"
       : $status === "FAILED"
-        ? "#c62828"
-        : "#667eea"};
+      ? "#c62828"
+      : "#667eea"};
   flex-shrink: 0;
 `;
 

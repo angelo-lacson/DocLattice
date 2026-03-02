@@ -287,7 +287,11 @@ export const EditFolderModal: React.FC = () => {
               maxLength={50}
             />
             <div
-              style={{ fontSize: "12px", color: OS_LEGAL_COLORS.textSecondary, marginTop: "4px" }}
+              style={{
+                fontSize: "12px",
+                color: OS_LEGAL_COLORS.textSecondary,
+                marginTop: "4px",
+              }}
             >
               Use Lucide React icon names (e.g., folder, file-text, star)
             </div>
@@ -301,7 +305,11 @@ export const EditFolderModal: React.FC = () => {
               onChange={(e) => setTags(e.target.value)}
             />
             <div
-              style={{ fontSize: "12px", color: OS_LEGAL_COLORS.textSecondary, marginTop: "4px" }}
+              style={{
+                fontSize: "12px",
+                color: OS_LEGAL_COLORS.textSecondary,
+                marginTop: "4px",
+              }}
             >
               Comma-separated tags for organization
             </div>

@@ -157,7 +157,9 @@ const DocumentGrid = styled.div`
 
 const DocumentCard = styled.div<{ $isSelected: boolean }>`
   background: white;
-  border: 1px solid ${(props) => (props.$isSelected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border)};
+  border: 1px solid
+    ${(props) =>
+      props.$isSelected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s ease;
@@ -558,7 +560,11 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         ) : (
           <>
             <div
-              style={{ width: "100%", height: "100%", background: OS_LEGAL_COLORS.surfaceHover }}
+              style={{
+                width: "100%",
+                height: "100%",
+                background: OS_LEGAL_COLORS.surfaceHover,
+              }}
             />
             <img
               src={fallback_doc_icon}

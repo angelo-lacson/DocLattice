@@ -171,15 +171,15 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
   // Fetch images if annotation has IMAGE modality
   const { images, loading, error } = useAnnotationImages(
     annotation.id,
-    contentModalities,
+    contentModalities
   );
   const selected = selectedAnnotations.includes(annotation.id);
 
   const my_output_relationships = relations.filter((relation) =>
-    relation.sourceIds.includes(annotation.id),
+    relation.sourceIds.includes(annotation.id)
   );
   const my_input_relationships = relations.filter((relation) =>
-    relation.targetIds.includes(annotation.id),
+    relation.targetIds.includes(annotation.id)
   );
   const handleClick = () => {
     // Only use scrollIntoView for PDF token annotations. Text annotations

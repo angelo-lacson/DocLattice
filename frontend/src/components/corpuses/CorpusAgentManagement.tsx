@@ -256,7 +256,8 @@ const ToolItem = styled.div<{ $selected: boolean }>`
   background: ${(props) => (props.$selected ? "#eff6ff" : "transparent")};
 
   &:hover {
-    background: ${(props) => (props.$selected ? "#dbeafe" : OS_LEGAL_COLORS.surfaceHover)};
+    background: ${(props) =>
+      props.$selected ? "#dbeafe" : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:last-child {
@@ -267,14 +268,16 @@ const ToolItem = styled.div<{ $selected: boolean }>`
 const ToolCheckbox = styled.div<{ $checked: boolean }>`
   width: 18px;
   height: 18px;
-  border: 2px solid ${(props) => (props.$checked ? OS_LEGAL_COLORS.primaryBlue : "#cbd5e1")};
+  border: 2px solid
+    ${(props) => (props.$checked ? OS_LEGAL_COLORS.primaryBlue : "#cbd5e1")};
   border-radius: 4px;
   margin-right: 0.75rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${(props) => (props.$checked ? OS_LEGAL_COLORS.primaryBlue : "white")};
+  background: ${(props) =>
+    props.$checked ? OS_LEGAL_COLORS.primaryBlue : "white"};
   transition: all 0.15s ease;
 
   &::after {
@@ -701,7 +704,12 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 <Table.Cell>
                   <strong>{agent.name}</strong>
                   {agent.slug && (
-                    <div style={{ fontSize: "0.75rem", color: OS_LEGAL_COLORS.textSecondary }}>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: OS_LEGAL_COLORS.textSecondary,
+                      }}
+                    >
                       <code>{agent.slug}</code>
                     </div>
                   )}

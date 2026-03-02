@@ -154,7 +154,11 @@ const EditorContainer = styled.div`
 const EditorHeader = styled.div`
   padding: 1.5rem;
   border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
-  background: linear-gradient(to right, ${OS_LEGAL_COLORS.surfaceHover}, ${OS_LEGAL_COLORS.surfaceLight});
+  background: linear-gradient(
+    to right,
+    ${OS_LEGAL_COLORS.surfaceHover},
+    ${OS_LEGAL_COLORS.surfaceLight}
+  );
   flex-shrink: 0;
 
   h3 {
@@ -303,7 +307,11 @@ const HistoryPanel = styled(motion.div)`
 const HistoryHeader = styled.div`
   padding: 1.5rem;
   border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
-  background: linear-gradient(to right, ${OS_LEGAL_COLORS.surfaceHover}, ${OS_LEGAL_COLORS.surfaceLight});
+  background: linear-gradient(
+    to right,
+    ${OS_LEGAL_COLORS.surfaceHover},
+    ${OS_LEGAL_COLORS.surfaceLight}
+  );
   flex-shrink: 0;
   position: relative;
 
@@ -474,7 +482,11 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
   padding: 1rem;
   border: 1px solid
     ${(props) =>
-      props.$isActive ? "#4a90e2" : props.$isViewing ? "#a78bfa" : OS_LEGAL_COLORS.border};
+      props.$isActive
+        ? "#4a90e2"
+        : props.$isViewing
+        ? "#a78bfa"
+        : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   background: ${(props) =>
     props.$isActive ? "#eff6ff" : props.$isViewing ? "#f3f4f6" : "white"};
@@ -498,7 +510,11 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
     .version-number {
       font-weight: 600;
       color: ${(props) =>
-        props.$isActive ? "#4a90e2" : props.$isViewing ? "#7c3aed" : OS_LEGAL_COLORS.textPrimary};
+        props.$isActive
+          ? "#4a90e2"
+          : props.$isViewing
+          ? "#7c3aed"
+          : OS_LEGAL_COLORS.textPrimary};
       display: flex;
       align-items: center;
       gap: 0.375rem;
@@ -510,9 +526,15 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
       font-size: 0.75rem;
       font-weight: 500;
       background: ${(props) =>
-        props.$isActive ? "#4a90e2" : props.$isViewing ? "#a78bfa" : OS_LEGAL_COLORS.border};
+        props.$isActive
+          ? "#4a90e2"
+          : props.$isViewing
+          ? "#a78bfa"
+          : OS_LEGAL_COLORS.border};
       color: ${(props) =>
-        props.$isActive || props.$isViewing ? "white" : OS_LEGAL_COLORS.textSecondary};
+        props.$isActive || props.$isViewing
+          ? "white"
+          : OS_LEGAL_COLORS.textSecondary};
     }
   }
 

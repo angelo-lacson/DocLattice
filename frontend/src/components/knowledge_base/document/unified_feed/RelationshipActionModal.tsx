@@ -67,7 +67,8 @@ const ModalContent = styled(Modal.Content)`
 const RelationshipOption = styled.div<{ $selected: boolean }>`
   padding: 1rem;
   margin: 0.5rem 0;
-  border: 2px solid ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
+  border: 2px solid
+    ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -379,7 +380,12 @@ export const RelationshipActionModal: React.FC<
                 <Form.Field style={{ marginTop: "1rem" }}>
                   <label>Select Relationship</label>
                   {editableRelationships.length === 0 ? (
-                    <p style={{ color: OS_LEGAL_COLORS.textSecondary, fontStyle: "italic" }}>
+                    <p
+                      style={{
+                        color: OS_LEGAL_COLORS.textSecondary,
+                        fontStyle: "italic",
+                      }}
+                    >
                       No editable relationships found. Create a new one instead.
                     </p>
                   ) : (
@@ -612,7 +618,10 @@ export const RelationshipActionModal: React.FC<
 
                     <AssignmentSection>
                       <div className="section-title">
-                        <ArrowRight size={14} color={OS_LEGAL_COLORS.primaryBlue} />
+                        <ArrowRight
+                          size={14}
+                          color={OS_LEGAL_COLORS.primaryBlue}
+                        />
                         Source Annotations
                       </div>
                       <div className="pills-container">

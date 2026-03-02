@@ -281,10 +281,14 @@ test(
 
     // Check action data - action badges use data-testid
     await expect(
-      table.locator('[data-testid="action-badge"]').filter({ hasText: "Lock Thread" })
+      table
+        .locator('[data-testid="action-badge"]')
+        .filter({ hasText: "Lock Thread" })
     ).toBeVisible();
     await expect(
-      table.locator('[data-testid="action-badge"]').filter({ hasText: "Delete Message" })
+      table
+        .locator('[data-testid="action-badge"]')
+        .filter({ hasText: "Delete Message" })
     ).toBeVisible();
 
     // Check thread titles

@@ -828,7 +828,12 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               }}
             >
               <Spinner size="md" />
-              <span style={{ marginTop: "0.75rem", color: OS_LEGAL_COLORS.textSecondary }}>
+              <span
+                style={{
+                  marginTop: "0.75rem",
+                  color: OS_LEGAL_COLORS.textSecondary,
+                }}
+              >
                 {extract.started && !extract.finished
                   ? "Processing..."
                   : "Loading..."}
@@ -1165,7 +1170,10 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
           style={{ borderRadius: "12px", padding: "1.5rem" }}
         >
           <Modal.Header
-            style={{ borderBottom: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`, paddingBottom: "1rem" }}
+            style={{
+              borderBottom: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`,
+              paddingBottom: "1rem",
+            }}
           >
             Confirm Delete
           </Modal.Header>
@@ -1182,7 +1190,10 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
             )}
           </Modal.Content>
           <Modal.Actions
-            style={{ borderTop: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`, paddingTop: "1rem" }}
+            style={{
+              borderTop: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`,
+              paddingTop: "1rem",
+            }}
           >
             <Button
               basic

@@ -140,15 +140,15 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
   const documentIds = isSingleDocument
     ? [documentId]
     : selectedDocumentIds.length
-      ? selectedDocumentIds
-      : documents.map((d) => d.id);
+    ? selectedDocumentIds
+    : documents.map((d) => d.id);
 
   const selectedDocs = documents.filter((d) => documentIds.includes(d.id));
 
   // Debounced search function
   const debouncedSetSearchTerm = useCallback(
     _.debounce(setSearchTerm, 300),
-    [],
+    []
   );
 
   // Query for corpuses with search
@@ -217,7 +217,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
         toast.success(
           `Document${
             documentIds.length > 1 ? "s" : ""
-          } added to corpus successfully!`,
+          } added to corpus successfully!`
         );
         onSuccess(selectedCorpus?.id || addingToCorpusId || "", selectedCorpus);
         onClose();
@@ -260,7 +260,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
         (corpus): corpus is CorpusType =>
           corpus !== null &&
           corpus !== undefined &&
-          (corpus.myPermissions?.includes("update_corpus") ?? false),
+          (corpus.myPermissions?.includes("update_corpus") ?? false)
       ) || [];
 
   const renderCorpusList = () => {

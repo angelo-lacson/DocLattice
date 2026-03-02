@@ -65,7 +65,8 @@ const ActionButton = styled(motion.button)<{ $color?: string }>`
   svg {
     width: 24px;
     height: 24px;
-    color: ${(props) => (props.$color ? "white" : OS_LEGAL_COLORS.textSecondary)};
+    color: ${(props) =>
+      props.$color ? "white" : OS_LEGAL_COLORS.textSecondary};
     transition: transform 0.3s ease;
   }
 
@@ -76,7 +77,8 @@ const ActionButton = styled(motion.button)<{ $color?: string }>`
         props.$color ? `${props.$color}30` : "rgba(59, 130, 246, 0.15)"};
 
     svg {
-      color: ${(props) => (props.$color ? "white" : OS_LEGAL_COLORS.primaryBlue)};
+      color: ${(props) =>
+        props.$color ? "white" : OS_LEGAL_COLORS.primaryBlue};
     }
   }
 
@@ -206,7 +208,8 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
     props.$isActive
       ? "linear-gradient(135deg, rgba(66, 153, 225, 0.08), rgba(66, 153, 225, 0.05))"
       : "transparent"};
-  color: ${(props) => (props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textSecondary)};
+  color: ${(props) =>
+    props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textSecondary};
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -239,7 +242,8 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
       props.$isActive
         ? "linear-gradient(135deg, rgba(66, 153, 225, 0.12), rgba(66, 153, 225, 0.08))"
         : "rgba(0, 0, 0, 0.02)"};
-    color: ${(props) => (props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textTertiary)};
+    color: ${(props) =>
+      props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textTertiary};
     transform: translateX(2px);
   }
 
@@ -318,7 +322,8 @@ const OrbitButton = styled(motion.button)<{ $color?: string }>`
   svg {
     width: 20px;
     height: 20px;
-    color: ${(props) => (props.$color ? "white" : OS_LEGAL_COLORS.textSecondary)};
+    color: ${(props) =>
+      props.$color ? "white" : OS_LEGAL_COLORS.textSecondary};
   }
 
   &:active {
