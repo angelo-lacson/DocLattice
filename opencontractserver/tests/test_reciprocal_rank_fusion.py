@@ -75,9 +75,7 @@ class TestReciprocalRankFusion(TestCase):
         items1 = [{"name": "alpha"}, {"name": "beta"}]
         items2 = [{"name": "beta"}, {"name": "gamma"}]
 
-        result = reciprocal_rank_fusion(
-            items1, items2, id_fn=lambda x: x["name"]
-        )
+        result = reciprocal_rank_fusion(items1, items2, id_fn=lambda x: x["name"])
         names = [item["name"] for item, _ in result]
 
         # beta appears in both → highest score → first
