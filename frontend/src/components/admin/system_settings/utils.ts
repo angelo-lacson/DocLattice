@@ -5,12 +5,7 @@ import { PipelineComponentType } from "../../../types/graphql-api";
  *
  * The canonical rule is: an empty `enabledComponents` list means
  * "all components are enabled"; otherwise the component must be
- * present in the list.  The backend applies this same logic when
- * computing the `enabled` GraphQL field, so prefer reading
- * `component.enabled` directly whenever the query result is
- * available.  This helper exists for the cases where we need to
- * evaluate enablement on the client (e.g. during the optimistic
- * toggle-transition before the mutation response arrives).
+ * present in the list.  Private helper used by `isComponentAvailable`.
  */
 const isComponentEnabled = (
   className: string,

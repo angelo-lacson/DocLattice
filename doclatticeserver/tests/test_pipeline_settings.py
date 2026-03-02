@@ -496,12 +496,6 @@ class EnabledComponentsMutationTestCase(TestCase):
     def setUp(self):
         from django.core.cache import cache
 
-        # Clear cache to ensure clean state between tests.
-        # With pytest-xdist, parallel workers share the same Redis cache
-        # but have separate databases, so stale cache entries from other
-        # workers can leak into this test.
-        cache.delete(PipelineSettings.CACHE_KEY)
-
         self.superuser = User.objects.create_superuser(
             username="ps_ec_admin", password="admin", email="ps_ec_admin@test.com"
         )
@@ -512,6 +506,7 @@ class EnabledComponentsMutationTestCase(TestCase):
         # Ensure the singleton exists and clear filetype default assignments.
         # This prevents validation conflicts when tests set enabled_components,
         # since the mutation rejects lists that omit assigned-default components.
+        # use_cache=False bypasses stale cache entries from prior tests.
         instance = PipelineSettings.get_instance(use_cache=False)
         instance.preferred_parsers = {}
         instance.preferred_embedders = {}
@@ -519,6 +514,7 @@ class EnabledComponentsMutationTestCase(TestCase):
         instance.default_embedder = ""
         instance.enabled_components = []
         instance.save()
+        # save() may re-populate the cache; clear it so tests start fresh.
         cache.delete(PipelineSettings.CACHE_KEY)
 
     def _get_real_component_paths(self):

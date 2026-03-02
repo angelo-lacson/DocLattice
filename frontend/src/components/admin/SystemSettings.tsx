@@ -141,6 +141,7 @@ export const SystemSettings: React.FC = () => {
           toast.success("Settings reset to defaults");
           setShowResetConfirm(false);
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.resetPipelineSettings?.message || "Failed to reset settings"
@@ -271,7 +272,7 @@ export const SystemSettings: React.FC = () => {
   // Toggle component enabled state
   const handleToggleEnabled = useCallback(
     (className: string, enabled: boolean) => {
-      if (componentsLoading) {
+      if (componentsLoading || settingsLoading) {
         toast.warning("Components are still loading. Please wait.");
         return;
       }
@@ -282,12 +283,15 @@ export const SystemSettings: React.FC = () => {
       let newEnabled: string[];
 
       if (currentEnabled.length === 0 && enabled) {
-        // Already in "all enabled" state and trying to enable — no-op
+        // Safe no-op: the checkbox's `checked` reflects `component.enabled ?? true`,
+        // so enabling when already in the "all enabled" (empty-list) state is
+        // unreachable via normal UI interaction. Guard kept for defensive safety.
         return;
       }
 
       if (currentEnabled.length === 0) {
-        // Transitioning from "all enabled" -- build full list from loaded components
+        // Transitioning from "all enabled" to explicit list: build full list
+        // from loaded components, then remove the one being disabled.
         const allPaths = [
           ...componentsByStage.parsers,
           ...componentsByStage.embedders,
@@ -302,20 +306,29 @@ export const SystemSettings: React.FC = () => {
         // Deduplicate paths in case a className appears across stages
         const uniquePaths = [...new Set(allPaths)];
 
-        newEnabled = enabled
-          ? uniquePaths
-          : uniquePaths.filter((p) => p !== className);
+        newEnabled = uniquePaths.filter((p) => p !== className);
       } else {
         newEnabled = enabled
           ? [...new Set([...currentEnabled, className])]
           : currentEnabled.filter((p: string) => p !== className);
       }
 
+      // NOTE: When disabling the last component, newEnabled becomes [].
+      // The backend interprets [] as "all enabled" (no filter), so this
+      // effectively re-enables everything. This is pre-existing behavior;
+      // a future improvement could add a dedicated "disable all" state.
+
       updateSettings({
         variables: { enabledComponents: newEnabled },
       });
     },
-    [settings, componentsByStage, componentsLoading, updateSettings]
+    [
+      settings,
+      componentsByStage,
+      componentsLoading,
+      settingsLoading,
+      updateSettings,
+    ]
   );
 
   // Assign a component to a filetype default
@@ -579,6 +592,8 @@ export const SystemSettings: React.FC = () => {
       <ComponentLibrary
         components={componentsByStage}
         updating={updating}
+        componentsLoading={componentsLoading}
+        settingsLoading={settingsLoading}
         onToggleEnabled={handleToggleEnabled}
         onAddSecrets={handleAddSecrets}
         onDeleteSecrets={handleDeleteSecretsClick}

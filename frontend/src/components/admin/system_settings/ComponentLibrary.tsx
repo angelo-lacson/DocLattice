@@ -43,6 +43,8 @@ interface ComponentLibraryProps {
     thumbnailers: (PipelineComponentType & { className: string })[];
   };
   updating: boolean;
+  componentsLoading: boolean;
+  settingsLoading: boolean;
   onToggleEnabled: (className: string, enabled: boolean) => void;
   onAddSecrets: (componentPath: string) => void;
   onDeleteSecrets: (componentPath: string) => void;
@@ -70,6 +72,8 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
   ({
     components,
     updating,
+    componentsLoading,
+    settingsLoading,
     onToggleEnabled,
     onAddSecrets,
     onDeleteSecrets,
@@ -206,7 +210,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
                   <input
                     type="checkbox"
                     checked={isEnabled}
-                    disabled={updating}
+                    disabled={updating || componentsLoading || settingsLoading}
                     onChange={(e) =>
                       onToggleEnabled(component.className, e.target.checked)
                     }
@@ -217,7 +221,10 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
                       width: 16,
                       height: 16,
                       marginTop: 2,
-                      cursor: updating ? "not-allowed" : "pointer",
+                      cursor:
+                        updating || componentsLoading || settingsLoading
+                          ? "not-allowed"
+                          : "pointer",
                       accentColor: stageConfig.color,
                     }}
                   />
