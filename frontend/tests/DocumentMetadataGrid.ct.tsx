@@ -291,16 +291,15 @@ test.describe("DocumentMetadataGrid", () => {
     // Wait for React to update
     await page.waitForTimeout(300);
 
-    // Look for checkbox container (Semantic UI wraps checkboxes)
-    const checkboxContainer = page.locator(".ui.checkbox").first();
-    await expect(checkboxContainer).toBeVisible({ timeout: 2000 });
+    // Look for checkbox input directly (no Semantic UI wrapper)
+    const checkbox = page.locator('input[type="checkbox"]').first();
+    await expect(checkbox).toBeVisible({ timeout: 2000 });
 
     // Check the actual checkbox state
-    const checkbox = checkboxContainer.locator('input[type="checkbox"]');
     await expect(checkbox).not.toBeChecked();
 
-    // Click the checkbox container (not the input directly)
-    await checkboxContainer.click();
+    // Click the checkbox
+    await checkbox.click();
 
     // Click outside to trigger save
     await page.locator("body").click({ position: { x: 10, y: 10 } });

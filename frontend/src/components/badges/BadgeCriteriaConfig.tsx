@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
-import { Form, Dropdown, Input, Message } from "semantic-ui-react";
+import { Form, Dropdown } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
 import {
   GET_BADGE_CRITERIA_TYPES,
   GetBadgeCriteriaTypesInput,
@@ -8,6 +9,7 @@ import {
   CriteriaTypeDefinition,
   CriteriaField,
 } from "../../graphql/queries";
+import { ErrorMessage, InfoMessage, WarningMessage } from "../widgets/feedback";
 
 interface BadgeCriteriaConfigProps {
   badgeType: "GLOBAL" | "CORPUS";
@@ -176,20 +178,18 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
   // Show loading state
   if (loading) {
     return (
-      <Message info>
-        <Message.Header>Loading Criteria Types</Message.Header>
-        <p>Fetching available auto-award criteria...</p>
-      </Message>
+      <InfoMessage title="Loading Criteria Types">
+        Fetching available auto-award criteria...
+      </InfoMessage>
     );
   }
 
   // Show error state
   if (error) {
     return (
-      <Message negative>
-        <Message.Header>Error Loading Criteria Types</Message.Header>
-        <p>{error.message}</p>
-      </Message>
+      <ErrorMessage title="Error Loading Criteria Types">
+        {error.message}
+      </ErrorMessage>
     );
   }
 
@@ -198,13 +198,10 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
   if (implementedTypes.length === 0) {
     return (
-      <Message warning>
-        <Message.Header>No Criteria Types Available</Message.Header>
-        <p>
-          There are no criteria types available for {badgeType.toLowerCase()}{" "}
-          badges yet.
-        </p>
-      </Message>
+      <WarningMessage title="No Criteria Types Available">
+        There are no criteria types available for {badgeType.toLowerCase()}{" "}
+        badges yet.
+      </WarningMessage>
     );
   }
 
@@ -233,10 +230,9 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
       {currentType && (
         <>
-          <Message info>
-            <Message.Header>{currentType.name}</Message.Header>
-            <p>{currentType.description}</p>
-          </Message>
+          <InfoMessage title={currentType.name}>
+            {currentType.description}
+          </InfoMessage>
 
           {currentType.fields.map((field) => (
             <Form.Field
@@ -266,11 +262,12 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
               {field.fieldType === "number" && (
                 <Input
+                  fullWidth
                   type="number"
                   min={field.minValue}
                   max={field.maxValue}
                   value={fieldValues[field.name] ?? ""}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     handleFieldChange(
                       field.name,
                       e.target.value === ""
@@ -285,9 +282,10 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
               {field.fieldType === "text" && !field.allowedValues && (
                 <Input
+                  fullWidth
                   type="text"
                   value={fieldValues[field.name] ?? ""}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     handleFieldChange(field.name, e.target.value)
                   }
                   placeholder={`Enter ${field.label.toLowerCase()}`}
@@ -333,14 +331,13 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
           ))}
 
           {Object.keys(validationErrors).length > 0 && (
-            <Message negative>
-              <Message.Header>Validation Errors</Message.Header>
+            <ErrorMessage title="Validation Errors">
               <ul>
                 {Object.values(validationErrors).map((error, idx) => (
                   <li key={idx}>{error}</li>
                 ))}
               </ul>
-            </Message>
+            </ErrorMessage>
           )}
         </>
       )}

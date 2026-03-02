@@ -11,16 +11,12 @@ import {
   Button,
   Modal,
   Form,
-  Input,
   Table,
   Dropdown,
-  Dimmer,
-  Loader,
-  Message,
   Confirm,
-  Icon,
 } from "semantic-ui-react";
-import { Copy, Check, Key } from "lucide-react";
+import { Input } from "@os-legal/ui";
+import { Copy, Check, Key, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 import styled from "styled-components";
 
@@ -37,6 +33,11 @@ import {
   OS_LEGAL_SPACING,
 } from "../../../assets/configurations/osLegalStyles";
 import { getNumericIdFromGlobalId } from "../../../utils/idValidation";
+import {
+  ErrorMessage,
+  InfoMessage,
+  LoadingState,
+} from "../../widgets/feedback";
 
 // ---------------------------------------------------------------------------
 // GraphQL operations
@@ -387,10 +388,9 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
 
   if (numericCorpusId === null) {
     return (
-      <Message negative>
-        <Message.Header>Invalid corpus ID</Message.Header>
-        <p>Unable to parse the corpus identifier.</p>
-      </Message>
+      <ErrorMessage title="Invalid corpus ID">
+        Unable to parse the corpus identifier.
+      </ErrorMessage>
     );
   }
 
@@ -408,7 +408,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
               size="small"
               onClick={() => setShowCreateModal(true)}
             >
-              <Icon name="plus" />
+              <Plus size={14} style={{ marginRight: "4px" }} />
               Create Token
             </Button>
           )}
@@ -422,28 +422,20 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
             be rate-limited or set to expire.
           </InfoNote>
 
-          {loadingTokens && (
-            <Dimmer active inverted>
-              <Loader>Loading tokens...</Loader>
-            </Dimmer>
-          )}
+          {loadingTokens && <LoadingState message="Loading tokens..." />}
 
           {tokensError && (
-            <Message negative>
-              <Message.Header>Error loading tokens</Message.Header>
-              <p>{tokensError.message}</p>
-            </Message>
+            <ErrorMessage title="Error loading tokens">
+              {tokensError.message}
+            </ErrorMessage>
           )}
 
           {!loadingTokens && !tokensError && tokens.length === 0 && (
-            <Message info>
-              <Message.Header>No Access Tokens</Message.Header>
-              <p>
-                {isSuperuser || isCreator
-                  ? "Create a token to allow a worker account to upload documents to this corpus."
-                  : "No access tokens have been created for this corpus yet. Contact an administrator to create one."}
-              </p>
-            </Message>
+            <InfoMessage title="No Access Tokens">
+              {isSuperuser || isCreator
+                ? "Create a token to allow a worker account to upload documents to this corpus."
+                : "No access tokens have been created for this corpus yet. Contact an administrator to create one."}
+            </InfoMessage>
           )}
 
           {!loadingTokens && !tokensError && tokens.length > 0 && (
@@ -541,9 +533,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
         <Modal.Header>Create Access Token</Modal.Header>
         <Modal.Content>
           {loadingAccounts ? (
-            <Dimmer active inverted>
-              <Loader>Loading worker accounts...</Loader>
-            </Dimmer>
+            <LoadingState message="Loading worker accounts..." />
           ) : (
             <Form>
               <Form.Field required>
@@ -566,8 +556,9 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
                 <label>Expiry Date (optional)</label>
                 <Input
                   type="datetime-local"
+                  fullWidth
                   value={formState.expiresAt}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormState({ ...formState, expiresAt: e.target.value })
                   }
                 />
@@ -576,9 +567,10 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
                 <label>Rate Limit (requests/min, 0 = unlimited)</label>
                 <Input
                   type="number"
+                  fullWidth
                   min={0}
                   value={formState.rateLimitPerMinute}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormState({
                       ...formState,
                       rateLimitPerMinute: parseInt(e.target.value, 10) || 0,

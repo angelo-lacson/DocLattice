@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
-import { Button, Dropdown, Message, Modal } from "semantic-ui-react";
+import { Button, Dropdown, Modal } from "semantic-ui-react";
 import { toast } from "react-toastify";
 
 import { CORPUS_DOCUMENTS_TOC_LIMIT } from "../../assets/configurations/constants";
+import { ErrorMessage, InfoMessage } from "../widgets/feedback";
 import {
   GET_CORPUS_DOCUMENTS_FOR_TOC,
   GetCorpusDocumentsForTocOutput,
@@ -91,10 +92,9 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
       <Modal.Content>
         <p>Select a document to run this action against:</p>
         {docsError && (
-          <Message negative>
-            <Message.Header>Failed to load documents</Message.Header>
-            <p>Please try again or check your permissions for this corpus.</p>
-          </Message>
+          <ErrorMessage title="Failed to load documents">
+            Please try again or check your permissions for this corpus.
+          </ErrorMessage>
         )}
         <Dropdown
           placeholder="Select document..."
@@ -107,10 +107,10 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
           onChange={(_, { value }) => setSelectedDocId(value as string)}
         />
         {isLimitExceeded && (
-          <Message info size="small">
+          <InfoMessage>
             Showing first {CORPUS_DOCUMENTS_TOC_LIMIT} of {totalCount}{" "}
             documents. Use the search box above to filter.
-          </Message>
+          </InfoMessage>
         )}
       </Modal.Content>
       <Modal.Actions>

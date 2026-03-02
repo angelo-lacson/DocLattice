@@ -24,10 +24,12 @@ test.describe("Badge Component - Mobile Responsive", () => {
       <Badge badge={mockBadge} size="small" showTooltip={true} />
     );
 
-    // Use the badge label specifically to avoid matching text in tooltip
-    const badgeLabel = component.locator(".ui.label");
-    await expect(badgeLabel).toBeVisible();
-    await expect(badgeLabel.filter({ hasText: "Test Badge" })).toBeVisible();
+    // Target the StyledBadge span specifically (popup title/description also contain badge name)
+    const badgeSpan = component
+      .locator("span")
+      .filter({ hasText: "Test Badge" })
+      .first();
+    await expect(badgeSpan).toBeVisible();
   });
 
   test("should show popup on hover (desktop)", async ({ mount, page }) => {
@@ -38,8 +40,12 @@ test.describe("Badge Component - Mobile Responsive", () => {
       <Badge badge={mockBadge} size="small" showTooltip={true} />
     );
 
-    // Hover over badge
-    await component.locator(".ui.label").hover();
+    // Hover over the badge span
+    const badgeSpan = component
+      .locator("span")
+      .filter({ hasText: "Test Badge" })
+      .first();
+    await badgeSpan.hover();
     await page.waitForTimeout(300);
 
     // Popup should be visible
@@ -59,8 +65,12 @@ test.describe("Badge Component - Mobile Responsive", () => {
       <Badge badge={mockBadge} size="small" showTooltip={true} />
     );
 
-    // Click on badge (simulating touch)
-    await component.locator(".ui.label").click();
+    // Click on badge span (simulating touch)
+    const badgeSpan = component
+      .locator("span")
+      .filter({ hasText: "Test Badge" })
+      .first();
+    await badgeSpan.click();
     await page.waitForTimeout(300);
 
     // Popup should be visible (centered on mobile)
@@ -80,8 +90,12 @@ test.describe("Badge Component - Mobile Responsive", () => {
       <Badge badge={mockBadge} size="small" showTooltip={true} />
     );
 
-    // Click the badge to show popup
-    await component.locator(".ui.label").click();
+    // Click the badge span to show popup
+    const badgeSpan = component
+      .locator("span")
+      .filter({ hasText: "Test Badge" })
+      .first();
+    await badgeSpan.click();
     await page.waitForTimeout(300);
 
     // Verify popup is visible
@@ -104,7 +118,10 @@ test.describe("Badge Component - Mobile Responsive", () => {
       <Badge badge={mockBadge} size="small" showTooltip={true} />
     );
 
-    const badge = component.locator(".ui.label");
+    const badge = component
+      .locator("span")
+      .filter({ hasText: "Test Badge" })
+      .first();
     const box = await badge.boundingBox();
 
     // Badge should have minimum height for touch targets (36px)
@@ -146,16 +163,12 @@ test.describe("UserBadges Container - Mobile Responsive", () => {
       <UserBadgesTestWrapper userId="user-1" badges={testBadges} />
     );
 
-    // Wait for badges to load - use .first() as text appears in both badge label and popup
-    await expect(
-      page.locator(".ui.label").filter({ hasText: "First Badge" }).first()
-    ).toBeVisible({ timeout: 5000 });
-    await expect(
-      page.locator(".ui.label").filter({ hasText: "Second Badge" }).first()
-    ).toBeVisible();
-    await expect(
-      page.locator(".ui.label").filter({ hasText: "Third Badge" }).first()
-    ).toBeVisible();
+    // Wait for badges to load
+    await expect(page.getByText("First Badge").first()).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByText("Second Badge").first()).toBeVisible();
+    await expect(page.getByText("Third Badge").first()).toBeVisible();
   });
 
   test("should center badges on mobile viewport", async ({ mount, page }) => {
@@ -166,17 +179,17 @@ test.describe("UserBadges Container - Mobile Responsive", () => {
       <UserBadgesTestWrapper userId="user-1" badges={testBadges} />
     );
 
-    // Wait for badges to load - use .first() as text appears in both badge label and popup
-    await expect(
-      page.locator(".ui.label").filter({ hasText: "First Badge" }).first()
-    ).toBeVisible({ timeout: 5000 });
+    // Wait for badges to load
+    await expect(page.getByText("First Badge").first()).toBeVisible({
+      timeout: 5000,
+    });
 
     // Container should have centered content on mobile
     // We verify this by checking the badge container's computed style
     const container = component
       .locator("div")
       .filter({
-        has: page.locator(".ui.label").filter({ hasText: "First Badge" }),
+        has: page.getByText("First Badge"),
       })
       .first();
     await expect(container).toBeVisible();

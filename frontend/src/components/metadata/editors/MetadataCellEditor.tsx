@@ -1,15 +1,12 @@
 import React, { useRef, useEffect, useState } from "react";
-import {
-  Input,
-  Checkbox,
-  Dropdown,
-  TextArea,
-  Label,
-  Icon,
-} from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import { CheckCircle, AlertCircle } from "lucide-react";
+import { Input } from "@os-legal/ui";
 import { MetadataColumn, MetadataDataType } from "../../../types/metadata";
 import { validateMetadataValue } from "../../../types/metadata";
+import { StyledTextArea as BaseStyledTextArea } from "../../widgets/modals/styled";
 
 interface MetadataCellEditorProps {
   column: MetadataColumn;
@@ -27,13 +24,10 @@ const EditorContainer = styled.div`
   width: 100%;
   position: relative;
 
-  .ui.input,
-  .ui.dropdown,
-  .ui.checkbox {
+  .ui.dropdown {
     width: 100%;
   }
 
-  .ui.input input,
   .ui.dropdown,
   textarea {
     padding: 0.5rem;
@@ -60,14 +54,41 @@ const EditorContainer = styled.div`
   }
 `;
 
-const ErrorLabel = styled(Label)`
-  &.ui.label {
+const ErrorLabel = styled.span`
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  z-index: 1000;
+  color: ${OS_LEGAL_COLORS.danger};
+  background: #fff6f6;
+  border: 1px solid #e0b4b4;
+  border-radius: 4px;
+  padding: 0.25em 0.5em;
+
+  &::before {
+    content: "";
     position: absolute;
-    top: 100%;
-    left: 0;
-    margin-top: 0.25rem;
-    font-size: 0.75rem;
-    z-index: 1000;
+    top: -5px;
+    left: 10px;
+    width: 8px;
+    height: 8px;
+    background: #fff6f6;
+    border-left: 1px solid #e0b4b4;
+    border-top: 1px solid #e0b4b4;
+    transform: rotate(45deg);
+  }
+`;
+
+const StyledTextArea = styled(BaseStyledTextArea)`
+  min-height: auto;
+  font-size: 0.875rem;
+  line-height: 1.4;
+
+  &[readOnly] {
+    background: #f9fafb;
+    cursor: default;
   }
 `;
 
@@ -88,13 +109,11 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
 
   useEffect(() => {
     if (autoFocus && inputRef.current) {
-      // Handle Semantic UI components that might wrap the actual input
       const element = inputRef.current;
 
       // Try to find the actual input element
       let inputElement = element;
       if (element.querySelector) {
-        // For Semantic UI components, find the actual input inside
         const actualInput = element.querySelector("input, textarea, select");
         if (actualInput) {
           inputElement = actualInput;
@@ -144,9 +163,9 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
     if (!onValidationChange) return null; // Only show icons if validation is being tracked
     if (isValid) {
       return (
-        <Icon
-          name="check circle"
-          color="green"
+        <CheckCircle
+          size={16}
+          color="#21ba45"
           data-testid="validation-icon-success"
           className="validation-icon"
           style={{ visibility: "visible", opacity: 1 }}
@@ -154,9 +173,9 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
       );
     }
     return (
-      <Icon
-        name="warning circle"
-        color="red"
+      <AlertCircle
+        size={16}
+        color={OS_LEGAL_COLORS.danger}
         data-testid="validation-icon-error"
         className="validation-icon"
         style={{ visibility: "visible", opacity: 1 }}
@@ -217,40 +236,44 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
           }
         }
         return (
-          <Input
+          <div
             ref={inputRef}
-            type={column.dataType === MetadataDataType.EMAIL ? "email" : "text"}
-            value={value || ""}
-            onChange={(e, { value }) => onChange(value)}
-            onBlur={onBlur}
-            onKeyDown={handleKeyDown}
-            error={!!error}
-            placeholder={
-              column.helpText || `Enter ${column.name.toLowerCase()}`
-            }
-            fluid
-            readOnly={readOnly}
-            // Remove Semantic icon injection; we'll render our own icon overlay
             className={onValidationChange ? "with-validation" : ""}
-            input={{
-              maxLength: config?.max_length,
-            }}
-          />
+          >
+            <Input
+              type={
+                column.dataType === MetadataDataType.EMAIL ? "email" : "text"
+              }
+              value={value || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange(e.target.value)
+              }
+              onBlur={onBlur}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                column.helpText || `Enter ${column.name.toLowerCase()}`
+              }
+              fullWidth
+              readOnly={readOnly}
+              maxLength={config?.max_length}
+            />
+          </div>
         );
 
       case MetadataDataType.TEXT:
         return (
-          <TextArea
+          <StyledTextArea
             ref={inputRef}
             value={value || ""}
-            onChange={(e, { value }) => onChange(value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+              onChange(e.target.value)
+            }
             onBlur={onBlur}
             onKeyDown={handleKeyDown}
             placeholder={
               column.helpText || `Enter ${column.name.toLowerCase()}`
             }
             rows={2}
-            style={{ width: "100%", resize: "vertical" }}
             readOnly={readOnly}
           />
         );
@@ -258,59 +281,54 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
       case MetadataDataType.NUMBER:
       case MetadataDataType.INTEGER:
         return (
-          <Input
+          <div
             ref={inputRef}
-            type="number"
-            value={value ?? ""}
-            onChange={(e, { value }) =>
-              onChange(value ? parseInt(value) : null)
-            }
-            onBlur={onBlur}
-            onKeyDown={handleKeyDown}
-            error={!!error}
-            placeholder="0"
-            fluid
-            readOnly={readOnly}
             className={onValidationChange ? "with-validation" : ""}
-            input={{
-              step: "1",
-              min: config?.min_value,
-              max: config?.max_value,
-            }}
-          />
+          >
+            <Input
+              type="number"
+              value={value ?? ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange(e.target.value ? parseInt(e.target.value) : null)
+              }
+              onBlur={onBlur}
+              onKeyDown={handleKeyDown}
+              placeholder="0"
+              fullWidth
+              readOnly={readOnly}
+            />
+          </div>
         );
 
       case MetadataDataType.FLOAT:
         return (
-          <Input
+          <div
             ref={inputRef}
-            type="number"
-            value={value ?? ""}
-            onChange={(e, { value }) =>
-              onChange(value ? parseFloat(value) : null)
-            }
-            onBlur={onBlur}
-            onKeyDown={handleKeyDown}
-            error={!!error}
-            placeholder="0.00"
-            fluid
-            readOnly={readOnly}
             className={onValidationChange ? "with-validation" : ""}
-            input={{
-              step: "0.01",
-              min: config?.min_value,
-              max: config?.max_value,
-            }}
-          />
+          >
+            <Input
+              type="number"
+              value={value ?? ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange(e.target.value ? parseFloat(e.target.value) : null)
+              }
+              onBlur={onBlur}
+              onKeyDown={handleKeyDown}
+              placeholder="0.00"
+              fullWidth
+              readOnly={readOnly}
+            />
+          </div>
         );
 
       case MetadataDataType.BOOLEAN:
         return (
-          <Checkbox
+          <input
             ref={inputRef}
+            type="checkbox"
             checked={value || false}
-            onChange={(e, { checked }) => {
-              onChange(checked);
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              onChange(e.target.checked);
               if (onBlur) setTimeout(onBlur, 100);
             }}
             onKeyDown={handleKeyDown}
@@ -320,42 +338,42 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
 
       case MetadataDataType.DATE:
         return (
-          <Input
+          <div
             ref={inputRef}
-            type="date"
-            value={value || ""}
-            onChange={(e, { value }) => onChange(value)}
-            onBlur={onBlur}
-            onKeyDown={handleKeyDown}
-            error={!!error}
-            fluid
-            readOnly={readOnly}
             className={onValidationChange ? "with-validation" : ""}
-            input={{
-              min: config?.min_date,
-              max: config?.max_date,
-            }}
-          />
+          >
+            <Input
+              type="date"
+              value={value || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange(e.target.value)
+              }
+              onBlur={onBlur}
+              onKeyDown={handleKeyDown}
+              fullWidth
+              readOnly={readOnly}
+            />
+          </div>
         );
 
       case MetadataDataType.DATETIME:
         return (
-          <Input
+          <div
             ref={inputRef}
-            type="datetime-local"
-            value={value ? value.slice(0, 16) : ""}
-            onChange={(e, { value }) => onChange(value ? `${value}:00Z` : null)}
-            onBlur={onBlur}
-            onKeyDown={handleKeyDown}
-            error={!!error}
-            fluid
-            readOnly={readOnly}
             className={onValidationChange ? "with-validation" : ""}
-            input={{
-              min: config?.min_date,
-              max: config?.max_date,
-            }}
-          />
+          >
+            <Input
+              type="datetime-local"
+              value={value ? value.slice(0, 16) : ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange(e.target.value ? `${e.target.value}:00Z` : null)
+              }
+              onBlur={onBlur}
+              onKeyDown={handleKeyDown}
+              fullWidth
+              readOnly={readOnly}
+            />
+          </div>
         );
 
       case MetadataDataType.CHOICE:
@@ -410,18 +428,18 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
       case MetadataDataType.JSON:
         return (
           <div style={{ position: "relative", width: "100%" }}>
-            <TextArea
+            <StyledTextArea
               ref={inputRef}
               value={
                 typeof value === "string"
                   ? value
                   : JSON.stringify(value, null, 2)
               }
-              onChange={(e, { value }) => {
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                 try {
-                  onChange(JSON.parse(value as string));
+                  onChange(JSON.parse(e.target.value));
                 } catch {
-                  onChange(value); // Keep as string if invalid JSON
+                  onChange(e.target.value); // Keep as string if invalid JSON
                 }
               }}
               onBlur={onBlur}
@@ -429,7 +447,6 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
               placeholder='{"key": "value"}'
               rows={3}
               style={{
-                width: "100%",
                 fontFamily: "monospace",
                 fontSize: "0.875rem",
                 paddingRight: "2.5em",
@@ -458,12 +475,7 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
       {editor}
       {!iconAlreadyInside && renderValidationIcon()}
       {!isValid && validationMessage && (
-        <ErrorLabel
-          data-testid="validation-error-message"
-          basic
-          color="red"
-          pointing
-        >
+        <ErrorLabel data-testid="validation-error-message">
           {validationMessage}
         </ErrorLabel>
       )}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, memo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
-import { Checkbox } from "semantic-ui-react";
 import {
   Settings,
   Eye,
@@ -25,6 +24,8 @@ import {
 } from "../../../graphql/cache";
 import { PermissionTypes } from "../../types";
 import { AnnotationControls } from "../../annotator/controls/AnnotationControls";
+import { ToggleSwitch } from "../../widgets/ToggleSwitch";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 const ControlsContainer = styled(motion.div)<{ $panelOffset?: number }>`
   position: fixed;
@@ -53,7 +54,7 @@ const ActionButton = styled(motion.button)<{ $color?: string }>`
   height: 56px;
   border-radius: 50%;
   background: ${(props) => props.$color || "white"};
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -64,18 +65,20 @@ const ActionButton = styled(motion.button)<{ $color?: string }>`
   svg {
     width: 24px;
     height: 24px;
-    color: ${(props) => (props.$color ? "white" : "#64748b")};
+    color: ${(props) =>
+      props.$color ? "white" : OS_LEGAL_COLORS.textSecondary};
     transition: transform 0.3s ease;
   }
 
   &:hover {
-    border-color: ${(props) => props.$color || "#3b82f6"};
+    border-color: ${(props) => props.$color || OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 6px 20px
       ${(props) =>
         props.$color ? `${props.$color}30` : "rgba(59, 130, 246, 0.15)"};
 
     svg {
-      color: ${(props) => (props.$color ? "white" : "#3b82f6")};
+      color: ${(props) =>
+        props.$color ? "white" : OS_LEGAL_COLORS.primaryBlue};
     }
   }
 
@@ -92,7 +95,7 @@ const ControlPanel = styled(motion.div)`
   background: white;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 1rem;
   min-width: 240px;
 
@@ -110,7 +113,7 @@ const ControlItem = styled.div`
   transition: background 0.2s ease;
 
   &:hover {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {
@@ -124,42 +127,18 @@ const ControlLabel = styled.div`
   gap: 0.5rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 
   svg {
     width: 16px;
     height: 16px;
-    color: #64748b;
-  }
-`;
-
-const StyledCheckbox = styled(Checkbox)`
-  &&& {
-    transform: scale(1.1);
-
-    label {
-      padding-left: 1.75rem !important;
-
-      &:before {
-        border-color: #e2e8f0 !important;
-        border-radius: 4px !important;
-      }
-
-      &:after {
-        border-radius: 2px !important;
-      }
-    }
-
-    &.checked label:before {
-      border-color: #3b82f6 !important;
-      background: #3b82f6 !important;
-    }
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
 const Divider = styled.div`
   height: 1px;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   margin: 0.5rem 0;
 `;
 
@@ -168,16 +147,16 @@ const PanelHeader = styled.div`
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   margin-bottom: 0.75rem;
   font-weight: 600;
   font-size: 0.9375rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 
   svg {
     width: 20px;
     height: 20px;
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 `;
 
@@ -192,7 +171,7 @@ const CloseButton = styled(motion.button)`
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   display: flex;
   align-items: center;
@@ -204,15 +183,15 @@ const CloseButton = styled(motion.button)`
   svg {
     width: 16px;
     height: 16px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 
   &:hover {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     border-color: #cbd5e1;
 
     svg {
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   }
 
@@ -229,7 +208,8 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
     props.$isActive
       ? "linear-gradient(135deg, rgba(66, 153, 225, 0.08), rgba(66, 153, 225, 0.05))"
       : "transparent"};
-  color: ${(props) => (props.$isActive ? "#4299e1" : "#64748b")};
+  color: ${(props) =>
+    props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textSecondary};
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -262,7 +242,8 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
       props.$isActive
         ? "linear-gradient(135deg, rgba(66, 153, 225, 0.12), rgba(66, 153, 225, 0.08))"
         : "rgba(0, 0, 0, 0.02)"};
-    color: ${(props) => (props.$isActive ? "#4299e1" : "#475569")};
+    color: ${(props) =>
+      props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textTertiary};
     transform: translateX(2px);
   }
 
@@ -328,7 +309,7 @@ const OrbitButton = styled(motion.button)<{ $color?: string }>`
   height: 48px;
   border-radius: 50%;
   background: ${(props) => props.$color || "white"};
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -341,7 +322,8 @@ const OrbitButton = styled(motion.button)<{ $color?: string }>`
   svg {
     width: 20px;
     height: 20px;
-    color: ${(props) => (props.$color ? "white" : "#64748b")};
+    color: ${(props) =>
+      props.$color ? "white" : OS_LEGAL_COLORS.textSecondary};
   }
 
   &:active {
@@ -485,7 +467,7 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
         if (onSummaryClick) {
           speedDialButtons.push({
             icon: <BookOpen />,
-            color: "#3b82f6",
+            color: OS_LEGAL_COLORS.primaryBlue,
             onClick: () => {
               onSummaryClick();
               setSpeedDialExpanded(false);
@@ -599,11 +581,15 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
                       <Maximize2 />
                       Auto-Zoom Sidebar
                     </ControlLabel>
-                    <StyledCheckbox
-                      toggle
-                      checked={autoZoomEnabled}
-                      onChange={() => onAutoZoomChange?.(!autoZoomEnabled)}
-                    />
+                    <ToggleSwitch>
+                      <input
+                        type="checkbox"
+                        aria-label="Auto-Zoom Sidebar"
+                        checked={autoZoomEnabled}
+                        onChange={() => onAutoZoomChange?.(!autoZoomEnabled)}
+                      />
+                      <span />
+                    </ToggleSwitch>
                   </ControlItem>
                 </ControlPanel>
               )}
@@ -761,11 +747,15 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
                     <Maximize2 />
                     Auto-Zoom Sidebar
                   </ControlLabel>
-                  <StyledCheckbox
-                    toggle
-                    checked={autoZoomEnabled}
-                    onChange={() => onAutoZoomChange?.(!autoZoomEnabled)}
-                  />
+                  <ToggleSwitch>
+                    <input
+                      type="checkbox"
+                      aria-label="Auto-Zoom Sidebar"
+                      checked={autoZoomEnabled}
+                      onChange={() => onAutoZoomChange?.(!autoZoomEnabled)}
+                    />
+                    <span />
+                  </ToggleSwitch>
                 </ControlItem>
               </ControlPanel>
             )}

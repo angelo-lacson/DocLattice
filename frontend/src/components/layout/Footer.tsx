@@ -1,11 +1,3 @@
-import {
-  Segment,
-  Container,
-  Grid,
-  Divider,
-  List,
-  Header,
-} from "semantic-ui-react";
 import styled from "styled-components";
 import { Link } from "react-router-dom";
 
@@ -21,126 +13,203 @@ const CenteredImage = styled.img<{ $small?: boolean }>`
   ${(props) => props.$small && "height: 50px;"}
 `;
 
+const FooterContainer = styled.footer<{ $compact?: boolean }>`
+  width: 100%;
+  padding: ${(props) => (props.$compact ? "1em" : "5em 0em")};
+  background: #1b1c1d;
+  color: rgba(255, 255, 255, 0.9);
+`;
+
+const FooterInner = styled.div`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1em;
+  text-align: center;
+`;
+
+const FooterGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: 2em;
+  text-align: left;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+`;
+
+const FooterHeading = styled.h4`
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.1em;
+  margin-bottom: 0.75em;
+`;
+
+const FooterLinkList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  li {
+    margin-bottom: 0.5em;
+  }
+
+  a {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+
+    &:hover {
+      color: rgba(255, 255, 255, 1);
+    }
+  }
+`;
+
+const FooterDivider = styled.hr`
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  margin: 2em 0;
+`;
+
+const InlineLinks = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  gap: 1em;
+  flex-wrap: wrap;
+  font-size: 0.9em;
+
+  a {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+
+    &:hover {
+      color: rgba(255, 255, 255, 1);
+    }
+  }
+`;
+
 export function Footer() {
   const { width } = useWindowDimensions();
 
   if (width <= 1000) {
     return (
-      <Segment inverted vertical style={{ width: "100%", padding: "1em" }}>
-        <Container textAlign="center">
+      <FooterContainer $compact>
+        <FooterInner>
           <CenteredImage
             src={logo}
             alt="Open Contracts Logo"
             $small={width <= 400}
           />
-          <List horizontal inverted divided link size="small">
-            <List.Item>
+          <InlineLinks>
+            <li>
               <Link to="/">Site Map</Link>
-            </List.Item>
-            <List.Item>
+            </li>
+            <li>
               <Link to="/contact">Contact Us</Link>
-            </List.Item>
-            <List.Item>
+            </li>
+            <li>
               <Link to="/terms_of_service">Terms of Service</Link>
-            </List.Item>
-            <List.Item>
+            </li>
+            <li>
               <Link to="/privacy">Privacy Policy</Link>
-            </List.Item>
-          </List>
-          <Divider inverted section />
-          <Grid divided inverted stackable>
-            <Grid.Column width={4}>
-              <Header inverted as="h4" content="My Other Projects:" />
-              <List link inverted>
-                <List.Item as="a" href="https://github.com/JSv4/GremlinServer">
-                  GREMLIN Low-Code
-                </List.Item>
-                <List.Item
-                  as="a"
-                  href="https://github.com/JSv4/AtticusClassifier"
-                >
-                  Open Classifiers
-                </List.Item>
-              </List>
-            </Grid.Column>
-            <Grid.Column width={4}>
-              <Header inverted as="h4" content="Open Source Legaltech" />
-              <List link inverted>
-                <List.Item as="a" href="https://github.com/JSv4">
-                  Github
-                </List.Item>
-              </List>
-            </Grid.Column>
-            <Grid.Column width={8}>
-              <Header
-                inverted
-                as="h4"
-                content="Gordium Knot, Inc. d/b/a OpenSource.Legal ©2021"
-              />
+            </li>
+          </InlineLinks>
+          <FooterDivider />
+          <FooterGrid>
+            <div>
+              <FooterHeading>My Other Projects:</FooterHeading>
+              <FooterLinkList>
+                <li>
+                  <a href="https://github.com/JSv4/GremlinServer">
+                    GREMLIN Low-Code
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/JSv4/AtticusClassifier">
+                    Open Classifiers
+                  </a>
+                </li>
+              </FooterLinkList>
+            </div>
+            <div>
+              <FooterHeading>Open Source Legaltech</FooterHeading>
+              <FooterLinkList>
+                <li>
+                  <a href="https://github.com/JSv4">Github</a>
+                </li>
+              </FooterLinkList>
+            </div>
+            <div>
+              <FooterHeading>
+                Gordium Knot, Inc. d/b/a OpenSource.Legal &copy;2021
+              </FooterHeading>
               <p>
                 Open Contracts was developed by{" "}
                 <a href="https://github.com/JSv4">JSv4</a>. Use of this tool is
                 governed by the terms of service.
               </p>
-            </Grid.Column>
-          </Grid>
-        </Container>
-      </Segment>
+            </div>
+          </FooterGrid>
+        </FooterInner>
+      </FooterContainer>
     );
   } else {
     return (
-      <Segment inverted vertical style={{ width: "100%", padding: "5em 0em" }}>
-        <Container textAlign="center">
-          <Grid divided inverted stackable>
-            <Grid.Column width={4}>
-              <Header inverted as="h4" content="My Other Projects:" />
-              <List link inverted>
-                <List.Item as="a" href="https://github.com/JSv4/GremlinServer">
-                  GREMLIN Low-Code
-                </List.Item>
-                <List.Item
-                  as="a"
-                  href="https://github.com/JSv4/AtticusClassifier"
-                >
-                  Open Classifiers
-                </List.Item>
-              </List>
-            </Grid.Column>
-            <Grid.Column width={4}>
-              <Header inverted as="h4" content="Open Source Legaltech" />
-              <List link inverted>
-                <List.Item as="a" href="https://github.com/JSv4">
-                  Github
-                </List.Item>
-              </List>
-            </Grid.Column>
-            <Grid.Column width={8}>
-              <Header inverted as="h4" content="©2021-2024 JSv4" />
+      <FooterContainer>
+        <FooterInner>
+          <FooterGrid>
+            <div>
+              <FooterHeading>My Other Projects:</FooterHeading>
+              <FooterLinkList>
+                <li>
+                  <a href="https://github.com/JSv4/GremlinServer">
+                    GREMLIN Low-Code
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/JSv4/AtticusClassifier">
+                    Open Classifiers
+                  </a>
+                </li>
+              </FooterLinkList>
+            </div>
+            <div>
+              <FooterHeading>Open Source Legaltech</FooterHeading>
+              <FooterLinkList>
+                <li>
+                  <a href="https://github.com/JSv4">Github</a>
+                </li>
+              </FooterLinkList>
+            </div>
+            <div>
+              <FooterHeading>&copy;2021-2024 JSv4</FooterHeading>
               <p>
                 Open Contracts was developed by{" "}
                 <a href="https://github.com/JSv4">JSv4</a>. Use of this tool is
                 governed by the terms of service.
               </p>
-            </Grid.Column>
-          </Grid>
-          <Divider inverted section />
+            </div>
+          </FooterGrid>
+          <FooterDivider />
           <CenteredImage src={logo} alt="Open Contracts Logo" />
-          <List horizontal inverted divided link size="small">
-            <List.Item>
+          <InlineLinks>
+            <li>
               <Link to="/">Site Map</Link>
-            </List.Item>
-            <List.Item>
+            </li>
+            <li>
               <Link to="/contact">Contact Us</Link>
-            </List.Item>
-            <List.Item>
+            </li>
+            <li>
               <Link to="/terms_of_service">Terms of Service</Link>
-            </List.Item>
-            <List.Item>
+            </li>
+            <li>
               <Link to="/privacy">Privacy Policy</Link>
-            </List.Item>
-          </List>
-        </Container>
-      </Segment>
+            </li>
+          </InlineLinks>
+        </FooterInner>
+      </FooterContainer>
     );
   }
 }

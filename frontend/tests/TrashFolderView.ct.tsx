@@ -83,9 +83,7 @@ test.describe("TrashFolderView", () => {
       timeout: 10000,
     });
 
-    await expect(
-      page.locator(".header").getByText("Failed to load trash")
-    ).toBeVisible();
+    await expect(page.getByText("Failed to load trash").first()).toBeVisible();
   });
 
   test("allows selecting documents", async ({ mount, page }) => {
@@ -167,11 +165,11 @@ test.describe("TrashFolderView", () => {
       .click();
 
     // Should show success message
-    await expect(page.locator(".header").getByText("Success")).toBeVisible({
+    await expect(page.getByText("Success").first()).toBeVisible({
       timeout: 10000,
     });
     await expect(
-      page.getByRole("paragraph").getByText("Document restored successfully")
+      page.getByText("Document restored successfully")
     ).toBeVisible();
   });
 
@@ -314,7 +312,7 @@ test.describe("TrashFolderView", () => {
       .click();
 
     // Should show success message
-    await expect(page.locator(".header").getByText("Success")).toBeVisible({
+    await expect(page.getByText("Success").first()).toBeVisible({
       timeout: 10000,
     });
 
@@ -322,9 +320,7 @@ test.describe("TrashFolderView", () => {
     await page.waitForTimeout(6000);
 
     // Success message should be gone
-    await expect(
-      page.locator(".header").getByText("Success")
-    ).not.toBeVisible();
+    await expect(page.getByText("Success").first()).not.toBeVisible();
   });
 
   // Null data scenario tests

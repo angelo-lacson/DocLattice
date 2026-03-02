@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button, Message } from "semantic-ui-react";
+import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, AlertTriangle } from "lucide-react";
 import {
@@ -19,6 +19,8 @@ import {
   DeleteCorpusFolderOutputs,
   GET_CORPUS_FOLDERS,
 } from "../../../graphql/queries/folders";
+import { ErrorMessage } from "../../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * DeleteFolderModal - Confirmation modal for deleting folders
@@ -110,14 +112,14 @@ const WarningContent = styled.div`
 
 const FolderInfo = styled.div`
   padding: 12px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 6px;
   margin-bottom: 16px;
   font-size: 14px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   strong {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-weight: 600;
   }
 `;
@@ -244,10 +246,9 @@ export const DeleteFolderModal: React.FC = () => {
         </FolderInfo>
 
         {error && (
-          <Message error>
-            <Message.Header>Error Deleting Folder</Message.Header>
-            <p>{error.message}</p>
-          </Message>
+          <ErrorMessage title="Error Deleting Folder">
+            {error.message}
+          </ErrorMessage>
         )}
       </Modal.Content>
 

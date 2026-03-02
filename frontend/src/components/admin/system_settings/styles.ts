@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import { PIPELINE_UI } from "../../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // ============================================================================
 // Layout Styled Components
@@ -52,7 +53,7 @@ export const PageTitle = styled.h1`
   gap: 0.75rem;
   font-size: 1.75rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 0.5rem 0;
 
   svg {
@@ -67,7 +68,7 @@ export const PageTitle = styled.h1`
 `;
 
 export const PageDescription = styled.p`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 1rem;
   margin: 0;
   line-height: 1.5;
@@ -77,7 +78,7 @@ export const LastModified = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 0.875rem;
   margin-top: 0.75rem;
 
@@ -94,7 +95,7 @@ export const LastModified = styled.div`
 export const ComponentName = styled.span`
   font-size: 0.75rem;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   text-align: center;
   line-height: 1.3;
 `;
@@ -104,7 +105,7 @@ export const NoComponents = styled.div`
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 0.875rem;
   font-style: italic;
 `;
@@ -120,18 +121,18 @@ export const AdvancedSettingsToggle = styled.button<{ $expanded: boolean }>`
   width: 100%;
   padding: 0.75rem;
   margin-top: 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   svg {
@@ -147,7 +148,7 @@ export const AdvancedSettingsContent = styled.div<{ $expanded: boolean }>`
   margin-top: 0.75rem;
   padding: 1rem;
   background: #fafafa;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 `;
 
@@ -175,7 +176,7 @@ export const RequiredBadge = styled.span`
 
 export const Section = styled.div`
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
@@ -195,7 +196,7 @@ export const SectionTitle = styled.h2`
   gap: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
 
   svg {
@@ -216,15 +217,15 @@ export const SecretKeyRow = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   font-size: 0.8125rem;
 `;
 
 export const SecretKeyName = styled.span`
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-family: monospace;
   font-size: 0.75rem;
 `;
@@ -248,7 +249,7 @@ export const SecretStatusIndicator = styled.span<{ $populated: boolean }>`
 `;
 
 export const EmptyValue = styled.span`
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-style: italic;
   font-size: 0.875rem;
 `;
@@ -258,8 +259,8 @@ export const DefaultEmbedderDisplay = styled.div`
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 `;
 
@@ -269,7 +270,7 @@ export const DefaultEmbedderInfo = styled.div`
 
 export const DefaultEmbedderPath = styled.code`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   word-break: break-all;
 `;
 
@@ -278,7 +279,7 @@ export const ActionButtons = styled.div`
   gap: 0.75rem;
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 // ============================================================================
@@ -292,7 +293,7 @@ export const LoadingContainer = styled.div`
   justify-content: center;
   min-height: 300px;
   gap: 1rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 export const ErrorContainer = styled.div`
@@ -313,7 +314,7 @@ export const ErrorContainer = styled.div`
 `;
 
 export const ErrorMessage = styled.p`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
   margin: 0;
 `;
