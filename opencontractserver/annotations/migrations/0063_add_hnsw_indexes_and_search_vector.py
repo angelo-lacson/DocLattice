@@ -98,8 +98,9 @@ class Migration(migrations.Migration):
         # =================================================================
         # init.sql only runs on fresh databases. This ensures existing
         # deployments also get hnsw.iterative_scan='relaxed_order' and
-        # hnsw.ef_search=40, which prevent result loss when combining
+        # hnsw.ef_search=64, which prevent result loss when combining
         # HNSW search with WHERE clauses (e.g., embedder_path filtering).
+        # ef_search >= ef_construction (64) is recommended for good recall.
         # Requires pgvector >= 0.8.
         migrations.RunSQL(
             sql="""
@@ -110,7 +111,7 @@ class Migration(migrations.Migration):
                         || $q$ SET hnsw.iterative_scan = 'relaxed_order'$q$;
                     EXECUTE 'ALTER DATABASE '
                         || current_database()
-                        || ' SET hnsw.ef_search = 40';
+                        || ' SET hnsw.ef_search = 64';
                 EXCEPTION WHEN OTHERS THEN
                     RAISE NOTICE 'hnsw settings not available (pgvector < 0.8): %',
                         SQLERRM;
@@ -196,15 +197,32 @@ class Migration(migrations.Migration):
         # =================================================================
         # Phase 4: Backfill search_vector for existing annotations
         # =================================================================
-        # WARNING: For tables with >1M rows, this UPDATE should be run
-        # during a maintenance window or chunked into batches (e.g.,
-        # UPDATE ... WHERE id BETWEEN x AND y) to avoid long-running
-        # row-level locks that block concurrent writes.
+        # !! LARGE-TABLE WARNING !!
+        # For deployments with >1M annotations, this single UPDATE can hold
+        # row-level locks for minutes, blocking concurrent writes. Consider
+        # running this migration during a maintenance window, or chunking
+        # the backfill manually (UPDATE ... WHERE id BETWEEN x AND y).
         migrations.RunSQL(
             sql=f"""
-                UPDATE annotations_annotation
-                SET search_vector = to_tsvector('{FTS_CONFIG}', COALESCE(raw_text, ''))
-                WHERE search_vector IS NULL;
+                DO $$
+                DECLARE
+                    row_count BIGINT;
+                BEGIN
+                    SELECT count(*) INTO row_count
+                    FROM annotations_annotation
+                    WHERE search_vector IS NULL;
+
+                    RAISE NOTICE '[Phase 4] Backfilling search_vector for % annotations',
+                        row_count;
+
+                    UPDATE annotations_annotation
+                    SET search_vector = to_tsvector('{FTS_CONFIG}',
+                                                   COALESCE(raw_text, ''))
+                    WHERE search_vector IS NULL;
+
+                    GET DIAGNOSTICS row_count = ROW_COUNT;
+                    RAISE NOTICE '[Phase 4] Backfill complete: % rows updated', row_count;
+                END $$;
             """,
             reverse_sql=migrations.RunSQL.noop,
         ),

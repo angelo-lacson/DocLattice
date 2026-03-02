@@ -2,7 +2,10 @@ import logging
 
 from pgvector.django import CosineDistance
 
-from opencontractserver.constants.search import HNSW_MAX_INDEXED_DIM
+from opencontractserver.constants.search import (
+    DIM_TO_FIELD_MAP,
+    HNSW_HIGHEST_INDEXED_DIM,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -31,8 +34,6 @@ class VectorSearchViaEmbeddingMixin:
         Given the dimension of the query vector, return the appropriate field
         on the Embedding model (vector_384, vector_768, etc.).
         """
-        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
-
         field_name = DIM_TO_FIELD_MAP.get(dimension)
         if not field_name:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
@@ -69,12 +70,12 @@ class VectorSearchViaEmbeddingMixin:
         with 'similarity_score'. Do not chain QuerySet methods on the result.
         """
         dimension = len(query_vector)
-        if dimension > HNSW_MAX_INDEXED_DIM:
-            _logger.warning(
-                "Embedding dimension %d exceeds HNSW index limit (%d); "
+        if dimension > HNSW_HIGHEST_INDEXED_DIM:
+            _logger.info(
+                "Embedding dimension %d exceeds highest HNSW-indexed dim (%d); "
                 "query will use sequential scan.",
                 dimension,
-                HNSW_MAX_INDEXED_DIM,
+                HNSW_HIGHEST_INDEXED_DIM,
             )
         vector_field = self._dimension_to_field(dimension)
 
@@ -140,9 +141,9 @@ class HasEmbeddingMixin:
         Returns:
             List[float] | None: The embedding vector or None if not found
         """
-        # Late import to avoid circular import
+        # Late import to avoid circular import (Embedding defined in annotations.models
+        # which itself uses this mixin)
         from opencontractserver.annotations.models import Embedding
-        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
 
         vector_field = DIM_TO_FIELD_MAP.get(dimension)
         if not vector_field:

@@ -10,6 +10,7 @@ from django.db import models
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
 from opencontractserver.annotations.models import Annotation
+from opencontractserver.constants.search import DIM_TO_FIELD_MAP
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.shared.defaults import jsonfield_default_value
@@ -299,8 +300,6 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         """
         from pgvector.django import CosineDistance
 
-        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
-
         dimension = len(query_vector)
         field_name = DIM_TO_FIELD_MAP.get(dimension)
         if not field_name:
@@ -455,8 +454,6 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
         Inherits from VectorSearchViaEmbeddingMixin pattern.
         """
         from pgvector.django import CosineDistance
-
-        from opencontractserver.constants.search import DIM_TO_FIELD_MAP
 
         dimension = len(query_vector)
         field_name = DIM_TO_FIELD_MAP.get(dimension)

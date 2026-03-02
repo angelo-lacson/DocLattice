@@ -10,6 +10,11 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q, QuerySet
 
 from opencontractserver.annotations.models import Annotation
+from opencontractserver.constants.search import (
+    FTS_CONFIG,
+    HYBRID_SEARCH_OVERSAMPLE_FACTOR,
+    VALID_EMBEDDING_DIMS,
+)
 from opencontractserver.utils.embeddings import (
     agenerate_embeddings_from_text,
     generate_embeddings_from_text,
@@ -169,8 +174,6 @@ class CoreAnnotationVectorStore:
         _logger.debug(f"Configured embedder path: {self.embedder_path}")
 
         # Validate or fallback dimension
-        from opencontractserver.constants.search import VALID_EMBEDDING_DIMS
-
         if self.embed_dim not in VALID_EMBEDDING_DIMS:
             self.embed_dim = getattr(embedder_class, "vector_size", 768)
 
@@ -531,8 +534,6 @@ class CoreAnnotationVectorStore:
             vector = self._generate_query_embedding(query.query_text)
 
         # Perform vector search if we have a valid embedding
-        from opencontractserver.constants.search import VALID_EMBEDDING_DIMS
-
         if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
             _logger.debug(f"Using vector search with dimension: {len(vector)}")
             _logger.debug(
@@ -627,11 +628,6 @@ class CoreAnnotationVectorStore:
 
         from django.contrib.postgres.search import SearchQuery, SearchRank
 
-        from opencontractserver.constants.search import (
-            FTS_CONFIG,
-            HYBRID_SEARCH_OVERSAMPLE_FACTOR,
-            VALID_EMBEDDING_DIMS,
-        )
         from opencontractserver.utils.search import reciprocal_rank_fusion
 
         # Build base queryset with filters
@@ -706,11 +702,18 @@ class CoreAnnotationVectorStore:
     async def async_hybrid_search(
         self, query: VectorSearchQuery
     ) -> list[VectorSearchResult]:
-        """Async version of hybrid_search.
+        """Async-native hybrid search combining vector similarity and full-text search.
 
-        Uses Reciprocal Rank Fusion (RRF) to merge results from vector
-        similarity search and full-text search. Falls back to single-arm
-        search when one signal is unavailable.
+        Uses Reciprocal Rank Fusion (RRF) to merge results from:
+        1. Vector similarity search (via HNSW index)
+        2. Full-text search (via GIN index on search_vector)
+
+        Falls back to vector-only search when no query text is available,
+        or to text-only search when no embedding can be generated.
+
+        Unlike ``hybrid_search()`` which wraps async calls via
+        ``async_to_sync``, this method ``await``s async operations directly,
+        avoiding nested sync->async->sync event-loop issues.
 
         Args:
             query: The search query containing text/embedding and filters
@@ -718,7 +721,84 @@ class CoreAnnotationVectorStore:
         Returns:
             List of search results with annotations and RRF-fused scores
         """
-        return await sync_to_async(self.hybrid_search)(query)
+        from django.contrib.postgres.search import SearchQuery, SearchRank
+
+        from opencontractserver.utils.search import reciprocal_rank_fusion
+
+        # Build base queryset (natively async)
+        queryset = await self._build_base_queryset()
+        queryset = self._apply_metadata_filters(queryset, query.filters)
+
+        oversample_k = query.similarity_top_k * HYBRID_SEARCH_OVERSAMPLE_FACTOR
+
+        # --- Vector search arm ---
+        vector = query.query_embedding
+        if vector is None and query.query_text is not None:
+            vector = await self._agenerate_query_embedding(query.query_text)
+
+        vector_results: list = []
+        if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
+            vector_results = await sync_to_async(
+                lambda: queryset.search_by_embedding(
+                    query_vector=vector,
+                    embedder_path=self.embedder_path,
+                    top_k=oversample_k,
+                )
+            )()
+            _logger.debug(f"Hybrid: vector arm returned {len(vector_results)} results")
+
+        # --- Full-text search arm ---
+        text_results: list = []
+        if query.query_text:
+            search_query = SearchQuery(query.query_text, config=FTS_CONFIG)
+
+            def _run_fts():
+                text_qs = (
+                    queryset.filter(search_vector=search_query)
+                    .annotate(text_rank=SearchRank("search_vector", search_query))
+                    .order_by("-text_rank")[:oversample_k]
+                )
+                return list(text_qs)
+
+            text_results = await sync_to_async(_run_fts)()
+            _logger.debug(f"Hybrid: full-text arm returned {len(text_results)} results")
+
+        # --- Fusion ---
+        if vector_results and text_results:
+            fused = reciprocal_rank_fusion(
+                vector_results,
+                text_results,
+                top_n=query.similarity_top_k,
+            )
+            _logger.info(
+                f"Hybrid search: fused {len(vector_results)} vector + "
+                f"{len(text_results)} text -> {len(fused)} results"
+            )
+            return [
+                VectorSearchResult(annotation=ann, similarity_score=score)
+                for ann, score in fused
+            ]
+        elif vector_results:
+            # Vector-only fallback
+            return [
+                VectorSearchResult(
+                    annotation=ann,
+                    similarity_score=getattr(ann, "similarity_score", 1.0),
+                )
+                for ann in vector_results[: query.similarity_top_k]
+            ]
+        elif text_results:
+            # Text-only fallback
+            return [
+                VectorSearchResult(
+                    annotation=ann,
+                    similarity_score=getattr(ann, "text_rank", 1.0),
+                )
+                for ann in text_results[: query.similarity_top_k]
+            ]
+        else:
+            _logger.warning("Hybrid search: no results from either arm")
+            return []
 
     @classmethod
     def global_search(
@@ -904,8 +984,6 @@ class CoreAnnotationVectorStore:
             vector = await self._agenerate_query_embedding(query.query_text)
 
         # Perform vector search if we have a valid embedding
-        from opencontractserver.constants.search import VALID_EMBEDDING_DIMS
-
         if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
             _logger.debug(f"Using vector search with dimension: {len(vector)}")
             _logger.debug(
