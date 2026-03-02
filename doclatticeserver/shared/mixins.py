@@ -1,4 +1,3 @@
-from django.db.models import QuerySet
 from pgvector.django import CosineDistance
 
 
@@ -48,7 +47,7 @@ class VectorSearchViaEmbeddingMixin:
         query_vector: list[float],
         embedder_path: str,
         top_k: int = 10,
-    ) -> QuerySet:
+    ) -> list:
         """
         Vector search for records of this model by embeddings stored in
         a reverse relation to Embedding (embedding->document, for instance).
@@ -56,18 +55,26 @@ class VectorSearchViaEmbeddingMixin:
         - dimension is inferred from len(query_vector)
         - filters on embedder_path
         - excludes cases where the chosen vector field is null
-        - adds an annotation 'similarity_score' via CosineDistance
-        - sorts ascending by that distance
-        - slices top_k
+        - adds an annotation '_cosine_distance' via CosineDistance
+        - PostgreSQL handles ORDER BY + LIMIT using HNSW index (O(log n))
+        - converts distance to similarity_score
 
-        Returns a QuerySet of your model (Document, Annotation, Note),
-        annotated with 'similarity_score'.
+        With HNSW indexes on the Embedding vector columns, PostgreSQL uses
+        approximate nearest neighbor search instead of sequential scan.
+        With pgvector 0.8+ iterative scans (set via init.sql), the
+        embedder_path WHERE filter is handled efficiently without
+        result loss.
+
+        The unique constraint per (embedder_path, parent) from migration 0059
+        guarantees at most one Embedding per parent object per embedder, so
+        no DISTINCT ON deduplication is needed.
+
+        Returns a list of model instances annotated with 'similarity_score'.
         """
         dimension = len(query_vector)
         vector_field = self._dimension_to_field(dimension)
 
-        # Must join to Embedding objects that have embedder_path == embedder_path
-        # and a non-null vector_xxx field
+        # JOIN to Embedding rows matching the embedder and non-null vector
         base_qs = self.filter(
             **{
                 f"{self.EMBEDDING_RELATED_NAME}__embedder_path": embedder_path,
@@ -75,28 +82,16 @@ class VectorSearchViaEmbeddingMixin:
             }
         )
 
-        # Use annotate(...) plus the CosineDistance from pgvector
-        # CosineDistance returns distance (0 = identical, 1 = orthogonal, 2 = opposite)
-        # We convert to similarity (1 = identical, 0 = different) for frontend display
-        # Formula: similarity = 1 - distance (for normalized vectors, distance is 0-1)
+        # Annotate with cosine distance and let PostgreSQL handle ORDER BY + LIMIT.
+        # With HNSW indexes this is O(log n) instead of O(n) sequential scan.
+        # CosineDistance returns 0 (identical) to 2 (opposite).
         base_qs = base_qs.annotate(
             _cosine_distance=CosineDistance(vector_field, query_vector)
         )
 
-        # PostgreSQL DISTINCT ON approach to handle JOIN duplicates:
-        # When an object has multiple Embedding rows with the same embedder_path,
-        # we want to keep only one result per unique object ID.
-        # DISTINCT ON (id) requires id to be first in ORDER BY, so we order by id first,
-        # then distance to pick the best score for each ID (though they should be identical).
-        base_qs = base_qs.order_by("id", "_cosine_distance").distinct("id")
-
-        # Materialize to list, sort by distance, and take top_k
-        # Note: DISTINCT ON requires id first in ORDER BY, so we can't do the final
-        # sort by distance in PostgreSQL. Python sort is efficient for typical result
-        # sizes (hundreds to low thousands). For extreme scale, consider raw SQL with CTE.
-        results = list(base_qs)
-        results.sort(key=lambda obj: obj._cosine_distance)
-        results = results[:top_k]
+        # Let PostgreSQL sort and limit — HNSW index drives the scan.
+        # Only top_k rows are materialized into Python, not the full table.
+        results = list(base_qs.order_by("_cosine_distance")[:top_k])
 
         # Convert distance to similarity score for each result
         # similarity = 1 - distance (clamped to 0-1 range)
