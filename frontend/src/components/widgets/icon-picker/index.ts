@@ -9,3 +9,5 @@ export type { IconDropdownProps } from "./IconDropdown";
 
 export { LUCIDE_ICONS, ICON_CATEGORIES, LUCIDE_ICON_NAMES } from "./icons";
 export type { IconEntry, IconCategory } from "./icons";
+
+export { resolvePickerIcon } from "./resolvePickerIcon";

@@ -3,7 +3,8 @@ import React from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { DYNAMIC_ICON_DEFAULT_SIZE } from "../../../assets/configurations/constants";
-import { resolveIcon } from "../../../utils/iconCompat";
+import { SEMANTIC_TO_LUCIDE, normalize } from "../../../utils/iconCompat";
+import { resolvePickerIcon } from "./resolvePickerIcon";
 
 export interface DynamicIconProps {
   /** SUI or Lucide icon name (e.g. "trash", "file-text", "warning sign"). */
@@ -37,7 +38,10 @@ export const DynamicIcon: React.FC<DynamicIconProps> = ({
   className,
   strokeWidth,
 }) => {
-  const IconComponent: LucideIcon = resolveIcon(name);
+  // Map SUI names to Lucide kebab-case, pass through Lucide names directly
+  const normalized = normalize(name);
+  const lucideName = SEMANTIC_TO_LUCIDE[normalized] ?? normalized;
+  const IconComponent: LucideIcon = resolvePickerIcon(lucideName);
 
   return (
     <IconComponent

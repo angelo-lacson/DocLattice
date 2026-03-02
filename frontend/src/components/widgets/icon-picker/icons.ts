@@ -566,7 +566,12 @@ export const LUCIDE_ICONS: IconEntry[] = [
 /** Set of all icon names in the catalog for O(1) lookups. */
 export const LUCIDE_ICON_NAMES = new Set(LUCIDE_ICONS.map((i) => i.name));
 
+/** Map of icon names to entries for O(1) lookups by name. */
+const ICON_ENTRY_MAP = new Map<string, IconEntry>(
+  LUCIDE_ICONS.map((entry) => [entry.name, entry])
+);
+
 /** Look up an entry by name. Returns `undefined` when not found. */
 export function findIconEntry(name: string): IconEntry | undefined {
-  return LUCIDE_ICONS.find((i) => i.name === name);
+  return ICON_ENTRY_MAP.get(name);
 }
