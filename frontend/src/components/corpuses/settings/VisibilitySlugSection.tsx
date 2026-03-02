@@ -6,7 +6,7 @@
  * - #corpus-slug-input
  */
 import React from "react";
-import { Button, Icon } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
 import { Save, AlertTriangle } from "lucide-react";
 import {
   SettingsCard,
@@ -19,6 +19,7 @@ import {
   StyledInput,
   PermissionBanner,
 } from "../styles/corpusSettingsStyles";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface VisibilitySlugSectionProps {
   publicDraft: boolean;
@@ -113,11 +114,11 @@ export const VisibilitySlugSection: React.FC<VisibilitySlugSectionProps> = ({
             disabled={hasNoPermissions || !hasChanges}
             onClick={onSave}
             style={{
-              background: hasNoPermissions ? "#e2e8f0" : undefined,
+              background: hasNoPermissions ? OS_LEGAL_COLORS.border : undefined,
               cursor: hasNoPermissions ? "not-allowed" : undefined,
             }}
           >
-            <Icon name="save" /> Save Changes
+            <Save size={16} /> Save Changes
           </Button>
         </div>
       </SettingsCardContent>

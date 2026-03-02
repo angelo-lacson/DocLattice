@@ -397,12 +397,7 @@ export const BulkImportModal: React.FC = () => {
       <p style={{ color: "#666", marginBottom: "1.5rem" }}>
         This may take a few moments depending on the size of your ZIP file.
       </p>
-      <UploadProgress
-        percent={uploadProgress}
-        progress="percent"
-        indicating
-        size="medium"
-      />
+      <UploadProgress $percent={uploadProgress} />
     </div>
   );
 

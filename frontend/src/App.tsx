@@ -12,8 +12,6 @@ import {
 
 import _ from "lodash";
 
-import { Container } from "semantic-ui-react";
-
 import { toast, ToastContainer } from "react-toastify";
 
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
@@ -358,16 +356,16 @@ export const App = () => {
             }}
           >
             <NavMenu />
-            <Container
+            <div
               id="AppContainer"
               style={{
                 flex: 1,
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "flex-start",
-                width: "100% !important",
-                margin: "0px !important",
-                padding: "0px !important",
+                width: "100%",
+                margin: "0px",
+                padding: "0px",
                 minWidth: "100vw",
                 minHeight: 0,
                 overflow: "hidden",
@@ -537,7 +535,7 @@ export const App = () => {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </AuthGate>
-            </Container>
+            </div>
           </div>
           <div
             style={{

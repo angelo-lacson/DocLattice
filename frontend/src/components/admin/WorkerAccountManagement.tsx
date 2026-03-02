@@ -1,21 +1,18 @@
 import React, { useState } from "react";
 import { gql, useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  Table,
-  Message,
-  Dimmer,
-  Loader,
-  Modal,
-  Form,
-  Input,
-  TextArea,
-  Confirm,
-} from "semantic-ui-react";
+import { Button, Table, Modal, Form, Confirm } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Upload, ArrowLeft } from "lucide-react";
+import { Input } from "@os-legal/ui";
+import { StyledTextArea } from "../widgets/modals/styled";
+import {
+  ErrorMessage,
+  InfoMessage,
+  WarningMessage,
+  LoadingState,
+} from "../widgets/feedback";
 
 import {
   OS_LEGAL_COLORS,
@@ -273,10 +270,9 @@ export const WorkerAccountManagement: React.FC = () => {
   if (!isSuperuser) {
     return (
       <Container>
-        <Message warning>
-          <Message.Header>Access Denied</Message.Header>
-          <p>Only administrators can manage worker accounts.</p>
-        </Message>
+        <WarningMessage title="Access Denied">
+          Only administrators can manage worker accounts.
+        </WarningMessage>
       </Container>
     );
   }
@@ -284,9 +280,7 @@ export const WorkerAccountManagement: React.FC = () => {
   if (loading) {
     return (
       <Container>
-        <Dimmer active inverted>
-          <Loader>Loading worker accounts...</Loader>
-        </Dimmer>
+        <LoadingState message="Loading worker accounts..." />
       </Container>
     );
   }
@@ -294,10 +288,9 @@ export const WorkerAccountManagement: React.FC = () => {
   if (error) {
     return (
       <Container>
-        <Message negative>
-          <Message.Header>Error loading worker accounts</Message.Header>
-          <p>{error.message}</p>
-        </Message>
+        <ErrorMessage title="Error loading worker accounts">
+          {error.message}
+        </ErrorMessage>
       </Container>
     );
   }
@@ -333,13 +326,10 @@ export const WorkerAccountManagement: React.FC = () => {
 
       <StyledSegment>
         {accounts.length === 0 ? (
-          <Message info>
-            <Message.Header>No Worker Accounts</Message.Header>
-            <p>
-              Create your first worker account to enable automated document
-              upload pipelines.
-            </p>
-          </Message>
+          <InfoMessage title="No Worker Accounts">
+            Create your first worker account to enable automated document upload
+            pipelines.
+          </InfoMessage>
         ) : (
           <Table basic="very" celled>
             <Table.Header>
@@ -400,16 +390,17 @@ export const WorkerAccountManagement: React.FC = () => {
             <Form.Field required>
               <label>Name</label>
               <Input
+                fullWidth
                 placeholder="Worker account name"
                 value={formState.name}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
             </Form.Field>
             <Form.Field>
               <label>Description</label>
-              <TextArea
+              <StyledTextArea
                 placeholder="Optional description of this worker account"
                 value={formState.description}
                 onChange={(e) =>

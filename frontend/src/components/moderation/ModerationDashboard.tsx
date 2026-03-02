@@ -1,22 +1,34 @@
 import React, { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import {
-  Segment,
-  Header,
-  Icon,
   Table,
   Dropdown,
-  Checkbox,
   Button,
   Modal,
   Form,
-  Message,
-  Label,
-  Loader,
-  Dimmer,
   Statistic,
-  Grid,
 } from "semantic-ui-react";
+import {
+  Shield,
+  BarChart3,
+  Filter,
+  List,
+  Undo2,
+  Plus,
+  AlertTriangle,
+  Settings,
+  User,
+  MessageSquare,
+  MessagesSquare,
+} from "lucide-react";
+import { Spinner } from "@os-legal/ui";
+import {
+  ErrorMessage,
+  InfoMessage,
+  WarningMessage,
+  LoadingState,
+} from "../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { toast } from "react-toastify";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -113,14 +125,31 @@ const formatActionType = (actionType: string): string => {
     .join(" ");
 };
 
-const getActionColor = (
-  actionType: string
-): "red" | "green" | "blue" | "yellow" | "grey" => {
-  if (actionType.includes("delete")) return "red";
-  if (actionType.includes("restore")) return "green";
-  if (actionType.includes("lock")) return "yellow";
-  if (actionType.includes("pin")) return "blue";
-  return "grey";
+const ACTION_COLOR_MAP: Record<string, { bg: string; color: string }> = {
+  delete: {
+    bg: OS_LEGAL_COLORS.dangerSurface,
+    color: OS_LEGAL_COLORS.dangerText,
+  },
+  restore: {
+    bg: OS_LEGAL_COLORS.successSurface,
+    color: OS_LEGAL_COLORS.successText,
+  },
+  lock: {
+    bg: OS_LEGAL_COLORS.warningSurface,
+    color: OS_LEGAL_COLORS.warningText,
+  },
+  pin: { bg: OS_LEGAL_COLORS.infoSurface, color: OS_LEGAL_COLORS.infoText },
+};
+const DEFAULT_ACTION_COLORS = {
+  bg: OS_LEGAL_COLORS.surfaceHover,
+  color: OS_LEGAL_COLORS.textSecondary,
+};
+
+const getActionColors = (actionType: string): { bg: string; color: string } => {
+  for (const [key, value] of Object.entries(ACTION_COLOR_MAP)) {
+    if (actionType.includes(key)) return value;
+  }
+  return DEFAULT_ACTION_COLORS;
 };
 
 export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
@@ -247,18 +276,56 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
 
   return (
     <div style={{ padding: "1rem" }}>
-      <Header as="h2" dividing>
-        <Icon name="shield" />
-        <Header.Content>
+      <div
+        style={{
+          borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
+          paddingBottom: "1rem",
+          marginBottom: "1rem",
+        }}
+      >
+        <h2
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: 0,
+          }}
+        >
+          <Shield size={24} />
           Moderation Dashboard
-          {corpusTitle && <Header.Subheader>{corpusTitle}</Header.Subheader>}
-        </Header.Content>
-      </Header>
+        </h2>
+        {corpusTitle && (
+          <div
+            style={{
+              color: OS_LEGAL_COLORS.textSecondary,
+              fontSize: "0.9rem",
+              marginTop: "0.25rem",
+            }}
+          >
+            {corpusTitle}
+          </div>
+        )}
+      </div>
 
       {/* Metrics Section */}
-      <Segment>
-        <Header as="h4">
-          <Icon name="chart bar" />
+      <div
+        style={{
+          padding: "1rem",
+          border: `1px solid ${OS_LEGAL_COLORS.border}`,
+          borderRadius: "8px",
+          background: "white",
+          marginBottom: "1rem",
+        }}
+      >
+        <h4
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: "0 0 0.5rem 0",
+          }}
+        >
+          <BarChart3 size={16} />
           Moderation Metrics
           <Dropdown
             inline
@@ -267,63 +334,84 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             onChange={(_, { value }) => setTimeRangeHours(value as number)}
             style={{ marginLeft: "1rem" }}
           />
-        </Header>
+        </h4>
         {metricsLoading ? (
-          <Loader active inline="centered" />
+          <div style={{ textAlign: "center", padding: "1rem" }}>
+            <Spinner size="sm" />
+          </div>
         ) : metricsError ? (
-          <Message negative>
-            <Message.Header>Error loading metrics</Message.Header>
-            <p>{metricsError.message}</p>
-          </Message>
+          <ErrorMessage title="Error loading metrics">
+            {metricsError.message}
+          </ErrorMessage>
         ) : metrics ? (
           <>
             {metrics.isAboveThreshold && (
-              <Message warning>
-                <Icon name="warning sign" />
+              <WarningMessage
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <AlertTriangle size={16} />
                 High moderation activity detected! Threshold exceeded for:{" "}
                 {metrics.thresholdExceededTypes.join(", ")}
-              </Message>
+              </WarningMessage>
             )}
-            <Grid columns={4} stackable>
-              <Grid.Column>
-                <Statistic size="small">
-                  <Statistic.Value>{metrics.totalActions}</Statistic.Value>
-                  <Statistic.Label>Total Actions</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-              <Grid.Column>
-                <Statistic size="small" color="blue">
-                  <Statistic.Value>{metrics.automatedActions}</Statistic.Value>
-                  <Statistic.Label>Automated</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-              <Grid.Column>
-                <Statistic size="small" color="green">
-                  <Statistic.Value>{metrics.manualActions}</Statistic.Value>
-                  <Statistic.Label>Manual</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-              <Grid.Column>
-                <Statistic size="small">
-                  <Statistic.Value>
-                    {metrics.hourlyActionRate.toFixed(1)}
-                  </Statistic.Value>
-                  <Statistic.Label>Actions/Hour</Statistic.Label>
-                </Statistic>
-              </Grid.Column>
-            </Grid>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                gap: "1rem",
+              }}
+            >
+              <Statistic size="small">
+                <Statistic.Value>{metrics.totalActions}</Statistic.Value>
+                <Statistic.Label>Total Actions</Statistic.Label>
+              </Statistic>
+              <Statistic size="small" color="blue">
+                <Statistic.Value>{metrics.automatedActions}</Statistic.Value>
+                <Statistic.Label>Automated</Statistic.Label>
+              </Statistic>
+              <Statistic size="small" color="green">
+                <Statistic.Value>{metrics.manualActions}</Statistic.Value>
+                <Statistic.Label>Manual</Statistic.Label>
+              </Statistic>
+              <Statistic size="small">
+                <Statistic.Value>
+                  {metrics.hourlyActionRate.toFixed(1)}
+                </Statistic.Value>
+                <Statistic.Label>Actions/Hour</Statistic.Label>
+              </Statistic>
+            </div>
           </>
         ) : (
-          <Message info>No metrics available</Message>
+          <InfoMessage>No metrics available</InfoMessage>
         )}
-      </Segment>
+      </div>
 
       {/* Filters */}
-      <Segment>
-        <Header as="h4">
-          <Icon name="filter" />
+      <div
+        style={{
+          padding: "1rem",
+          border: `1px solid ${OS_LEGAL_COLORS.border}`,
+          borderRadius: "8px",
+          background: "white",
+          marginBottom: "1rem",
+        }}
+      >
+        <h4
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: "0 0 0.5rem 0",
+          }}
+        >
+          <Filter size={16} />
           Filters
-        </Header>
+        </h4>
         <Form>
           <Form.Group inline>
             <Form.Field>
@@ -338,33 +426,55 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
               />
             </Form.Field>
             <Form.Field>
-              <Checkbox
-                label="Automated actions only"
-                checked={automatedOnly}
-                onChange={(_, { checked }) => setAutomatedOnly(!!checked)}
-              />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={automatedOnly}
+                  onChange={(e) => setAutomatedOnly(e.target.checked)}
+                />
+                Automated actions only
+              </label>
             </Form.Field>
           </Form.Group>
         </Form>
-      </Segment>
+      </div>
 
       {/* Actions Table */}
-      <Segment>
-        <Header as="h4">
-          <Icon name="list" />
+      <div
+        style={{
+          padding: "1rem",
+          border: `1px solid ${OS_LEGAL_COLORS.border}`,
+          borderRadius: "8px",
+          background: "white",
+          marginBottom: "1rem",
+        }}
+      >
+        <h4
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            margin: "0 0 0.5rem 0",
+          }}
+        >
+          <List size={16} />
           Moderation Actions
-        </Header>
+        </h4>
         {actionsLoading ? (
-          <Dimmer active inverted>
-            <Loader>Loading actions...</Loader>
-          </Dimmer>
+          <LoadingState message="Loading actions..." />
         ) : actionsError ? (
-          <Message negative>
-            <Message.Header>Error loading actions</Message.Header>
-            <p>{actionsError.message}</p>
-          </Message>
+          <ErrorMessage title="Error loading actions">
+            {actionsError.message}
+          </ErrorMessage>
         ) : actions.length === 0 ? (
-          <Message info>No moderation actions found</Message>
+          <InfoMessage>No moderation actions found</InfoMessage>
         ) : (
           <>
             <Table celled striped>
@@ -379,74 +489,131 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {actions.map(({ node }) => (
-                  <Table.Row key={node.id}>
-                    <Table.Cell>
-                      <Label color={getActionColor(node.actionType)}>
-                        {formatActionType(node.actionType)}
-                      </Label>
-                      {node.isAutomated && (
-                        <Label size="tiny" color="purple">
-                          <Icon name="cog" />
-                          Auto
-                        </Label>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.conversation && (
-                        <div>
-                          <Icon name="comments" />
-                          {node.conversation.title}
-                        </div>
-                      )}
-                      {node.message && (
-                        <div style={{ fontSize: "0.9em", color: "#666" }}>
-                          <Icon name="comment" />
-                          {node.message.content.substring(0, 50)}...
-                        </div>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.moderator ? (
-                        <span>
-                          <Icon name="user" />
-                          {node.moderator.username}
-                        </span>
-                      ) : (
-                        <span style={{ color: "#888" }}>
-                          <Icon name="cog" />
-                          System
-                        </span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.reason || (
-                        <span style={{ color: "#888" }}>
-                          No reason provided
-                        </span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span title={format(new Date(node.created), "PPpp")}>
-                        {formatDistanceToNow(new Date(node.created), {
-                          addSuffix: true,
-                        })}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {node.canRollback && (
-                        <Button
-                          size="tiny"
-                          color="orange"
-                          onClick={() => openRollbackModal(node)}
+                {actions.map(({ node }) => {
+                  const { bg: actionBg, color: actionColor } = getActionColors(
+                    node.actionType
+                  );
+                  return (
+                    <Table.Row key={node.id}>
+                      <Table.Cell>
+                        <span
+                          data-testid="action-badge"
+                          style={{
+                            display: "inline-block",
+                            padding: "0.2em 0.5em",
+                            fontSize: "0.8rem",
+                            fontWeight: 500,
+                            borderRadius: "4px",
+                            background: actionBg,
+                            color: actionColor,
+                            border: "1px solid currentColor",
+                          }}
                         >
-                          <Icon name="undo" />
-                          Rollback
-                        </Button>
-                      )}
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
+                          {formatActionType(node.actionType)}
+                        </span>
+                        {node.isAutomated && (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              marginLeft: "0.5rem",
+                              padding: "0.15em 0.4em",
+                              fontSize: "0.7rem",
+                              fontWeight: 500,
+                              background: "#f3e8ff",
+                              color: "#7e22ce",
+                              borderRadius: "4px",
+                            }}
+                          >
+                            <Settings size={10} />
+                            Auto
+                          </span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.conversation && (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <MessagesSquare size={14} />
+                            {node.conversation.title}
+                          </div>
+                        )}
+                        {node.message && (
+                          <div
+                            style={{
+                              fontSize: "0.9em",
+                              color: "#666",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <MessageSquare size={12} />
+                            {node.message.content.substring(0, 50)}...
+                          </div>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.moderator ? (
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <User size={14} />
+                            {node.moderator.username}
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              color: "#888",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <Settings size={14} />
+                            System
+                          </span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.reason || (
+                          <span style={{ color: "#888" }}>
+                            No reason provided
+                          </span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span title={format(new Date(node.created), "PPpp")}>
+                          {formatDistanceToNow(new Date(node.created), {
+                            addSuffix: true,
+                          })}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {node.canRollback && (
+                          <Button
+                            size="tiny"
+                            color="orange"
+                            onClick={() => openRollbackModal(node)}
+                          >
+                            <Undo2 size={14} />
+                            Rollback
+                          </Button>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
               </Table.Body>
             </Table>
             {actionsData?.moderationActions?.pageInfo?.hasNextPage && (
@@ -456,14 +623,14 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                   loading={isLoadingMore}
                   disabled={isLoadingMore}
                 >
-                  <Icon name="plus" />
+                  <Plus size={14} />
                   Load More
                 </Button>
               </div>
             )}
           </>
         )}
-      </Segment>
+      </div>
 
       {/* Rollback Confirmation Modal */}
       <Modal
@@ -472,7 +639,10 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         size="small"
       >
         <Modal.Header>
-          <Icon name="undo" />
+          <Undo2
+            size={16}
+            style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+          />
           Confirm Rollback
         </Modal.Header>
         <Modal.Content>
@@ -509,7 +679,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             loading={rollbackLoading}
             disabled={rollbackLoading}
           >
-            <Icon name="undo" />
+            <Undo2 size={14} />
             Rollback
           </Button>
         </Modal.Actions>
