@@ -77,6 +77,12 @@ class Command(BaseCommand):
             "have new defaults you want to adopt.",
         )
         parser.add_argument(
+            "--init-only",
+            action="store_true",
+            help="Only populate fields that are currently empty/unset in the database. "
+            "Existing non-empty values are preserved. Safe for use on every startup.",
+        )
+        parser.add_argument(
             "--list-components",
             action="store_true",
             help="List all available pipeline components and their settings schemas. "
@@ -92,6 +98,7 @@ class Command(BaseCommand):
         force_overwrite = options.get("force", False)
         strict_mode = options.get("strict", False)
         sync_preferences = options.get("sync_preferences", False)
+        init_only = options.get("init_only", False)
         list_components = options.get("list_components", False)
 
         # Handle --list-components first (doesn't need the header)
@@ -116,7 +123,7 @@ class Command(BaseCommand):
             return
 
         if sync_preferences:
-            self._sync_preferences(dry_run, verbose)
+            self._sync_preferences(dry_run, verbose, init_only=init_only)
             return
 
         # Import here to avoid circular imports
@@ -448,7 +455,7 @@ class Command(BaseCommand):
 
         self.stdout.write("=" * 70 + "\n")
 
-    def _sync_preferences(self, dry_run: bool, verbose: bool):
+    def _sync_preferences(self, dry_run: bool, verbose: bool, init_only: bool = False):
         """
         Sync main pipeline preferences from Django settings to database.
 
@@ -459,12 +466,19 @@ class Command(BaseCommand):
         - parser_kwargs from PARSER_KWARGS
         - default_embedder from DEFAULT_EMBEDDER
         - enabled_components from ENABLED_COMPONENTS (defaults to [] = all enabled)
+
+        When init_only=True, fields that already have non-empty values in the
+        database are preserved. This makes the command safe to run on every
+        startup without overwriting admin-configured values.
         """
         from opencontractserver.documents.models import PipelineSettings
 
         pipeline_settings = PipelineSettings.get_instance(use_cache=False)
 
-        self.stdout.write("Syncing main pipeline preferences from Django settings...\n")
+        mode_label = " (init-only)" if init_only else ""
+        self.stdout.write(
+            f"Syncing main pipeline preferences from Django settings{mode_label}...\n"
+        )
 
         # Map of DB field -> Django setting name
         preference_mappings = [
@@ -477,10 +491,18 @@ class Command(BaseCommand):
         ]
 
         changes = []
+        skipped = []
 
         for db_field, setting_name, default in preference_mappings:
             current_value = getattr(pipeline_settings, db_field)
             new_value = getattr(django_settings, setting_name, default)
+
+            # In init-only mode, skip fields that already have non-empty values
+            if init_only and current_value not in (None, "", {}, []):
+                skipped.append(db_field)
+                if verbose:
+                    self.stdout.write(f"  {db_field}: [PRESERVED] (already configured)")
+                continue
 
             # Normalize for comparison (handle None vs empty dict/string)
             current_normalized = current_value if current_value else default
@@ -522,6 +544,13 @@ class Command(BaseCommand):
             self.stdout.write(
                 "  No changes needed - database already matches Django settings"
             )
+
+        if skipped:
+            self.stdout.write(
+                f"  Fields preserved (already configured): {len(skipped)}"
+            )
+            for field in skipped:
+                self.stdout.write(f"    - {field}")
 
         if dry_run:
             self.stdout.write(

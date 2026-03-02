@@ -206,6 +206,175 @@ class MigratePipelineSettingsCommandTestCase(TestCase):
         self.assertTrue(args.dry_run)
 
 
+class InitOnlyTestCase(TestCase):
+    """Tests for the --init-only flag with --sync-preferences."""
+
+    def setUp(self):
+        """Set up test fixtures with admin-configured values."""
+        PipelineSettings.objects.all().delete()
+        self.pipeline_settings = PipelineSettings.objects.create(
+            id=1,
+            preferred_parsers={"application/pdf": "admin.configured.Parser"},
+            preferred_embedders={"application/pdf": "admin.configured.Embedder"},
+            preferred_thumbnailers={},
+            parser_kwargs={"admin.configured.Parser": {"custom": True}},
+            default_embedder="admin.configured.DefaultEmbedder",
+            enabled_components=["admin.configured.Component"],
+        )
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "settings.parser.Path"},
+        PREFERRED_EMBEDDERS={"application/pdf": "settings.embedder.Path"},
+        PARSER_KWARGS={"settings.parser.Path": {"force_ocr": False}},
+        DEFAULT_EMBEDDER="settings.embedder.Default",
+    )
+    def test_init_only_preserves_existing_values(self):
+        """Test --init-only skips fields that already have non-empty values."""
+        out = StringIO()
+
+        call_command(
+            "migrate_pipeline_settings",
+            "--sync-preferences",
+            "--init-only",
+            stdout=out,
+        )
+
+        # DB values should be unchanged
+        refreshed = PipelineSettings.get_instance(use_cache=False)
+        self.assertEqual(
+            refreshed.preferred_parsers,
+            {"application/pdf": "admin.configured.Parser"},
+        )
+        self.assertEqual(
+            refreshed.preferred_embedders,
+            {"application/pdf": "admin.configured.Embedder"},
+        )
+        self.assertEqual(
+            refreshed.parser_kwargs,
+            {"admin.configured.Parser": {"custom": True}},
+        )
+        self.assertEqual(
+            refreshed.default_embedder,
+            "admin.configured.DefaultEmbedder",
+        )
+        self.assertEqual(
+            refreshed.enabled_components,
+            ["admin.configured.Component"],
+        )
+
+        output = out.getvalue()
+        self.assertIn("Fields preserved (already configured):", output)
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "settings.parser.Path"},
+        PREFERRED_EMBEDDERS={"application/pdf": "settings.embedder.Path"},
+        PREFERRED_THUMBNAILERS={"application/pdf": "settings.thumb.Path"},
+        PARSER_KWARGS={"settings.parser.Path": {"force_ocr": False}},
+        DEFAULT_EMBEDDER="settings.embedder.Default",
+    )
+    def test_init_only_populates_empty_fields(self):
+        """Test --init-only still populates fields that are empty."""
+        # preferred_thumbnailers is {} (empty) so it should be populated
+        out = StringIO()
+
+        call_command(
+            "migrate_pipeline_settings",
+            "--sync-preferences",
+            "--init-only",
+            stdout=out,
+        )
+
+        refreshed = PipelineSettings.get_instance(use_cache=False)
+        # Empty field should be populated from settings
+        self.assertEqual(
+            refreshed.preferred_thumbnailers,
+            {"application/pdf": "settings.thumb.Path"},
+        )
+        # Non-empty fields should be preserved
+        self.assertEqual(
+            refreshed.preferred_parsers,
+            {"application/pdf": "admin.configured.Parser"},
+        )
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "settings.parser.Path"},
+        PREFERRED_EMBEDDERS={"application/pdf": "settings.embedder.Path"},
+        PARSER_KWARGS={"settings.parser.Path": {"force_ocr": False}},
+        DEFAULT_EMBEDDER="settings.embedder.Default",
+    )
+    def test_without_init_only_overwrites(self):
+        """Test that without --init-only, existing values ARE overwritten."""
+        out = StringIO()
+
+        call_command(
+            "migrate_pipeline_settings",
+            "--sync-preferences",
+            stdout=out,
+        )
+
+        refreshed = PipelineSettings.get_instance(use_cache=False)
+        # Values should be overwritten with Django settings
+        self.assertEqual(
+            refreshed.preferred_parsers,
+            {"application/pdf": "settings.parser.Path"},
+        )
+        self.assertEqual(refreshed.default_embedder, "settings.embedder.Default")
+
+    def test_init_only_argument_exists(self):
+        """Test that --init-only argument is recognized."""
+        from django.core.management import get_commands, load_command_class
+
+        app_name = get_commands()["migrate_pipeline_settings"]
+        command = load_command_class(app_name, "migrate_pipeline_settings")
+        parser = command.create_parser("manage.py", "migrate_pipeline_settings")
+
+        args = parser.parse_args(["--sync-preferences", "--init-only"])
+        self.assertTrue(args.init_only)
+        self.assertTrue(args.sync_preferences)
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "settings.parser.Path"},
+        PREFERRED_EMBEDDERS={"application/pdf": "settings.embedder.Path"},
+        PARSER_KWARGS={"settings.parser.Path": {"force_ocr": False}},
+        DEFAULT_EMBEDDER="settings.embedder.Default",
+    )
+    def test_init_only_verbose_shows_preserved(self):
+        """Test --init-only --verbose shows which fields were preserved."""
+        out = StringIO()
+
+        call_command(
+            "migrate_pipeline_settings",
+            "--sync-preferences",
+            "--init-only",
+            "--verbose",
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn("PRESERVED", output)
+        self.assertIn("already configured", output)
+
+    @override_settings(
+        PREFERRED_PARSERS={"application/pdf": "settings.parser.Path"},
+        PREFERRED_EMBEDDERS={"application/pdf": "settings.embedder.Path"},
+        PARSER_KWARGS={"settings.parser.Path": {"force_ocr": False}},
+        DEFAULT_EMBEDDER="settings.embedder.Default",
+    )
+    def test_init_only_summary_shows_preserved_count(self):
+        """Test --init-only summary shows count of preserved fields."""
+        out = StringIO()
+
+        call_command(
+            "migrate_pipeline_settings",
+            "--sync-preferences",
+            "--init-only",
+            stdout=out,
+        )
+
+        output = out.getvalue()
+        self.assertIn("Fields preserved (already configured):", output)
+
+
 class ListComponentsTestCase(TestCase):
     """Tests for the --list-components option."""
 
