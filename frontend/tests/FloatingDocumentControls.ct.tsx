@@ -231,7 +231,7 @@ test.describe("FloatingDocumentControls", () => {
     // Find and click the toggle
     const toggleRow = page.locator("text=Show Only Selected").locator("..");
     const toggle = toggleRow.locator('input[type="checkbox"]');
-    const toggleWrapper = toggleRow.locator(".ui.checkbox");
+    const toggleWrapper = toggleRow.locator("label");
 
     await expect(toggle).not.toBeChecked();
     await toggleWrapper.click();
@@ -253,7 +253,7 @@ test.describe("FloatingDocumentControls", () => {
     // Find and click the toggle
     const toggleRow = page.locator("text=Show Bounding Boxes").locator("..");
     const toggle = toggleRow.locator('input[type="checkbox"]');
-    const toggleWrapper = toggleRow.locator(".ui.checkbox");
+    const toggleWrapper = toggleRow.locator("label");
 
     await expect(toggle).not.toBeChecked();
     await toggleWrapper.click();
@@ -292,7 +292,7 @@ test.describe("FloatingDocumentControls", () => {
     const structuralToggleWrapper = page
       .locator("text=Show Structural")
       .locator("..")
-      .locator(".ui.checkbox");
+      .locator("label");
 
     await expect(selectedOnlyToggle).not.toBeChecked();
     await expect(structuralToggle).not.toBeChecked();
@@ -340,7 +340,7 @@ test.describe("FloatingDocumentControls", () => {
     const selectedOnlyToggleWrapper = page
       .locator("text=Show Only Selected")
       .locator("..")
-      .locator(".ui.checkbox");
+      .locator("label");
     const structuralToggle = page
       .locator("text=Show Structural")
       .locator("..")
@@ -466,7 +466,7 @@ test.describe("FloatingDocumentControls", () => {
     // Toggle should still work
     const toggleRow = page.locator("text=Show Bounding Boxes").locator("..");
     const toggle = toggleRow.locator('input[type="checkbox"]');
-    const toggleWrapper = toggleRow.locator(".ui.checkbox");
+    const toggleWrapper = toggleRow.locator("label");
 
     await expect(toggle).not.toBeChecked();
     await toggleWrapper.click();

@@ -54,7 +54,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ files }) => {
             : "Uploading files..."}
         </span>
         <span className="progress-count">
-          {successCount} / {totalCount} completed
+          {successCount} / {totalCount} completed ({Math.round(percentage)}%)
         </span>
       </div>
       <Progress

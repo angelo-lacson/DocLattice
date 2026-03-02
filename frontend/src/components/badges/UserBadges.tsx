@@ -1,8 +1,11 @@
 import React from "react";
 import { useQuery } from "@apollo/client";
-import { Header, Message, Dimmer, Loader, Segment } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import styled from "styled-components";
+import { ErrorMessage } from "../widgets/feedback";
 import { Badge, BadgeData } from "./Badge";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { GradientSegment } from "../layout/SharedSegments";
 import {
   GET_USER_BADGES,
   GetUserBadgesInput,
@@ -27,24 +30,18 @@ const BadgesContainer = styled.div`
   }
 `;
 
-const StyledSegment = styled(Segment)`
-  &.ui.segment {
-    border-radius: 16px;
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+const StyledSegment = styled(GradientSegment)`
+  position: relative;
 
+  @media (max-width: 768px) {
+    border-radius: 12px;
+    margin: 0.5em 0;
+  }
+
+  h3 {
     @media (max-width: 768px) {
-      border-radius: 12px;
-      margin: 0.5em 0;
-    }
-
-    /* Responsive header inside segment */
-    h3.ui.header {
-      @media (max-width: 768px) {
-        font-size: 1.1em;
-        text-align: center;
-      }
+      font-size: 1.1em;
+      text-align: center;
     }
   }
 `;
@@ -52,7 +49,7 @@ const StyledSegment = styled(Segment)`
 const EmptyState = styled.div`
   text-align: center;
   padding: 3em 1em;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 1.1em;
 
   @media (max-width: 768px) {
@@ -89,9 +86,20 @@ export const UserBadges: React.FC<UserBadgesProps> = ({
   if (loading) {
     return (
       <StyledSegment>
-        <Dimmer active inverted>
-          <Loader>Loading badges...</Loader>
-        </Dimmer>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(255,255,255,0.8)",
+            zIndex: 10,
+            borderRadius: "16px",
+          }}
+        >
+          <Spinner />
+        </div>
         <div style={{ minHeight: "100px" }} />
       </StyledSegment>
     );
@@ -99,10 +107,7 @@ export const UserBadges: React.FC<UserBadgesProps> = ({
 
   if (error) {
     return (
-      <Message negative>
-        <Message.Header>Error loading badges</Message.Header>
-        <p>{error.message}</p>
-      </Message>
+      <ErrorMessage title="Error loading badges">{error.message}</ErrorMessage>
     );
   }
 
@@ -111,7 +116,17 @@ export const UserBadges: React.FC<UserBadgesProps> = ({
   if (userBadges.length === 0) {
     return (
       <StyledSegment>
-        {showTitle && <Header as="h3">{title}</Header>}
+        {showTitle && (
+          <h3
+            style={{
+              margin: "0 0 0.5rem 0",
+              fontSize: "1.25rem",
+              fontWeight: 600,
+            }}
+          >
+            {title}
+          </h3>
+        )}
         <EmptyState>No badges earned yet. Keep contributing!</EmptyState>
       </StyledSegment>
     );
@@ -133,9 +148,15 @@ export const UserBadges: React.FC<UserBadgesProps> = ({
   return (
     <StyledSegment>
       {showTitle && (
-        <Header as="h3">
+        <h3
+          style={{
+            margin: "0 0 0.5rem 0",
+            fontSize: "1.25rem",
+            fontWeight: 600,
+          }}
+        >
           {title} ({userBadges.length})
-        </Header>
+        </h3>
       )}
       <BadgesContainer>
         {badgeData.map((badge) => (

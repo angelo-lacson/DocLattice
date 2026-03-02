@@ -324,9 +324,10 @@ test.describe("GlobalAgentManagement Component", () => {
       timeout: 5000,
     });
 
-    // Edit and delete buttons should be present
-    await expect(page.locator("button i.edit.icon")).toBeVisible();
-    await expect(page.locator("button i.trash.icon")).toBeVisible();
+    // Edit and delete buttons should be present (Lucide icons render as SVGs)
+    const actionButtons = page.locator("button:has(svg)");
+    await expect(actionButtons.first()).toBeVisible();
+    expect(await actionButtons.count()).toBeGreaterThanOrEqual(2);
 
     await component.unmount();
   });
