@@ -40,7 +40,6 @@ services:
     volumes:
       - local_postgres_data:/var/lib/postgresql/data:Z
       - local_postgres_data_backups:/backups:z
-      - ./compose/production/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     env_file:
       - ./.envs/.local/.postgres
     # Dev-friendly memory settings (production uses 2GB/128MB respectively)

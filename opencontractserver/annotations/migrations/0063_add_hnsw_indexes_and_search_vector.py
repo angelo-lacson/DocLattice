@@ -30,8 +30,8 @@ from pgvector.django import HnswIndex
 # Values at time of migration creation (2026-02-28).
 HNSW_M = 16
 HNSW_EF_CONSTRUCTION = 64
-# TODO: FTS_CONFIG hardcodes English. Multilingual corpora will need
-# per-corpus or per-document text search configuration in a follow-up.
+# NOTE(deferred): FTS_CONFIG hardcodes English. Multilingual corpora will need
+# per-corpus or per-document text search configuration.
 FTS_CONFIG = "english"
 
 # HNSW index definitions: (index_name, column_name)

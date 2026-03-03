@@ -20,6 +20,7 @@ from opencontractserver.utils.embeddings import (
     generate_embeddings_from_text,
     get_embedder,
 )
+from opencontractserver.utils.search import reciprocal_rank_fusion
 
 User = get_user_model()
 
@@ -602,6 +603,84 @@ class CoreAnnotationVectorStore:
 
         return results
 
+    @staticmethod
+    def _fuse_results(
+        vector_results: list,
+        text_results: list,
+        top_k: int,
+    ) -> list["VectorSearchResult"]:
+        """Merge vector and full-text search results via Reciprocal Rank Fusion.
+
+        Handles three cases:
+        - Both arms have results: fuse with RRF
+        - Only one arm has results: return that arm's results (up to *top_k*)
+        - Neither arm has results: return empty list
+
+        Args:
+            vector_results: Annotation instances from vector similarity search,
+                each expected to have a ``similarity_score`` attribute.
+            text_results: Annotation instances from full-text search,
+                each expected to have a ``text_rank`` attribute.
+            top_k: Maximum number of results to return.
+
+        Returns:
+            List of :class:`VectorSearchResult` with fused scores.
+        """
+        if vector_results and text_results:
+            fused = reciprocal_rank_fusion(
+                vector_results,
+                text_results,
+                top_n=top_k,
+            )
+            _logger.info(
+                f"Hybrid search: fused {len(vector_results)} vector + "
+                f"{len(text_results)} text -> {len(fused)} results"
+            )
+            return [
+                VectorSearchResult(annotation=ann, similarity_score=score)
+                for ann, score in fused
+            ]
+        elif vector_results:
+            return [
+                VectorSearchResult(
+                    annotation=ann,
+                    similarity_score=getattr(ann, "similarity_score", 1.0),
+                )
+                for ann in vector_results[:top_k]
+            ]
+        elif text_results:
+            return [
+                VectorSearchResult(
+                    annotation=ann,
+                    similarity_score=getattr(ann, "text_rank", 1.0),
+                )
+                for ann in text_results[:top_k]
+            ]
+        else:
+            _logger.warning("Hybrid search: no results from either arm")
+            return []
+
+    def _run_fts_query(self, queryset, query_text: str, oversample_k: int) -> list:
+        """Execute the full-text search arm of hybrid search (sync).
+
+        Args:
+            queryset: Base annotation queryset (already filtered).
+            query_text: User query string for full-text matching.
+            oversample_k: Number of results to retrieve before fusion.
+
+        Returns:
+            List of Annotation instances annotated with ``text_rank``.
+        """
+        from django.contrib.postgres.search import SearchQuery, SearchRank
+
+        search_query = SearchQuery(query_text, config=FTS_CONFIG)
+        text_qs = (
+            queryset.filter(search_vector=search_query)
+            .annotate(text_rank=SearchRank("search_vector", search_query))
+            .order_by("-text_rank")[:oversample_k]
+        )
+        return list(text_qs)
+
     def hybrid_search(self, query: VectorSearchQuery) -> list[VectorSearchResult]:
         """Execute a hybrid search combining vector similarity and full-text search.
 
@@ -626,10 +705,6 @@ class CoreAnnotationVectorStore:
                 "Sync method called from async context - this may cause issues"
             )
 
-        from django.contrib.postgres.search import SearchQuery, SearchRank
-
-        from opencontractserver.utils.search import reciprocal_rank_fusion
-
         # Build base queryset with filters
         queryset = async_to_sync(self._build_base_queryset)()
         queryset = self._apply_metadata_filters(queryset, query.filters)
@@ -641,7 +716,7 @@ class CoreAnnotationVectorStore:
         if vector is None and query.query_text is not None:
             vector = self._generate_query_embedding(query.query_text)
 
-        vector_results = []
+        vector_results: list = []
         if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
             vector_results = queryset.search_by_embedding(
                 query_vector=vector,
@@ -651,53 +726,12 @@ class CoreAnnotationVectorStore:
             _logger.debug(f"Hybrid: vector arm returned {len(vector_results)} results")
 
         # --- Full-text search arm ---
-        text_results = []
+        text_results: list = []
         if query.query_text:
-            search_query = SearchQuery(query.query_text, config=FTS_CONFIG)
-            text_qs = (
-                queryset.filter(search_vector=search_query)
-                .annotate(text_rank=SearchRank("search_vector", search_query))
-                .order_by("-text_rank")[:oversample_k]
-            )
-            text_results = list(text_qs)
+            text_results = self._run_fts_query(queryset, query.query_text, oversample_k)
             _logger.debug(f"Hybrid: full-text arm returned {len(text_results)} results")
 
-        # --- Fusion ---
-        if vector_results and text_results:
-            fused = reciprocal_rank_fusion(
-                vector_results,
-                text_results,
-                top_n=query.similarity_top_k,
-            )
-            _logger.info(
-                f"Hybrid search: fused {len(vector_results)} vector + "
-                f"{len(text_results)} text -> {len(fused)} results"
-            )
-            return [
-                VectorSearchResult(annotation=ann, similarity_score=score)
-                for ann, score in fused
-            ]
-        elif vector_results:
-            # Vector-only fallback
-            return [
-                VectorSearchResult(
-                    annotation=ann,
-                    similarity_score=getattr(ann, "similarity_score", 1.0),
-                )
-                for ann in vector_results[: query.similarity_top_k]
-            ]
-        elif text_results:
-            # Text-only fallback
-            return [
-                VectorSearchResult(
-                    annotation=ann,
-                    similarity_score=getattr(ann, "text_rank", 1.0),
-                )
-                for ann in text_results[: query.similarity_top_k]
-            ]
-        else:
-            _logger.warning("Hybrid search: no results from either arm")
-            return []
+        return self._fuse_results(vector_results, text_results, query.similarity_top_k)
 
     async def async_hybrid_search(
         self, query: VectorSearchQuery
@@ -721,10 +755,6 @@ class CoreAnnotationVectorStore:
         Returns:
             List of search results with annotations and RRF-fused scores
         """
-        from django.contrib.postgres.search import SearchQuery, SearchRank
-
-        from opencontractserver.utils.search import reciprocal_rank_fusion
-
         # Build base queryset (natively async)
         queryset = await self._build_base_queryset()
         queryset = self._apply_metadata_filters(queryset, query.filters)
@@ -750,55 +780,12 @@ class CoreAnnotationVectorStore:
         # --- Full-text search arm ---
         text_results: list = []
         if query.query_text:
-            search_query = SearchQuery(query.query_text, config=FTS_CONFIG)
-
-            def _run_fts():
-                text_qs = (
-                    queryset.filter(search_vector=search_query)
-                    .annotate(text_rank=SearchRank("search_vector", search_query))
-                    .order_by("-text_rank")[:oversample_k]
-                )
-                return list(text_qs)
-
-            text_results = await sync_to_async(_run_fts)()
+            text_results = await sync_to_async(self._run_fts_query)(
+                queryset, query.query_text, oversample_k
+            )
             _logger.debug(f"Hybrid: full-text arm returned {len(text_results)} results")
 
-        # --- Fusion ---
-        if vector_results and text_results:
-            fused = reciprocal_rank_fusion(
-                vector_results,
-                text_results,
-                top_n=query.similarity_top_k,
-            )
-            _logger.info(
-                f"Hybrid search: fused {len(vector_results)} vector + "
-                f"{len(text_results)} text -> {len(fused)} results"
-            )
-            return [
-                VectorSearchResult(annotation=ann, similarity_score=score)
-                for ann, score in fused
-            ]
-        elif vector_results:
-            # Vector-only fallback
-            return [
-                VectorSearchResult(
-                    annotation=ann,
-                    similarity_score=getattr(ann, "similarity_score", 1.0),
-                )
-                for ann in vector_results[: query.similarity_top_k]
-            ]
-        elif text_results:
-            # Text-only fallback
-            return [
-                VectorSearchResult(
-                    annotation=ann,
-                    similarity_score=getattr(ann, "text_rank", 1.0),
-                )
-                for ann in text_results[: query.similarity_top_k]
-            ]
-        else:
-            _logger.warning("Hybrid search: no results from either arm")
-            return []
+        return self._fuse_results(vector_results, text_results, query.similarity_top_k)
 
     @classmethod
     def global_search(
@@ -966,12 +953,23 @@ class CoreAnnotationVectorStore:
     async def async_search(self, query: VectorSearchQuery) -> list[VectorSearchResult]:
         """Async version of search that properly handles Django ORM in async context.
 
+        When a text query is provided, delegates to ``async_hybrid_search()``
+        which combines vector similarity with full-text search via RRF fusion.
+        This mirrors the sync ``resolve_semantic_search`` resolver behaviour
+        so callers going through ``async_search`` get the same hybrid benefit.
+
         Args:
             query: The search query containing text/embedding and filters
 
         Returns:
             List of search results with annotations and similarity scores
         """
+        # Delegate to hybrid search when a text query is present — mirrors
+        # the sync GraphQL resolver logic in resolve_semantic_search.
+        if query.query_text and query.query_text.strip():
+            return await self.async_hybrid_search(query)
+
+        # Vector-only / no-text path: embedding lookup without FTS overhead.
         # Build base queryset with filters
         queryset = await self._build_base_queryset()
 

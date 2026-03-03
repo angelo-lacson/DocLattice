@@ -67,6 +67,6 @@ HNSW_HIGHEST_INDEXED_DIM = 1536
 # =============================================================================
 # PostgreSQL text search configuration name for tsvector generation.
 # "english" provides stemming and stop-word removal for English text.
-# TODO: This hardcodes English for full-text search. Multilingual corpora
-# will need per-corpus or per-document FTS config. See follow-up issue.
+# NOTE(deferred): This hardcodes English for full-text search. Multilingual corpora
+# will need per-corpus or per-document FTS config.
 FTS_CONFIG = "english"
