@@ -957,7 +957,6 @@ class TestGetUserByPayloadWithClaimSync(TestCase):
 
 
 @override_settings(
-    RATELIMIT_ENABLE=True,
     RATELIMIT_DISABLE=False,
     CACHES={
         "default": {

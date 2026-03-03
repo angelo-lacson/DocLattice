@@ -56,25 +56,33 @@ def _pick_xff_ip(xff_value: str) -> str:
     right (the IP appended by the Nth trusted proxy).  The default is
     ``1`` (rightmost entry = single proxy such as Traefik/nginx).
 
-    .. important::
-        Callers **must** check ``RATELIMIT_PROXIES_COUNT > 0`` before
-        calling this function.  When ``proxies_count == 0`` the
-        ``X-Forwarded-For`` header should be ignored entirely (app
-        receives connections directly and XFF is client-controlled).
-
     Args:
         xff_value: The raw ``X-Forwarded-For`` header value (comma-separated IPs).
 
     Returns:
         The selected IP string, or :data:`UNKNOWN_IP` if the header is empty.
+
+    Raises:
+        ValueError: If ``RATELIMIT_PROXIES_COUNT`` is ``<= 0``.  Callers
+            must check ``proxies_count > 0`` before calling this function;
+            when ``proxies_count == 0`` the ``X-Forwarded-For`` header
+            should be ignored entirely (app receives connections directly
+            and XFF is client-controlled).
     """
     from django.conf import settings
+
+    proxies_count = getattr(settings, "RATELIMIT_PROXIES_COUNT", 1)
+    if proxies_count <= 0:
+        raise ValueError(
+            f"_pick_xff_ip called with RATELIMIT_PROXIES_COUNT={proxies_count}. "
+            f"When proxies_count <= 0, X-Forwarded-For should not be consulted "
+            f"because it is entirely client-controlled."
+        )
 
     parts = [p.strip() for p in xff_value.split(",") if p.strip()]
     if not parts:
         return UNKNOWN_IP
 
-    proxies_count = getattr(settings, "RATELIMIT_PROXIES_COUNT", 1)
     # Trust the Nth entry from the right (1 = rightmost = single proxy)
     index = -proxies_count
     try:

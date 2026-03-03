@@ -199,7 +199,6 @@ RATELIMIT_DISABLE=true
 Core settings in `config/settings/ratelimit.py`:
 
 ```python
-RATELIMIT_ENABLE = True           # Enable rate limiting globally
 RATELIMIT_DISABLE = False         # Disable all rate limiting (env override)
 RATELIMIT_USE_CACHE = "default"   # Cache backend for counters
 RATELIMIT_FAIL_OPEN = False       # Deny requests if cache is down
@@ -219,6 +218,8 @@ The engine uses a fixed-window counter algorithm:
 3. `cache.add()` atomically creates the key if absent (set to 1)
 4. `cache.incr()` atomically increments the counter
 5. If `counter > count`, the request is rate limited
+
+> **Burst note:** Fixed-window counters can allow up to 2x the configured rate at window boundaries (e.g. N requests at the end of one window + N at the start of the next). This is an accepted trade-off for the simplicity and atomicity of the algorithm. If stricter burst control is needed, consider migrating to a sliding-window or token-bucket algorithm.
 
 ### Cache Key Format
 
@@ -287,6 +288,10 @@ class RateLimitEngineTest(TestCase):
 
 - `opencontractserver/tests/test_rate_limiting.py` — Integration tests for GraphQL rate limiting
 - `opencontractserver/tests/test_unified_rate_limiting.py` — Comprehensive tests for all engine, key, rate, and adapter components
+
+### Differences from Previous Implementation (`django-ratelimit`)
+
+The previous rate limiting used `django-ratelimit` which set `X-RateLimit-*` response headers on GraphQL responses. The new unified engine does **not** emit these headers. This is a deliberate simplification: the rate limit state is server-side only, and clients should rely on the `RateLimitExceeded` error (GraphQL), `RATE_LIMITED` WebSocket frame, or HTTP 429 status (views) rather than inspecting response headers. If `X-RateLimit-Remaining` / `X-RateLimit-Limit` headers are needed, they can be added in middleware or per-adapter in `config/ratelimit/decorators.py`.
 
 ## Best Practices
 

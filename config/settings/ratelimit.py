@@ -10,8 +10,6 @@ import environ
 
 env = environ.Env()
 
-# Django-ratelimit settings
-RATELIMIT_ENABLE = True  # Enable rate limiting globally
 RATELIMIT_USE_CACHE = "default"  # Use default cache backend
 # Whether to disable rate limiting
 # By default, disable in test environments unless explicitly enabled
@@ -61,8 +59,8 @@ RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"
 # Controls which entry in X-Forwarded-For is used for rate limit keying:
 #   1 (default): rightmost entry (single proxy, e.g. Traefik/nginx)
 #   2: second from right (two proxies, e.g. CDN + load balancer)
-#   0: leftmost entry (backwards-compatible escape hatch, but client-spoofable
-#      — only use if the app receives connections directly without a proxy)
+#   0: ignore X-Forwarded-For entirely (app receives connections directly
+#      without a reverse proxy — REMOTE_ADDR is used instead)
 # Set this to match your deployment's proxy chain depth.
 RATELIMIT_PROXIES_COUNT = env.int("RATELIMIT_PROXIES_COUNT", default=1)
 
