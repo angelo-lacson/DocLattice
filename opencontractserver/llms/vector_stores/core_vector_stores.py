@@ -608,7 +608,7 @@ class CoreAnnotationVectorStore:
         vector_results: list,
         text_results: list,
         top_k: int,
-    ) -> list["VectorSearchResult"]:
+    ) -> list[VectorSearchResult]:
         """Merge vector and full-text search results via Reciprocal Rank Fusion.
 
         Handles three cases:
@@ -768,6 +768,9 @@ class CoreAnnotationVectorStore:
 
         vector_results: list = []
         if vector is not None and len(vector) in VALID_EMBEDDING_DIMS:
+            # Lambda captures are safe here: the lambda is immediately awaited,
+            # so captured variables (queryset, vector, etc.) cannot change
+            # between capture and execution.
             vector_results = await sync_to_async(
                 lambda: queryset.search_by_embedding(
                     query_vector=vector,

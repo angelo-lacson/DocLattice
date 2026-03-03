@@ -68,7 +68,7 @@ services:
       - test_postgres_data_backups:/backups:z
     env_file:
       - ./.envs/.test/.postgres
-    # Dev/test memory settings (production uses 2GB/128MB respectively)
+    # Dev/test memory settings (production uses 1GB/512MB respectively)
     command: >
       postgres
       -c shared_buffers=512MB

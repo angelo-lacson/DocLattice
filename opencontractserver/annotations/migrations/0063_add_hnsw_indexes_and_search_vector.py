@@ -171,6 +171,9 @@ class Migration(migrations.Migration):
         # =================================================================
         # Phase 3: Database trigger to auto-populate search_vector
         # =================================================================
+        # NOTE: f-string interpolation of FTS_CONFIG below is safe because
+        # FTS_CONFIG is a hardcoded constant defined at the top of this file
+        # (frozen at migration creation time), not user input.
         migrations.RunSQL(
             sql=f"""
                 CREATE OR REPLACE FUNCTION annotation_search_vector_update()
@@ -198,10 +201,20 @@ class Migration(migrations.Migration):
         # Phase 4: Backfill search_vector for existing annotations
         # =================================================================
         # !! LARGE-TABLE WARNING !!
-        # For deployments with >1M annotations, this single UPDATE can hold
-        # row-level locks for minutes, blocking concurrent writes. Consider
-        # running this migration during a maintenance window, or chunking
-        # the backfill manually (UPDATE ... WHERE id BETWEEN x AND y).
+        # This runs an UNBOUNDED single UPDATE across all rows where
+        # search_vector IS NULL. For deployments with >1M annotations,
+        # this can hold row-level locks for minutes, blocking concurrent
+        # writes to annotations_annotation.
+        #
+        # Mitigation options for large tables:
+        #   1. Run this migration during a maintenance window.
+        #   2. Skip this phase and run the backfill manually in chunks:
+        #        UPDATE annotations_annotation
+        #        SET search_vector = to_tsvector('english', COALESCE(raw_text, ''))
+        #        WHERE search_vector IS NULL AND id BETWEEN <start> AND <end>;
+        #   3. Use a management command for batched backfill (not yet provided).
+        #
+        # NOTE: f-string interpolation of FTS_CONFIG is safe (see Phase 3 note).
         migrations.RunSQL(
             sql=f"""
                 DO $$

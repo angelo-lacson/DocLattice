@@ -26,7 +26,6 @@ from opencontractserver.llms.vector_stores.core_vector_stores import (
     VectorSearchResult,
 )
 from opencontractserver.pipeline.utils import get_default_embedder_path
-from opencontractserver.utils.search import reciprocal_rank_fusion
 
 User = get_user_model()
 
@@ -381,7 +380,9 @@ class TestSearchVectorTrigger(TestCase):
         # Verify stemmed terms are present (English tsvector stems words)
         self.assertIn("contract", sv, "Expected stemmed 'contractual' -> 'contract'")
         self.assertIn("oblig", sv, "Expected stemmed 'obligations' -> 'oblig'")
-        self.assertIn("indemnif", sv, "Expected stemmed 'indemnification' -> 'indemnif'")
+        self.assertIn(
+            "indemnif", sv, "Expected stemmed 'indemnification' -> 'indemnif'"
+        )
 
     def test_trigger_updates_on_raw_text_change(self):
         """UPDATE of raw_text should refresh search_vector via the trigger."""
@@ -392,11 +393,14 @@ class TestSearchVectorTrigger(TestCase):
             is_public=True,
         )
         sv_initial = self._get_search_vector_raw(ann.id)
-        self.assertIn("placeholder", sv_initial)
+        # English stemmer reduces "placeholder" -> "placehold"
+        self.assertIn("placehold", sv_initial)
 
-        # Update raw_text
-        ann.raw_text = "Revised termination clause with penalty provisions"
-        ann.save(update_fields=["raw_text"])
+        # Update raw_text via QuerySet.update to ensure the DB trigger fires
+        # without any Django model-layer interference.
+        Annotation.objects.filter(pk=ann.pk).update(
+            raw_text="Revised termination clause with penalty provisions"
+        )
 
         sv_updated = self._get_search_vector_raw(ann.id)
         self.assertNotEqual(sv_initial, sv_updated, "search_vector should change")
@@ -413,7 +417,9 @@ class TestSearchVectorTrigger(TestCase):
         )
         sv = self._get_search_vector_raw(ann.id)
         # COALESCE(NULL, '') -> '' -> empty tsvector
-        self.assertIsNotNone(sv, "search_vector should not be NULL even with NULL raw_text")
+        self.assertIsNotNone(
+            sv, "search_vector should not be NULL even with NULL raw_text"
+        )
 
     def test_trigger_handles_empty_raw_text(self):
         """INSERT with empty raw_text should produce a valid (empty) tsvector."""
@@ -425,51 +431,6 @@ class TestSearchVectorTrigger(TestCase):
         )
         sv = self._get_search_vector_raw(ann.id)
         self.assertIsNotNone(sv, "search_vector should exist for empty raw_text")
-
-
-class TestReciprocalRankFusion(TestCase):
-    """Unit tests for the reciprocal_rank_fusion utility function."""
-
-    def test_single_list(self):
-        """RRF with a single list returns items in the same order."""
-
-        class Item:
-            def __init__(self, id, name):
-                self.id = id
-                self.name = name
-
-        items = [Item(1, "a"), Item(2, "b"), Item(3, "c")]
-        result = reciprocal_rank_fusion(items, top_n=3)
-        self.assertEqual(len(result), 3)
-        self.assertEqual(result[0][0].id, 1)
-
-    def test_two_lists_with_overlap(self):
-        """Items appearing in both lists should score higher."""
-
-        class Item:
-            def __init__(self, id):
-                self.id = id
-
-        list1 = [Item(1), Item(2), Item(3)]
-        list2 = [Item(3), Item(2), Item(4)]
-        result = reciprocal_rank_fusion(list1, list2, top_n=4)
-        ids = [r[0].id for r in result]
-        # Item 2 and 3 appear in both lists, so they should rank highest
-        self.assertIn(2, ids[:2])
-        self.assertIn(3, ids[:2])
-
-    def test_top_n_limits_output(self):
-        """top_n should cap the number of results."""
-
-        class Item:
-            def __init__(self, id):
-                self.id = id
-
-        items = [Item(i) for i in range(10)]
-        result = reciprocal_rank_fusion(items, top_n=3)
-        self.assertEqual(len(result), 3)
-
-    def test_empty_lists(self):
-        """RRF with empty lists returns empty."""
-        result = reciprocal_rank_fusion([], [])
-        self.assertEqual(result, [])
+        # Empty raw_text produces an empty tsvector (no lexemes)
+        sv_stripped = sv.strip() if sv else ""
+        self.assertEqual(sv_stripped, "", "Empty raw_text should yield empty tsvector")

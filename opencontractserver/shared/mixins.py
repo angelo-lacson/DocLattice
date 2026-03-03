@@ -71,9 +71,9 @@ class VectorSearchViaEmbeddingMixin:
         """
         dimension = len(query_vector)
         if dimension > HNSW_HIGHEST_INDEXED_DIM:
-            _logger.info(
+            _logger.warning(
                 "Embedding dimension %d exceeds highest HNSW-indexed dim (%d); "
-                "query will use sequential scan.",
+                "query will use sequential scan instead of HNSW index.",
                 dimension,
                 HNSW_HIGHEST_INDEXED_DIM,
             )

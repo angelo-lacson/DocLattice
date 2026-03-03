@@ -42,7 +42,7 @@ services:
       - local_postgres_data_backups:/backups:z
     env_file:
       - ./.envs/.local/.postgres
-    # Dev-friendly memory settings (production uses 2GB/128MB respectively)
+    # Dev-friendly memory settings (production uses 1GB/512MB respectively)
     command: >
       postgres
       -c shared_buffers=512MB
