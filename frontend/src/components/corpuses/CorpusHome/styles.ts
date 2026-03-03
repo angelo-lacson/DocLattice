@@ -35,9 +35,28 @@ export const BaseContainer = styled.div`
 // LANDING VIEW STYLES
 // ============================================================================
 
-/** Landing page container - centered content */
+/** Landing page container - centered, scrollable content */
 export const LandingContainer = styled(BaseContainer)`
   align-items: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: ${CORPUS_COLORS.slate[200]};
+    border-radius: 3px;
+
+    &:hover {
+      background: ${CORPUS_COLORS.slate[300]};
+    }
+  }
 `;
 
 /** Centered content wrapper for landing view */
@@ -48,9 +67,6 @@ export const LandingContent = styled.div`
   width: 100%;
   max-width: 800px;
   padding: 2rem 1.5rem;
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
 
   ${mediaQuery.tablet} {
     padding: 1.25rem 1rem;
@@ -262,6 +278,51 @@ export const AccessBadge = styled.div<{ $isPublic?: boolean }>`
   svg {
     width: 12px;
     height: 12px;
+  }
+`;
+
+/** Power User toggle - styled as a metadata item with interactive hover */
+export const PowerUserMetaButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: ${CORPUS_COLORS.slate[500]};
+  cursor: pointer;
+  transition: color ${CORPUS_TRANSITIONS.fast};
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: ${CORPUS_COLORS.slate[400]};
+    transition: color ${CORPUS_TRANSITIONS.fast};
+  }
+
+  &:hover {
+    color: ${CORPUS_COLORS.teal[700]};
+
+    svg {
+      color: ${CORPUS_COLORS.teal[700]};
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${CORPUS_COLORS.teal[500]};
+    outline-offset: 4px;
+    border-radius: ${CORPUS_RADII.sm};
+  }
+
+  ${mediaQuery.tablet} {
+    font-size: 0.75rem;
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
   }
 `;
 
