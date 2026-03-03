@@ -327,7 +327,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
             onSubmit={onChatSubmit || (() => {})}
             onViewHistory={onViewChatHistory || (() => {})}
             autoFocus={true}
-            showQuickActions={false}
+            showQuickActions={true}
             testId={`${testId}-chat`}
           />
         </ChatSection>

@@ -1389,9 +1389,11 @@ test.describe("Corpus - Power User Mode", () => {
     await expect(page.getByTestId("navigation-sidebar")).toBeHidden();
 
     // Power User toggle should be visible (user has CAN_UPDATE)
+    // Toggle is a pill with "Focus" and "Power" labels
     const toggle = page.getByTestId("power-user-toggle");
     await expect(toggle).toBeVisible();
-    await expect(toggle).toContainText("Power User");
+    await expect(toggle).toContainText("Focus");
+    await expect(toggle).toContainText("Power");
 
     await docScreenshot(page, "corpus--landing--clean-view");
   });

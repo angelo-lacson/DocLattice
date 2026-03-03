@@ -13,7 +13,6 @@ import {
   ChevronsUpDown,
   ChevronsDownUp,
   Edit,
-  Activity,
   Menu,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -53,7 +52,6 @@ import {
   AboutMainContent,
   AboutHeader,
   AboutActions,
-  TextButton,
   TextButtonPrimary,
   AboutBody,
   ExpandButton,
@@ -291,15 +289,6 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
               <AboutHeader>
                 <SectionLabel>About</SectionLabel>
                 <AboutActions>
-                  {hasContent && (
-                    <TextButton
-                      onClick={onEditDescription}
-                      aria-label="View version history"
-                    >
-                      <Activity />
-                      History
-                    </TextButton>
-                  )}
                   {canEdit && (
                     <TextButtonPrimary
                       onClick={onEditDescription}
@@ -369,6 +358,7 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
                     <MobileSearchInput
                       type="text"
                       placeholder="Filter documents..."
+                      aria-label="Filter documents"
                       value={docSearchQuery}
                       onChange={(e) => setDocSearchQuery(e.target.value)}
                     />
@@ -398,28 +388,17 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
                 </>
               ) : (
                 <>
-                  {(hasContent || canEdit) && (
+                  {canEdit && (
                     <MobileAboutActions>
-                      {hasContent && (
-                        <TextButton
-                          onClick={onEditDescription}
-                          aria-label="View version history"
-                        >
-                          <Activity />
-                          History
-                        </TextButton>
-                      )}
-                      {canEdit && (
-                        <TextButtonPrimary
-                          onClick={onEditDescription}
-                          aria-label={
-                            hasContent ? "Edit description" : "Add description"
-                          }
-                        >
-                          <Edit />
-                          {hasContent ? "Edit" : "Add"}
-                        </TextButtonPrimary>
-                      )}
+                      <TextButtonPrimary
+                        onClick={onEditDescription}
+                        aria-label={
+                          hasContent ? "Edit description" : "Add description"
+                        }
+                      >
+                        <Edit />
+                        {hasContent ? "Edit" : "Add"}
+                      </TextButtonPrimary>
                     </MobileAboutActions>
                   )}
                   <CorpusAbout

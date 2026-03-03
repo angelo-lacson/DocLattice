@@ -504,7 +504,7 @@ export const LandingAboutCard = styled(motion.div)`
 
 /** View Details — subtle text link, not a prominent button.
  *  Content should be king; navigation chrome stays quiet. */
-export const ViewDetailsButton = styled(motion.button)`
+export const ViewDetailsButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;

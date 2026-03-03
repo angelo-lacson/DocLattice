@@ -490,15 +490,15 @@ test("renders landing view with description as subtitle", async ({
   await expect(description).toContainText("Dummy corpus for component-testing");
 });
 
-test("renders View Details button in landing view", async ({ mount, page }) => {
+test("renders Browse documents link in landing view", async ({ mount, page }) => {
   await mountCorpusHome(mount);
 
-  // View Details button should be visible
+  // Browse documents link should be visible
   const viewDetailsBtn = page.getByTestId(
     "corpus-home-landing-view-details-btn"
   );
   await expect(viewDetailsBtn).toBeVisible();
-  await expect(viewDetailsBtn).toContainText("View Details");
+  await expect(viewDetailsBtn).toContainText("Browse documents");
 });
 
 test("clicking View Details switches to details view", async ({

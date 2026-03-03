@@ -34,6 +34,7 @@ import {
   OS_LEGAL_SPACING,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../assets/configurations/osLegalStyles";
+import { mediaQuery } from "./styles/corpusDesignTokens";
 import {
   DOCUMENT_RELATIONSHIP_TOC_LIMIT,
   CORPUS_DOCUMENTS_TOC_LIMIT,
@@ -165,7 +166,7 @@ const TreeNode = styled.div<{ $depth: number }>`
     padding-left: 1px;
   `}
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     margin-left: ${(props) => props.$depth * 12}px;
     ${(props) =>
       props.$depth > 0 &&
@@ -202,7 +203,7 @@ const NodeItem = styled.div<{
     outline-offset: -2px;
   }
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     gap: 8px;
     padding: ${(props) => (props.$hasDescription ? "10px 12px" : "8px 12px")};
   }
@@ -235,7 +236,7 @@ const IconContainer = styled.div<{ $fileType?: string }>`
   flex-shrink: 0;
   color: #64748b;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     width: 18px;
     height: 18px;
 
@@ -268,7 +269,7 @@ const NodeTitle = styled.div`
     color: #0f766e;
   }
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     font-size: 0.9375rem;
     line-height: 1.4;
   }
@@ -286,7 +287,7 @@ const NodeDescription = styled.div`
   -webkit-box-orient: vertical;
   overflow: hidden;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     font-size: 0.8125rem;
     line-height: 1.4;
     -webkit-line-clamp: 1;
