@@ -3,7 +3,7 @@ Add HNSW indexes on Embedding vector columns and SearchVectorField on Annotation
 
 This migration:
 0. Enables hnsw.iterative_scan for filtered ANN queries on existing databases
-1. Creates HNSW indexes on Embedding vector columns (dims ≤ 2000) for O(log n) ANN search
+1. Creates HNSW indexes on Embedding vector columns (dims <= 2000) for O(log n) ANN search
 2. Adds a search_vector (tsvector) column to Annotation for full-text search
 3. Creates a GIN index on search_vector for fast full-text lookups
 4. Creates a database trigger to auto-populate search_vector on INSERT/UPDATE
@@ -26,16 +26,13 @@ import django.contrib.postgres.search
 from django.db import migrations
 from pgvector.django import HnswIndex
 
-# Frozen constants — do NOT import from application code in migrations.
+# Frozen constants -- do NOT import from application code in migrations.
 # Values at time of migration creation (2026-02-28).
 HNSW_M = 16
 HNSW_EF_CONSTRUCTION = 64
-# TODO: FTS_CONFIG hardcodes English. Multilingual corpora will need
-# per-corpus or per-document text search configuration in a follow-up.
-FTS_CONFIG = "english"
 
 # HNSW index definitions: (index_name, column_name)
-# Only dimensions ≤ 2000 — pgvector HNSW hard limit.
+# Only dimensions <= 2000 -- pgvector HNSW hard limit.
 HNSW_INDEXES = [
     ("emb_hnsw_384", "vector_384"),
     ("emb_hnsw_768", "vector_768"),
@@ -171,13 +168,15 @@ class Migration(migrations.Migration):
         # =================================================================
         # Phase 3: Database trigger to auto-populate search_vector
         # =================================================================
+        # NOTE(deferred): FTS config hardcodes 'english'. Multilingual corpora
+        # will need per-corpus or per-document text search configuration.
         migrations.RunSQL(
-            sql=f"""
+            sql="""
                 CREATE OR REPLACE FUNCTION annotation_search_vector_update()
                 RETURNS trigger AS $$
                 BEGIN
                     NEW.search_vector :=
-                        to_tsvector('{FTS_CONFIG}', COALESCE(NEW.raw_text, ''));
+                        to_tsvector('english', COALESCE(NEW.raw_text, ''));
                     RETURN NEW;
                 END;
                 $$ LANGUAGE plpgsql;
@@ -198,12 +197,19 @@ class Migration(migrations.Migration):
         # Phase 4: Backfill search_vector for existing annotations
         # =================================================================
         # !! LARGE-TABLE WARNING !!
-        # For deployments with >1M annotations, this single UPDATE can hold
-        # row-level locks for minutes, blocking concurrent writes. Consider
-        # running this migration during a maintenance window, or chunking
-        # the backfill manually (UPDATE ... WHERE id BETWEEN x AND y).
+        # This runs an UNBOUNDED single UPDATE across all rows where
+        # search_vector IS NULL. For deployments with >1M annotations,
+        # this can hold row-level locks for minutes, blocking concurrent
+        # writes to annotations_annotation.
+        #
+        # Mitigation options for large tables:
+        #   1. Run this migration during a maintenance window.
+        #   2. Skip this phase and run the backfill manually in chunks:
+        #        UPDATE annotations_annotation
+        #        SET search_vector = to_tsvector('english', COALESCE(raw_text, ''))
+        #        WHERE search_vector IS NULL AND id BETWEEN <start> AND <end>;
         migrations.RunSQL(
-            sql=f"""
+            sql="""
                 DO $$
                 DECLARE
                     row_count BIGINT;
@@ -216,7 +222,7 @@ class Migration(migrations.Migration):
                         row_count;
 
                     UPDATE annotations_annotation
-                    SET search_vector = to_tsvector('{FTS_CONFIG}',
+                    SET search_vector = to_tsvector('english',
                                                    COALESCE(raw_text, ''))
                     WHERE search_vector IS NULL;
 
