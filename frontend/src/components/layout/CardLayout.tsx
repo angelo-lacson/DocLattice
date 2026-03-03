@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { mediaQuery } from "../corpuses/styles/corpusDesignTokens";
 
 interface CardLayoutProps {
   children?: React.ReactChild | React.ReactChild[];
@@ -93,7 +94,7 @@ const ScrollableSegment = styled(StyledSegment)`
     background: #555;
   }
 
-  @media (max-width: 600px) {
+  ${mediaQuery.mobile} {
     overflow-y: hidden;
     scrollbar-width: none;
 
