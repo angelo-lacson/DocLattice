@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Backward-compatible re-exports**: `config/graphql/ratelimits.py` remains a valid import path for all existing GraphQL files
 - Comprehensive test suite (`opencontractserver/tests/test_unified_rate_limiting.py`) covering engine, keys, rates, and all protocol adapters
 
+- **IconPicker Lucide Rebuild (SUI Migration Step 3)**: Replaced the Semantic UI icon catalog with a curated Lucide icon catalog (~440 icons across 16 categories). New `IconPickerModal` component displays Lucide icons in a searchable, category-filtered grid with live preview. New `IconDropdown` component provides a compact trigger that opens the modal. Updated `iconCompat.ts` with dynamic fallback resolution so `resolveIcon()` supports all Lucide icons via `kebabToPascal` conversion against the full `lucide-react` export. Legacy SUI icon names remain backward-compatible through the existing `SEMANTIC_TO_LUCIDE` mapping. Includes 16 Playwright component tests and automated documentation screenshots. (`frontend/src/components/widgets/icon-picker/icons.ts`, `frontend/src/components/widgets/icon-picker/IconPickerModal.tsx`, `frontend/src/components/widgets/icon-picker/IconDropdown.tsx`, `frontend/src/utils/iconCompat.ts`)
+
 ### Changed
 
 - Removed `django-ratelimit` dependency from `requirements/base.txt` — all rate limiting now handled by `config.ratelimit`
