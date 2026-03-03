@@ -29,7 +29,6 @@ import {
   BarChart3,
   MoreVertical,
   Link2,
-  Zap,
 } from "lucide-react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
@@ -376,6 +375,8 @@ const CorpusQueryView = ({
   statsLoading,
   onOpenMobileMenu,
   onSourceNavigate,
+  onModeToggle,
+  isPowerUserMode,
 }: {
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
@@ -392,6 +393,8 @@ const CorpusQueryView = ({
   statsLoading: boolean;
   onOpenMobileMenu?: () => void;
   onSourceNavigate?: (source: ChatMessageSource) => void;
+  onModeToggle?: () => void;
+  isPowerUserMode?: boolean;
 }) => {
   const [chatExpanded, setChatExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -580,6 +583,8 @@ const CorpusQueryView = ({
               onViewChatHistory={openHistoryView}
               onNavigateToCorpuses={onBack}
               onOpenMobileMenu={onOpenMobileMenu}
+              onModeToggle={onModeToggle}
+              isPowerUserMode={isPowerUserMode}
             />
           </ContentWrapper>
         </DashboardContainer>
@@ -909,18 +914,23 @@ const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
     props.$isZero
       ? "transparent"
       : props.isActive
-      ? "linear-gradient(135deg, #4a90e2 0%, #357abd 100%)"
-      : "#e2e8f0"};
+      ? CORPUS_COLORS.teal[700]
+      : CORPUS_COLORS.slate[200]};
   color: ${(props) =>
-    props.$isZero ? "#94a3b8" : props.isActive ? "white" : "#64748b"};
-  border: ${(props) => (props.$isZero ? "1px dashed #cbd5e1" : "none")};
-  transition: all 0.2s ease;
+    props.$isZero
+      ? CORPUS_COLORS.slate[400]
+      : props.isActive
+      ? CORPUS_COLORS.white
+      : CORPUS_COLORS.slate[600]};
+  border: ${(props) =>
+    props.$isZero ? `1px dashed ${CORPUS_COLORS.slate[300]}` : "none"};
+  transition: all ${CORPUS_TRANSITIONS.normal};
   box-shadow: ${(props) =>
     props.$isZero
       ? "none"
       : props.isActive
-      ? "0 2px 4px rgba(74, 144, 226, 0.3)"
-      : "0 1px 2px rgba(0, 0, 0, 0.05)"};
+      ? `0 2px 4px rgba(15, 118, 110, 0.25)`
+      : CORPUS_SHADOWS.sm};
 `;
 
 const NavigationItem = styled(motion.button)<{
@@ -1090,7 +1100,6 @@ const MainContentArea = styled.div<{ $sidebarExpanded: boolean }>`
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     margin-left: 0;
-    /* No extra padding needed - FAB is compact and positioned absolutely */
   }
 `;
 
@@ -1334,7 +1343,10 @@ const NotificationBadge = styled.div`
   }
 `;
 
-// Compact badge for collapsed sidebar - slight overlap at corner
+// Compact badge for collapsed sidebar - slight overlap at corner.
+// Teal (non-zero) / slate (zero) is intentional: these badges display entity
+// counts (documents, annotations, analyses, etc.), not action-required items,
+// so the teal design-token color is appropriate rather than a warning palette.
 const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   position: absolute;
   top: -4px;
@@ -1343,10 +1355,8 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   height: 16px;
   padding: 0 4px;
   background: ${(props) =>
-    props.$isZero
-      ? "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)"
-      : "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"};
-  color: white;
+    props.$isZero ? CORPUS_COLORS.slate[400] : CORPUS_COLORS.teal[700]};
+  color: ${CORPUS_COLORS.white};
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1354,7 +1364,7 @@ const CollapsedBadge = styled.div<{ $isZero: boolean }>`
   font-size: 0.6rem;
   font-weight: 700;
   z-index: 2;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: ${CORPUS_SHADOWS.sm};
 `;
 
 // Split view container for extracts tab
@@ -1527,62 +1537,20 @@ const ExtractsTabContent: React.FC<{
   );
 };
 
-// Power user mode toggle - subtle, positioned at top-right of clean view
-const PowerUserToggle = styled(motion.button)`
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.875rem;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  color: ${CORPUS_COLORS.slate[500]};
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all ${CORPUS_TRANSITIONS.normal};
-  z-index: 10;
-  box-shadow: ${CORPUS_SHADOWS.sm};
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    background: ${CORPUS_COLORS.teal[50]};
-    border-color: ${CORPUS_COLORS.teal[200]};
-    color: ${CORPUS_COLORS.teal[700]};
-    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.12);
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: 2px;
-  }
-
-  ${corpusMediaQuery.tablet} {
-    padding: 0.375rem 0.625rem;
-    font-size: 0.75rem;
-    top: 0.75rem;
-    right: 0.75rem;
-  }
-`;
-
-// Container for the clean landing view (no sidebar)
+// Container for the clean landing view (no sidebar).
+// Does NOT scroll — LandingContainer (inside CorpusLandingView) handles scrolling
+// via overflow-y: auto.  This wrapper only provides flex layout so that the
+// LandingContainer child can fill the available height from CardLayout's flex
+// ancestor chain.  Height constraints (height: 100%, min-height: 0,
+// max-height: 100dvh, overflow: hidden) were intentionally removed because
+// LandingContainer inherits bounded height through the flex column
+// (CardLayout → CleanViewContainer → LandingContainer), and those properties
+// conflicted with the scroll container living inside LandingContainer.
 const CleanViewContainer = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  max-height: 100dvh;
-  overflow: hidden;
 `;
 
 // Wrapper for the "Simple View" exit button at the bottom of the sidebar
@@ -2353,6 +2321,17 @@ export const Corpuses = () => {
             statsLoading={effectiveStatsLoading}
             onOpenMobileMenu={() => setMobileSidebarOpen(true)}
             onSourceNavigate={handleSourceNavigate}
+            isPowerUserMode={isPowerUserMode}
+            onModeToggle={
+              canUpdateCorpus
+                ? () =>
+                    updateModeParam(
+                      location,
+                      navigate,
+                      isPowerUserMode ? null : "power"
+                    )
+                : undefined
+            }
           />
         ),
       },
@@ -2699,6 +2678,7 @@ export const Corpuses = () => {
     documentsViewMode, // Required for view mode toggle to work
     chatInConversation, // Required for chat tab header visibility
     currentSelectedThreadId, // Required for discussions tab header visibility (URL-driven)
+    isPowerUserMode, // Required for mode toggle button label and callback
     // Note: corpusAtomPermissions is an array that changes, but canUpdateCorpus is derived from it
     // and is a stable boolean, so we don't need corpusAtomPermissions in deps
   ]);
@@ -2897,9 +2877,7 @@ export const Corpuses = () => {
             >
               <ArrowLeft />
               {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-                <span style={{ flex: "1", textAlign: "left" }}>
-                  Simple View
-                </span>
+                <span style={{ flex: "1", textAlign: "left" }}>Focus Mode</span>
               )}
             </NavigationItem>
           </ExitPowerUserWrapper>
@@ -2915,19 +2893,6 @@ export const Corpuses = () => {
       </CorpusViewContainer>
     ) : (
       <CleanViewContainer id="corpus-clean-view">
-        {/* Power User toggle - only shown for users with edit rights */}
-        {canUpdateCorpus && (
-          <PowerUserToggle
-            onClick={() => updateModeParam(location, navigate, "power")}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            data-testid="power-user-toggle"
-            title="Switch to full corpus management view"
-          >
-            <Zap />
-            Power User
-          </PowerUserToggle>
-        )}
         {mainContent}
       </CleanViewContainer>
     );
