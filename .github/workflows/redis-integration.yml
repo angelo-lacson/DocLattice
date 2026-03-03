@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout Code Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Stack (django + postgres + redis only)
         run: |
