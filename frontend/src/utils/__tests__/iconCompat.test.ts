@@ -31,7 +31,8 @@ describe("iconCompat", () => {
 
     it('returns "help-circle" for unknown icon names', () => {
       expect(resolveIconName("nonexistent-icon")).toBe("help-circle");
-      expect(resolveIconName("banana")).toBe("help-circle");
+      // "banana" is a valid Lucide icon, so use a truly nonexistent name
+      expect(resolveIconName("zzz-not-a-real-icon")).toBe("help-circle");
       expect(resolveIconName("")).toBe("help-circle");
     });
 
