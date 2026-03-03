@@ -237,6 +237,26 @@ class GetRateLimitKeyTestCase(TestCase):
 class RateLimitsTestCase(TestCase):
     """Test the RateLimits singleton."""
 
+    def test_default_values(self):
+        """Verify all default rate limit values are correctly set."""
+        self.assertEqual(RateLimits.AUTH_LOGIN, "5/m")
+        self.assertEqual(RateLimits.AUTH_REGISTER, "3/m")
+        self.assertEqual(RateLimits.AUTH_PASSWORD_RESET, "3/h")
+        self.assertEqual(RateLimits.READ_LIGHT, "100/m")
+        self.assertEqual(RateLimits.READ_MEDIUM, "30/m")
+        self.assertEqual(RateLimits.READ_HEAVY, "10/m")
+        self.assertEqual(RateLimits.WRITE_LIGHT, "30/m")
+        self.assertEqual(RateLimits.WRITE_MEDIUM, "10/m")
+        self.assertEqual(RateLimits.WRITE_HEAVY, "5/m")
+        self.assertEqual(RateLimits.AI_ANALYSIS, "5/m")
+        self.assertEqual(RateLimits.AI_EXTRACT, "10/m")
+        self.assertEqual(RateLimits.AI_QUERY, "20/m")
+        self.assertEqual(RateLimits.EXPORT, "5/h")
+        self.assertEqual(RateLimits.IMPORT, "10/h")
+        self.assertEqual(RateLimits.ADMIN_OPERATION, "100/m")
+        self.assertEqual(RateLimits.ADMIN_LOGIN_PAGE, "20/m")
+        self.assertEqual(RateLimits.MCP_GLOBAL, "100/m")
+
     def test_ws_connect_category(self):
         self.assertEqual(RateLimits.WS_CONNECT, "10/m")
 
@@ -447,16 +467,25 @@ class CheckMcpRateLimitTestCase(TestCase):
 
     @patch("config.ratelimit.engine.time")
     def test_per_tool_limit(self, mock_time):
+        """Model production two-layer design: ASGI app increments global,
+        tool handlers increment per-tool with skip_global=True.
+
+        This avoids double-counting the global counter.
+        """
         mock_time.time.return_value = 1000000.0
         scope = self._make_scope()
 
-        # search_corpus maps to READ_HEAVY (10/m)
+        # search_corpus maps to READ_HEAVY (10/m).
+        # In production, tool handlers use skip_global=True because the
+        # ASGI app already performed the global check.
         for _ in range(10):
-            asyncio.run(check_mcp_rate_limit(scope, tool_name="search_corpus"))
+            asyncio.run(
+                check_mcp_rate_limit(scope, tool_name="search_corpus", skip_global=True)
+            )
 
         # Next search_corpus should be per-tool limited
         is_limited, error_msg = asyncio.run(
-            check_mcp_rate_limit(scope, tool_name="search_corpus")
+            check_mcp_rate_limit(scope, tool_name="search_corpus", skip_global=True)
         )
         self.assertTrue(is_limited)
         self.assertIn("search_corpus", error_msg)
@@ -740,8 +769,10 @@ class PickXffIpTestCase(TestCase):
     """Test _pick_xff_ip with RATELIMIT_PROXIES_COUNT."""
 
     @override_settings(RATELIMIT_PROXIES_COUNT=0)
-    def test_default_uses_leftmost(self):
-        self.assertEqual(_pick_xff_ip("1.1.1.1, 2.2.2.2, 3.3.3.3"), "1.1.1.1")
+    def test_zero_proxies_raises_valueerror(self):
+        """proxies_count=0 means no proxy — XFF should not be consulted."""
+        with self.assertRaises(ValueError):
+            _pick_xff_ip("1.1.1.1, 2.2.2.2, 3.3.3.3")
 
     @override_settings(RATELIMIT_PROXIES_COUNT=1)
     def test_single_proxy_uses_rightmost(self):
@@ -756,6 +787,12 @@ class PickXffIpTestCase(TestCase):
         self.assertEqual(_pick_xff_ip("1.1.1.1, 2.2.2.2"), "1.1.1.1")
 
     @override_settings(RATELIMIT_PROXIES_COUNT=0)
+    def test_zero_proxies_empty_xff_raises_valueerror(self):
+        """Even with empty XFF, proxies_count=0 should raise."""
+        with self.assertRaises(ValueError):
+            _pick_xff_ip("")
+
+    @override_settings(RATELIMIT_PROXIES_COUNT=1)
     def test_empty_xff_returns_unknown(self):
         self.assertEqual(_pick_xff_ip(""), UNKNOWN_IP)
 

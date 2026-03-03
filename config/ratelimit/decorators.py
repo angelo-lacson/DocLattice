@@ -415,6 +415,11 @@ def view_ratelimit(
                 request = args[0]
             else:
                 # Can't determine request — skip rate limiting
+                logger.warning(
+                    "view_ratelimit: could not locate request object in "
+                    "arguments for %s, skipping rate limit",
+                    func.__name__,
+                )
                 return func(request_or_self, *args, **kwargs)
 
             if getattr(settings, "RATELIMIT_DISABLE", False):

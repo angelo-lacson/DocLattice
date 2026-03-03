@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 # NOTE: These are captured at import time since @view_ratelimit evaluates the
 # rate parameter at decoration time.  Calling RateLimits.reload() will NOT
 # affect admin login rates; a server restart is required.
-ADMIN_LOGIN_RATE = getattr(RateLimits, "AUTH_LOGIN", "5/m")
-ADMIN_LOGIN_PAGE_RATE = getattr(RateLimits, "ADMIN_LOGIN_PAGE", "20/m")
+# Direct attribute access (no getattr fallback) so missing attributes surface
+# as AttributeError at startup rather than silently falling back to a default.
+ADMIN_LOGIN_RATE = RateLimits.AUTH_LOGIN
+ADMIN_LOGIN_PAGE_RATE = RateLimits.ADMIN_LOGIN_PAGE
 
 
 def _get_login_url():

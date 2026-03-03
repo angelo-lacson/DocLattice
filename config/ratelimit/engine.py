@@ -120,6 +120,13 @@ async def ais_rate_limited(
 
     Wraps the synchronous cache operations with ``sync_to_async`` so it is
     safe to call from ASGI handlers and Django Channels consumers.
+
+    .. note::
+        Each call incurs the overhead of ``sync_to_async`` (thread-pool
+        dispatch).  This is acceptable for current load levels since rate
+        limit checks are fast (single cache round-trip).  If profiling
+        shows this becoming a bottleneck under high concurrency, consider
+        replacing with a native async cache backend (e.g. ``aioredis``).
     """
     from asgiref.sync import sync_to_async
 
