@@ -1,8 +1,10 @@
 /**
  * Icon compatibility layer for Semantic UI → Lucide migration.
  *
- * Uses explicit imports (Option B) so only the ~100 icons actually
- * referenced are bundled — no barrel import from "lucide-react".
+ * Provides an explicit KNOWN_ICONS map for the ~100 icons originally migrated
+ * from SUI.  For dynamic resolution of the full Lucide catalog (used by the
+ * icon picker and DynamicIcon), see `resolvePickerIcon.ts` in the icon-picker
+ * feature directory.
  */
 
 import type { LucideIcon } from "lucide-react";
@@ -112,7 +114,7 @@ import {
 
 /**
  * Map of known Lucide icon kebab-case names to their component.
- * Only icons actually referenced in this codebase are included.
+ * This covers the original SUI-migrated icons with explicit imports.
  */
 const KNOWN_ICONS: Record<string, LucideIcon> = {
   activity: Activity,
@@ -390,8 +392,16 @@ export const SEMANTIC_TO_LUCIDE: Record<string, string> = {
 /**
  * Normalize an icon name: lowercase, trim, collapse whitespace.
  */
-function normalize(name: string): string {
+export function normalize(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Look up a Lucide icon component by its kebab-case name
+ * in the explicit KNOWN_ICONS map.
+ */
+function lookupIcon(kebabName: string): LucideIcon | undefined {
+  return KNOWN_ICONS[kebabName];
 }
 
 /**
@@ -408,8 +418,8 @@ export function resolveIconName(name: string): string {
   const mapped = SEMANTIC_TO_LUCIDE[key];
   if (mapped) return mapped;
 
-  // Passthrough if already a known Lucide name
-  if (KNOWN_ICONS[key]) return key;
+  // Passthrough if already a known Lucide name (explicit or dynamic)
+  if (lookupIcon(key)) return key;
 
   // Fallback
   return "help-circle";
@@ -422,5 +432,5 @@ export function resolveIconName(name: string): string {
  */
 export function resolveIcon(name: string): LucideIcon {
   const lucideName = resolveIconName(name);
-  return KNOWN_ICONS[lucideName] ?? HelpCircle;
+  return lookupIcon(lucideName) ?? HelpCircle;
 }
