@@ -101,7 +101,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         corpus={corpus}
         onBack={handleBackToLanding}
         onEditDescription={onEditDescription}
-        onOpenMobileMenu={onOpenMobileMenu}
+        onOpenMobileMenu={isPowerUserMode ? onOpenMobileMenu : undefined}
         testId="corpus-home-details"
       />
     );

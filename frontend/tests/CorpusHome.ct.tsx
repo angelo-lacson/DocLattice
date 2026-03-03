@@ -151,6 +151,7 @@ const corpusDocumentsMock: MockedResponse = {
             node: {
               id: "doc-parent",
               title: "Parent Document",
+              description: "A parent document for testing",
               slug: "parent-document",
               icon: null,
               fileType: "application/pdf",
@@ -163,6 +164,7 @@ const corpusDocumentsMock: MockedResponse = {
             node: {
               id: "doc-child",
               title: "Child Document",
+              description: "A child document for testing",
               slug: "child-document",
               icon: null,
               fileType: "application/pdf",
