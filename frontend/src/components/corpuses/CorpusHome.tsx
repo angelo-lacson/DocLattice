@@ -33,6 +33,9 @@ export interface CorpusHomeProps {
   onNavigateToCorpuses?: () => void;
   // Mobile navigation
   onOpenMobileMenu?: () => void;
+  // Mode toggle
+  onModeToggle?: () => void;
+  isPowerUserMode?: boolean;
 }
 
 /**
@@ -57,6 +60,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   onViewChatHistory,
   onNavigateToCorpuses,
   onOpenMobileMenu,
+  onModeToggle,
+  isPowerUserMode,
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -123,6 +128,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       onChatSubmit={onChatSubmit}
       onViewChatHistory={onViewChatHistory}
       onOpenMobileMenu={onOpenMobileMenu}
+      onModeToggle={onModeToggle}
+      isPowerUserMode={isPowerUserMode}
       onViewDiscussions={handleViewDiscussions}
       onThreadClick={handleThreadClick}
       testId="corpus-home-landing"
