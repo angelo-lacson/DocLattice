@@ -1187,6 +1187,84 @@ class CorpusActionGroupObjectPermission(GroupObjectPermissionBase):
     # enabled = False
 
 
+class CorpusActionTemplate(BaseOCModel):
+    """Reusable template for agent-based corpus actions.
+
+    Templates are cloned into ``CorpusAction`` records when a new corpus is
+    created.  They define the agent configuration, task instructions, and
+    trigger type that the cloned action will use.
+
+    Templates are agent-only — no fieldset or analyzer support.
+    """
+
+    name = django.db.models.CharField(max_length=256)
+    description = django.db.models.TextField(blank=True, default="")
+
+    agent_config = django.db.models.ForeignKey(
+        "agents.AgentConfiguration",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="action_templates",
+        help_text="Optional agent configuration for persona/tool defaults.",
+    )
+    task_instructions = django.db.models.TextField(
+        help_text="What the agent should do when this action fires.",
+    )
+    pre_authorized_tools = django.db.models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Tools pre-authorized to run without user approval.",
+    )
+
+    trigger = django.db.models.CharField(
+        max_length=256, choices=CorpusActionTrigger.choices
+    )
+
+    is_active = django.db.models.BooleanField(
+        default=True,
+        help_text="Whether this template is used when creating new corpuses.",
+    )
+    disabled_on_clone = django.db.models.BooleanField(
+        default=True,
+        help_text="If True, cloned actions start disabled (user must opt-in).",
+    )
+    sort_order = django.db.models.IntegerField(
+        default=0,
+        help_text="Display ordering in template lists.",
+    )
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def clean(self):
+        if not self.task_instructions:
+            raise ValidationError("task_instructions is required for templates.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"CorpusActionTemplate: {self.name} ({self.get_trigger_display()})"
+
+    def clone_to_corpus(self, corpus, creator=None):
+        """Create a CorpusAction from this template for the given corpus.
+
+        Returns the created CorpusAction instance.
+        """
+        return CorpusAction.objects.create(
+            name=self.name,
+            corpus=corpus,
+            agent_config=self.agent_config,
+            task_instructions=self.task_instructions,
+            pre_authorized_tools=list(self.pre_authorized_tools),
+            trigger=self.trigger,
+            disabled=self.disabled_on_clone,
+            creator=creator or corpus.creator,
+        )
+
+
 # -------------------- CorpusDescriptionRevision -------------------- #
 
 
