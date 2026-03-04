@@ -5,6 +5,7 @@ from opencontractserver.analyzer.models import Analysis, Analyzer
 from opencontractserver.annotations.models import Annotation, Relationship
 from opencontractserver.corpuses.models import Corpus, CorpusFolder, LabelSet
 from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.utils.corpus_collector import (
     CorpusObjectCollection,
     collect_corpus_objects,
@@ -212,6 +213,19 @@ class TestCollectCorpusObjects(TestCase):
         result = collect_corpus_objects(corpus)
         self.assertEqual(result.folder_ids, [folder.id])
 
+    def test_folder_tree_ordering_parents_before_children(self):
+        """with_tree_fields() ensures parents come before children in folder_ids."""
+        corpus = self._make_corpus()
+        parent = CorpusFolder.objects.create(
+            name="Parent", corpus=corpus, creator=self.user
+        )
+        child = CorpusFolder.objects.create(
+            name="Child", corpus=corpus, creator=self.user, parent=parent
+        )
+
+        result = collect_corpus_objects(corpus)
+        self.assertEqual(result.folder_ids, [parent.id, child.id])
+
     def test_include_metadata_false_skips_metadata(self):
         """When include_metadata=False (default), metadata fields stay empty."""
         corpus = self._make_corpus()
@@ -223,20 +237,15 @@ class TestCollectCorpusObjects(TestCase):
 
     def test_include_metadata_true_collects_manual_columns(self):
         """When include_metadata=True, manual metadata columns are collected."""
-        from opencontractserver.extracts.models import Fieldset
-
         corpus = self._make_corpus()
         doc = self._add_document(corpus)
 
-        # Create metadata schema (fieldset) with a manual column
+        # Create metadata schema (fieldset) linked to the corpus
         fieldset = Fieldset.objects.create(
             name="Metadata Schema",
             creator=self.user,
+            corpus=corpus,
         )
-        corpus.metadata_schema = fieldset
-        corpus.save(update_fields=["metadata_schema"])
-
-        from opencontractserver.extracts.models import Column
 
         manual_col = Column.objects.create(
             fieldset=fieldset,
@@ -254,8 +263,6 @@ class TestCollectCorpusObjects(TestCase):
         )
 
         # Create a manual datacell
-        from opencontractserver.extracts.models import Datacell
-
         datacell = Datacell.objects.create(
             column=manual_col,
             document=doc,

@@ -1,11 +1,13 @@
 """
-Shared corpus object collection for fork and export operations.
+Shared corpus object collection for fork and clone operations.
 
-Both forking and exporting a corpus require gathering the same categories
+Forking and cloning a corpus require gathering the same categories
 of objects (documents, annotations, labels, folders, relationships, metadata).
 This module provides a single source of truth for that collection logic,
-eliminating duplication between StartCorpusFork, build_fork_corpus_task,
-and StartCorpusExport.
+eliminating duplication between StartCorpusFork and build_fork_corpus_task.
+
+The export path only needs document IDs and queries DocumentPath directly
+to avoid running the full set of queries.
 
 See issue #816 for design rationale.
 """
@@ -76,7 +78,7 @@ def collect_corpus_objects(
     )
 
     # Label set
-    label_set_id = corpus.label_set.pk if corpus.label_set else None
+    label_set_id = corpus.label_set_id if corpus.label_set_id else None
 
     # Folders: in tree order (parents before children)
     folder_ids = list(
