@@ -10,16 +10,22 @@ import logging
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from django.contrib.auth.models import AnonymousUser
+from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_GET
 
-from opencontractserver.mcp.config import RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW
+from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import DocumentPath
+from opencontractserver.mcp.config import RATE_LIMIT_REQUESTS
 
 logger = logging.getLogger(__name__)
 
 # Cache discovery responses for 5 minutes to avoid repeated DB hits
 CACHE_SECONDS = 300
+
+# Standardized human-readable rate limit string for all discovery endpoints
+RATE_LIMIT_DISPLAY = f"{RATE_LIMIT_REQUESTS} requests/minute per IP"
 
 
 def _get_base_url(request: HttpRequest) -> str:
@@ -31,23 +37,30 @@ def _get_base_url(request: HttpRequest) -> str:
 
 def _get_public_corpuses() -> list[dict]:
     """Return summary dicts for all public corpuses visible to anonymous users."""
-    from opencontractserver.corpuses.models import Corpus
-
     anonymous = AnonymousUser()
-    qs = Corpus.objects.visible_to_user(anonymous).order_by("-created")
-    results = []
-    for corpus in qs:
-        results.append(
-            {
-                "slug": corpus.slug,
-                "title": corpus.title,
-                "description": corpus.description or "",
-                "document_count": (
-                    corpus.document_count() if hasattr(corpus, "document_count") else 0
+    qs = (
+        Corpus.objects.visible_to_user(anonymous)
+        .annotate(
+            active_document_count=Count(
+                "document_paths",
+                filter=Q(
+                    document_paths__is_current=True,
+                    document_paths__is_deleted=False,
                 ),
-            }
+                distinct=True,
+            )
         )
-    return results
+        .order_by("-created")
+    )
+    return [
+        {
+            "slug": corpus.slug,
+            "title": corpus.title,
+            "description": corpus.description or "",
+            "document_count": corpus.active_document_count,
+        }
+        for corpus in qs
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +143,7 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
         f"- Endpoint (corpus-scoped): {base_url}/mcp/corpus/{{corpus_slug}}/",
         "- Protocol: JSON-RPC 2.0 (MCP spec 2025-03-26)",
         "- Auth: None required (public data only)",
-        f"- Rate limit: {RATE_LIMIT_REQUESTS} requests/{RATE_LIMIT_WINDOW}s per IP",
+        f"- Rate limit: {RATE_LIMIT_DISPLAY}",
         "",
         "### Connecting",
         "",
@@ -228,7 +241,7 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
         "- Protocol: JSON-RPC 2.0 (MCP specification 2025-03-26)",
         "- Transport: Streamable HTTP (recommended), SSE (deprecated)",
         "- Authentication: None required (public data only)",
-        f"- Rate limit: {RATE_LIMIT_REQUESTS} requests/{RATE_LIMIT_WINDOW}s per IP",
+        f"- Rate limit: {RATE_LIMIT_DISPLAY}",
         "- Security: Read-only, slug-based identifiers, no internal IDs exposed",
         "",
         "## Connecting",
@@ -506,9 +519,6 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
 @cache_page(CACHE_SECONDS)
 def sitemap_xml(request: HttpRequest) -> HttpResponse:
     """Generate an XML sitemap listing public corpuses and their documents."""
-    from opencontractserver.corpuses.models import Corpus
-    from opencontractserver.documents.models import DocumentPath
-
     base_url = _get_base_url(request)
     anonymous = AnonymousUser()
 
@@ -521,8 +531,10 @@ def sitemap_xml(request: HttpRequest) -> HttpResponse:
     SubElement(url_el, "changefreq").text = "weekly"
     SubElement(url_el, "priority").text = "1.0"
 
-    # Public corpuses
-    public_corpuses = Corpus.objects.visible_to_user(anonymous).order_by("-created")
+    # Public corpuses - materialize once to avoid double queryset evaluation
+    public_corpuses = list(
+        Corpus.objects.visible_to_user(anonymous).order_by("-created")
+    )
     for corpus in public_corpuses:
         if not corpus.slug:
             continue
@@ -534,7 +546,7 @@ def sitemap_xml(request: HttpRequest) -> HttpResponse:
         SubElement(url_el, "priority").text = "0.8"
 
     # Public documents within those corpuses (via DocumentPath)
-    public_corpus_ids = list(public_corpuses.values_list("id", flat=True))
+    public_corpus_ids = [c.id for c in public_corpuses]
     if public_corpus_ids:
         doc_paths = (
             DocumentPath.objects.filter(
@@ -589,10 +601,7 @@ def well_known_mcp(request: HttpRequest) -> HttpResponse:
             ),
             "transport": "streamable-http",
             "authentication": None,
-            "rateLimit": (
-                f"{RATE_LIMIT_REQUESTS} requests per "
-                f"{RATE_LIMIT_WINDOW} seconds per IP"
-            ),
+            "rateLimit": RATE_LIMIT_DISPLAY,
         }
     }
 

@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MCP discovery link in HTML head**: Added `<link rel="alternate" type="application/json" href="/.well-known/mcp.json">` to `frontend/index.html` for agent discovery
 - **Comprehensive test suite** for all five discovery endpoints covering content types, spec conformance, public/private corpus filtering, hostname resolution, and edge cases (`opencontractserver/discovery/tests/test_discovery_views.py`)
 
+### Removed
+
+- **Unused `django-crispy-forms` and `crispy-bootstrap5` dependencies**: These were cookiecutter-django boilerplate never used by the project (React frontend uses its own form components). Removed packages from `requirements/base.txt`, `INSTALLED_APPS`, and `CRISPY_*` settings from `config/settings/base.py`.
+
 ### Fixed
 
 - **Duplicate enabled-field logic**: `ComponentLibrary` now reads the backend-computed `component.enabled` field instead of recalculating enablement from the `enabledComponents` list, eliminating divergent sources of truth (issue #1036 item 1). (`frontend/src/components/admin/system_settings/ComponentLibrary.tsx`)
