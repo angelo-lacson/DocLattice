@@ -5048,7 +5048,7 @@ export interface GetCorpusDocumentsForTocInput {
 export interface CorpusDocumentForToc {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   slug: string;
   icon: string | null;
   fileType: string | null;

@@ -102,6 +102,7 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
   const navigate = useNavigate();
   const [mdContent, setMdContent] = React.useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTabType>("about");
+  // Intentionally preserved across tab switches so returning to Documents keeps the filter
   const [docSearchQuery, setDocSearchQuery] = useState("");
 
   // Get TOC expand state from URL-driven reactive var (set by CentralRouteManager)

@@ -263,7 +263,7 @@ export const HeroImageBand = styled.div`
         black 55%,
         transparent 100%
       );
-    -webkit-mask-composite: source-in;
+    -webkit-mask-composite: source-in; /* WebKit equivalent of mask-composite: intersect */
   }
 
   ${mediaQuery.tablet} {
@@ -327,21 +327,6 @@ export const AddDescriptionLink = styled.button`
   svg {
     width: 14px;
     height: 14px;
-  }
-`;
-
-/** Subtle centered divider between hero and action sections.
- *  A short horizontal line that creates visual breathing room
- *  without being heavy — channels the discovery page's generous
- *  section spacing. */
-export const SectionDivider = styled.div`
-  width: 48px;
-  height: 1px;
-  background: ${CORPUS_COLORS.slate[200]};
-  margin: 1.5rem 0;
-
-  ${mediaQuery.tablet} {
-    margin: 1rem 0;
   }
 `;
 
@@ -1077,7 +1062,7 @@ export const MobileAboutActions = styled.div`
   padding: 0.75rem 1rem 0;
 `;
 
-/** Sticky toolbar above the mobile document list — search + expand toggle */
+/** Toolbar above the mobile document list — search + expand toggle */
 export const MobileDocToolbar = styled.div`
   display: flex;
   align-items: center;
@@ -1156,7 +1141,7 @@ export const MobileMenuButton = styled.button`
     height: 16px;
   }
 
-  ${mediaQuery.mobile} {
+  ${mediaQuery.tablet} {
     display: flex;
   }
 `;

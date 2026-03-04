@@ -490,7 +490,10 @@ test("renders landing view with description as subtitle", async ({
   await expect(description).toContainText("Dummy corpus for component-testing");
 });
 
-test("renders Browse documents link in landing view", async ({ mount, page }) => {
+test("renders Browse documents link in landing view", async ({
+  mount,
+  page,
+}) => {
   await mountCorpusHome(mount);
 
   // Browse documents link should be visible
