@@ -107,6 +107,7 @@ export const SystemSettings: React.FC = () => {
   const {
     data: componentsData,
     loading: componentsLoading,
+    error: componentsError,
     refetch: refetchComponents,
   } = useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
     fetchPolicy: "cache-and-network",
@@ -289,7 +290,7 @@ export const SystemSettings: React.FC = () => {
         return;
       }
 
-      if (currentEnabled.length === 0) {
+      if (currentEnabled.length === 0 && !enabled) {
         // Transitioning from "all enabled" to explicit list: build full list
         // from loaded components, then remove the one being disabled.
         const allPaths = [
@@ -531,7 +532,8 @@ export const SystemSettings: React.FC = () => {
   }
 
   // Error state
-  if (settingsError) {
+  const queryError = settingsError || componentsError;
+  if (queryError) {
     return (
       <Container>
         <BackButton onClick={() => navigate("/admin/settings")}>
@@ -542,10 +544,16 @@ export const SystemSettings: React.FC = () => {
           <AlertTriangle />
           <h3>Error Loading Settings</h3>
           <ErrorMessage>
-            {settingsError.message ||
+            {queryError.message ||
               "Unable to load pipeline settings. You may not have permission to view this page."}
           </ErrorMessage>
-          <Button variant="primary" onClick={() => refetchSettings()}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              refetchSettings();
+              refetchComponents();
+            }}
+          >
             Try Again
           </Button>
         </ErrorContainer>
