@@ -201,3 +201,55 @@ def trigger_corpus_actions_on_message_creation(sender, instance, created, **kwar
         )
 
     transaction.on_commit(queue_message_action)
+
+
+# =============================================================================
+# Template Cloning on Corpus Creation
+# =============================================================================
+
+
+@receiver(post_save, sender="corpuses.Corpus")
+def clone_templates_on_corpus_create(sender, instance, created, **kwargs):
+    """Clone active CorpusActionTemplates into a newly created corpus.
+
+    Each active template produces a CorpusAction (typically disabled) that the
+    user can later enable and customise.
+
+    Uses bulk_create for efficiency — the DB-level CheckConstraint on
+    CorpusAction still enforces valid action type configuration.
+    """
+    if not created:
+        return
+
+    if getattr(instance, "_skip_signals", False):
+        return
+
+    from opencontractserver.corpuses.models import (
+        CorpusAction,
+        CorpusActionTemplate,
+    )
+
+    templates = CorpusActionTemplate.objects.filter(is_active=True).order_by(
+        "sort_order", "name"
+    )
+    if not templates.exists():
+        return
+
+    actions = [
+        CorpusAction(
+            name=t.name,
+            corpus=instance,
+            agent_config=t.agent_config,
+            task_instructions=t.task_instructions,
+            pre_authorized_tools=list(t.pre_authorized_tools),
+            trigger=t.trigger,
+            disabled=t.disabled_on_clone,
+            creator=instance.creator,
+        )
+        for t in templates
+    ]
+    CorpusAction.objects.bulk_create(actions)
+    logger.info(
+        f"[TemplateClone] Cloned {len(actions)} action templates into "
+        f"corpus {instance.pk} ({instance.title!r})"
+    )
