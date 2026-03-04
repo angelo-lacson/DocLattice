@@ -15,14 +15,19 @@ from django.http import HttpRequest, HttpResponse
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_GET
 
+from doclatticeserver.constants.discovery import (
+    DISCOVERY_CACHE_SECONDS,
+    MAX_PUBLIC_CORPUSES,
+)
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import DocumentPath
-from doclatticeserver.mcp.config import RATE_LIMIT_REQUESTS
+
+try:
+    from doclatticeserver.mcp.config import RATE_LIMIT_REQUESTS
+except ImportError:
+    RATE_LIMIT_REQUESTS = 100
 
 logger = logging.getLogger(__name__)
-
-# Cache discovery responses for 5 minutes to avoid repeated DB hits
-CACHE_SECONDS = 300
 
 # Standardized human-readable rate limit string for all discovery endpoints
 RATE_LIMIT_DISPLAY = f"{RATE_LIMIT_REQUESTS} requests/minute per IP"
@@ -35,10 +40,19 @@ def _get_base_url(request: HttpRequest) -> str:
     return f"{scheme}://{host}"
 
 
-def _get_public_corpuses() -> list[dict]:
-    """Return summary dicts for all public corpuses visible to anonymous users."""
+def _sanitize_markdown_title(title: str) -> str:
+    """Strip leading '#' characters from a title to prevent Markdown injection."""
+    return title.lstrip("#").strip()
+
+
+def _get_public_corpus_queryset():
+    """Return a queryset of public corpuses visible to anonymous users.
+
+    The queryset is annotated with ``active_document_count`` and capped at
+    ``MAX_PUBLIC_CORPUSES`` to prevent unbounded memory usage.
+    """
     anonymous = AnonymousUser()
-    qs = (
+    return (
         Corpus.objects.visible_to_user(anonymous)
         .annotate(
             active_document_count=Count(
@@ -50,8 +64,12 @@ def _get_public_corpuses() -> list[dict]:
                 distinct=True,
             )
         )
-        .order_by("-created")
+        .order_by("-created")[:MAX_PUBLIC_CORPUSES]
     )
+
+
+def _get_public_corpuses() -> list[dict]:
+    """Return summary dicts for public corpuses visible to anonymous users."""
     return [
         {
             "slug": corpus.slug,
@@ -59,7 +77,7 @@ def _get_public_corpuses() -> list[dict]:
             "description": corpus.description or "",
             "document_count": corpus.active_document_count,
         }
-        for corpus in qs
+        for corpus in _get_public_corpus_queryset()
     ]
 
 
@@ -67,7 +85,7 @@ def _get_public_corpuses() -> list[dict]:
 # robots.txt
 # ---------------------------------------------------------------------------
 @require_GET
-@cache_page(CACHE_SECONDS)
+@cache_page(DISCOVERY_CACHE_SECONDS)
 def robots_txt(request: HttpRequest) -> HttpResponse:
     base_url = _get_base_url(request)
     lines = [
@@ -117,7 +135,7 @@ def robots_txt(request: HttpRequest) -> HttpResponse:
 # llms.txt
 # ---------------------------------------------------------------------------
 @require_GET
-@cache_page(CACHE_SECONDS)
+@cache_page(DISCOVERY_CACHE_SECONDS)
 def llms_txt(request: HttpRequest) -> HttpResponse:
     base_url = _get_base_url(request)
     corpuses = _get_public_corpuses()
@@ -185,9 +203,9 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
         lines.append("")
         for c in corpuses:
             slug = c["slug"]
-            title = c["title"]
+            title = _sanitize_markdown_title(c["title"])
             doc_count = c["document_count"]
-            desc = c["description"]
+            desc = (c["description"] or "").replace("\n", " ").replace("\r", "")
             # Truncate long descriptions to keep llms.txt concise
             if len(desc) > 120:
                 desc = desc[:117] + "..."
@@ -214,7 +232,7 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
 # llms-full.txt
 # ---------------------------------------------------------------------------
 @require_GET
-@cache_page(CACHE_SECONDS)
+@cache_page(DISCOVERY_CACHE_SECONDS)
 def llms_full_txt(request: HttpRequest) -> HttpResponse:
     base_url = _get_base_url(request)
     corpuses = _get_public_corpuses()
@@ -470,9 +488,9 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
         lines.append("")
         for c in corpuses:
             slug = c["slug"]
-            title = c["title"]
+            title = _sanitize_markdown_title(c["title"])
             doc_count = c["document_count"]
-            desc = c["description"]
+            desc = (c["description"] or "").replace("\n", " ").replace("\r", "")
             lines.append(f"### {title}")
             lines.append("")
             lines.append(f"- Slug: `{slug}`")
@@ -516,11 +534,10 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
 # sitemap.xml
 # ---------------------------------------------------------------------------
 @require_GET
-@cache_page(CACHE_SECONDS)
+@cache_page(DISCOVERY_CACHE_SECONDS)
 def sitemap_xml(request: HttpRequest) -> HttpResponse:
     """Generate an XML sitemap listing public corpuses and their documents."""
     base_url = _get_base_url(request)
-    anonymous = AnonymousUser()
 
     urlset = Element("urlset")
     urlset.set("xmlns", "http://www.sitemaps.org/schemas/sitemap/0.9")
@@ -531,10 +548,8 @@ def sitemap_xml(request: HttpRequest) -> HttpResponse:
     SubElement(url_el, "changefreq").text = "weekly"
     SubElement(url_el, "priority").text = "1.0"
 
-    # Public corpuses - materialize once to avoid double queryset evaluation
-    public_corpuses = list(
-        Corpus.objects.visible_to_user(anonymous).order_by("-created")
-    )
+    # Public corpuses - reuse shared queryset (already capped at MAX_PUBLIC_CORPUSES)
+    public_corpuses = list(_get_public_corpus_queryset())
     for corpus in public_corpuses:
         if not corpus.slug:
             continue
@@ -586,7 +601,7 @@ def sitemap_xml(request: HttpRequest) -> HttpResponse:
 # .well-known/mcp.json
 # ---------------------------------------------------------------------------
 @require_GET
-@cache_page(CACHE_SECONDS)
+@cache_page(DISCOVERY_CACHE_SECONDS)
 def well_known_mcp(request: HttpRequest) -> HttpResponse:
     """MCP server discovery endpoint per emerging .well-known convention."""
     base_url = _get_base_url(request)
