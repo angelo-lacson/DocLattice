@@ -18,6 +18,15 @@ _migration_mod = importlib.import_module(
 )
 _create_default_action_templates = _migration_mod.create_default_action_templates
 
+# Shared across test classes that verify default template seeding
+DEFAULT_TEMPLATE_NAMES = [
+    "Document Description Updater",
+    "Corpus Description Updater",
+    "Document Summary Generator",
+    "Key Terms Annotator",
+    "Document Notes Generator",
+]
+
 User = get_user_model()
 
 
@@ -118,7 +127,11 @@ class CorpusActionTemplateModelTest(TestCase):
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
-        templates = list(CorpusActionTemplate.objects.all())
+        templates = list(
+            CorpusActionTemplate.objects.filter(name__in=["First", "Second"]).order_by(
+                "sort_order"
+            )
+        )
         self.assertEqual(templates[0].pk, t2.pk)
         self.assertEqual(templates[1].pk, t1.pk)
 
@@ -220,30 +233,26 @@ class DefaultTemplatesMigrationTest(TestCase):
     exercise the same code path.
     """
 
-    EXPECTED_NAMES = [
-        "Document Description Updater",
-        "Corpus Description Updater",
-        "Document Summary Generator",
-        "Key Terms Annotator",
-        "Document Notes Generator",
-    ]
+    EXPECTED_NAMES = DEFAULT_TEMPLATE_NAMES
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         # Ensure a superuser exists so the migration function can run,
         # then invoke the migration logic if templates are missing.
+        # Guard with existence check for --keepdb compatibility.
         from django.apps import apps
 
-        cls._superuser = User.objects.create_superuser(
+        cls._superuser, _ = User.objects.get_or_create(
             username="migration_admin",
-            password="testpass",
-            email="admin@test.com",
+            defaults={
+                "password": "testpass",
+                "email": "admin@test.com",
+                "is_superuser": True,
+                "is_staff": True,
+            },
         )
-        if not CorpusActionTemplate.objects.filter(
-            name__in=cls.EXPECTED_NAMES
-        ).exists():
-            _create_default_action_templates(apps, None)
+        _create_default_action_templates(apps, None)
 
     def test_default_templates_exist(self):
         """All 5 default templates should exist after migration."""
@@ -302,23 +311,14 @@ class CorpusActionTemplateIntegrationTest(TestCase):
         super().setUpClass()
         from django.apps import apps
 
-        cls.EXPECTED_NAMES = [
-            "Document Description Updater",
-            "Corpus Description Updater",
-            "Document Summary Generator",
-            "Key Terms Annotator",
-            "Document Notes Generator",
-        ]
+        cls.EXPECTED_NAMES = DEFAULT_TEMPLATE_NAMES
         if not User.objects.filter(is_superuser=True).exists():
             User.objects.create_superuser(
                 username="integration_admin",
                 password="testpass",
                 email="intadmin@test.com",
             )
-        if not CorpusActionTemplate.objects.filter(
-            name__in=cls.EXPECTED_NAMES
-        ).exists():
-            _create_default_action_templates(apps, None)
+        _create_default_action_templates(apps, None)
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -330,8 +330,6 @@ class CorpusActionTemplateIntegrationTest(TestCase):
         active_template_count = CorpusActionTemplate.objects.filter(
             is_active=True
         ).count()
-        if active_template_count == 0:
-            self.skipTest("No active templates — data migration may not have run")
 
         corpus = Corpus.objects.create(title="Integration Corpus", creator=self.user)
         actions = CorpusAction.objects.filter(corpus=corpus)

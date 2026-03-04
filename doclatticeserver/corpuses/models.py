@@ -1195,9 +1195,24 @@ class CorpusActionTemplate(BaseOCModel):
     trigger type that the cloned action will use.
 
     Templates are agent-only — no fieldset or analyzer support.
+
+    Note: Intentionally NOT exposed via GraphQL. Templates are a system-level
+    concern managed through Django admin. Users interact with the cloned
+    ``CorpusAction`` instances on their corpuses, not the templates directly.
     """
 
-    name = django.db.models.CharField(max_length=256)
+    # Override BaseOCModel.creator to use SET_NULL — system-level templates
+    # are owned by an arbitrary superuser at migration time and must survive
+    # that user being deleted.
+    creator = django.db.models.ForeignKey(
+        get_user_model(),
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    name = django.db.models.CharField(max_length=256, unique=True)
     description = django.db.models.TextField(blank=True, default="")
 
     agent_config = django.db.models.ForeignKey(
@@ -1252,7 +1267,16 @@ class CorpusActionTemplate(BaseOCModel):
         """Return kwargs dict for constructing a CorpusAction from this template.
 
         Used by both ``clone_to_corpus`` (single) and the bulk clone signal.
+
+        Raises:
+            ValueError: If neither ``creator`` nor ``corpus.creator`` is set.
         """
+        resolved_creator = creator or corpus.creator
+        if resolved_creator is None:
+            raise ValueError(
+                f"Cannot clone template {self.name!r}: no creator provided "
+                f"and corpus {corpus.pk} has no creator."
+            )
         return dict(
             name=self.name,
             corpus=corpus,
@@ -1261,7 +1285,7 @@ class CorpusActionTemplate(BaseOCModel):
             pre_authorized_tools=list(self.pre_authorized_tools),
             trigger=self.trigger,
             disabled=self.disabled_on_clone,
-            creator=creator or corpus.creator,
+            creator=resolved_creator,
         )
 
     def clone_to_corpus(self, corpus, creator=None):
@@ -1269,7 +1293,10 @@ class CorpusActionTemplate(BaseOCModel):
 
         Returns the created CorpusAction instance.
         """
-        return CorpusAction.objects.create(**self.to_action_kwargs(corpus, creator))
+        kwargs = self.to_action_kwargs(corpus, creator)
+        action = CorpusAction(**kwargs)
+        action.save()  # save() calls full_clean() internally
+        return action
 
 
 # -------------------- CorpusDescriptionRevision -------------------- #

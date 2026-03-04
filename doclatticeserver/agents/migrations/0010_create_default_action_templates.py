@@ -7,6 +7,17 @@ from django.db import migrations
 # Template definitions
 # ---------------------------------------------------------------------------
 
+# NOTE: Tool names (e.g. "add_annotations_from_exact_strings") must match the
+# registered tool names in doclatticeserver/llms/tools/core_tools.py.
+#
+# Each template has both "tools" (available tools) and "pre_authorized" (tools
+# that don't require user confirmation).  For these default templates the lists
+# are intentionally identical — every available tool is pre-authorized — but
+# they are kept separate because custom templates may restrict pre-authorization
+# to a subset of available tools.
+#
+# sort_order values use gaps (10, 20, 30, ...) so new templates can be inserted
+# between existing ones without renumbering.
 TEMPLATES = [
     {
         "name": "Document Description Updater",
@@ -33,6 +44,7 @@ TEMPLATES = [
             "update_document_description to save your result. If a description "
             "already exists, improve it based on the actual document content."
         ),
+        "badge_config": {"icon": "file-text", "color": "#059669", "label": "Desc"},
     },
     {
         "name": "Corpus Description Updater",
@@ -64,6 +76,7 @@ TEMPLATES = [
             "collection's purpose and contents. If no description exists, "
             "create one based on the available documents."
         ),
+        "badge_config": {"icon": "database", "color": "#7C3AED", "label": "Corpus"},
     },
     {
         "name": "Document Summary Generator",
@@ -94,6 +107,7 @@ TEMPLATES = [
             "dates or deadlines, (5) Notable provisions or conclusions. "
             "Use update_document_summary to save your result."
         ),
+        "badge_config": {"icon": "file-text", "color": "#2563EB", "label": "Summary"},
     },
     {
         "name": "Key Terms Annotator",
@@ -121,6 +135,7 @@ TEMPLATES = [
             "create annotations using add_annotations_from_exact_strings "
             "with the label 'Key Term'. Limit to the 20 most important terms."
         ),
+        "badge_config": {"icon": "tag", "color": "#D97706", "label": "Terms"},
     },
     {
         "name": "Document Notes Generator",
@@ -147,47 +162,33 @@ TEMPLATES = [
             "action items, and any risks or notable provisions. Title the "
             "note 'Document Analysis'."
         ),
+        "badge_config": {"icon": "edit", "color": "#DC2626", "label": "Notes"},
     },
 ]
 
 
-BADGE_CONFIGS = {
-    "Document Description Updater": {
-        "icon": "file-text",
-        "color": "#059669",
-        "label": "Desc",
-    },
-    "Corpus Description Updater": {
-        "icon": "database",
-        "color": "#7C3AED",
-        "label": "Corpus",
-    },
-    "Document Summary Generator": {
-        "icon": "file-text",
-        "color": "#2563EB",
-        "label": "Summary",
-    },
-    "Key Terms Annotator": {
-        "icon": "tag",
-        "color": "#D97706",
-        "label": "Terms",
-    },
-    "Document Notes Generator": {
-        "icon": "edit",
-        "color": "#DC2626",
-        "label": "Notes",
-    },
-}
-
-
 def create_default_action_templates(apps, schema_editor):
-    """Create default AgentConfigurations and CorpusActionTemplates."""
+    """Create default AgentConfigurations and CorpusActionTemplates.
+
+    AgentConfiguration.creator is NOT NULL (inherited from BaseOCModel), so we
+    need a superuser to own them.  CorpusActionTemplate.creator is nullable, so
+    we fall back to None when no superuser exists.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    User = apps.get_model("users", "User")
     AgentConfiguration = apps.get_model("agents", "AgentConfiguration")
     CorpusActionTemplate = apps.get_model("corpuses", "CorpusActionTemplate")
-    User = apps.get_model("users", "User")
 
     system_user = User.objects.filter(is_superuser=True).first()
     if not system_user:
+        logger.warning(
+            "No superuser found — skipping default action template creation. "
+            "After creating a superuser, run: "
+            "python manage.py seed_action_templates"
+        )
         return
 
     for tmpl_def in TEMPLATES:
@@ -205,7 +206,7 @@ def create_default_action_templates(apps, schema_editor):
             ),
             available_tools=tmpl_def["tools"],
             permission_required_tools=[],
-            badge_config=BADGE_CONFIGS.get(tmpl_def["name"], {}),
+            badge_config=tmpl_def.get("badge_config", {}),
             scope="GLOBAL",
             is_active=True,
             is_public=True,

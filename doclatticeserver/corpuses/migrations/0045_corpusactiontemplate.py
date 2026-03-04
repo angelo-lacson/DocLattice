@@ -30,7 +30,7 @@ class Migration(migrations.Migration):
                 ("is_public", models.BooleanField(default=False)),
                 ("created", models.DateTimeField(auto_now_add=True)),
                 ("modified", models.DateTimeField(auto_now=True)),
-                ("name", models.CharField(max_length=256)),
+                ("name", models.CharField(max_length=256, unique=True)),
                 ("description", models.TextField(blank=True, default="")),
                 (
                     "task_instructions",
@@ -92,7 +92,9 @@ class Migration(migrations.Migration):
                 (
                     "creator",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),

@@ -13,7 +13,11 @@ User = get_user_model()
 class CorpusActionModelTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="testuser", password="testpass")
-        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        # Build then save with _skip_signals to prevent clone_templates_on_corpus_create
+        # from auto-creating CorpusActions that interfere with precise test counts.
+        self.corpus = Corpus(title="Test Corpus", creator=self.user)
+        self.corpus._skip_signals = True
+        self.corpus.save()
         self.analyzer = Analyzer.objects.create(
             description="Test Analyzer", creator=self.user, task_name="not.a.real.task"
         )

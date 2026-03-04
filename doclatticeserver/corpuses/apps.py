@@ -11,9 +11,11 @@ class CorpusesConfig(AppConfig):
     def ready(self):
         try:
             # Import signals to register signal handlers for corpus actions.
-            # This enables automatic triggering of corpus actions when:
-            # - NEW_THREAD: A discussion thread is created in a corpus
-            # - NEW_MESSAGE: A human message is posted to a thread in a corpus
+            # This enables:
+            # - NEW_THREAD: Trigger corpus actions when a discussion thread is created
+            # - NEW_MESSAGE: Trigger corpus actions when a human message is posted
+            # - Template cloning: Auto-clone active CorpusActionTemplates into
+            #   newly created corpuses (post_save on Corpus)
             # Note: Document-based triggers (ADD_DOCUMENT, EDIT_DOCUMENT) are
             # handled via direct invocation in add_document(), import_document(),
             # and set_doc_lock_state().

@@ -229,13 +229,21 @@ def clone_templates_on_corpus_create(sender, instance, created, **kwargs):
         CorpusActionTemplate,
     )
 
-    templates = CorpusActionTemplate.objects.filter(is_active=True).order_by(
-        "sort_order", "name"
+    templates = list(
+        CorpusActionTemplate.objects.filter(is_active=True).order_by(
+            "sort_order", "name"
+        )
     )
-    if not templates.exists():
+    if not templates:
         return
 
     actions = [CorpusAction(**t.to_action_kwargs(instance)) for t in templates]
+    for action in actions:
+        action.full_clean()
+    # bulk_create is used for efficiency. Validation is handled above via
+    # full_clean() on each instance. Note: bulk_create bypasses save() (which
+    # also calls full_clean()), so if CorpusAction gains post_save signal
+    # handlers in the future, this code must switch to per-instance save().
     CorpusAction.objects.bulk_create(actions)
     logger.info(
         f"[TemplateClone] Cloned {len(actions)} action templates into "
