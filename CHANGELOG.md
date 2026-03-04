@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-04
 
+### Removed
+
+- **Unused `django-crispy-forms` and `crispy-bootstrap5` dependencies**: These were cookiecutter-django boilerplate never used by the project (React frontend uses its own form components). Removed packages from `requirements/base.txt`, `INSTALLED_APPS`, and `CRISPY_*` settings from `config/settings/base.py`.
+
 ### Fixed
 
 - **Duplicate enabled-field logic**: `ComponentLibrary` now reads the backend-computed `component.enabled` field instead of recalculating enablement from the `enabledComponents` list, eliminating divergent sources of truth (issue #1036 item 1). (`frontend/src/components/admin/system_settings/ComponentLibrary.tsx`)
