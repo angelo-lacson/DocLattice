@@ -8,6 +8,7 @@ import {
 } from "../../../assets/configurations/constants";
 import { getComponentDisplayName } from "../PipelineIcons";
 import { StageType } from "./types";
+import { isComponentAvailable } from "./utils";
 import {
   Section,
   SectionHeader,
@@ -59,32 +60,6 @@ const STAGES: { key: StageType; label: string }[] = [
   { key: "thumbnailers", label: "Thumbnailer" },
 ];
 
-/**
- * Determine whether a component is available for a given MIME type.
- * A component is available if:
- * 1. It is enabled (present in enabledComponents, or enabledComponents is empty meaning all enabled)
- * 2. Its supportedFileTypes includes the short label (e.g., "pdf") or it has no supportedFileTypes (universal)
- */
-const isComponentAvailable = (
-  component: PipelineComponentType & { className: string },
-  mimeShortLabel: string,
-  enabledComponents: string[]
-): boolean => {
-  // Check enabled status
-  const isEnabled =
-    enabledComponents.length === 0 ||
-    enabledComponents.includes(component.className);
-  if (!isEnabled) return false;
-
-  // Check file type support
-  const fileTypes = (component.supportedFileTypes || [])
-    .filter((ft): ft is NonNullable<typeof ft> => Boolean(ft))
-    .map((ft) => String(ft).toLowerCase());
-
-  if (fileTypes.length === 0) return true; // Universal component
-  return fileTypes.includes(mimeShortLabel.toLowerCase());
-};
-
 // ============================================================================
 // Component
 // ============================================================================
@@ -123,7 +98,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
       };
 
       for (const mime of SUPPORTED_MIME_TYPES) {
-        const shortLabel = MIME_TO_SHORT_LABEL[mime.value] || "";
+        const shortLabel = MIME_TO_SHORT_LABEL[mime.value] || mime.value;
         for (const stage of STAGES) {
           result[stage.key][mime.value] = components[stage.key].filter((comp) =>
             isComponentAvailable(comp, shortLabel, enabledComponents)

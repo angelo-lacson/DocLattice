@@ -62,6 +62,11 @@ RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"
 #   0: ignore X-Forwarded-For entirely (app receives connections directly
 #      without a reverse proxy — REMOTE_ADDR is used instead)
 # Set this to match your deployment's proxy chain depth.
+#
+# WARNING: The default of 1 assumes a reverse proxy (e.g. Traefik or nginx)
+# is present. Deployments without a reverse proxy MUST set this to 0,
+# otherwise X-Forwarded-For is client-controlled and an attacker can spoof
+# their IP to bypass rate limits.
 RATELIMIT_PROXIES_COUNT = env.int("RATELIMIT_PROXIES_COUNT", default=1)
 
 # Whether to group IPv6 addresses by subnet for rate limiting

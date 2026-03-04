@@ -144,8 +144,8 @@ export const AboutContent = styled.div<{ $minimal?: boolean }>`
   max-height: 100%;
 
   ${mediaQuery.tablet} {
-    padding: ${(props) => (props.$minimal ? "0" : "1.25rem")};
-    padding-bottom: ${(props) => (props.$minimal ? "0" : "3rem")};
+    padding: ${(props) => (props.$minimal ? "1rem 1.5rem" : "1.25rem")};
+    padding-bottom: ${(props) => (props.$minimal ? "1.5rem" : "3rem")};
     font-size: 0.9375rem;
     line-height: 1.65;
   }

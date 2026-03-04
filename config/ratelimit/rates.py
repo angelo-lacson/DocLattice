@@ -14,7 +14,7 @@ from typing import Any, Callable
 from django.conf import settings
 
 from config.ratelimit.engine import parse_rate
-from config.ratelimit.keys import _is_authenticated
+from config.ratelimit.keys import is_authenticated
 
 
 class _RateLimits:
@@ -113,7 +113,7 @@ def get_tier_adjusted_rate(user: Any, base_rate: str) -> str:
 
     if user and hasattr(user, "is_superuser") and user.is_superuser:
         count = base_count * 10
-    elif user and _is_authenticated(user):
+    elif user and is_authenticated(user):
         count = base_count * 2
     else:
         count = base_count

@@ -13,8 +13,7 @@ import {
   ChevronsUpDown,
   ChevronsDownUp,
   Edit,
-  Activity,
-  MoreVertical,
+  Menu,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -53,7 +52,6 @@ import {
   AboutMainContent,
   AboutHeader,
   AboutActions,
-  TextButton,
   TextButtonPrimary,
   AboutBody,
   ExpandButton,
@@ -61,6 +59,9 @@ import {
   MobileTabList,
   MobileTab,
   MobileTabContent,
+  MobileAboutActions,
+  MobileDocToolbar,
+  MobileSearchInput,
   HeaderRow,
   MobileMenuButton,
 } from "./styles";
@@ -101,6 +102,8 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
   const navigate = useNavigate();
   const [mdContent, setMdContent] = React.useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTabType>("about");
+  // Intentionally preserved across tab switches so returning to Documents keeps the filter
+  const [docSearchQuery, setDocSearchQuery] = useState("");
 
   // Get TOC expand state from URL-driven reactive var (set by CentralRouteManager)
   const isTocExpanded = useReactiveVar(tocExpandAll);
@@ -162,7 +165,7 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
       <DetailsPage>
         {/* Header section - clean, minimal */}
         <DetailsHeader>
-          <HeaderRow>
+          <HeaderRow $justify="space-between">
             <BackButton
               onClick={onBack}
               whileHover={{ scale: 1.01 }}
@@ -178,7 +181,7 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
                 aria-label="Open navigation menu"
                 data-testid={`${testId}-mobile-menu`}
               >
-                <MoreVertical />
+                <Menu />
               </MobileMenuButton>
             )}
           </HeaderRow>
@@ -219,16 +222,16 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
                   </>
                 )}
 
-                <MetadataSeparator />
+                <MetadataSeparator className="hide-mobile" />
 
-                <MetadataItem>
+                <MetadataItem className="hide-mobile">
                   <Users aria-hidden="true" />
                   <span>{creatorName}</span>
                 </MetadataItem>
 
-                <MetadataSeparator />
+                <MetadataSeparator className="hide-mobile" />
 
-                <MetadataItem>
+                <MetadataItem className="hide-mobile">
                   <Calendar aria-hidden="true" />
                   <span>{createdDate}</span>
                 </MetadataItem>
@@ -287,15 +290,6 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
               <AboutHeader>
                 <SectionLabel>About</SectionLabel>
                 <AboutActions>
-                  {hasContent && (
-                    <TextButton
-                      onClick={onEditDescription}
-                      aria-label="View version history"
-                    >
-                      <Activity />
-                      History
-                    </TextButton>
-                  )}
                   {canEdit && (
                     <TextButtonPrimary
                       onClick={onEditDescription}
@@ -360,20 +354,64 @@ export const CorpusDetailsView: React.FC<CorpusDetailsViewProps> = ({
               }
             >
               {mobileTab === "toc" ? (
-                <DocumentTableOfContents
-                  corpusId={corpus.id}
-                  maxDepth={4}
-                  embedded={true}
-                />
+                <>
+                  <MobileDocToolbar>
+                    <MobileSearchInput
+                      type="text"
+                      placeholder="Filter documents..."
+                      aria-label="Filter documents"
+                      value={docSearchQuery}
+                      onChange={(e) => setDocSearchQuery(e.target.value)}
+                    />
+                    <ExpandButton
+                      onClick={handleToggleExpandAll}
+                      aria-label={isTocExpanded ? "Collapse all" : "Expand all"}
+                    >
+                      {isTocExpanded ? (
+                        <>
+                          <ChevronsDownUp />
+                          Collapse
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsUpDown />
+                          Expand
+                        </>
+                      )}
+                    </ExpandButton>
+                  </MobileDocToolbar>
+                  <DocumentTableOfContents
+                    corpusId={corpus.id}
+                    maxDepth={4}
+                    embedded={true}
+                    filterQuery={docSearchQuery}
+                  />
+                </>
               ) : (
-                <CorpusAbout
-                  corpus={fullCorpus}
-                  mdContent={mdContent}
-                  isLoading={corpusLoading}
-                  canEdit={canEdit}
-                  onEditDescription={onEditDescription}
-                  testId={`${testId}-about-mobile`}
-                />
+                <>
+                  {canEdit && (
+                    <MobileAboutActions>
+                      <TextButtonPrimary
+                        onClick={onEditDescription}
+                        aria-label={
+                          hasContent ? "Edit description" : "Add description"
+                        }
+                      >
+                        <Edit />
+                        {hasContent ? "Edit" : "Add"}
+                      </TextButtonPrimary>
+                    </MobileAboutActions>
+                  )}
+                  <CorpusAbout
+                    corpus={fullCorpus}
+                    mdContent={mdContent}
+                    isLoading={corpusLoading}
+                    canEdit={canEdit}
+                    onEditDescription={onEditDescription}
+                    hideHeader={true}
+                    testId={`${testId}-about-mobile`}
+                  />
+                </>
               )}
             </MobileTabContent>
           </MobileTabContainer>
