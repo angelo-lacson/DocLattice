@@ -7,6 +7,7 @@ These tests verify:
    via Reciprocal Rank Fusion.
 2. search_by_embedding() uses PostgreSQL ORDER BY + LIMIT without DISTINCT ON.
 3. The search_vector trigger auto-populates tsvector on INSERT and UPDATE.
+4. Sequential scan fallback for high-dimensional vectors (dims > 1536).
 """
 
 from typing import Optional
@@ -33,6 +34,16 @@ User = get_user_model()
 def constant_vector(dimension: int = 384, value: float = 0.5) -> list[float]:
     """Generate a constant vector of the given dimension."""
     return [value] * dimension
+
+
+def directional_vector(dimension: int = 384, active_dims: int = 384) -> list[float]:
+    """Generate a vector with 1.0 in the first *active_dims* positions, 0.0 elsewhere.
+
+    Two directional vectors with different ``active_dims`` values will produce
+    meaningfully different cosine distances from a query vector, unlike
+    constant vectors where all-0.1 and all-0.2 have identical direction.
+    """
+    return [1.0] * active_dims + [0.0] * (dimension - active_dims)
 
 
 class TestHybridSearch(TestCase):
@@ -255,7 +266,9 @@ class TestSearchByEmbeddingRefactor(TestCase):
                 creator=cls.user,
                 is_public=True,
             )
-            # Create several annotations with embeddings at known values
+            # Create annotations with embeddings whose *direction* differs
+            # from the query vector by varying amounts, producing distinct
+            # cosine distances that PostgreSQL can stably sort.
             cls.annotations = []
             for i in range(5):
                 ann = Annotation.objects.create(
@@ -267,15 +280,19 @@ class TestSearchByEmbeddingRefactor(TestCase):
                 cls.annotations.append(ann)
 
         embedder_path = get_default_embedder_path()
+        # Use directional vectors so each annotation has a genuinely different
+        # cosine distance from the query vector (which will be a full 1.0 vector).
+        # active_dims: 384, 300, 200, 100, 50 -> increasingly different from query.
+        active_dims_list = [384, 300, 200, 100, 50]
         for i, ann in enumerate(cls.annotations):
             ann.add_embedding(
                 embedder_path,
-                constant_vector(384, 0.1 * (i + 1)),
+                directional_vector(384, active_dims_list[i]),
             )
 
     def test_search_by_embedding_returns_list(self):
         """search_by_embedding should return a list, not a QuerySet."""
-        query_vec = constant_vector(384, 0.25)
+        query_vec = directional_vector(384, 384)
         results = Annotation.objects.search_by_embedding(
             query_vector=query_vec,
             embedder_path=get_default_embedder_path(),
@@ -285,7 +302,7 @@ class TestSearchByEmbeddingRefactor(TestCase):
 
     def test_search_by_embedding_respects_top_k(self):
         """Returned list should have at most top_k elements."""
-        query_vec = constant_vector(384, 0.25)
+        query_vec = directional_vector(384, 384)
         top_k = 3
         results = Annotation.objects.search_by_embedding(
             query_vector=query_vec,
@@ -296,7 +313,7 @@ class TestSearchByEmbeddingRefactor(TestCase):
 
     def test_search_by_embedding_has_similarity_scores(self):
         """Each result should have a similarity_score between 0 and 1."""
-        query_vec = constant_vector(384, 0.25)
+        query_vec = directional_vector(384, 384)
         results = Annotation.objects.search_by_embedding(
             query_vector=query_vec,
             embedder_path=get_default_embedder_path(),
@@ -311,8 +328,13 @@ class TestSearchByEmbeddingRefactor(TestCase):
             self.assertLessEqual(ann.similarity_score, 1.0)
 
     def test_search_by_embedding_ordered_by_similarity(self):
-        """Results should be ordered by descending similarity (ascending distance)."""
-        query_vec = constant_vector(384, 0.25)
+        """Results should be ordered by descending similarity (ascending distance).
+
+        Uses directional vectors with varying numbers of active dimensions to
+        produce clearly distinct cosine distances, ensuring PostgreSQL can
+        stably sort the results.
+        """
+        query_vec = directional_vector(384, 384)
         results = Annotation.objects.search_by_embedding(
             query_vector=query_vec,
             embedder_path=get_default_embedder_path(),
@@ -327,13 +349,74 @@ class TestSearchByEmbeddingRefactor(TestCase):
 
     def test_search_by_embedding_filters_by_embedder(self):
         """Only annotations with the specified embedder should appear."""
-        query_vec = constant_vector(384, 0.25)
+        query_vec = directional_vector(384, 384)
         results = Annotation.objects.search_by_embedding(
             query_vector=query_vec,
             embedder_path="nonexistent-embedder-path",
             top_k=10,
         )
         self.assertEqual(len(results), 0, "No embeddings for this path")
+
+
+class TestSequentialScanFallback(TestCase):
+    """Test graceful degradation for embedding dimensions above the HNSW limit.
+
+    Vectors with dimension > 1536 cannot use HNSW indexes (pgvector hard limit
+    of 2000 dims, and we only index up to 1536). These queries fall back to
+    sequential scan and should still return correct results while logging a
+    warning message.
+    """
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        with transaction.atomic():
+            cls.user = User.objects.create_user(
+                username="seqscan_user",
+                password="testpass",
+                email="seqscan@example.com",
+            )
+            cls.doc = Document.objects.create(
+                title="Sequential Scan Doc",
+                creator=cls.user,
+                is_public=True,
+            )
+            cls.annotation = Annotation.objects.create(
+                document=cls.doc,
+                creator=cls.user,
+                raw_text="High-dimensional embedding test annotation",
+                is_public=True,
+            )
+
+        # Store a 2048-dim embedding (above HNSW limit of 1536)
+        embedder_path = get_default_embedder_path()
+        cls.annotation.add_embedding(embedder_path, constant_vector(2048, 0.5))
+
+    def test_high_dim_search_returns_results(self):
+        """Queries with dim > 1536 should still return results via sequential scan."""
+        query_vec = constant_vector(2048, 0.5)
+        results = Annotation.objects.search_by_embedding(
+            query_vector=query_vec,
+            embedder_path=get_default_embedder_path(),
+            top_k=10,
+        )
+        self.assertIsInstance(results, list)
+        self.assertTrue(len(results) > 0, "Sequential scan should still find results")
+        # The single stored vector is identical to the query, so similarity ~ 1.0
+        self.assertAlmostEqual(results[0].similarity_score, 1.0, places=3)
+
+    def test_high_dim_search_logs_warning(self):
+        """Queries with dim > 1536 should log a warning about sequential scan."""
+        query_vec = constant_vector(2048, 0.5)
+        with self.assertLogs("opencontractserver.shared.mixins", level="WARNING") as cm:
+            Annotation.objects.search_by_embedding(
+                query_vector=query_vec,
+                embedder_path=get_default_embedder_path(),
+                top_k=10,
+            )
+        self.assertTrue(
+            any("sequential scan" in msg for msg in cm.output),
+            "Expected log message about sequential scan fallback",
+        )
 
 
 class TestSearchVectorTrigger(TestCase):

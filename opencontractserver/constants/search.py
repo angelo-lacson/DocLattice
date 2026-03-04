@@ -53,14 +53,15 @@ DIM_TO_FIELD_MAP: dict[int, str] = {
 }
 
 # =============================================================================
-# HNSW Index Dimension Limit
+# HNSW Index Dimension Coverage
 # =============================================================================
-# pgvector HNSW indexes have a hard 2000-dimension limit. This constant is
-# the highest dimension that actually has an HNSW index (1536), NOT pgvector's
-# hard cap (2000). Dimensions above this value (2048, 3072, 4096) fall back
-# to sequential scan. This value is also frozen into migration 0063 (as a
-# local constant, per Django migration best practice).
-HNSW_HIGHEST_INDEXED_DIM = 1536
+# pgvector HNSW indexes have a hard 2000-dimension limit. Only the dimensions
+# listed here actually have HNSW indexes created in migration 0063.
+# Dimensions above HNSW_MAX_INDEXED_DIM (2048, 3072, 4096) fall back to
+# sequential scan. These values are also frozen into migration 0063 (as
+# local constants, per Django migration best practice).
+HNSW_INDEXED_DIMS = frozenset({384, 768, 1024, 1536})
+HNSW_MAX_INDEXED_DIM = max(HNSW_INDEXED_DIMS)
 
 # =============================================================================
 # Full-Text Search Configuration

@@ -4,7 +4,7 @@ from pgvector.django import CosineDistance
 
 from opencontractserver.constants.search import (
     DIM_TO_FIELD_MAP,
-    HNSW_HIGHEST_INDEXED_DIM,
+    HNSW_MAX_INDEXED_DIM,
 )
 
 _logger = logging.getLogger(__name__)
@@ -70,12 +70,12 @@ class VectorSearchViaEmbeddingMixin:
         with 'similarity_score'. Do not chain QuerySet methods on the result.
         """
         dimension = len(query_vector)
-        if dimension > HNSW_HIGHEST_INDEXED_DIM:
+        if dimension > HNSW_MAX_INDEXED_DIM:
             _logger.warning(
                 "Embedding dimension %d exceeds highest HNSW-indexed dim (%d); "
                 "query will use sequential scan instead of HNSW index.",
                 dimension,
-                HNSW_HIGHEST_INDEXED_DIM,
+                HNSW_MAX_INDEXED_DIM,
             )
         vector_field = self._dimension_to_field(dimension)
 

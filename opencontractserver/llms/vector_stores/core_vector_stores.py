@@ -641,6 +641,8 @@ class CoreAnnotationVectorStore:
                 for ann, score in fused
             ]
         elif vector_results:
+            # Trim from oversample_k down to the final top_k requested
+            # by the caller (search_by_embedding already fetched oversample_k).
             return [
                 VectorSearchResult(
                     annotation=ann,
@@ -899,7 +901,9 @@ class CoreAnnotationVectorStore:
 
         _logger.debug("Global search queryset built, searching by embedding")
 
-        # Perform vector search using DEFAULT_EMBEDDER embeddings
+        # Perform vector search using DEFAULT_EMBEDDER embeddings.
+        # TODO: This path uses vector-only search. Integrate full-text search
+        # with RRF fusion (like hybrid_search) for improved result quality.
         queryset = queryset.search_by_embedding(
             query_vector=query_vector,
             embedder_path=default_embedder_path,

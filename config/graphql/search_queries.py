@@ -606,8 +606,11 @@ class SearchQueryMixin:
             # Apply pagination
             paginated_results = results[offset : offset + limit]
         else:
-            # Use global_search for cross-corpus search
-            # Then apply additional filters post-search
+            # Use global_search for cross-corpus search.
+            # TODO: global_search uses vector-only search; it does not benefit
+            # from hybrid (vector + FTS) search with RRF fusion. Adding FTS
+            # integration here would improve result quality for text queries.
+            # Then apply additional filters post-search.
             results = CoreAnnotationVectorStore.global_search(
                 user_id=user.id,
                 query_text=query_text,
