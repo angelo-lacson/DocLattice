@@ -668,12 +668,14 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check both sections are visible
-    await expect(page.locator("text=Pipeline Components")).toBeVisible();
-    await expect(page.locator("text=Filetype Defaults")).toBeVisible();
+    // Check both sections are visible (use .first() — desktop layout renders first)
+    await expect(
+      page.locator("text=Pipeline Components").first()
+    ).toBeVisible();
+    await expect(page.locator("text=Filetype Defaults").first()).toBeVisible();
 
     // Check component names are visible in ComponentLibrary section
-    const lib = page.locator('[data-testid="component-library"]');
+    const lib = page.locator('[data-testid="component-library"]').first();
     await expect(lib.locator("text=Docling Parser")).toBeVisible({
       timeout: 10000,
     });
@@ -740,7 +742,7 @@ test.describe("SystemSettings Component", () => {
     });
 
     // All 4 components should be visible in the component library
-    const lib = page.locator('[data-testid="component-library"]');
+    const lib = page.locator('[data-testid="component-library"]').first();
     await expect(lib.locator("text=Docling Parser")).toBeVisible({
       timeout: 10000,
     });
@@ -748,8 +750,8 @@ test.describe("SystemSettings Component", () => {
     await expect(lib.locator("text=OpenAI Ada Embedder")).toBeVisible();
     await expect(lib.locator("text=PDF Thumbnailer")).toBeVisible();
 
-    // Checkboxes should exist and be checked
-    const checkboxes = page.locator(
+    // Checkboxes should exist and be checked (scope to desktop layout)
+    const checkboxes = lib.locator(
       'input[type="checkbox"][aria-label*="Disable"]'
     );
     await expect(checkboxes).toHaveCount(4);
@@ -786,7 +788,9 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    const advancedSettingsButton = page
+    // Scope to desktop layout to avoid hidden mobile duplicates
+    const lib = page.locator('[data-testid="component-library"]').first();
+    const advancedSettingsButton = lib
       .locator("button:has-text('Advanced Settings')")
       .last();
     await advancedSettingsButton.click();
@@ -936,7 +940,9 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    const advancedSettingsButton = page
+    // Scope to desktop layout to avoid hidden mobile duplicates
+    const lib = page.locator('[data-testid="component-library"]').first();
+    const advancedSettingsButton = lib
       .locator("button:has-text('Advanced Settings')")
       .last();
     await advancedSettingsButton.click();
@@ -1117,8 +1123,8 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check filter chips
-    const lib = page.locator('[data-testid="component-library"]');
+    // Check filter chips (scope to desktop layout)
+    const lib = page.locator('[data-testid="component-library"]').first();
     await expect(lib.locator("text=All").first()).toBeVisible();
     await expect(lib.locator("text=Parsers").first()).toBeVisible();
     await expect(lib.locator("text=Embedders").first()).toBeVisible();
@@ -1159,8 +1165,8 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Scope assertions to the component library section
-    const lib = page.locator('[data-testid="component-library"]');
+    // Scope assertions to the desktop component library
+    const lib = page.locator('[data-testid="component-library"]').first();
 
     // Click "Parsers" filter chip
     await lib.locator("[aria-pressed]", { hasText: "Parsers" }).first().click();
@@ -1201,8 +1207,8 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Scope assertions to the component library section
-    const lib = page.locator('[data-testid="component-library"]');
+    // Scope assertions to the desktop component library
+    const lib = page.locator('[data-testid="component-library"]').first();
 
     // Type in the search input
     const searchInput = lib.locator(
@@ -1284,16 +1290,17 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    // Check Filetype Defaults section
-    await expect(page.locator("text=Filetype Defaults")).toBeVisible();
+    // Check Filetype Defaults section (use .first() for desktop layout)
+    await expect(page.locator("text=Filetype Defaults").first()).toBeVisible();
 
     // Check MIME type labels
     await expect(page.locator("text=PDF").first()).toBeVisible();
     await expect(page.locator("text=TXT").first()).toBeVisible();
     await expect(page.locator("text=DOCX").first()).toBeVisible();
 
-    // Check select dropdowns exist (3 MIME types x 3 stages = 9 minimum)
-    const selects = page.locator("select");
+    // Check select dropdowns exist (3 MIME types x 3 stages = 9 minimum, desktop only)
+    // Both layouts render selects; scope to visible ones
+    const selects = page.locator("select:visible");
     const selectCount = await selects.count();
     expect(selectCount).toBeGreaterThanOrEqual(9);
 
@@ -1819,7 +1826,9 @@ test.describe("SystemSettings Component", () => {
       timeout: 5000,
     });
 
-    const advancedSettingsButton = page
+    // Scope to desktop layout to avoid hidden mobile duplicates
+    const lib = page.locator('[data-testid="component-library"]').first();
+    const advancedSettingsButton = lib
       .locator("button:has-text('Advanced Settings')")
       .last();
     await advancedSettingsButton.click();
@@ -1846,6 +1855,179 @@ test.describe("SystemSettings Component", () => {
         timeout: 5000,
       }
     );
+
+    await component.unmount();
+  });
+});
+
+// ============================================================================
+// SystemSettings Two-Column Layout Tests
+// ============================================================================
+
+test.describe("SystemSettings Two-Column Layout", () => {
+  const standardMocks = [
+    {
+      request: { query: GET_PIPELINE_SETTINGS },
+      result: { data: { pipelineSettings: mockPipelineSettings } },
+    },
+    {
+      request: { query: GET_PIPELINE_COMPONENTS },
+      result: { data: { pipelineComponents: mockPipelineComponents } },
+    },
+  ];
+
+  const waitForLoad = async (page: any) => {
+    await expect(
+      page.locator("h1:has-text('Pipeline Configuration')")
+    ).toBeVisible({ timeout: 5000 });
+  };
+
+  test("should render both sections side-by-side on desktop viewport", async ({
+    mount,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={standardMocks} />
+    );
+    await waitForLoad(page);
+
+    // Both sections should be visible simultaneously in the two-column layout
+    // Use .first() since both desktop and mobile containers render ComponentLibrary
+    // (mobile one is hidden via CSS display:none)
+    const lib = page.locator('[data-testid="component-library"]').first();
+    await expect(lib).toBeVisible({ timeout: 10000 });
+    await expect(lib.locator("text=Docling Parser")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await expect(page.locator("text=Filetype Defaults").first()).toBeVisible();
+    await expect(page.locator("text=PDF").first()).toBeVisible();
+
+    // Mobile tab bar should NOT be visible on desktop
+    await expect(page.locator('div[role="tablist"]')).not.toBeVisible();
+
+    await docScreenshot(page, "admin--pipeline-settings--two-column-desktop");
+
+    await component.unmount();
+  });
+
+  test("should show mobile tab bar at narrow viewport", async ({
+    mount,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 600, height: 800 });
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={standardMocks} />
+    );
+    await waitForLoad(page);
+
+    // Tab bar should be visible
+    const tablist = page.locator('div[role="tablist"]');
+    await expect(tablist).toBeVisible();
+
+    // Both tab buttons should exist
+    const libraryTab = tablist.locator('button:has-text("Component Library")');
+    const defaultsTab = tablist.locator('button:has-text("Filetype Defaults")');
+    await expect(libraryTab).toBeVisible();
+    await expect(defaultsTab).toBeVisible();
+
+    // Component Library tab should be active by default
+    await expect(libraryTab).toHaveAttribute("aria-selected", "true");
+    await expect(defaultsTab).toHaveAttribute("aria-selected", "false");
+
+    // Component Library content should be visible (use last() — mobile tab panel's instance)
+    const lib = page.locator('[data-testid="component-library"]').last();
+    await expect(lib).toBeVisible({ timeout: 10000 });
+
+    await docScreenshot(page, "admin--pipeline-settings--mobile-tabs");
+
+    await component.unmount();
+  });
+
+  test("should switch tabs on mobile viewport", async ({ mount, page }) => {
+    await page.setViewportSize({ width: 600, height: 800 });
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={standardMocks} />
+    );
+    await waitForLoad(page);
+
+    const tablist = page.locator('div[role="tablist"]');
+    const libraryTab = tablist.locator('button:has-text("Component Library")');
+    const defaultsTab = tablist.locator('button:has-text("Filetype Defaults")');
+
+    // Click Filetype Defaults tab
+    await defaultsTab.click();
+
+    // Filetype Defaults tab should now be active
+    await expect(defaultsTab).toHaveAttribute("aria-selected", "true");
+    await expect(libraryTab).toHaveAttribute("aria-selected", "false");
+
+    // Filetype Defaults content should be visible
+    // Scope to the tabpanel to avoid matching hidden desktop layout elements
+    const tabpanel = page.locator('div[role="tabpanel"]');
+    await expect(tabpanel.locator("text=Filetype Defaults")).toBeVisible();
+    await expect(tabpanel.locator("text=PDF").first()).toBeVisible();
+
+    await docScreenshot(page, "admin--pipeline-settings--mobile-filetype-tab");
+
+    // Switch back to Component Library
+    await libraryTab.click();
+    await expect(libraryTab).toHaveAttribute("aria-selected", "true");
+
+    const lib = page.locator('[data-testid="component-library"]').last();
+    await expect(lib).toBeVisible({ timeout: 10000 });
+
+    await component.unmount();
+  });
+
+  test("should have correct ARIA attributes on mobile tabs", async ({
+    mount,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 600, height: 800 });
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={standardMocks} />
+    );
+    await waitForLoad(page);
+
+    // Verify tablist role
+    const tablist = page.locator('div[role="tablist"]');
+    await expect(tablist).toBeVisible();
+
+    // Verify tab roles
+    const tabs = tablist.locator('button[role="tab"]');
+    await expect(tabs).toHaveCount(2);
+
+    // Verify tabpanel role
+    const tabpanel = page.locator('div[role="tabpanel"]');
+    await expect(tabpanel).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should hide mobile tabs on desktop viewport", async ({
+    mount,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+
+    const component = await mount(
+      <SystemSettingsWrapper mocks={standardMocks} />
+    );
+    await waitForLoad(page);
+
+    // Mobile tab container should be hidden
+    await expect(page.locator('div[role="tablist"]')).not.toBeVisible();
+
+    // Both sections should be visible in two-column layout
+    const lib = page.locator('[data-testid="component-library"]').first();
+    await expect(lib).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=Filetype Defaults").first()).toBeVisible();
 
     await component.unmount();
   });
