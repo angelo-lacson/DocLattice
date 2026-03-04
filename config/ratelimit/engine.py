@@ -44,7 +44,13 @@ def parse_rate(rate: str) -> tuple[int, int]:
             f"Invalid rate string: {rate!r}. "
             f"Expected format: '<count>/<period>' where period is one of s, m, h, d."
         )
-    return int(parts[0]), PERIOD_MAP[parts[1]]
+    count = int(parts[0])
+    if count <= 0:
+        raise ValueError(
+            f"Invalid rate count in {rate!r}: count must be a positive integer, "
+            f"got {count}."
+        )
+    return count, PERIOD_MAP[parts[1]]
 
 
 def _make_cache_key(group: str, key: str, window: int) -> str:

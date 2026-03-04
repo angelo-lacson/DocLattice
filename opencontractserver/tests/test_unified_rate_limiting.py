@@ -25,6 +25,7 @@ from config.ratelimit.decorators import (
 )
 from config.ratelimit.engine import UNKNOWN_IP, is_rate_limited, parse_rate
 from config.ratelimit.keys import (
+    _mask_ipv6,
     _pick_xff_ip,
     get_client_ip_from_http,
     get_client_ip_from_scope,
@@ -67,6 +68,14 @@ class ParseRateTestCase(TestCase):
     def test_invalid_period_raises(self):
         with self.assertRaises(ValueError):
             parse_rate("10/x")
+
+    def test_zero_count_raises(self):
+        with self.assertRaises(ValueError):
+            parse_rate("0/m")
+
+    def test_negative_count_raises(self):
+        with self.assertRaises(ValueError):
+            parse_rate("-1/m")
 
 
 @override_settings(RATELIMIT_DISABLE=False)
@@ -138,6 +147,32 @@ class IsRateLimitedTestCase(TestCase):
 # =============================================================================
 #  Key resolution tests
 # =============================================================================
+
+
+class MaskIpv6TestCase(TestCase):
+    """Test IPv6 subnet masking for rate limiting."""
+
+    @override_settings(RATELIMIT_IPV6_MASK=64)
+    def test_ipv6_masked_to_64(self):
+        """Two addresses in the same /64 should map to the same key."""
+        addr_a = "2001:db8:abcd:0012:1:2:3:4"
+        addr_b = "2001:db8:abcd:0012:ffff:ffff:ffff:ffff"
+        self.assertEqual(_mask_ipv6(addr_a), _mask_ipv6(addr_b))
+
+    @override_settings(RATELIMIT_IPV6_MASK=64)
+    def test_ipv6_different_subnets(self):
+        """Addresses in different /64 subnets should produce different keys."""
+        addr_a = "2001:db8:abcd:0012::1"
+        addr_b = "2001:db8:abcd:0013::1"
+        self.assertNotEqual(_mask_ipv6(addr_a), _mask_ipv6(addr_b))
+
+    def test_ipv4_unchanged(self):
+        """IPv4 addresses should pass through unmodified."""
+        self.assertEqual(_mask_ipv6("192.168.1.1"), "192.168.1.1")
+
+    def test_invalid_address_unchanged(self):
+        """Non-IP strings should pass through unmodified."""
+        self.assertEqual(_mask_ipv6("not-an-ip"), "not-an-ip")
 
 
 class GetClientIpFromHttpTestCase(TestCase):
@@ -301,6 +336,15 @@ class GetTierAdjustedRateTestCase(TestCase):
 
     def test_none_user_1x(self):
         self.assertEqual(get_tier_adjusted_rate(None, "10/m"), "10/m")
+
+    def test_capped_superuser_5x(self):
+        """A usage-capped superuser gets 10x * 0.5x = 5x base rate."""
+        user = MagicMock()
+        user.is_superuser = True
+        user.is_authenticated = True
+        user.is_usage_capped = True
+        # 10/m * 10x = 100, * 0.5x = 50
+        self.assertEqual(get_tier_adjusted_rate(user, "10/m"), "50/m")
 
 
 # =============================================================================
@@ -808,6 +852,36 @@ class PickXffIpTestCase(TestCase):
         scope = {"headers": [(b"x-forwarded-for", b"client, proxy")]}
         # With PROXIES_COUNT=1, should get rightmost (proxy)
         self.assertEqual(get_client_ip_from_scope(scope), "proxy")
+
+    @override_settings(RATELIMIT_PROXIES_COUNT=0)
+    def test_zero_proxies_ignores_x_real_ip_in_scope(self):
+        """When proxies_count=0 (direct connections), X-Real-IP must be
+        ignored because it is entirely client-controlled."""
+        scope = {
+            "headers": [(b"x-real-ip", b"spoofed.ip")],
+            "client": ("192.168.1.1", 12345),
+        }
+        # Should use the direct client IP, NOT the spoofed X-Real-IP
+        self.assertEqual(get_client_ip_from_scope(scope), "192.168.1.1")
+
+    @override_settings(RATELIMIT_PROXIES_COUNT=0)
+    def test_zero_proxies_ignores_xff_in_scope(self):
+        """When proxies_count=0, X-Forwarded-For must also be ignored."""
+        scope = {
+            "headers": [(b"x-forwarded-for", b"spoofed.ip")],
+            "client": ("192.168.1.1", 12345),
+        }
+        self.assertEqual(get_client_ip_from_scope(scope), "192.168.1.1")
+
+    @override_settings(RATELIMIT_PROXIES_COUNT=0)
+    def test_zero_proxies_ignores_xff_in_http(self):
+        """When proxies_count=0, HTTP X-Forwarded-For must be ignored."""
+        request = MagicMock()
+        request.META = {
+            "HTTP_X_FORWARDED_FOR": "spoofed.ip",
+            "REMOTE_ADDR": "192.168.1.1",
+        }
+        self.assertEqual(get_client_ip_from_http(request), "192.168.1.1")
 
 
 # =============================================================================

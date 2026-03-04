@@ -157,6 +157,13 @@ def graphql_ratelimit(
 ):
     """Rate limit decorator for GraphQL resolvers.
 
+    .. note::
+        The ``method`` parameter from ``django_ratelimit`` is intentionally
+        not supported.  GraphQL requests are always ``POST`` and method
+        filtering is meaningless in this context.  No existing callers
+        passed ``method=`` at the time of migration (verified via codebase
+        grep).
+
     Args:
         key: Key strategy — ``None``/``"user_or_ip"`` (default), ``"ip"``,
              ``"user"``, or a custom callable ``(root, info, **kwargs) -> str``.
@@ -366,7 +373,7 @@ async def check_mcp_rate_limit(
     # 1. Global cap (skipped when called from tool handlers that already
     #    passed through the ASGI-level global check).
     if not skip_global:
-        global_rate = getattr(RateLimits, "MCP_GLOBAL", "100/m")
+        global_rate = RateLimits.MCP_GLOBAL
         if await ais_rate_limited("mcp:global", limit_key, global_rate):
             return True, "Rate limit exceeded. Please wait before making more requests."
 
@@ -397,9 +404,17 @@ def view_ratelimit(
     Sets ``request.limited = True`` when the limit is exceeded (compatible
     with ``block=False`` usage pattern in admin auth views).
 
+    .. note::
+        Unlike the old ``django_ratelimit`` decorator, this version does
+        **not** support string key specifications (e.g. ``"ip"``,
+        ``"user"``, ``"header:X-Api-Key"``).  Pass a **callable**
+        ``(group, request) -> str`` for custom keying, or ``None`` for
+        the default IP-based key.
+
     Args:
         key: Key function ``(group, request) -> str``, or ``None`` for
-             IP-based keying.
+             IP-based keying.  String key specs are **not** supported
+             (a ``ValueError`` will be raised).
         rate: Rate limit string (e.g. ``"5/m"``).
         block: If ``True``, return an HTTP 429 response automatically.
         group: Cache group name (defaults to the decorated function's name).

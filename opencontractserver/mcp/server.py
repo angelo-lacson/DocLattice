@@ -1100,9 +1100,17 @@ def create_mcp_asgi_app():
             return
 
         # Store scope in ContextVar so tool handlers can access it
-        # for per-tool rate limiting
-        _mcp_asgi_scope.set(scope)
+        # for per-tool rate limiting.  The token is saved so we can
+        # reset it in the finally block, preventing stale scope data
+        # from leaking into subsequent requests on the same task.
+        _scope_token = _mcp_asgi_scope.set(scope)
 
+        try:
+            await _handle_mcp_request(scope, receive, send)
+        finally:
+            _mcp_asgi_scope.reset(_scope_token)
+
+    async def _handle_mcp_request(scope, receive, send):
         # Rate limiting check (global cap, before any path processing)
         is_limited, error_msg = await check_mcp_rate_limit(scope)
         if is_limited:
