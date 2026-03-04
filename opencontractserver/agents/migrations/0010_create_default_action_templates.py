@@ -1,6 +1,10 @@
 # Generated manually for data migration
 
+import logging
+
 from django.db import migrations
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +192,11 @@ def create_default_action_templates(apps, schema_editor):
 
     system_user = User.objects.filter(is_superuser=True).first()
     if not system_user:
+        logger.warning(
+            "No superuser found — skipping default action template seeding. "
+            "Templates will need to be created manually or by re-running "
+            "this migration after a superuser is created."
+        )
         return
 
     for tmpl_def in TEMPLATES:

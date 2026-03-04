@@ -1197,6 +1197,17 @@ class CorpusActionTemplate(BaseOCModel):
     Templates are agent-only — no fieldset or analyzer support.
     """
 
+    # Override BaseOCModel.creator to use SET_NULL — system-level templates
+    # are owned by an arbitrary superuser at migration time and must survive
+    # that user being deleted.
+    creator = django.db.models.ForeignKey(
+        get_user_model(),
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
     name = django.db.models.CharField(max_length=256)
     description = django.db.models.TextField(blank=True, default="")
 

@@ -34,7 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **5 default action templates** seeded via data migration: Document Description Updater, Corpus Description Updater, Document Summary Generator, Key Terms Annotator, Document Notes Generator — each with a dedicated `AgentConfiguration` and curated tool set (`opencontractserver/agents/migrations/0010_create_default_action_templates.py`)
 - **Auto-clone signal**: `clone_templates_on_corpus_create` clones all active templates into disabled `CorpusAction` records when a new corpus is created, so users can opt-in per corpus (`opencontractserver/corpuses/signals.py`)
 
-
 #### Optimize Vector Search and Index Scalability for Million-Scale Corpora
 - **HNSW indexes on all Embedding vector columns** (384–4096 dimensions): Approximate nearest neighbor search reduces vector queries from O(n) sequential scan to O(log n). Created via `AddIndexConcurrently` to avoid table locks during index creation (`opencontractserver/annotations/models.py`, `opencontractserver/annotations/migrations/0063_add_hnsw_indexes_and_search_vector.py`)
 - **Eliminated Python-side materialization** in `VectorSearchViaEmbeddingMixin.search_by_embedding()`: Previously materialized ALL matching rows into Python, sorted, and sliced. Now uses PostgreSQL `ORDER BY + LIMIT` so only top-k rows cross the wire. The unique constraint from migration 0059 guarantees no JOIN duplicates, removing the need for `DISTINCT ON` (`opencontractserver/shared/mixins.py`)

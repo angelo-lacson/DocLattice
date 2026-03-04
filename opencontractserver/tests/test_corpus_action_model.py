@@ -98,6 +98,8 @@ class CorpusActionModelTestCase(TestCase):
         self.assertEqual(CorpusActionTrigger.EDIT_DOCUMENT, "edit_document")
 
     def test_corpus_action_related_name(self):
+        # Clear any auto-cloned template actions so we test the count precisely
+        self.corpus.actions.all().delete()
         CorpusAction.objects.create(
             corpus=self.corpus,
             analyzer=self.analyzer,

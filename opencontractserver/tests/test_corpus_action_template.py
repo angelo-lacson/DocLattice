@@ -18,6 +18,15 @@ _migration_mod = importlib.import_module(
 )
 _create_default_action_templates = _migration_mod.create_default_action_templates
 
+# Shared across test classes that verify default template seeding
+DEFAULT_TEMPLATE_NAMES = [
+    "Document Description Updater",
+    "Corpus Description Updater",
+    "Document Summary Generator",
+    "Key Terms Annotator",
+    "Document Notes Generator",
+]
+
 User = get_user_model()
 
 
@@ -220,13 +229,7 @@ class DefaultTemplatesMigrationTest(TestCase):
     exercise the same code path.
     """
 
-    EXPECTED_NAMES = [
-        "Document Description Updater",
-        "Corpus Description Updater",
-        "Document Summary Generator",
-        "Key Terms Annotator",
-        "Document Notes Generator",
-    ]
+    EXPECTED_NAMES = DEFAULT_TEMPLATE_NAMES
 
     @classmethod
     def setUpClass(cls):
@@ -302,13 +305,7 @@ class CorpusActionTemplateIntegrationTest(TestCase):
         super().setUpClass()
         from django.apps import apps
 
-        cls.EXPECTED_NAMES = [
-            "Document Description Updater",
-            "Corpus Description Updater",
-            "Document Summary Generator",
-            "Key Terms Annotator",
-            "Document Notes Generator",
-        ]
+        cls.EXPECTED_NAMES = DEFAULT_TEMPLATE_NAMES
         if not User.objects.filter(is_superuser=True).exists():
             User.objects.create_superuser(
                 username="integration_admin",
