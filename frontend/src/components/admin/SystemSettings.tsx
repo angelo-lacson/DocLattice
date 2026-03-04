@@ -62,6 +62,12 @@ import {
   FormField,
   FormLabel,
   FormHelperText,
+  SettingsTwoColumnLayout,
+  SettingsLeftColumn,
+  SettingsRightColumn,
+  MobileSettingsTabContainer,
+  MobileSettingsTabList,
+  MobileSettingsTab,
 } from "./system_settings/styles";
 import { ComponentLibrary } from "./system_settings/ComponentLibrary";
 import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
@@ -72,6 +78,9 @@ import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
 
 export const SystemSettings: React.FC = () => {
   const navigate = useNavigate();
+
+  // Layout state
+  const [activeTab, setActiveTab] = useState<"library" | "defaults">("library");
 
   // Modal states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -552,41 +561,106 @@ export const SystemSettings: React.FC = () => {
         </WarningText>
       </WarningBanner>
 
-      {/* Component Library */}
-      <ComponentLibrary
-        components={componentsByStage}
-        enabledComponents={
-          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-        }
-        updating={updating}
-        onToggleEnabled={handleToggleEnabled}
-        onAddSecrets={handleAddSecrets}
-        onDeleteSecrets={handleDeleteSecretsClick}
-        onSaveConfig={handleSaveComponentSettings}
-        getConfigSettings={getNonSecretSettingsForComponent}
-        getSecretSettings={getSecretSettingsForComponent}
-      />
+      {/* Desktop: Two-column layout */}
+      <SettingsTwoColumnLayout>
+        <SettingsLeftColumn>
+          <ComponentLibrary
+            components={componentsByStage}
+            enabledComponents={
+              (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+            }
+            updating={updating}
+            onToggleEnabled={handleToggleEnabled}
+            onAddSecrets={handleAddSecrets}
+            onDeleteSecrets={handleDeleteSecretsClick}
+            onSaveConfig={handleSaveComponentSettings}
+            getConfigSettings={getNonSecretSettingsForComponent}
+            getSecretSettings={getSecretSettingsForComponent}
+          />
+        </SettingsLeftColumn>
+        <SettingsRightColumn>
+          <FiletypeDefaults
+            components={componentsByStage}
+            enabledComponents={
+              (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+            }
+            preferredParsers={
+              (settings?.preferredParsers as Record<string, string>) || {}
+            }
+            preferredEmbedders={
+              (settings?.preferredEmbedders as Record<string, string>) || {}
+            }
+            preferredThumbnailers={
+              (settings?.preferredThumbnailers as Record<string, string>) || {}
+            }
+            defaultEmbedder={settings?.defaultEmbedder || ""}
+            updating={updating}
+            onAssign={handleAssign}
+            onEditDefaultEmbedder={handleEditDefaultEmbedder}
+          />
+        </SettingsRightColumn>
+      </SettingsTwoColumnLayout>
 
-      {/* Filetype Defaults */}
-      <FiletypeDefaults
-        components={componentsByStage}
-        enabledComponents={
-          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-        }
-        preferredParsers={
-          (settings?.preferredParsers as Record<string, string>) || {}
-        }
-        preferredEmbedders={
-          (settings?.preferredEmbedders as Record<string, string>) || {}
-        }
-        preferredThumbnailers={
-          (settings?.preferredThumbnailers as Record<string, string>) || {}
-        }
-        defaultEmbedder={settings?.defaultEmbedder || ""}
-        updating={updating}
-        onAssign={handleAssign}
-        onEditDefaultEmbedder={handleEditDefaultEmbedder}
-      />
+      {/* Mobile: Tabbed layout */}
+      <MobileSettingsTabContainer>
+        <MobileSettingsTabList role="tablist">
+          <MobileSettingsTab
+            role="tab"
+            aria-selected={activeTab === "library"}
+            $active={activeTab === "library"}
+            onClick={() => setActiveTab("library")}
+          >
+            Component Library
+          </MobileSettingsTab>
+          <MobileSettingsTab
+            role="tab"
+            aria-selected={activeTab === "defaults"}
+            $active={activeTab === "defaults"}
+            onClick={() => setActiveTab("defaults")}
+          >
+            Filetype Defaults
+          </MobileSettingsTab>
+        </MobileSettingsTabList>
+
+        <div role="tabpanel">
+          {activeTab === "library" ? (
+            <ComponentLibrary
+              components={componentsByStage}
+              enabledComponents={
+                (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+              }
+              updating={updating}
+              onToggleEnabled={handleToggleEnabled}
+              onAddSecrets={handleAddSecrets}
+              onDeleteSecrets={handleDeleteSecretsClick}
+              onSaveConfig={handleSaveComponentSettings}
+              getConfigSettings={getNonSecretSettingsForComponent}
+              getSecretSettings={getSecretSettingsForComponent}
+            />
+          ) : (
+            <FiletypeDefaults
+              components={componentsByStage}
+              enabledComponents={
+                (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+              }
+              preferredParsers={
+                (settings?.preferredParsers as Record<string, string>) || {}
+              }
+              preferredEmbedders={
+                (settings?.preferredEmbedders as Record<string, string>) || {}
+              }
+              preferredThumbnailers={
+                (settings?.preferredThumbnailers as Record<string, string>) ||
+                {}
+              }
+              defaultEmbedder={settings?.defaultEmbedder || ""}
+              updating={updating}
+              onAssign={handleAssign}
+              onEditDefaultEmbedder={handleEditDefaultEmbedder}
+            />
+          )}
+        </div>
+      </MobileSettingsTabContainer>
 
       {/* Reset to Defaults */}
       <ActionButtons>
