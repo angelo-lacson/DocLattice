@@ -42,8 +42,9 @@ interface ComponentLibraryProps {
     embedders: (PipelineComponentType & { className: string })[];
     thumbnailers: (PipelineComponentType & { className: string })[];
   };
-  enabledComponents: string[];
   updating: boolean;
+  componentsLoading: boolean;
+  settingsLoading: boolean;
   onToggleEnabled: (className: string, enabled: boolean) => void;
   onAddSecrets: (componentPath: string) => void;
   onDeleteSecrets: (componentPath: string) => void;
@@ -70,8 +71,9 @@ const FILTER_OPTIONS: { value: FilterCategory; label: string }[] = [
 export const ComponentLibrary = memo<ComponentLibraryProps>(
   ({
     components,
-    enabledComponents,
     updating,
+    componentsLoading,
+    settingsLoading,
     onToggleEnabled,
     onAddSecrets,
     onDeleteSecrets,
@@ -176,9 +178,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
           {/* Component list */}
           {filteredComponents.length > 0 ? (
             filteredComponents.map(({ component, stage }) => {
-              const isEnabled =
-                enabledComponents.length === 0 ||
-                enabledComponents.includes(component.className);
+              const isEnabled = component.enabled ?? true;
               const stageConfig = STAGE_CONFIG[stage];
               const displayName = getComponentDisplayName(
                 component.className,
@@ -210,7 +210,7 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
                   <input
                     type="checkbox"
                     checked={isEnabled}
-                    disabled={updating}
+                    disabled={updating || componentsLoading || settingsLoading}
                     onChange={(e) =>
                       onToggleEnabled(component.className, e.target.checked)
                     }
@@ -221,7 +221,10 @@ export const ComponentLibrary = memo<ComponentLibraryProps>(
                       width: 16,
                       height: 16,
                       marginTop: 2,
-                      cursor: updating ? "not-allowed" : "pointer",
+                      cursor:
+                        updating || componentsLoading || settingsLoading
+                          ? "not-allowed"
+                          : "pointer",
                       accentColor: stageConfig.color,
                     }}
                   />
