@@ -157,16 +157,19 @@ def get_client_ip_from_scope(scope: dict[str, Any]) -> str:
     proxies_count = getattr(settings, "RATELIMIT_PROXIES_COUNT", 1)
     headers = dict(scope.get("headers", []))
 
-    # X-Forwarded-For (bytes in ASGI) — only when we have trusted proxies
+    # Proxy-injected headers — only trusted when behind a reverse proxy
+    # (proxies_count > 0).  When proxies_count == 0 the app receives
+    # connections directly, so both X-Forwarded-For and X-Real-IP are
+    # entirely client-controlled and must be ignored.
     if proxies_count > 0:
         xff = headers.get(b"x-forwarded-for")
         if xff:
             return _mask_ipv6(_pick_xff_ip(xff.decode()))
 
-    # X-Real-IP (common in nginx setups)
-    x_real_ip = headers.get(b"x-real-ip")
-    if x_real_ip:
-        return _mask_ipv6(x_real_ip.decode().strip())
+        # X-Real-IP (common in nginx setups)
+        x_real_ip = headers.get(b"x-real-ip")
+        if x_real_ip:
+            return _mask_ipv6(x_real_ip.decode().strip())
 
     # Direct client connection
     client = scope.get("client")
