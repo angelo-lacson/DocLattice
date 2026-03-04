@@ -87,7 +87,14 @@ export const SystemSettings: React.FC = () => {
     useState(false);
   const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
 
-  // GraphQL queries
+  // GraphQL queries.
+  //
+  // NOTE: ComponentLibrary reads `component.enabled` from GET_PIPELINE_COMPONENTS,
+  // while FiletypeDefaults reads `enabledComponents` from GET_PIPELINE_SETTINGS.
+  // Both are refetched after each mutation (see onCompleted handlers below), but
+  // they are independent network calls. In the brief window between one resolving
+  // and the other, the two panels may show transiently inconsistent enabled state.
+  // The server enforces consistency, so this is cosmetic only.
   const {
     data: settingsData,
     loading: settingsLoading,
@@ -100,6 +107,7 @@ export const SystemSettings: React.FC = () => {
   const {
     data: componentsData,
     loading: componentsLoading,
+    error: componentsError,
     refetch: refetchComponents,
   } = useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
     fetchPolicy: "cache-and-network",
@@ -134,6 +142,7 @@ export const SystemSettings: React.FC = () => {
           toast.success("Settings reset to defaults");
           setShowResetConfirm(false);
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.resetPipelineSettings?.message || "Failed to reset settings"
@@ -264,35 +273,63 @@ export const SystemSettings: React.FC = () => {
   // Toggle component enabled state
   const handleToggleEnabled = useCallback(
     (className: string, enabled: boolean) => {
+      if (componentsLoading || settingsLoading) {
+        toast.warning("Components are still loading. Please wait.");
+        return;
+      }
+
       const currentEnabled: string[] = (
         settings?.enabledComponents || []
       ).filter((s): s is string => s != null);
       let newEnabled: string[];
 
-      if (currentEnabled.length === 0) {
-        // Transitioning from "all enabled" -- build full list from loaded components
+      if (currentEnabled.length === 0 && enabled) {
+        // Safe no-op: the checkbox's `checked` reflects `component.enabled ?? true`,
+        // so enabling when already in the "all enabled" (empty-list) state is
+        // unreachable via normal UI interaction. Guard kept for defensive safety.
+        return;
+      }
+
+      if (currentEnabled.length === 0 && !enabled) {
+        // Transitioning from "all enabled" to explicit list: build full list
+        // from loaded components, then remove the one being disabled.
         const allPaths = [
           ...componentsByStage.parsers,
           ...componentsByStage.embedders,
           ...componentsByStage.thumbnailers,
         ].map((c) => c.className);
 
-        if (allPaths.length === 0) return; // Components not loaded yet
+        if (allPaths.length === 0) {
+          toast.warning("No components available.");
+          return;
+        }
 
-        newEnabled = enabled
-          ? allPaths
-          : allPaths.filter((p) => p !== className);
+        // Deduplicate paths in case a className appears across stages
+        const uniquePaths = [...new Set(allPaths)];
+
+        newEnabled = uniquePaths.filter((p) => p !== className);
       } else {
         newEnabled = enabled
-          ? [...currentEnabled, className]
+          ? [...new Set([...currentEnabled, className])]
           : currentEnabled.filter((p: string) => p !== className);
       }
+
+      // NOTE: When disabling the last component, newEnabled becomes [].
+      // The backend interprets [] as "all enabled" (no filter), so this
+      // effectively re-enables everything. This is pre-existing behavior;
+      // a future improvement could add a dedicated "disable all" state.
 
       updateSettings({
         variables: { enabledComponents: newEnabled },
       });
     },
-    [settings, componentsByStage, updateSettings]
+    [
+      settings,
+      componentsByStage,
+      componentsLoading,
+      settingsLoading,
+      updateSettings,
+    ]
   );
 
   // Assign a component to a filetype default
@@ -495,7 +532,8 @@ export const SystemSettings: React.FC = () => {
   }
 
   // Error state
-  if (settingsError) {
+  const queryError = settingsError || componentsError;
+  if (queryError) {
     return (
       <Container>
         <BackButton onClick={() => navigate("/admin/settings")}>
@@ -506,10 +544,16 @@ export const SystemSettings: React.FC = () => {
           <AlertTriangle />
           <h3>Error Loading Settings</h3>
           <ErrorMessage>
-            {settingsError.message ||
+            {queryError.message ||
               "Unable to load pipeline settings. You may not have permission to view this page."}
           </ErrorMessage>
-          <Button variant="primary" onClick={() => refetchSettings()}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              refetchSettings();
+              refetchComponents();
+            }}
+          >
             Try Again
           </Button>
         </ErrorContainer>
@@ -555,10 +599,9 @@ export const SystemSettings: React.FC = () => {
       {/* Component Library */}
       <ComponentLibrary
         components={componentsByStage}
-        enabledComponents={
-          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-        }
         updating={updating}
+        componentsLoading={componentsLoading}
+        settingsLoading={settingsLoading}
         onToggleEnabled={handleToggleEnabled}
         onAddSecrets={handleAddSecrets}
         onDeleteSecrets={handleDeleteSecretsClick}
