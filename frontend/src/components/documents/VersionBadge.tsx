@@ -1,6 +1,5 @@
 import React from "react";
 import styled from "styled-components";
-import { Popup } from "semantic-ui-react";
 
 // Badge container with conditional styling based on version state
 const BadgeContainer = styled.div<{
@@ -85,29 +84,6 @@ const HistoryIndicator = styled.span`
   opacity: 0.8;
 `;
 
-const TooltipContent = styled.div`
-  font-size: 12px;
-  line-height: 1.4;
-
-  .tooltip-title {
-    font-weight: 600;
-    margin-bottom: 4px;
-    color: #0f172a;
-  }
-
-  .tooltip-info {
-    color: #475569;
-    margin-bottom: 2px;
-  }
-
-  .tooltip-action {
-    margin-top: 6px;
-    font-style: italic;
-    color: #3b82f6;
-    font-size: 11px;
-  }
-`;
-
 export interface VersionBadgeProps {
   versionNumber: number;
   hasHistory: boolean;
@@ -152,28 +128,13 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
     }
   };
 
-  const tooltipContent = (
-    <TooltipContent>
-      <div className="tooltip-title">
-        {isOutdated ? "Outdated Version" : "Version Information"}
-      </div>
-      <div className="tooltip-info">Current: v{versionNumber}</div>
-      {hasHistory && (
-        <div className="tooltip-info">Total versions: {versionCount}</div>
-      )}
-      {isOutdated && (
-        <div className="tooltip-info">
-          A newer version is available (you are viewing v{versionNumber} of{" "}
-          {versionCount})
-        </div>
-      )}
-      {hasHistory && (
-        <div className="tooltip-action">Click to view version history</div>
-      )}
-    </TooltipContent>
-  );
+  const tooltipText = isOutdated
+    ? `Outdated Version - Current: v${versionNumber}. Total versions: ${versionCount}. A newer version is available. Click to view version history.`
+    : hasHistory
+    ? `Version Information - Current: v${versionNumber}. Total versions: ${versionCount}. Click to view version history.`
+    : `Version ${versionNumber}`;
 
-  const badge = (
+  return (
     <BadgeContainer
       $hasHistory={hasHistory}
       $isOutdated={isOutdated}
@@ -185,6 +146,7 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
       }`}
       tabIndex={hasHistory ? 0 : undefined}
       onKeyDown={hasHistory ? handleKeyDown : undefined}
+      title={tooltipText}
     >
       <VersionText>v{versionNumber}</VersionText>
       {hasHistory && (
@@ -192,26 +154,6 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
       )}
     </BadgeContainer>
   );
-
-  // Wrap in tooltip if there's useful information to show
-  if (hasHistory || versionNumber > 1) {
-    return (
-      <Popup
-        trigger={badge}
-        content={tooltipContent}
-        position="bottom right"
-        size="small"
-        inverted={false}
-        style={{
-          padding: "10px 12px",
-          borderRadius: "8px",
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-        }}
-      />
-    );
-  }
-
-  return badge;
 };
 
 export default VersionBadge;

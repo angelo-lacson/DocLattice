@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Form, Button } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Input,
+} from "@os-legal/ui";
+import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { Database, Plus, Trash2, Save } from "lucide-react";
@@ -19,28 +27,18 @@ interface MetadataColumnModalProps {
 }
 
 const dataTypeOptions = [
-  { key: "STRING", value: "STRING", text: "Short Text", icon: "font" },
-  { key: "TEXT", value: "TEXT", text: "Long Text", icon: "align left" },
-  { key: "INTEGER", value: "INTEGER", text: "Whole Number", icon: "hashtag" },
-  { key: "FLOAT", value: "FLOAT", text: "Decimal Number", icon: "calculator" },
-  { key: "BOOLEAN", value: "BOOLEAN", text: "Yes/No", icon: "toggle on" },
-  { key: "DATE", value: "DATE", text: "Date", icon: "calendar" },
-  {
-    key: "DATETIME",
-    value: "DATETIME",
-    text: "Date & Time",
-    icon: "calendar times",
-  },
-  { key: "CHOICE", value: "CHOICE", text: "Single Choice", icon: "dot circle" },
-  {
-    key: "MULTI_CHOICE",
-    value: "MULTI_CHOICE",
-    text: "Multiple Choice",
-    icon: "list ul",
-  },
-  { key: "URL", value: "URL", text: "Web Link", icon: "linkify" },
-  { key: "EMAIL", value: "EMAIL", text: "Email Address", icon: "mail" },
-  { key: "JSON", value: "JSON", text: "JSON Data", icon: "code" },
+  { key: "STRING", value: "STRING", text: "Short Text" },
+  { key: "TEXT", value: "TEXT", text: "Long Text" },
+  { key: "INTEGER", value: "INTEGER", text: "Whole Number" },
+  { key: "FLOAT", value: "FLOAT", text: "Decimal Number" },
+  { key: "BOOLEAN", value: "BOOLEAN", text: "Yes/No" },
+  { key: "DATE", value: "DATE", text: "Date" },
+  { key: "DATETIME", value: "DATETIME", text: "Date & Time" },
+  { key: "CHOICE", value: "CHOICE", text: "Single Choice" },
+  { key: "MULTI_CHOICE", value: "MULTI_CHOICE", text: "Multiple Choice" },
+  { key: "URL", value: "URL", text: "Web Link" },
+  { key: "EMAIL", value: "EMAIL", text: "Email Address" },
+  { key: "JSON", value: "JSON", text: "JSON Data" },
 ];
 
 const ValidationSection = styled.div`
@@ -74,6 +72,12 @@ const ErrorChip = styled.span`
   background: #fff6f6;
   border: 1px solid #e0b4b4;
   border-radius: 4px;
+`;
+
+const DropdownWrapper = styled.div`
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
 `;
 
 export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
@@ -215,39 +219,51 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
       case MetadataDataType.TEXT:
         return (
           <>
-            <Form.Group widths="equal">
-              <Form.Input
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "1rem",
+              }}
+            >
+              <Input
                 id="metadata-min-length"
                 label="Minimum Length"
                 type="number"
-                min="0"
-                value={minLength || ""}
-                onChange={(e, { value }) =>
-                  setMinLength(value ? parseInt(value) : undefined)
+                min={0}
+                value={minLength !== undefined ? String(minLength) : ""}
+                onChange={(e) =>
+                  setMinLength(
+                    e.target.value ? parseInt(e.target.value) : undefined
+                  )
                 }
                 placeholder="No minimum"
               />
-              <Form.Input
+              <Input
                 id="metadata-max-length"
                 label="Maximum Length"
                 type="number"
-                min="0"
-                value={maxLength || ""}
-                onChange={(e, { value }) =>
-                  setMaxLength(value ? parseInt(value) : undefined)
+                min={0}
+                value={maxLength !== undefined ? String(maxLength) : ""}
+                onChange={(e) =>
+                  setMaxLength(
+                    e.target.value ? parseInt(e.target.value) : undefined
+                  )
                 }
                 placeholder="No maximum"
               />
-            </Form.Group>
+            </div>
             {dataType === MetadataDataType.STRING && (
-              <Form.Input
-                id="metadata-pattern"
-                label="Pattern (Regular Expression)"
-                value={regexPattern}
-                onChange={(e, { value }) => setRegexPattern(value)}
-                placeholder="e.g., ^[A-Z]{2}-\d{4}$"
-                error={errors.regex}
-              />
+              <div style={{ marginTop: "1rem" }}>
+                <Input
+                  id="metadata-pattern"
+                  label="Pattern (Regular Expression)"
+                  value={regexPattern}
+                  onChange={(e) => setRegexPattern(e.target.value)}
+                  placeholder="e.g., ^[A-Z]{2}-\d{4}$"
+                  error={errors.regex}
+                />
+              </div>
             )}
           </>
         );
@@ -255,30 +271,40 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
       case MetadataDataType.INTEGER:
       case MetadataDataType.FLOAT:
         return (
-          <Form.Group widths="equal">
-            <Form.Input
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "1rem",
+            }}
+          >
+            <Input
               id="metadata-min-value"
               label="Minimum Value"
               type="number"
               step={dataType === MetadataDataType.FLOAT ? "0.01" : "1"}
-              value={minValue ?? ""}
-              onChange={(e, { value }) =>
-                setMinValue(value ? parseFloat(value) : undefined)
+              value={minValue !== undefined ? String(minValue) : ""}
+              onChange={(e) =>
+                setMinValue(
+                  e.target.value ? parseFloat(e.target.value) : undefined
+                )
               }
               placeholder="No minimum"
             />
-            <Form.Input
+            <Input
               id="metadata-max-value"
               label="Maximum Value"
               type="number"
               step={dataType === MetadataDataType.FLOAT ? "0.01" : "1"}
-              value={maxValue ?? ""}
-              onChange={(e, { value }) =>
-                setMaxValue(value ? parseFloat(value) : undefined)
+              value={maxValue !== undefined ? String(maxValue) : ""}
+              onChange={(e) =>
+                setMaxValue(
+                  e.target.value ? parseFloat(e.target.value) : undefined
+                )
               }
               placeholder="No maximum"
             />
-          </Form.Group>
+          </div>
         );
 
       case MetadataDataType.CHOICE:
@@ -292,23 +318,23 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
             <ChoiceList>
               {choices.map((choice, index) => (
                 <ChoiceInput key={index}>
-                  <Form.Input
+                  <Input
                     value={choice}
-                    onChange={(e, { value }) => updateChoice(index, value)}
+                    onChange={(e) => updateChoice(index, e.target.value)}
                     placeholder={`Choice ${index + 1}`}
                   />
                   <Button
-                    icon
-                    size="tiny"
-                    negative
+                    variant="danger"
+                    size="sm"
                     disabled={choices.length === 1}
                     onClick={() => removeChoice(index)}
+                    leftIcon={<Trash2 size={14} />}
                   >
-                    <Trash2 size={14} />
+                    {" "}
                   </Button>
                 </ChoiceInput>
               ))}
-              <Button size="small" onClick={addChoice}>
+              <Button size="sm" onClick={addChoice}>
                 <Plus size={14} style={{ marginRight: "0.5rem" }} />
                 Add Choice
               </Button>
@@ -318,11 +344,22 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 
       case MetadataDataType.BOOLEAN:
         return (
-          <Form.Checkbox
-            label="Default Value"
-            checked={defaultValue || false}
-            onChange={(e, { checked }) => setDefaultValue(checked)}
-          />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              marginTop: "0.5rem",
+            }}
+          >
+            <input
+              type="checkbox"
+              id="metadata-default-value"
+              checked={defaultValue || false}
+              onChange={(e) => setDefaultValue(e.target.checked)}
+            />
+            <label htmlFor="metadata-default-value">Default Value</label>
+          </div>
         );
 
       default:
@@ -331,76 +368,120 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
   };
 
   return (
-    <Modal open={open} onClose={onClose} size="small">
-      <Modal.Header>
-        <Database
-          size={16}
-          style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
-        />
-        {column ? "Edit Metadata Field" : "Create Metadata Field"}
-      </Modal.Header>
-      <Modal.Content>
-        <Form>
-          <Form.Input
-            id="metadata-field-name"
-            label="Field Name"
-            value={name}
-            onChange={(e, { value }) => setName(value)}
-            placeholder="e.g., Contract Status, Due Date, Priority"
-            required
-            error={errors.name}
-          />
-
-          <Form.Dropdown
-            id="metadata-data-type"
-            label="Data Type"
-            selection
-            options={dataTypeOptions}
-            value={dataType}
-            onChange={(e, { value }) => setDataType(value as MetadataDataType)}
-            disabled={!!column} // Can't change type after creation
-          />
-
-          <Form.Field>
-            <label htmlFor="metadata-help-text">Help Text</label>
-            <StyledTextArea
-              id="metadata-help-text"
-              value={helpText}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                setHelpText(e.target.value)
-              }
-              placeholder="Provide guidance for users filling out this field..."
-              rows={2}
-            />
-          </Form.Field>
-
-          <ValidationSection>
-            <h4>Validation Rules</h4>
-            <Form.Checkbox
-              label="Required Field"
-              checked={required}
-              onChange={(e, { checked }) => setRequired(checked || false)}
+    <Modal open={open} onClose={onClose} size="md">
+      <ModalHeader
+        title={
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Database size={16} />
+            {column ? "Edit Metadata Field" : "Create Metadata Field"}
+          </span>
+        }
+        onClose={onClose}
+      />
+      <ModalBody>
+        <DropdownWrapper>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
+            <Input
+              id="metadata-field-name"
+              label="Field Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Contract Status, Due Date, Priority"
+              error={errors.name}
             />
 
-            {renderValidationFields()}
-          </ValidationSection>
+            <div>
+              <label
+                htmlFor="metadata-data-type"
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: 500,
+                }}
+              >
+                Data Type
+              </label>
+              <Dropdown
+                id="metadata-data-type"
+                selection
+                fluid
+                options={dataTypeOptions}
+                value={dataType}
+                onChange={(_e, { value }) =>
+                  setDataType(value as MetadataDataType)
+                }
+                disabled={!!column} // Can't change type after creation
+              />
+            </div>
 
-          {dataType !== MetadataDataType.BOOLEAN &&
-            !["CHOICE", "MULTI_CHOICE"].includes(dataType) && (
-              <InfoMessage title="Default Value">
-                You can set default values for individual documents when editing
-                metadata.
-              </InfoMessage>
-            )}
-        </Form>
-      </Modal.Content>
-      <Modal.Actions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button primary onClick={handleSave}>
-          <Save size={14} style={{ marginRight: "0.5rem" }} />
+            <div>
+              <label
+                htmlFor="metadata-help-text"
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: 500,
+                }}
+              >
+                Help Text
+              </label>
+              <StyledTextArea
+                id="metadata-help-text"
+                value={helpText}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setHelpText(e.target.value)
+                }
+                placeholder="Provide guidance for users filling out this field..."
+                rows={2}
+              />
+            </div>
+
+            <ValidationSection>
+              <h4>Validation Rules</h4>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  id="metadata-required"
+                  checked={required}
+                  onChange={(e) => setRequired(e.target.checked)}
+                />
+                <label htmlFor="metadata-required">Required Field</label>
+              </div>
+
+              {renderValidationFields()}
+            </ValidationSection>
+
+            {dataType !== MetadataDataType.BOOLEAN &&
+              !["CHOICE", "MULTI_CHOICE"].includes(dataType) && (
+                <InfoMessage title="Default Value">
+                  You can set default values for individual documents when
+                  editing metadata.
+                </InfoMessage>
+              )}
+          </div>
+        </DropdownWrapper>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          leftIcon={<Save size={14} />}
+        >
           {column ? "Update Field" : "Create Field"}
         </Button>
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 };

@@ -1,9 +1,16 @@
 import React, { useCallback, useState, useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button, Dropdown } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, Folder, Home } from "lucide-react";
+import {
+  Button,
+  Modal,
+  ModalHeader as OcModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import {
   showMoveFolderModalAtom,
   activeFolderModalIdAtom,
@@ -31,18 +38,16 @@ import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
  * - Optimistic update + refetch
  */
 
-const StyledModal = styled(Modal)`
-  &.ui.modal {
+const StyledModalWrapper = styled.div`
+  .oc-modal {
     max-width: 500px;
+    width: 100%;
   }
-`;
 
-const ModalHeader = styled(Modal.Header)`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: ${OS_LEGAL_COLORS.surfaceHover};
-  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
 `;
 
 const CloseButton = styled.button`
@@ -222,87 +227,84 @@ export const MoveFolderModal: React.FC = () => {
   const currentLocation = folder.parent ? folder.parent.name : "Corpus Root";
 
   return (
-    <StyledModal open={showModal} onClose={handleClose}>
-      <ModalHeader>
-        <span>Move Folder</span>
-        <CloseButton onClick={handleClose} aria-label="Close">
-          <X size={20} />
-        </CloseButton>
-      </ModalHeader>
+    <StyledModalWrapper>
+      <Modal open={showModal} onClose={handleClose} size="sm">
+        <OcModalHeader title="Move Folder" onClose={handleClose} />
 
-      <Modal.Content>
-        <CurrentLocationBox>
-          <div style={{ marginBottom: "8px" }}>
-            <FolderIcon size={16} />
-            <strong>{folder.name}</strong>
-          </div>
-          <div style={{ fontSize: "13px" }}>
-            Current location:{" "}
-            {folder.parent ? (
-              <>
-                <FolderIcon size={14} />
-                {currentLocation}
-              </>
-            ) : (
-              <>
-                <HomeIcon size={14} />
-                Corpus Root
-              </>
-            )}
-          </div>
-        </CurrentLocationBox>
+        <ModalBody>
+          <CurrentLocationBox>
+            <div style={{ marginBottom: "8px" }}>
+              <FolderIcon size={16} />
+              <strong>{folder.name}</strong>
+            </div>
+            <div style={{ fontSize: "13px" }}>
+              Current location:{" "}
+              {folder.parent ? (
+                <>
+                  <FolderIcon size={14} />
+                  {currentLocation}
+                </>
+              ) : (
+                <>
+                  <HomeIcon size={14} />
+                  Corpus Root
+                </>
+              )}
+            </div>
+          </CurrentLocationBox>
 
-        <div style={{ marginBottom: "16px" }}>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "8px",
-              fontWeight: 600,
-              fontSize: "14px",
-            }}
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontWeight: 600,
+                fontSize: "14px",
+              }}
+            >
+              Move to:
+            </label>
+            <Dropdown
+              placeholder="Select destination folder"
+              fluid
+              selection
+              search
+              options={validDestinations}
+              value={newParentId}
+              onChange={(_, data) => {
+                setNewParentId(data.value as string);
+                setValidationError(null);
+              }}
+            />
+          </div>
+
+          {validationError && (
+            <ErrorMessage title="Cannot Move Folder">
+              {validationError}
+            </ErrorMessage>
+          )}
+
+          {error && (
+            <ErrorMessage title="Error Moving Folder">
+              {error.message}
+            </ErrorMessage>
+          )}
+        </ModalBody>
+
+        <ModalFooter>
+          <Button variant="secondary" onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            loading={loading}
+            disabled={loading || newParentId === undefined}
           >
-            Move to:
-          </label>
-          <Dropdown
-            placeholder="Select destination folder"
-            fluid
-            selection
-            search
-            options={validDestinations}
-            value={newParentId}
-            onChange={(_, data) => {
-              setNewParentId(data.value as string);
-              setValidationError(null);
-            }}
-          />
-        </div>
-
-        {validationError && (
-          <ErrorMessage title="Cannot Move Folder">
-            {validationError}
-          </ErrorMessage>
-        )}
-
-        {error && (
-          <ErrorMessage title="Error Moving Folder">
-            {error.message}
-          </ErrorMessage>
-        )}
-      </Modal.Content>
-
-      <Modal.Actions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          primary
-          onClick={handleSubmit}
-          loading={loading}
-          disabled={loading || newParentId === undefined}
-        >
-          Move Folder
-        </Button>
-      </Modal.Actions>
-    </StyledModal>
+            Move Folder
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };

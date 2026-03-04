@@ -1,6 +1,13 @@
 import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
-import { Header, Icon, SemanticICONS } from "semantic-ui-react";
+import {
+  FileText,
+  MessageSquare,
+  BarChart3,
+  Table2,
+  MessagesSquare,
+  LucideIcon,
+} from "lucide-react";
 import {
   CorpusStats,
   GET_CORPUS_STATS,
@@ -20,18 +27,17 @@ interface NewQuerySearchProps {
 const StatisticWithAnimation = ({
   value,
   label,
-  icon,
+  icon: IconComponent,
 }: {
   value: number;
   label: string;
-  icon: SemanticICONS;
+  icon: LucideIcon;
 }) => {
-  const { width } = useWindowDimensions();
-  const isDesktop = width > MOBILE_VIEW_BREAKPOINT;
-
   return (
     <StatisticWrapper>
-      <StatisticIcon name={icon} />
+      <StatisticIconWrapper>
+        <IconComponent />
+      </StatisticIconWrapper>
       <StatisticContent>
         <StatisticValue>
           <CountUp end={value} duration={1.5} />
@@ -64,15 +70,26 @@ const StatisticWrapper = styled.div`
   }
 `;
 
-const StatisticIcon = styled(Icon)`
-  font-size: 1.75rem !important;
-  margin: 0 1rem 0 0 !important;
+const StatisticIconWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 1rem 0 0;
   opacity: 0.8;
   color: #4a90e2;
 
+  svg {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    font-size: 2.5rem !important;
-    margin: 0 0 0.75rem 0 !important;
+    margin: 0 0 0.75rem 0;
+
+    svg {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
   }
 `;
 
@@ -133,19 +150,17 @@ const StatsGrid = styled.div`
   }
 `;
 
-const DashboardHeader = styled(Header)`
-  &.ui.header {
-    color: #4a90e2;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    font-size: 1.5rem;
-    margin: 0 0 0.5rem 0;
-    text-align: center;
+const DashboardHeader = styled.h2`
+  color: #4a90e2;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem 0;
+  text-align: center;
 
-    @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-      font-size: 2rem;
-      margin: 0 0 1rem 0;
-    }
+  @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    font-size: 2rem;
+    margin: 0 0 1rem 0;
   }
 `;
 
@@ -176,7 +191,7 @@ export const CorpusDashboard: React.FC<{ corpus: CorpusType }> = ({
 
   return (
     <DashboardContainer>
-      <DashboardHeader as="h2">
+      <DashboardHeader>
         {isDesktop ? "Corpus Dashboard" : corpus.title}
       </DashboardHeader>
 
@@ -184,27 +199,27 @@ export const CorpusDashboard: React.FC<{ corpus: CorpusType }> = ({
         <StatisticWithAnimation
           value={stats.totalDocs}
           label="Documents"
-          icon="file text"
+          icon={FileText}
         />
         <StatisticWithAnimation
           value={stats.totalAnnotations}
           label="Annotations"
-          icon="comment"
+          icon={MessageSquare}
         />
         <StatisticWithAnimation
           value={stats.totalAnalyses}
           label="Analyses"
-          icon="chart bar"
+          icon={BarChart3}
         />
         <StatisticWithAnimation
           value={stats.totalExtracts}
           label="Extracts"
-          icon="table"
+          icon={Table2}
         />
         <StatisticWithAnimation
           value={stats.totalComments}
           label="Comments"
-          icon="comments"
+          icon={MessagesSquare}
         />
       </StatsGrid>
     </DashboardContainer>

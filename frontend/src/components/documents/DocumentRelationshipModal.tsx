@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { Modal, Form, Radio, Dropdown, Button } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -13,7 +13,15 @@ import {
   ArrowLeft,
   Target,
 } from "lucide-react";
-import { Input } from "@os-legal/ui";
+import {
+  Input,
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Textarea,
+} from "@os-legal/ui";
 
 import { useCorpusState } from "../annotator/context/CorpusAtom";
 import { LabelType, DocumentType } from "../../types/graphql-api";
@@ -65,7 +73,13 @@ type RelationshipMode = "RELATIONSHIP" | "NOTES";
 // STYLED COMPONENTS
 // ============================================================================
 
-const ModalContent = styled(Modal.Content)`
+const StyledModalWrapper = styled.div`
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+`;
+
+const ScrollableContent = styled.div`
   max-height: 70vh;
   overflow-y: auto;
 
@@ -664,456 +678,578 @@ export const DocumentRelationshipModal: React.FC<
   };
 
   return (
-    <Modal open={open} onClose={handleClose} size="small">
-      <Modal.Header>
-        <Link2 size={20} style={{ marginRight: "0.5rem" }} />
-        Link Documents
-      </Modal.Header>
-      <ModalContent>
-        {!hasCorpus && (
-          <ErrorMessage
-            title="No Corpus Context"
-            style={{ marginBottom: "1.5rem" }}
-          >
-            Document relationships require a corpus context.
-          </ErrorMessage>
-        )}
+    <StyledModalWrapper>
+      <Modal open={open} onClose={handleClose} size="md">
+        <ModalHeader>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <Link2 size={20} style={{ marginRight: "0.5rem" }} />
+            Link Documents
+          </div>
+        </ModalHeader>
+        <ModalBody>
+          <ScrollableContent>
+            {!hasCorpus && (
+              <ErrorMessage
+                title="No Corpus Context"
+                style={{ marginBottom: "1.5rem" }}
+              >
+                Document relationships require a corpus context.
+              </ErrorMessage>
+            )}
 
-        {/* Two-Column Source/Target Layout */}
-        <TwoColumnLayout>
-          {/* Source Documents Column */}
-          <DocumentSection>
-            <ColumnHeader>
-              <div className="column-title">
-                <ArrowRight size={14} color={OS_LEGAL_COLORS.primaryBlue} />
-                Source Documents
-              </div>
-              <span className="column-count">{sourceIds.length}</span>
-            </ColumnHeader>
-            <div className="pills-container">
-              {sourceDocuments.length > 0 ? (
-                sourceDocuments.map((doc) => (
-                  <DocumentPill key={doc.id} $variant="source">
-                    <FileText size={14} />
-                    <span title={doc.title}>
-                      {doc.title.length > 20
-                        ? `${doc.title.substring(0, 20)}...`
-                        : doc.title}
-                    </span>
-                    <PillButton
-                      onClick={() => moveToTarget(doc.id)}
-                      title="Move to targets"
-                    >
-                      <ArrowRight size={12} />
-                    </PillButton>
-                    <PillButton
-                      onClick={() => removeFromSource(doc.id)}
-                      title="Remove"
-                    >
-                      <X size={12} />
-                    </PillButton>
-                  </DocumentPill>
-                ))
-              ) : documentsLoading ? (
-                <span
-                  style={{
-                    color: OS_LEGAL_COLORS.textSecondary,
-                    fontStyle: "italic",
-                  }}
-                >
-                  Loading...
-                </span>
-              ) : (
-                <span
-                  style={{
-                    color: OS_LEGAL_COLORS.textSecondary,
-                    fontStyle: "italic",
-                  }}
-                >
-                  No source documents
-                </span>
-              )}
-            </div>
-            <Button
-              size="tiny"
-              basic
-              icon
-              labelPosition="left"
-              onClick={() =>
-                setAddingToSide(addingToSide === "source" ? null : "source")
-              }
-              style={{ marginTop: "0.5rem" }}
-            >
-              {addingToSide === "source" ? <X size={14} /> : <Plus size={14} />}
-              {addingToSide === "source" ? "Cancel" : "Add Source"}
-            </Button>
-          </DocumentSection>
-
-          {/* Target Documents Column */}
-          <DocumentSection>
-            <ColumnHeader>
-              <div className="column-title">
-                <Target size={14} color="#22c55e" />
-                Target Documents
-              </div>
-              <span className="column-count">{targetIds.length}</span>
-            </ColumnHeader>
-            <div className="pills-container">
-              {targetDocuments.length > 0 ? (
-                targetDocuments.map((doc) => (
-                  <DocumentPill key={doc.id} $variant="target">
-                    <PillButton
-                      onClick={() => moveToSource(doc.id)}
-                      title="Move to sources"
-                    >
-                      <ArrowLeft size={12} />
-                    </PillButton>
-                    <FileText size={14} />
-                    <span title={doc.title}>
-                      {doc.title.length > 20
-                        ? `${doc.title.substring(0, 20)}...`
-                        : doc.title}
-                    </span>
-                    <PillButton
-                      onClick={() => removeFromTarget(doc.id)}
-                      title="Remove"
-                    >
-                      <X size={12} />
-                    </PillButton>
-                  </DocumentPill>
-                ))
-              ) : (
-                <span
-                  style={{
-                    color: OS_LEGAL_COLORS.textSecondary,
-                    fontStyle: "italic",
-                  }}
-                >
-                  No target documents
-                </span>
-              )}
-            </div>
-            <Button
-              size="tiny"
-              basic
-              icon
-              labelPosition="left"
-              onClick={() =>
-                setAddingToSide(addingToSide === "target" ? null : "target")
-              }
-              style={{ marginTop: "0.5rem" }}
-            >
-              {addingToSide === "target" ? <X size={14} /> : <Plus size={14} />}
-              {addingToSide === "target" ? "Cancel" : "Add Target"}
-            </Button>
-          </DocumentSection>
-        </TwoColumnLayout>
-
-        {/* Document Search (when adding) */}
-        {addingToSide && (
-          <DocumentSection style={{ marginTop: "1rem" }}>
-            <div className="section-title">
-              <Search size={16} />
-              Add to {addingToSide === "source" ? "Sources" : "Targets"}
-            </div>
-            <Form.Field>
-              <Input
-                fullWidth
-                placeholder="Search documents in corpus..."
-                value={documentSearchTerm}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setDocumentSearchTerm(e.target.value)
-                }
-                autoFocus
-              />
-            </Form.Field>
-            <div
-              style={{
-                maxHeight: "150px",
-                overflowY: "auto",
-                marginTop: "0.5rem",
-              }}
-            >
-              {documentsLoading ? (
-                <EmptyState>Loading documents...</EmptyState>
-              ) : availableDocuments.length > 0 ? (
-                availableDocuments.slice(0, 10).map((doc) => (
-                  <SearchResultItem
-                    key={doc.id}
-                    $selected={false}
-                    onClick={() => addDocument(doc.id, addingToSide)}
-                  >
-                    <div className="doc-icon">
-                      <FileText
-                        size={16}
-                        color={OS_LEGAL_COLORS.textSecondary}
-                      />
-                    </div>
-                    <div className="doc-info">
-                      <div className="doc-title">{doc.title}</div>
-                    </div>
-                    <Plus size={16} color={OS_LEGAL_COLORS.textSecondary} />
-                  </SearchResultItem>
-                ))
-              ) : (
-                <EmptyState>
-                  {documentSearchTerm
-                    ? "No documents found"
-                    : "No available documents"}
-                </EmptyState>
-              )}
-            </div>
-          </DocumentSection>
-        )}
-
-        {/* Relationship Type Selection */}
-        <ModeSection style={{ marginTop: "1rem" }}>
-          <Form.Field>
-            <label style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-              Relationship Type
-            </label>
-            <Form.Group inline>
-              <Form.Field>
-                <Radio
-                  label="Labeled Relationship"
-                  value="RELATIONSHIP"
-                  checked={mode === "RELATIONSHIP"}
-                  onChange={() => setMode("RELATIONSHIP")}
-                  disabled={!hasCorpus}
-                />
-              </Form.Field>
-              <Form.Field>
-                <Radio
-                  label="Notes"
-                  value="NOTES"
-                  checked={mode === "NOTES"}
-                  onChange={() => setMode("NOTES")}
-                  disabled={!hasCorpus}
-                />
-              </Form.Field>
-            </Form.Group>
-          </Form.Field>
-
-          {/* Label Selection (for RELATIONSHIP mode) */}
-          {mode === "RELATIONSHIP" && (
-            <>
-              {!hasLabelset && (
-                <WarningMessage style={{ marginTop: "1rem" }}>
-                  <strong>No labelset found.</strong> Creating a label will
-                  automatically create a labelset for this corpus.
-                </WarningMessage>
-              )}
-
-              {!selectedLabel ? (
-                !showCreateLabel ? (
-                  <Form.Field style={{ marginTop: "1rem" }}>
-                    <label>Relationship Label</label>
-                    <Dropdown
-                      placeholder="Search or type to create..."
-                      fluid
-                      selection
-                      search
-                      allowAdditions
-                      additionLabel="Create label: "
-                      noResultsMessage="Type to create a new label"
-                      options={filteredRelationshipLabels.map((label) => ({
-                        key: label.id,
-                        text: label.text,
-                        value: label.id,
-                        content: (
-                          <span
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.5rem",
-                            }}
-                          >
-                            <span
-                              style={{
-                                width: 10,
-                                height: 10,
-                                borderRadius: 2,
-                                backgroundColor: label.color || "#10b981",
-                                flexShrink: 0,
-                              }}
-                            />
-                            {label.text}
-                          </span>
-                        ),
-                      }))}
-                      value={selectedLabelId || undefined}
-                      onSearchChange={(_, data) =>
-                        setLabelSearchTerm(data.searchQuery)
-                      }
-                      onChange={(_, data) => {
-                        const value = data.value as string;
-                        // Check if this is an existing label or a new one
-                        const existingLabel = filteredRelationshipLabels.find(
-                          (l) => l.id === value
-                        );
-                        if (existingLabel) {
-                          setSelectedLabelId(value);
-                        } else {
-                          // User selected the "add" option - show create form
-                          setNewLabelText(value);
-                          setShowCreateLabel(true);
-                        }
-                      }}
-                    />
-                  </Form.Field>
-                ) : (
-                  <>
-                    <Form.Field style={{ marginTop: "1rem" }}>
-                      <label>Create New Label</label>
-                      <Input
-                        fullWidth
-                        placeholder="Enter label name"
-                        value={newLabelText}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setNewLabelText(e.target.value)
-                        }
-                        autoFocus
-                      />
-                    </Form.Field>
-
-                    <Form.Group widths="equal">
-                      <Form.Field>
-                        <label>Color</label>
-                        <input
-                          type="color"
-                          value={newLabelColor}
-                          onChange={(e) => setNewLabelColor(e.target.value)}
-                          style={{ width: "60px", padding: "2px" }}
-                        />
-                      </Form.Field>
-
-                      <Form.Field>
-                        <label>Description (optional)</label>
-                        <Input
-                          fullWidth
-                          placeholder="Enter description"
-                          value={newLabelDescription}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setNewLabelDescription(e.target.value)
-                          }
-                        />
-                      </Form.Field>
-                    </Form.Group>
-
-                    <Button.Group fluid style={{ marginTop: "0.5rem" }}>
-                      <Button
-                        onClick={() => {
-                          setShowCreateLabel(false);
-                          setNewLabelText("");
-                          setNewLabelDescription("");
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button.Or />
-                      <Button positive onClick={handleCreateLabel}>
-                        Create Label
-                      </Button>
-                    </Button.Group>
-                  </>
-                )
-              ) : (
-                <Form.Field style={{ marginTop: "1rem" }}>
-                  <label>Selected Label</label>
-                  <div
-                    style={{
-                      padding: "0.75rem",
-                      background: OS_LEGAL_COLORS.surfaceHover,
-                      border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                      borderRadius: "6px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
+            {/* Two-Column Source/Target Layout */}
+            <TwoColumnLayout>
+              {/* Source Documents Column */}
+              <DocumentSection>
+                <ColumnHeader>
+                  <div className="column-title">
+                    <ArrowRight size={14} color={OS_LEGAL_COLORS.primaryBlue} />
+                    Source Documents
+                  </div>
+                  <span className="column-count">{sourceIds.length}</span>
+                </ColumnHeader>
+                <div className="pills-container">
+                  {sourceDocuments.length > 0 ? (
+                    sourceDocuments.map((doc) => (
+                      <DocumentPill key={doc.id} $variant="source">
+                        <FileText size={14} />
+                        <span title={doc.title}>
+                          {doc.title.length > 20
+                            ? `${doc.title.substring(0, 20)}...`
+                            : doc.title}
+                        </span>
+                        <PillButton
+                          onClick={() => moveToTarget(doc.id)}
+                          title="Move to targets"
+                        >
+                          <ArrowRight size={12} />
+                        </PillButton>
+                        <PillButton
+                          onClick={() => removeFromSource(doc.id)}
+                          title="Remove"
+                        >
+                          <X size={12} />
+                        </PillButton>
+                      </DocumentPill>
+                    ))
+                  ) : documentsLoading ? (
                     <span
                       style={{
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
+                        color: OS_LEGAL_COLORS.textSecondary,
+                        fontStyle: "italic",
                       }}
                     >
-                      <span
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 3,
-                          backgroundColor: selectedLabel.color || "#10b981",
-                        }}
-                      />
-                      {selectedLabel.text}
+                      Loading...
                     </span>
-                    <Button
-                      size="tiny"
-                      basic
-                      onClick={() => {
-                        setSelectedLabelId(null);
-                        setLabelSearchTerm("");
+                  ) : (
+                    <span
+                      style={{
+                        color: OS_LEGAL_COLORS.textSecondary,
+                        fontStyle: "italic",
                       }}
                     >
-                      Change
-                    </Button>
+                      No source documents
+                    </span>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={
+                    addingToSide === "source" ? (
+                      <X size={14} />
+                    ) : (
+                      <Plus size={14} />
+                    )
+                  }
+                  onClick={() =>
+                    setAddingToSide(addingToSide === "source" ? null : "source")
+                  }
+                  style={{ marginTop: "0.5rem" }}
+                >
+                  {addingToSide === "source" ? "Cancel" : "Add Source"}
+                </Button>
+              </DocumentSection>
+
+              {/* Target Documents Column */}
+              <DocumentSection>
+                <ColumnHeader>
+                  <div className="column-title">
+                    <Target size={14} color="#22c55e" />
+                    Target Documents
                   </div>
-                </Form.Field>
+                  <span className="column-count">{targetIds.length}</span>
+                </ColumnHeader>
+                <div className="pills-container">
+                  {targetDocuments.length > 0 ? (
+                    targetDocuments.map((doc) => (
+                      <DocumentPill key={doc.id} $variant="target">
+                        <PillButton
+                          onClick={() => moveToSource(doc.id)}
+                          title="Move to sources"
+                        >
+                          <ArrowLeft size={12} />
+                        </PillButton>
+                        <FileText size={14} />
+                        <span title={doc.title}>
+                          {doc.title.length > 20
+                            ? `${doc.title.substring(0, 20)}...`
+                            : doc.title}
+                        </span>
+                        <PillButton
+                          onClick={() => removeFromTarget(doc.id)}
+                          title="Remove"
+                        >
+                          <X size={12} />
+                        </PillButton>
+                      </DocumentPill>
+                    ))
+                  ) : (
+                    <span
+                      style={{
+                        color: OS_LEGAL_COLORS.textSecondary,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      No target documents
+                    </span>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={
+                    addingToSide === "target" ? (
+                      <X size={14} />
+                    ) : (
+                      <Plus size={14} />
+                    )
+                  }
+                  onClick={() =>
+                    setAddingToSide(addingToSide === "target" ? null : "target")
+                  }
+                  style={{ marginTop: "0.5rem" }}
+                >
+                  {addingToSide === "target" ? "Cancel" : "Add Target"}
+                </Button>
+              </DocumentSection>
+            </TwoColumnLayout>
+
+            {/* Document Search (when adding) */}
+            {addingToSide && (
+              <DocumentSection style={{ marginTop: "1rem" }}>
+                <div className="section-title">
+                  <Search size={16} />
+                  Add to {addingToSide === "source" ? "Sources" : "Targets"}
+                </div>
+                <div>
+                  <Input
+                    fullWidth
+                    placeholder="Search documents in corpus..."
+                    value={documentSearchTerm}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setDocumentSearchTerm(e.target.value)
+                    }
+                    autoFocus
+                  />
+                </div>
+                <div
+                  style={{
+                    maxHeight: "150px",
+                    overflowY: "auto",
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  {documentsLoading ? (
+                    <EmptyState>Loading documents...</EmptyState>
+                  ) : availableDocuments.length > 0 ? (
+                    availableDocuments.slice(0, 10).map((doc) => (
+                      <SearchResultItem
+                        key={doc.id}
+                        $selected={false}
+                        onClick={() => addDocument(doc.id, addingToSide)}
+                      >
+                        <div className="doc-icon">
+                          <FileText
+                            size={16}
+                            color={OS_LEGAL_COLORS.textSecondary}
+                          />
+                        </div>
+                        <div className="doc-info">
+                          <div className="doc-title">{doc.title}</div>
+                        </div>
+                        <Plus size={16} color={OS_LEGAL_COLORS.textSecondary} />
+                      </SearchResultItem>
+                    ))
+                  ) : (
+                    <EmptyState>
+                      {documentSearchTerm
+                        ? "No documents found"
+                        : "No available documents"}
+                    </EmptyState>
+                  )}
+                </div>
+              </DocumentSection>
+            )}
+
+            {/* Relationship Type Selection */}
+            <ModeSection style={{ marginTop: "1rem" }}>
+              <div>
+                <label
+                  style={{
+                    fontWeight: 600,
+                    marginBottom: "0.5rem",
+                    display: "block",
+                  }}
+                >
+                  Relationship Type
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "1.5rem",
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      cursor: hasCorpus ? "pointer" : "default",
+                      opacity: hasCorpus ? 1 : 0.5,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="relationship-mode"
+                      value="RELATIONSHIP"
+                      checked={mode === "RELATIONSHIP"}
+                      onChange={() => setMode("RELATIONSHIP")}
+                      disabled={!hasCorpus}
+                    />
+                    Labeled Relationship
+                  </label>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      cursor: hasCorpus ? "pointer" : "default",
+                      opacity: hasCorpus ? 1 : 0.5,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="relationship-mode"
+                      value="NOTES"
+                      checked={mode === "NOTES"}
+                      onChange={() => setMode("NOTES")}
+                      disabled={!hasCorpus}
+                    />
+                    Notes
+                  </label>
+                </div>
+              </div>
+
+              {/* Label Selection (for RELATIONSHIP mode) */}
+              {mode === "RELATIONSHIP" && (
+                <>
+                  {!hasLabelset && (
+                    <WarningMessage style={{ marginTop: "1rem" }}>
+                      <strong>No labelset found.</strong> Creating a label will
+                      automatically create a labelset for this corpus.
+                    </WarningMessage>
+                  )}
+
+                  {!selectedLabel ? (
+                    !showCreateLabel ? (
+                      <div style={{ marginTop: "1rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            fontWeight: 600,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Relationship Label
+                        </label>
+                        <Dropdown
+                          placeholder="Search or type to create..."
+                          fluid
+                          selection
+                          search
+                          allowAdditions
+                          additionLabel="Create label: "
+                          noResultsMessage="Type to create a new label"
+                          options={filteredRelationshipLabels.map((label) => ({
+                            key: label.id,
+                            text: label.text,
+                            value: label.id,
+                            content: (
+                              <span
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: 2,
+                                    backgroundColor: label.color || "#10b981",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {label.text}
+                              </span>
+                            ),
+                          }))}
+                          value={selectedLabelId || undefined}
+                          onSearchChange={(_, data) =>
+                            setLabelSearchTerm(data.searchQuery)
+                          }
+                          onChange={(_, data) => {
+                            const value = data.value as string;
+                            // Check if this is an existing label or a new one
+                            const existingLabel =
+                              filteredRelationshipLabels.find(
+                                (l) => l.id === value
+                              );
+                            if (existingLabel) {
+                              setSelectedLabelId(value);
+                            } else {
+                              // User selected the "add" option - show create form
+                              setNewLabelText(value);
+                              setShowCreateLabel(true);
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ marginTop: "1rem" }}>
+                          <label
+                            style={{
+                              display: "block",
+                              fontWeight: 600,
+                              marginBottom: "0.5rem",
+                            }}
+                          >
+                            Create New Label
+                          </label>
+                          <Input
+                            fullWidth
+                            placeholder="Enter label name"
+                            value={newLabelText}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setNewLabelText(e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "1rem",
+                            marginTop: "0.75rem",
+                          }}
+                        >
+                          <div>
+                            <label
+                              style={{
+                                display: "block",
+                                fontWeight: 600,
+                                marginBottom: "0.5rem",
+                              }}
+                            >
+                              Color
+                            </label>
+                            <input
+                              type="color"
+                              value={newLabelColor}
+                              onChange={(e) => setNewLabelColor(e.target.value)}
+                              style={{ width: "60px", padding: "2px" }}
+                            />
+                          </div>
+
+                          <div style={{ flex: 1 }}>
+                            <label
+                              style={{
+                                display: "block",
+                                fontWeight: 600,
+                                marginBottom: "0.5rem",
+                              }}
+                            >
+                              Description (optional)
+                            </label>
+                            <Input
+                              fullWidth
+                              placeholder="Enter description"
+                              value={newLabelDescription}
+                              onChange={(
+                                e: React.ChangeEvent<HTMLInputElement>
+                              ) => setNewLabelDescription(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            marginTop: "0.5rem",
+                          }}
+                        >
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              setShowCreateLabel(false);
+                              setNewLabelText("");
+                              setNewLabelDescription("");
+                            }}
+                            style={{ flex: 1 }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="primary"
+                            onClick={handleCreateLabel}
+                            style={{ flex: 1 }}
+                          >
+                            Create Label
+                          </Button>
+                        </div>
+                      </>
+                    )
+                  ) : (
+                    <div style={{ marginTop: "1rem" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontWeight: 600,
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Selected Label
+                      </label>
+                      <div
+                        style={{
+                          padding: "0.75rem",
+                          background: OS_LEGAL_COLORS.surfaceHover,
+                          border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                          borderRadius: "6px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontWeight: 500,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: 3,
+                              backgroundColor: selectedLabel.color || "#10b981",
+                            }}
+                          />
+                          {selectedLabel.text}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setSelectedLabelId(null);
+                            setLabelSearchTerm("");
+                          }}
+                        >
+                          Change
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          )}
 
-          {/* Notes Content (for NOTES mode) */}
-          {mode === "NOTES" && (
-            <Form.Field style={{ marginTop: "1rem" }}>
-              <label>Notes (optional)</label>
-              <Form.TextArea
-                placeholder="Add notes about this document relationship..."
-                value={notesContent}
-                onChange={(_, data) => setNotesContent(data.value as string)}
-                rows={3}
-              />
-            </Form.Field>
-          )}
-        </ModeSection>
+              {/* Notes Content (for NOTES mode) */}
+              {mode === "NOTES" && (
+                <div style={{ marginTop: "1rem" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontWeight: 600,
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    Notes (optional)
+                  </label>
+                  <Textarea
+                    placeholder="Add notes about this document relationship..."
+                    value={notesContent}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                      setNotesContent(e.target.value)
+                    }
+                    rows={3}
+                  />
+                </div>
+              )}
+            </ModeSection>
 
-        <InfoBox>
-          <strong>
-            Creating {sourceIds.length * targetIds.length} relationship
+            <InfoBox>
+              <strong>
+                Creating {sourceIds.length * targetIds.length} relationship
+                {sourceIds.length * targetIds.length !== 1 ? "s" : ""}
+              </strong>
+              : Each source document will be linked to each target document.
+              {sourceIds.length === 0 && (
+                <span
+                  style={{ color: "#ef4444", display: "block", marginTop: 4 }}
+                >
+                  ⚠ Add at least one source document
+                </span>
+              )}
+              {targetIds.length === 0 && (
+                <span
+                  style={{ color: "#ef4444", display: "block", marginTop: 4 }}
+                >
+                  ⚠ Add at least one target document
+                </span>
+              )}
+            </InfoBox>
+          </ScrollableContent>
+        </ModalBody>
+
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={!hasCorpus || !canSubmit || isSubmitting}
+            loading={isSubmitting}
+            leftIcon={<Link2 size={16} />}
+          >
+            Create Relationship
             {sourceIds.length * targetIds.length !== 1 ? "s" : ""}
-          </strong>
-          : Each source document will be linked to each target document.
-          {sourceIds.length === 0 && (
-            <span style={{ color: "#ef4444", display: "block", marginTop: 4 }}>
-              ⚠ Add at least one source document
-            </span>
-          )}
-          {targetIds.length === 0 && (
-            <span style={{ color: "#ef4444", display: "block", marginTop: 4 }}>
-              ⚠ Add at least one target document
-            </span>
-          )}
-        </InfoBox>
-      </ModalContent>
-
-      <Modal.Actions>
-        <Button onClick={handleClose} disabled={isSubmitting}>
-          Cancel
-        </Button>
-        <Button
-          primary
-          onClick={handleSubmit}
-          disabled={!hasCorpus || !canSubmit || isSubmitting}
-          loading={isSubmitting}
-        >
-          <Link2 size={16} style={{ marginRight: "0.5rem" }} />
-          Create Relationship
-          {sourceIds.length * targetIds.length !== 1 ? "s" : ""}
-        </Button>
-      </Modal.Actions>
-    </Modal>
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };
 

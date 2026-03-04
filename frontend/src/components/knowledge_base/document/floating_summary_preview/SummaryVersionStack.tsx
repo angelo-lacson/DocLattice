@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import { SummaryPreviewCard } from "./SummaryPreviewCard";
 import { DocumentSummaryRevision } from "./graphql/documentSummaryQueries";
-import { Loader } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import { Layers, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface SummaryVersionStackProps {
@@ -220,7 +220,7 @@ export const SummaryVersionStack: React.FC<SummaryVersionStackProps> = ({
     return (
       <StackContainer>
         <LoaderContainer>
-          <Loader active inline size="small" />
+          <Spinner size="sm" />
         </LoaderContainer>
       </StackContainer>
     );

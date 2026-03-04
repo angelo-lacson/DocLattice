@@ -161,8 +161,8 @@ test.describe("DocumentRelationshipModal", () => {
 
     await page.waitForSelector('text="Link Documents"', { timeout: 10000 });
 
-    // Modal should be visible and have proper structure
-    const modal = page.locator(".ui.modal");
+    // Modal should be visible and have proper structure (role="dialog" from @os-legal/ui)
+    const modal = page.locator('[role="dialog"]');
     await expect(modal).toBeVisible();
   });
 

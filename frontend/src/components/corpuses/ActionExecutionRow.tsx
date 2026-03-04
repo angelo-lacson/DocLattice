@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Icon, Label } from "semantic-ui-react";
+import {
+  ChevronDown,
+  Clock,
+  Loader2,
+  Check,
+  X,
+  FastForward,
+} from "lucide-react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { CorpusActionExecutionNode } from "../../graphql/queries";
@@ -10,36 +17,41 @@ import { getDocumentUrl } from "../../utils/navigationUtils";
  */
 const STATUS_CONFIG: Record<
   string,
-  { color: string; bgColor: string; icon: string; label: string }
+  {
+    color: string;
+    bgColor: string;
+    icon: React.ComponentType<{ size?: string | number }>;
+    label: string;
+  }
 > = {
   queued: {
     color: "#d97706",
     bgColor: "#fef3c7",
-    icon: "clock outline",
+    icon: Clock,
     label: "Queued",
   },
   running: {
     color: "#2563eb",
     bgColor: "#dbeafe",
-    icon: "spinner",
+    icon: Loader2,
     label: "Running",
   },
   completed: {
     color: "#059669",
     bgColor: "#d1fae5",
-    icon: "check",
+    icon: Check,
     label: "Completed",
   },
   failed: {
     color: "#dc2626",
     bgColor: "#fee2e2",
-    icon: "times",
+    icon: X,
     label: "Failed",
   },
   skipped: {
     color: "#6b7280",
     bgColor: "#f3f4f6",
-    icon: "forward",
+    icon: FastForward,
     label: "Skipped",
   },
 };
@@ -304,7 +316,7 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
         <TypeBadge>{typeLabel}</TypeBadge>
         <TimeInfo>{formatRelativeTime(execution.queuedAt)}</TimeInfo>
         <ExpandIcon $expanded={expanded}>
-          <Icon name="chevron down" size="small" />
+          <ChevronDown size={14} />
         </ExpandIcon>
       </RowHeader>
 
@@ -314,17 +326,22 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
             <DetailItem>
               <div className="label">Status</div>
               <div className="value">
-                <Label
-                  size="tiny"
+                <span
                   style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                    fontSize: "0.75rem",
                     background: status.bgColor,
                     color: status.color,
                     fontWeight: 500,
                   }}
                 >
-                  <Icon name={status.icon as any} />
+                  <status.icon size={12} />
                   {status.label}
-                </Label>
+                </span>
               </div>
             </DetailItem>
             <DetailItem>

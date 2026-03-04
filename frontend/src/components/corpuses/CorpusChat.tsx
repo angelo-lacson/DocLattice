@@ -25,8 +25,7 @@ import React, {
 import { useLazyQuery, useQuery, useReactiveVar } from "@apollo/client";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Send, Home } from "lucide-react";
-import { Button } from "semantic-ui-react";
-import { Spinner } from "@os-legal/ui";
+import { Button, Spinner } from "@os-legal/ui";
 import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
@@ -1272,14 +1271,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                         >
                           {wsError}
                           <Button
-                            size="small"
+                            size="sm"
+                            variant="danger"
                             onClick={() => window.location.reload()}
                             style={{
                               marginLeft: "0.75rem",
-                              background: "#dc3545",
-                              color: "white",
-                              border: "none",
-                              boxShadow: "0 2px 4px rgba(220,53,69,0.2)",
                             }}
                           >
                             Reconnect

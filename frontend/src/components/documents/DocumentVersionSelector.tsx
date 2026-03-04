@@ -2,7 +2,8 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useLazyQuery, useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { Popup, Loader, Icon } from "semantic-ui-react";
+import { ChevronUp, ChevronDown } from "lucide-react";
+import { Spinner } from "@os-legal/ui";
 import { selectedDocVersion } from "../../graphql/cache";
 import { GET_CORPUS_VERSIONS } from "../../graphql/queries";
 
@@ -335,36 +336,25 @@ export const DocumentVersionSelector: React.FC<
 
   return (
     <SelectorContainer ref={containerRef}>
-      <Popup
-        trigger={
-          <VersionPill
-            ref={pillRef}
-            $isOutdated={isOutdated}
-            $hasHistory={hasHistory}
-            onClick={handleToggle}
-            aria-label={`Version ${displayVersion ?? "?"} of ${
-              sortedVersions.length
-            }, click to switch versions`}
-            aria-expanded={isOpen}
-            aria-haspopup="listbox"
-            aria-activedescendant={
-              isOpen && focusedIndex >= 0
-                ? `version-option-${sortedVersions[focusedIndex]?.versionNumber}`
-                : undefined
-            }
-          >
-            v{displayVersion ?? "?"}
-            <span style={{ fontSize: "9px", opacity: 0.7 }}>
-              / {sortedVersions.length}
-            </span>
-            <Icon
-              name={isOpen ? "chevron up" : "chevron down"}
-              style={{ fontSize: "9px", margin: 0 }}
-            />
-          </VersionPill>
+      <VersionPill
+        ref={pillRef}
+        $isOutdated={isOutdated}
+        $hasHistory={hasHistory}
+        onClick={handleToggle}
+        aria-label={`Version ${displayVersion ?? "?"} of ${
+          sortedVersions.length
+        }, click to switch versions`}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-activedescendant={
+          isOpen && focusedIndex >= 0
+            ? `version-option-${sortedVersions[focusedIndex]?.versionNumber}`
+            : undefined
         }
-        content={
-          isOutdated
+        title={
+          isOpen
+            ? undefined
+            : isOutdated
             ? `Viewing version ${displayVersion ?? "?"} of ${
                 sortedVersions.length
               }. A newer version is available.`
@@ -372,16 +362,23 @@ export const DocumentVersionSelector: React.FC<
                 sortedVersions.length
               }. Click to switch versions.`
         }
-        position="bottom left"
-        size="small"
-        disabled={isOpen}
-      />
+      >
+        v{displayVersion ?? "?"}
+        <span style={{ fontSize: "9px", opacity: 0.7 }}>
+          / {sortedVersions.length}
+        </span>
+        {isOpen ? (
+          <ChevronUp size={9} style={{ margin: 0 }} />
+        ) : (
+          <ChevronDown size={9} style={{ margin: 0 }} />
+        )}
+      </VersionPill>
 
       {isOpen && (
         <DropdownMenu role="listbox" aria-label="Document versions">
           {loading ? (
             <DropdownLoading>
-              <Loader active inline="centered" size="tiny" />
+              <Spinner size="sm" />
             </DropdownLoading>
           ) : (
             sortedVersions.map((version, index) => {

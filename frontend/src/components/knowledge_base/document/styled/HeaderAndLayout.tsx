@@ -1,29 +1,26 @@
-import { Segment } from "semantic-ui-react";
 import styled from "styled-components";
 
-export const HeaderContainer = styled(Segment)`
-  &&& {
-    margin: 0 !important;
-    border-radius: 0 !important;
-    padding: 1.5rem 2rem !important;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(231, 234, 237, 0.7);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-    z-index: 100;
-    position: relative;
-    display: flex !important;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+export const HeaderContainer = styled.div`
+  margin: 0;
+  border-radius: 0;
+  padding: 1.5rem 2rem;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(231, 234, 237, 0.7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  z-index: 100;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 
-    /* Mobile-friendly header */
-    @media (max-width: 768px) {
-      padding: 1rem !important;
+  /* Mobile-friendly header */
+  @media (max-width: 768px) {
+    padding: 1rem;
 
-      h2 {
-        font-size: 1.25rem;
-      }
+    h2 {
+      font-size: 1.25rem;
     }
   }
 `;

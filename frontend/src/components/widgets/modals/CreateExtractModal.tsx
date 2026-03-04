@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Form } from "semantic-ui-react";
 import styled from "styled-components";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -120,12 +119,10 @@ const ModalBody = styled.div`
   }
 `;
 
-const StyledForm = styled(Form)`
-  && {
-    display: flex;
-    flex-direction: column;
-    gap: 1.75rem;
-  }
+const StyledForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
 `;
 
 const FormSection = styled.div`
@@ -307,7 +304,9 @@ const ButtonGroup = styled.div`
   }
 `;
 
-const Button = styled(motion.button)<{ $variant?: "primary" | "secondary" }>`
+const StyledButton = styled(motion.button)<{
+  $variant?: "primary" | "secondary";
+}>`
   padding: 0.625rem 1.25rem;
   border-radius: 10px;
   font-size: 0.875rem;
@@ -483,143 +482,136 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
   const isLoading = isSubmitting || createExtractLoading;
 
   return (
-    <Modal
-      open={open}
-      onClose={handleClose}
-      size="large"
-      style={{ position: "relative" }}
-    >
-      <ModalOverlay onClick={handleClose}>
-        <ModalContainer
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.2 }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ModalHeader>
-            <ModalTitle>
-              {extractId ? "Edit Extract" : "Create New Extract"}
-            </ModalTitle>
-            <ModalSubtitle>
-              Set up a new data extraction workflow to analyze your documents
-            </ModalSubtitle>
-            <CloseButton
-              onClick={handleClose}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <X />
-            </CloseButton>
-          </ModalHeader>
+    <ModalOverlay onClick={handleClose}>
+      <ModalContainer
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ModalHeader>
+          <ModalTitle>
+            {extractId ? "Edit Extract" : "Create New Extract"}
+          </ModalTitle>
+          <ModalSubtitle>
+            Set up a new data extraction workflow to analyze your documents
+          </ModalSubtitle>
+          <CloseButton
+            onClick={handleClose}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <X />
+          </CloseButton>
+        </ModalHeader>
 
-          <ModalBody>
-            <StyledForm onSubmit={handleSubmit}>
+        <ModalBody>
+          <StyledForm onSubmit={handleSubmit}>
+            <FormSection>
+              <Label>
+                Extract Name <span className="required">*</span>
+              </Label>
+              <InputWrapper>
+                <StyledInput
+                  type="text"
+                  placeholder="Enter a descriptive name for your extract"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={isLoading}
+                  autoFocus
+                />
+              </InputWrapper>
+              <HelperText>
+                Choose a clear, descriptive name that helps identify this
+                extract's purpose
+              </HelperText>
+            </FormSection>
+
+            {!corpusId && (
               <FormSection>
-                <Label>
-                  Extract Name <span className="required">*</span>
-                </Label>
-                <InputWrapper>
-                  <StyledInput
-                    type="text"
-                    placeholder="Enter a descriptive name for your extract"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    disabled={isLoading}
-                    autoFocus
+                <Label>Select Corpus</Label>
+                <DropdownWrapper>
+                  <CorpusDropdown
+                    placeholder="Choose a corpus to load documents from"
+                    fluid
                   />
-                </InputWrapper>
+                </DropdownWrapper>
                 <HelperText>
-                  Choose a clear, descriptive name that helps identify this
-                  extract's purpose
+                  <strong>Optional:</strong> Select a corpus to automatically
+                  load all its documents into this extract
                 </HelperText>
               </FormSection>
+            )}
 
-              {!corpusId && (
-                <FormSection>
-                  <Label>Select Corpus</Label>
-                  <DropdownWrapper>
-                    <CorpusDropdown
-                      placeholder="Choose a corpus to load documents from"
-                      fluid
-                    />
-                  </DropdownWrapper>
-                  <HelperText>
-                    <strong>Optional:</strong> Select a corpus to automatically
-                    load all its documents into this extract
-                  </HelperText>
-                </FormSection>
-              )}
+            {!fieldsetId && (
+              <FormSection>
+                <Label>Select Fieldset</Label>
+                <UnifiedFieldsetSelector
+                  value={localSelectedFieldset}
+                  onChange={handleFieldsetChange}
+                  placeholder="Search or create a fieldset..."
+                  disabled={isLoading}
+                />
+                <HelperText>
+                  <strong>Optional:</strong> Choose a predefined set of columns,
+                  or create them later in the extract editor
+                </HelperText>
+              </FormSection>
+            )}
+          </StyledForm>
+        </ModalBody>
 
-              {!fieldsetId && (
-                <FormSection>
-                  <Label>Select Fieldset</Label>
-                  <UnifiedFieldsetSelector
-                    value={localSelectedFieldset}
-                    onChange={handleFieldsetChange}
-                    placeholder="Search or create a fieldset..."
-                    disabled={isLoading}
+        <ModalFooter>
+          <FooterInfo>
+            {localSelectedFieldset
+              ? `Using ${
+                  localSelectedFieldset.columns?.edges?.length || 0
+                } predefined columns`
+              : "You can add columns after creating the extract"}
+          </FooterInfo>
+          <ButtonGroup>
+            <StyledButton
+              type="button"
+              onClick={handleClose}
+              disabled={isLoading}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              Cancel
+            </StyledButton>
+            <StyledButton
+              $variant="primary"
+              onClick={handleSubmit}
+              disabled={isLoading || !name.trim()}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {isLoading ? (
+                <>
+                  <LoadingSpinner
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
                   />
-                  <HelperText>
-                    <strong>Optional:</strong> Choose a predefined set of
-                    columns, or create them later in the extract editor
-                  </HelperText>
-                </FormSection>
+                  Creating...
+                </>
+              ) : (
+                "Create Extract"
               )}
-            </StyledForm>
-          </ModalBody>
+            </StyledButton>
+          </ButtonGroup>
+        </ModalFooter>
 
-          <ModalFooter>
-            <FooterInfo>
-              {localSelectedFieldset
-                ? `Using ${
-                    localSelectedFieldset.columns?.edges?.length || 0
-                  } predefined columns`
-                : "You can add columns after creating the extract"}
-            </FooterInfo>
-            <ButtonGroup>
-              <Button
-                type="button"
-                onClick={handleClose}
-                disabled={isLoading}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Cancel
-              </Button>
-              <Button
-                $variant="primary"
-                onClick={handleSubmit}
-                disabled={isLoading || !name.trim()}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {isLoading ? (
-                  <>
-                    <LoadingSpinner
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 1,
-                        repeat: Infinity,
-                        ease: "linear",
-                      }}
-                    />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Extract"
-                )}
-              </Button>
-            </ButtonGroup>
-          </ModalFooter>
-
-          <LoadingOverlay
-            active={isLoading}
-            inverted
-            content="Creating your extract..."
-          />
-        </ModalContainer>
-      </ModalOverlay>
-    </Modal>
+        <LoadingOverlay
+          active={isLoading}
+          inverted
+          content="Creating your extract..."
+        />
+      </ModalContainer>
+    </ModalOverlay>
   );
 };

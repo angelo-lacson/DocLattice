@@ -1,5 +1,4 @@
 import React, { useRef, useState, MouseEvent } from "react";
-import { Card, Popup, Button } from "semantic-ui-react";
 import _ from "lodash";
 import styled, { keyframes } from "styled-components";
 import {

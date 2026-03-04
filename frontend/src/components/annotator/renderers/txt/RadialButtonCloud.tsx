@@ -1,7 +1,7 @@
 // src/RadialButtonCloud.tsx
 import React, { useState, useRef, useEffect } from "react";
 import styled, { createGlobalStyle, css, keyframes } from "styled-components";
-import { Button, Modal } from "semantic-ui-react";
+import { Button, Modal, ModalBody, ModalFooter } from "@os-legal/ui";
 import { DynamicIcon } from "../../../widgets/icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
 
@@ -158,11 +158,11 @@ const moveOut = keyframes`
   }
 `;
 
-const CloudButton = styled(Button).attrs<CloudButtonProps>((props) => {
+const CloudButton = styled.button.attrs<CloudButtonProps>((props) => {
   const validColor = ensureValidHexColor(props.backgroundColor);
   return {
     style: {
-      position: "absolute",
+      position: "absolute" as const,
       opacity: 0,
       "--x": `${props.position.x}px`,
       "--y": `${props.position.y}px`,
@@ -175,32 +175,37 @@ const CloudButton = styled(Button).attrs<CloudButtonProps>((props) => {
     animation: ${moveOut} 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     animation-delay: ${props.delay}s;
   `}
-  padding: 8px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-  transition: all 0.2s ease !important;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
 
   &:hover {
-    transform: translate(var(--x), var(--y)) scale(1.1) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    transform: translate(var(--x), var(--y)) scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   &:active {
-    transform: translate(var(--x), var(--y)) scale(0.95) !important;
+    transform: translate(var(--x), var(--y)) scale(0.95);
   }
 
-  svg,
-  i.icon {
-    margin: 0 !important;
-    font-size: 1rem !important;
+  svg {
+    margin: 0;
+    font-size: 1rem;
   }
 `;
 
 const GlobalStyle = createGlobalStyle`
-  .confirm-modal-container.ui.page.modals.dimmer.transition.visible.active {
+  .radial-confirm-modal .oc-modal-overlay {
     z-index: 20000 !important;
   }
 
-  #ConfirmModal {
+  .radial-confirm-modal .oc-modal {
     z-index: 20001 !important;
   }
 `;
@@ -304,9 +309,6 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
           {buttonList.map((btn, index) => (
             <CloudButton
               key={index}
-              icon
-              circular
-              size="small"
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation();
                 handleButtonClick(btn);
@@ -321,37 +323,36 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
           ))}
         </CloudContainer>
       )}
-      <Modal
-        id="ConfirmModal"
-        size="mini"
-        className="confirm-modal-container"
-        open={confirmModal.open}
-        onClose={() => setConfirmModal({ ...confirmModal, open: false })}
-      >
-        <Modal.Content>
-          <p>{confirmModal.message}</p>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button
-            negative
-            onClick={() => {
-              setConfirmModal({ ...confirmModal, open: false });
-              setCloudVisible(false);
-            }}
-          >
-            No
-          </Button>
-          <Button
-            positive
-            onClick={() => {
-              confirmModal.onConfirm();
-              setConfirmModal({ ...confirmModal, open: false });
-            }}
-          >
-            Yes
-          </Button>
-        </Modal.Actions>
-      </Modal>
+      <div className="radial-confirm-modal">
+        <Modal
+          open={confirmModal.open}
+          onClose={() => setConfirmModal({ ...confirmModal, open: false })}
+        >
+          <ModalBody>
+            <p>{confirmModal.message}</p>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setConfirmModal({ ...confirmModal, open: false });
+                setCloudVisible(false);
+              }}
+            >
+              No
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                confirmModal.onConfirm();
+                setConfirmModal({ ...confirmModal, open: false });
+              }}
+            >
+              Yes
+            </Button>
+          </ModalFooter>
+        </Modal>
+      </div>
     </div>
   );
 };

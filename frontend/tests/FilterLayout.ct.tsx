@@ -251,12 +251,14 @@ test.describe("Filter Layout", () => {
       component.locator('text="Structural Annotations"')
     ).toBeVisible();
 
-    // Check that the corpus action filter has a toggle
-    await expect(component.locator('input[type="checkbox"]')).toBeVisible();
+    // Check that the corpus action filter has a toggle (checkbox is visually hidden by ToggleSwitch)
+    await expect(component.getByRole("checkbox")).toBeAttached();
 
-    // Check that label elements are present
-    const labelElements = component.locator(".ui.label");
-    const labelCount = await labelElements.count();
+    // Check that filter label elements are present (gradient-styled spans)
+    const filterLabels = component.locator(
+      'span:has-text("Filter by"), span:has-text("Corpus Actions"), span:has-text("Structural Annotations"), span:has-text("Created by Analysis")'
+    );
+    const labelCount = await filterLabels.count();
     expect(labelCount).toBeGreaterThan(0);
   });
 
@@ -352,8 +354,8 @@ test.describe("Filter Layout", () => {
       page.locator('text="Select a corpus to filter..."')
     ).toBeVisible();
 
-    // Check for the toggle
-    await expect(page.locator('input[type="checkbox"]')).toBeVisible();
+    // Check for the toggle (checkbox is visually hidden by ToggleSwitch)
+    await expect(page.getByRole("checkbox")).toBeAttached();
   });
 
   test("mobile responsive behavior", async ({ mount, page }) => {

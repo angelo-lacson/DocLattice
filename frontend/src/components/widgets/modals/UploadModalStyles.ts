@@ -1,5 +1,5 @@
 import styled, { css, keyframes } from "styled-components";
-import { Modal, Button } from "semantic-ui-react";
+import { Modal } from "@os-legal/ui";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // Breakpoints for responsive design
@@ -33,15 +33,18 @@ const pulse = keyframes`
   }
 `;
 
-// Styled Modal with responsive sizing
+// Styled Modal with responsive sizing - wrapping @os-legal/ui Modal
 export const StyledUploadModal = styled(Modal)`
-  &.ui.modal {
+  &.oc-modal {
+    animation: ${fadeIn} 0.3s ease-out;
+  }
+
+  .oc-modal-content {
     width: 90% !important;
     max-width: 700px !important;
     margin: 1rem auto !important;
     border-radius: 12px !important;
     overflow: hidden;
-    animation: ${fadeIn} 0.3s ease-out;
 
     @media (max-width: ${breakpoints.mobile}) {
       width: 95% !important;
@@ -52,43 +55,46 @@ export const StyledUploadModal = styled(Modal)`
     @media (max-width: ${breakpoints.tablet}) {
       width: 95% !important;
     }
+  }
 
-    > .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white !important;
-      padding: 1.25rem 1.5rem !important;
-      font-size: 1.25rem !important;
-      border-bottom: none !important;
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white !important;
+    padding: 1.25rem 1.5rem !important;
+    font-size: 1.25rem !important;
+    border-bottom: none !important;
 
-      @media (max-width: ${breakpoints.mobile}) {
-        padding: 1rem !important;
-        font-size: 1.1rem !important;
-      }
+    @media (max-width: ${breakpoints.mobile}) {
+      padding: 1rem !important;
+      font-size: 1.1rem !important;
     }
+  }
 
-    > .content {
-      padding: 1.5rem !important;
+  .content {
+    padding: 1.5rem !important;
 
-      @media (max-width: ${breakpoints.mobile}) {
-        padding: 1rem !important;
-      }
+    @media (max-width: ${breakpoints.mobile}) {
+      padding: 1rem !important;
     }
+  }
 
-    > .actions {
-      padding: 1rem 1.5rem !important;
-      background: #f8f9fa !important;
-      border-top: 1px solid #e9ecef !important;
+  .actions {
+    padding: 1rem 1.5rem !important;
+    background: #f8f9fa !important;
+    border-top: 1px solid #e9ecef !important;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
 
-      @media (max-width: ${breakpoints.mobile}) {
-        padding: 0.75rem 1rem !important;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
+    @media (max-width: ${breakpoints.mobile}) {
+      padding: 0.75rem 1rem !important;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
 
-        .button {
-          width: 100% !important;
-          margin: 0 !important;
-        }
+      button {
+        width: 100% !important;
+        margin: 0 !important;
       }
     }
   }
@@ -100,7 +106,7 @@ export const ModalHeader = styled.div`
   align-items: center;
   gap: 0.75rem;
 
-  .icon {
+  svg {
     font-size: 1.5rem;
 
     @media (max-width: ${breakpoints.mobile}) {
@@ -272,30 +278,33 @@ export const DropZoneText = styled.div`
   }
 `;
 
-export const DropZoneButton = styled(Button)`
-  &.ui.button {
-    margin-top: 1rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-    color: white !important;
-    border-radius: 8px !important;
-    padding: 0.875rem 1.5rem !important;
-    font-weight: 500 !important;
-    transition: all 0.2s ease !important;
-    min-height: 44px; /* Touch target size */
+export const DropZoneButton = styled.button`
+  margin-top: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  border-radius: 8px !important;
+  padding: 0.875rem 1.5rem !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  min-height: 44px; /* Touch target size */
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 
-    @media (max-width: ${breakpoints.mobile}) {
-      width: 100%;
-      padding: 1rem !important;
-    }
+  @media (max-width: ${breakpoints.mobile}) {
+    width: 100%;
+    padding: 1rem !important;
+  }
 
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
 
-    &:active {
-      transform: translateY(0);
-    }
+  &:active {
+    transform: translateY(0);
   }
 `;
 
@@ -441,32 +450,28 @@ export const FileItemActions = styled.div`
   flex-shrink: 0;
 `;
 
-export const DeleteButton = styled(Button)`
-  &.ui.button {
-    padding: 0.5rem !important;
-    margin: 0 !important;
-    background: transparent !important;
-    color: #868e96 !important;
-    border-radius: 6px !important;
-    min-width: 36px;
-    min-height: 36px;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
+export const DeleteButton = styled.button`
+  padding: 0.5rem !important;
+  margin: 0 !important;
+  background: transparent !important;
+  color: #868e96 !important;
+  border-radius: 6px !important;
+  min-width: 36px;
+  min-height: 36px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
 
-    @media (max-width: ${breakpoints.mobile}) {
-      min-width: 44px;
-      min-height: 44px;
-    }
+  @media (max-width: ${breakpoints.mobile}) {
+    min-width: 44px;
+    min-height: 44px;
+  }
 
-    &:hover {
-      background: #ffebee !important;
-      color: #c62828 !important;
-    }
-
-    i.icon {
-      margin: 0 !important;
-    }
+  &:hover {
+    background: #ffebee !important;
+    color: #c62828 !important;
   }
 `;
 
@@ -547,58 +552,62 @@ export const UploadProgress = styled.div<{ $percent?: number }>`
 `;
 
 // Action buttons
-export const ActionButton = styled(Button)<{
+export const ActionButton = styled.button<{
   $variant?: "primary" | "secondary" | "danger";
 }>`
-  &.ui.button {
-    border-radius: 8px !important;
-    font-weight: 500 !important;
-    min-height: 44px;
-    padding: 0.875rem 1.5rem !important;
-    transition: all 0.2s ease !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  min-height: 44px;
+  padding: 0.875rem 1.5rem !important;
+  transition: all 0.2s ease !important;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 
-    @media (max-width: ${breakpoints.mobile}) {
-      width: 100%;
-      padding: 1rem !important;
-    }
+  @media (max-width: ${breakpoints.mobile}) {
+    width: 100%;
+    padding: 1rem !important;
+  }
 
-    ${({ $variant }) =>
-      $variant === "primary" &&
-      css`
-        background: linear-gradient(
-          135deg,
-          #667eea 0%,
-          #764ba2 100%
-        ) !important;
-        color: white !important;
+  ${({ $variant }) =>
+    $variant === "primary" &&
+    css`
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
 
-        &:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-      `}
+      &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+    `}
 
-    ${({ $variant }) =>
-      $variant === "secondary" &&
-      css`
-        background: #f1f3f5 !important;
-        color: #495057 !important;
+  ${({ $variant }) =>
+    $variant === "secondary" &&
+    css`
+      background: #f1f3f5 !important;
+      color: #495057 !important;
 
-        &:hover {
-          background: #e9ecef !important;
-        }
-      `}
+      &:hover:not(:disabled) {
+        background: #e9ecef !important;
+      }
+    `}
 
-    ${({ $variant }) =>
-      $variant === "danger" &&
-      css`
-        background: #ffebee !important;
-        color: #c62828 !important;
+  ${({ $variant }) =>
+    $variant === "danger" &&
+    css`
+      background: #ffebee !important;
+      color: #c62828 !important;
 
-        &:hover {
-          background: #ffcdd2 !important;
-        }
-      `}
+      &:hover:not(:disabled) {
+        background: #ffcdd2 !important;
+      }
+    `}
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 `;
 

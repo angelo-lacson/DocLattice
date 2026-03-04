@@ -1,8 +1,16 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-import { Button, Table, Modal, Form, Dropdown } from "semantic-ui-react";
+import { Table, Dropdown } from "semantic-ui-react";
 import { Plus, Check, X, Trash2 } from "lucide-react";
-import { Input } from "@os-legal/ui";
+import {
+  Button,
+  IconButton,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import styled from "styled-components";
 import { StyledTextArea } from "../widgets/modals/styled";
 import { ErrorMessage, LoadingState } from "../widgets/feedback";
@@ -180,12 +188,10 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
         >
           <h2>Badge Management</h2>
           <Button
-            primary
+            variant="primary"
+            leftIcon={<Plus size={14} />}
             onClick={() => setShowCreateModal(true)}
-            icon
-            labelPosition="left"
           >
-            <Plus size={14} />
             Create Badge
           </Button>
         </div>
@@ -226,17 +232,17 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                   )}
                 </Table.Cell>
                 <Table.Cell>
-                  <Button
-                    icon
-                    negative
-                    size="small"
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Delete badge"
                     onClick={() => {
                       setBadgeToDelete(badge);
                       setDeleteModalOpen(true);
                     }}
                   >
-                    <Trash2 size={14} />
-                  </Button>
+                    <Trash2 size={14} color={OS_LEGAL_COLORS.danger} />
+                  </IconButton>
                 </Table.Cell>
               </Table.Row>
             ))}
@@ -248,13 +254,18 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
       <Modal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        size="small"
+        size="sm"
       >
-        <Modal.Header>Create New Badge</Modal.Header>
-        <Modal.Content>
-          <Form>
-            <Form.Field required>
-              <label>Badge Name</label>
+        <ModalHeader
+          title="Create New Badge"
+          onClose={() => setShowCreateModal(false)}
+        />
+        <ModalBody>
+          <div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label>
+                Badge Name <span style={{ color: "red" }}>*</span>
+              </label>
               <Input
                 fullWidth
                 placeholder="e.g., First Post"
@@ -263,20 +274,24 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                   setName(e.target.value)
                 }
               />
-            </Form.Field>
+            </div>
 
-            <Form.Field required>
-              <label>Description</label>
+            <div style={{ marginBottom: "1rem" }}>
+              <label>
+                Description <span style={{ color: "red" }}>*</span>
+              </label>
               <StyledTextArea
                 placeholder="Describe what this badge represents"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
               />
-            </Form.Field>
+            </div>
 
-            <Form.Field required>
-              <label>Icon</label>
+            <div style={{ marginBottom: "1rem" }}>
+              <label>
+                Icon <span style={{ color: "red" }}>*</span>
+              </label>
               <Dropdown
                 fluid
                 selection
@@ -284,19 +299,23 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                 value={icon}
                 onChange={(_, { value }) => setIcon(value as string)}
               />
-            </Form.Field>
+            </div>
 
-            <Form.Field required>
-              <label>Color</label>
+            <div style={{ marginBottom: "1rem" }}>
+              <label>
+                Color <span style={{ color: "red" }}>*</span>
+              </label>
               <input
                 type="color"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
               />
-            </Form.Field>
+            </div>
 
-            <Form.Field required>
-              <label>Badge Type</label>
+            <div style={{ marginBottom: "1rem" }}>
+              <label>
+                Badge Type <span style={{ color: "red" }}>*</span>
+              </label>
               <Dropdown
                 fluid
                 selection
@@ -314,9 +333,9 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                   setBadgeType(value as "GLOBAL" | "CORPUS")
                 }
               />
-            </Form.Field>
+            </div>
 
-            <Form.Field>
+            <div style={{ marginBottom: "1rem" }}>
               <label
                 style={{
                   display: "flex",
@@ -338,9 +357,8 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                 />
                 Auto-award this badge
               </label>
-            </Form.Field>
+            </div>
 
-            {/* Show criteria configuration when auto-award is enabled */}
             {isAutoAwarded && (
               <BadgeCriteriaConfig
                 badgeType={badgeType}
@@ -351,23 +369,25 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                 }}
               />
             )}
-          </Form>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
+            Cancel
+          </Button>
           <Button
-            primary
+            variant="primary"
             onClick={handleCreate}
-            loading={creating}
             disabled={
               !name ||
               !description ||
+              creating ||
               (isAutoAwarded && (!criteriaConfig || !criteriaValid))
             }
           >
-            Create Badge
+            {creating ? "Creating..." : "Create Badge"}
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
       {/* Delete Confirmation Modal */}

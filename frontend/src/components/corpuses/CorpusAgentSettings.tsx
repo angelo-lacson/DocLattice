@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Form, Button } from "semantic-ui-react";
+import { Button, Textarea } from "@os-legal/ui";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -142,7 +142,7 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
         documents. Leave blank to use system defaults.
       </HelperText>
 
-      <Form>
+      <div>
         <Section>
           <SectionHeader>
             <h4
@@ -161,7 +161,8 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
               description is empty.
             </HelperText>
           </SectionHeader>
-          <Form.TextArea
+          <Textarea
+            fullWidth
             placeholder="Leave blank to use default instructions..."
             value={corpusInstructions}
             onChange={(e) => handleCorpusInstructionsChange(e.target.value)}
@@ -187,7 +188,8 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
               emphasize using tools and citing sources with page numbers.
             </HelperText>
           </SectionHeader>
-          <Form.TextArea
+          <Textarea
+            fullWidth
             placeholder="Leave blank to use default instructions..."
             value={documentInstructions}
             onChange={(e) => handleDocumentInstructionsChange(e.target.value)}
@@ -198,15 +200,19 @@ export const CorpusAgentSettings: React.FC<CorpusAgentSettingsProps> = ({
 
         {hasChanges && (
           <ButtonGroup>
-            <Button primary onClick={handleSave} loading={loading}>
+            <Button variant="primary" onClick={handleSave} loading={loading}>
               Save Changes
             </Button>
-            <Button onClick={handleReset} disabled={loading}>
+            <Button
+              variant="secondary"
+              onClick={handleReset}
+              disabled={loading}
+            >
               Reset
             </Button>
           </ButtonGroup>
         )}
-      </Form>
+      </div>
     </Container>
   );
 };

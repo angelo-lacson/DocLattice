@@ -1,7 +1,10 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
-import { Icon, Dropdown, Button, Confirm } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
+import { Button, IconButton, Spinner } from "@os-legal/ui";
+import { AlertCircle, StickyNote } from "lucide-react";
+import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { toast } from "react-toastify";
 import {
   Link2,
@@ -419,16 +422,15 @@ export const CorpusDocumentRelationships: React.FC<
     return (
       <Container>
         <EmptyState>
-          <Icon name="warning circle" size="huge" />
+          <AlertCircle size={48} strokeWidth={1.5} />
           <h3>Error Loading Relationships</h3>
           <p>{error.message}</p>
           <Button
             onClick={() => refetch()}
             style={{ marginTop: 16 }}
-            icon
-            labelPosition="left"
+            variant="secondary"
+            leftIcon={<RefreshCw size={14} />}
           >
-            <Icon name="refresh" />
             Retry
           </Button>
         </EmptyState>
@@ -451,22 +453,21 @@ export const CorpusDocumentRelationships: React.FC<
             value={filterType}
             onChange={(_, { value }) => setFilterType(value as FilterType)}
           />
-          <Button
-            icon
-            basic
+          <IconButton
+            variant="ghost"
             onClick={() => refetch()}
             loading={loading}
-            title="Refresh"
+            aria-label="Refresh"
           >
             <RefreshCw size={16} />
-          </Button>
+          </IconButton>
         </FilterBar>
       </Header>
 
       <TableContainer>
         {loading && !data ? (
           <LoadingState>
-            <Icon name="spinner" loading />
+            <Spinner size="sm" />
             Loading relationships...
           </LoadingState>
         ) : relationships.length === 0 ? (
@@ -534,7 +535,7 @@ export const CorpusDocumentRelationships: React.FC<
                         </>
                       ) : (
                         <>
-                          <Icon name="sticky note outline" size="small" />
+                          <StickyNote size={12} />
                           Notes
                         </>
                       )}
@@ -590,14 +591,12 @@ export const CorpusDocumentRelationships: React.FC<
         </TotalCount>
       )}
 
-      <Confirm
-        open={deleteConfirm !== null}
-        onCancel={() => setDeleteConfirm(null)}
-        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
-        header="Delete Relationship"
-        content="Are you sure you want to delete this document relationship? This action cannot be undone."
-        confirmButton={{ content: "Delete", negative: true }}
-        cancelButton="Cancel"
+      <ConfirmModal
+        visible={deleteConfirm !== null}
+        message="Are you sure you want to delete this document relationship? This action cannot be undone."
+        yesAction={() => deleteConfirm && handleDelete(deleteConfirm)}
+        noAction={() => setDeleteConfirm(null)}
+        toggleModal={() => setDeleteConfirm(null)}
       />
     </Container>
   );

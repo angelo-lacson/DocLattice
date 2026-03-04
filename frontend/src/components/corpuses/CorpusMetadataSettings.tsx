@@ -3,7 +3,9 @@
  * Restyled to use OS-Legal design system
  */
 import React, { useState, useEffect } from "react";
-import { Table, Button, Popup, Confirm } from "semantic-ui-react";
+import { Table } from "semantic-ui-react";
+import { Button, IconButton, Tooltip } from "@os-legal/ui";
+import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { useQuery, useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -258,7 +260,7 @@ const RequiredBadge = styled.span`
 `;
 
 const AddFieldButton = styled(Button)`
-  &&& {
+  &.oc-button {
     background: ${OS_LEGAL_COLORS.accent};
     color: white;
     border: none;
@@ -273,44 +275,12 @@ const AddFieldButton = styled(Button)`
       background: ${OS_LEGAL_COLORS.accentHover};
       box-shadow: 0 4px 12px ${OS_LEGAL_COLORS.accentLight};
     }
-
-    .icon {
-      margin-right: 0.5rem !important;
-    }
   }
 `;
 
-const ActionButtonGroup = styled(Button.Group)`
-  &&& {
-    button {
-      transition: all 0.15s ease !important;
-      border: 1px solid ${OS_LEGAL_COLORS.border} !important;
-      background: ${OS_LEGAL_COLORS.surface} !important;
-      color: ${OS_LEGAL_COLORS.textSecondary} !important;
-
-      &:first-child {
-        border-top-left-radius: 6px !important;
-        border-bottom-left-radius: 6px !important;
-      }
-
-      &:last-child {
-        border-top-right-radius: 6px !important;
-        border-bottom-right-radius: 6px !important;
-      }
-
-      &:hover:not(.negative) {
-        background: ${OS_LEGAL_COLORS.accent} !important;
-        border-color: ${OS_LEGAL_COLORS.accent} !important;
-        color: white !important;
-      }
-
-      &.negative:hover {
-        background: ${OS_LEGAL_COLORS.danger} !important;
-        border-color: ${OS_LEGAL_COLORS.danger} !important;
-        color: white !important;
-      }
-    }
-  }
+const ActionButtonGroup = styled.div`
+  display: inline-flex;
+  gap: 4px;
 `;
 
 const ValidationInfo = styled.div`
@@ -514,7 +484,7 @@ export const CorpusMetadataSettings = ({
             can be edited directly in the document list view.
           </HelperText>
         </div>
-        <AddFieldButton primary onClick={() => setIsModalOpen(true)}>
+        <AddFieldButton variant="primary" onClick={() => setIsModalOpen(true)}>
           <Plus size={16} style={{ marginRight: "0.5rem" }} />
           Add Field
         </AddFieldButton>
@@ -530,7 +500,10 @@ export const CorpusMetadataSettings = ({
             Create custom fields to track additional information about your
             documents.
           </p>
-          <AddFieldButton primary onClick={() => setIsModalOpen(true)}>
+          <AddFieldButton
+            variant="primary"
+            onClick={() => setIsModalOpen(true)}
+          >
             <Plus size={16} style={{ marginRight: "0.5rem" }} />
             Create Your First Field
           </AddFieldButton>
@@ -552,24 +525,24 @@ export const CorpusMetadataSettings = ({
               <Table.Row key={column.id} data-testid="metadata-column-row">
                 <Table.Cell>
                   <OrderButtons>
-                    <Button
-                      icon
-                      size="mini"
-                      basic
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
                       disabled={index === 0}
                       onClick={() => moveColumn(index, "up")}
+                      aria-label="Move up"
                     >
                       <ChevronUp size={14} />
-                    </Button>
-                    <Button
-                      icon
-                      size="mini"
-                      basic
+                    </IconButton>
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
                       disabled={index === columns.length - 1}
                       onClick={() => moveColumn(index, "down")}
+                      aria-label="Move down"
                     >
                       <ChevronDown size={14} />
-                    </Button>
+                    </IconButton>
                   </OrderButtons>
                 </Table.Cell>
                 <Table.Cell>
@@ -614,30 +587,30 @@ export const CorpusMetadataSettings = ({
                 </Table.Cell>
                 <Table.Cell>{column.helpText || "—"}</Table.Cell>
                 <Table.Cell textAlign="center">
-                  <ActionButtonGroup size="tiny">
-                    <Popup
-                      content="Edit field"
-                      trigger={
-                        <Button icon onClick={() => openEditModal(column)}>
-                          <Edit size={14} />
-                        </Button>
-                      }
-                    />
-                    <Popup
-                      content="Delete field"
-                      trigger={
-                        <Button
-                          icon
-                          negative
-                          onClick={() => {
-                            setColumnToDelete(column.id);
-                            setDeleteConfirmOpen(true);
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      }
-                    />
+                  <ActionButtonGroup>
+                    <Tooltip content="Edit field">
+                      <IconButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditModal(column)}
+                        aria-label="Edit field"
+                      >
+                        <Edit size={14} />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip content="Delete field">
+                      <IconButton
+                        variant="danger"
+                        size="sm"
+                        onClick={() => {
+                          setColumnToDelete(column.id);
+                          setDeleteConfirmOpen(true);
+                        }}
+                        aria-label="Delete field"
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
+                    </Tooltip>
                   </ActionButtonGroup>
                 </Table.Cell>
               </Table.Row>
@@ -653,16 +626,16 @@ export const CorpusMetadataSettings = ({
         column={editingColumn}
       />
 
-      <Confirm
-        open={deleteConfirmOpen}
-        onCancel={() => {
-          setDeleteConfirmOpen(false);
+      <ConfirmModal
+        visible={deleteConfirmOpen}
+        message="Are you sure you want to delete this metadata field? All values for this field will be permanently deleted."
+        yesAction={handleDelete}
+        noAction={() => {
           setColumnToDelete(null);
         }}
-        onConfirm={handleDelete}
-        content="Are you sure you want to delete this metadata field? All values for this field will be permanently deleted."
-        confirmButton="Delete Field"
-        cancelButton="Cancel"
+        toggleModal={() => {
+          setDeleteConfirmOpen(false);
+        }}
       />
     </Container>
   );

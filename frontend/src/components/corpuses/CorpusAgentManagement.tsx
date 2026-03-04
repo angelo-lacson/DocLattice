@@ -1,10 +1,19 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
-import { Button, Table, Modal, Form } from "semantic-ui-react";
+import { Table } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Plus, Edit, Trash2, Cpu } from "lucide-react";
-import { Input, Spinner } from "@os-legal/ui";
+import {
+  Button,
+  IconButton,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Spinner,
+} from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { BadgeConfigurator, BadgeConfig } from "../agents/BadgeConfigurator";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
@@ -630,16 +639,14 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
           <Cpu size={18} /> Agent Configurations
         </SectionTitle>
         <Button
-          primary
-          size="small"
-          icon
-          labelPosition="left"
+          variant="primary"
+          size="sm"
+          leftIcon={<Plus size={14} />}
           onClick={() => {
             setFormState(initialFormState);
             setShowCreateModal(true);
           }}
         >
-          <Plus size={14} />
           Create Agent
         </Button>
       </SectionHeader>
@@ -675,15 +682,13 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
             and document analysis for this corpus.
           </EmptyStateDescription>
           <Button
-            primary
-            icon
-            labelPosition="left"
+            variant="primary"
+            leftIcon={<Plus size={14} />}
             onClick={() => {
               setFormState(initialFormState);
               setShowCreateModal(true);
             }}
           >
-            <Plus size={14} />
             Create Agent
           </Button>
         </EmptyState>
@@ -750,20 +755,24 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   </StatusBadge>
                 </Table.Cell>
                 <Table.Cell>
-                  <Button icon size="tiny" onClick={() => openEditModal(agent)}>
+                  <IconButton
+                    size="sm"
+                    aria-label="Edit agent"
+                    onClick={() => openEditModal(agent)}
+                  >
                     <Edit size={14} />
-                  </Button>
-                  <Button
-                    icon
-                    size="tiny"
-                    negative
+                  </IconButton>
+                  <IconButton
+                    size="sm"
+                    variant="danger"
+                    aria-label="Delete agent"
                     onClick={() => {
                       setAgentToDelete(agent);
                       setDeleteModalOpen(true);
                     }}
                   >
                     <Trash2 size={14} />
-                  </Button>
+                  </IconButton>
                 </Table.Cell>
               </Table.Row>
             ))}
@@ -775,10 +784,13 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
       <Modal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        size="large"
+        size="xl"
       >
-        <Modal.Header>Create Agent Configuration</Modal.Header>
-        <Modal.Content scrolling>
+        <ModalHeader
+          title="Create Agent Configuration"
+          onClose={() => setShowCreateModal(false)}
+        />
+        <ModalBody>
           <InfoMessage
             title="How Agent Scope Works"
             style={{ marginBottom: "1rem" }}
@@ -798,10 +810,10 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
               </ul>
             </>
           </InfoMessage>
-          <Form>
-            <Form.Field required>
-              <label>Name</label>
+          <div>
+            <div style={{ marginBottom: "1rem" }}>
               <Input
+                label="Name"
                 fullWidth
                 placeholder="Agent name"
                 value={formState.name}
@@ -809,24 +821,30 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
-            </Form.Field>
-            <Form.Field>
-              <label>Slug (for @mentions)</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
               <Input
+                label="Slug (for @mentions)"
                 fullWidth
                 placeholder="my-agent (auto-generated from name if empty)"
                 value={formState.slug}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, slug: e.target.value })
                 }
+                helperText="URL-friendly identifier used in @mentions (e.g., @agent:my-agent)"
               />
-              <small style={{ color: OS_LEGAL_COLORS.textSecondary }}>
-                URL-friendly identifier used in @mentions (e.g.,
-                @agent:my-agent)
-              </small>
-            </Form.Field>
-            <Form.Field required>
-              <label>Description</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Description
+              </label>
               <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
@@ -835,9 +853,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 }
                 rows={2}
               />
-            </Form.Field>
-            <Form.Field required>
-              <label>System Instructions</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                System Instructions
+              </label>
               <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
@@ -850,9 +877,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 rows={6}
                 style={{ fontFamily: "monospace" }}
               />
-            </Form.Field>
-            <Form.Field>
-              <label>Available Tools</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Available Tools
+              </label>
               {toolsLoading ? (
                 <Spinner size="sm" />
               ) : (
@@ -908,9 +944,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   </ToolHelpText>
                 </>
               )}
-            </Form.Field>
-            <Form.Field>
-              <label>Permission Required Tools</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Permission Required Tools
+              </label>
               <ToolHelpText style={{ marginTop: 0, marginBottom: "0.5rem" }}>
                 Select tools that should require explicit user permission before
                 the agent can use them. Only tools selected above can be marked
@@ -953,38 +998,38 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   })}
                 </ToolSelectionContainer>
               )}
-            </Form.Field>
-            <Form.Field>
-              <label>Badge Appearance</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Badge Appearance
+              </label>
               <BadgeConfigurator
                 value={formState.badgeConfig}
                 onChange={(config) =>
                   setFormState({ ...formState, badgeConfig: config })
                 }
               />
-            </Form.Field>
-            <Form.Field>
-              <label>Avatar URL (optional)</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
               <Input
+                label="Avatar URL (optional)"
                 fullWidth
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
+                helperText="Custom avatar image URL. If not provided, the badge icon will be used."
               />
-              <small
-                style={{
-                  color: OS_LEGAL_COLORS.textSecondary,
-                  marginTop: "0.25rem",
-                  display: "block",
-                }}
-              >
-                Custom avatar image URL. If not provided, the badge icon will be
-                used.
-              </small>
-            </Form.Field>
-            <Form.Field>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
               <label
                 style={{
                   display: "flex",
@@ -1002,13 +1047,15 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 />
                 Publicly visible (visible to users with corpus access)
               </label>
-            </Form.Field>
-          </Form>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            </div>
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
+            Cancel
+          </Button>
           <Button
-            primary
+            variant="primary"
             loading={creating}
             disabled={
               !formState.name ||
@@ -1019,23 +1066,24 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
           >
             Create Agent
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
       {/* Edit Modal */}
       <Modal
         open={showEditModal}
         onClose={() => setShowEditModal(false)}
-        size="large"
+        size="xl"
       >
-        <Modal.Header>
-          Edit Agent Configuration: {agentToEdit?.name}
-        </Modal.Header>
-        <Modal.Content scrolling>
-          <Form>
-            <Form.Field required>
-              <label>Name</label>
+        <ModalHeader
+          title={`Edit Agent Configuration: ${agentToEdit?.name}`}
+          onClose={() => setShowEditModal(false)}
+        />
+        <ModalBody>
+          <div>
+            <div style={{ marginBottom: "1rem" }}>
               <Input
+                label="Name"
                 fullWidth
                 placeholder="Agent name"
                 value={formState.name}
@@ -1043,24 +1091,30 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
-            </Form.Field>
-            <Form.Field>
-              <label>Slug (for @mentions)</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
               <Input
+                label="Slug (for @mentions)"
                 fullWidth
                 placeholder="my-agent"
                 value={formState.slug}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, slug: e.target.value })
                 }
+                helperText="URL-friendly identifier used in @mentions (e.g., @agent:my-agent)"
               />
-              <small style={{ color: OS_LEGAL_COLORS.textSecondary }}>
-                URL-friendly identifier used in @mentions (e.g.,
-                @agent:my-agent)
-              </small>
-            </Form.Field>
-            <Form.Field required>
-              <label>Description</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Description
+              </label>
               <StyledTextArea
                 placeholder="Brief description of what this agent does"
                 value={formState.description}
@@ -1069,9 +1123,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 }
                 rows={2}
               />
-            </Form.Field>
-            <Form.Field required>
-              <label>System Instructions</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                System Instructions
+              </label>
               <StyledTextArea
                 placeholder="System prompt for the agent..."
                 value={formState.systemInstructions}
@@ -1084,9 +1147,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                 rows={6}
                 style={{ fontFamily: "monospace" }}
               />
-            </Form.Field>
-            <Form.Field>
-              <label>Available Tools</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Available Tools
+              </label>
               {toolsLoading ? (
                 <Spinner size="sm" />
               ) : (
@@ -1142,9 +1214,18 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   </ToolHelpText>
                 </>
               )}
-            </Form.Field>
-            <Form.Field>
-              <label>Permission Required Tools</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Permission Required Tools
+              </label>
               <ToolHelpText style={{ marginTop: 0, marginBottom: "0.5rem" }}>
                 Select tools that should require explicit user permission before
                 the agent can use them. Only tools selected above can be marked
@@ -1187,83 +1268,83 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
                   })}
                 </ToolSelectionContainer>
               )}
-            </Form.Field>
-            <Form.Field>
-              <label>Badge Appearance</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 500,
+                  fontSize: "0.875rem",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                Badge Appearance
+              </label>
               <BadgeConfigurator
                 value={formState.badgeConfig}
                 onChange={(config) =>
                   setFormState({ ...formState, badgeConfig: config })
                 }
               />
-            </Form.Field>
-            <Form.Field>
-              <label>Avatar URL (optional)</label>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
               <Input
+                label="Avatar URL (optional)"
                 fullWidth
                 placeholder="https://example.com/avatar.png"
                 value={formState.avatarUrl}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormState({ ...formState, avatarUrl: e.target.value })
                 }
+                helperText="Custom avatar image URL. If not provided, the badge icon will be used."
               />
-              <small
+            </div>
+            <div
+              style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem" }}
+            >
+              <label
                 style={{
-                  color: OS_LEGAL_COLORS.textSecondary,
-                  marginTop: "0.25rem",
-                  display: "block",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
                 }}
               >
-                Custom avatar image URL. If not provided, the badge icon will be
-                used.
-              </small>
-            </Form.Field>
-            <Form.Group>
-              <Form.Field>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={formState.isActive}
-                    onChange={(e) =>
-                      setFormState({ ...formState, isActive: e.target.checked })
-                    }
-                  />
-                  Active
-                </label>
-              </Form.Field>
-              <Form.Field>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={formState.isPublic}
-                    onChange={(e) =>
-                      setFormState({ ...formState, isPublic: e.target.checked })
-                    }
-                  />
-                  Publicly visible
-                </label>
-              </Form.Field>
-            </Form.Group>
-          </Form>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowEditModal(false)}>Cancel</Button>
+                <input
+                  type="checkbox"
+                  checked={formState.isActive}
+                  onChange={(e) =>
+                    setFormState({ ...formState, isActive: e.target.checked })
+                  }
+                />
+                Active
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formState.isPublic}
+                  onChange={(e) =>
+                    setFormState({ ...formState, isPublic: e.target.checked })
+                  }
+                />
+                Publicly visible
+              </label>
+            </div>
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowEditModal(false)}>
+            Cancel
+          </Button>
           <Button
-            primary
+            variant="primary"
             loading={updating}
             disabled={
               !formState.name ||
@@ -1274,7 +1355,7 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
           >
             Save Changes
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
       {/* Delete Confirmation */}

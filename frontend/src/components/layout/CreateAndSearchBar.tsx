@@ -1,5 +1,6 @@
 import React, { forwardRef } from "react";
-import { Form, Popup, InputOnChangeData } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
+import { useState, useRef, useEffect } from "react";
 import { Filter, Plus } from "lucide-react";
 import { DynamicIcon } from "../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
@@ -52,53 +53,57 @@ export const CreateAndSearchBar: React.FC<CreateAndSearchBarProps> = ({
     />
   ));
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    data: InputOnChangeData
-  ) => {
+  const [showFilter, setShowFilter] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Close filter popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        filterRef.current &&
+        !filterRef.current.contains(event.target as Node)
+      ) {
+        setShowFilter(false);
+      }
+    };
+    if (showFilter) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showFilter]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (onChange) {
-      onChange(data.value);
+      onChange(e.target.value);
     }
   };
 
   return (
     <SearchBarContainer style={style}>
       <SearchInputWrapper>
-        <Form>
-          <StyledFormInput
-            icon="search"
+        <StyledInputWrapper>
+          <Input
             placeholder={placeholder}
             value={value}
             onChange={handleInputChange}
-            fluid
+            fullWidth
           />
-        </Form>
+        </StyledInputWrapper>
       </SearchInputWrapper>
 
       <ActionsWrapper>
         {filters && (
-          <Popup
-            trigger={
-              <StyledButton aria-label="Filter">
-                <Filter size={16} />
-              </StyledButton>
-            }
-            content={<FilterPopoverContent>{filters}</FilterPopoverContent>}
-            on="click"
-            position="bottom right"
-            pinned
-            offset={[0, 10]}
-            popperDependencies={[filters]}
-            className="filter-popup"
-            style={{
-              padding: 0,
-              border: "none",
-              background: "transparent",
-              boxShadow: "none",
-              maxWidth: "none",
-            }}
-            basic
-          />
+          <div ref={filterRef} style={{ position: "relative" }}>
+            <StyledButton
+              aria-label="Filter"
+              onClick={() => setShowFilter(!showFilter)}
+            >
+              <Filter size={16} />
+            </StyledButton>
+            {showFilter && (
+              <FilterPopoverContent>{filters}</FilterPopoverContent>
+            )}
+          </div>
         )}
 
         {actions.length > 0 && (
@@ -272,12 +277,12 @@ const SearchInputWrapper = styled.div`
 `;
 
 /**
- * Styled form input with customized border and focus effects.
+ * Styled wrapper for the search input with customized border and focus effects.
  */
-const StyledFormInput = styled(Form.Input)`
-  .ui.input > input {
-    border-radius: 20px;
-    border: 1px solid #ccc;
+const StyledInputWrapper = styled.div`
+  input {
+    border-radius: 20px !important;
+    border: 1px solid #ccc !important;
     transition: all 0.3s ease;
 
     &:focus {
@@ -328,7 +333,10 @@ const FilterPopoverContent = styled.div`
 
   /* Allow dropdowns to overflow the container */
   overflow: visible !important;
-  position: relative;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 100;
 
   /* Smooth appearance animation */
   animation: filterPopupAppear 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -349,5 +357,10 @@ const FilterPopoverContent = styled.div`
   & > * {
     position: relative;
     z-index: 1;
+  }
+
+  /* SUI Dropdown z-index fix */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
   }
 `;

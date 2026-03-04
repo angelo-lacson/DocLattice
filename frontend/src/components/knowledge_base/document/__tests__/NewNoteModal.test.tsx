@@ -101,7 +101,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Some content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       expect(createButton).toBeDisabled();
     });
 
@@ -111,7 +111,7 @@ describe("NewNoteModal", () => {
       const titleField = screen.getByPlaceholderText("Enter note title...");
       await userEvent.type(titleField, "Some title");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       expect(createButton).toBeDisabled();
     });
 
@@ -126,7 +126,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "   ");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       expect(createButton).toBeDisabled();
     });
 
@@ -141,7 +141,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Valid content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       expect(createButton).not.toBeDisabled();
     });
   });
@@ -158,7 +158,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       await userEvent.click(createButton);
 
       await waitFor(() => {
@@ -181,7 +181,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       await userEvent.click(createButton);
 
       await waitFor(() => {
@@ -215,7 +215,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       await userEvent.click(createButton);
 
       await waitFor(() => {
@@ -240,7 +240,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       await userEvent.click(createButton);
 
       await waitFor(() => {
@@ -254,7 +254,7 @@ describe("NewNoteModal", () => {
     it("should close modal when Cancel is clicked", async () => {
       renderComponent();
 
-      const cancelButton = screen.getByText("Cancel");
+      const cancelButton = screen.getByRole("button", { name: "Cancel" });
       await userEvent.click(cancelButton);
 
       expect(mockOnClose).toHaveBeenCalled();
@@ -272,7 +272,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const cancelButton = screen.getByText("Cancel");
+      const cancelButton = screen.getByRole("button", { name: "Cancel" });
       await userEvent.click(cancelButton);
 
       expect(mockOnClose).toHaveBeenCalled();
@@ -289,12 +289,12 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       await userEvent.click(createButton);
 
       // Check buttons are disabled during mutation
       expect(createButton).toBeDisabled();
-      expect(screen.getByText("Cancel")).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     });
   });
 
@@ -341,7 +341,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       await userEvent.click(createButton);
 
       await waitFor(() => {
@@ -362,7 +362,7 @@ describe("NewNoteModal", () => {
       );
       await userEvent.type(contentField, "Test content");
 
-      const createButton = screen.getByText("Create Note");
+      const createButton = screen.getByRole("button", { name: "Create Note" });
       await userEvent.click(createButton);
 
       await waitFor(() => {

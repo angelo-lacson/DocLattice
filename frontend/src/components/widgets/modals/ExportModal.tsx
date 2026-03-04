@@ -2,7 +2,14 @@
  * A modal for viewing and searching exports, with lazy loading and infinite scroll.
  */
 import { useEffect, useRef, useState } from "react";
-import { Button, Modal, Icon, Header } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from "@os-legal/ui";
+import { FileArchive, X } from "lucide-react";
 import _ from "lodash";
 import { CreateAndSearchBar } from "../../layout/CreateAndSearchBar";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
@@ -153,29 +160,30 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
     .filter((item): item is ExportObject => !!item);
 
   return (
-    <Modal closeIcon open={visible} onClose={() => toggleModal()}>
-      <Modal.Header>
-        <div
-          style={{
-            width: "100%",
-            display: "flex",
-            flexDirection: "row",
-            justifyContent: "center",
-          }}
-        >
-          <div>
-            <Header as="h2" icon>
-              <Icon name="zip" />
-              Corpus Exports
-              <Header.Subheader>
-                WARNING - If you have a free account, your exports will be
-                deleted within 24 hours of completion.
-              </Header.Subheader>
-            </Header>
+    <Modal open={visible} onClose={() => toggleModal()} size="lg">
+      <ModalHeader
+        title={
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <FileArchive size={32} style={{ marginBottom: "0.5rem" }} />
+            <span>Corpus Exports</span>
+            <div
+              style={{ fontSize: "0.85rem", color: "#666", fontWeight: 400 }}
+            >
+              WARNING - If you have a free account, your exports will be deleted
+              within 24 hours of completion.
+            </div>
           </div>
-        </div>
-      </Modal.Header>
-      <Modal.Content style={{ position: "relative" }}>
+        }
+        onClose={() => toggleModal()}
+      />
+      <ModalBody style={{ position: "relative" }}>
         <LoadingOverlay
           active={exports_loading}
           inverted
@@ -205,12 +213,16 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
           fetchMore={fetchMoreExports}
           onDelete={handleDelete}
         />
-      </Modal.Content>
-      <Modal.Actions>
-        <Button basic color="grey" onClick={() => toggleModal()}>
-          <Icon name="remove" /> Close
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          variant="secondary"
+          onClick={() => toggleModal()}
+          leftIcon={<X size={16} />}
+        >
+          Close
         </Button>
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 }

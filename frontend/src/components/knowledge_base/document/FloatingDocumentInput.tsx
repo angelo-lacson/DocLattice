@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import styled, { css } from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MessageSquare, Send, X, ChevronUp } from "lucide-react";
-import { Form } from "semantic-ui-react";
 import _ from "lodash";
 import {
   useSearchText,
