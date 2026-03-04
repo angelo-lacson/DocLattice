@@ -191,6 +191,10 @@ def create_default_action_templates(apps, schema_editor):
         return
 
     for tmpl_def in TEMPLATES:
+        # Idempotency: skip if this template already exists.
+        if CorpusActionTemplate.objects.filter(name=tmpl_def["name"]).exists():
+            continue
+
         agent_config = AgentConfiguration.objects.create(
             name=f"{tmpl_def['name']} Agent",
             description=tmpl_def["description"],

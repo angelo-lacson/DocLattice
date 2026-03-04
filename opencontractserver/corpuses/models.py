@@ -1248,12 +1248,12 @@ class CorpusActionTemplate(BaseOCModel):
     def __str__(self):
         return f"CorpusActionTemplate: {self.name} ({self.get_trigger_display()})"
 
-    def clone_to_corpus(self, corpus, creator=None):
-        """Create a CorpusAction from this template for the given corpus.
+    def to_action_kwargs(self, corpus, creator=None):
+        """Return kwargs dict for constructing a CorpusAction from this template.
 
-        Returns the created CorpusAction instance.
+        Used by both ``clone_to_corpus`` (single) and the bulk clone signal.
         """
-        return CorpusAction.objects.create(
+        return dict(
             name=self.name,
             corpus=corpus,
             agent_config=self.agent_config,
@@ -1263,6 +1263,13 @@ class CorpusActionTemplate(BaseOCModel):
             disabled=self.disabled_on_clone,
             creator=creator or corpus.creator,
         )
+
+    def clone_to_corpus(self, corpus, creator=None):
+        """Create a CorpusAction from this template for the given corpus.
+
+        Returns the created CorpusAction instance.
+        """
+        return CorpusAction.objects.create(**self.to_action_kwargs(corpus, creator))
 
 
 # -------------------- CorpusDescriptionRevision -------------------- #

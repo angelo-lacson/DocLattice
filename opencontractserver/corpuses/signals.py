@@ -235,19 +235,7 @@ def clone_templates_on_corpus_create(sender, instance, created, **kwargs):
     if not templates.exists():
         return
 
-    actions = [
-        CorpusAction(
-            name=t.name,
-            corpus=instance,
-            agent_config=t.agent_config,
-            task_instructions=t.task_instructions,
-            pre_authorized_tools=list(t.pre_authorized_tools),
-            trigger=t.trigger,
-            disabled=t.disabled_on_clone,
-            creator=instance.creator,
-        )
-        for t in templates
-    ]
+    actions = [CorpusAction(**t.to_action_kwargs(instance)) for t in templates]
     CorpusAction.objects.bulk_create(actions)
     logger.info(
         f"[TemplateClone] Cloned {len(actions)} action templates into "
