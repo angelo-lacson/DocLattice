@@ -113,3 +113,92 @@ class CorpusActionTemplateModelTest(TestCase):
         templates = list(CorpusActionTemplate.objects.all())
         self.assertEqual(templates[0].pk, t2.pk)
         self.assertEqual(templates[1].pk, t1.pk)
+
+
+class CorpusActionTemplateCloneSignalTest(TestCase):
+    """Test that creating a corpus auto-clones active templates."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="signaluser", password="testpass")
+        self.agent_config = AgentConfiguration.objects.create(
+            name="Signal Agent",
+            description="Agent for signal tests",
+            system_instructions="You are a test agent.",
+            available_tools=["load_document_text"],
+            is_active=True,
+            creator=self.user,
+        )
+        # Clear any existing templates from data migrations
+        CorpusActionTemplate.objects.all().delete()
+
+    def test_new_corpus_gets_cloned_actions(self):
+        CorpusActionTemplate.objects.create(
+            name="Auto Clone",
+            agent_config=self.agent_config,
+            task_instructions="Do it automatically.",
+            pre_authorized_tools=["load_document_text"],
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            disabled_on_clone=True,
+            creator=self.user,
+        )
+        corpus = Corpus.objects.create(title="Signal Test Corpus", creator=self.user)
+
+        actions = CorpusAction.objects.filter(corpus=corpus)
+        self.assertEqual(actions.count(), 1)
+
+        action = actions.first()
+        self.assertEqual(action.name, "Auto Clone")
+        self.assertEqual(action.task_instructions, "Do it automatically.")
+        self.assertTrue(action.disabled)
+        self.assertEqual(action.trigger, CorpusActionTrigger.ADD_DOCUMENT)
+        self.assertEqual(action.creator, self.user)
+
+    def test_inactive_templates_not_cloned(self):
+        CorpusActionTemplate.objects.create(
+            name="Inactive",
+            task_instructions="Should not clone.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            is_active=False,
+            creator=self.user,
+        )
+        corpus = Corpus.objects.create(title="Inactive Test", creator=self.user)
+        self.assertEqual(CorpusAction.objects.filter(corpus=corpus).count(), 0)
+
+    def test_skip_signals_prevents_cloning(self):
+        CorpusActionTemplate.objects.create(
+            name="Skip Me",
+            task_instructions="Should not clone.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        corpus = Corpus(title="Skip Test", creator=self.user)
+        corpus._skip_signals = True
+        corpus.save()
+        self.assertEqual(CorpusAction.objects.filter(corpus=corpus).count(), 0)
+
+    def test_multiple_templates_cloned(self):
+        for i in range(3):
+            CorpusActionTemplate.objects.create(
+                name=f"Template {i}",
+                task_instructions=f"Instructions {i}.",
+                trigger=CorpusActionTrigger.ADD_DOCUMENT,
+                sort_order=i,
+                creator=self.user,
+            )
+        corpus = Corpus.objects.create(title="Multi Test", creator=self.user)
+        self.assertEqual(CorpusAction.objects.filter(corpus=corpus).count(), 3)
+
+    def test_corpus_update_does_not_clone(self):
+        CorpusActionTemplate.objects.create(
+            name="No Re-Clone",
+            task_instructions="Only once.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        corpus = Corpus.objects.create(title="Update Test", creator=self.user)
+        initial_count = CorpusAction.objects.filter(corpus=corpus).count()
+        self.assertEqual(initial_count, 1)
+
+        corpus.title = "Updated Title"
+        corpus.save()
+        self.assertEqual(CorpusAction.objects.filter(corpus=corpus).count(), 1)
