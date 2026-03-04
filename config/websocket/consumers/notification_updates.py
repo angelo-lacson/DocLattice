@@ -35,6 +35,7 @@ import uuid
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 from config.ratelimit.decorators import check_ws_rate_limit
+from config.websocket.middleware import WS_CLOSE_RATE_LIMITED
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ class NotificationUpdatesConsumer(AsyncWebsocketConsumer):
         # Rate limit new connections (skip JSON message — connection
         # is about to be closed so the client won't see it)
         if await check_ws_rate_limit(self, "WS_CONNECT", send_message=False):
-            await self.close(code=4029)
+            await self.close(code=WS_CLOSE_RATE_LIMITED)
             return
 
         # Extract user from scope (set by auth middleware)

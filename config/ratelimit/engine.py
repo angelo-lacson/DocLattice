@@ -126,7 +126,14 @@ def is_rate_limited(group: str, key: str, rate: str, increment: bool = True) -> 
         if added:
             current = 1
         else:
-            current = cache.incr(cache_key)
+            try:
+                current = cache.incr(cache_key)
+            except ValueError:
+                # The key expired between add() returning False and incr().
+                # This happens at window boundaries.  Re-initialise the counter
+                # instead of treating it as a cache failure.
+                cache.set(cache_key, 1, period + 1)
+                current = 1
     except Exception:
         # Cache unavailable — honour fail-open/fail-closed setting.
         fail_open = getattr(settings, "RATELIMIT_FAIL_OPEN", False)

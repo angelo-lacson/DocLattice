@@ -321,7 +321,7 @@ class MCPRateLimiterTest(TestCase):
         scope = {"headers": [], "client": ("10.0.0.1", 8080)}
 
         # First request should be allowed
-        is_limited, _ = asyncio.run(check_mcp_rate_limit(scope))
+        is_limited, _, _ = asyncio.run(check_mcp_rate_limit(scope))
         self.assertFalse(is_limited)
 
     @override_settings(RATELIMIT_DISABLE=False)
@@ -331,17 +331,27 @@ class MCPRateLimiterTest(TestCase):
         from unittest.mock import patch
 
         from config.ratelimit.decorators import check_mcp_rate_limit
+        from config.ratelimit.rates import RateLimits
 
         scope = {"headers": [], "client": ("10.0.0.2", 8080)}
+        test_limit = 3
+
+        async def _exhaust_and_check():
+            # Exhaust the limit
+            for _ in range(test_limit):
+                await check_mcp_rate_limit(scope)
+            # Next should be blocked
+            return await check_mcp_rate_limit(scope)
 
         with patch("config.ratelimit.engine.time") as mock_time:
             mock_time.time.return_value = 1000000.0
-            # Exhaust the limit (MCP_GLOBAL = 100/m)
-            for _ in range(100):
-                asyncio.run(check_mcp_rate_limit(scope))
-            # Next should be blocked
-            is_limited, _ = asyncio.run(check_mcp_rate_limit(scope))
-            self.assertTrue(is_limited)
+            original_rate = RateLimits.MCP_GLOBAL
+            RateLimits.MCP_GLOBAL = f"{test_limit}/m"
+            try:
+                is_limited, _, _ = asyncio.run(_exhaust_and_check())
+                self.assertTrue(is_limited)
+            finally:
+                RateLimits.MCP_GLOBAL = original_rate
 
     @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_separate_clients(self):
@@ -350,21 +360,31 @@ class MCPRateLimiterTest(TestCase):
         from unittest.mock import patch
 
         from config.ratelimit.decorators import check_mcp_rate_limit
+        from config.ratelimit.rates import RateLimits
 
         scope_a = {"headers": [], "client": ("10.0.0.3", 8080)}
         scope_b = {"headers": [], "client": ("10.0.0.4", 8080)}
+        test_limit = 3
+
+        async def _exhaust_a_and_check_both():
+            # Exhaust client-a
+            for _ in range(test_limit):
+                await check_mcp_rate_limit(scope_a)
+            is_limited_a, _, _ = await check_mcp_rate_limit(scope_a)
+            # client-b should still be fine
+            is_limited_b, _, _ = await check_mcp_rate_limit(scope_b)
+            return is_limited_a, is_limited_b
 
         with patch("config.ratelimit.engine.time") as mock_time:
             mock_time.time.return_value = 1000000.0
-            # Exhaust client-a
-            for _ in range(100):
-                asyncio.run(check_mcp_rate_limit(scope_a))
-            is_limited_a, _ = asyncio.run(check_mcp_rate_limit(scope_a))
-            self.assertTrue(is_limited_a)
-
-            # client-b should still be fine
-            is_limited_b, _ = asyncio.run(check_mcp_rate_limit(scope_b))
-            self.assertFalse(is_limited_b)
+            original_rate = RateLimits.MCP_GLOBAL
+            RateLimits.MCP_GLOBAL = f"{test_limit}/m"
+            try:
+                is_limited_a, is_limited_b = asyncio.run(_exhaust_a_and_check_both())
+                self.assertTrue(is_limited_a)
+                self.assertFalse(is_limited_b)
+            finally:
+                RateLimits.MCP_GLOBAL = original_rate
 
 
 class MCPToolsDocumentsTest(TestCase):
@@ -2002,19 +2022,19 @@ class MCPTelemetryTest(TestCase):
 
     def test_get_client_ip_from_scope_direct(self):
         """Test extracting client IP from direct connection."""
-        from doclatticeserver.mcp.telemetry import get_client_ip_from_scope
+        from doclatticeserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "client": ("192.168.1.100", 54321),
             "headers": [],
         }
 
-        ip = get_client_ip_from_scope(scope)
+        ip = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(ip, "192.168.1.100")
 
     def test_get_client_ip_from_scope_x_forwarded_for(self):
         """Test extracting client IP from X-Forwarded-For header."""
-        from doclatticeserver.mcp.telemetry import get_client_ip_from_scope
+        from doclatticeserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "client": ("127.0.0.1", 80),  # Proxy address
@@ -2023,7 +2043,7 @@ class MCPTelemetryTest(TestCase):
             ],
         }
 
-        ip = get_client_ip_from_scope(scope)
+        ip = get_claimed_client_ip_from_scope(scope)
         # Telemetry uses leftmost (original client claim) for privacy-
         # preserving analytics deduplication, unlike rate limiting which
         # uses rightmost for anti-spoofing.
@@ -2031,7 +2051,7 @@ class MCPTelemetryTest(TestCase):
 
     def test_get_client_ip_from_scope_x_real_ip(self):
         """Test extracting client IP from X-Real-IP header."""
-        from doclatticeserver.mcp.telemetry import get_client_ip_from_scope
+        from doclatticeserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "client": ("127.0.0.1", 80),
@@ -2040,18 +2060,18 @@ class MCPTelemetryTest(TestCase):
             ],
         }
 
-        ip = get_client_ip_from_scope(scope)
+        ip = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(ip, "203.0.113.50")
 
     def test_get_client_ip_from_scope_no_client(self):
         """Test extracting client IP when no client info available."""
-        from doclatticeserver.mcp.telemetry import get_client_ip_from_scope
+        from doclatticeserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "headers": [],
         }
 
-        ip = get_client_ip_from_scope(scope)
+        ip = get_claimed_client_ip_from_scope(scope)
         self.assertIsNone(ip)
 
     def test_record_mcp_tool_call_success(self):

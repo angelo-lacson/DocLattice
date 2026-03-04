@@ -505,9 +505,10 @@ class CheckMcpRateLimitTestCase(TestCase):
             self.assertFalse(result[0])
 
         # Next should be limited
-        is_limited, error_msg = asyncio.run(check_mcp_rate_limit(scope))
+        is_limited, error_msg, retry_after = asyncio.run(check_mcp_rate_limit(scope))
         self.assertTrue(is_limited)
         self.assertIn("Rate limit exceeded", error_msg)
+        self.assertGreater(retry_after, 0)
 
     @patch("config.ratelimit.engine.time")
     def test_per_tool_limit(self, mock_time):
@@ -528,11 +529,12 @@ class CheckMcpRateLimitTestCase(TestCase):
             )
 
         # Next search_corpus should be per-tool limited
-        is_limited, error_msg = asyncio.run(
+        is_limited, error_msg, retry_after = asyncio.run(
             check_mcp_rate_limit(scope, tool_name="search_corpus", skip_global=True)
         )
         self.assertTrue(is_limited)
         self.assertIn("search_corpus", error_msg)
+        self.assertGreater(retry_after, 0)
 
     @patch("config.ratelimit.engine.time")
     def test_different_ips_independent(self, mock_time):
@@ -543,11 +545,11 @@ class CheckMcpRateLimitTestCase(TestCase):
         # Exhaust ip1
         for _ in range(100):
             asyncio.run(check_mcp_rate_limit(scope1))
-        is_limited1, _ = asyncio.run(check_mcp_rate_limit(scope1))
+        is_limited1, _, _ = asyncio.run(check_mcp_rate_limit(scope1))
         self.assertTrue(is_limited1)
 
         # ip2 should be fine
-        is_limited2, _ = asyncio.run(check_mcp_rate_limit(scope2))
+        is_limited2, _, _ = asyncio.run(check_mcp_rate_limit(scope2))
         self.assertFalse(is_limited2)
 
     def test_tool_rate_map_covers_all_tools(self):
@@ -670,21 +672,25 @@ class FailOpenTestCase(TestCase):
 
     @override_settings(RATELIMIT_FAIL_OPEN=True)
     @patch("config.ratelimit.engine.time")
-    @patch("config.ratelimit.engine.cache")
-    def test_fail_open_allows_on_cache_error(self, mock_cache, mock_time):
+    @patch("config.ratelimit.engine._get_cache")
+    def test_fail_open_allows_on_cache_error(self, mock_get_cache, mock_time):
         mock_time.time.return_value = 1000000.0
+        mock_cache = MagicMock()
         mock_cache.add.side_effect = Exception("Redis down")
         mock_cache.incr.side_effect = Exception("Redis down")
+        mock_get_cache.return_value = mock_cache
         # fail_open=True → should NOT be rate limited
         self.assertFalse(is_rate_limited("test", "key", "1/m"))
 
     @override_settings(RATELIMIT_FAIL_OPEN=False)
     @patch("config.ratelimit.engine.time")
-    @patch("config.ratelimit.engine.cache")
-    def test_fail_closed_blocks_on_cache_error(self, mock_cache, mock_time):
+    @patch("config.ratelimit.engine._get_cache")
+    def test_fail_closed_blocks_on_cache_error(self, mock_get_cache, mock_time):
         mock_time.time.return_value = 1000000.0
+        mock_cache = MagicMock()
         mock_cache.add.side_effect = Exception("Redis down")
         mock_cache.incr.side_effect = Exception("Redis down")
+        mock_get_cache.return_value = mock_cache
         # fail_open=False → should be rate limited
         self.assertTrue(is_rate_limited("test", "key", "1/m"))
 
