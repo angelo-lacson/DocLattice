@@ -223,6 +223,10 @@ class LlmsFullTxtTest(TestCase):
         self.assertNotIn("THIS_HOST", content)
         self.assertIn("http://testserver/mcp/", content)
 
+    def test_only_get_allowed(self):
+        response = self.client.post("/llms-full.txt")
+        self.assertEqual(response.status_code, 405)
+
 
 @override_settings(
     CACHES={"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}}
