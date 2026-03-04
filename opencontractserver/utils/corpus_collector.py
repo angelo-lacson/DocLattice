@@ -78,7 +78,7 @@ def collect_corpus_objects(
     )
 
     # Label set
-    label_set_id = corpus.label_set_id if corpus.label_set_id else None
+    label_set_id = corpus.label_set_id
 
     # Folders: in tree order (parents before children)
     folder_ids = list(

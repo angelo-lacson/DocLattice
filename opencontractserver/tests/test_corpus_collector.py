@@ -2,8 +2,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from opencontractserver.analyzer.models import Analysis, Analyzer
-from opencontractserver.annotations.models import Annotation, Relationship
-from opencontractserver.corpuses.models import Corpus, CorpusFolder, LabelSet
+from opencontractserver.annotations.models import Annotation, LabelSet, Relationship
+from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import Document, DocumentPath
 from opencontractserver.extracts.models import Column, Datacell, Fieldset
 from opencontractserver.utils.corpus_collector import (
@@ -243,6 +243,7 @@ class TestCollectCorpusObjects(TestCase):
         # Create metadata schema (fieldset) linked to the corpus
         fieldset = Fieldset.objects.create(
             name="Metadata Schema",
+            description="",
             creator=self.user,
             corpus=corpus,
         )
@@ -253,6 +254,8 @@ class TestCollectCorpusObjects(TestCase):
             query="manual query",
             creator=self.user,
             is_manual_entry=True,
+            data_type="TEXT",
+            output_type="str",
         )
         Column.objects.create(
             fieldset=fieldset,
@@ -268,6 +271,7 @@ class TestCollectCorpusObjects(TestCase):
             document=doc,
             creator=self.user,
             extract=None,
+            data_definition="",
         )
 
         result = collect_corpus_objects(corpus, include_metadata=True)
