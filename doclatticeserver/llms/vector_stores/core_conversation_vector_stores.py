@@ -203,16 +203,14 @@ class CoreConversationVectorStore:
         else:
             raise ValueError("Either query_text or query_embedding must be provided")
 
-        # Perform vector search
-        results_qs = queryset.search_by_embedding(
+        # Perform vector search (returns a sliced QuerySet; all filtering
+        # must be applied before this call since Django prohibits filtering
+        # after slicing).
+        search_results = queryset.search_by_embedding(
             query_vector=query_embedding,
             embedder_path=self.embedder_path,
             top_k=query.similarity_top_k,
         )
-
-        # Note: query.filters cannot be applied here because search_by_embedding
-        # returns a sliced queryset, and Django doesn't allow filtering after slicing.
-        # All filtering must be done before the vector search operation above.
 
         # Convert to result objects
         results = [
@@ -220,7 +218,7 @@ class CoreConversationVectorStore:
                 conversation=conv,
                 similarity_score=getattr(conv, "similarity_score", 1.0),
             )
-            for conv in results_qs
+            for conv in search_results
         ]
 
         _logger.info(f"Sync search completed with {len(results)} results")
@@ -434,16 +432,14 @@ class CoreChatMessageVectorStore:
         else:
             raise ValueError("Either query_text or query_embedding must be provided")
 
-        # Perform vector search
-        results_qs = queryset.search_by_embedding(
+        # Perform vector search (returns a sliced QuerySet; all filtering
+        # must be applied before this call since Django prohibits filtering
+        # after slicing).
+        search_results = queryset.search_by_embedding(
             query_vector=query_embedding,
             embedder_path=self.embedder_path,
             top_k=query.similarity_top_k,
         )
-
-        # Note: query.filters cannot be applied here because search_by_embedding
-        # returns a sliced queryset, and Django doesn't allow filtering after slicing.
-        # All filtering must be done before the vector search operation above.
 
         # Convert to result objects
         results = [
@@ -451,7 +447,7 @@ class CoreChatMessageVectorStore:
                 message=msg,
                 similarity_score=getattr(msg, "similarity_score", 1.0),
             )
-            for msg in results_qs
+            for msg in search_results
         ]
 
         _logger.info(f"Sync search completed with {len(results)} results")

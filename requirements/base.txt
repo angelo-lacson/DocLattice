@@ -28,7 +28,7 @@ django-extensions==4.1  # https://github.com/django-extensions/django-extensions
 whitenoise==6.12.0
 django-tree-queries[admin]==0.23.1  # https://pypi.org/project/django-tree-queries/0.21.0/
 django-cte==3.0.0  # https://github.com/dimagi/django-cte
-pgvector  # For vector embeddings
+pgvector>=0.4.0  # Python binding for pgvector; PostgreSQL extension v0.8+ required for HNSW iterative scan (installed separately)
 channels==4.3.2  # https://github.com/django/channels
 daphne==4.2.1  # https://github.com/django/daphne
 channels-redis==4.3.0
