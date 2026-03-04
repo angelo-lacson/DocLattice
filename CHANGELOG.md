@@ -5,7 +5,11 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-02
+## [Unreleased] - 2026-03-04
+
+### Removed
+
+- **Unused `django-crispy-forms` and `crispy-bootstrap5` dependencies**: These were cookiecutter-django boilerplate never used by the project (React frontend uses its own form components). Removed packages from `requirements/base.txt`, `INSTALLED_APPS`, and `CRISPY_*` settings from `config/settings/base.py`.
 
 ### Fixed
 
