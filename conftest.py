@@ -33,10 +33,12 @@ def disable_document_processing_signals(django_db_setup):
         ANNOT_CREATE_UID,
         process_annot_on_create_atomic,
     )
-    from opencontractserver.documents.models import Document
+    from opencontractserver.documents.models import Document, DocumentPath
     from opencontractserver.documents.signals import (
         DOC_CREATE_UID,
+        DOC_PATH_CREATE_UID,
         process_doc_on_create_atomic,
+        process_doc_on_document_path_create,
     )
 
     # Disconnect signals
@@ -45,6 +47,11 @@ def disable_document_processing_signals(django_db_setup):
     )
     post_save.disconnect(
         process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+    post_save.disconnect(
+        process_doc_on_document_path_create,
+        sender=DocumentPath,
+        dispatch_uid=DOC_PATH_CREATE_UID,
     )
 
     yield
@@ -55,6 +62,11 @@ def disable_document_processing_signals(django_db_setup):
     )
     post_save.connect(
         process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+    post_save.connect(
+        process_doc_on_document_path_create,
+        sender=DocumentPath,
+        dispatch_uid=DOC_PATH_CREATE_UID,
     )
 
 
@@ -78,10 +90,12 @@ def enable_doc_processing_signals():
         ANNOT_CREATE_UID,
         process_annot_on_create_atomic,
     )
-    from opencontractserver.documents.models import Document
+    from opencontractserver.documents.models import Document, DocumentPath
     from opencontractserver.documents.signals import (
         DOC_CREATE_UID,
+        DOC_PATH_CREATE_UID,
         process_doc_on_create_atomic,
+        process_doc_on_document_path_create,
     )
 
     # Re-enable signals for this test
@@ -90,6 +104,11 @@ def enable_doc_processing_signals():
     )
     post_save.connect(
         process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+    post_save.connect(
+        process_doc_on_document_path_create,
+        sender=DocumentPath,
+        dispatch_uid=DOC_PATH_CREATE_UID,
     )
 
     yield
@@ -100,6 +119,11 @@ def enable_doc_processing_signals():
     )
     post_save.disconnect(
         process_annot_on_create_atomic, sender=Annotation, dispatch_uid=ANNOT_CREATE_UID
+    )
+    post_save.disconnect(
+        process_doc_on_document_path_create,
+        sender=DocumentPath,
+        dispatch_uid=DOC_PATH_CREATE_UID,
     )
 
 
