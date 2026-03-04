@@ -30,10 +30,13 @@ import { formatUsername } from "../../threads/userUtils";
 const FeedContainer = styled.div`
   width: 100%;
   max-width: 600px;
-  margin-top: 3.5rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid ${CORPUS_COLORS.slate[200]};
 
   ${mediaQuery.tablet} {
-    margin-top: 2.5rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
   }
 `;
 

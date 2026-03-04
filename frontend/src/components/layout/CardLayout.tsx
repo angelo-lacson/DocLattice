@@ -2,6 +2,7 @@ import React from "react";
 import styled from "styled-components";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { mediaQuery } from "../corpuses/styles/corpusDesignTokens";
 
 interface CardLayoutProps {
   children?: React.ReactChild | React.ReactChild[];
@@ -92,6 +93,15 @@ const ScrollableSegment = styled(StyledSegment)`
   &::-webkit-scrollbar-thumb:hover {
     background: #555;
   }
+
+  ${mediaQuery.mobile} {
+    overflow-y: hidden;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
 `;
 
 export const CardLayout: React.FC<CardLayoutProps> = ({
@@ -102,8 +112,8 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
   style,
 }) => {
   const { width } = useWindowDimensions();
-  const use_mobile = width <= 400;
-  const use_responsive = width <= 1000 && width > 400;
+  const use_mobile = width <= 600;
+  const use_responsive = width <= 1000 && width > 600;
 
   return (
     <CardContainer
@@ -126,10 +136,10 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       <ScrollableSegment
         id="ScrollableSegment"
         style={{
-          padding: use_mobile ? "0.75rem" : use_responsive ? "1rem" : "1rem",
+          padding: use_mobile ? "0" : use_responsive ? "0.5rem" : "1rem",
           flex: 1,
           minHeight: 0,
-          marginBottom: use_mobile ? "8px" : use_responsive ? "12px" : "20px",
+          marginBottom: use_mobile ? "0" : use_responsive ? "12px" : "20px",
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
         }}
         className="CardHolder"
@@ -160,21 +170,21 @@ const CardContainer = styled.div<CardContainerArgs>(({ width }) => {
     box-sizing: border-box;
   `;
 
-  if (width <= 400) {
+  if (width <= 600) {
+    return `
+      ${baseStyling}
+      max-height: 100vh;
+      height: 100%;
+      padding: clamp(0.25rem, 1vw, 0.5rem);
+      padding-bottom: clamp(0.5rem, 2vh, 0.75rem);
+    `;
+  } else if (width <= 1000 && width > 600) {
     return `
       ${baseStyling}
       max-height: 100vh;
       height: 100%;
       padding: clamp(0.5rem, 1.5vw, 0.75rem);
-      padding-bottom: clamp(0.625rem, 2vh, 0.875rem);
-    `;
-  } else if (width <= 1000) {
-    return `
-      ${baseStyling}
-      max-height: 100vh;
-      height: 100%;
-      padding: clamp(0.75rem, 2vw, 1rem);
-      padding-bottom: clamp(0.875rem, 2.5vh, 1.125rem);
+      padding-bottom: clamp(0.5rem, 2vh, 0.75rem);
     `;
   } else {
     return `
