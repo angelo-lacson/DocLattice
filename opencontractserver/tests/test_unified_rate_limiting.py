@@ -670,21 +670,25 @@ class FailOpenTestCase(TestCase):
 
     @override_settings(RATELIMIT_FAIL_OPEN=True)
     @patch("config.ratelimit.engine.time")
-    @patch("config.ratelimit.engine.cache")
-    def test_fail_open_allows_on_cache_error(self, mock_cache, mock_time):
+    @patch("config.ratelimit.engine._get_cache")
+    def test_fail_open_allows_on_cache_error(self, mock_get_cache, mock_time):
         mock_time.time.return_value = 1000000.0
+        mock_cache = MagicMock()
         mock_cache.add.side_effect = Exception("Redis down")
         mock_cache.incr.side_effect = Exception("Redis down")
+        mock_get_cache.return_value = mock_cache
         # fail_open=True → should NOT be rate limited
         self.assertFalse(is_rate_limited("test", "key", "1/m"))
 
     @override_settings(RATELIMIT_FAIL_OPEN=False)
     @patch("config.ratelimit.engine.time")
-    @patch("config.ratelimit.engine.cache")
-    def test_fail_closed_blocks_on_cache_error(self, mock_cache, mock_time):
+    @patch("config.ratelimit.engine._get_cache")
+    def test_fail_closed_blocks_on_cache_error(self, mock_get_cache, mock_time):
         mock_time.time.return_value = 1000000.0
+        mock_cache = MagicMock()
         mock_cache.add.side_effect = Exception("Redis down")
         mock_cache.incr.side_effect = Exception("Redis down")
+        mock_get_cache.return_value = mock_cache
         # fail_open=False → should be rate limited
         self.assertTrue(is_rate_limited("test", "key", "1/m"))
 

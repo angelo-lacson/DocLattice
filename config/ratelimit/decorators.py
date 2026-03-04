@@ -471,11 +471,21 @@ def view_ratelimit(
             if is_limited and block:
                 from django.http import HttpResponse
 
-                return HttpResponse(
+                # Compute Retry-After from remaining seconds in the current
+                # rate-limit window (RFC 6585).
+                try:
+                    _, period_seconds = parse_rate(rate)
+                    retry_after = period_seconds - (int(time.time()) % period_seconds)
+                except (ValueError, ZeroDivisionError):
+                    retry_after = 60
+
+                response = HttpResponse(
                     "Too many requests. Please try again later.",
                     status=429,
                     content_type="text/plain",
                 )
+                response["Retry-After"] = str(retry_after)
+                return response
 
             return func(request_or_self, *args, **kwargs)
 

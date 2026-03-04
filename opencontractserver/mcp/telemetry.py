@@ -308,7 +308,7 @@ async def arecord_mcp_request(
     return await arecord_event("mcp_request", properties)
 
 
-def get_client_ip_from_scope(scope: dict[str, Any]) -> str | None:
+def get_claimed_client_ip_from_scope(scope: dict[str, Any]) -> str | None:
     """Extract client IP address from an ASGI scope for telemetry purposes.
 
     Unlike the rate-limiting IP extractor (which picks the rightmost trusted
