@@ -62,12 +62,23 @@ services:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
     image: opencontractserver_production_postgres
+    # 256m is sufficient for test workloads; production uses 4g for HNSW builds
+    shm_size: '256m'
     volumes:
       - test_postgres_data:/var/lib/postgresql/data:Z
       - test_postgres_data_backups:/backups:z
-      - ./compose/production/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     env_file:
       - ./.envs/.test/.postgres
+    # Dev/test memory settings (production uses 1GB/512MB respectively)
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c maintenance_work_mem=256MB
+      -c effective_cache_size=2GB
+      -c work_mem=16MB
+      -c max_parallel_maintenance_workers=4
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U oc_user -d opencontractserver"]
       interval: 5s

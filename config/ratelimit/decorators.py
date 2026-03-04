@@ -26,10 +26,10 @@ from config.ratelimit.engine import (
     parse_rate,
 )
 from config.ratelimit.keys import (
-    _is_authenticated,
     get_client_ip_from_http,
     get_client_ip_from_scope,
     get_rate_limit_key,
+    is_authenticated,
 )
 from config.ratelimit.rates import RateLimits, get_tier_adjusted_rate
 
@@ -229,7 +229,7 @@ def _resolve_graphql_key(key, root, info, request, block: bool, **kwargs) -> str
         return get_rate_limit_key(ip=ip, strategy="ip")
 
     if key == "user":
-        if not request.user or not _is_authenticated(request.user):
+        if not request.user or not is_authenticated(request.user):
             if block:
                 raise GraphQLError("Authentication required for this operation")
             return None
@@ -286,7 +286,18 @@ async def check_ws_rate_limit(
     ip = get_client_ip_from_scope(consumer.scope)
     limit_key = get_rate_limit_key(user=user, ip=ip)
 
-    base_rate = getattr(RateLimits, operation_type, RateLimits.READ_MEDIUM)
+    try:
+        base_rate = getattr(RateLimits, operation_type)
+    except AttributeError:
+        valid = [
+            attr
+            for attr in dir(RateLimits)
+            if attr.isupper() and not attr.startswith("_")
+        ]
+        raise ValueError(
+            f"Unknown rate limit category {operation_type!r}. "
+            f"Valid categories: {', '.join(sorted(valid))}"
+        )
     rate = get_tier_adjusted_rate(user, base_rate)
 
     grp = f"ws:{group_suffix or operation_type}"
@@ -393,7 +404,7 @@ async def check_mcp_rate_limit(
 
 
 def view_ratelimit(
-    key: str | Callable | None = None,
+    key: Callable[[str, Any], str] | None = None,
     rate: str = "10/m",
     block: bool = False,
     group: str | None = None,

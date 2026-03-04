@@ -1,5 +1,13 @@
-from django.db.models import QuerySet
+import logging
+
 from pgvector.django import CosineDistance
+
+from opencontractserver.constants.search import (
+    DIM_TO_FIELD_MAP,
+    HNSW_MAX_INDEXED_DIM,
+)
+
+_logger = logging.getLogger(__name__)
 
 
 class VectorSearchViaEmbeddingMixin:
@@ -26,29 +34,17 @@ class VectorSearchViaEmbeddingMixin:
         Given the dimension of the query vector, return the appropriate field
         on the Embedding model (vector_384, vector_768, etc.).
         """
-        if dimension == 384:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_384"
-        elif dimension == 768:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_768"
-        elif dimension == 1024:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_1024"
-        elif dimension == 1536:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
-        elif dimension == 2048:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_2048"
-        elif dimension == 3072:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
-        elif dimension == 4096:
-            return f"{self.EMBEDDING_RELATED_NAME}__vector_4096"
-        else:
+        field_name = DIM_TO_FIELD_MAP.get(dimension)
+        if not field_name:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
+        return f"{self.EMBEDDING_RELATED_NAME}__{field_name}"
 
     def search_by_embedding(
         self,
         query_vector: list[float],
         embedder_path: str,
         top_k: int = 10,
-    ) -> QuerySet:
+    ) -> list:
         """
         Vector search for records of this model by embeddings stored in
         a reverse relation to Embedding (embedding->document, for instance).
@@ -56,18 +52,34 @@ class VectorSearchViaEmbeddingMixin:
         - dimension is inferred from len(query_vector)
         - filters on embedder_path
         - excludes cases where the chosen vector field is null
-        - adds an annotation 'similarity_score' via CosineDistance
-        - sorts ascending by that distance
-        - slices top_k
+        - adds an annotation '_cosine_distance' via CosineDistance
+        - PostgreSQL handles ORDER BY + LIMIT using HNSW index (O(log n))
+        - converts distance to similarity_score
 
-        Returns a QuerySet of your model (Document, Annotation, Note),
-        annotated with 'similarity_score'.
+        With HNSW indexes on the Embedding vector columns, PostgreSQL uses
+        approximate nearest neighbor search instead of sequential scan.
+        With pgvector 0.8+ iterative scans (set via init.sql), the
+        embedder_path WHERE filter is handled efficiently without
+        result loss.
+
+        The unique constraint per (embedder_path, parent) from migration 0059
+        guarantees at most one Embedding per parent object per embedder, so
+        no DISTINCT ON deduplication is needed.
+
+        Returns a **list** (not a QuerySet) of model instances annotated
+        with 'similarity_score'. Do not chain QuerySet methods on the result.
         """
         dimension = len(query_vector)
+        if dimension > HNSW_MAX_INDEXED_DIM:
+            _logger.warning(
+                "Embedding dimension %d exceeds highest HNSW-indexed dim (%d); "
+                "query will use sequential scan instead of HNSW index.",
+                dimension,
+                HNSW_MAX_INDEXED_DIM,
+            )
         vector_field = self._dimension_to_field(dimension)
 
-        # Must join to Embedding objects that have embedder_path == embedder_path
-        # and a non-null vector_xxx field
+        # JOIN to Embedding rows matching the embedder and non-null vector
         base_qs = self.filter(
             **{
                 f"{self.EMBEDDING_RELATED_NAME}__embedder_path": embedder_path,
@@ -75,28 +87,16 @@ class VectorSearchViaEmbeddingMixin:
             }
         )
 
-        # Use annotate(...) plus the CosineDistance from pgvector
-        # CosineDistance returns distance (0 = identical, 1 = orthogonal, 2 = opposite)
-        # We convert to similarity (1 = identical, 0 = different) for frontend display
-        # Formula: similarity = 1 - distance (for normalized vectors, distance is 0-1)
+        # Annotate with cosine distance and let PostgreSQL handle ORDER BY + LIMIT.
+        # With HNSW indexes this is O(log n) instead of O(n) sequential scan.
+        # CosineDistance returns 0 (identical) to 2 (opposite).
         base_qs = base_qs.annotate(
             _cosine_distance=CosineDistance(vector_field, query_vector)
         )
 
-        # PostgreSQL DISTINCT ON approach to handle JOIN duplicates:
-        # When an object has multiple Embedding rows with the same embedder_path,
-        # we want to keep only one result per unique object ID.
-        # DISTINCT ON (id) requires id to be first in ORDER BY, so we order by id first,
-        # then distance to pick the best score for each ID (though they should be identical).
-        base_qs = base_qs.order_by("id", "_cosine_distance").distinct("id")
-
-        # Materialize to list, sort by distance, and take top_k
-        # Note: DISTINCT ON requires id first in ORDER BY, so we can't do the final
-        # sort by distance in PostgreSQL. Python sort is efficient for typical result
-        # sizes (hundreds to low thousands). For extreme scale, consider raw SQL with CTE.
-        results = list(base_qs)
-        results.sort(key=lambda obj: obj._cosine_distance)
-        results = results[:top_k]
+        # Let PostgreSQL sort and limit — HNSW index drives the scan.
+        # Only top_k rows are materialized into Python, not the full table.
+        results = list(base_qs.order_by("_cosine_distance")[:top_k])
 
         # Convert distance to similarity score for each result
         # similarity = 1 - distance (clamped to 0-1 range)
@@ -141,25 +141,12 @@ class HasEmbeddingMixin:
         Returns:
             List[float] | None: The embedding vector or None if not found
         """
-        # Late import to avoid circular import
+        # Late import to avoid circular import (Embedding defined in annotations.models
+        # which itself uses this mixin)
         from opencontractserver.annotations.models import Embedding
 
-        # Get the appropriate vector field name
-        if dimension == 384:
-            vector_field = "vector_384"
-        elif dimension == 768:
-            vector_field = "vector_768"
-        elif dimension == 1024:
-            vector_field = "vector_1024"
-        elif dimension == 1536:
-            vector_field = "vector_1536"
-        elif dimension == 2048:
-            vector_field = "vector_2048"
-        elif dimension == 3072:
-            vector_field = "vector_3072"
-        elif dimension == 4096:
-            vector_field = "vector_4096"
-        else:
+        vector_field = DIM_TO_FIELD_MAP.get(dimension)
+        if not vector_field:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
 
         kwargs = self.get_embedding_reference_kwargs()  # e.g. {"document_id": self.pk}

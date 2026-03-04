@@ -595,7 +595,6 @@ const mockPipelineComponents = {
       settingsSchema: [],
     },
   ],
-  postProcessors: [],
 };
 
 const mockPipelineComponentsWithConfiguredSecrets = {
@@ -1475,7 +1474,6 @@ test.describe("SystemSettings Component", () => {
           settingsSchema: [],
         },
       ],
-      postProcessors: [],
     };
 
     const settingsMock = {

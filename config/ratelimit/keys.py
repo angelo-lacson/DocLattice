@@ -213,17 +213,17 @@ def get_rate_limit_key(
         return f"ip:{ip}"
 
     if strategy == "user":
-        if not user or not _is_authenticated(user):
+        if not user or not is_authenticated(user):
             raise ValueError("Authenticated user required for 'user' key strategy")
         return f"user:{user.id}"
 
     # Default: user_or_ip
-    if user and _is_authenticated(user):
+    if user and is_authenticated(user):
         return f"user:{user.id}"
     return f"ip:{ip}"
 
 
-def _is_authenticated(user: Any) -> bool:
+def is_authenticated(user: Any) -> bool:
     """Check if a user object is authenticated, handling both property and method forms.
 
     The callable guard exists because ``is_authenticated`` was a method

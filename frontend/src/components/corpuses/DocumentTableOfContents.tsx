@@ -34,6 +34,7 @@ import {
   OS_LEGAL_SPACING,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../assets/configurations/osLegalStyles";
+import { mediaQuery } from "./styles/corpusDesignTokens";
 import {
   DOCUMENT_RELATIONSHIP_TOC_LIMIT,
   CORPUS_DOCUMENTS_TOC_LIMIT,
@@ -48,6 +49,8 @@ interface DocumentTableOfContentsProps {
   maxDepth?: number;
   /** When true, renders without outer container (for embedding in tabs) */
   embedded?: boolean;
+  /** Case-insensitive filter applied to document titles and descriptions */
+  filterQuery?: string;
 }
 
 interface DocumentNode {
@@ -162,6 +165,15 @@ const TreeNode = styled.div<{ $depth: number }>`
     margin-left: ${props.$depth * 16 - 1}px;
     padding-left: 1px;
   `}
+
+  ${mediaQuery.tablet} {
+    margin-left: ${(props) => props.$depth * 12}px;
+    ${(props) =>
+      props.$depth > 0 &&
+      `
+      margin-left: ${props.$depth * 12 - 1}px;
+    `}
+  }
 `;
 
 const NodeItem = styled.div<{
@@ -189,6 +201,11 @@ const NodeItem = styled.div<{
   &:focus-visible {
     outline: 2px solid ${OS_LEGAL_COLORS.accent};
     outline-offset: -2px;
+  }
+
+  ${mediaQuery.tablet} {
+    gap: 8px;
+    padding: ${(props) => (props.$hasDescription ? "10px 12px" : "8px 12px")};
   }
 `;
 
@@ -218,6 +235,16 @@ const IconContainer = styled.div<{ $fileType?: string }>`
   height: 22px;
   flex-shrink: 0;
   color: #64748b;
+
+  ${mediaQuery.tablet} {
+    width: 18px;
+    height: 18px;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
 `;
 
 const NodeContent = styled.div`
@@ -241,6 +268,11 @@ const NodeTitle = styled.div`
   ${NodeItem}:hover & {
     color: #0f766e;
   }
+
+  ${mediaQuery.tablet} {
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
 `;
 
 const NodeDescription = styled.div`
@@ -254,6 +286,13 @@ const NodeDescription = styled.div`
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+
+  ${mediaQuery.tablet} {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    -webkit-line-clamp: 1;
+    margin-top: 2px;
+  }
 `;
 
 const NodeMeta = styled.div`
@@ -353,7 +392,7 @@ const formatFileType = (fileType?: string): string => {
 
 export const DocumentTableOfContents: React.FC<
   DocumentTableOfContentsProps
-> = ({ corpusId, maxDepth = 4, embedded = false }) => {
+> = ({ corpusId, maxDepth = 4, embedded = false, filterQuery }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(
@@ -455,7 +494,7 @@ export const DocumentTableOfContents: React.FC<
         documentMap.set(doc.id, {
           id: doc.id,
           title: doc.title || "Untitled",
-          description: undefined, // Not available in lightweight query
+          description: doc.description || undefined,
           fileType: doc.fileType || undefined,
           slug: doc.slug,
           icon: doc.icon || undefined,
@@ -582,6 +621,34 @@ export const DocumentTableOfContents: React.FC<
         allNodeIds: collectExpandableIds(roots),
       };
     }, [relationshipsData, documentsData, documentsLoading, maxDepth]);
+
+  // Apply filter to tree when filterQuery is provided
+  const filteredNodes = useMemo(() => {
+    const query = filterQuery?.trim().toLowerCase();
+    if (!query) return rootNodes;
+
+    const filterTree = (nodes: DocumentNode[]): DocumentNode[] => {
+      const result: DocumentNode[] = [];
+      for (const node of nodes) {
+        const titleMatch = node.title.toLowerCase().includes(query);
+        const descMatch = node.description?.toLowerCase().includes(query);
+
+        if (titleMatch || descMatch) {
+          // Node matches — keep it and ALL its children unfiltered
+          result.push(node);
+        } else {
+          // Check if any descendant matches
+          const filteredChildren = filterTree(node.children);
+          if (filteredChildren.length > 0) {
+            result.push({ ...node, children: filteredChildren });
+          }
+        }
+      }
+      return result;
+    };
+
+    return filterTree(rootNodes);
+  }, [rootNodes, filterQuery]);
 
   // Track if we've successfully handled the initial expand all state
   // (only true once we've actually expanded nodes, not just attempted to)
@@ -830,17 +897,20 @@ export const DocumentTableOfContents: React.FC<
     );
   }
 
-  if (rootNodes.length === 0) {
-    // Show empty state when there are no documents in the corpus
+  if (filteredNodes.length === 0) {
+    // Show empty state when there are no documents (or filter matched nothing)
     return (
       <Wrapper>
         <TreeContainer>
           <div className="empty-state">
             <ListTree size={48} className="empty-icon" />
-            <div className="empty-title">No Documents</div>
+            <div className="empty-title">
+              {filterQuery?.trim() ? "No Matches" : "No Documents"}
+            </div>
             <div className="empty-description">
-              This corpus doesn't have any documents yet. Add documents to see
-              them in the table of contents.
+              {filterQuery?.trim()
+                ? "No documents match your filter. Try a different search term."
+                : "This corpus doesn't have any documents yet. Add documents to see them in the table of contents."}
             </div>
           </div>
         </TreeContainer>
@@ -872,7 +942,7 @@ export const DocumentTableOfContents: React.FC<
         </WarningBanner>
       )}
       <TreeContainer role="tree" aria-label="Document hierarchy">
-        {rootNodes.map((node) => renderNode(node, 0))}
+        {filteredNodes.map((node) => renderNode(node, 0))}
       </TreeContainer>
     </Wrapper>
   );

@@ -5,7 +5,7 @@ hiredis==3.3.0  # https://github.com/redis/hiredis-py
 redis==7.2.1  # https://github.com/redis/redis-py
 celery==5.6.2  # pyup: < 6.0  # https://github.com/celery/celery
 flower==2.0.1  # https://github.com/mher/flower
-django-celery-beat==2.8.1  # https://github.com/celery/django-celery-beat
+django-celery-beat==2.9.0  # https://github.com/celery/django-celery-beat
 pyjwt==2.11.0  # https://github.com/jpadilla/pyjwt
 cryptography==46.0.5  # https://github.com/pyca/cryptography
 pydantic==2.*
@@ -19,8 +19,6 @@ tokenizers>=0.21,<0.23  # Pin to prevent conflicts with transformers
 django==5.2.11  # https://www.djangoproject.com/
 django-environ==0.13.0  # https://github.com/joke2k/django-environ
 django-model-utils==5.0.0  # https://github.com/jazzband/django-model-utils
-django-crispy-forms==2.5  # https://github.com/django-crispy-forms/django-crispy-forms
-crispy-bootstrap5==2025.6  # https://github.com/django-crispy-forms/crispy-bootstrap5
 django-redis==6.0.0  # https://github.com/jazzband/django-redis
 django-filter==25.1  # https://github.com/carltongibson/django-filter
 django-storages[boto3,google]==1.14.6  # https://github.com/jschneier/django-storages
@@ -28,7 +26,7 @@ django-extensions==4.1  # https://github.com/django-extensions/django-extensions
 whitenoise==6.12.0
 django-tree-queries[admin]==0.23.1  # https://pypi.org/project/django-tree-queries/0.21.0/
 django-cte==3.0.0  # https://github.com/dimagi/django-cte
-pgvector  # For vector embeddings
+pgvector>=0.4.0  # Python binding for pgvector; PostgreSQL extension v0.8+ required for HNSW iterative scan (installed separately)
 channels==4.3.2  # https://github.com/django/channels
 daphne==4.2.1  # https://github.com/django/daphne
 channels-redis==4.3.0
@@ -70,7 +68,7 @@ django-graphql-jwt==0.4.0
 
 # Telemetry
 # ------------------------------------------------------------------------------
-posthog==7.9.4  # https://github.com/posthog/posthog-python
+posthog==7.9.6  # https://github.com/posthog/posthog-python
 
 # JSON Schema
 # ------------------------------------------------------------------------------

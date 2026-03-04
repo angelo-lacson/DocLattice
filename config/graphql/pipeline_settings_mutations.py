@@ -470,7 +470,9 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
                             pipeline_settings=None,
                         )
 
-                settings_instance.enabled_components = enabled_components
+                settings_instance.enabled_components = list(
+                    dict.fromkeys(enabled_components)
+                )
 
             # Record who made the change
             settings_instance.modified_by = user

@@ -10,6 +10,7 @@ from django.db import models
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
 
 from opencontractserver.annotations.models import Annotation
+from opencontractserver.constants.search import DIM_TO_FIELD_MAP
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.shared.defaults import jsonfield_default_value
@@ -300,22 +301,10 @@ class ConversationQuerySet(SoftDeleteQuerySet):
         from pgvector.django import CosineDistance
 
         dimension = len(query_vector)
-
-        # Map dimension to vector field
-        if dimension == 384:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_384"
-        elif dimension == 768:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_768"
-        elif dimension == 1024:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_1024"
-        elif dimension == 1536:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
-        elif dimension == 3072:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
-        elif dimension == 4096:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_4096"
-        else:
+        field_name = DIM_TO_FIELD_MAP.get(dimension)
+        if not field_name:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
+        vector_field = f"{self.EMBEDDING_RELATED_NAME}__{field_name}"
 
         # Filter for embeddings with matching embedder_path and non-null vector
         base_qs = self.filter(
@@ -467,22 +456,10 @@ class ChatMessageQuerySet(SoftDeleteQuerySet):
         from pgvector.django import CosineDistance
 
         dimension = len(query_vector)
-
-        # Map dimension to vector field
-        if dimension == 384:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_384"
-        elif dimension == 768:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_768"
-        elif dimension == 1024:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_1024"
-        elif dimension == 1536:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_1536"
-        elif dimension == 3072:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_3072"
-        elif dimension == 4096:
-            vector_field = f"{self.EMBEDDING_RELATED_NAME}__vector_4096"
-        else:
+        field_name = DIM_TO_FIELD_MAP.get(dimension)
+        if not field_name:
             raise ValueError(f"Unsupported embedding dimension: {dimension}")
+        vector_field = f"{self.EMBEDDING_RELATED_NAME}__{field_name}"
 
         # Filter for embeddings with matching embedder_path and non-null vector
         base_qs = self.filter(

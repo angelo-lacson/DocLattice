@@ -8,13 +8,27 @@ in sync and async contexts without requiring a Django ``HttpRequest``.
 
 Cache key format: ``{prefix}:{group}:{key}:{window}``
 where ``window = int(time.time()) // period``.
+
+.. note:: **Behavior change from django-ratelimit**
+
+   The previous ``RateLimiter.check_rate_limit()`` reset the cache TTL on
+   every call (``cache.set(key, current + 1, window_seconds)``), which
+   approximated a sliding expiry.  This engine uses true fixed windows
+   (``int(time.time()) // period``), so the counter resets at predictable
+   boundaries.
+
+   **Known limitation:** The fixed-window algorithm allows up to 2x the
+   configured rate at window boundaries (N requests at the end of window T,
+   N more at the start of window T+1).  For the rate limits used in this
+   project the burst is acceptable.  If strict enforcement is needed in the
+   future, consider a sliding-window or token-bucket algorithm.
 """
 
 import logging
 import time
 
 from django.conf import settings
-from django.core.cache import cache
+from django.core.cache import caches
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +37,12 @@ PERIOD_MAP = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 PERIOD_NAMES = {"s": "second", "m": "minute", "h": "hour", "d": "day"}
 
 UNKNOWN_IP = "unknown"
+
+
+def _get_cache():
+    """Return the cache backend configured for rate limiting."""
+    backend = getattr(settings, "RATELIMIT_USE_CACHE", "default")
+    return caches[backend]
 
 
 def parse_rate(rate: str) -> tuple[int, int]:
@@ -90,6 +110,7 @@ def is_rate_limited(group: str, key: str, rate: str, increment: bool = True) -> 
 
     window = int(time.time()) // period
     cache_key = _make_cache_key(group, key, window)
+    cache = _get_cache()
 
     if not increment:
         current = cache.get(cache_key, 0)

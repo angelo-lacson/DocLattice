@@ -5,7 +5,23 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-02
+## [Unreleased] - 2026-03-04
+
+### Removed
+
+- **Unused `django-crispy-forms` and `crispy-bootstrap5` dependencies**: These were cookiecutter-django boilerplate never used by the project (React frontend uses its own form components). Removed packages from `requirements/base.txt`, `INSTALLED_APPS`, and `CRISPY_*` settings from `config/settings/base.py`.
+
+### Fixed
+
+- **Duplicate enabled-field logic**: `ComponentLibrary` now reads the backend-computed `component.enabled` field instead of recalculating enablement from the `enabledComponents` list, eliminating divergent sources of truth (issue #1036 item 1). (`frontend/src/components/admin/system_settings/ComponentLibrary.tsx`)
+- **Silent toggle failure**: Toggle clicks while components are loading now show a toast warning instead of silently failing (issue #1036 item 2). (`frontend/src/components/admin/SystemSettings.tsx`)
+- **MIME-type fallback flaw**: `FiletypeDefaults` now falls back to the full MIME string when the short-label lookup misses, preventing all availability checks from failing for unmapped types (issue #1036 item 3). (`frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
+- **Unused postProcessors fetch**: Removed `postProcessors` from the `GET_PIPELINE_COMPONENTS` GraphQL query since no frontend component consumes it (issue #1036 item 4). (`frontend/src/components/admin/system_settings/graphql.ts`)
+- **Potential duplicate class names**: Toggle handler now deduplicates component paths when transitioning from all-enabled to an explicit list (issue #1036 item 5). (`frontend/src/components/admin/SystemSettings.tsx`)
+- **Replicated empty-list-as-all-enabled semantics**: Extracted `isComponentEnabled` and `isComponentAvailable` into a shared `utils.ts` module, consolidating the repeated logic into one place (issue #1036 item 6). (`frontend/src/components/admin/system_settings/utils.ts`)
+- **Implicit test dependency**: Added explicit class-level constants for test component paths and expanded `test_pipeline_components_query_non_superuser_filters_configured` to verify all component stages, not just parsers (issue #1036 item 8). (`opencontractserver/tests/test_pipeline_component_queries.py`)
+- **Corpus preferred_embedder not set when default is empty** (pre-existing): `Corpus.save()` used `if not self.preferred_embedder and default_embedder` which skipped assignment when `get_default_embedder_path()` returned `""`. Changed to `if self.preferred_embedder is None` so the field is always populated consistently. (`opencontractserver/corpuses/models.py:426`)
+- **Stale postProcessors in PipelineComponentsType**: Removed unused `postProcessors` field from the `PipelineComponentsType` TypeScript type to match the system settings GQL query. (`frontend/src/types/graphql-api.ts`)
 
 ### Added
 
@@ -19,6 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Django view adapter** (`view_ratelimit`): Drop-in replacement for `django_ratelimit.decorators.ratelimit`, used in admin login views
 - **Backward-compatible re-exports**: `config/graphql/ratelimits.py` remains a valid import path for all existing GraphQL files
 - Comprehensive test suite (`opencontractserver/tests/test_unified_rate_limiting.py`) covering engine, keys, rates, and all protocol adapters
+
+- Backend mutation test for the all-enabled-to-explicit toggle transition, verifying the mutation succeeds and the query reflects the change (issue #1036 item 7). (`opencontractserver/tests/test_pipeline_settings.py`)
+
+### Added
+
+#### Optimize Vector Search and Index Scalability for Million-Scale Corpora
+- **HNSW indexes on all Embedding vector columns** (384–4096 dimensions): Approximate nearest neighbor search reduces vector queries from O(n) sequential scan to O(log n). Created via `AddIndexConcurrently` to avoid table locks during index creation (`opencontractserver/annotations/models.py`, `opencontractserver/annotations/migrations/0063_add_hnsw_indexes_and_search_vector.py`)
+- **Eliminated Python-side materialization** in `VectorSearchViaEmbeddingMixin.search_by_embedding()`: Previously materialized ALL matching rows into Python, sorted, and sliced. Now uses PostgreSQL `ORDER BY + LIMIT` so only top-k rows cross the wire. The unique constraint from migration 0059 guarantees no JOIN duplicates, removing the need for `DISTINCT ON` (`opencontractserver/shared/mixins.py`)
+- **PostgreSQL full-text search** on Annotation: Added `search_vector` (`SearchVectorField`) with GIN index and a database trigger that auto-populates tsvector from `raw_text` on INSERT/UPDATE. Replaces `LIKE '%term%'` (`icontains`) with indexed tsvector matching for 100x+ faster text search at scale (`opencontractserver/annotations/models.py`)
+- **Hybrid search with Reciprocal Rank Fusion (RRF)**: New `CoreAnnotationVectorStore.hybrid_search()` method runs vector similarity and full-text search in parallel, then fuses results using RRF (k=60). Semantic search GraphQL resolver now uses hybrid search for improved result quality (`opencontractserver/llms/vector_stores/core_vector_stores.py`, `config/graphql/search_queries.py`)
+- **RRF utility function** (`opencontractserver/utils/search.py`): Generic `reciprocal_rank_fusion()` that merges any number of ranked lists
+- **Search constants** (`opencontractserver/constants/search.py`): `HNSW_M`, `HNSW_EF_CONSTRUCTION`, `RRF_K`, `HYBRID_SEARCH_OVERSAMPLE_FACTOR`, `FTS_CONFIG`
+- **pgvector PostgreSQL extension upgraded to 0.8.0** (installed via Docker, not the Python package): Enables iterative index scans for filtered ANN queries (prevents result loss when combining vector search with `WHERE` clauses like `embedder_path` filtering). Database default set via `ALTER DATABASE ... SET hnsw.iterative_scan = 'relaxed_order'` in `init.sql` (`compose/production/postgres/Dockerfile`, `compose/production/postgres/init.sql`)
+- **PostgreSQL tuning for vector workloads**: Added `shared_buffers`, `maintenance_work_mem`, `effective_cache_size`, `work_mem`, `max_parallel_maintenance_workers`, `random_page_cost`, and `effective_io_concurrency` to all Docker Compose files. Added `shm_size` for parallel HNSW index builds (`local.yml`, `production.yml`, `test.yml`)
+- **Pinned pgvector Python package** to `>=0.4.0` for `HnswIndex` support (`requirements/base.txt`)
+- **Expanded valid embedding dimensions** in `CoreAnnotationVectorStore`: Search methods now accept 1024 and 2048 dimensions in addition to existing 384, 768, 1536, 3072, 4096
+- **Added 2048-dimension support** to conversation and message vector search methods (`opencontractserver/conversations/models.py`)
+- **GraphQL annotation mention search** now uses full-text search via `SearchQuery` on GIN-indexed `search_vector` instead of `raw_text__icontains` (`config/graphql/search_queries.py`)
 
 - **IconPicker Lucide Rebuild (SUI Migration Step 3)**: Replaced the Semantic UI icon catalog with a curated Lucide icon catalog (~440 icons across 16 categories). New `IconPickerModal` component displays Lucide icons in a searchable, category-filtered grid with live preview. New `IconDropdown` component provides a compact trigger that opens the modal. Updated `iconCompat.ts` with dynamic fallback resolution so `resolveIcon()` supports all Lucide icons via `kebabToPascal` conversion against the full `lucide-react` export. Legacy SUI icon names remain backward-compatible through the existing `SEMANTIC_TO_LUCIDE` mapping. Includes 16 Playwright component tests and automated documentation screenshots. (`frontend/src/components/widgets/icon-picker/icons.ts`, `frontend/src/components/widgets/icon-picker/IconPickerModal.tsx`, `frontend/src/components/widgets/icon-picker/IconDropdown.tsx`, `frontend/src/utils/iconCompat.ts`)
 
@@ -63,6 +97,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Missing embedding dimensions in VALID_EMBEDDING_DIMS
+- `VALID_EMBEDDING_DIMS` was missing dimensions 1024, 2048, and 4096, causing validation failures for embedders that produce these common dimensions (e.g., some OpenAI and Cohere models). Added missing entries to `VALID_EMBEDDING_DIMS` and `DIM_TO_FIELD_MAP` in `opencontractserver/constants/search.py`.
+
 #### Fix My Documents Corpus Not Navigable Due to Missing Slugs
 - **Root cause**: Migration 0038 created personal corpuses using historical models which bypass `Corpus.save()` slug auto-generation, leaving `slug=NULL`. The frontend requires both `corpus.slug` and `creator.slug` to build navigation URLs (`/c/<user>/<corpus>`), so clicking "My Documents" logged "Cannot navigate to corpus without slugs" and did nothing.
 - **Fix (model)**: `Corpus.get_or_create_personal_corpus()` now detects when a returned corpus lacks a slug and triggers `save()` to backfill it on access (`opencontractserver/corpuses/models.py:518-521`).
@@ -79,6 +116,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Added**: `test_formfield_rejects_invalid_json` and `test_formfield_accepts_valid_json` integration tests on `NullableJSONFieldTests` to verify the model field's `formfield()` method produces a form field that properly validates JSON (`opencontractserver/tests/test_custom_fields.py:63-71`).
 
 ### Changed
+
+#### Deployment: migration 0063 backfill may need a maintenance window for large deployments
+- Operators with >1M annotations should consider running the search_vector backfill (Phase 4 of migration 0063) during a maintenance window. The migration now emits `RAISE NOTICE` progress messages so operators can monitor backfill progress in PostgreSQL logs.
+- Production `maintenance_work_mem` reduced from `2GB` to `512MB`. The higher value is only needed during the initial HNSW index build; operators should temporarily increase it for that migration, then revert (`production.yml`).
+- `hnsw.ef_search` increased from `40` to `64` to match `ef_construction`, improving recall for legal document search (`compose/production/postgres/init.sql`, migration 0063).
+
+#### Annotation text search now uses PostgreSQL full-text search with English stemming
+- The annotation mention search (`resolve_search_annotations_for_mention`) and the semantic search resolver now use `SearchQuery` on a GIN-indexed `search_vector` column instead of `raw_text__icontains`. This means text queries now match English-stemmed forms (e.g., searching "contract" also matches "contracting" and "contracted") rather than requiring exact substring matches. This is a semantic behavior change for users accustomed to exact substring matching on `raw_text`. See `config/graphql/search_queries.py`.
 
 #### Triage and Clean Up TODO/FIXME Comments (Closes #971)
 - Removed 62 TODO/FIXME/HACK annotations across 43 backend and frontend files
