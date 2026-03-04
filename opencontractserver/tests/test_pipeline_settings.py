@@ -496,9 +496,6 @@ class EnabledComponentsMutationTestCase(TestCase):
     def setUp(self):
         from django.core.cache import cache
 
-        # Clear cache to ensure clean state between tests
-        cache.delete(PipelineSettings.CACHE_KEY)
-
         self.superuser = User.objects.create_superuser(
             username="ps_ec_admin", password="admin", email="ps_ec_admin@test.com"
         )
@@ -506,8 +503,19 @@ class EnabledComponentsMutationTestCase(TestCase):
             schema, context_value=TestContext(self.superuser)
         )
 
-        # Ensure the singleton exists
-        PipelineSettings.get_instance()
+        # Ensure the singleton exists and clear filetype default assignments.
+        # This prevents validation conflicts when tests set enabled_components,
+        # since the mutation rejects lists that omit assigned-default components.
+        # use_cache=False bypasses stale cache entries from prior tests.
+        instance = PipelineSettings.get_instance(use_cache=False)
+        instance.preferred_parsers = {}
+        instance.preferred_embedders = {}
+        instance.preferred_thumbnailers = {}
+        instance.default_embedder = ""
+        instance.enabled_components = []
+        instance.save()
+        # save() may re-populate the cache; clear it so tests start fresh.
+        cache.delete(PipelineSettings.CACHE_KEY)
 
     def _get_real_component_paths(self):
         """Return a dict with real component paths from the registry."""
@@ -692,6 +700,122 @@ class EnabledComponentsMutationTestCase(TestCase):
         data = result["data"]["updatePipelineSettings"]
         self.assertTrue(data["ok"], data.get("message"))
         self.assertEqual(data["pipelineSettings"]["enabledComponents"], [])
+
+    def test_transition_from_all_enabled_to_explicit_list(self):
+        """Simulate the frontend toggle: start with [] (all enabled), then
+        disable one component by sending the full list minus that component.
+        Verify the mutation succeeds and the query reflects the change."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        all_paths = sorted(
+            {
+                c.class_name
+                for c in registry.parsers + registry.embedders + registry.thumbnailers
+            }
+        )
+        if len(all_paths) < 2:
+            self.skipTest("Need at least 2 registered components")
+
+        # Pick one component to disable (setUp already clears filetype defaults)
+        target = all_paths[0]
+        new_enabled = [p for p in all_paths if p != target]
+
+        mutation = """
+            mutation UpdatePipelineSettings($enabledComponents: [String]) {
+                updatePipelineSettings(enabledComponents: $enabledComponents) {
+                    ok
+                    message
+                    pipelineSettings {
+                        enabledComponents
+                    }
+                }
+            }
+        """
+
+        result = self.superuser_client.execute(
+            mutation, variables={"enabledComponents": new_enabled}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updatePipelineSettings"]
+        self.assertTrue(data["ok"], data.get("message"))
+        self.assertEqual(
+            sorted(data["pipelineSettings"]["enabledComponents"]),
+            sorted(new_enabled),
+        )
+
+        # Verify the disabled component is reflected in a query
+        query = """
+            query {
+                pipelineComponents {
+                    parsers { className enabled }
+                    embedders { className enabled }
+                    thumbnailers { className enabled }
+                }
+            }
+        """
+        query_result = self.superuser_client.execute(query)
+        self.assertIsNone(query_result.get("errors"))
+        components_data = query_result["data"]["pipelineComponents"]
+        all_components = (
+            components_data["parsers"]
+            + components_data["embedders"]
+            + components_data["thumbnailers"]
+        )
+
+        target_component = next(
+            (c for c in all_components if c["className"] == target), None
+        )
+        self.assertIsNotNone(
+            target_component,
+            f"Disabled component {target} should still appear in query results",
+        )
+        self.assertFalse(
+            target_component["enabled"],
+            f"Component {target} should be disabled after transition",
+        )
+
+        # Verify all other components are still enabled
+        for comp in all_components:
+            if comp["className"] != target and comp["className"] in new_enabled:
+                self.assertTrue(
+                    comp["enabled"],
+                    f"Component {comp['className']} should still be enabled",
+                )
+
+    def test_toggle_accepts_duplicates_in_enabled_list(self):
+        """Verify that duplicate class names in enabled_components are accepted
+        gracefully (the mutation deduplicates before storing)."""
+        from opencontractserver.pipeline.registry import get_registry
+
+        registry = get_registry()
+        if not registry.parsers:
+            self.skipTest("Need at least 1 registered parser")
+
+        # setUp already clears filetype defaults to avoid "cannot disable assigned" errors
+        path = registry.parsers[0].class_name
+        mutation = """
+            mutation UpdatePipelineSettings($enabledComponents: [String]) {
+                updatePipelineSettings(enabledComponents: $enabledComponents) {
+                    ok
+                    message
+                    pipelineSettings { enabledComponents }
+                }
+            }
+        """
+        result = self.superuser_client.execute(
+            mutation, variables={"enabledComponents": [path, path]}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updatePipelineSettings"]
+        self.assertTrue(data["ok"], data.get("message"))
+
+        stored = data["pipelineSettings"]["enabledComponents"]
+        self.assertEqual(
+            stored,
+            [path],
+            "Backend should deduplicate enabled_components before storing",
+        )
 
 
 class PipelineSettingsSecretsTestCase(TestCase):

@@ -216,6 +216,16 @@ class TestPostProcessor(BasePostProcessor):
                 os.remove(file_path)
         cls.test_files = []
 
+    # Class-level constants for test component paths.  Every test that
+    # relies on a specific component being configured should reference
+    # these constants rather than relying on implicit setUp state.
+    TEST_PARSER = "opencontractserver.pipeline.parsers.test_parser.TestParser"
+    TEST_EMBEDDER = "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
+    TEST_THUMBNAILER = (
+        "opencontractserver.pipeline.thumbnailers.test_thumbnailer.TestThumbnailer"
+    )
+    TEST_POST_PROCESSOR = "opencontractserver.pipeline.post_processors.test_post_processor.TestPostProcessor"
+
     def setUp(self):
         self.user = User.objects.create_user(
             username="testuser", password="testpassword"
@@ -230,19 +240,17 @@ class TestPostProcessor(BasePostProcessor):
 
         settings_instance = PipelineSettings.get_instance(use_cache=False)
         settings_instance.preferred_parsers = {
-            "application/pdf": "opencontractserver.pipeline.parsers.test_parser.TestParser"
+            "application/pdf": self.TEST_PARSER,
         }
         settings_instance.preferred_embedders = {
-            "application/pdf": "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
+            "application/pdf": self.TEST_EMBEDDER,
         }
         settings_instance.preferred_thumbnailers = {
-            "application/pdf": "opencontractserver.pipeline.thumbnailers.test_thumbnailer.TestThumbnailer"
+            "application/pdf": self.TEST_THUMBNAILER,
         }
-        settings_instance.default_embedder = (
-            "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
-        )
+        settings_instance.default_embedder = self.TEST_EMBEDDER
         settings_instance.component_settings = {
-            "opencontractserver.pipeline.post_processors.test_post_processor.TestPostProcessor": {}
+            self.TEST_POST_PROCESSOR: {},
         }
         settings_instance.save()
 
@@ -326,22 +334,36 @@ class TestPostProcessor(BasePostProcessor):
         self.assertIsNotNone(result.get("errors"))
 
     def test_pipeline_components_query_non_superuser_filters_configured(self):
-        """Test non-superusers only see configured components."""
+        """Test non-superusers only see configured components.
+
+        setUp configures TEST_PARSER, TEST_EMBEDDER, TEST_THUMBNAILER (via
+        preferred_* mappings and default_embedder) and TEST_POST_PROCESSOR
+        (via component_settings).  Only these should be returned for a
+        regular (non-superuser) request.
+        """
         query = """
         query {
             pipelineComponents {
-                parsers {
-                    name
-                }
+                parsers { name }
+                embedders { name }
+                thumbnailers { name }
             }
         }
         """
         result = self.client.execute(query)
         self.assertIsNone(result.get("errors"))
-        parsers = result["data"]["pipelineComponents"]["parsers"]
-        parser_names = [parser["name"] for parser in parsers]
+
+        data = result["data"]["pipelineComponents"]
+
+        parser_names = [p["name"] for p in data["parsers"]]
         self.assertIn("TestParser", parser_names)
         self.assertNotIn("DoclingParser", parser_names)
+
+        embedder_names = [e["name"] for e in data["embedders"]]
+        self.assertIn("TestEmbedder", embedder_names)
+
+        thumbnailer_names = [t["name"] for t in data["thumbnailers"]]
+        self.assertIn("TestThumbnailer", thumbnailer_names)
 
     def test_pipeline_components_query_with_mimetype(self):
         """Test querying pipeline components filtered by mimetype."""

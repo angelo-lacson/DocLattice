@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-02
 
+### Fixed
+
+- **Duplicate enabled-field logic**: `ComponentLibrary` now reads the backend-computed `component.enabled` field instead of recalculating enablement from the `enabledComponents` list, eliminating divergent sources of truth (issue #1036 item 1). (`frontend/src/components/admin/system_settings/ComponentLibrary.tsx`)
+- **Silent toggle failure**: Toggle clicks while components are loading now show a toast warning instead of silently failing (issue #1036 item 2). (`frontend/src/components/admin/SystemSettings.tsx`)
+- **MIME-type fallback flaw**: `FiletypeDefaults` now falls back to the full MIME string when the short-label lookup misses, preventing all availability checks from failing for unmapped types (issue #1036 item 3). (`frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
+- **Unused postProcessors fetch**: Removed `postProcessors` from the `GET_PIPELINE_COMPONENTS` GraphQL query since no frontend component consumes it (issue #1036 item 4). (`frontend/src/components/admin/system_settings/graphql.ts`)
+- **Potential duplicate class names**: Toggle handler now deduplicates component paths when transitioning from all-enabled to an explicit list (issue #1036 item 5). (`frontend/src/components/admin/SystemSettings.tsx`)
+- **Replicated empty-list-as-all-enabled semantics**: Extracted `isComponentEnabled` and `isComponentAvailable` into a shared `utils.ts` module, consolidating the repeated logic into one place (issue #1036 item 6). (`frontend/src/components/admin/system_settings/utils.ts`)
+- **Implicit test dependency**: Added explicit class-level constants for test component paths and expanded `test_pipeline_components_query_non_superuser_filters_configured` to verify all component stages, not just parsers (issue #1036 item 8). (`opencontractserver/tests/test_pipeline_component_queries.py`)
+- **Corpus preferred_embedder not set when default is empty** (pre-existing): `Corpus.save()` used `if not self.preferred_embedder and default_embedder` which skipped assignment when `get_default_embedder_path()` returned `""`. Changed to `if self.preferred_embedder is None` so the field is always populated consistently. (`opencontractserver/corpuses/models.py:426`)
+- **Stale postProcessors in PipelineComponentsType**: Removed unused `postProcessors` field from the `PipelineComponentsType` TypeScript type to match the system settings GQL query. (`frontend/src/types/graphql-api.ts`)
+
+### Added
+
+- Backend mutation test for the all-enabled-to-explicit toggle transition, verifying the mutation succeeds and the query reflects the change (issue #1036 item 7). (`opencontractserver/tests/test_pipeline_settings.py`)
+
 ### Added
 
 #### Optimize Vector Search and Index Scalability for Million-Scale Corpora

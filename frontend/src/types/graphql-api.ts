@@ -1833,8 +1833,6 @@ export type PipelineComponentsType = {
   embedders?: Maybe<Array<Maybe<PipelineComponentType>>>;
   /** List of available thumbnail generators. */
   thumbnailers?: Maybe<Array<Maybe<PipelineComponentType>>>;
-  /** List of available post-processors. */
-  postProcessors?: Maybe<Array<Maybe<PipelineComponentType>>>;
 };
 
 /** Enum for file types. */
