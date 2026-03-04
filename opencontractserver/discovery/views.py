@@ -14,10 +14,15 @@ from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_GET
+from django.views.decorators.vary import vary_on_headers
 
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import DocumentPath
-from opencontractserver.mcp.config import RATE_LIMIT_REQUESTS
+
+try:
+    from opencontractserver.mcp.config import RATE_LIMIT_REQUESTS
+except ImportError:
+    RATE_LIMIT_REQUESTS = 100
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +38,11 @@ def _get_base_url(request: HttpRequest) -> str:
     scheme = "https" if request.is_secure() else "http"
     host = request.get_host()
     return f"{scheme}://{host}"
+
+
+def _sanitize_markdown_title(title: str) -> str:
+    """Strip leading '#' characters from a title to prevent Markdown injection."""
+    return title.lstrip("#").strip()
 
 
 def _get_public_corpuses() -> list[dict]:
@@ -67,6 +77,7 @@ def _get_public_corpuses() -> list[dict]:
 # robots.txt
 # ---------------------------------------------------------------------------
 @require_GET
+@vary_on_headers("Host")
 @cache_page(CACHE_SECONDS)
 def robots_txt(request: HttpRequest) -> HttpResponse:
     base_url = _get_base_url(request)
@@ -117,6 +128,7 @@ def robots_txt(request: HttpRequest) -> HttpResponse:
 # llms.txt
 # ---------------------------------------------------------------------------
 @require_GET
+@vary_on_headers("Host")
 @cache_page(CACHE_SECONDS)
 def llms_txt(request: HttpRequest) -> HttpResponse:
     base_url = _get_base_url(request)
@@ -185,7 +197,7 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
         lines.append("")
         for c in corpuses:
             slug = c["slug"]
-            title = c["title"]
+            title = _sanitize_markdown_title(c["title"])
             doc_count = c["document_count"]
             desc = c["description"]
             # Truncate long descriptions to keep llms.txt concise
@@ -214,6 +226,7 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
 # llms-full.txt
 # ---------------------------------------------------------------------------
 @require_GET
+@vary_on_headers("Host")
 @cache_page(CACHE_SECONDS)
 def llms_full_txt(request: HttpRequest) -> HttpResponse:
     base_url = _get_base_url(request)
@@ -470,7 +483,7 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
         lines.append("")
         for c in corpuses:
             slug = c["slug"]
-            title = c["title"]
+            title = _sanitize_markdown_title(c["title"])
             doc_count = c["document_count"]
             desc = c["description"]
             lines.append(f"### {title}")
@@ -516,6 +529,7 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
 # sitemap.xml
 # ---------------------------------------------------------------------------
 @require_GET
+@vary_on_headers("Host")
 @cache_page(CACHE_SECONDS)
 def sitemap_xml(request: HttpRequest) -> HttpResponse:
     """Generate an XML sitemap listing public corpuses and their documents."""
@@ -586,6 +600,7 @@ def sitemap_xml(request: HttpRequest) -> HttpResponse:
 # .well-known/mcp.json
 # ---------------------------------------------------------------------------
 @require_GET
+@vary_on_headers("Host")
 @cache_page(CACHE_SECONDS)
 def well_known_mcp(request: HttpRequest) -> HttpResponse:
     """MCP server discovery endpoint per emerging .well-known convention."""

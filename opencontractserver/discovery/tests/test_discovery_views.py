@@ -279,8 +279,7 @@ class SitemapXmlTest(TestCase):
     def test_excludes_private_corpus(self):
         response = self.client.get("/sitemap.xml")
         content = response.content.decode()
-        if self.private_corpus.slug:
-            self.assertNotIn(f"/c/{self.private_corpus.slug}", content)
+        self.assertNotIn(f"/c/{self.private_corpus.slug}", content)
 
     def test_includes_discovery_endpoints(self):
         response = self.client.get("/sitemap.xml")
