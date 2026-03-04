@@ -1,21 +1,22 @@
 import styled from "styled-components";
 import { PIPELINE_UI } from "../../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import { mediaQuery } from "../../corpuses/styles/corpusDesignTokens";
 
 // ============================================================================
 // Layout Styled Components
 // ============================================================================
 
 export const Container = styled.div`
-  padding: 2rem;
-  max-width: 900px;
+  padding: 3rem 2rem 4rem;
+  max-width: 1400px;
   margin: 0 auto;
   min-height: 100%;
   overflow-y: auto;
   overflow-x: clip;
 
   @media (max-width: 768px) {
-    padding: 1rem;
+    padding: 2rem 1rem 3rem;
   }
 `;
 
@@ -597,5 +598,74 @@ export const StyledSelect = styled.select<{ $warning?: boolean }>`
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+`;
+
+// ============================================================================
+// Two-Column Layout (Desktop) + Mobile Tab Fallback
+// ============================================================================
+
+export const SettingsTwoColumnLayout = styled.div`
+  display: flex;
+  gap: 1.5rem;
+
+  ${mediaQuery.tablet} {
+    display: none;
+  }
+`;
+
+export const SettingsLeftColumn = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+export const SettingsRightColumn = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+export const MobileSettingsTabContainer = styled.div`
+  display: none;
+
+  ${mediaQuery.tablet} {
+    display: block;
+  }
+`;
+
+export const MobileSettingsTabList = styled.div`
+  display: flex;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  margin-bottom: 1rem;
+`;
+
+export const MobileSettingsTab = styled.button<{ $active: boolean }>`
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: ${(props) => (props.$active ? "600" : "500")};
+  color: ${(props) =>
+    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#64748b"};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+
+  ${(props) =>
+    props.$active &&
+    `
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+    }
+  `}
+
+  &:hover {
+    color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 `;
