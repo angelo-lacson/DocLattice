@@ -8,14 +8,14 @@ import { mediaQuery } from "../../corpuses/styles/corpusDesignTokens";
 // ============================================================================
 
 export const Container = styled.div`
-  padding: 3rem 2rem 4rem;
+  padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
   min-height: 100%;
   overflow-y: auto;
   overflow-x: clip;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     padding: 2rem 1rem 3rem;
   }
 `;
@@ -63,7 +63,7 @@ export const PageTitle = styled.h1`
     color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     font-size: 1.5rem;
   }
 `;
@@ -522,7 +522,7 @@ export const DefaultsHeaderRow = styled.div`
   letter-spacing: 0.05em;
   color: #94a3b8;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     display: none;
   }
 `;
@@ -537,7 +537,7 @@ export const FiletypeRow = styled.div`
   border: 1px solid #e2e8f0;
   border-radius: 8px;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     grid-template-columns: 1fr;
     gap: 0.5rem;
   }
@@ -567,7 +567,7 @@ export const StageDropdownLabel = styled.label`
   color: #94a3b8;
   margin-bottom: 0.25rem;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     display: block;
   }
 `;
@@ -608,10 +608,6 @@ export const StyledSelect = styled.select<{ $warning?: boolean }>`
 export const SettingsTwoColumnLayout = styled.div`
   display: flex;
   gap: 1.5rem;
-
-  ${mediaQuery.tablet} {
-    display: none;
-  }
 `;
 
 export const SettingsLeftColumn = styled.div`
@@ -625,11 +621,7 @@ export const SettingsRightColumn = styled.div`
 `;
 
 export const MobileSettingsTabContainer = styled.div`
-  display: none;
-
-  ${mediaQuery.tablet} {
-    display: block;
-  }
+  display: block;
 `;
 
 export const MobileSettingsTabList = styled.div`
@@ -646,7 +638,9 @@ export const MobileSettingsTab = styled.button<{ $active: boolean }>`
   font-size: 0.875rem;
   font-weight: ${(props) => (props.$active ? "600" : "500")};
   color: ${(props) =>
-    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#64748b"};
+    props.$active
+      ? PIPELINE_UI.PRIMARY_ACCENT_COLOR
+      : OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;

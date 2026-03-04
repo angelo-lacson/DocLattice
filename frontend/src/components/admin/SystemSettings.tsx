@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,6 +26,7 @@ import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { PipelineComponentType } from "../../types/graphql-api";
 import { getComponentDisplayName } from "./PipelineIcons";
 import { PIPELINE_UI } from "../../assets/configurations/constants";
+import { CORPUS_BREAKPOINTS } from "../corpuses/styles/corpusDesignTokens";
 import { formatSettingLabel } from "../../utils/formatters";
 
 // Sub-module imports
@@ -79,8 +80,18 @@ import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
 export const SystemSettings: React.FC = () => {
   const navigate = useNavigate();
 
-  // Layout state
+  // Layout state - JS-based media query so only one layout mounts at a time
+  const [isMobile, setIsMobile] = useState(
+    () => window.innerWidth <= CORPUS_BREAKPOINTS.tablet
+  );
   const [activeTab, setActiveTab] = useState<"library" | "defaults">("library");
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${CORPUS_BREAKPOINTS.tablet}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   // Modal states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -96,7 +107,14 @@ export const SystemSettings: React.FC = () => {
     useState(false);
   const [deleteSecretsPath, setDeleteSecretsPath] = useState("");
 
-  // GraphQL queries
+  // GraphQL queries.
+  //
+  // NOTE: ComponentLibrary reads `component.enabled` from GET_PIPELINE_COMPONENTS,
+  // while FiletypeDefaults reads `enabledComponents` from GET_PIPELINE_SETTINGS.
+  // Both are refetched after each mutation (see onCompleted handlers below), but
+  // they are independent network calls. In the brief window between one resolving
+  // and the other, the two panels may show transiently inconsistent enabled state.
+  // The server enforces consistency, so this is cosmetic only.
   const {
     data: settingsData,
     loading: settingsLoading,
@@ -109,6 +127,7 @@ export const SystemSettings: React.FC = () => {
   const {
     data: componentsData,
     loading: componentsLoading,
+    error: componentsError,
     refetch: refetchComponents,
   } = useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
     fetchPolicy: "cache-and-network",
@@ -143,6 +162,7 @@ export const SystemSettings: React.FC = () => {
           toast.success("Settings reset to defaults");
           setShowResetConfirm(false);
           refetchSettings();
+          refetchComponents();
         } else {
           toast.error(
             data.resetPipelineSettings?.message || "Failed to reset settings"
@@ -273,35 +293,63 @@ export const SystemSettings: React.FC = () => {
   // Toggle component enabled state
   const handleToggleEnabled = useCallback(
     (className: string, enabled: boolean) => {
+      if (componentsLoading || settingsLoading) {
+        toast.warning("Components are still loading. Please wait.");
+        return;
+      }
+
       const currentEnabled: string[] = (
         settings?.enabledComponents || []
       ).filter((s): s is string => s != null);
       let newEnabled: string[];
 
-      if (currentEnabled.length === 0) {
-        // Transitioning from "all enabled" -- build full list from loaded components
+      if (currentEnabled.length === 0 && enabled) {
+        // Safe no-op: the checkbox's `checked` reflects `component.enabled ?? true`,
+        // so enabling when already in the "all enabled" (empty-list) state is
+        // unreachable via normal UI interaction. Guard kept for defensive safety.
+        return;
+      }
+
+      if (currentEnabled.length === 0 && !enabled) {
+        // Transitioning from "all enabled" to explicit list: build full list
+        // from loaded components, then remove the one being disabled.
         const allPaths = [
           ...componentsByStage.parsers,
           ...componentsByStage.embedders,
           ...componentsByStage.thumbnailers,
         ].map((c) => c.className);
 
-        if (allPaths.length === 0) return; // Components not loaded yet
+        if (allPaths.length === 0) {
+          toast.warning("No components available.");
+          return;
+        }
 
-        newEnabled = enabled
-          ? allPaths
-          : allPaths.filter((p) => p !== className);
+        // Deduplicate paths in case a className appears across stages
+        const uniquePaths = [...new Set(allPaths)];
+
+        newEnabled = uniquePaths.filter((p) => p !== className);
       } else {
         newEnabled = enabled
-          ? [...currentEnabled, className]
+          ? [...new Set([...currentEnabled, className])]
           : currentEnabled.filter((p: string) => p !== className);
       }
+
+      // NOTE: When disabling the last component, newEnabled becomes [].
+      // The backend interprets [] as "all enabled" (no filter), so this
+      // effectively re-enables everything. This is pre-existing behavior;
+      // a future improvement could add a dedicated "disable all" state.
 
       updateSettings({
         variables: { enabledComponents: newEnabled },
       });
     },
-    [settings, componentsByStage, updateSettings]
+    [
+      settings,
+      componentsByStage,
+      componentsLoading,
+      settingsLoading,
+      updateSettings,
+    ]
   );
 
   // Assign a component to a filetype default
@@ -504,7 +552,8 @@ export const SystemSettings: React.FC = () => {
   }
 
   // Error state
-  if (settingsError) {
+  const queryError = settingsError || componentsError;
+  if (queryError) {
     return (
       <Container>
         <BackButton onClick={() => navigate("/admin/settings")}>
@@ -515,10 +564,16 @@ export const SystemSettings: React.FC = () => {
           <AlertTriangle />
           <h3>Error Loading Settings</h3>
           <ErrorMessage>
-            {settingsError.message ||
+            {queryError.message ||
               "Unable to load pipeline settings. You may not have permission to view this page."}
           </ErrorMessage>
-          <Button variant="primary" onClick={() => refetchSettings()}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              refetchSettings();
+              refetchComponents();
+            }}
+          >
             Try Again
           </Button>
         </ErrorContainer>
@@ -561,75 +616,83 @@ export const SystemSettings: React.FC = () => {
         </WarningText>
       </WarningBanner>
 
-      {/* Desktop: Two-column layout */}
-      <SettingsTwoColumnLayout>
-        <SettingsLeftColumn>
-          <ComponentLibrary
-            components={componentsByStage}
-            enabledComponents={
-              (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-            }
-            updating={updating}
-            onToggleEnabled={handleToggleEnabled}
-            onAddSecrets={handleAddSecrets}
-            onDeleteSecrets={handleDeleteSecretsClick}
-            onSaveConfig={handleSaveComponentSettings}
-            getConfigSettings={getNonSecretSettingsForComponent}
-            getSecretSettings={getSecretSettingsForComponent}
-          />
-        </SettingsLeftColumn>
-        <SettingsRightColumn>
-          <FiletypeDefaults
-            components={componentsByStage}
-            enabledComponents={
-              (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-            }
-            preferredParsers={
-              (settings?.preferredParsers as Record<string, string>) || {}
-            }
-            preferredEmbedders={
-              (settings?.preferredEmbedders as Record<string, string>) || {}
-            }
-            preferredThumbnailers={
-              (settings?.preferredThumbnailers as Record<string, string>) || {}
-            }
-            defaultEmbedder={settings?.defaultEmbedder || ""}
-            updating={updating}
-            onAssign={handleAssign}
-            onEditDefaultEmbedder={handleEditDefaultEmbedder}
-          />
-        </SettingsRightColumn>
-      </SettingsTwoColumnLayout>
+      {/* Conditionally render one layout to avoid double-mounting */}
+      {isMobile ? (
+        <MobileSettingsTabContainer>
+          <MobileSettingsTabList role="tablist">
+            <MobileSettingsTab
+              id="settings-tab-library"
+              role="tab"
+              aria-selected={activeTab === "library"}
+              aria-controls="settings-panel-library"
+              $active={activeTab === "library"}
+              onClick={() => setActiveTab("library")}
+            >
+              Component Library
+            </MobileSettingsTab>
+            <MobileSettingsTab
+              id="settings-tab-defaults"
+              role="tab"
+              aria-selected={activeTab === "defaults"}
+              aria-controls="settings-panel-defaults"
+              $active={activeTab === "defaults"}
+              onClick={() => setActiveTab("defaults")}
+            >
+              Filetype Defaults
+            </MobileSettingsTab>
+          </MobileSettingsTabList>
 
-      {/* Mobile: Tabbed layout */}
-      <MobileSettingsTabContainer>
-        <MobileSettingsTabList role="tablist">
-          <MobileSettingsTab
-            role="tab"
-            aria-selected={activeTab === "library"}
-            $active={activeTab === "library"}
-            onClick={() => setActiveTab("library")}
+          <div
+            id={`settings-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`settings-tab-${activeTab}`}
           >
-            Component Library
-          </MobileSettingsTab>
-          <MobileSettingsTab
-            role="tab"
-            aria-selected={activeTab === "defaults"}
-            $active={activeTab === "defaults"}
-            onClick={() => setActiveTab("defaults")}
-          >
-            Filetype Defaults
-          </MobileSettingsTab>
-        </MobileSettingsTabList>
-
-        <div role="tabpanel">
-          {activeTab === "library" ? (
+            {activeTab === "library" ? (
+              <ComponentLibrary
+                components={componentsByStage}
+                updating={updating}
+                componentsLoading={componentsLoading}
+                settingsLoading={settingsLoading}
+                onToggleEnabled={handleToggleEnabled}
+                onAddSecrets={handleAddSecrets}
+                onDeleteSecrets={handleDeleteSecretsClick}
+                onSaveConfig={handleSaveComponentSettings}
+                getConfigSettings={getNonSecretSettingsForComponent}
+                getSecretSettings={getSecretSettingsForComponent}
+              />
+            ) : (
+              <FiletypeDefaults
+                components={componentsByStage}
+                enabledComponents={
+                  (settings?.enabledComponents?.filter(Boolean) as string[]) ??
+                  []
+                }
+                preferredParsers={
+                  (settings?.preferredParsers as Record<string, string>) || {}
+                }
+                preferredEmbedders={
+                  (settings?.preferredEmbedders as Record<string, string>) || {}
+                }
+                preferredThumbnailers={
+                  (settings?.preferredThumbnailers as Record<string, string>) ||
+                  {}
+                }
+                defaultEmbedder={settings?.defaultEmbedder || ""}
+                updating={updating}
+                onAssign={handleAssign}
+                onEditDefaultEmbedder={handleEditDefaultEmbedder}
+              />
+            )}
+          </div>
+        </MobileSettingsTabContainer>
+      ) : (
+        <SettingsTwoColumnLayout>
+          <SettingsLeftColumn>
             <ComponentLibrary
               components={componentsByStage}
-              enabledComponents={
-                (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-              }
               updating={updating}
+              componentsLoading={componentsLoading}
+              settingsLoading={settingsLoading}
               onToggleEnabled={handleToggleEnabled}
               onAddSecrets={handleAddSecrets}
               onDeleteSecrets={handleDeleteSecretsClick}
@@ -637,7 +700,8 @@ export const SystemSettings: React.FC = () => {
               getConfigSettings={getNonSecretSettingsForComponent}
               getSecretSettings={getSecretSettingsForComponent}
             />
-          ) : (
+          </SettingsLeftColumn>
+          <SettingsRightColumn>
             <FiletypeDefaults
               components={componentsByStage}
               enabledComponents={
@@ -658,9 +722,9 @@ export const SystemSettings: React.FC = () => {
               onAssign={handleAssign}
               onEditDefaultEmbedder={handleEditDefaultEmbedder}
             />
-          )}
-        </div>
-      </MobileSettingsTabContainer>
+          </SettingsRightColumn>
+        </SettingsTwoColumnLayout>
+      )}
 
       {/* Reset to Defaults */}
       <ActionButtons>
