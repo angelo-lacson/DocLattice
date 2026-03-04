@@ -15,8 +15,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from django.contrib.auth import get_user_model
-
 from opencontractserver.annotations.models import Annotation, Relationship
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import DocumentPath
@@ -24,14 +22,11 @@ from opencontractserver.extracts.models import Datacell
 
 logger = logging.getLogger(__name__)
 
-User = get_user_model()
-
 
 @dataclass
 class CorpusObjectCollection:
     """Result of collecting object IDs from a corpus."""
 
-    corpus: Corpus
     document_ids: list[int] = field(default_factory=list)
     annotation_ids: list[int] = field(default_factory=list)
     label_set_id: int | None = None
@@ -62,11 +57,14 @@ def collect_corpus_objects(
     """
     corpus_pk = corpus.pk
 
-    # Documents: active docs via DocumentPath
+    # Documents: active docs via DocumentPath (distinct guards against
+    # multiple active paths pointing to the same document)
     document_ids = list(
         DocumentPath.objects.filter(
             corpus_id=corpus_pk, is_current=True, is_deleted=False
-        ).values_list("document_id", flat=True)
+        )
+        .values_list("document_id", flat=True)
+        .distinct()
     )
 
     # Annotations: user-created only (not analysis-generated)
@@ -116,7 +114,6 @@ def collect_corpus_objects(
             )
 
     return CorpusObjectCollection(
-        corpus=corpus,
         document_ids=document_ids,
         annotation_ids=annotation_ids,
         label_set_id=label_set_id,
