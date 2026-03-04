@@ -2,9 +2,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from doclatticeserver.analyzer.models import Analysis, Analyzer
-from doclatticeserver.annotations.models import Annotation, Relationship
-from doclatticeserver.corpuses.models import Corpus, CorpusFolder, LabelSet
+from doclatticeserver.annotations.models import Annotation, LabelSet, Relationship
+from doclatticeserver.corpuses.models import Corpus, CorpusFolder
 from doclatticeserver.documents.models import Document, DocumentPath
+from doclatticeserver.extracts.models import Column, Datacell, Fieldset
 from doclatticeserver.utils.corpus_collector import (
     CorpusObjectCollection,
     collect_corpus_objects,
@@ -97,7 +98,9 @@ class TestCollectCorpusObjects(TestCase):
         corpus = self._make_corpus()
         doc = Document.objects.create(title="Shared Doc", creator=self.user)
 
-        # Two active paths pointing to the same document
+        # Two is_current=True DocumentPath records for the same document is not
+        # a normal application state, but we test it as defensive coverage against
+        # the edge case to ensure collect_corpus_objects de-duplicates correctly.
         DocumentPath.objects.create(
             document=doc,
             corpus=corpus,
@@ -136,9 +139,10 @@ class TestCollectCorpusObjects(TestCase):
 
         # Analysis-generated annotation
         analyzer = Analyzer.objects.create(
-            analyzer_id="test-analyzer",
+            id="test-analyzer",
             description="Test",
             creator=self.user,
+            task_name="test_task_annot",
         )
         analysis = Analysis.objects.create(
             analyzer=analyzer,
@@ -171,9 +175,10 @@ class TestCollectCorpusObjects(TestCase):
 
         # Analysis relationship
         analyzer = Analyzer.objects.create(
-            analyzer_id="test-analyzer-rel",
+            id="test-analyzer-rel",
             description="Test",
             creator=self.user,
+            task_name="test_task_rel",
         )
         analysis = Analysis.objects.create(
             analyzer=analyzer,
@@ -212,6 +217,19 @@ class TestCollectCorpusObjects(TestCase):
         result = collect_corpus_objects(corpus)
         self.assertEqual(result.folder_ids, [folder.id])
 
+    def test_folder_tree_ordering_parents_before_children(self):
+        """with_tree_fields() ensures parents come before children in folder_ids."""
+        corpus = self._make_corpus()
+        parent = CorpusFolder.objects.create(
+            name="Parent", corpus=corpus, creator=self.user
+        )
+        child = CorpusFolder.objects.create(
+            name="Child", corpus=corpus, creator=self.user, parent=parent
+        )
+
+        result = collect_corpus_objects(corpus)
+        self.assertEqual(result.folder_ids, [parent.id, child.id])
+
     def test_include_metadata_false_skips_metadata(self):
         """When include_metadata=False (default), metadata fields stay empty."""
         corpus = self._make_corpus()
@@ -223,20 +241,16 @@ class TestCollectCorpusObjects(TestCase):
 
     def test_include_metadata_true_collects_manual_columns(self):
         """When include_metadata=True, manual metadata columns are collected."""
-        from doclatticeserver.extracts.models import Fieldset
-
         corpus = self._make_corpus()
         doc = self._add_document(corpus)
 
-        # Create metadata schema (fieldset) with a manual column
+        # Create metadata schema (fieldset) linked to the corpus
         fieldset = Fieldset.objects.create(
             name="Metadata Schema",
+            description="",
             creator=self.user,
+            corpus=corpus,
         )
-        corpus.metadata_schema = fieldset
-        corpus.save(update_fields=["metadata_schema"])
-
-        from doclatticeserver.extracts.models import Column
 
         manual_col = Column.objects.create(
             fieldset=fieldset,
@@ -244,6 +258,8 @@ class TestCollectCorpusObjects(TestCase):
             query="manual query",
             creator=self.user,
             is_manual_entry=True,
+            data_type="TEXT",
+            output_type="str",
         )
         Column.objects.create(
             fieldset=fieldset,
@@ -254,13 +270,12 @@ class TestCollectCorpusObjects(TestCase):
         )
 
         # Create a manual datacell
-        from doclatticeserver.extracts.models import Datacell
-
         datacell = Datacell.objects.create(
             column=manual_col,
             document=doc,
             creator=self.user,
             extract=None,
+            data_definition="manual metadata entry",
         )
 
         result = collect_corpus_objects(corpus, include_metadata=True)
