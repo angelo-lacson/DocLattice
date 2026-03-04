@@ -59,6 +59,7 @@ from doclatticeserver.types.enums import (
     PermissionTypes,
 )
 from doclatticeserver.users.models import UserExport
+from doclatticeserver.utils.corpus_collector import collect_corpus_objects
 from doclatticeserver.utils.etl import is_dict_instance_of_typed_dict
 from doclatticeserver.utils.files import is_plaintext_content
 from doclatticeserver.utils.permissioning import (
@@ -1114,11 +1115,10 @@ class StartCorpusExport(graphene.Mutation):
                     except Exception:  # If invalid, just skip for safety
                         pass
 
-            # Collect doc_ids in the corpus via DocumentPath
-            doc_ids = DocumentPath.objects.filter(
-                corpus_id=corpus_pk, is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True)
-            logger.info(f"Doc ids: {list(doc_ids)}")
+            # Collect doc_ids using shared collector
+            collected = collect_corpus_objects(corpus)
+            doc_ids = collected.document_ids
+            logger.info(f"Doc ids: {doc_ids}")
 
             # Build the Celery chain: label lookups -> burn doc annotations -> package -> optional post-proc
             if export_format == ExportType.DOCLATTICE.value:
