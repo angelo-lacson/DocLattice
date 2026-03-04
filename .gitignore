@@ -186,3 +186,6 @@ scratch.py
 
 # Claude Code
 .claude/
+
+# Implementation plans (ephemeral)
+docs/plans/

@@ -9,7 +9,7 @@ import {
   FileText,
   ArrowRight,
   Plus,
-  MoreVertical,
+  Menu,
   Zap,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -32,8 +32,10 @@ import {
   LandingHero,
   CenteredBreadcrumbs,
   CorpusBadge,
+  TitleRow,
   LandingTitle,
   LandingDescription,
+  HeroImageBand,
   NoDescriptionContainer,
   NoDescriptionText,
   AddDescriptionLink,
@@ -41,7 +43,8 @@ import {
   MetadataItem,
   MetadataSeparator,
   AccessBadge,
-  PowerUserMetaButton,
+  PillToggle,
+  PillToggleLabel,
   ChatSection,
   ViewDetailsButton,
   HeaderRow,
@@ -166,8 +169,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
     <LandingContainer data-testid={testId}>
       <LandingContent>
         <LandingHero>
-          {/* Centered breadcrumbs with mobile menu button as sibling */}
-          <HeaderRow $justify="center">
+          <HeaderRow>
             <CenteredBreadcrumbs
               aria-label="Breadcrumb navigation"
               data-testid={`${testId}-breadcrumbs`}
@@ -186,46 +188,9 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                 {fullCorpus.title || "Untitled Corpus"}
               </span>
             </CenteredBreadcrumbs>
-            {onOpenMobileMenu && (
-              <MobileMenuButton
-                onClick={onOpenMobileMenu}
-                aria-label="Open navigation menu"
-                data-testid={`${testId}-mobile-menu`}
-              >
-                <MoreVertical />
-              </MobileMenuButton>
-            )}
           </HeaderRow>
 
-          {/* Corpus badge */}
-          <CorpusBadge>CORPUS</CorpusBadge>
-
-          {/* Large title */}
-          <LandingTitle data-testid={`${testId}-title`}>
-            {fullCorpus.title || "Untitled Corpus"}
-          </LandingTitle>
-
-          {/* Description as subtitle or "no description" with action */}
-          {hasDescription ? (
-            <LandingDescription data-testid={`${testId}-description`}>
-              {descriptionText}
-            </LandingDescription>
-          ) : (
-            <NoDescriptionContainer data-testid={`${testId}-no-description`}>
-              <NoDescriptionText>No description yet.</NoDescriptionText>
-              {canEdit && (
-                <AddDescriptionLink
-                  onClick={onEditDescription}
-                  data-testid={`${testId}-add-description-btn`}
-                >
-                  <Plus size={14} />
-                  Add one now
-                </AddDescriptionLink>
-              )}
-            </NoDescriptionContainer>
-          )}
-
-          {/* Metadata row */}
+          {/* Metadata row — context first, before the title */}
           <CenteredMetadataRow data-testid={`${testId}-metadata`}>
             <AccessBadge $isPublic={fullCorpus.isPublic}>
               {fullCorpus.isPublic ? (
@@ -253,16 +218,16 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
               </>
             )}
 
-            <MetadataSeparator />
+            <MetadataSeparator className="hide-mobile" />
 
-            <MetadataItem>
+            <MetadataItem className="hide-mobile">
               <Users aria-hidden="true" />
               <span>{creatorName}</span>
             </MetadataItem>
 
-            <MetadataSeparator />
+            <MetadataSeparator className="hide-mobile" />
 
-            <MetadataItem>
+            <MetadataItem className="hide-mobile">
               <Calendar aria-hidden="true" />
               <span>{createdDate}</span>
             </MetadataItem>
@@ -282,7 +247,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
             {onModeToggle && (
               <>
                 <MetadataSeparator />
-                <PowerUserMetaButton
+                <PillToggle
                   onClick={onModeToggle}
                   title={
                     isPowerUserMode
@@ -291,12 +256,67 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                   }
                   data-testid="power-user-toggle"
                 >
-                  <Zap aria-hidden="true" />
-                  {isPowerUserMode ? "Focus Mode" : "Power User"}
-                </PowerUserMetaButton>
+                  <PillToggleLabel $active={!isPowerUserMode}>
+                    Focus
+                  </PillToggleLabel>
+                  <PillToggleLabel $active={isPowerUserMode}>
+                    <Zap aria-hidden="true" />
+                    Power
+                  </PillToggleLabel>
+                </PillToggle>
               </>
             )}
           </CenteredMetadataRow>
+
+          {/* Corpus badge */}
+          <CorpusBadge>CORPUS</CorpusBadge>
+
+          {/* Large title — with optional hamburger on mobile */}
+          <TitleRow>
+            {onOpenMobileMenu && isPowerUserMode && (
+              <MobileMenuButton
+                onClick={onOpenMobileMenu}
+                aria-label="Open navigation menu"
+                data-testid={`${testId}-mobile-menu`}
+              >
+                <Menu />
+              </MobileMenuButton>
+            )}
+            <LandingTitle data-testid={`${testId}-title`}>
+              {fullCorpus.title || "Untitled Corpus"}
+            </LandingTitle>
+          </TitleRow>
+
+          {/* Hero image band — only rendered when corpus has an icon */}
+          {fullCorpus.icon && (
+            <HeroImageBand data-testid={`${testId}-hero-image`}>
+              <img
+                src={fullCorpus.icon}
+                alt={`${fullCorpus.title || "Corpus"} cover image`}
+                loading="lazy"
+              />
+            </HeroImageBand>
+          )}
+
+          {/* Description as subtitle or "no description" with action */}
+          {hasDescription ? (
+            <LandingDescription data-testid={`${testId}-description`}>
+              {descriptionText}
+            </LandingDescription>
+          ) : (
+            <NoDescriptionContainer data-testid={`${testId}-no-description`}>
+              <NoDescriptionText>No description yet.</NoDescriptionText>
+              {canEdit && (
+                <AddDescriptionLink
+                  onClick={onEditDescription}
+                  data-testid={`${testId}-add-description-btn`}
+                >
+                  <Plus size={14} />
+                  Add one now
+                </AddDescriptionLink>
+              )}
+            </NoDescriptionContainer>
+          )}
         </LandingHero>
 
         {/* Chat section */}
@@ -312,14 +332,12 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
           />
         </ChatSection>
 
-        {/* View Details button */}
+        {/* Browse documents — subtle text link */}
         <ViewDetailsButton
           onClick={onViewDetails}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
           data-testid={`${testId}-view-details-btn`}
         >
-          View Details
+          Browse documents
           <ArrowRight />
         </ViewDetailsButton>
 

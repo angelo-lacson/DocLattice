@@ -31,6 +31,7 @@ const mockCorpusDocuments = [
     node: {
       id: "doc-1",
       title: "Parent Document",
+      description: "A parent document for testing hierarchy",
       slug: "parent-document",
       icon: null,
       fileType: "application/pdf",
@@ -43,6 +44,7 @@ const mockCorpusDocuments = [
     node: {
       id: "doc-2",
       title: "Child Document 1",
+      description: "First child document",
       slug: "child-document-1",
       icon: null,
       fileType: "application/pdf",
@@ -55,6 +57,7 @@ const mockCorpusDocuments = [
     node: {
       id: "doc-3",
       title: "Child Document 2",
+      description: "Second child document",
       slug: "child-document-2",
       icon: null,
       fileType: "application/pdf",

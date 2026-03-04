@@ -40,6 +40,7 @@ export const LandingContainer = styled(BaseContainer)`
   align-items: center;
   overflow-y: auto;
   overflow-x: hidden;
+  min-height: 100%;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -57,9 +58,17 @@ export const LandingContainer = styled(BaseContainer)`
       background: ${CORPUS_COLORS.slate[300]};
     }
   }
+
+  ${mediaQuery.mobile} {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
 `;
 
-/** Centered content wrapper for landing view */
+/** Centered content wrapper for landing view. */
 export const LandingContent = styled.div`
   display: flex;
   flex-direction: column;
@@ -69,7 +78,11 @@ export const LandingContent = styled.div`
   padding: 2rem 1.5rem;
 
   ${mediaQuery.tablet} {
-    padding: 1.25rem 1rem;
+    padding: 1.25rem 1rem 2.5rem;
+  }
+
+  ${mediaQuery.mobile} {
+    padding: 1rem 1.5rem 2.5rem;
   }
 `;
 
@@ -86,6 +99,11 @@ export const LandingHero = styled.div`
   ${mediaQuery.tablet} {
     padding: 1.25rem 0.75rem;
     gap: 0.75rem;
+  }
+
+  ${mediaQuery.mobile} {
+    padding: 0.75rem 0.75rem;
+    gap: 0.5rem;
   }
 `;
 
@@ -118,6 +136,10 @@ export const CenteredBreadcrumbs = styled.nav`
     color: ${CORPUS_COLORS.slate[700]};
     font-weight: 500;
   }
+
+  ${mediaQuery.mobile} {
+    display: none;
+  }
 `;
 
 /** Corpus badge - teal background, uppercase */
@@ -133,6 +155,18 @@ export const CorpusBadge = styled.span`
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+
+  ${mediaQuery.mobile} {
+    display: none;
+  }
+`;
+
+/** Row wrapper that pairs the mobile hamburger with the title.
+ *  On desktop the hamburger is hidden so the title centers alone. */
+export const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
 /** Large serif title for landing view */
@@ -149,9 +183,16 @@ export const LandingTitle = styled.h1`
   ${mediaQuery.tablet} {
     font-size: 1.875rem;
   }
+
+  ${mediaQuery.mobile} {
+    font-size: 1.5rem;
+  }
 `;
 
-/** Description subtitle under the title - elegant typography */
+/** Description subtitle under the title - left-aligned body copy within
+ *  the centered hero container, matching the discovery page pattern of
+ *  centered headings with left-aligned prose. Clamped to 3 lines; the
+ *  native title attribute provides a tooltip for the full text. */
 export const LandingDescription = styled.p`
   margin: 0;
   margin-top: 1rem;
@@ -160,8 +201,14 @@ export const LandingDescription = styled.p`
   font-weight: 400;
   color: ${CORPUS_COLORS.slate[500]};
   line-height: 1.65;
-  text-align: center;
+  text-align: left;
   max-width: 600px;
+  width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: default;
 
   ${mediaQuery.tablet} {
     font-size: 1rem;
@@ -169,13 +216,83 @@ export const LandingDescription = styled.p`
   }
 `;
 
-/** No description placeholder with action */
+/** Hero image band — full-width with composite gradient mask.
+ *  Vertical: light fade at top, heavy dissolve at bottom.
+ *  Horizontal: soft side edges that blend into the page background.
+ *  Uses mask-composite to intersect the two gradient layers. */
+export const HeroImageBand = styled.div`
+  width: 100%;
+  max-width: 600px;
+  max-height: 280px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+  border-radius: ${CORPUS_RADII.lg};
+
+  img {
+    width: 100%;
+    height: 100%;
+    max-height: 280px;
+    object-fit: cover;
+    display: block;
+    mask-image: linear-gradient(
+        to right,
+        transparent,
+        black 8%,
+        black 92%,
+        transparent
+      ),
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 8%,
+        black 55%,
+        transparent 100%
+      );
+    mask-composite: intersect;
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent,
+        black 8%,
+        black 92%,
+        transparent
+      ),
+      linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 8%,
+        black 55%,
+        transparent 100%
+      );
+    -webkit-mask-composite: source-in; /* WebKit equivalent of mask-composite: intersect */
+  }
+
+  ${mediaQuery.tablet} {
+    max-height: 160px;
+
+    img {
+      max-height: 160px;
+    }
+  }
+
+  ${mediaQuery.mobile} {
+    max-height: 80px;
+
+    img {
+      max-height: 80px;
+    }
+  }
+`;
+
+/** No description placeholder with action — left-aligned to match
+ *  the LandingDescription styling. */
 export const NoDescriptionContainer = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   margin-top: 1rem;
+  width: 100%;
+  max-width: 600px;
 `;
 
 export const NoDescriptionText = styled.span`
@@ -213,17 +330,23 @@ export const AddDescriptionLink = styled.button`
   }
 `;
 
-/** Centered metadata row for landing view */
+/** Metadata row — positioned above the title as contextual orientation.
+ *  Lightweight, muted, gives the reader context before the content. */
 export const CenteredMetadataRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-top: 0.5rem;
 
   ${mediaQuery.tablet} {
     gap: 0.75rem;
+  }
+
+  ${mediaQuery.mobile} {
+    .hide-mobile {
+      display: none;
+    }
   }
 `;
 
@@ -281,47 +404,59 @@ export const AccessBadge = styled.div<{ $isPublic?: boolean }>`
   }
 `;
 
-/** Power User toggle - styled as a metadata item with interactive hover */
-export const PowerUserMetaButton = styled.button`
+/** Pill toggle container — sits inline in the metadata row */
+export const PillToggle = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0;
-  background: none;
-  border: none;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: ${CORPUS_COLORS.slate[500]};
+  position: relative;
+  padding: 2px;
+  border-radius: ${CORPUS_RADII.full};
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  background: ${CORPUS_COLORS.slate[100]};
   cursor: pointer;
-  transition: color ${CORPUS_TRANSITIONS.fast};
-
-  svg {
-    width: 14px;
-    height: 14px;
-    color: ${CORPUS_COLORS.slate[400]};
-    transition: color ${CORPUS_TRANSITIONS.fast};
-  }
+  transition: border-color ${CORPUS_TRANSITIONS.fast};
 
   &:hover {
-    color: ${CORPUS_COLORS.teal[700]};
-
-    svg {
-      color: ${CORPUS_COLORS.teal[700]};
-    }
+    border-color: ${CORPUS_COLORS.teal[300]};
   }
 
   &:focus-visible {
     outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: 4px;
-    border-radius: ${CORPUS_RADII.sm};
+    outline-offset: 2px;
+  }
+`;
+
+/** Individual label inside the pill */
+export const PillToggleLabel = styled.span<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: ${CORPUS_RADII.full};
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  z-index: 1;
+  transition: color ${CORPUS_TRANSITIONS.fast},
+    background ${CORPUS_TRANSITIONS.fast};
+  color: ${(props) =>
+    props.$active ? CORPUS_COLORS.white : CORPUS_COLORS.slate[500]};
+  background: ${(props) =>
+    props.$active ? CORPUS_COLORS.teal[700] : "transparent"};
+
+  svg {
+    width: 12px;
+    height: 12px;
   }
 
   ${mediaQuery.tablet} {
-    font-size: 0.75rem;
+    font-size: 0.625rem;
+    padding: 0.1875rem 0.5rem;
 
     svg {
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
     }
   }
 `;
@@ -352,46 +487,43 @@ export const LandingAboutCard = styled(motion.div)`
   }
 `;
 
-/** View Details button */
-export const ViewDetailsButton = styled(motion.button)`
+/** View Details — subtle text link, not a prominent button.
+ *  Content should be king; navigation chrome stays quiet. */
+export const ViewDetailsButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  margin-top: 2rem;
-  background: ${CORPUS_COLORS.white};
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  color: ${CORPUS_COLORS.teal[700]};
-  font-size: 0.9375rem;
+  gap: 0.375rem;
+  padding: 0;
+  margin-top: 0.5rem;
+  background: none;
+  border: none;
+  color: ${CORPUS_COLORS.slate[400]};
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all ${CORPUS_TRANSITIONS.fast};
+  transition: color ${CORPUS_TRANSITIONS.fast};
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
     transition: transform ${CORPUS_TRANSITIONS.fast};
   }
 
   &:hover {
-    background: ${CORPUS_COLORS.teal[50]};
-    border-color: ${CORPUS_COLORS.teal[200]};
+    color: ${CORPUS_COLORS.teal[700]};
 
     svg {
-      transform: translateX(4px);
+      transform: translateX(3px);
     }
   }
 
   &:focus-visible {
     outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: 2px;
+    outline-offset: 4px;
   }
 
   ${mediaQuery.tablet} {
-    margin-top: 1.5rem;
-    padding: 0.625rem 1.25rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 `;
 
@@ -438,11 +570,11 @@ export const DetailsHeader = styled.div`
   flex-direction: column;
   gap: 0.25rem;
   padding: 2rem 2.5rem 1.5rem;
-  border-bottom: 1px solid ${CORPUS_COLORS.slate[100]};
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
   flex-shrink: 0;
 
   ${mediaQuery.tablet} {
-    padding: 1.5rem 1.25rem 1.25rem;
+    padding: 1rem 1rem 0.75rem;
   }
 `;
 
@@ -483,8 +615,8 @@ export const BackButton = styled(motion.button)`
     outline-offset: 4px;
   }
 
-  ${mediaQuery.tablet} {
-    margin-bottom: 0.75rem;
+  ${mediaQuery.mobile} {
+    margin-bottom: 0.25rem;
   }
 `;
 
@@ -515,14 +647,24 @@ export const DetailsTitle = styled.h1`
   ${mediaQuery.tablet} {
     font-size: 1.75rem;
   }
+
+  ${mediaQuery.mobile} {
+    font-size: 1.5rem;
+  }
 `;
 
-/** Main content area - fills remaining space */
+/** Main content area - fills remaining space.
+ *  Row direction on desktop (for TwoColumnLayout),
+ *  column direction on tablet/mobile (for MobileTabContainer). */
 export const DetailsMainContent = styled.div`
   flex: 1;
   overflow: hidden;
   display: flex;
   min-height: 0;
+
+  ${mediaQuery.tablet} {
+    flex-direction: column;
+  }
 `;
 
 /** Two-column layout - Documents sidebar + About main content */
@@ -816,41 +958,39 @@ export const ColumnCard = styled.div`
 // MOBILE TAB STYLES
 // ============================================================================
 
-/** Mobile tab container - only visible on mobile */
+/** Mobile tab container - only visible on tablet/mobile */
 export const MobileTabContainer = styled.div`
   display: none;
 
   ${mediaQuery.tablet} {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
     min-height: 0;
+    overflow: hidden;
   }
 `;
 
-/** Mobile tab list */
+/** Mobile tab list — transparent underline tabs, no card borders */
 export const MobileTabList = styled.div`
   display: flex;
-  background: ${CORPUS_COLORS.white};
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.lg} ${CORPUS_RADII.lg} 0 0;
-  overflow: hidden;
+  background: transparent;
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
   flex-shrink: 0;
 `;
 
-/** Mobile tab button */
+/** Mobile tab button — transparent with underline indicator */
 export const MobileTab = styled.button<{ $active: boolean }>`
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.875rem 1rem;
+  padding: 0.75rem 1rem;
   border: none;
-  background: ${(props) =>
-    props.$active ? CORPUS_COLORS.white : CORPUS_COLORS.slate[50]};
+  background: transparent;
   color: ${(props) =>
-    props.$active ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.slate[600]};
+    props.$active ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.slate[400]};
   font-size: 0.875rem;
   font-weight: ${(props) => (props.$active ? "600" : "500")};
   cursor: pointer;
@@ -863,7 +1003,7 @@ export const MobileTab = styled.button<{ $active: boolean }>`
     &::after {
       content: '';
       position: absolute;
-      bottom: 0;
+      bottom: -1px;
       left: 0;
       right: 0;
       height: 2px;
@@ -872,8 +1012,8 @@ export const MobileTab = styled.button<{ $active: boolean }>`
   `}
 
   &:hover {
-    background: ${(props) =>
-      props.$active ? CORPUS_COLORS.white : CORPUS_COLORS.slate[100]};
+    color: ${(props) =>
+      props.$active ? CORPUS_COLORS.teal[700] : CORPUS_COLORS.slate[600]};
   }
 
   &:focus-visible {
@@ -885,39 +1025,70 @@ export const MobileTab = styled.button<{ $active: boolean }>`
     width: 16px;
     height: 16px;
   }
-
-  &:not(:last-child) {
-    border-right: 1px solid ${CORPUS_COLORS.slate[200]};
-  }
 `;
 
-/** Mobile tab content */
+/** Mobile tab content — borderless, flows naturally */
 export const MobileTabContent = styled.div`
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   background: ${CORPUS_COLORS.white};
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-top: none;
-  border-radius: 0 0 ${CORPUS_RADII.lg} ${CORPUS_RADII.lg};
   min-height: 0;
 
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
 
   &::-webkit-scrollbar-track {
-    background: ${CORPUS_COLORS.slate[50]};
-    border-radius: 4px;
+    background: transparent;
   }
 
   &::-webkit-scrollbar-thumb {
     background: ${CORPUS_COLORS.slate[200]};
-    border-radius: 4px;
+    border-radius: 3px;
 
     &:hover {
       background: ${CORPUS_COLORS.slate[300]};
     }
+  }
+`;
+
+/** Lightweight action row for mobile About tab — right-aligned, no background */
+export const MobileAboutActions = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 0.75rem 1rem 0;
+`;
+
+/** Toolbar above the mobile document list — search + expand toggle */
+export const MobileDocToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
+  flex-shrink: 0;
+`;
+
+/** Lightweight text input for instant document filtering on mobile */
+export const MobileSearchInput = styled.input`
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid ${CORPUS_COLORS.slate[200]};
+  border-radius: ${CORPUS_RADII.sm};
+  font-size: 0.8125rem;
+  background: ${CORPUS_COLORS.white};
+  color: ${CORPUS_COLORS.slate[700]};
+
+  &:focus {
+    outline: 2px solid ${CORPUS_COLORS.teal[500]};
+    outline-offset: -1px;
+  }
+
+  &::placeholder {
+    color: ${CORPUS_COLORS.slate[400]};
   }
 `;
 
@@ -926,56 +1097,51 @@ export const MobileTabContent = styled.div`
 // ============================================================================
 
 /** Flex row that holds breadcrumbs (or a back button) and the mobile menu
- *  button side-by-side, keeping the menu button outside the <nav> landmark. */
+ *  button side-by-side, keeping the menu button outside the <nav> landmark.
+ *  Defaults to centered layout; the landing view uses position:absolute on the
+ *  menu button so breadcrumbs stay visually centered. Pass $justify to override
+ *  (e.g. "space-between" in the details view). */
 export const HeaderRow = styled.div<{ $justify?: string }>`
   display: flex;
   align-items: center;
-  justify-content: ${(props) => props.$justify || "space-between"};
+  justify-content: ${(props) => props.$justify || "center"};
   width: 100%;
+  position: relative;
 `;
 
 // ============================================================================
 // MOBILE MENU BUTTON
 // ============================================================================
 
-/** Mobile-only menu button for opening the sidebar on the home tab.
- *  Uses the same kebab-menu pattern as other tab headers for consistency. */
+/** Mobile-only menu button — styled to match MetadataItem weight
+ *  so it blends into the metadata row without drawing attention. */
 export const MobileMenuButton = styled.button`
   display: none;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
   padding: 0;
-  background: ${CORPUS_COLORS.white};
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  color: ${CORPUS_COLORS.slate[500]};
+  background: none;
+  border: none;
+  color: ${CORPUS_COLORS.slate[400]};
   cursor: pointer;
-  transition: all ${CORPUS_TRANSITIONS.fast};
+  transition: color ${CORPUS_TRANSITIONS.fast};
   flex-shrink: 0;
 
   &:hover {
-    background: ${CORPUS_COLORS.teal[50]};
-    border-color: ${CORPUS_COLORS.teal[200]};
     color: ${CORPUS_COLORS.teal[700]};
-  }
-
-  &:active {
-    transform: scale(0.95);
   }
 
   &:focus-visible {
     outline: 2px solid ${CORPUS_COLORS.teal[500]};
-    outline-offset: 2px;
+    outline-offset: 4px;
   }
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
-  ${mediaQuery.mobile} {
+  ${mediaQuery.tablet} {
     display: flex;
   }
 `;

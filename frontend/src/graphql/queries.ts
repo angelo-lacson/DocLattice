@@ -428,6 +428,7 @@ export const GET_CORPUS_WITH_HISTORY = gql`
       title
       description
       mdDescription
+      icon
       created
       modified
       isPublic
@@ -487,6 +488,7 @@ export interface GetCorpusWithHistoryQuery {
     title: string;
     description: string;
     mdDescription?: string | null;
+    icon?: string | null;
     created: string;
     modified: string;
     isPublic: boolean;
@@ -5046,6 +5048,7 @@ export interface GetCorpusDocumentsForTocInput {
 export interface CorpusDocumentForToc {
   id: string;
   title: string;
+  description: string | null;
   slug: string;
   icon: string | null;
   fileType: string | null;
@@ -5076,6 +5079,7 @@ export const GET_CORPUS_DOCUMENTS_FOR_TOC = gql`
         node {
           id
           title
+          description
           slug
           icon
           fileType
