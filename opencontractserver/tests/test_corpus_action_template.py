@@ -1,3 +1,5 @@
+import importlib
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -9,6 +11,12 @@ from opencontractserver.corpuses.models import (
     CorpusActionTemplate,
     CorpusActionTrigger,
 )
+
+# Migration module name starts with a digit, so we must use importlib.
+_migration_mod = importlib.import_module(
+    "opencontractserver.agents.migrations.0010_create_default_action_templates"
+)
+_create_default_action_templates = _migration_mod.create_default_action_templates
 
 User = get_user_model()
 
@@ -202,3 +210,138 @@ class CorpusActionTemplateCloneSignalTest(TestCase):
         corpus.title = "Updated Title"
         corpus.save()
         self.assertEqual(CorpusAction.objects.filter(corpus=corpus).count(), 1)
+
+
+class DefaultTemplatesMigrationTest(TestCase):
+    """Verify the data migration created the expected default templates.
+
+    The data migration (agents/0010) requires a superuser to run. In test
+    databases that start empty we call the migration function directly to
+    exercise the same code path.
+    """
+
+    EXPECTED_NAMES = [
+        "Document Description Updater",
+        "Corpus Description Updater",
+        "Document Summary Generator",
+        "Key Terms Annotator",
+        "Document Notes Generator",
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Ensure a superuser exists so the migration function can run,
+        # then invoke the migration logic if templates are missing.
+        from django.apps import apps
+
+        cls._superuser = User.objects.create_superuser(
+            username="migration_admin",
+            password="testpass",
+            email="admin@test.com",
+        )
+        if not CorpusActionTemplate.objects.filter(
+            name__in=cls.EXPECTED_NAMES
+        ).exists():
+            _create_default_action_templates(apps, None)
+
+    def test_default_templates_exist(self):
+        """All 5 default templates should exist after migration."""
+        for name in self.EXPECTED_NAMES:
+            self.assertTrue(
+                CorpusActionTemplate.objects.filter(name=name).exists(),
+                f"Default template '{name}' not found",
+            )
+
+    def test_default_templates_have_agent_configs(self):
+        """Each default template should have a linked AgentConfiguration."""
+        for template in CorpusActionTemplate.objects.filter(
+            name__in=self.EXPECTED_NAMES
+        ):
+            self.assertIsNotNone(
+                template.agent_config,
+                f"Template '{template.name}' has no agent_config",
+            )
+            self.assertTrue(
+                template.agent_config.is_active,
+                f"Agent config for '{template.name}' is not active",
+            )
+
+    def test_default_templates_are_active_but_disabled_on_clone(self):
+        """Default templates should be active (used for new corpuses)
+        but cloned actions should start disabled."""
+        for template in CorpusActionTemplate.objects.filter(
+            name__in=self.EXPECTED_NAMES
+        ):
+            self.assertTrue(template.is_active)
+            self.assertTrue(template.disabled_on_clone)
+
+    def test_default_templates_all_add_document_trigger(self):
+        """All default templates should trigger on ADD_DOCUMENT."""
+        for template in CorpusActionTemplate.objects.filter(
+            name__in=self.EXPECTED_NAMES
+        ):
+            self.assertEqual(template.trigger, CorpusActionTrigger.ADD_DOCUMENT)
+
+    def test_default_templates_have_pre_authorized_tools(self):
+        """Each template should have pre-authorized tools matching its config."""
+        for template in CorpusActionTemplate.objects.filter(
+            name__in=self.EXPECTED_NAMES
+        ):
+            self.assertTrue(
+                len(template.pre_authorized_tools) > 0,
+                f"Template '{template.name}' has no pre-authorized tools",
+            )
+
+
+class CorpusActionTemplateIntegrationTest(TestCase):
+    """End-to-end test: creating a corpus clones default templates."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from django.apps import apps
+
+        cls.EXPECTED_NAMES = [
+            "Document Description Updater",
+            "Corpus Description Updater",
+            "Document Summary Generator",
+            "Key Terms Annotator",
+            "Document Notes Generator",
+        ]
+        if not User.objects.filter(is_superuser=True).exists():
+            User.objects.create_superuser(
+                username="integration_admin",
+                password="testpass",
+                email="intadmin@test.com",
+            )
+        if not CorpusActionTemplate.objects.filter(
+            name__in=cls.EXPECTED_NAMES
+        ).exists():
+            _create_default_action_templates(apps, None)
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="integrationuser", password="testpass"
+        )
+
+    def test_new_corpus_gets_default_actions(self):
+        """A new corpus should get cloned CorpusActions from all active templates."""
+        active_template_count = CorpusActionTemplate.objects.filter(
+            is_active=True
+        ).count()
+        if active_template_count == 0:
+            self.skipTest("No active templates — data migration may not have run")
+
+        corpus = Corpus.objects.create(title="Integration Corpus", creator=self.user)
+        actions = CorpusAction.objects.filter(corpus=corpus)
+        self.assertEqual(actions.count(), active_template_count)
+
+        # All cloned actions should be disabled
+        for action in actions:
+            self.assertTrue(
+                action.disabled,
+                f"Cloned action '{action.name}' should be disabled",
+            )
+            self.assertTrue(action.is_agent_action)
+            self.assertEqual(action.creator, self.user)
