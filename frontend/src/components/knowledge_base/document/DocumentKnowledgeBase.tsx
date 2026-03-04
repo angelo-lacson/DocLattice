@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import { unstable_batchedUpdates } from "react-dom";
-import { Button, Header, Modal, Loader, Message } from "semantic-ui-react";
+import { Button, Modal, ModalBody, ModalFooter, Spinner } from "@os-legal/ui";
+import {
+  ErrorMessage,
+  InfoMessage,
+  SuccessMessage,
+} from "../../widgets/feedback";
 import {
   MessageSquare,
   FileText,
@@ -297,16 +302,17 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       documentId
     );
     return (
-      <Modal open onClose={handleClose}>
-        <Modal.Content>
-          <Message error>
-            <Message.Header>Invalid Document</Message.Header>
-            <p>Cannot load document: Invalid document ID</p>
-          </Message>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={handleClose}>Close</Button>
-        </Modal.Actions>
+      <Modal open onClose={handleClose} size="sm">
+        <ModalBody>
+          <ErrorMessage title="Invalid Document">
+            Cannot load document: Invalid document ID
+          </ErrorMessage>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={handleClose}>
+            Close
+          </Button>
+        </ModalFooter>
       </Modal>
     );
   }
@@ -1502,7 +1508,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             createAnnotationHandler={createAnnotationHandler}
           />
         ) : viewState === ViewState.LOADING ? (
-          <Loader active inline="centered" content="Loading PDF..." />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              gap: "0.5rem",
+            }}
+          >
+            <Spinner size={24} />
+            <span style={{ color: "#64748b", fontSize: "0.875rem" }}>
+              Loading PDF...
+            </span>
+          </div>
         ) : (
           <EmptyState
             icon={<FileText size={40} />}
@@ -1518,7 +1538,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         {viewState === ViewState.LOADED ? (
           <TxtAnnotatorWrapper readOnly={!canEdit} allowInput={canEdit} />
         ) : viewState === ViewState.LOADING ? (
-          <Loader active inline="centered" content="Loading Text..." />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              gap: "0.5rem",
+            }}
+          >
+            <Spinner size={24} />
+            <span style={{ color: "#64748b", fontSize: "0.875rem" }}>
+              Loading Text...
+            </span>
+          </div>
         ) : (
           <EmptyState
             icon={<FileText size={40} />}
@@ -1540,7 +1574,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         }}
       >
         {viewState === ViewState.LOADING ? (
-          <Loader active inline="centered" content="Loading Document..." />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              gap: "0.5rem",
+            }}
+          >
+            <Spinner size={24} />
+            <span style={{ color: "#64748b", fontSize: "0.875rem" }}>
+              Loading Document...
+            </span>
+          </div>
         ) : (
           <EmptyState
             icon={<FileText size={40} />}
@@ -1680,20 +1728,21 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             overflow: "hidden",
           }}
         >
-          <Header
-            as="h2"
+          <h2
             style={{
               margin: 0,
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
               maxWidth: "100%",
+              fontSize: "1.5rem",
+              fontWeight: 700,
             }}
           >
             <span title={metadata.title || "Untitled Document"}>
               {metadata.title || "Untitled Document"}
             </span>
-          </Header>
+          </h2>
           <MetadataRow>
             <span>
               <FileType size={16} /> {metadata.fileType}
@@ -1765,31 +1814,27 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       {queryError ? (
         <ContentArea id="content-area">
           <div style={{ padding: "2rem", textAlign: "center" }}>
-            <Message negative size="large">
-              <Message.Header>Error loading document</Message.Header>
-              <p>{queryError.message}</p>
-            </Message>
+            <ErrorMessage title="Error loading document">
+              {queryError.message}
+            </ErrorMessage>
           </div>
         </ContentArea>
       ) : (
         <>
           {/* Corpus info display */}
           {showCorpusInfo && corpusData?.corpus && (
-            <Message info>
-              <Message.Header>Corpus: {corpusData.corpus.title}</Message.Header>
+            <InfoMessage title={`Corpus: ${corpusData.corpus.title}`}>
               {(corpusMdContent || corpusData.corpus.description) && (
                 <SafeMarkdown>
                   {corpusMdContent || corpusData.corpus.description || ""}
                 </SafeMarkdown>
               )}
-            </Message>
+            </InfoMessage>
           )}
 
           {/* Success message if just added to corpus */}
           {showSuccessMessage && (
-            <Message success onDismiss={() => {}}>
-              <Message.Header>{showSuccessMessage}</Message.Header>
-            </Message>
+            <SuccessMessage>{showSuccessMessage}</SuccessMessage>
           )}
 
           <ContentArea id="content-area">

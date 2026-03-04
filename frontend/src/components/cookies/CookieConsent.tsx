@@ -1,6 +1,17 @@
-import { List, Modal, Header, Icon, Button } from "semantic-ui-react";
+import styled from "styled-components";
 import { useMutation, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
+import {
+  AlertTriangle,
+  Users,
+  Settings,
+  Monitor,
+  BarChart3,
+  MousePointer,
+  Bug,
+  Check,
+} from "lucide-react";
+import { Button, Modal, ModalBody, ModalFooter } from "@os-legal/ui";
 
 import { showCookieAcceptModal, userObj } from "../../graphql/cache";
 import {
@@ -12,6 +23,81 @@ import {
   setAnalyticsConsent,
   isPostHogConfigured,
 } from "../../utils/analytics";
+
+const StyledModalWrapper = styled.div`
+  .oc-modal-overlay {
+    z-index: 2000;
+  }
+
+  .oc-modal {
+    max-width: 600px;
+    color: #e2e8f0;
+    background: #1e293b;
+  }
+
+  .oc-modal-body {
+    background: #1e293b;
+    padding: 1.5rem;
+  }
+
+  .oc-modal-footer {
+    background: #1e293b;
+    border-top: 1px solid #334155;
+    display: flex;
+    justify-content: center;
+  }
+`;
+
+const ModalHeaderSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const IconWrapper = styled.div`
+  color: #fbbf24;
+  margin-bottom: 0.5rem;
+`;
+
+const ModalTitle = styled.h2`
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+`;
+
+const SectionHeading = styled.h4`
+  text-align: center;
+  color: white;
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+
+  u {
+    text-decoration-color: #94a3b8;
+  }
+`;
+
+const DataList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+`;
+
+const DataListItem = styled.li`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  font-size: 0.95rem;
+  color: #cbd5e1;
+
+  svg {
+    flex-shrink: 0;
+    color: #94a3b8;
+  }
+`;
 
 export const CookieConsentDialog = () => {
   const currentUser = useReactiveVar(userObj);
@@ -61,132 +147,121 @@ export const CookieConsentDialog = () => {
   };
 
   return (
-    <Modal basic size="small" open>
-      <Header icon>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            justifyContent: "center",
-          }}
-        >
-          <div>
-            <Icon name="warning" />
-          </div>
-        </div>
-        <div style={{ marginTop: ".5em" }}>DEMO SYSTEM</div>
-      </Header>
-      <Modal.Content style={{ marginTop: "0", paddingTop: "0" }}>
-        <Header inverted textAlign="center">
-          <Header.Content as="h4">
+    <StyledModalWrapper>
+      <Modal open onClose={() => {}}>
+        <ModalBody>
+          <ModalHeaderSection>
+            <IconWrapper>
+              <AlertTriangle size={48} />
+            </IconWrapper>
+            <ModalTitle>DEMO SYSTEM</ModalTitle>
+          </ModalHeaderSection>
+
+          <SectionHeading>
             <u>Cookie Policy</u>
-          </Header.Content>
-        </Header>
-        <p>
-          This website uses cookies to enhance the user experience and help us
-          refine OpenContracts. We do not sell or share user information. Please
-          accept the cookie to continue.
-        </p>
-        <Header inverted textAlign="center">
-          <Header.Content as="h4">
+          </SectionHeading>
+          <p>
+            This website uses cookies to enhance the user experience and help us
+            refine OpenContracts. We do not sell or share user information.
+            Please accept the cookie to continue.
+          </p>
+
+          <SectionHeading>
             <u>NO REPRESENTATIONS OR WARRANTIES</u>
-          </Header.Content>
-        </Header>
-        <p>
-          This is a demo system with <b>NO</b> guarantee of uptime or data
-          retention. We may delete accounts and data{" "}
-          <u>AT ANY TIME AND FOR ANY REASON</u>. THE SOFTWARE IS PROVIDED "AS
-          IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
-          NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-          PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-          OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-          LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-          ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-          OTHER DEALINGS IN THE SOFTWARE.
-        </p>
-        <Header inverted textAlign="center">
-          <Header.Content as="h4">
+          </SectionHeading>
+          <p>
+            This is a demo system with <b>NO</b> guarantee of uptime or data
+            retention. We may delete accounts and data{" "}
+            <u>AT ANY TIME AND FOR ANY REASON</u>. THE SOFTWARE IS PROVIDED "AS
+            IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+            NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+            PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+            AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+            OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+            OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+            OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+          </p>
+
+          <SectionHeading>
             <u>Data We Collect</u>
-          </Header.Content>
-        </Header>
-        <List>
-          <List.Item>
-            <List.Icon name="users" />
-            <List.Content>User Information (email, name, ip)</List.Content>
-          </List.Item>
-          <List.Item>
-            <List.Icon name="settings" />
-            <List.Content>Usage Information</List.Content>
-          </List.Item>
-          <List.Item>
-            <List.Icon name="computer" />
-            <List.Content>System Information</List.Content>
-          </List.Item>
-        </List>
-        <Header inverted textAlign="center">
-          <Header.Content as="h4">
+          </SectionHeading>
+          <DataList>
+            <DataListItem>
+              <Users size={16} />
+              <span>User Information (email, name, ip)</span>
+            </DataListItem>
+            <DataListItem>
+              <Settings size={16} />
+              <span>Usage Information</span>
+            </DataListItem>
+            <DataListItem>
+              <Monitor size={16} />
+              <span>System Information</span>
+            </DataListItem>
+          </DataList>
+
+          <SectionHeading>
             <u>Data You Agree to Share</u>
-          </Header.Content>
-        </Header>
-        <p>
-          By interacting with this demo system, you agree to share the following
-          under a CC0 1.0 Universal license:
-        </p>
-        <List>
-          <List.Item>
-            <List.Icon name="users" />
-            <List.Content>Labelsets & Labels</List.Content>
-          </List.Item>
-          <List.Item>
-            <List.Icon name="computer" />
-            <List.Content>Configured Data Extractors</List.Content>
-          </List.Item>
-        </List>
-        {analyticsEnabled && (
-          <>
-            <Header inverted textAlign="center">
-              <Header.Content as="h4">
-                <u>Analytics & Usage Tracking</u>
-              </Header.Content>
-            </Header>
-            <p>
-              We use PostHog to collect anonymous usage analytics to help us
-              understand how OpenContracts is used and improve the experience.
-              This includes:
-            </p>
-            <List>
-              <List.Item>
-                <List.Icon name="chart line" />
-                <List.Content>Page views and navigation patterns</List.Content>
-              </List.Item>
-              <List.Item>
-                <List.Icon name="mouse pointer" />
-                <List.Content>Feature usage statistics</List.Content>
-              </List.Item>
-              <List.Item>
-                <List.Icon name="bug" />
-                <List.Content>Error tracking for debugging</List.Content>
-              </List.Item>
-            </List>
-            <p style={{ fontSize: "0.9em", opacity: 0.8 }}>
-              Analytics data is used solely to improve OpenContracts and is
-              never sold or shared with third parties. You can opt out at any
-              time through your browser settings or by using Do Not Track.
-            </p>
-          </>
-        )}
-      </Modal.Content>
-      <Modal.Actions>
-        <Button
-          color="green"
-          inverted
-          loading={loading}
-          disabled={loading}
-          onClick={handleAccept}
-        >
-          <Icon name="checkmark" /> Accept
-        </Button>
-      </Modal.Actions>
-    </Modal>
+          </SectionHeading>
+          <p>
+            By interacting with this demo system, you agree to share the
+            following under a CC0 1.0 Universal license:
+          </p>
+          <DataList>
+            <DataListItem>
+              <Users size={16} />
+              <span>Labelsets &amp; Labels</span>
+            </DataListItem>
+            <DataListItem>
+              <Monitor size={16} />
+              <span>Configured Data Extractors</span>
+            </DataListItem>
+          </DataList>
+
+          {analyticsEnabled && (
+            <>
+              <SectionHeading>
+                <u>Analytics &amp; Usage Tracking</u>
+              </SectionHeading>
+              <p>
+                We use PostHog to collect anonymous usage analytics to help us
+                understand how OpenContracts is used and improve the experience.
+                This includes:
+              </p>
+              <DataList>
+                <DataListItem>
+                  <BarChart3 size={16} />
+                  <span>Page views and navigation patterns</span>
+                </DataListItem>
+                <DataListItem>
+                  <MousePointer size={16} />
+                  <span>Feature usage statistics</span>
+                </DataListItem>
+                <DataListItem>
+                  <Bug size={16} />
+                  <span>Error tracking for debugging</span>
+                </DataListItem>
+              </DataList>
+              <p style={{ fontSize: "0.9em", opacity: 0.8 }}>
+                Analytics data is used solely to improve OpenContracts and is
+                never sold or shared with third parties. You can opt out at any
+                time through your browser settings or by using Do Not Track.
+              </p>
+            </>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="primary"
+            loading={loading}
+            disabled={loading}
+            leftIcon={<Check size={16} />}
+            onClick={handleAccept}
+          >
+            Accept
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };

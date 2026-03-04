@@ -1,4 +1,3 @@
-import { Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { Trash2 } from "lucide-react";
 
@@ -46,22 +45,26 @@ const RelationHeader = styled.div`
   margin-bottom: 0.25rem;
 `;
 
-const DeleteButton = styled(Button)`
-  &&& {
-    padding: 0.4em;
-    margin: 0;
-    background-color: transparent;
-    color: #99a1a7;
-    transition: all 0.2s ease;
+const DeleteButton = styled.button`
+  padding: 0.4em;
+  margin: 0;
+  background-color: transparent;
+  color: #99a1a7;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background-color: #fee2e2;
-      color: #dc2626;
-    }
+  &:hover {
+    background-color: #fee2e2;
+    color: #dc2626;
+  }
 
-    &:active {
-      background-color: #fecaca;
-    }
+  &:active {
+    background-color: #fecaca;
   }
 `;
 
@@ -161,14 +164,14 @@ export function RelationItem({
       {!relation.structural && (
         <RelationHeader>
           <DeleteButton
-            icon={<Trash2 size={16} />}
-            size="mini"
-            circular
+            aria-label="Delete relation"
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onDeleteRelation(relation.id);
             }}
-          />
+          >
+            <Trash2 size={16} />
+          </DeleteButton>
         </RelationHeader>
       )}
 

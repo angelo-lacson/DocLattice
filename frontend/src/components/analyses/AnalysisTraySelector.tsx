@@ -6,7 +6,8 @@ import React, {
   useCallback,
 } from "react";
 import Fuse from "fuse.js";
-import { Form, Segment, Button } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
+import { Search, X } from "lucide-react";
 import { AnalysisType } from "../../types/graphql-api";
 import styled from "styled-components";
 import {
@@ -49,55 +50,30 @@ interface AnalysisTraySelectorProps {
   searchTerm?: string;
 }
 
-const TrayContainer = styled(Segment.Group)`
+const TrayContainer = styled.div`
   height: 100%;
-  display: flex !important;
-  flex-direction: column !important;
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  box-shadow: none;
+  background: transparent;
 `;
 
-const SearchSegment = styled(Segment)`
-  padding: 1rem !important;
-  background: white !important;
-  border: 1px solid #e2e8f0 !important;
-  border-bottom: none !important;
-  border-radius: 12px 12px 0 0 !important;
-
-  .input {
-    width: 100%;
-
-    input {
-      border-radius: 8px !important;
-      border: 1px solid #e2e8f0 !important;
-      padding: 0.6rem 1rem !important;
-      transition: all 0.2s ease-in-out !important;
-
-      &:focus {
-        border-color: #4a90e2 !important;
-        box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1) !important;
-      }
-    }
-
-    i.icon {
-      opacity: 0.5;
-      transition: opacity 0.2s ease-in-out;
-
-      &:hover {
-        opacity: 1;
-      }
-    }
-  }
+const SearchSegment = styled.div`
+  padding: 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
 `;
 
-const AnalysisListSegment = styled(Segment)`
-  flex: 1 !important;
-  overflow-y: auto !important;
-  background: white !important;
-  border: 1px solid #e2e8f0 !important;
-  border-radius: 0 0 12px 12px !important;
-  padding: 0.75rem !important;
+const AnalysisListSegment = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0 0 12px 12px;
+  padding: 0.75rem;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -649,25 +625,41 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
   return (
     <TrayContainer>
       {externalSearchTerm === undefined && (
-        <SearchSegment attached="top">
-          <Form>
-            <Form.Input
-              icon={{
-                name: searchTerm ? "cancel" : "search",
-                link: true,
-                onClick: searchTerm ? () => handleSearchChange("") : undefined,
-              }}
+        <SearchSegment>
+          <div style={{ position: "relative" }}>
+            <Input
               placeholder="Search analyses..."
-              onChange={(e) => handleSearchChange(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handleSearchChange(e.target.value)
+              }
               value={searchTerm}
+              fullWidth
             />
-          </Form>
+            <button
+              type="button"
+              onClick={searchTerm ? () => handleSearchChange("") : undefined}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                cursor: searchTerm ? "pointer" : "default",
+                padding: "4px",
+                display: "flex",
+                alignItems: "center",
+                color: "#94a3b8",
+              }}
+              aria-label={searchTerm ? "Clear search" : "Search"}
+            >
+              {searchTerm ? <X size={16} /> : <Search size={16} />}
+            </button>
+          </div>
         </SearchSegment>
       )}
 
-      <AnalysisListSegment
-        attached={externalSearchTerm === undefined ? "bottom" : undefined}
-      >
+      <AnalysisListSegment>
         {mountedRef.current && filteredItems.length === 0 ? (
           <NoAnalysesMessage>
             <ChartNetwork size={32} />

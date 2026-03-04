@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import styled from "styled-components";
-import { Form, Input, Label } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
 import {
   Bot,
   Brain,
@@ -325,7 +325,7 @@ export const BadgeConfigurator: React.FC<BadgeConfiguratorProps> = ({
       {/* Label Input */}
       <SectionTitle>Label Text</SectionTitle>
       <LabelInputWrapper>
-        <Form.Field>
+        <div>
           <Input
             placeholder="AI Assistant"
             value={value.label}
@@ -337,7 +337,7 @@ export const BadgeConfigurator: React.FC<BadgeConfiguratorProps> = ({
           >
             Short label shown on the badge (max 20 chars)
           </small>
-        </Form.Field>
+        </div>
       </LabelInputWrapper>
     </Container>
   );

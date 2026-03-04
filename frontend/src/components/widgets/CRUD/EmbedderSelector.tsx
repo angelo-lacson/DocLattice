@@ -1,5 +1,5 @@
 import { useQuery } from "@apollo/client";
-import { Header, Segment, Dropdown, Message } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import {
   GetEmbeddersInput,
@@ -19,14 +19,8 @@ const MobileFriendlyWrapper = styled.div`
       font-size: 16px; /* Prevents iOS zoom on focus */
     }
 
-    /* Make header text readable on mobile */
-    h5.ui.header {
-      font-size: 1rem;
-      padding: 0.75rem 1rem;
-    }
-
-    /* Add padding to segment for better mobile spacing */
-    .ui.segment {
+    /* Add padding for better mobile spacing */
+    > div:last-child {
       padding: 1rem;
     }
 
@@ -94,34 +88,74 @@ export const EmbedderSelector = ({
     text: embedder.title || embedder.name,
     value: embedder.className,
     content: (
-      <Header
-        image={embedder.author ? undefined : undefined} // Could add an icon based on author if needed
-        content={embedder.title || embedder.name}
-        subheader={`${embedder.description || ""} (${
-          embedder.vectorSize || "Unknown"
-        } dimensions)`}
-      />
+      <div>
+        <div style={{ fontWeight: 600 }}>{embedder.title || embedder.name}</div>
+        <div style={{ fontSize: "0.85rem", color: "#666" }}>
+          {`${embedder.description || ""} (${
+            embedder.vectorSize || "Unknown"
+          } dimensions)`}
+        </div>
+      </div>
     ),
   }));
 
   return (
     <MobileFriendlyWrapper>
-      <Header as="h5" attached="top">
+      <h5
+        style={{
+          margin: 0,
+          padding: "0.75rem 1rem",
+          background: "#f9fafb",
+          border: "1px solid rgba(34,36,38,.15)",
+          borderBottom: "none",
+          borderRadius: "4px 4px 0 0",
+          fontSize: "0.9rem",
+          fontWeight: 600,
+        }}
+      >
         Preferred Embedder:
-      </Header>
-      <Segment attached>
+      </h5>
+      <div
+        style={{
+          padding: "1rem",
+          border: "1px solid rgba(34,36,38,.15)",
+          borderRadius: "0 0 4px 4px",
+        }}
+      >
         {error && (
-          <Message negative compact size="tiny">
-            <Message.Header>Failed to load embedders</Message.Header>
-            <p>{error.message}</p>
-          </Message>
+          <div
+            style={{
+              background: "#fff6f6",
+              color: "#9f3a38",
+              border: "1px solid #e0b4b4",
+              borderRadius: "4px",
+              padding: "0.75rem 1rem",
+              marginBottom: "0.75rem",
+              fontSize: "0.85rem",
+            }}
+          >
+            <div style={{ fontWeight: 700 }}>Failed to load embedders</div>
+            <p style={{ margin: "0.25rem 0 0" }}>{error.message}</p>
+          </div>
         )}
 
         {!loading && !error && !hasEmbedders && (
-          <Message info compact size="tiny">
-            <Message.Header>No embedders available</Message.Header>
-            <p>There are currently no embedders configured in the system.</p>
-          </Message>
+          <div
+            style={{
+              background: "#f8ffff",
+              color: "#276f86",
+              border: "1px solid #a9d5de",
+              borderRadius: "4px",
+              padding: "0.75rem 1rem",
+              marginBottom: "0.75rem",
+              fontSize: "0.85rem",
+            }}
+          >
+            <div style={{ fontWeight: 700 }}>No embedders available</div>
+            <p style={{ margin: "0.25rem 0 0" }}>
+              There are currently no embedders configured in the system.
+            </p>
+          </div>
         )}
 
         <Dropdown
@@ -141,7 +175,7 @@ export const EmbedderSelector = ({
           noResultsMessage="No embedders match your search"
           loading={loading}
         />
-      </Segment>
+      </div>
     </MobileFriendlyWrapper>
   );
 };

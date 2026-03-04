@@ -1,6 +1,19 @@
 import React from "react";
 import { useQuery } from "@apollo/client";
-import { Icon, Loader, Message, SemanticICONS } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
+import {
+  TrendingUp,
+  MessageCircle,
+  MessageSquare,
+  ArrowRightLeft,
+  Mail,
+  CalendarCheck,
+  CalendarDays,
+  Users,
+  UserPlus,
+  ThumbsUp,
+  type LucideIcon,
+} from "lucide-react";
 import styled from "styled-components";
 import CountUp from "react-countup";
 import {
@@ -23,6 +36,20 @@ import {
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 
+// Map of icon identifiers to lucide-react components
+const ICON_MAP: Record<string, LucideIcon> = {
+  comments: MessageCircle,
+  "comment alternate outline": MessageSquare,
+  exchange: ArrowRightLeft,
+  envelope: Mail,
+  "calendar check": CalendarCheck,
+  "calendar alternate outline": CalendarDays,
+  users: Users,
+  "user plus": UserPlus,
+  "thumbs up": ThumbsUp,
+  "chart line": TrendingUp,
+};
+
 interface CorpusEngagementDashboardProps {
   corpusId: string;
 }
@@ -35,12 +62,15 @@ const StatisticWithAnimation = ({
 }: {
   value: number;
   label: string;
-  icon: SemanticICONS;
+  icon: string;
   color?: string;
 }) => {
+  const IconComponent = ICON_MAP[icon] || TrendingUp;
   return (
     <StatisticWrapper>
-      <StatisticIcon name={icon} style={{ color: color || "#4a90e2" }} />
+      <StatisticIconWrapper style={{ color: color || "#4a90e2" }}>
+        <IconComponent />
+      </StatisticIconWrapper>
       <StatisticContent>
         <StatisticValue>
           <CountUp end={value} duration={1.5} />
@@ -68,9 +98,10 @@ export const CorpusEngagementDashboard: React.FC<
   if (loading) {
     return (
       <LoadingContainer>
-        <Loader active inline="centered">
+        <Spinner size="md" />
+        <div style={{ marginTop: "0.5rem", color: "#64748b" }}>
           Loading engagement metrics...
-        </Loader>
+        </div>
       </LoadingContainer>
     );
   }
@@ -78,10 +109,10 @@ export const CorpusEngagementDashboard: React.FC<
   if (error) {
     return (
       <ErrorContainer>
-        <Message error>
-          <Message.Header>Error Loading Metrics</Message.Header>
+        <AlertBox $variant="error">
+          <strong>Error Loading Metrics</strong>
           <p>{error.message}</p>
-        </Message>
+        </AlertBox>
       </ErrorContainer>
     );
   }
@@ -91,13 +122,13 @@ export const CorpusEngagementDashboard: React.FC<
   if (!metrics) {
     return (
       <EmptyStateContainer>
-        <Message info>
-          <Message.Header>No Engagement Data Available</Message.Header>
+        <AlertBox $variant="info">
+          <strong>No Engagement Data Available</strong>
           <p>
             Engagement metrics haven't been calculated for this corpus yet. They
             will be available once the background task has run.
           </p>
-        </Message>
+        </AlertBox>
       </EmptyStateContainer>
     );
   }
@@ -122,7 +153,7 @@ export const CorpusEngagementDashboard: React.FC<
     <DashboardContainer>
       <DashboardHeader>
         <Title>
-          <Icon name="chart line" />
+          <TrendingUp />
           Engagement Analytics
         </Title>
         <LastUpdated>
@@ -272,8 +303,10 @@ const Title = styled.h2`
   gap: 0.5rem;
   margin: 0;
 
-  i.icon {
+  svg {
     color: #4a90e2;
+    width: 24px;
+    height: 24px;
   }
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
@@ -338,14 +371,44 @@ const StatisticWrapper = styled.div`
   }
 `;
 
-const StatisticIcon = styled(Icon)`
-  font-size: 1.75rem !important;
-  margin: 0 1rem 0 0 !important;
+const StatisticIconWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 1rem 0 0;
   opacity: 0.8;
 
+  svg {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    font-size: 2.5rem !important;
-    margin: 0 0 0.75rem 0 !important;
+    margin: 0 0 0.75rem 0;
+
+    svg {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+  }
+`;
+
+const AlertBox = styled.div<{ $variant: "error" | "info" }>`
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  background: ${(props) =>
+    props.$variant === "error" ? "#fee2e2" : "#eff6ff"};
+  border: 1px solid
+    ${(props) => (props.$variant === "error" ? "#fca5a5" : "#bfdbfe")};
+  color: ${(props) => (props.$variant === "error" ? "#991b1b" : "#1e40af")};
+
+  strong {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin: 0;
   }
 `;
 

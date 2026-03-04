@@ -18,7 +18,7 @@ import {
 } from "../ChatContainers";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Send } from "lucide-react";
-import { Button } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChatMessage,
@@ -1417,17 +1417,15 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               >
                 {!readOnly && user_obj && (
                   <Button
-                    size="small"
+                    size="sm"
+                    variant="secondary"
+                    leftIcon={<ArrowLeft size={16} />}
                     onClick={exitConversation}
                     style={{
                       background: "transparent",
                       padding: "0.5rem",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
                     }}
                   >
-                    <ArrowLeft size={16} />
                     Back to Conversations
                   </Button>
                 )}
@@ -1680,7 +1678,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                     >
                       {wsError}
                       <Button
-                        size="small"
+                        size="sm"
+                        variant="secondary"
                         onClick={() => window.location.reload()}
                         style={{
                           marginLeft: "0.75rem",

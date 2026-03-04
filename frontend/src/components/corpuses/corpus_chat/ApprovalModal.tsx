@@ -1,7 +1,7 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, CheckCircle, X } from "lucide-react";
-import { Button } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 
 /**
  * Shape of the pending approval data passed from the parent chat component.
@@ -138,33 +138,29 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
             }}
           >
             <Button
-              size="medium"
+              variant="secondary"
+              size="md"
               onClick={() => onDecision(false)}
+              leftIcon={<X size={16} />}
               style={{
                 backgroundColor: "#dc2626",
                 color: "white",
                 border: "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
               }}
             >
-              <X size={16} />
               Reject
             </Button>
             <Button
-              size="medium"
+              variant="secondary"
+              size="md"
               onClick={() => onDecision(true)}
+              leftIcon={<CheckCircle size={16} />}
               style={{
                 backgroundColor: "#059669",
                 color: "white",
                 border: "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
               }}
             >
-              <CheckCircle size={16} />
               Approve
             </Button>
           </div>

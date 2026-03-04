@@ -1,10 +1,15 @@
 import React, { Dispatch, SetStateAction } from "react";
-import { Button, Icon, Modal } from "semantic-ui-react";
-import { X } from "lucide-react";
+import { X, Edit } from "lucide-react";
+import {
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import { useNavigate } from "react-router-dom";
 import { NoteType } from "../../../../types/graphql-api";
 
-import { NoteModal } from "../StickyNotes";
 import { SafeMarkdown } from "../../markdown/SafeMarkdown";
 import { NoteEditor } from "../NoteEditor";
 import { NewNoteModal } from "../NewNoteModal";
@@ -78,58 +83,62 @@ export const DocumentModals: React.FC<DocumentModalsProps> = ({
 
   return (
     <>
-      <Modal
-        open={showGraph}
-        onClose={() => setShowGraph(false)}
-        size="large"
-        basic
-      >
-        <Modal.Content>
-          {/* Graph or relationship visualization */}
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowGraph(false)}>
-            <X size={16} />
+      <Modal open={showGraph} onClose={() => setShowGraph(false)} size="lg">
+        <ModalHeader title="Graph View" onClose={() => setShowGraph(false)} />
+        <ModalBody>{/* Graph or relationship visualization */}</ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => setShowGraph(false)}
+            leftIcon={<X size={16} />}
+          >
             Close
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
-      <NoteModal
-        id={`note-modal_${selectedNote?.id}`}
-        closeIcon
-        open={!!selectedNote}
-        onClose={() => setSelectedNote(null)}
-        size="large"
-      >
-        {selectedNote && (
-          <>
-            <Modal.Header>{selectedNote.title || "Untitled Note"}</Modal.Header>
-            <Modal.Content>
-              <SafeMarkdown>{selectedNote.content}</SafeMarkdown>
-            </Modal.Content>
-            <Modal.Actions>
-              {!readOnly && (
-                <Button
-                  primary
-                  onClick={() => {
-                    setEditingNoteId(selectedNote.id);
-                    setSelectedNote(null);
-                  }}
-                >
-                  <Icon name="edit" />
-                  Edit Note
-                </Button>
-              )}
-              <Button onClick={() => setSelectedNote(null)}>Close</Button>
-            </Modal.Actions>
-            <div className="meta">
+      {!!selectedNote && (
+        <Modal
+          open={!!selectedNote}
+          onClose={() => setSelectedNote(null)}
+          size="lg"
+        >
+          <ModalHeader
+            title={selectedNote.title || "Untitled Note"}
+            onClose={() => setSelectedNote(null)}
+          />
+          <ModalBody>
+            <SafeMarkdown>{selectedNote.content}</SafeMarkdown>
+            <div
+              style={{
+                fontSize: "0.85em",
+                color: "#64748b",
+                marginTop: "1rem",
+              }}
+            >
               Added by {selectedNote.creator.email} on{" "}
               {new Date(selectedNote.created).toLocaleString()}
             </div>
-          </>
-        )}
-      </NoteModal>
+          </ModalBody>
+          <ModalFooter>
+            {!readOnly && (
+              <Button
+                variant="primary"
+                leftIcon={<Edit size={16} />}
+                onClick={() => {
+                  setEditingNoteId(selectedNote.id);
+                  setSelectedNote(null);
+                }}
+              >
+                Edit Note
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => setSelectedNote(null)}>
+              Close
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
 
       {!readOnly && editingNoteId && (
         <NoteEditor

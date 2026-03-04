@@ -1,7 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import * as LucideIcons from "lucide-react";
-import { Popup } from "semantic-ui-react";
+import { useState, useRef } from "react";
 import {
   ChatMessageType,
   UserBadgeType,
@@ -62,6 +62,36 @@ const BadgeMetadata = styled.div`
   margin-top: 0.3em;
   border-top: 1px solid #e2e8f0;
   padding-top: 0.5em;
+`;
+
+const TooltipWrapper = styled.div`
+  position: relative;
+  display: inline-flex;
+`;
+
+const TooltipPopup = styled.div`
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 0.75em;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  max-width: 220px;
+  pointer-events: auto;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: white;
+  }
 `;
 
 interface BadgeDisplayData {
@@ -128,6 +158,7 @@ function BadgeItem({
   badge: BadgeDisplayData | AgentBadgeDisplayData;
   showTooltip: boolean;
 }) {
+  const [isHovered, setIsHovered] = useState(false);
   // Dynamically get the icon component from lucide-react
   const IconComponent = (LucideIcons[badge.icon as keyof typeof LucideIcons] ||
     LucideIcons.Award) as React.ComponentType<{ size: number }>;
@@ -143,40 +174,36 @@ function BadgeItem({
     return badgeElement;
   }
 
-  // Create detailed popup content
-  const popupContent = (
-    <BadgeContent>
-      <BadgeTitle>{badge.name}</BadgeTitle>
-      <BadgeDescription>{badge.description}</BadgeDescription>
-      {"badgeType" in badge && (
-        <BadgeMetadata>
-          {badge.badgeType === "CORPUS" && badge.corpus && (
-            <div>Corpus: {badge.corpus.title}</div>
-          )}
-          {badge.badgeType === "GLOBAL" && <div>Global Badge</div>}
-          {badge.isAutoAwarded && <div>Auto-awarded</div>}
-          {badge.awardedAt && (
-            <div>Awarded: {new Date(badge.awardedAt).toLocaleDateString()}</div>
-          )}
-          {badge.awardedBy && <div>By: {badge.awardedBy.username}</div>}
-        </BadgeMetadata>
-      )}
-    </BadgeContent>
-  );
-
   return (
-    <Popup
-      trigger={badgeElement}
-      content={popupContent}
-      position="top center"
-      hoverable
-      inverted={false}
-      style={{
-        padding: "0.75em",
-        borderRadius: "10px",
-        boxShadow: "0 3px 15px rgba(0, 0, 0, 0.15)",
-      }}
-    />
+    <TooltipWrapper
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {badgeElement}
+      {isHovered && (
+        <TooltipPopup>
+          <BadgeContent>
+            <BadgeTitle>{badge.name}</BadgeTitle>
+            <BadgeDescription>{badge.description}</BadgeDescription>
+            {"badgeType" in badge && (
+              <BadgeMetadata>
+                {badge.badgeType === "CORPUS" && badge.corpus && (
+                  <div>Corpus: {badge.corpus.title}</div>
+                )}
+                {badge.badgeType === "GLOBAL" && <div>Global Badge</div>}
+                {badge.isAutoAwarded && <div>Auto-awarded</div>}
+                {badge.awardedAt && (
+                  <div>
+                    Awarded: {new Date(badge.awardedAt).toLocaleDateString()}
+                  </div>
+                )}
+                {badge.awardedBy && <div>By: {badge.awardedBy.username}</div>}
+              </BadgeMetadata>
+            )}
+          </BadgeContent>
+        </TooltipPopup>
+      )}
+    </TooltipWrapper>
   );
 }
 

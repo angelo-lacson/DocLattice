@@ -1,4 +1,3 @@
-import { Button } from "semantic-ui-react";
 import { DynamicIcon } from "../../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
@@ -68,23 +67,27 @@ const ContentArea = styled.div`
   margin-left: 0.625rem;
 `;
 
-const RemoveButton = styled(Button)`
-  &&& {
-    padding: 0.35em;
-    margin-left: 0.375rem;
-    background-color: transparent;
-    color: #b0b7bf;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
+const RemoveButton = styled.button`
+  padding: 0.35em;
+  margin-left: 0.375rem;
+  background-color: transparent;
+  color: #b0b7bf;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 
-    &:hover {
-      background-color: #fee2e2;
-      color: #dc2626;
-    }
+  &:hover {
+    background-color: #fee2e2;
+    color: #dc2626;
+  }
 
-    &:active {
-      background-color: #fecaca;
-    }
+  &:active {
+    background-color: #fecaca;
   }
 `;
 
@@ -153,14 +156,14 @@ export const RelationHighlightItem = ({
       </ContentArea>
       {!read_only && onRemoveAnnotationFromRelation && (
         <RemoveButton
-          icon={<X size={14} />}
-          size="mini"
-          circular
+          aria-label="Remove annotation from relation"
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation();
             onRemoveAnnotationFromRelation(annotation.id);
           }}
-        />
+        >
+          <X size={14} />
+        </RemoveButton>
       )}
     </ItemRow>
   );

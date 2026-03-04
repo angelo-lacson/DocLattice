@@ -10,7 +10,6 @@ import React from "react";
 import { formatDistanceToNow } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { Calendar, Plus, Search, X } from "lucide-react";
-import { CardMeta } from "semantic-ui-react";
 import {
   CardContent,
   CardTitle,
@@ -217,12 +216,12 @@ export const DocumentConversationListView: React.FC<
               </MessageCount>
               <CardContent>
                 <CardTitle>{conv.title || "Untitled Conversation"}</CardTitle>
-                <CardMeta>
+                <div style={{ color: "#6c757d", fontSize: "0.875rem" }}>
                   <TimeStamp>
                     {formatDistanceToNow(new Date(conv.createdAt))} ago
                   </TimeStamp>
                   <Creator>{conv.creator?.email}</Creator>
-                </CardMeta>
+                </div>
               </CardContent>
             </ConversationCard>
           );

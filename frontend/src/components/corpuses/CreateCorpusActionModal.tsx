@@ -1,7 +1,16 @@
 import React, { useMemo, useState, useCallback } from "react";
-import { Modal, Form, Button, Dropdown, Menu } from "semantic-ui-react";
+import { Dropdown, Menu } from "semantic-ui-react";
 import { Info, Settings, Cpu, FileText } from "lucide-react";
-import { Spinner } from "@os-legal/ui";
+import {
+  Button,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Spinner,
+} from "@os-legal/ui";
+import styled from "styled-components";
 import { useMutation, useQuery } from "@apollo/client";
 import { InfoMessage } from "../widgets/feedback";
 import { StyledTextArea } from "../widgets/modals/styled";
@@ -34,6 +43,18 @@ import {
   GetAvailableDocumentToolsOutput,
   AvailableTool,
 } from "../../graphql/queries";
+
+const StyledModalWrapper = styled.div`
+  .oc-modal {
+    max-width: 640px;
+    width: 100%;
+  }
+
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+`;
 
 /**
  * Default moderation tools (fallback when backend query fails or returns no data).
@@ -573,22 +594,26 @@ export const CreateCorpusActionModal: React.FC<
   }, [selectedAgentConfig]);
 
   return (
-    <Modal open={open} onClose={onClose} size="small">
-      <Modal.Header>
-        {isEditMode ? "Edit Corpus Action" : "Create New Corpus Action"}
-      </Modal.Header>
-      <Modal.Content>
-        <Form loading={isSubmitting}>
-          <Form.Field required>
+    <StyledModalWrapper>
+      <Modal open={open} onClose={onClose} size="md">
+        <ModalHeader
+          title={isEditMode ? "Edit Corpus Action" : "Create New Corpus Action"}
+          onClose={onClose}
+        />
+        <ModalBody>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Name</label>
-            <Form.Input
+            <Input
+              fullWidth
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setName(e.target.value)
+              }
               placeholder="Enter action name"
             />
-          </Form.Field>
+          </div>
 
-          <Form.Field required>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Trigger</label>
             <Dropdown
               selection
@@ -630,9 +655,9 @@ export const CreateCorpusActionModal: React.FC<
                 }
               }}
             />
-          </Form.Field>
+          </div>
 
-          <Form.Field required>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Action Type</label>
             <Dropdown
               selection
@@ -656,7 +681,7 @@ export const CreateCorpusActionModal: React.FC<
                 Thread/message triggers only support agent-based actions.
               </small>
             )}
-          </Form.Field>
+          </div>
 
           {actionType === "fieldset" && (
             <div
@@ -682,7 +707,7 @@ export const CreateCorpusActionModal: React.FC<
                 Select a fieldset to automatically extract data from documents
                 when they are {trigger === "add_document" ? "added" : "edited"}.
               </InfoMessage>
-              <Form.Field required>
+              <div style={{ marginBottom: "1rem" }}>
                 <label>Fieldset</label>
                 <Dropdown
                   selection
@@ -695,7 +720,7 @@ export const CreateCorpusActionModal: React.FC<
                   }
                   placeholder="Select fieldset"
                 />
-              </Form.Field>
+              </div>
             </div>
           )}
 
@@ -723,7 +748,7 @@ export const CreateCorpusActionModal: React.FC<
                 Select an analyzer to automatically run analysis on documents
                 when they are {trigger === "add_document" ? "added" : "edited"}.
               </InfoMessage>
-              <Form.Field required>
+              <div style={{ marginBottom: "1rem" }}>
                 <label>Analyzer</label>
                 <Dropdown
                   selection
@@ -736,7 +761,7 @@ export const CreateCorpusActionModal: React.FC<
                   }
                   placeholder="Select analyzer"
                 />
-              </Form.Field>
+              </div>
             </div>
           )}
 
@@ -831,26 +856,30 @@ export const CreateCorpusActionModal: React.FC<
                           : "Creates a new agent with document processing tools enabled."}
                       </div>
 
-                      <Form.Field required>
+                      <div style={{ marginBottom: "1rem" }}>
                         <label>Agent Name</label>
-                        <Form.Input
+                        <Input
+                          fullWidth
                           value={inlineAgentName}
-                          onChange={(e) => setInlineAgentName(e.target.value)}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setInlineAgentName(e.target.value)
+                          }
                           placeholder={
                             isThreadTrigger
                               ? "e.g., Discussion Moderator"
                               : "e.g., Document Summarizer"
                           }
                         />
-                      </Form.Field>
+                      </div>
 
-                      <Form.Field>
+                      <div style={{ marginBottom: "1rem" }}>
                         <label>
                           Agent Description <InlineBadge>Optional</InlineBadge>
                         </label>
-                        <Form.Input
+                        <Input
+                          fullWidth
                           value={inlineAgentDescription}
-                          onChange={(e) =>
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                             setInlineAgentDescription(e.target.value)
                           }
                           placeholder={
@@ -859,9 +888,9 @@ export const CreateCorpusActionModal: React.FC<
                               : "Brief description of what this agent does"
                           }
                         />
-                      </Form.Field>
+                      </div>
 
-                      <Form.Field required>
+                      <div style={{ marginBottom: "1rem" }}>
                         <label>
                           {isThreadTrigger
                             ? "System Instructions"
@@ -890,9 +919,9 @@ export const CreateCorpusActionModal: React.FC<
                             ? "These instructions define how the agent behaves and what moderation policies it follows."
                             : "Optional persona guidelines. The main instructions go in the Task Instructions field below."}
                         </small>
-                      </Form.Field>
+                      </div>
 
-                      <Form.Field required>
+                      <div style={{ marginBottom: "1rem" }}>
                         <label>Task Instructions</label>
                         <StyledTextArea
                           value={taskInstructions}
@@ -914,9 +943,9 @@ export const CreateCorpusActionModal: React.FC<
                           This prompt is sent to the agent each time the action
                           triggers.
                         </small>
-                      </Form.Field>
+                      </div>
 
-                      <Form.Field required>
+                      <div style={{ marginBottom: "1rem" }}>
                         <label>
                           {isThreadTrigger
                             ? "Moderation Tools"
@@ -996,8 +1025,8 @@ export const CreateCorpusActionModal: React.FC<
                         </div>
                         <div style={{ marginTop: "0.5rem" }}>
                           <Button
-                            type="button"
-                            size="tiny"
+                            variant="secondary"
+                            size="sm"
                             onClick={() => {
                               const tools = isThreadTrigger
                                 ? moderationTools
@@ -1011,8 +1040,8 @@ export const CreateCorpusActionModal: React.FC<
                             Select All
                           </Button>
                           <Button
-                            type="button"
-                            size="tiny"
+                            variant="secondary"
+                            size="sm"
                             onClick={() => {
                               const setter = isThreadTrigger
                                 ? setSelectedModerationTools
@@ -1023,14 +1052,14 @@ export const CreateCorpusActionModal: React.FC<
                             Clear All
                           </Button>
                         </div>
-                      </Form.Field>
+                      </div>
                     </>
                   )}
 
                   {/* Existing Agent Mode */}
                   {!useInlineAgent && (
                     <>
-                      <Form.Field required>
+                      <div style={{ marginBottom: "1rem" }}>
                         <label>Agent</label>
                         <Dropdown
                           selection
@@ -1047,7 +1076,7 @@ export const CreateCorpusActionModal: React.FC<
                           placeholder="Select agent configuration"
                           selectOnNavigation={false}
                         />
-                      </Form.Field>
+                      </div>
 
                       {selectedAgentConfig && (
                         <>
@@ -1071,7 +1100,7 @@ export const CreateCorpusActionModal: React.FC<
                             <p>{selectedAgentConfig.description}</p>
                           </div>
 
-                          <Form.Field required>
+                          <div style={{ marginBottom: "1rem" }}>
                             <label>Task Instructions</label>
                             <StyledTextArea
                               value={taskInstructions}
@@ -1081,10 +1110,10 @@ export const CreateCorpusActionModal: React.FC<
                               placeholder="Enter the task prompt for the agent"
                               rows={4}
                             />
-                          </Form.Field>
+                          </div>
 
                           {toolOptions.length > 0 && (
-                            <Form.Field>
+                            <div style={{ marginBottom: "1rem" }}>
                               <label>
                                 Pre-authorized Tools{" "}
                                 <InlineBadge $variant="info">
@@ -1102,7 +1131,7 @@ export const CreateCorpusActionModal: React.FC<
                                 }
                                 placeholder="Select tools to pre-authorize (optional)"
                               />
-                            </Form.Field>
+                            </div>
                           )}
                         </>
                       )}
@@ -1136,7 +1165,7 @@ export const CreateCorpusActionModal: React.FC<
                     </>
                   </InfoMessage>
 
-                  <Form.Field required>
+                  <div style={{ marginBottom: "1rem" }}>
                     <label>Agent</label>
                     <Dropdown
                       selection
@@ -1153,7 +1182,7 @@ export const CreateCorpusActionModal: React.FC<
                       placeholder="Select agent configuration"
                       selectOnNavigation={false}
                     />
-                  </Form.Field>
+                  </div>
 
                   {selectedAgentConfig && (
                     <>
@@ -1174,7 +1203,7 @@ export const CreateCorpusActionModal: React.FC<
                         <p>{selectedAgentConfig.description}</p>
                       </div>
 
-                      <Form.Field required>
+                      <div style={{ marginBottom: "1rem" }}>
                         <label>Task Instructions</label>
                         <StyledTextArea
                           value={taskInstructions}
@@ -1182,10 +1211,10 @@ export const CreateCorpusActionModal: React.FC<
                           placeholder="Enter the task prompt for the agent (e.g., 'Summarize this document and update its description')"
                           rows={4}
                         />
-                      </Form.Field>
+                      </div>
 
                       {toolOptions.length > 0 && (
-                        <Form.Field>
+                        <div style={{ marginBottom: "1rem" }}>
                           <label>
                             Pre-authorized Tools{" "}
                             <InlineBadge $variant="info">Optional</InlineBadge>
@@ -1212,7 +1241,7 @@ export const CreateCorpusActionModal: React.FC<
                             approval. Leave empty to use all available tools
                             with approval gates.
                           </small>
-                        </Form.Field>
+                        </div>
                       )}
                     </>
                   )}
@@ -1221,7 +1250,7 @@ export const CreateCorpusActionModal: React.FC<
             </div>
           )}
 
-          <Form.Field>
+          <div style={{ marginBottom: "1rem" }}>
             <label
               style={{
                 display: "flex",
@@ -1237,9 +1266,9 @@ export const CreateCorpusActionModal: React.FC<
               />
               Initially Disabled
             </label>
-          </Form.Field>
+          </div>
 
-          <Form.Field>
+          <div style={{ marginBottom: "1rem" }}>
             <label
               style={{
                 display: "flex",
@@ -1255,22 +1284,27 @@ export const CreateCorpusActionModal: React.FC<
               />
               Run on All Corpuses
             </label>
-          </Form.Field>
-        </Form>
-      </Modal.Content>
-      <Modal.Actions>
-        <Button
-          onClick={() => {
-            resetForm();
-            onClose();
-          }}
-        >
-          Cancel
-        </Button>
-        <Button primary onClick={handleSubmit} loading={isSubmitting}>
-          {isEditMode ? "Update Action" : "Create Action"}
-        </Button>
-      </Modal.Actions>
-    </Modal>
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              resetForm();
+              onClose();
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            loading={isSubmitting}
+          >
+            {isEditMode ? "Update Action" : "Create Action"}
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };

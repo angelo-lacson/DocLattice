@@ -2,8 +2,8 @@
  * CategoriesSection - Category selector for corpus organization
  */
 import React from "react";
-import { Button, Icon } from "semantic-ui-react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Save } from "lucide-react";
+import { Button } from "@os-legal/ui";
 import { CategorySelector } from "../CategorySelector";
 import {
   SettingsCard,
@@ -69,16 +69,17 @@ export const CategoriesSection: React.FC<CategoriesSectionProps> = ({
 
         <div style={{ marginTop: "1.5rem" }}>
           <Button
-            primary
+            variant="primary"
             loading={loading}
             disabled={!canUpdate || !hasChanges}
             onClick={onSave}
+            leftIcon={<Save size={16} />}
             style={{
               background: !canUpdate ? "#e2e8f0" : undefined,
               cursor: !canUpdate ? "not-allowed" : undefined,
             }}
           >
-            <Icon name="save" /> Save Categories
+            Save Categories
           </Button>
         </div>
       </SettingsCardContent>

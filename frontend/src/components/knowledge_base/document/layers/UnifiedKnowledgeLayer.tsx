@@ -8,10 +8,11 @@ import {
   Clock,
   ArrowLeft,
   AlertCircle,
-  EditIcon,
+  Pencil,
   X,
+  Save,
 } from "lucide-react";
-import { Button, Icon } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 import { format } from "date-fns";
 
 import {
@@ -231,17 +232,29 @@ const UnifiedKnowledgeLayer: React.FC<Props> = ({
             </h2>
             <div className="header-actions">
               {!isEditingSummary && isViewingCurrent && !readOnly && (
-                <Button primary onClick={handleEdit}>
-                  <Icon name="edit" /> Edit Summary
+                <Button
+                  variant="primary"
+                  leftIcon={<Pencil size={16} />}
+                  onClick={handleEdit}
+                >
+                  Edit Summary
                 </Button>
               )}
               {isEditingSummary && (
                 <>
-                  <Button positive onClick={handleSaveEdit}>
-                    <Icon name="save" /> Save as New Version
+                  <Button
+                    variant="primary"
+                    leftIcon={<Save size={16} />}
+                    onClick={handleSaveEdit}
+                  >
+                    Save as New Version
                   </Button>
-                  <Button onClick={handleCancelEdit}>
-                    <Icon name="cancel" /> Cancel
+                  <Button
+                    variant="secondary"
+                    leftIcon={<X size={16} />}
+                    onClick={handleCancelEdit}
+                  >
+                    Cancel
                   </Button>
                 </>
               )}
@@ -266,7 +279,7 @@ const UnifiedKnowledgeLayer: React.FC<Props> = ({
             <EditModeToolbar>
               <div className="toolbar-left">
                 <div className="edit-indicator">
-                  <EditIcon /> Editing Mode
+                  <Pencil size={16} /> Editing Mode
                 </div>
               </div>
               <div className="toolbar-actions">

@@ -2,7 +2,7 @@
  * CorpusActionsSection - Corpus actions list with add/edit/delete functionality
  */
 import React from "react";
-import { Button } from "semantic-ui-react";
+import { Button, IconButton } from "@os-legal/ui";
 import {
   Plus,
   Play,
@@ -90,8 +90,13 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
     <SettingsCard>
       <SettingsCardHeader>
         <SettingsCardTitle>Corpus Actions</SettingsCardTitle>
-        <Button primary size="small" onClick={onAddAction}>
-          <Plus size={14} /> Add Action
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={onAddAction}
+          leftIcon={<Plus size={14} />}
+        >
+          Add Action
         </Button>
       </SettingsCardHeader>
 
@@ -233,10 +238,14 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                     </ActionStatusBadge>
 
                     {isSuperuser && (
-                      <Button
-                        icon
-                        size="tiny"
+                      <IconButton
+                        size="sm"
                         disabled={!!action.fieldset || !!action.analyzer}
+                        aria-label={
+                          action.fieldset || action.analyzer
+                            ? "Only agent actions can be manually triggered"
+                            : "Run this action on a document"
+                        }
                         title={
                           action.fieldset || action.analyzer
                             ? "Only agent actions can be manually triggered"
@@ -245,29 +254,29 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                         onClick={() => onRunAction?.(action)}
                       >
                         <Play size={14} />
-                      </Button>
+                      </IconButton>
                     )}
 
-                    <Button
-                      icon
-                      size="tiny"
+                    <IconButton
+                      size="sm"
                       onClick={() =>
                         onEditAction(action as unknown as CorpusActionData)
                       }
+                      aria-label="Edit action"
                       title="Edit action"
                     >
                       <Edit size={14} />
-                    </Button>
+                    </IconButton>
 
-                    <Button
-                      icon
-                      negative
-                      size="tiny"
+                    <IconButton
+                      size="sm"
                       onClick={() => onDeleteAction(action.id)}
+                      aria-label="Delete action"
                       title="Delete action"
+                      style={{ color: "#dc2626" }}
                     >
                       <Trash2 size={14} />
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
               </ActionCard>

@@ -1,11 +1,18 @@
 import React, { useState } from "react";
 import { gql, useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import { Button, Table, Modal, Form, Confirm } from "semantic-ui-react";
+import { Table } from "semantic-ui-react";
+import {
+  Button,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Upload, ArrowLeft } from "lucide-react";
-import { Input } from "@os-legal/ui";
 import { StyledTextArea } from "../widgets/modals/styled";
 import {
   ErrorMessage,
@@ -152,6 +159,46 @@ const TruncatedCell = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+`;
+
+const DangerButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid #ef4444;
+  background: #ef4444;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+  }
+`;
+
+const FormField = styled.div<{ $required?: boolean }>`
+  margin-bottom: 1rem;
+
+  > label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    font-size: 0.875rem;
+
+    ${({ $required }) =>
+      $required &&
+      `
+      &::after {
+        content: " *";
+        color: #ef4444;
+      }
+    `}
+  }
 `;
 
 // ---------------------------------------------------------------------------
@@ -314,7 +361,7 @@ export const WorkerAccountManagement: React.FC = () => {
           </PageSubtitle>
         </PageTitleGroup>
         <Button
-          primary
+          variant="primary"
           onClick={() => {
             setFormState(initialFormState);
             setShowCreateModal(true);
@@ -363,13 +410,19 @@ export const WorkerAccountManagement: React.FC = () => {
                     {new Date(account.created).toLocaleDateString()}
                   </Table.Cell>
                   <Table.Cell>
-                    <Button
-                      size="tiny"
-                      color={account.isActive ? "red" : "green"}
-                      onClick={() => handleToggleActive(account)}
-                    >
-                      {account.isActive ? "Deactivate" : "Activate"}
-                    </Button>
+                    {account.isActive ? (
+                      <DangerButton onClick={() => handleToggleActive(account)}>
+                        Deactivate
+                      </DangerButton>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleToggleActive(account)}
+                      >
+                        Activate
+                      </Button>
+                    )}
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -382,12 +435,15 @@ export const WorkerAccountManagement: React.FC = () => {
       <Modal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        size="small"
+        size="sm"
       >
-        <Modal.Header>Create Worker Account</Modal.Header>
-        <Modal.Content>
-          <Form>
-            <Form.Field required>
+        <ModalHeader
+          title="Create Worker Account"
+          onClose={() => setShowCreateModal(false)}
+        />
+        <ModalBody>
+          <form>
+            <FormField $required>
               <label>Name</label>
               <Input
                 fullWidth
@@ -397,8 +453,8 @@ export const WorkerAccountManagement: React.FC = () => {
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
-            </Form.Field>
-            <Form.Field>
+            </FormField>
+            <FormField>
               <label>Description</label>
               <StyledTextArea
                 placeholder="Optional description of this worker account"
@@ -408,31 +464,52 @@ export const WorkerAccountManagement: React.FC = () => {
                 }
                 rows={3}
               />
-            </Form.Field>
-          </Form>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            </FormField>
+          </form>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
+            Cancel
+          </Button>
           <Button
-            primary
-            loading={creating}
+            variant="primary"
             disabled={!formState.name.trim() || creating}
             onClick={handleCreate}
           >
-            Create Account
+            {creating ? "Creating..." : "Create Account"}
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
       {/* Deactivate Confirmation */}
-      <Confirm
-        open={accountToDeactivate !== null}
-        onCancel={() => setAccountToDeactivate(null)}
-        onConfirm={handleConfirmDeactivate}
-        content={`Are you sure you want to deactivate "${accountToDeactivate?.name}"? This will invalidate all access tokens for this account.`}
-        confirmButton="Deactivate"
-        cancelButton="Cancel"
-      />
+      {accountToDeactivate !== null && (
+        <Modal
+          open={accountToDeactivate !== null}
+          onClose={() => setAccountToDeactivate(null)}
+          size="sm"
+        >
+          <ModalHeader
+            title="Confirm Deactivation"
+            onClose={() => setAccountToDeactivate(null)}
+          />
+          <ModalBody>
+            Are you sure you want to deactivate &quot;
+            {accountToDeactivate?.name}&quot;? This will invalidate all access
+            tokens for this account.
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setAccountToDeactivate(null)}
+            >
+              Cancel
+            </Button>
+            <DangerButton onClick={handleConfirmDeactivate}>
+              Deactivate
+            </DangerButton>
+          </ModalFooter>
+        </Modal>
+      )}
     </Container>
   );
 };

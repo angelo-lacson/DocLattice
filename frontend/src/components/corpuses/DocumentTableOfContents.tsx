@@ -1,7 +1,7 @@
 import React, { useMemo, useEffect, useRef } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
-import { Icon } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   FileText,
@@ -879,7 +879,7 @@ export const DocumentTableOfContents: React.FC<
     return (
       <Wrapper>
         <LoadingState>
-          <Icon name="spinner" loading size="big" />
+          <Spinner size="lg" />
           <span>Loading document structure...</span>
         </LoadingState>
       </Wrapper>
@@ -890,7 +890,7 @@ export const DocumentTableOfContents: React.FC<
     return (
       <Wrapper>
         <ErrorState>
-          <Icon name="warning circle" size="big" className="error-icon" />
+          <AlertTriangle size={32} className="error-icon" />
           <div>Failed to load document structure</div>
         </ErrorState>
       </Wrapper>

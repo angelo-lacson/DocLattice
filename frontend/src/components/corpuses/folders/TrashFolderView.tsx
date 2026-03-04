@@ -1,7 +1,13 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
-import { Button, Modal } from "semantic-ui-react";
+import {
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import {
   ErrorMessage,
   SuccessMessage,
@@ -639,22 +645,26 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
         </Title>
         <ActionBar>
           {onBack && (
-            <Button basic onClick={onBack} title="Back to Folders">
-              <ArrowLeft size={16} />
-              <span className="hide-mobile-text"> Back</span>
+            <Button
+              variant="secondary"
+              onClick={onBack}
+              leftIcon={<ArrowLeft size={16} />}
+              title="Back to Folders"
+            >
+              <span className="hide-mobile-text">Back</span>
             </Button>
           )}
           {deletedDocuments.length > 0 && (
             <Button
-              basic
-              color="red"
+              variant="secondary"
               onClick={() => setConfirmEmptyTrash(true)}
               disabled={emptyTrashLoading}
               loading={emptyTrashLoading}
+              leftIcon={<Trash2 size={16} />}
               title="Permanently delete all items in trash"
+              style={{ color: "#dc2626", borderColor: "#dc2626" }}
             >
-              <Trash2 size={16} />
-              <span className="hide-mobile-text"> Empty Trash</span>
+              <span className="hide-mobile-text">Empty Trash</span>
             </Button>
           )}
         </ActionBar>
@@ -730,20 +740,20 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
           </div>
           <div className="selection-actions">
             <Button
-              basic
-              size="small"
+              variant="secondary"
+              size="sm"
               onClick={() => setSelectedDocuments(new Set())}
             >
               Clear Selection
             </Button>
             <Button
-              primary
-              size="small"
+              variant="primary"
+              size="sm"
               onClick={handleRestoreSelected}
               loading={restoreLoading}
               disabled={restoreLoading}
+              leftIcon={<Undo2 size={14} />}
             >
-              <Undo2 size={14} style={{ marginRight: "4px" }} />
               Restore Selected
             </Button>
           </div>
@@ -862,17 +872,17 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
 
                   <CardActions>
                     <Button
-                      primary
-                      size="tiny"
-                      fluid
+                      variant="primary"
+                      size="sm"
                       onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         handleRestoreSingle(docPath);
                       }}
                       loading={restoreLoading}
                       disabled={restoreLoading}
+                      leftIcon={<RotateCcw size={14} />}
+                      style={{ width: "100%" }}
                     >
-                      <RotateCcw size={14} style={{ marginRight: "6px" }} />
                       Restore
                     </Button>
                   </CardActions>
@@ -884,15 +894,15 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
       )}
 
       <Modal
-        size="tiny"
+        size="sm"
         open={confirmEmptyTrash}
         onClose={() => setConfirmEmptyTrash(false)}
       >
-        <Modal.Header>
-          <AlertTriangle size={16} color="red" style={{ marginRight: "6px" }} />
-          Empty Trash - Permanent Deletion
-        </Modal.Header>
-        <Modal.Content>
+        <ModalHeader
+          title="Empty Trash - Permanent Deletion"
+          onClose={() => setConfirmEmptyTrash(false)}
+        />
+        <ModalBody>
           <ErrorMessage title="This action cannot be undone!">
             <>
               You are about to permanently delete{" "}
@@ -910,11 +920,16 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               </strong>
             </>
           </ErrorMessage>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setConfirmEmptyTrash(false)}>Cancel</Button>
+        </ModalBody>
+        <ModalFooter>
           <Button
-            negative
+            variant="secondary"
+            onClick={() => setConfirmEmptyTrash(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
             loading={emptyTrashLoading}
             disabled={emptyTrashLoading}
             onClick={() => {
@@ -922,11 +937,12 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
                 variables: { corpusId },
               });
             }}
+            leftIcon={<Trash2 size={14} />}
+            style={{ backgroundColor: "#dc2626", borderColor: "#dc2626" }}
           >
-            <Trash2 size={14} style={{ marginRight: "4px" }} />
             Permanently Delete All
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
     </Container>
   );

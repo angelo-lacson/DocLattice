@@ -17,7 +17,14 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import styled, { keyframes, css } from "styled-components";
-import { Modal, Button, Dropdown } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
+import {
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 
 import { AnnotationLabelType } from "../../../../types/graphql-api";
 import { ServerSpanAnnotation } from "../../types/annotations";
@@ -326,6 +333,17 @@ function buildCombinedBackgroundStyle(
     };
   }
 }
+
+const StyledModalWrapper = styled.div`
+  .oc-modal-body {
+    overflow: visible;
+  }
+
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+`;
 
 const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   text,
@@ -1222,51 +1240,54 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
         </SelectionActionMenu>
       )}
 
-      <Modal
-        open={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setAnnotationToEdit(null);
-        }}
-      >
-        <Modal.Header>Edit Annotation Label</Modal.Header>
-        <Modal.Content>
-          {annotationToEdit && (
-            <Dropdown
-              selection
-              options={availableLabels.map((label) => ({
-                key: label.id,
-                text: label.text,
-                value: label.id,
-              }))}
-              value={annotationToEdit.annotationLabel.id}
-              onChange={(e, { value }) => {
-                const newLabel = availableLabels.find(
-                  (lbl) => lbl.id === value
-                );
-                if (newLabel) {
-                  const updatedAnnotation = annotationToEdit.update({
-                    annotationLabel: newLabel,
-                  });
-                  updateAnnotation(updatedAnnotation);
-                }
+      <StyledModalWrapper>
+        <Modal
+          open={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setAnnotationToEdit(null);
+          }}
+        >
+          <ModalHeader>Edit Annotation Label</ModalHeader>
+          <ModalBody>
+            {annotationToEdit && (
+              <Dropdown
+                selection
+                options={availableLabels.map((label) => ({
+                  key: label.id,
+                  text: label.text,
+                  value: label.id,
+                }))}
+                value={annotationToEdit.annotationLabel.id}
+                onChange={(e, { value }) => {
+                  const newLabel = availableLabels.find(
+                    (lbl) => lbl.id === value
+                  );
+                  if (newLabel) {
+                    const updatedAnnotation = annotationToEdit.update({
+                      annotationLabel: newLabel,
+                    });
+                    updateAnnotation(updatedAnnotation);
+                  }
+                  setEditModalOpen(false);
+                  setAnnotationToEdit(null);
+                }}
+              />
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
                 setEditModalOpen(false);
                 setAnnotationToEdit(null);
               }}
-            />
-          )}
-        </Modal.Content>
-        <Modal.Actions>
-          <Button
-            onClick={() => {
-              setEditModalOpen(false);
-              setAnnotationToEdit(null);
-            }}
-          >
-            Cancel
-          </Button>
-        </Modal.Actions>
-      </Modal>
+            >
+              Cancel
+            </Button>
+          </ModalFooter>
+        </Modal>
+      </StyledModalWrapper>
     </>
   );
 };

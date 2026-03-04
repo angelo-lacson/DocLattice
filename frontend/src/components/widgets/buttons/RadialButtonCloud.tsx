@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import styled, { createGlobalStyle, keyframes } from "styled-components";
-import { Button, ButtonProps, Modal } from "semantic-ui-react";
+import { Modal, ModalBody, ModalFooter, Button } from "@os-legal/ui";
 import { DynamicIcon } from "../icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
@@ -87,12 +87,12 @@ function calculateButtonPositions(
   return positions.slice(skipCount);
 }
 
-interface CloudButtonProps extends ButtonProps {
+interface CloudButtonStyledProps {
   $delay: number;
   $position: ButtonPosition;
 }
 
-const moveOut = (props: CloudButtonProps) => keyframes`
+const moveOut = (props: CloudButtonStyledProps) => keyframes`
     from {
       opacity: 0;
       transform: translate(0, 0);
@@ -106,19 +106,29 @@ const moveOut = (props: CloudButtonProps) => keyframes`
     }
   `;
 
-const CloudButton = styled(Button)<CloudButtonProps>`
+const CloudButtonStyled = styled.button<CloudButtonStyledProps>`
   position: absolute;
   opacity: 0;
   animation: ${moveOut} 0.5s forwards;
   animation-delay: ${(props) => props.$delay}s;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  background: #eee;
+
+  &:hover {
+    filter: brightness(0.9);
+  }
 `;
 
 const GlobalStyle = createGlobalStyle`
-  .confirm-modal-container.ui.page.modals.dimmer.transition.visible.active {
-    z-index: 20000 !important;
-  }
-
-  #ConfirmModal {
+  .oc-modal[style] {
     z-index: 20001 !important;
   }
 `;
@@ -212,23 +222,14 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
    * @returns A contrast color in hex format.
    */
   const getContrastColor = (bgColor: string): string => {
-    // console.log("getContrastColor called with:", {
-    //   value: bgColor,
-    //   type: typeof bgColor,
-    //   isNull: bgColor === null,
-    //   isUndefined: bgColor === undefined,
-    // });
-
     // Handle undefined, null, or empty string
     if (!bgColor) {
-      // console.warn("No background color provided or empty value:", bgColor);
       return "#00ff00";
     }
 
     // If it looks like a hex color without the #, add it
     if (/^[A-Fa-f0-9]{3,6}$/.test(bgColor)) {
       bgColor = "#" + bgColor;
-      // console.log("Added # prefix to hex color:", bgColor);
     }
 
     // Log the validation results for each format
@@ -246,36 +247,18 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
 
     // If the color isn't in a valid format, return default
     if (!Object.values(validationResults).some((result) => result)) {
-      // console.warn(`Invalid color format. Color string: "${bgColor}"`);
-      // console.warn("Color string length:", bgColor.length);
-      // console.warn(
-      //   "Color string characters:",
-      //   Array.from(bgColor).map((c) => `'${c}'(${c.charCodeAt(0)})`)
-      // );
       return "#00ff00";
     }
 
     try {
-      // console.log("Attempting to calculate luminance for color:", bgColor);
       const luminance = getLuminance(bgColor);
-      // console.log("Calculated luminance:", luminance);
       return luminance > 0.5 ? "#00aa00" : "#00ff00";
     } catch (error: any) {
-      // console.error("Luminance calculation error:", {
-      //   color: bgColor,
-      //   error: error.message,
-      //   stack: error.stack,
-      // });
       return "#00ff00";
     }
   };
 
-  // console.log("Component render - Parent background color:", {
-  //   value: parentBackgroundColor,
-  //   type: typeof parentBackgroundColor,
-  // });
   const dotColor = getContrastColor(parentBackgroundColor);
-  // console.log("Final dot color:", dotColor);
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
@@ -288,12 +271,8 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
       {cloudVisible && (
         <CloudContainer ref={cloudRef}>
           {buttonList.map((btn, index) => (
-            <CloudButton
+            <CloudButtonStyled
               key={index}
-              color={btn.color as any}
-              icon
-              circular
-              size="mini"
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation();
                 handleButtonClick(btn);
@@ -301,25 +280,24 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
               title={btn.tooltip}
               $delay={index * 0.1}
               $position={buttonPositions[index]}
+              style={{ background: btn.color || "#eee" }}
             >
               <DynamicIcon name={btn.name} size={14} />
-            </CloudButton>
+            </CloudButtonStyled>
           ))}
         </CloudContainer>
       )}
       <Modal
-        id="ConfirmModal"
-        size="mini"
-        className="confirm-modal-container"
         open={confirmModal.open}
         onClose={() => setConfirmModal({ ...confirmModal, open: false })}
+        size="sm"
       >
-        <Modal.Content>
+        <ModalBody>
           <p>{confirmModal.message}</p>
-        </Modal.Content>
-        <Modal.Actions>
+        </ModalBody>
+        <ModalFooter>
           <Button
-            negative
+            variant="danger"
             onClick={() => {
               setConfirmModal({ ...confirmModal, open: false });
               setCloudVisible(false);
@@ -328,7 +306,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
             No
           </Button>
           <Button
-            positive
+            variant="primary"
             onClick={() => {
               confirmModal.onConfirm();
               setConfirmModal({ ...confirmModal, open: false });
@@ -336,7 +314,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
           >
             Yes
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
     </div>
   );

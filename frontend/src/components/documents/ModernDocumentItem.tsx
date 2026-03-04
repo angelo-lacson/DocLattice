@@ -1,10 +1,25 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Icon } from "semantic-ui-react";
 import styled, { keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Link2, ArrowRight, FileText, RotateCcw } from "lucide-react";
+import {
+  Link2,
+  ArrowRight,
+  FileText,
+  RotateCcw,
+  BookOpen,
+  Eye,
+  Download,
+  Loader2,
+  Edit,
+  Trash2,
+  Check,
+  AlertTriangle,
+  Globe,
+  Tag,
+  GitBranch,
+} from "lucide-react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
@@ -1195,7 +1210,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
         disabled={backendLock}
         title="Open"
       >
-        <Icon name="book" />
+        <BookOpen size={14} />
       </ActionButton>
 
       {!inOverlay && (
@@ -1206,7 +1221,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             disabled={backendLock}
             title="View"
           >
-            <Icon name="eye" />
+            <Eye size={14} />
           </ActionButton>
 
           {pdfFile && (
@@ -1216,10 +1231,11 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
               disabled={backendLock || isDownloading}
               title="Download"
             >
-              <Icon
-                name={isDownloading ? "spinner" : "download"}
-                className={isDownloading ? "loading" : ""}
-              />
+              {isDownloading ? (
+                <Loader2 size={14} className="loading" />
+              ) : (
+                <Download size={14} />
+              )}
             </ActionButton>
           )}
 
@@ -1230,7 +1246,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
               disabled={backendLock}
               title="Edit"
             >
-              <Icon name="edit" />
+              <Edit size={14} />
             </ActionButton>
           )}
 
@@ -1241,7 +1257,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
               disabled={backendLock}
               title="Remove"
             >
-              <Icon name="trash" />
+              <Trash2 size={14} />
             </ActionButton>
           )}
         </>
@@ -1292,7 +1308,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             className={`checkbox ${is_selected ? "selected" : ""}`}
             onClick={handleCheckboxClick}
           >
-            {is_selected && <Icon name="check" />}
+            {is_selected && <Check size={12} />}
           </CardCheckbox>
 
           <CardPreview>
@@ -1303,7 +1319,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                 aria-label="Processing failed"
               >
                 <FailureIconCircle $size="large" aria-hidden="true">
-                  <Icon name="warning sign" />
+                  <AlertTriangle size={16} />
                 </FailureIconCircle>
               </ThumbnailFailureOverlay>
             )}
@@ -1404,19 +1420,19 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
               <CardMeta>
                 {pageCount && (
                   <div className="meta-item">
-                    <Icon name="file outline" />
+                    <FileText size={12} />
                     {pageCount}p
                   </div>
                 )}
                 {isPublic && (
                   <div className="meta-item">
-                    <Icon name="globe" />
+                    <Globe size={12} />
                     Public
                   </div>
                 )}
                 {doc_label_objs.length > 0 && (
                   <div className="meta-item">
-                    <Icon name="tag" />
+                    <Tag size={12} />
                     {doc_label_objs.length}
                   </div>
                 )}
@@ -1496,7 +1512,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           className={`checkbox ${is_selected ? "selected" : ""}`}
           onClick={handleCheckboxClick}
         >
-          {is_selected && <Icon name="check" />}
+          {is_selected && <Check size={12} />}
         </ListCheckbox>
 
         <ListThumbnail>
@@ -1504,7 +1520,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
           {isFailed && (
             <ThumbnailFailureOverlay>
               <FailureIconCircle $size="small" aria-hidden="true">
-                <Icon name="warning sign" />
+                <AlertTriangle size={16} />
               </FailureIconCircle>
             </ThumbnailFailureOverlay>
           )}
@@ -1527,7 +1543,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             {pageCount && <div className="meta-item">{pageCount} pages</div>}
             {isPublic && (
               <div className="meta-item">
-                <Icon name="globe" />
+                <Globe size={12} />
                 Public
               </div>
             )}
@@ -1547,7 +1563,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                     : undefined
                 }
               >
-                <Icon name="code branch" />v{versionCount || 1}
+                <GitBranch size={12} />v{versionCount || 1}
                 {hasVersionHistory && ` (${versionCount} versions)`}
               </div>
             )}

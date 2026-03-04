@@ -8,7 +8,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
-import { Button } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 import type { ChatMessageProps } from "../../../widgets/chat/ChatMessage";
 
 /** Shape of the pending approval state passed from ChatTray. */
@@ -142,33 +142,29 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
           style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}
         >
           <Button
-            size="medium"
+            size="md"
+            variant="secondary"
+            leftIcon={<XCircle size={16} />}
             onClick={() => sendApprovalDecision(false)}
             style={{
               backgroundColor: "#dc2626",
               color: "white",
               border: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
             }}
           >
-            <XCircle size={16} />
             Reject
           </Button>
           <Button
-            size="medium"
+            size="md"
+            variant="secondary"
+            leftIcon={<CheckCircle size={16} />}
             onClick={() => sendApprovalDecision(true)}
             style={{
               backgroundColor: "#059669",
               color: "white",
               border: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
             }}
           >
-            <CheckCircle size={16} />
             Approve
           </Button>
         </div>
@@ -219,7 +215,8 @@ export const ReopenApprovalButton: React.FC<ReopenApprovalButtonProps> = ({
 
   return (
     <Button
-      size="small"
+      size="sm"
+      variant="secondary"
       onClick={() => setShowApprovalModal(true)}
       style={{
         background: "#f59e0b",

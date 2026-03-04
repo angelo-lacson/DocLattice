@@ -1,9 +1,13 @@
-import { Modal } from "semantic-ui-react";
+import React from "react";
+import { Modal } from "@os-legal/ui";
 import styled from "styled-components";
 
-// Enhanced styled components
-export const FullScreenModal = styled(Modal)`
-  &&& {
+const FullScreenModalWrapper = styled.div`
+  .oc-modal-overlay {
+    padding: 0;
+  }
+
+  .oc-modal {
     position: fixed !important;
     margin: 0 !important;
     top: 0 !important;
@@ -19,24 +23,35 @@ export const FullScreenModal = styled(Modal)`
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+  }
 
-    /* Ensure the close button remains visible and properly positioned */
-    > .close.icon {
-      top: 1rem !important;
-      right: 1rem !important;
-      color: rgba(0, 0, 0, 0.7) !important;
-      z-index: 1000;
-    }
-
-    /* Ensure modal content fills available space */
-    .content {
-      flex: 1 1 auto !important;
-      overflow: hidden !important;
-      padding: 0 !important;
-      margin: 0 !important;
-    }
+  .oc-modal-body {
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 `;
+
+interface FullScreenModalProps {
+  id?: string;
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+export const FullScreenModal: React.FC<FullScreenModalProps> = ({
+  id,
+  open,
+  onClose,
+  children,
+}) => (
+  <FullScreenModalWrapper id={id}>
+    <Modal open={open} onClose={onClose} size="lg">
+      {children}
+    </Modal>
+  </FullScreenModalWrapper>
+);
 
 export const SourceIndicator = styled.div`
   padding: 0.5rem;

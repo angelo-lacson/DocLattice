@@ -1,6 +1,13 @@
 import React, { useState, useMemo } from "react";
-import { Modal, Button, Form, Dropdown, Radio } from "semantic-ui-react";
-import { Input } from "@os-legal/ui";
+import { Dropdown } from "semantic-ui-react";
+import {
+  Button,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import {
   ArrowRight,
   Target,
@@ -44,11 +51,11 @@ interface RelationshipActionModalProps {
   ) => Promise<void>;
 }
 
-const ModalContent = styled(Modal.Content)`
+const ScrollableContent = styled.div`
   max-height: 60vh;
   overflow-y: auto;
+  padding: 1rem;
 
-  /* Pretty scrollbar */
   &::-webkit-scrollbar {
     width: 8px;
   }
@@ -344,412 +351,495 @@ export const RelationshipActionModal: React.FC<
   );
 
   return (
-    <Modal open={open} onClose={onClose} size="small">
-      <Modal.Header>
-        <Link
-          size={16}
-          style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
-        />
-        Add Annotations to Relationship
-      </Modal.Header>
-      <ModalContent>
-        {!hasCorpus && (
-          <ErrorMessage
-            title="No Corpus Selected"
-            style={{ marginBottom: "1.5rem" }}
-          >
-            You must select a corpus to create or manage relationships.
-            Relationships require a corpus context and labelset.
-          </ErrorMessage>
-        )}
-        <Form>
-          {/* Mode Selection */}
-          <ModeSection>
-            <Form.Field>
-              <Radio
-                label="Add to existing relationship"
-                value="add"
-                checked={mode === "add"}
-                onChange={() => setMode("add")}
-                disabled={!hasCorpus}
-              />
-            </Form.Field>
+    <Modal open={open} onClose={onClose} size="sm">
+      <ModalHeader
+        title={
+          <span>
+            <Link
+              size={16}
+              style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+            />
+            Add Annotations to Relationship
+          </span>
+        }
+        onClose={onClose}
+      />
+      <ModalBody>
+        <ScrollableContent>
+          {!hasCorpus && (
+            <ErrorMessage
+              title="No Corpus Selected"
+              style={{ marginBottom: "1.5rem" }}
+            >
+              You must select a corpus to create or manage relationships.
+              Relationships require a corpus context and labelset.
+            </ErrorMessage>
+          )}
+          <div>
+            <ModeSection>
+              <div style={{ marginBottom: "0.75rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: hasCorpus ? "pointer" : "default",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="relationship-mode"
+                    value="add"
+                    checked={mode === "add"}
+                    onChange={() => setMode("add")}
+                    disabled={!hasCorpus}
+                  />
+                  Add to existing relationship
+                </label>
+              </div>
 
-            {mode === "add" && (
-              <>
-                <Form.Field style={{ marginTop: "1rem" }}>
-                  <label>Select Relationship</label>
-                  {editableRelationships.length === 0 ? (
-                    <p
-                      style={{
-                        color: OS_LEGAL_COLORS.textSecondary,
-                        fontStyle: "italic",
-                      }}
-                    >
-                      No editable relationships found. Create a new one instead.
-                    </p>
-                  ) : (
-                    <div>
-                      {editableRelationships.map((rel) => (
-                        <RelationshipOption
-                          key={rel.id}
-                          $selected={selectedRelationshipId === rel.id}
-                          onClick={() => setSelectedRelationshipId(rel.id)}
-                        >
-                          <div className="relationship-label">
-                            {rel.label.icon && (
-                              <DynamicIcon
-                                name={rel.label.icon as string}
-                                size={14}
-                              />
-                            )}
-                            {rel.label.text}
-                          </div>
-                          <div className="relationship-stats">
-                            <span>
-                              <ArrowRight size={12} /> Sources:{" "}
-                              {rel.sourceIds.length}
-                            </span>
-                            <span>
-                              <Target size={12} /> Targets:{" "}
-                              {rel.targetIds.length}
-                            </span>
-                          </div>
-                        </RelationshipOption>
-                      ))}
-                    </div>
-                  )}
-                </Form.Field>
-
-                {selectedRelationshipId && (
-                  <Form.Field>
-                    <label>Add selected annotations as:</label>
-                    <Form.Group inline>
-                      <Form.Radio
-                        label="Source annotations"
-                        value="source"
-                        checked={role === "source"}
-                        onChange={() => setRole("source")}
-                      />
-                      <Form.Radio
-                        label="Target annotations"
-                        value="target"
-                        checked={role === "target"}
-                        onChange={() => setRole("target")}
-                      />
-                    </Form.Group>
-                  </Form.Field>
-                )}
-              </>
-            )}
-          </ModeSection>
-
-          <ModeSection>
-            <Form.Field>
-              <Radio
-                label="Create new relationship"
-                value="create"
-                checked={mode === "create"}
-                onChange={() => setMode("create")}
-                disabled={!hasCorpus}
-              />
-            </Form.Field>
-
-            {mode === "create" && (
-              <>
-                {!newLabelId ? (
-                  <>
-                    {!hasLabelset && (
-                      <WarningMessage style={{ marginTop: "1rem" }}>
-                        <strong>No labelset found.</strong> Creating a label
-                        will automatically create a labelset for this corpus.
-                      </WarningMessage>
-                    )}
-
-                    {!showCreateLabel ? (
-                      <>
-                        <Form.Field style={{ marginTop: "1rem" }}>
-                          <label>Search or Create Relationship Label</label>
-                          <Input
-                            fullWidth
-                            placeholder="Search for a relationship label..."
-                            value={labelSearchTerm}
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>
-                            ) => setLabelSearchTerm(e.target.value)}
-                          />
-                        </Form.Field>
-
-                        {filteredRelationshipLabels.length > 0 ? (
-                          <Form.Field>
-                            <label>Select from existing labels:</label>
-                            <Dropdown
-                              placeholder="Select relationship label"
-                              fluid
-                              selection
-                              options={filteredRelationshipLabels.map(
-                                (label) => ({
-                                  key: label.id,
-                                  text: label.text,
-                                  value: label.id,
-                                  icon: label.icon || undefined,
-                                })
-                              )}
-                              value={newLabelId || undefined}
-                              onChange={(_, data) =>
-                                setNewLabelId(data.value as string)
-                              }
-                            />
-                          </Form.Field>
-                        ) : (
-                          <p
-                            style={{
-                              color: OS_LEGAL_COLORS.textSecondary,
-                              fontStyle: "italic",
-                              margin: "0.5rem 0",
-                            }}
-                          >
-                            No matching labels found.
-                          </p>
-                        )}
-
-                        {labelSearchTerm && (
-                          <Button
-                            icon
-                            labelPosition="left"
-                            color="green"
-                            onClick={() => {
-                              setNewLabelText(labelSearchTerm);
-                              setShowCreateLabel(true);
-                            }}
-                            style={{ marginTop: "0.5rem" }}
-                          >
-                            <Plus size={14} />
-                            Create "{labelSearchTerm}" label
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <Form.Field style={{ marginTop: "1rem" }}>
-                          <label>Label Name</label>
-                          <Input
-                            fullWidth
-                            placeholder="Enter label name"
-                            value={newLabelText}
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>
-                            ) => setNewLabelText(e.target.value)}
-                          />
-                        </Form.Field>
-
-                        <Form.Field>
-                          <label>Color</label>
-                          <input
-                            type="color"
-                            value={newLabelColor}
-                            onChange={(e) => setNewLabelColor(e.target.value)}
-                          />
-                        </Form.Field>
-
-                        <Form.Field>
-                          <label>Description (optional)</label>
-                          <Input
-                            fullWidth
-                            placeholder="Enter description"
-                            value={newLabelDescription}
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>
-                            ) => setNewLabelDescription(e.target.value)}
-                          />
-                        </Form.Field>
-
-                        <Button.Group fluid style={{ marginTop: "0.5rem" }}>
-                          <Button
-                            onClick={() => {
-                              setShowCreateLabel(false);
-                              setNewLabelText("");
-                              setNewLabelDescription("");
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button.Or />
-                          <Button positive onClick={handleCreateLabel}>
-                            Create Label
-                          </Button>
-                        </Button.Group>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Form.Field style={{ marginTop: "1rem" }}>
-                      <label>Selected Label</label>
-                      <div
+              {mode === "add" && (
+                <>
+                  <div style={{ marginTop: "1rem", marginBottom: "0.75rem" }}>
+                    <label>Select Relationship</label>
+                    {editableRelationships.length === 0 ? (
+                      <p
                         style={{
-                          padding: "0.75rem",
-                          background: OS_LEGAL_COLORS.surfaceHover,
-                          border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                          borderRadius: "6px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
+                          color: OS_LEGAL_COLORS.textSecondary,
+                          fontStyle: "italic",
                         }}
                       >
-                        <span style={{ fontWeight: 500 }}>
-                          {
-                            relationLabels?.find((l) => l.id === newLabelId)
-                              ?.text
-                          }
-                        </span>
-                        <Button
-                          size="tiny"
-                          basic
-                          onClick={() => {
-                            setNewLabelId(null);
-                            setLabelSearchTerm("");
+                        No editable relationships found. Create a new one
+                        instead.
+                      </p>
+                    ) : (
+                      <div>
+                        {editableRelationships.map((rel) => (
+                          <RelationshipOption
+                            key={rel.id}
+                            $selected={selectedRelationshipId === rel.id}
+                            onClick={() => setSelectedRelationshipId(rel.id)}
+                          >
+                            <div className="relationship-label">
+                              {rel.label.icon && (
+                                <DynamicIcon
+                                  name={rel.label.icon as string}
+                                  size={14}
+                                />
+                              )}
+                              {rel.label.text}
+                            </div>
+                            <div className="relationship-stats">
+                              <span>
+                                <ArrowRight size={12} /> Sources:{" "}
+                                {rel.sourceIds.length}
+                              </span>
+                              <span>
+                                <Target size={12} /> Targets:{" "}
+                                {rel.targetIds.length}
+                              </span>
+                            </div>
+                          </RelationshipOption>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedRelationshipId && (
+                    <div style={{ marginBottom: "0.75rem" }}>
+                      <label>Add selected annotations as:</label>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "1.5rem",
+                          marginTop: "0.5rem",
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            cursor: "pointer",
                           }}
                         >
-                          Change
-                        </Button>
+                          <input
+                            type="radio"
+                            name="annotation-role"
+                            value="source"
+                            checked={role === "source"}
+                            onChange={() => setRole("source")}
+                          />
+                          Source annotations
+                        </label>
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="annotation-role"
+                            value="target"
+                            checked={role === "target"}
+                            onChange={() => setRole("target")}
+                          />
+                          Target annotations
+                        </label>
                       </div>
-                    </Form.Field>
+                    </div>
+                  )}
+                </>
+              )}
+            </ModeSection>
 
-                    <AssignmentSection>
-                      <div className="section-title">
-                        <ArrowRight
-                          size={14}
-                          color={OS_LEGAL_COLORS.primaryBlue}
-                        />
-                        Source Annotations
-                      </div>
-                      <div className="pills-container">
-                        {selectedAnnotationIds.map((annId) => {
-                          const isSource = sourceAnnotationIds.includes(annId);
-                          const isTarget = targetAnnotationIds.includes(annId);
-                          const role = isSource
-                            ? "source"
-                            : isTarget
-                            ? "target"
-                            : "unassigned";
-                          return (
-                            <AnnotationPill
-                              key={annId}
-                              $role={role}
-                              onClick={() => {
-                                if (isSource) {
-                                  setSourceAnnotationIds((prev) =>
-                                    prev.filter((id) => id !== annId)
-                                  );
-                                } else {
-                                  setSourceAnnotationIds((prev) => [
-                                    ...prev,
-                                    annId,
-                                  ]);
-                                  setTargetAnnotationIds((prev) =>
-                                    prev.filter((id) => id !== annId)
-                                  );
+            <ModeSection>
+              <div style={{ marginBottom: "0.75rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    cursor: hasCorpus ? "pointer" : "default",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="relationship-mode"
+                    value="create"
+                    checked={mode === "create"}
+                    onChange={() => setMode("create")}
+                    disabled={!hasCorpus}
+                  />
+                  Create new relationship
+                </label>
+              </div>
+
+              {mode === "create" && (
+                <>
+                  {!newLabelId ? (
+                    <>
+                      {!hasLabelset && (
+                        <WarningMessage style={{ marginTop: "1rem" }}>
+                          <strong>No labelset found.</strong> Creating a label
+                          will automatically create a labelset for this corpus.
+                        </WarningMessage>
+                      )}
+
+                      {!showCreateLabel ? (
+                        <>
+                          <div
+                            style={{
+                              marginTop: "1rem",
+                              marginBottom: "0.75rem",
+                            }}
+                          >
+                            <label>Search or Create Relationship Label</label>
+                            <Input
+                              fullWidth
+                              placeholder="Search for a relationship label..."
+                              value={labelSearchTerm}
+                              onChange={(
+                                e: React.ChangeEvent<HTMLInputElement>
+                              ) => setLabelSearchTerm(e.target.value)}
+                            />
+                          </div>
+
+                          {filteredRelationshipLabels.length > 0 ? (
+                            <div style={{ marginBottom: "0.75rem" }}>
+                              <label>Select from existing labels:</label>
+                              <Dropdown
+                                placeholder="Select relationship label"
+                                fluid
+                                selection
+                                options={filteredRelationshipLabels.map(
+                                  (label) => ({
+                                    key: label.id,
+                                    text: label.text,
+                                    value: label.id,
+                                    icon: label.icon || undefined,
+                                  })
+                                )}
+                                value={newLabelId || undefined}
+                                onChange={(_, data) =>
+                                  setNewLabelId(data.value as string)
                                 }
+                              />
+                            </div>
+                          ) : (
+                            <p
+                              style={{
+                                color: OS_LEGAL_COLORS.textSecondary,
+                                fontStyle: "italic",
+                                margin: "0.5rem 0",
                               }}
                             >
-                              {role === "source" && <Check size={12} />}
-                              {getAnnotationPreview(annId)}
-                            </AnnotationPill>
-                          );
-                        })}
-                      </div>
-                    </AssignmentSection>
+                              No matching labels found.
+                            </p>
+                          )}
 
-                    <AssignmentSection>
-                      <div className="section-title">
-                        <Target size={14} color="#22c55e" />
-                        Target Annotations
-                      </div>
-                      <div className="pills-container">
-                        {selectedAnnotationIds.map((annId) => {
-                          const isSource = sourceAnnotationIds.includes(annId);
-                          const isTarget = targetAnnotationIds.includes(annId);
-                          const role = isSource
-                            ? "source"
-                            : isTarget
-                            ? "target"
-                            : "unassigned";
-                          return (
-                            <AnnotationPill
-                              key={annId}
-                              $role={role}
+                          {labelSearchTerm && (
+                            <Button
+                              variant="primary"
+                              leftIcon={<Plus size={14} />}
                               onClick={() => {
-                                if (isTarget) {
-                                  setTargetAnnotationIds((prev) =>
-                                    prev.filter((id) => id !== annId)
-                                  );
-                                } else {
-                                  setTargetAnnotationIds((prev) => [
-                                    ...prev,
-                                    annId,
-                                  ]);
-                                  setSourceAnnotationIds((prev) =>
-                                    prev.filter((id) => id !== annId)
-                                  );
-                                }
+                                setNewLabelText(labelSearchTerm);
+                                setShowCreateLabel(true);
+                              }}
+                              style={{ marginTop: "0.5rem" }}
+                            >
+                              Create &quot;{labelSearchTerm}&quot; label
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            style={{
+                              marginTop: "1rem",
+                              marginBottom: "0.75rem",
+                            }}
+                          >
+                            <label>Label Name</label>
+                            <Input
+                              fullWidth
+                              placeholder="Enter label name"
+                              value={newLabelText}
+                              onChange={(
+                                e: React.ChangeEvent<HTMLInputElement>
+                              ) => setNewLabelText(e.target.value)}
+                            />
+                          </div>
+
+                          <div style={{ marginBottom: "0.75rem" }}>
+                            <label>Color</label>
+                            <input
+                              type="color"
+                              value={newLabelColor}
+                              onChange={(e) => setNewLabelColor(e.target.value)}
+                            />
+                          </div>
+
+                          <div style={{ marginBottom: "0.75rem" }}>
+                            <label>Description (optional)</label>
+                            <Input
+                              fullWidth
+                              placeholder="Enter description"
+                              value={newLabelDescription}
+                              onChange={(
+                                e: React.ChangeEvent<HTMLInputElement>
+                              ) => setNewLabelDescription(e.target.value)}
+                            />
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "0.5rem",
+                              marginTop: "0.5rem",
+                            }}
+                          >
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setShowCreateLabel(false);
+                                setNewLabelText("");
+                                setNewLabelDescription("");
                               }}
                             >
-                              {role === "target" && <Check size={12} />}
-                              {getAnnotationPreview(annId)}
-                            </AnnotationPill>
-                          );
-                        })}
+                              Cancel
+                            </Button>
+                            <Button
+                              variant="primary"
+                              onClick={handleCreateLabel}
+                            >
+                              Create Label
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{ marginTop: "1rem", marginBottom: "0.75rem" }}
+                      >
+                        <label>Selected Label</label>
+                        <div
+                          style={{
+                            padding: "0.75rem",
+                            background: OS_LEGAL_COLORS.surfaceHover,
+                            border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                            borderRadius: "6px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <span style={{ fontWeight: 500 }}>
+                            {
+                              relationLabels?.find((l) => l.id === newLabelId)
+                                ?.text
+                            }
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setNewLabelId(null);
+                              setLabelSearchTerm("");
+                            }}
+                          >
+                            Change
+                          </Button>
+                        </div>
                       </div>
-                    </AssignmentSection>
 
-                    <p
-                      style={{
-                        fontSize: "0.875rem",
-                        color: OS_LEGAL_COLORS.textSecondary,
-                        marginTop: "1rem",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      Click an annotation to assign it as source or target. You
-                      can leave some unassigned and add them later.
-                    </p>
-                  </>
-                )}
-              </>
-            )}
-          </ModeSection>
-        </Form>
+                      <AssignmentSection>
+                        <div className="section-title">
+                          <ArrowRight
+                            size={14}
+                            color={OS_LEGAL_COLORS.primaryBlue}
+                          />
+                          Source Annotations
+                        </div>
+                        <div className="pills-container">
+                          {selectedAnnotationIds.map((annId) => {
+                            const isSource =
+                              sourceAnnotationIds.includes(annId);
+                            const isTarget =
+                              targetAnnotationIds.includes(annId);
+                            const role = isSource
+                              ? "source"
+                              : isTarget
+                              ? "target"
+                              : "unassigned";
+                            return (
+                              <AnnotationPill
+                                key={annId}
+                                $role={role}
+                                onClick={() => {
+                                  if (isSource) {
+                                    setSourceAnnotationIds((prev) =>
+                                      prev.filter((id) => id !== annId)
+                                    );
+                                  } else {
+                                    setSourceAnnotationIds((prev) => [
+                                      ...prev,
+                                      annId,
+                                    ]);
+                                    setTargetAnnotationIds((prev) =>
+                                      prev.filter((id) => id !== annId)
+                                    );
+                                  }
+                                }}
+                              >
+                                {role === "source" && <Check size={12} />}
+                                {getAnnotationPreview(annId)}
+                              </AnnotationPill>
+                            );
+                          })}
+                        </div>
+                      </AssignmentSection>
 
-        <InfoBox>
-          <strong>
-            <Info
-              size={14}
-              style={{
-                display: "inline",
-                verticalAlign: "middle",
-                marginRight: "0.5rem",
-              }}
-            />
-            Selected: {selectedAnnotationIds.length} annotation
-            {selectedAnnotationIds.length !== 1 ? "s" : ""}
-          </strong>
-        </InfoBox>
-      </ModalContent>
+                      <AssignmentSection>
+                        <div className="section-title">
+                          <Target size={14} color="#22c55e" />
+                          Target Annotations
+                        </div>
+                        <div className="pills-container">
+                          {selectedAnnotationIds.map((annId) => {
+                            const isSource =
+                              sourceAnnotationIds.includes(annId);
+                            const isTarget =
+                              targetAnnotationIds.includes(annId);
+                            const role = isSource
+                              ? "source"
+                              : isTarget
+                              ? "target"
+                              : "unassigned";
+                            return (
+                              <AnnotationPill
+                                key={annId}
+                                $role={role}
+                                onClick={() => {
+                                  if (isTarget) {
+                                    setTargetAnnotationIds((prev) =>
+                                      prev.filter((id) => id !== annId)
+                                    );
+                                  } else {
+                                    setTargetAnnotationIds((prev) => [
+                                      ...prev,
+                                      annId,
+                                    ]);
+                                    setSourceAnnotationIds((prev) =>
+                                      prev.filter((id) => id !== annId)
+                                    );
+                                  }
+                                }}
+                              >
+                                {role === "target" && <Check size={12} />}
+                                {getAnnotationPreview(annId)}
+                              </AnnotationPill>
+                            );
+                          })}
+                        </div>
+                      </AssignmentSection>
 
-      <Modal.Actions>
-        <Button onClick={onClose} disabled={isSubmitting}>
+                      <p
+                        style={{
+                          fontSize: "0.875rem",
+                          color: OS_LEGAL_COLORS.textSecondary,
+                          marginTop: "1rem",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        Click an annotation to assign it as source or target.
+                        You can leave some unassigned and add them later.
+                      </p>
+                    </>
+                  )}
+                </>
+              )}
+            </ModeSection>
+          </div>
+
+          <InfoBox>
+            <strong>
+              <Info
+                size={14}
+                style={{
+                  display: "inline",
+                  verticalAlign: "middle",
+                  marginRight: "0.5rem",
+                }}
+              />
+              Selected: {selectedAnnotationIds.length} annotation
+              {selectedAnnotationIds.length !== 1 ? "s" : ""}
+            </strong>
+          </InfoBox>
+        </ScrollableContent>
+      </ModalBody>
+
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button
-          primary
+          variant="primary"
           onClick={handleSubmit}
           disabled={!hasCorpus || !canSubmit() || isSubmitting}
-          loading={isSubmitting}
         >
-          {mode === "add" ? "Add to Relationship" : "Create Relationship"}
+          {isSubmitting
+            ? "Submitting..."
+            : mode === "add"
+            ? "Add to Relationship"
+            : "Create Relationship"}
         </Button>
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 };

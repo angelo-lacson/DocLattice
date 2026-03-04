@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { Modal, Form, Button, Message } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Input,
+  Textarea,
+} from "@os-legal/ui";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
 import { CREATE_NOTE } from "../../../graphql/mutations/noteMutations";
@@ -69,58 +77,77 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
   };
 
   return (
-    <Modal open={isOpen} onClose={handleClose} size="large">
-      <Modal.Header>Create New Note</Modal.Header>
-      <Modal.Content>
-        <Form>
-          <Form.Field required>
-            <label>Title</label>
-            <Form.Input
-              placeholder="Enter note title..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={loading}
-            />
-          </Form.Field>
-          <Form.Field required>
-            <label>Content (Markdown supported)</label>
-            <Form.TextArea
-              placeholder="Write your note here..."
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={10}
-              disabled={loading}
-              style={{ fontFamily: "monospace" }}
-            />
-          </Form.Field>
-          <Message info>
-            <Message.Header>Markdown Support</Message.Header>
-            <Message.Content>
-              You can use Markdown formatting in your notes. For example:
-              <ul>
-                <li>**bold text**</li>
-                <li>*italic text*</li>
-                <li># Heading</li>
-                <li>- List item</li>
-                <li>`code`</li>
-              </ul>
-            </Message.Content>
-          </Message>
-        </Form>
-      </Modal.Content>
-      <Modal.Actions>
-        <Button onClick={handleClose} disabled={loading}>
+    <Modal open={isOpen} onClose={handleClose} size="lg">
+      <ModalHeader title="Create New Note" onClose={handleClose} />
+      <ModalBody>
+        <div style={{ marginBottom: "1rem" }}>
+          <label
+            style={{ display: "block", marginBottom: "0.25rem" }}
+            htmlFor="note-title"
+          >
+            Title <span style={{ color: "red" }}>*</span>
+          </label>
+          <Input
+            id="note-title"
+            placeholder="Enter note title..."
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={loading}
+          />
+        </div>
+        <div style={{ marginBottom: "1rem" }}>
+          <label
+            style={{ display: "block", marginBottom: "0.25rem" }}
+            htmlFor="note-content"
+          >
+            Content (Markdown supported) <span style={{ color: "red" }}>*</span>
+          </label>
+          <Textarea
+            id="note-content"
+            placeholder="Write your note here..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={10}
+            disabled={loading}
+            style={{ fontFamily: "monospace" }}
+          />
+        </div>
+        <div
+          style={{
+            padding: "1rem",
+            background: "#eef6fc",
+            border: "1px solid #a9d5de",
+            borderRadius: "8px",
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
+            Markdown Support
+          </div>
+          <div>
+            You can use Markdown formatting in your notes. For example:
+            <ul>
+              <li>**bold text**</li>
+              <li>*italic text*</li>
+              <li># Heading</li>
+              <li>- List item</li>
+              <li>`code`</li>
+            </ul>
+          </div>
+        </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="secondary" onClick={handleClose} disabled={loading}>
           Cancel
         </Button>
         <Button
-          primary
+          variant="primary"
           onClick={handleSubmit}
           loading={loading}
           disabled={loading || !title.trim() || !content.trim()}
         >
           Create Note
         </Button>
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 };

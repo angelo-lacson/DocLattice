@@ -1,4 +1,11 @@
-import { Label, Icon, Modal, Header, Button } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from "@os-legal/ui";
+import { X, Check, AlertCircle } from "lucide-react";
 
 interface ConfirmModalProps {
   message: string;
@@ -25,25 +32,35 @@ export function ConfirmModal({
   };
 
   return (
-    <Modal open={visible} basic size="small">
-      <Label
-        corner="right"
-        color="grey"
-        icon="cancel"
-        onClick={() => toggleModal()}
+    <Modal open={visible} onClose={() => toggleModal()} size="sm">
+      <ModalHeader
+        title={
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <AlertCircle size={20} />
+            ARE YOU SURE?
+          </span>
+        }
+        onClose={() => toggleModal()}
       />
-      <Header icon="exclamation circle" content="ARE YOU SURE?" />
-      <Modal.Content>
+      <ModalBody>
         <p>{message}</p>
-      </Modal.Content>
-      <Modal.Actions>
-        <Button basic color="red" inverted onClick={() => onNoClick()}>
-          <Icon name="remove" /> No
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          variant="danger"
+          onClick={() => onNoClick()}
+          leftIcon={<X size={16} />}
+        >
+          No
         </Button>
-        <Button color="green" inverted onClick={() => onYesClick()}>
-          <Icon name="checkmark" /> Yes
+        <Button
+          variant="primary"
+          onClick={() => onYesClick()}
+          leftIcon={<Check size={16} />}
+        >
+          Yes
         </Button>
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 }

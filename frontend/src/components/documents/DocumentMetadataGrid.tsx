@@ -5,7 +5,8 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { Table, Button, Popup } from "semantic-ui-react";
+import { Table } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 import { Loader2, Circle } from "lucide-react";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -635,16 +636,9 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                             )}
                           </EditableCell>
                           {hasError && (
-                            <Popup
-                              content={
-                                <ErrorTooltip>
-                                  {validationErrors[cellKey]}
-                                </ErrorTooltip>
-                              }
-                              open
-                              position="top center"
-                              trigger={<span />}
-                            />
+                            <ErrorTooltip>
+                              {validationErrors[cellKey]}
+                            </ErrorTooltip>
                           )}
                         </>
                       )}
@@ -661,8 +655,8 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
               Showing {documents.length} of many documents
             </PaginationInfo>
             <Button
-              primary
-              size="small"
+              variant="primary"
+              size="sm"
               onClick={() => {
                 if (!documentsLoading && pageInfo?.hasNextPage && fetchMore) {
                   fetchMore({
