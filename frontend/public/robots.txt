@@ -1,7 +1,0 @@
-# https://www.robotstxt.org/robotstxt.html
-User-agent: *
-Disallow:
-
-# AI agent instructions (MCP server documentation)
-# See https://llmstxt.org for the llms.txt convention
-Sitemap: /llms.txt
