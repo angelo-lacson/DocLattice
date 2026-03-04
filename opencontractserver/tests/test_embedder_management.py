@@ -66,6 +66,25 @@ class TestCorpusEmbedderAutoPopulation(TestCase):
             "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder",
         )
 
+    @patch(
+        "opencontractserver.pipeline.utils.get_default_embedder_path",
+        return_value="",
+    )
+    def test_auto_population_with_empty_default(self, _mock_path):
+        """When default embedder is empty string and preferred_embedder is None,
+        preferred_embedder is set to empty string (not left as None)."""
+        corpus = Corpus.objects.create(title="Empty Default", creator=self.user)
+        self.assertEqual(corpus.preferred_embedder, "")
+
+    def test_explicit_empty_string_embedder_preserved(self):
+        """Corpus with explicit empty-string embedder keeps it, not the default."""
+        corpus = Corpus.objects.create(
+            title="Explicit Empty",
+            creator=self.user,
+            preferred_embedder="",
+        )
+        self.assertEqual(corpus.preferred_embedder, "")
+
     def test_created_with_embedder_not_changed_on_update(self):
         """created_with_embedder doesn't change when corpus is updated."""
         corpus = Corpus.objects.create(title="Immutable Audit", creator=self.user)
