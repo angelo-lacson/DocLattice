@@ -98,7 +98,9 @@ class TestCollectCorpusObjects(TestCase):
         corpus = self._make_corpus()
         doc = Document.objects.create(title="Shared Doc", creator=self.user)
 
-        # Two active paths pointing to the same document
+        # Two is_current=True DocumentPath records for the same document is not
+        # a normal application state, but we test it as defensive coverage against
+        # the edge case to ensure collect_corpus_objects de-duplicates correctly.
         DocumentPath.objects.create(
             document=doc,
             corpus=corpus,
@@ -137,9 +139,10 @@ class TestCollectCorpusObjects(TestCase):
 
         # Analysis-generated annotation
         analyzer = Analyzer.objects.create(
-            analyzer_id="test-analyzer",
+            id="test-analyzer",
             description="Test",
             creator=self.user,
+            task_name="test_task_annot",
         )
         analysis = Analysis.objects.create(
             analyzer=analyzer,
@@ -172,9 +175,10 @@ class TestCollectCorpusObjects(TestCase):
 
         # Analysis relationship
         analyzer = Analyzer.objects.create(
-            analyzer_id="test-analyzer-rel",
+            id="test-analyzer-rel",
             description="Test",
             creator=self.user,
+            task_name="test_task_rel",
         )
         analysis = Analysis.objects.create(
             analyzer=analyzer,
@@ -271,7 +275,7 @@ class TestCollectCorpusObjects(TestCase):
             document=doc,
             creator=self.user,
             extract=None,
-            data_definition="",
+            data_definition="manual metadata entry",
         )
 
         result = collect_corpus_objects(corpus, include_metadata=True)
