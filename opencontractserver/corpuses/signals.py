@@ -229,10 +229,12 @@ def clone_templates_on_corpus_create(sender, instance, created, **kwargs):
         CorpusActionTemplate,
     )
 
-    templates = CorpusActionTemplate.objects.filter(is_active=True).order_by(
-        "sort_order", "name"
+    templates = list(
+        CorpusActionTemplate.objects.filter(is_active=True).order_by(
+            "sort_order", "name"
+        )
     )
-    if not templates.exists():
+    if not templates:
         return
 
     actions = [CorpusAction(**t.to_action_kwargs(instance)) for t in templates]

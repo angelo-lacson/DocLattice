@@ -1280,7 +1280,11 @@ class CorpusActionTemplate(BaseOCModel):
 
         Returns the created CorpusAction instance.
         """
-        return CorpusAction.objects.create(**self.to_action_kwargs(corpus, creator))
+        kwargs = self.to_action_kwargs(corpus, creator)
+        action = CorpusAction(**kwargs)
+        action.full_clean()
+        action.save()
+        return action
 
 
 # -------------------- CorpusDescriptionRevision -------------------- #

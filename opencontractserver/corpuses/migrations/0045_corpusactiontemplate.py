@@ -92,7 +92,9 @@ class Migration(migrations.Migration):
                 (
                     "creator",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),

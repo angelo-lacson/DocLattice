@@ -127,7 +127,11 @@ class CorpusActionTemplateModelTest(TestCase):
             trigger=CorpusActionTrigger.ADD_DOCUMENT,
             creator=self.user,
         )
-        templates = list(CorpusActionTemplate.objects.all())
+        templates = list(
+            CorpusActionTemplate.objects.filter(name__in=["First", "Second"]).order_by(
+                "sort_order"
+            )
+        )
         self.assertEqual(templates[0].pk, t2.pk)
         self.assertEqual(templates[1].pk, t1.pk)
 

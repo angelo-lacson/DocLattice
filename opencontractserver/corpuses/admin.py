@@ -7,6 +7,7 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusActionExecution,
+    CorpusActionTemplate,
     CorpusCategory,
 )
 from opencontractserver.tasks.permissioning_tasks import make_corpus_public_task
@@ -64,6 +65,13 @@ class CorpusCategoryAdmin(admin.ModelAdmin):
 @admin.register(CorpusAction)
 class CorpusActionAdmin(GuardedModelAdmin):
     list_display = ["id", "name", "corpus"]
+
+
+@admin.register(CorpusActionTemplate)
+class CorpusActionTemplateAdmin(admin.ModelAdmin):
+    list_display = ["name", "trigger", "is_active", "sort_order", "disabled_on_clone"]
+    list_filter = ["is_active", "trigger"]
+    search_fields = ["name"]
 
 
 @admin.register(CorpusActionExecution)
