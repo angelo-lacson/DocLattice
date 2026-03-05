@@ -321,7 +321,7 @@ class MCPRateLimiterTest(TestCase):
         scope = {"headers": [], "client": ("10.0.0.1", 8080)}
 
         # First request should be allowed
-        is_limited, _ = asyncio.run(check_mcp_rate_limit(scope))
+        is_limited, _, _ = asyncio.run(check_mcp_rate_limit(scope))
         self.assertFalse(is_limited)
 
     @override_settings(RATELIMIT_DISABLE=False)
@@ -343,7 +343,7 @@ class MCPRateLimiterTest(TestCase):
 
         with patch("config.ratelimit.engine.time") as mock_time:
             mock_time.time.return_value = 1000000.0
-            is_limited, _ = asyncio.run(_exhaust_and_check())
+            is_limited, _, _ = asyncio.run(_exhaust_and_check())
             self.assertTrue(is_limited)
 
     @override_settings(RATELIMIT_DISABLE=False)
@@ -361,9 +361,9 @@ class MCPRateLimiterTest(TestCase):
             # Exhaust client-a
             for _ in range(100):
                 await check_mcp_rate_limit(scope_a)
-            is_limited_a, _ = await check_mcp_rate_limit(scope_a)
+            is_limited_a, _, _ = await check_mcp_rate_limit(scope_a)
             # client-b should still be fine
-            is_limited_b, _ = await check_mcp_rate_limit(scope_b)
+            is_limited_b, _, _ = await check_mcp_rate_limit(scope_b)
             return is_limited_a, is_limited_b
 
         with patch("config.ratelimit.engine.time") as mock_time:

@@ -27,6 +27,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from graphql_relay import from_global_id
 
 from config.ratelimit.decorators import check_ws_rate_limit
+from config.websocket.middleware import WS_CLOSE_RATE_LIMITED
 from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from opencontractserver.conversations.models import Conversation
 
@@ -76,7 +77,7 @@ class ThreadUpdatesConsumer(AsyncWebsocketConsumer):
         # Rate limit new connections (skip JSON message — connection
         # is about to be closed so the client won't see it)
         if await check_ws_rate_limit(self, "WS_CONNECT", send_message=False):
-            await self.close(code=4029)
+            await self.close(code=WS_CLOSE_RATE_LIMITED)
             return
 
         # Authenticate user (set by auth middleware)

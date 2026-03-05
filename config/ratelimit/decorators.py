@@ -361,10 +361,11 @@ async def check_mcp_rate_limit(
     tool_name: str | None = None,
     *,
     skip_global: bool = False,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, int]:
     """Check MCP rate limits: global cap + optional per-tool limit.
 
     MCP is always anonymous, so no tier adjustment is applied.
+    # TODO: if MCP gains auth, pass user to get_tier_adjusted_rate here
 
     Args:
         scope: ASGI scope dictionary (used for IP extraction).
@@ -375,8 +376,9 @@ async def check_mcp_rate_limit(
             global counter.
 
     Returns:
-        Tuple of ``(is_limited, error_message)``.  When ``is_limited`` is
-        ``False``, ``error_message`` is an empty string.
+        Tuple of ``(is_limited, error_message, retry_after)``.  When
+        ``is_limited`` is ``False``, ``error_message`` is an empty string
+        and ``retry_after`` is ``0``.
     """
     ip = get_client_ip_from_scope(scope)
     limit_key = f"ip:{ip}"
@@ -386,16 +388,37 @@ async def check_mcp_rate_limit(
     if not skip_global:
         global_rate = RateLimits.MCP_GLOBAL
         if await ais_rate_limited("mcp:global", limit_key, global_rate):
-            return True, "Rate limit exceeded. Please wait before making more requests."
+            retry_after = _compute_retry_after(global_rate)
+            return (
+                True,
+                "Rate limit exceeded. Please wait before making more requests.",
+                retry_after,
+            )
 
     # 2. Per-tool limit
     if tool_name and tool_name in MCP_TOOL_RATE_MAP:
         category = MCP_TOOL_RATE_MAP[tool_name]
         tool_rate = getattr(RateLimits, category)
         if await ais_rate_limited(f"mcp:tool:{tool_name}", limit_key, tool_rate):
-            return True, f"Rate limit exceeded for {tool_name}."
+            retry_after = _compute_retry_after(tool_rate)
+            return True, f"Rate limit exceeded for {tool_name}.", retry_after
 
-    return False, ""
+    return False, "", 0
+
+
+def _compute_retry_after(rate: str) -> int:
+    """Compute remaining seconds in the current rate-limit window.
+
+    Returns the number of seconds until the current fixed-window resets,
+    which is the appropriate ``Retry-After`` value for 429 responses.
+
+    Falls back to ``60`` if the rate string cannot be parsed.
+    """
+    try:
+        _, period_seconds = parse_rate(rate)
+        return period_seconds - (int(time.time()) % period_seconds)
+    except (ValueError, IndexError, ZeroDivisionError):
+        return 60
 
 
 # ---------------------------------------------------------------------------

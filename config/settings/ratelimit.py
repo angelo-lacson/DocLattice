@@ -51,10 +51,6 @@ RATE_LIMIT_OVERRIDES = {
 # Remove None values
 RATE_LIMIT_OVERRIDES = {k: v for k, v in RATE_LIMIT_OVERRIDES.items() if v is not None}
 
-# IP address extraction for rate limiting behind proxies
-# This is important when running behind Traefik or other reverse proxies
-RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"
-
 # Number of trusted reverse proxies in front of the application.
 # Controls which entry in X-Forwarded-For is used for rate limit keying:
 #   1 (default): rightmost entry (single proxy, e.g. Traefik/nginx)

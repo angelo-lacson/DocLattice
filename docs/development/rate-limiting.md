@@ -116,7 +116,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         # send_message=False because the connection hasn't been accepted yet
         # and sending a message would fail
         if await check_ws_rate_limit(self, "WS_CONNECT", send_message=False):
-            await self.close(code=4029)
+            await self.close(code=WS_CLOSE_RATE_LIMITED)
             return
         await self.accept()
 
@@ -203,7 +203,6 @@ RATELIMIT_DISABLE = False         # Disable all rate limiting (env override)
 RATELIMIT_USE_CACHE = "default"   # Cache backend for counters
 RATELIMIT_FAIL_OPEN = False       # Deny requests if cache is down
 RATELIMIT_KEY_PREFIX = "rl"       # Cache key prefix
-RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"  # IP extraction header
 RATELIMIT_IPV6_MASK = 64          # Group by /64 subnet
 ```
 

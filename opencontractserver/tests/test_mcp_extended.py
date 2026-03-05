@@ -40,7 +40,7 @@ from opencontractserver.mcp.telemetry import (
     IP_HASH_LENGTH,
     _hash_ip,
     clear_request_context,
-    get_client_ip_from_scope,
+    get_claimed_client_ip_from_scope,
     isolated_telemetry_context,
     record_mcp_request,
     record_mcp_resource_read,
@@ -211,17 +211,17 @@ class TestGetClientIpFromScope(TestCase):
 
     def test_x_forwarded_for_single(self):
         scope = {"headers": [(b"x-forwarded-for", b"1.2.3.4")]}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "1.2.3.4")
 
     def test_x_forwarded_for_multiple(self):
         scope = {"headers": [(b"x-forwarded-for", b"1.2.3.4, 5.6.7.8, 9.10.11.12")]}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "1.2.3.4")
 
     def test_x_real_ip(self):
         scope = {"headers": [(b"x-real-ip", b"10.0.0.1")]}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "10.0.0.1")
 
     def test_x_forwarded_for_takes_precedence(self):
@@ -231,21 +231,21 @@ class TestGetClientIpFromScope(TestCase):
                 (b"x-real-ip", b"5.6.7.8"),
             ]
         }
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "1.2.3.4")
 
     def test_direct_client_connection(self):
         scope = {"headers": [], "client": ("192.168.1.1", 12345)}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "192.168.1.1")
 
     def test_no_ip_available(self):
         scope = {"headers": []}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertIsNone(result)
 
     def test_empty_scope(self):
-        result = get_client_ip_from_scope({})
+        result = get_claimed_client_ip_from_scope({})
         self.assertIsNone(result)
 
 
