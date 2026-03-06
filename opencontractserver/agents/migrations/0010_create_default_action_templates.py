@@ -1,10 +1,6 @@
 # Generated manually for data migration
 
-import logging
-
 from django.db import migrations
-
-logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -13,6 +9,15 @@ logger = logging.getLogger(__name__)
 
 # NOTE: Tool names (e.g. "add_annotations_from_exact_strings") must match the
 # registered tool names in opencontractserver/llms/tools/core_tools.py.
+#
+# Each template has both "tools" (available tools) and "pre_authorized" (tools
+# that don't require user confirmation).  For these default templates the lists
+# are intentionally identical — every available tool is pre-authorized — but
+# they are kept separate because custom templates may restrict pre-authorization
+# to a subset of available tools.
+#
+# sort_order values use gaps (10, 20, 30, ...) so new templates can be inserted
+# between existing ones without renumbering.
 TEMPLATES = [
     {
         "name": "Document Description Updater",
@@ -187,19 +192,13 @@ BADGE_CONFIGS = {
 
 
 def create_default_action_templates(apps, schema_editor):
-    """Create default AgentConfigurations and CorpusActionTemplates."""
+    """Create default AgentConfigurations and CorpusActionTemplates.
+
+    Uses creator=None because both models have nullable creator fields and
+    a superuser may not exist yet (e.g. in CI or fresh deployments).
+    """
     AgentConfiguration = apps.get_model("agents", "AgentConfiguration")
     CorpusActionTemplate = apps.get_model("corpuses", "CorpusActionTemplate")
-    User = apps.get_model("users", "User")
-
-    system_user = User.objects.filter(is_superuser=True).first()
-    if not system_user:
-        logger.warning(
-            "No superuser found — skipping default action template seeding. "
-            "Templates will need to be created manually or by re-running "
-            "this migration after a superuser is created."
-        )
-        return
 
     for tmpl_def in TEMPLATES:
         # Idempotency: skip if this template already exists.
@@ -220,7 +219,7 @@ def create_default_action_templates(apps, schema_editor):
             scope="GLOBAL",
             is_active=True,
             is_public=True,
-            creator=system_user,
+            creator=None,
         )
 
         CorpusActionTemplate.objects.create(
@@ -233,7 +232,7 @@ def create_default_action_templates(apps, schema_editor):
             is_active=True,
             disabled_on_clone=True,
             sort_order=tmpl_def["sort_order"],
-            creator=system_user,
+            creator=None,
         )
 
 

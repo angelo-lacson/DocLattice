@@ -240,6 +240,8 @@ def clone_templates_on_corpus_create(sender, instance, created, **kwargs):
     actions = [CorpusAction(**t.to_action_kwargs(instance)) for t in templates]
     for action in actions:
         action.full_clean()
+    # bulk_create is safe here: CorpusAction has no post_save signal handlers,
+    # so skipping .save() per-instance doesn't miss any side effects.
     CorpusAction.objects.bulk_create(actions)
     logger.info(
         f"[TemplateClone] Cloned {len(actions)} action templates into "
