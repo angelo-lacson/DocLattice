@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 # Template definitions
 # ---------------------------------------------------------------------------
 
+# NOTE: Tool names (e.g. "add_annotations_from_exact_strings") must match the
+# registered tool names in opencontractserver/llms/tools/core_tools.py.
 TEMPLATES = [
     {
         "name": "Document Description Updater",

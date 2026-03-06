@@ -30,7 +30,7 @@ class Migration(migrations.Migration):
                 ("is_public", models.BooleanField(default=False)),
                 ("created", models.DateTimeField(auto_now_add=True)),
                 ("modified", models.DateTimeField(auto_now=True)),
-                ("name", models.CharField(max_length=256)),
+                ("name", models.CharField(max_length=256, unique=True)),
                 ("description", models.TextField(blank=True, default="")),
                 (
                     "task_instructions",

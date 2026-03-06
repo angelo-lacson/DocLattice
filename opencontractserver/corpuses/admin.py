@@ -68,7 +68,7 @@ class CorpusActionAdmin(GuardedModelAdmin):
 
 
 @admin.register(CorpusActionTemplate)
-class CorpusActionTemplateAdmin(admin.ModelAdmin):
+class CorpusActionTemplateAdmin(GuardedModelAdmin):
     list_display = ["name", "trigger", "is_active", "sort_order", "disabled_on_clone"]
     list_filter = ["is_active", "trigger"]
     search_fields = ["name"]

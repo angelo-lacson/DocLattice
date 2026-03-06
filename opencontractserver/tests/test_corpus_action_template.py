@@ -247,10 +247,7 @@ class DefaultTemplatesMigrationTest(TestCase):
             password="testpass",
             email="admin@test.com",
         )
-        if not CorpusActionTemplate.objects.filter(
-            name__in=cls.EXPECTED_NAMES
-        ).exists():
-            _create_default_action_templates(apps, None)
+        _create_default_action_templates(apps, None)
 
     def test_default_templates_exist(self):
         """All 5 default templates should exist after migration."""
@@ -316,10 +313,7 @@ class CorpusActionTemplateIntegrationTest(TestCase):
                 password="testpass",
                 email="intadmin@test.com",
             )
-        if not CorpusActionTemplate.objects.filter(
-            name__in=cls.EXPECTED_NAMES
-        ).exists():
-            _create_default_action_templates(apps, None)
+        _create_default_action_templates(apps, None)
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -331,8 +325,6 @@ class CorpusActionTemplateIntegrationTest(TestCase):
         active_template_count = CorpusActionTemplate.objects.filter(
             is_active=True
         ).count()
-        if active_template_count == 0:
-            self.skipTest("No active templates — data migration may not have run")
 
         corpus = Corpus.objects.create(title="Integration Corpus", creator=self.user)
         actions = CorpusAction.objects.filter(corpus=corpus)

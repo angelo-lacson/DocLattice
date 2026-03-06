@@ -1208,7 +1208,7 @@ class CorpusActionTemplate(BaseOCModel):
         db_index=True,
     )
 
-    name = django.db.models.CharField(max_length=256)
+    name = django.db.models.CharField(max_length=256, unique=True)
     description = django.db.models.TextField(blank=True, default="")
 
     agent_config = django.db.models.ForeignKey(
