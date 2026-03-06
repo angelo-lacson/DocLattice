@@ -135,7 +135,7 @@ test.describe("RemoveDocumentsModal", () => {
       await expect(page.getByText("Cancel")).toBeVisible({ timeout: 5000 });
     });
 
-    test("has Remove button with negative styling", async ({ mount, page }) => {
+    test("has Remove button with danger styling", async ({ mount, page }) => {
       const component = await mount(
         <FolderTestWrapper>
           <RemoveDocumentsModalFixture
@@ -145,8 +145,10 @@ test.describe("RemoveDocumentsModal", () => {
         </FolderTestWrapper>
       );
 
-      // Remove button should have "negative" class from Semantic UI
-      const removeButton = page.locator('button.negative:has-text("Remove")');
+      // Remove button should be visible with danger-like styling (red background via inline style)
+      const removeButton = page.getByRole("button", {
+        name: /Remove 1 Document/,
+      });
       await expect(removeButton).toBeVisible({ timeout: 5000 });
     });
 

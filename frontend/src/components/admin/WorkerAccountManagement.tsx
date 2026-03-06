@@ -439,9 +439,10 @@ export const WorkerAccountManagement: React.FC = () => {
           <Button
             variant="primary"
             disabled={!formState.name.trim() || creating}
+            loading={creating}
             onClick={handleCreate}
           >
-            {creating ? "Creating..." : "Create Account"}
+            Create Account
           </Button>
         </ModalFooter>
       </Modal>

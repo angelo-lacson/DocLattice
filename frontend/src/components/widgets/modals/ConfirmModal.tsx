@@ -13,6 +13,8 @@ interface ConfirmModalProps {
   yesAction: (args?: any) => void;
   noAction: (args?: any) => void;
   toggleModal: (args?: any) => void;
+  /** Variant for the confirm button. Defaults to "danger" for destructive actions. */
+  confirmVariant?: "primary" | "secondary" | "danger" | "ghost";
 }
 export function ConfirmModal({
   message,
@@ -20,6 +22,7 @@ export function ConfirmModal({
   yesAction,
   noAction,
   toggleModal,
+  confirmVariant = "danger",
 }: ConfirmModalProps) {
   const onYesClick = () => {
     yesAction();
@@ -54,7 +57,7 @@ export function ConfirmModal({
           No
         </Button>
         <Button
-          variant="danger"
+          variant={confirmVariant}
           onClick={() => onYesClick()}
           leftIcon={<Check size={16} />}
         >

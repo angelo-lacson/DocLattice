@@ -202,44 +202,6 @@ const VersionActions = styled.div`
   gap: 8px;
 `;
 
-const ActionButtonStyled = styled.button`
-  padding: 6px 12px;
-  font-size: 11px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
-  background: white;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
-
-  &:hover:not(:disabled) {
-    background: #f8fafc;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &.primary {
-    background: #3b82f6;
-    color: white;
-    border-color: #3b82f6;
-
-    &:hover:not(:disabled) {
-      background: #2563eb;
-    }
-  }
-
-  &.basic {
-    background: transparent;
-    border-color: #e2e8f0;
-    color: #475569;
-  }
-`;
-
 const EmptyState = styled.div`
   text-align: center;
   padding: 40px 20px;
@@ -488,28 +450,31 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
 
                 {isSelected && !isCurrent && (
                   <VersionActions>
-                    <ActionButtonStyled
-                      className="primary"
+                    <Button
+                      size="sm"
+                      variant="primary"
                       disabled={restoreLoading}
-                      onClick={(e: React.MouseEvent) => {
+                      loading={restoreLoading}
+                      leftIcon={<Undo2 size={12} />}
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                         e.stopPropagation();
                         handleRestore(version.id);
                       }}
                     >
-                      <Undo2 size={12} />
-                      {restoreLoading ? "Restoring..." : "Restore This Version"}
-                    </ActionButtonStyled>
+                      Restore This Version
+                    </Button>
                     {onDownload && (
-                      <ActionButtonStyled
-                        className="basic"
-                        onClick={(e: React.MouseEvent) => {
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        leftIcon={<Download size={12} />}
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                           e.stopPropagation();
                           onDownload(version.id);
                         }}
                       >
-                        <Download size={12} />
                         Download
-                      </ActionButtonStyled>
+                      </Button>
                     )}
                   </VersionActions>
                 )}

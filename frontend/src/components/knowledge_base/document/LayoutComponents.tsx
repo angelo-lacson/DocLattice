@@ -47,7 +47,13 @@ export const FullScreenModal: React.FC<FullScreenModalProps> = ({
   children,
 }) => (
   <FullScreenModalWrapper id={id}>
-    <Modal open={open} onClose={onClose} size="lg">
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="lg"
+      closeOnEscape={false}
+      closeOnOverlay={false}
+    >
       {children}
     </Modal>
   </FullScreenModalWrapper>
