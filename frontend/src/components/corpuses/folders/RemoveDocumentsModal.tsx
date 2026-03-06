@@ -212,11 +212,10 @@ export const RemoveDocumentsModal: React.FC = () => {
             Cancel
           </Button>
           <Button
-            variant="primary"
+            variant="danger"
             onClick={handleConfirmRemove}
             loading={loading}
             disabled={loading}
-            style={{ backgroundColor: "#dc2626", borderColor: "#dc2626" }}
           >
             Remove {count} Document{count !== 1 ? "s" : ""}
           </Button>

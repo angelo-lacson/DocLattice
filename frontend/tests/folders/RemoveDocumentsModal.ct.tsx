@@ -145,11 +145,12 @@ test.describe("RemoveDocumentsModal", () => {
         </FolderTestWrapper>
       );
 
-      // Remove button should be visible with danger-like styling (red background via inline style)
+      // Remove button should use the design system's danger variant
       const removeButton = page.getByRole("button", {
         name: /Remove 1 Document/,
       });
       await expect(removeButton).toBeVisible({ timeout: 5000 });
+      await expect(removeButton).toHaveClass(/oc-button--danger/);
     });
 
     test("has close button in header", async ({ mount, page }) => {
