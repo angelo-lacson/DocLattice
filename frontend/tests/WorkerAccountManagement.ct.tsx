@@ -193,7 +193,7 @@ test.describe("WorkerAccountManagement", () => {
 
     // Verify the Create Account button in the modal is disabled when name is empty
     const modalCreateButton = page
-      .locator(".actions")
+      .locator(".oc-modal-footer")
       .getByRole("button", { name: "Create Account" });
     await expect(modalCreateButton).toBeDisabled();
 

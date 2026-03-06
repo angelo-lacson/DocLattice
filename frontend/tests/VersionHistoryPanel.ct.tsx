@@ -9,7 +9,9 @@ test.describe("VersionHistoryPanel", () => {
     );
 
     // Modal should be visible
-    await expect(page.locator(".ui.modal")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("[role='dialog']")).toBeVisible({
+      timeout: 10000,
+    });
     await expect(page.getByText("Version History")).toBeVisible();
     await expect(page.getByText("Test Document")).toBeVisible();
   });
@@ -20,7 +22,7 @@ test.describe("VersionHistoryPanel", () => {
     );
 
     // Modal should not be visible
-    await expect(page.locator(".ui.modal")).not.toBeVisible();
+    await expect(page.locator("[role='dialog']")).not.toBeVisible();
   });
 
   test("shows loading indicator or content after mount", async ({
@@ -355,7 +357,7 @@ test.describe("VersionHistoryPanel", () => {
     });
 
     // Dismiss the message
-    await page.locator(".message.positive .close.icon").click();
+    await page.getByRole("button", { name: "Dismiss" }).click();
 
     // Message should be gone
     await expect(page.getByText("Version Restored")).not.toBeVisible();
@@ -382,7 +384,7 @@ test.describe("VersionHistoryPanel", () => {
     });
 
     // Dismiss the message
-    await page.locator(".message.negative .close.icon").click();
+    await page.getByRole("button", { name: "Dismiss" }).click();
 
     // Message should be gone
     await expect(page.getByText("Restore Failed")).not.toBeVisible();

@@ -420,7 +420,9 @@ test.describe("CorpusMetadataSettings", () => {
     await valueRow.locator("button").nth(3).click();
 
     // Confirm deletion in the ConfirmModal
-    await page.getByRole("button", { name: "Yes" }).click();
+    await page
+      .getByRole("button", { name: "Delete Field", exact: true })
+      .click();
 
     // Wait for deletion
     await page.waitForTimeout(500);
