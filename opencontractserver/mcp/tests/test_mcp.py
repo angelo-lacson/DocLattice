@@ -331,20 +331,27 @@ class MCPRateLimiterTest(TestCase):
         from unittest.mock import patch
 
         from config.ratelimit.decorators import check_mcp_rate_limit
+        from config.ratelimit.rates import RateLimits
 
         scope = {"headers": [], "client": ("10.0.0.2", 8080)}
+        test_limit = 3
 
         async def _exhaust_and_check():
-            # Exhaust the limit (MCP_GLOBAL = 100/m)
-            for _ in range(100):
+            # Exhaust the limit
+            for _ in range(test_limit):
                 await check_mcp_rate_limit(scope)
             # Next should be blocked
             return await check_mcp_rate_limit(scope)
 
         with patch("config.ratelimit.engine.time") as mock_time:
             mock_time.time.return_value = 1000000.0
-            is_limited, _, _ = asyncio.run(_exhaust_and_check())
-            self.assertTrue(is_limited)
+            original_rate = RateLimits.MCP_GLOBAL
+            RateLimits.MCP_GLOBAL = f"{test_limit}/m"
+            try:
+                is_limited, _, _ = asyncio.run(_exhaust_and_check())
+                self.assertTrue(is_limited)
+            finally:
+                RateLimits.MCP_GLOBAL = original_rate
 
     @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_separate_clients(self):
@@ -353,13 +360,15 @@ class MCPRateLimiterTest(TestCase):
         from unittest.mock import patch
 
         from config.ratelimit.decorators import check_mcp_rate_limit
+        from config.ratelimit.rates import RateLimits
 
         scope_a = {"headers": [], "client": ("10.0.0.3", 8080)}
         scope_b = {"headers": [], "client": ("10.0.0.4", 8080)}
+        test_limit = 3
 
         async def _exhaust_a_and_check_both():
             # Exhaust client-a
-            for _ in range(100):
+            for _ in range(test_limit):
                 await check_mcp_rate_limit(scope_a)
             is_limited_a, _, _ = await check_mcp_rate_limit(scope_a)
             # client-b should still be fine
@@ -368,9 +377,14 @@ class MCPRateLimiterTest(TestCase):
 
         with patch("config.ratelimit.engine.time") as mock_time:
             mock_time.time.return_value = 1000000.0
-            is_limited_a, is_limited_b = asyncio.run(_exhaust_a_and_check_both())
-            self.assertTrue(is_limited_a)
-            self.assertFalse(is_limited_b)
+            original_rate = RateLimits.MCP_GLOBAL
+            RateLimits.MCP_GLOBAL = f"{test_limit}/m"
+            try:
+                is_limited_a, is_limited_b = asyncio.run(_exhaust_a_and_check_both())
+                self.assertTrue(is_limited_a)
+                self.assertFalse(is_limited_b)
+            finally:
+                RateLimits.MCP_GLOBAL = original_rate
 
 
 class MCPToolsDocumentsTest(TestCase):

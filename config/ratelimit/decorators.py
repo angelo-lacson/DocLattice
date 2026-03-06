@@ -343,7 +343,9 @@ async def check_ws_rate_limit(
 # ---------------------------------------------------------------------------
 
 
-# Maps MCP tool names to existing rate limit categories
+# Maps MCP tool names to existing rate limit categories.
+# NOTE: Keys must be kept in sync with TOOL_HANDLERS in opencontractserver/mcp/server.py
+# and the scoped tool definitions in opencontractserver/mcp/tools.py.
 MCP_TOOL_RATE_MAP: dict[str, str] = {
     "list_public_corpuses": "READ_LIGHT",
     "list_documents": "READ_MEDIUM",
