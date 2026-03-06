@@ -7,6 +7,7 @@ import {
   Button,
   Input,
 } from "@os-legal/ui";
+// TODO: migrate to @os-legal/ui once Dropdown component is available
 import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";

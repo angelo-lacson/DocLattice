@@ -57,7 +57,7 @@ export const StyledUploadModal = styled(Modal)`
     }
   }
 
-  .header {
+  .oc-modal-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white !important;
     padding: 1.25rem 1.5rem !important;
@@ -70,7 +70,7 @@ export const StyledUploadModal = styled(Modal)`
     }
   }
 
-  .content {
+  .oc-modal-body {
     padding: 1.5rem !important;
 
     @media (max-width: ${breakpoints.mobile}) {
@@ -78,7 +78,7 @@ export const StyledUploadModal = styled(Modal)`
     }
   }
 
-  .actions {
+  .oc-modal-footer {
     padding: 1rem 1.5rem !important;
     background: #f8f9fa !important;
     border-top: 1px solid #e9ecef !important;

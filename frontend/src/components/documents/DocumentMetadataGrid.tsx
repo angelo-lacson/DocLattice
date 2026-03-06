@@ -5,6 +5,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+// TODO: migrate to @os-legal/ui once Table component is available
 import { Table } from "semantic-ui-react";
 import { Button } from "@os-legal/ui";
 import { Loader2, Circle } from "lucide-react";
@@ -172,12 +173,18 @@ const EmptyValue = styled.span`
 `;
 
 const ErrorTooltip = styled.div`
+  position: absolute;
+  bottom: -2rem;
+  left: 0.5rem;
+  z-index: 10;
   background: #dc2626;
   color: white;
-  padding: 0.5rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   max-width: 200px;
+  white-space: nowrap;
+  pointer-events: none;
 `;
 
 const PaginationFooter = styled.div`
@@ -596,7 +603,7 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                           autoFocus
                         />
                       ) : (
-                        <>
+                        <div style={{ position: "relative" }}>
                           <EditableCell
                             isEditing={false}
                             hasError={hasError}
@@ -640,7 +647,7 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                               {validationErrors[cellKey]}
                             </ErrorTooltip>
                           )}
-                        </>
+                        </div>
                       )}
                     </Table.Cell>
                   );

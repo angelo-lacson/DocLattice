@@ -3,6 +3,7 @@
  * Restyled to use OS-Legal design system
  */
 import React, { useState, useEffect } from "react";
+// TODO: migrate to @os-legal/ui once Table component is available
 import { Table } from "semantic-ui-react";
 import { Button, IconButton, Tooltip } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
@@ -260,7 +261,7 @@ const RequiredBadge = styled.span`
 `;
 
 const AddFieldButton = styled(Button)`
-  &.oc-button {
+  && {
     background: ${OS_LEGAL_COLORS.accent};
     color: white;
     border: none;
@@ -629,6 +630,8 @@ export const CorpusMetadataSettings = ({
       <ConfirmModal
         visible={deleteConfirmOpen}
         message="Are you sure you want to delete this metadata field? All values for this field will be permanently deleted."
+        confirmLabel="Delete Field"
+        cancelLabel="Cancel"
         yesAction={handleDelete}
         noAction={() => {
           setColumnToDelete(null);

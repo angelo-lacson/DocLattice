@@ -179,20 +179,8 @@ export const CRUDWidget = <T extends Record<string, any>>({
                   showErrorList={false}
                   className="responsive-form"
                 >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
-                    }}
-                  >
-                    <div>
-                      <></>
-                    </div>
-                    <div>
-                      <></>
-                    </div>
-                  </div>
+                  {/* Empty child suppresses rjsf's default submit button */}
+                  <div />
                 </Form>
               </div>
             </div>
