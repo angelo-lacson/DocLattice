@@ -194,11 +194,25 @@ BADGE_CONFIGS = {
 def create_default_action_templates(apps, schema_editor):
     """Create default AgentConfigurations and CorpusActionTemplates.
 
-    Uses creator=None because both models have nullable creator fields and
-    a superuser may not exist yet (e.g. in CI or fresh deployments).
+    AgentConfiguration.creator is NOT NULL (inherited from BaseOCModel), so we
+    need a superuser to own them.  CorpusActionTemplate.creator is nullable, so
+    we fall back to None when no superuser exists.
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    User = apps.get_model("users", "User")
     AgentConfiguration = apps.get_model("agents", "AgentConfiguration")
     CorpusActionTemplate = apps.get_model("corpuses", "CorpusActionTemplate")
+
+    system_user = User.objects.filter(is_superuser=True).first()
+    if not system_user:
+        logger.warning(
+            "No superuser found — skipping default action template creation. "
+            "Run this migration again after creating a superuser."
+        )
+        return
 
     for tmpl_def in TEMPLATES:
         # Idempotency: skip if this template already exists.
@@ -219,7 +233,7 @@ def create_default_action_templates(apps, schema_editor):
             scope="GLOBAL",
             is_active=True,
             is_public=True,
-            creator=None,
+            creator=system_user,
         )
 
         CorpusActionTemplate.objects.create(
@@ -232,7 +246,7 @@ def create_default_action_templates(apps, schema_editor):
             is_active=True,
             disabled_on_clone=True,
             sort_order=tmpl_def["sort_order"],
-            creator=None,
+            creator=system_user,
         )
 
 
