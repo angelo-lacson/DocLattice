@@ -34,6 +34,7 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
 
     # Adjust the title to indicate it's a fork
     corpus_copy.title = f"[FORK] {corpus_copy.title}"
+    # Lock corpus to tell frontend to show this as loading and disable selection
     corpus_copy.backend_lock = True
     corpus_copy.creator = user
     corpus_copy.parent_id = corpus_pk_to_fork

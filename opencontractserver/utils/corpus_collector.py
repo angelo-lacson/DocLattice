@@ -99,9 +99,10 @@ def collect_corpus_objects(
     metadata_column_ids = []
     metadata_datacell_ids = []
     if include_metadata:
-        if hasattr(corpus, "metadata_schema"):
+        metadata_schema = getattr(corpus, "metadata_schema", None)
+        if metadata_schema:
             metadata_column_ids = list(
-                corpus.metadata_schema.columns.filter(is_manual_entry=True).values_list(
+                metadata_schema.columns.filter(is_manual_entry=True).values_list(
                     "id", flat=True
                 )
             )
