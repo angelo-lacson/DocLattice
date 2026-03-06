@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-04
 
+### Added
+
+- **Dynamic discovery endpoints for crawlers and AI agents**: Replaced static `robots.txt`, `llms.txt`, and `llms-full.txt` files with Django views that dynamically generate content with live data from the database. New endpoints:
+  - `robots.txt`: Includes explicit `Allow` directives for AI crawler user-agents (GPTBot, ClaudeBot, anthropic-ai, Google-Extended, PerplexityBot, Bytespider, cohere-ai) and a proper `Sitemap:` reference to `sitemap.xml`
+  - `llms.txt` / `llms-full.txt`: Now auto-populate an "Available Collections" section listing all public corpuses with titles, slugs, document counts, and descriptions. Hostnames are resolved from the request instead of using placeholder text. Links use proper inline Markdown format per the llmstxt.org spec
+  - `sitemap.xml`: New XML sitemap listing homepage, public corpuses, their documents (via DocumentPath), and discovery endpoints
+  - `.well-known/mcp.json`: New MCP server discovery endpoint listing the global MCP server and per-corpus scoped servers
+  (`opencontractserver/discovery/views.py`, `opencontractserver/discovery/urls.py`, `config/urls.py`)
+- **Traefik routing for discovery endpoints**: Updated production and CI Traefik configs to route `/robots.txt`, `/llms.txt`, `/llms-full.txt`, `/sitemap.xml`, and `/.well-known/*` to Django instead of the frontend nginx container (`compose/production/traefik/traefik.yml`, `compose/production/traefik/traefik-ci.yml`)
+- **MCP discovery link in HTML head**: Added `<link rel="alternate" type="application/json" href="/.well-known/mcp.json">` to `frontend/index.html` for agent discovery
+- **Comprehensive test suite** for all five discovery endpoints covering content types, spec conformance, public/private corpus filtering, hostname resolution, and edge cases (`opencontractserver/discovery/tests/test_discovery_views.py`)
+
 ### Removed
 
 - **Unused `django-crispy-forms` and `crispy-bootstrap5` dependencies**: These were cookiecutter-django boilerplate never used by the project (React frontend uses its own form components). Removed packages from `requirements/base.txt`, `INSTALLED_APPS`, and `CRISPY_*` settings from `config/settings/base.py`.
