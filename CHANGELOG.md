@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-04
 
+### Changed
+
+- **Extracted shared corpus object collection logic** into `opencontractserver/utils/corpus_collector.py`: New `collect_corpus_objects()` utility and `CorpusObjectCollection` dataclass consolidate duplicated corpus forking/export collection logic (Issue #816)
+
 ### Added
 
 - **Dynamic discovery endpoints for crawlers and AI agents**: Replaced static `robots.txt`, `llms.txt`, and `llms-full.txt` files with Django views that dynamically generate content with live data from the database. New endpoints:
