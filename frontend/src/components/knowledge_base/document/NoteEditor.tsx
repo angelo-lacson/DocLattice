@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Modal } from "@os-legal/ui";
+import { Modal, Spinner } from "@os-legal/ui";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQuery } from "@apollo/client";
@@ -956,8 +956,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               onClick={handleSave}
               disabled={!hasChanges || updating}
             >
-              <Save size={16} />
-              Save Changes
+              {updating ? <Spinner size="sm" /> : <Save size={16} />}
+              {updating ? "Saving..." : "Save Changes"}
               {hasChanges && !updating && (
                 <motion.span
                   initial={{ scale: 0 }}

@@ -1,21 +1,24 @@
-import React from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
 
 // Badge container with conditional styling based on version state
+const BadgeWrapper = styled.div`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+`;
+
 const BadgeContainer = styled.div<{
   $hasHistory: boolean;
   $isOutdated: boolean;
 }>`
-  position: absolute;
-  top: 8px;
-  right: 8px;
   font-size: 11px;
   font-weight: 600;
   padding: 3px 8px;
   border-radius: 12px;
   cursor: ${(props) => (props.$hasHistory ? "pointer" : "default")};
   user-select: none;
-  z-index: 10;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(4px);
 
@@ -84,6 +87,33 @@ const HistoryIndicator = styled.span`
   opacity: 0.8;
 `;
 
+const Tooltip = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  padding: 10px 12px;
+  background: #1e293b;
+  color: #f1f5f9;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  pointer-events: none;
+  white-space: normal;
+`;
+
+const TooltipTitle = styled.div`
+  font-weight: 600;
+  margin-bottom: 4px;
+`;
+
+const TooltipLine = styled.div`
+  color: #cbd5e1;
+`;
+
 export interface VersionBadgeProps {
   versionNumber: number;
   hasHistory: boolean;
@@ -111,6 +141,7 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
   onClick,
   className,
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
   const isOutdated = hasHistory && !isLatest;
 
   const handleClick = (e: React.MouseEvent) => {
@@ -128,31 +159,51 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
     }
   };
 
-  const tooltipText = isOutdated
-    ? `Outdated Version - Current: v${versionNumber}. Total versions: ${versionCount}. A newer version is available. Click to view version history.`
-    : hasHistory
-    ? `Version Information - Current: v${versionNumber}. Total versions: ${versionCount}. Click to view version history.`
-    : `Version ${versionNumber}`;
+  const showTooltip = isHovered && hasHistory;
 
   return (
-    <BadgeContainer
-      $hasHistory={hasHistory}
-      $isOutdated={isOutdated}
-      onClick={handleClick}
-      className={className}
-      role={hasHistory ? "button" : undefined}
-      aria-label={`Version ${versionNumber}${
-        hasHistory ? `, click to view history` : ""
-      }`}
-      tabIndex={hasHistory ? 0 : undefined}
-      onKeyDown={hasHistory ? handleKeyDown : undefined}
-      title={tooltipText}
+    <BadgeWrapper
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <VersionText>v{versionNumber}</VersionText>
-      {hasHistory && (
-        <HistoryIndicator>&#8226; {versionCount}</HistoryIndicator>
+      <BadgeContainer
+        $hasHistory={hasHistory}
+        $isOutdated={isOutdated}
+        onClick={handleClick}
+        className={className}
+        role={hasHistory ? "button" : undefined}
+        aria-label={`Version ${versionNumber}${
+          hasHistory ? `, click to view history` : ""
+        }`}
+        tabIndex={hasHistory ? 0 : undefined}
+        onKeyDown={hasHistory ? handleKeyDown : undefined}
+      >
+        <VersionText>v{versionNumber}</VersionText>
+        {hasHistory && (
+          <HistoryIndicator>&#8226; {versionCount}</HistoryIndicator>
+        )}
+      </BadgeContainer>
+      {showTooltip && (
+        <Tooltip>
+          {isOutdated ? (
+            <>
+              <TooltipTitle>Outdated Version</TooltipTitle>
+              <TooltipLine>
+                A newer version is available (you are viewing v{versionNumber}{" "}
+                of {versionCount})
+              </TooltipLine>
+            </>
+          ) : (
+            <>
+              <TooltipTitle>Version Information</TooltipTitle>
+              <TooltipLine>Current: v{versionNumber}</TooltipLine>
+              <TooltipLine>Total versions: {versionCount}</TooltipLine>
+              <TooltipLine>Click to view version history</TooltipLine>
+            </>
+          )}
+        </Tooltip>
       )}
-    </BadgeContainer>
+    </BadgeWrapper>
   );
 };
 

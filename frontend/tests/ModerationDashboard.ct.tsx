@@ -216,13 +216,13 @@ test(
       timeout: 15000,
     });
 
-    // Check metric labels — Statistic component is still Semantic UI
+    // Check metric values — StatBlock uses @os-legal/ui with .oc-stat-block class
     const metricsSection = page
       .locator("div")
       .filter({ hasText: "Moderation Metrics" })
       .first();
     await expect(
-      metricsSection.locator(".statistic").filter({ hasText: "15" })
+      metricsSection.locator(".oc-stat-block").filter({ hasText: "15" })
     ).toBeVisible();
     await expect(metricsSection.getByText("Manual")).toBeVisible();
     await expect(metricsSection.getByText("Actions/Hour")).toBeVisible();

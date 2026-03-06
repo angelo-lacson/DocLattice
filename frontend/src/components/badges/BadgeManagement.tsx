@@ -378,6 +378,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
           <Button
             variant="primary"
             onClick={handleCreate}
+            loading={creating}
             disabled={
               !name ||
               !description ||
@@ -385,7 +386,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
               (isAutoAwarded && (!criteriaConfig || !criteriaValid))
             }
           >
-            {creating ? "Creating..." : "Create Badge"}
+            Create Badge
           </Button>
         </ModalFooter>
       </Modal>
