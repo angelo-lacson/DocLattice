@@ -772,9 +772,9 @@ test.describe("Metadata Workflow Integration", () => {
 
     // Fill in field details
     // The modal might be positioned off-screen, so let's be more specific
-    // Target the input within the modal
+    // Target the input within the modal (uses @os-legal/ui Modal with .oc-modal class)
     const modal = page
-      .locator(".ui.modal")
+      .locator(".oc-modal")
       .filter({ hasText: "Create Metadata Field" });
 
     // Ensure modal is in view
