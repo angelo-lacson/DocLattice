@@ -17,6 +17,7 @@ import time
 from typing import Any, Callable
 
 from django.conf import settings
+from django.http import HttpResponse
 from graphql import GraphQLError
 
 from config.ratelimit.engine import (
@@ -175,6 +176,10 @@ def graphql_ratelimit(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(root, info, *args, **kwargs):
+            # Return value intentionally discarded: when block=True the
+            # helper raises RateLimitExceeded; when block=False it sets
+            # request.limited=True and the resolver runs regardless,
+            # matching the old django-ratelimit behavior.
             _graphql_rate_limit_check(
                 func.__name__, root, info, rate, key, block, group, **kwargs
             )
@@ -204,6 +209,10 @@ def graphql_ratelimit_dynamic(
         @functools.wraps(func)
         def wrapper(root, info, *args, **kwargs):
             resolved_rate = get_rate(root, info)
+            # Return value intentionally discarded: when block=True the
+            # helper raises RateLimitExceeded; when block=False it sets
+            # request.limited=True and the resolver runs regardless,
+            # matching the old django-ratelimit behavior.
             _graphql_rate_limit_check(
                 func.__name__, root, info, resolved_rate, key, block, group, **kwargs
             )
@@ -494,8 +503,6 @@ def view_ratelimit(
             request.limited = is_limited
 
             if is_limited and block:
-                from django.http import HttpResponse
-
                 # Compute Retry-After from remaining seconds in the current
                 # rate-limit window (RFC 6585).
                 try:

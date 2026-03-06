@@ -18,8 +18,13 @@ RATELIMIT_DISABLE = env.bool("RATELIMIT_DISABLE", default=False)
 # Rate limit key prefix (useful for multi-tenant setups)
 RATELIMIT_KEY_PREFIX = "rl"
 
-# Whether to fail "open" (allow requests) or "closed" (deny requests) when cache is unavailable
-RATELIMIT_FAIL_OPEN = False
+# Controls whether rate limiting fails open (allows requests) or closed (denies
+# requests) when the cache backend (Redis) is unavailable.  Setting this to True
+# ensures application availability is not impacted by a cache outage — requests
+# are allowed through without rate limiting.  Setting to False (deny) is safer
+# from an abuse perspective but may cause downtime if Redis is unreachable.
+# Read by config/ratelimit/engine.py in the cache-error exception handler.
+RATELIMIT_FAIL_OPEN = True
 
 # Custom rate limits can be overridden via environment variables
 # Example: RATELIMIT_AUTH_LOGIN=10/m would set login rate to 10 per minute

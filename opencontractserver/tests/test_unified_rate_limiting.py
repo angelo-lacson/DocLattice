@@ -566,6 +566,27 @@ class CheckMcpRateLimitTestCase(TestCase):
         }
         self.assertEqual(set(MCP_TOOL_RATE_MAP.keys()), expected_tools)
 
+    def test_mcp_tool_rate_map_keys_subset_of_handlers(self):
+        """Every key in MCP_TOOL_RATE_MAP must exist in either the global
+        TOOL_HANDLERS or the scoped tool handlers returned by
+        get_scoped_tool_handlers.  This prevents silent drift where a rate
+        map entry references a tool that no longer exists."""
+        from opencontractserver.mcp.server import TOOL_HANDLERS
+        from opencontractserver.mcp.tools import get_scoped_tool_handlers
+
+        # Scoped handlers require a corpus_slug, but the returned *keys*
+        # are the same regardless of the slug value.
+        scoped_keys = set(get_scoped_tool_handlers("dummy-slug").keys())
+        all_handler_keys = set(TOOL_HANDLERS.keys()) | scoped_keys
+
+        for tool_name in MCP_TOOL_RATE_MAP:
+            self.assertIn(
+                tool_name,
+                all_handler_keys,
+                f"MCP_TOOL_RATE_MAP key {tool_name!r} not found in "
+                f"TOOL_HANDLERS or scoped tool handlers",
+            )
+
 
 # =============================================================================
 #  Django view decorator tests
