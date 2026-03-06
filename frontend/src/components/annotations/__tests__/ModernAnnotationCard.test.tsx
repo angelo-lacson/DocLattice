@@ -14,6 +14,18 @@ vi.mock("@os-legal/ui", () => ({
   Avatar: ({ fallback, size }: { fallback: string; size: string }) => (
     <div data-testid="avatar">{fallback}</div>
   ),
+  Chip: ({
+    children,
+    size,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    size?: string;
+  }) => (
+    <span data-testid="chip" {...rest}>
+      {children}
+    </span>
+  ),
 }));
 
 /**

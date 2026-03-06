@@ -464,7 +464,7 @@ test.describe("CorpusAgentManagement Component", () => {
     // Modal should open with corpus-specific title
     await expect(
       page
-        .locator(".header")
+        .locator(".oc-modal-header__title")
         .getByText("Create Agent Configuration", { exact: true })
     ).toBeVisible();
 

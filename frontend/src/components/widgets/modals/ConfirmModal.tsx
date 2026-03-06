@@ -47,14 +47,14 @@ export function ConfirmModal({
       </ModalBody>
       <ModalFooter>
         <Button
-          variant="danger"
+          variant="secondary"
           onClick={() => onNoClick()}
           leftIcon={<X size={16} />}
         >
           No
         </Button>
         <Button
-          variant="primary"
+          variant="danger"
           onClick={() => onYesClick()}
           leftIcon={<Check size={16} />}
         >

@@ -61,6 +61,18 @@ vi.mock("@os-legal/ui", () => ({
   Avatar: ({ fallback }: { fallback: string }) => (
     <div data-testid="avatar">{fallback}</div>
   ),
+  Chip: ({
+    children,
+    size,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    size?: string;
+  }) => (
+    <span data-testid="chip" {...rest}>
+      {children}
+    </span>
+  ),
 }));
 
 // Mock react-cool-inview to avoid IntersectionObserver issues

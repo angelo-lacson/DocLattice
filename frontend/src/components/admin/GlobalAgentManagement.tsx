@@ -16,6 +16,7 @@ import {
 } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { StyledTextArea } from "../widgets/modals/styled";
+import { FormField } from "../widgets/form/FormField";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
 import { AgentConfigurationType } from "../../types/graphql-api";
@@ -191,49 +192,10 @@ const CheckboxLabel = styled.label`
   cursor: pointer;
 `;
 
-const FormField = styled.div<{ $required?: boolean }>`
-  margin-bottom: 1rem;
-
-  > label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 0.35rem;
-    font-size: 0.875rem;
-
-    ${({ $required }) =>
-      $required &&
-      `
-      &::after {
-        content: " *";
-        color: #ef4444;
-      }
-    `}
-  }
-`;
-
 const FormGroup = styled.div`
   display: flex;
   gap: 1.5rem;
   margin-bottom: 1rem;
-`;
-
-const DangerIconButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  border: 1px solid #ef4444;
-  background: #ef4444;
-  color: white;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: #dc2626;
-    border-color: #dc2626;
-  }
 `;
 
 /** Shared form fields for both create and edit agent modals. */
@@ -594,15 +556,17 @@ export const GlobalAgentManagement: React.FC = () => {
                       >
                         <Edit size={14} />
                       </IconButton>
-                      <DangerIconButton
+                      <IconButton
+                        variant="danger"
+                        size="sm"
                         onClick={() => {
                           setAgentToDelete(agent);
                           setDeleteModalOpen(true);
                         }}
-                        title="Delete agent"
+                        aria-label="Delete agent"
                       >
                         <Trash2 size={14} />
-                      </DangerIconButton>
+                      </IconButton>
                     </div>
                   </Table.Cell>
                 </Table.Row>

@@ -14,6 +14,7 @@ import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Upload, ArrowLeft } from "lucide-react";
 import { StyledTextArea } from "../widgets/modals/styled";
+import { FormField } from "../widgets/form/FormField";
 import {
   ErrorMessage,
   InfoMessage,
@@ -159,46 +160,6 @@ const TruncatedCell = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-`;
-
-const DangerButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  border-radius: 6px;
-  border: 1px solid #ef4444;
-  background: #ef4444;
-  color: white;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: #dc2626;
-    border-color: #dc2626;
-  }
-`;
-
-const FormField = styled.div<{ $required?: boolean }>`
-  margin-bottom: 1rem;
-
-  > label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 0.35rem;
-    font-size: 0.875rem;
-
-    ${({ $required }) =>
-      $required &&
-      `
-      &::after {
-        content: " *";
-        color: #ef4444;
-      }
-    `}
-  }
 `;
 
 // ---------------------------------------------------------------------------
@@ -411,9 +372,13 @@ export const WorkerAccountManagement: React.FC = () => {
                   </Table.Cell>
                   <Table.Cell>
                     {account.isActive ? (
-                      <DangerButton onClick={() => handleToggleActive(account)}>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleToggleActive(account)}
+                      >
                         Deactivate
-                      </DangerButton>
+                      </Button>
                     ) : (
                       <Button
                         size="sm"
@@ -504,9 +469,9 @@ export const WorkerAccountManagement: React.FC = () => {
             >
               Cancel
             </Button>
-            <DangerButton onClick={handleConfirmDeactivate}>
+            <Button variant="danger" onClick={handleConfirmDeactivate}>
               Deactivate
-            </DangerButton>
+            </Button>
           </ModalFooter>
         </Modal>
       )}
