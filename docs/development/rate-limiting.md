@@ -201,7 +201,7 @@ Core settings in `config/settings/ratelimit.py`:
 ```python
 RATELIMIT_DISABLE = False         # Disable all rate limiting (env override)
 RATELIMIT_USE_CACHE = "default"   # Cache backend for counters
-RATELIMIT_FAIL_OPEN = False       # Deny requests if cache is down
+RATELIMIT_FAIL_OPEN = True        # Allow requests if cache is down
 RATELIMIT_KEY_PREFIX = "rl"       # Cache key prefix
 RATELIMIT_IPV6_MASK = 64          # Group by /64 subnet
 ```
@@ -235,8 +235,8 @@ rl:graphql:resolve_documents:user:42:28571428
 ### Fail Behavior
 
 When the cache is unavailable:
-- `RATELIMIT_FAIL_OPEN = True` → Allow all requests (fail open)
-- `RATELIMIT_FAIL_OPEN = False` → Deny all requests (fail closed, default)
+- `RATELIMIT_FAIL_OPEN = True` → Allow all requests (fail open, default)
+- `RATELIMIT_FAIL_OPEN = False` → Deny all requests (fail closed)
 
 ## Monitoring
 
@@ -291,6 +291,32 @@ class RateLimitEngineTest(TestCase):
 ### Differences from Previous Implementation (`django-ratelimit`)
 
 The previous rate limiting used `django-ratelimit` which set `X-RateLimit-*` response headers on GraphQL responses. The new unified engine does **not** emit these headers. This is a deliberate simplification: the rate limit state is server-side only, and clients should rely on the `RateLimitExceeded` error (GraphQL), `RATE_LIMITED` WebSocket frame, or HTTP 429 status (views) rather than inspecting response headers. If `X-RateLimit-Remaining` / `X-RateLimit-Limit` headers are needed, they can be added in middleware or per-adapter in `config/ratelimit/decorators.py`.
+
+## Deployment Checklist
+
+Before deploying rate limiting to production, verify the following:
+
+1. **`RATELIMIT_PROXIES_COUNT`** - This is the most critical setting. It controls which entry in the `X-Forwarded-For` header is used to identify the client IP for rate limiting. Getting this wrong means either:
+   - **Too low** (e.g. `0` behind a proxy): `X-Forwarded-For` is ignored and all requests appear to come from the proxy's IP, causing all users to share a single rate limit bucket.
+   - **Too high** (e.g. `2` with only one proxy): An attacker can inject a fake IP in `X-Forwarded-For` to bypass rate limits entirely.
+
+   | Deployment | Value | Reason |
+   |------------|-------|--------|
+   | No reverse proxy (direct) | `0` | `REMOTE_ADDR` is the real client IP |
+   | Single proxy (Traefik/nginx) | `1` | Rightmost `X-Forwarded-For` entry is real |
+   | CDN + load balancer | `2` | Second from right is real |
+
+   Set via environment variable: `RATELIMIT_PROXIES_COUNT=1`
+
+2. **Redis connectivity** - Rate limit counters are stored in the Django cache backend (Redis in production). Verify Redis is reachable and the `default` cache is configured correctly. If Redis goes down, behavior is controlled by `RATELIMIT_FAIL_OPEN`.
+
+3. **`RATELIMIT_FAIL_OPEN`** - Defaults to `True` (allow requests when cache is unavailable). Set to `False` if you prefer to deny requests when Redis is unreachable (stricter security, but risks downtime).
+
+4. **`RATELIMIT_DISABLE`** - Must be `False` in production (the default). Double-check this is not set to `True` in your environment.
+
+5. **Edge rate limiting** - Ensure Traefik (or your reverse proxy) rate limits are configured as a first line of defense. Application-level rate limiting is a second layer.
+
+6. **IPv6 subnet masking** - `RATELIMIT_IPV6_MASK=64` groups IPv6 addresses by /64 subnet to prevent bypassing limits with different addresses in the same allocation.
 
 ## Best Practices
 

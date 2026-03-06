@@ -71,6 +71,13 @@ class _RateLimits:
 
         Useful after ``override_settings`` in tests or after updating
         settings at runtime via an admin UI.
+
+        .. note::
+            Module-level constants that capture rate values at import time
+            (e.g. ``ADMIN_LOGIN_RATE`` in ``config/admin_auth/views.py``)
+            are **not** affected by ``reload()``.  Those values are read
+            once when the module is first imported and will retain the old
+            rate until the process is restarted.
         """
         overrides = getattr(settings, "RATE_LIMIT_OVERRIDES", {})
         for key, default_value in self._defaults.items():
