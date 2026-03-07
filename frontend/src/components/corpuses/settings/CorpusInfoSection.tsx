@@ -2,7 +2,8 @@
  * CorpusInfoSection - Metadata grid showing corpus information
  */
 import React from "react";
-import { Lock, Unlock, MessageSquare } from "lucide-react";
+import { Lock, Unlock, MessageSquare, Scale } from "lucide-react";
+import { LICENSE_OPTIONS } from "../../../assets/configurations/constants";
 import {
   SettingsCard,
   SettingsCardHeader,
@@ -23,6 +24,8 @@ interface CorpusInfoSectionProps {
     modified?: string;
     isPublic?: boolean;
     allowComments?: boolean;
+    license?: string | null;
+    licenseLink?: string | null;
   };
 }
 
@@ -83,6 +86,19 @@ export const CorpusInfoSection: React.FC<CorpusInfoSectionProps> = ({
                 <StatusBadge variant="public">
                   <MessageSquare size={14} />
                   Enabled
+                </StatusBadge>
+              </div>
+            </MetadataItem>
+          )}
+
+          {corpus.license && (
+            <MetadataItem>
+              <div className="label">License</div>
+              <div className="value">
+                <StatusBadge variant="public">
+                  <Scale size={14} />
+                  {LICENSE_OPTIONS.find((o) => o.value === corpus.license)
+                    ?.label || corpus.license}
                 </StatusBadge>
               </div>
             </MetadataItem>
