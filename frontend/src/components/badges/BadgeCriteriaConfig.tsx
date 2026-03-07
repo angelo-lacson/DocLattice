@@ -10,6 +10,7 @@ import {
   CriteriaField,
 } from "../../graphql/queries";
 import { ErrorMessage, InfoMessage, WarningMessage } from "../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface BadgeCriteriaConfigProps {
   badgeType: "GLOBAL" | "CORPUS";
@@ -246,7 +247,7 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
                 <p
                   style={{
                     fontSize: "0.9em",
-                    color: "#666",
+                    color: OS_LEGAL_COLORS.textSecondary,
                     marginBottom: "0.5em",
                   }}
                 >

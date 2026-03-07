@@ -11,6 +11,7 @@ import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { CorpusActionExecutionNode } from "../../graphql/queries";
 import { getDocumentUrl } from "../../utils/navigationUtils";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 /**
  * Status configuration
@@ -25,26 +26,26 @@ const STATUS_CONFIG: Record<
   }
 > = {
   queued: {
-    color: "#d97706",
+    color: OS_LEGAL_COLORS.folderIcon,
     bgColor: "#fef3c7",
     icon: Clock,
     label: "Queued",
   },
   running: {
-    color: "#2563eb",
+    color: OS_LEGAL_COLORS.primaryBlueHover,
     bgColor: "#dbeafe",
     icon: Loader2,
     label: "Running",
   },
   completed: {
-    color: "#059669",
+    color: OS_LEGAL_COLORS.greenDark,
     bgColor: "#d1fae5",
     icon: Check,
     label: "Completed",
   },
   failed: {
-    color: "#dc2626",
-    bgColor: "#fee2e2",
+    color: OS_LEGAL_COLORS.danger,
+    bgColor: OS_LEGAL_COLORS.dangerSurfaceHover,
     icon: X,
     label: "Failed",
   },
@@ -94,14 +95,16 @@ function formatRelativeTime(isoString: string | null): string {
 
 const Row = styled.div<{ $expanded: boolean }>`
   background: ${(props) => (props.$expanded ? "#fafbfc" : "white")};
-  border: 1px solid ${(props) => (props.$expanded ? "#e2e8f0" : "#f1f5f9")};
+  border: 1px solid
+    ${(props) =>
+      props.$expanded ? OS_LEGAL_COLORS.border : OS_LEGAL_COLORS.surfaceLight};
   border-radius: 8px;
   margin-bottom: 6px;
   transition: all 0.15s ease;
   overflow: hidden;
 
   &:hover {
-    border-color: #e2e8f0;
+    border-color: ${OS_LEGAL_COLORS.border};
     background: #fafbfc;
   }
 `;
@@ -130,7 +133,7 @@ const StatusDot = styled.div<{ $color: string; $bgColor: string }>`
 
 const ActionName = styled.div`
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-size: 0.9rem;
   flex: 1;
   min-width: 120px;
@@ -145,7 +148,7 @@ const ActionName = styled.div`
 `;
 
 const DocumentName = styled.div`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.8125rem;
   flex: 1.5;
   min-width: 150px;
@@ -163,8 +166,8 @@ const TypeBadge = styled.span`
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #64748b;
-  background: #f1f5f9;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   padding: 3px 8px;
   border-radius: 4px;
   flex-shrink: 0;
@@ -176,7 +179,7 @@ const TypeBadge = styled.span`
 
 const TimeInfo = styled.div`
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   min-width: 70px;
   text-align: right;
   flex-shrink: 0;
@@ -189,7 +192,7 @@ const TimeInfo = styled.div`
 `;
 
 const ExpandIcon = styled.div<{ $expanded: boolean }>`
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   transition: transform 0.2s ease;
   transform: rotate(${(props) => (props.$expanded ? "180deg" : "0deg")});
   flex-shrink: 0;
@@ -202,7 +205,7 @@ const ExpandIcon = styled.div<{ $expanded: boolean }>`
 
 const ExpandedContent = styled.div`
   padding: 0 16px 16px 16px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
 `;
 
 const DetailGrid = styled.div`
@@ -217,7 +220,7 @@ const DetailItem = styled.div`
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
     margin-bottom: 4px;
   }
   .value {
@@ -229,11 +232,11 @@ const DetailItem = styled.div`
 const ErrorBox = styled.div`
   margin-top: 12px;
   padding: 10px 12px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: ${OS_LEGAL_COLORS.dangerSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 6px;
   font-size: 0.8rem;
-  color: #991b1b;
+  color: ${OS_LEGAL_COLORS.dangerText};
   font-family: ui-monospace, monospace;
 `;
 
@@ -308,7 +311,7 @@ export const ActionExecutionRow: React.FC<ActionExecutionRowProps> = ({
               🗨️ {execution.conversation.title}
             </span>
           ) : (
-            <span style={{ color: "#94a3b8" }}>
+            <span style={{ color: OS_LEGAL_COLORS.textMuted }}>
               {execution.conversation ? "🗨️ Thread" : "N/A"}
             </span>
           )}

@@ -17,6 +17,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 const Overlay = styled.div`
   position: fixed;
@@ -160,11 +161,11 @@ const HelpText = styled.p`
 const ErrorMessage = styled.div`
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: #fee2e2;
+  background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
   border: 1px solid #fca5a5;
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   font-size: 0.8125rem;
 `;
 

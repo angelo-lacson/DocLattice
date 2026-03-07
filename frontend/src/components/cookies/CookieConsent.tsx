@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { useMutation, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 import {
@@ -31,18 +32,18 @@ const StyledModalWrapper = styled.div`
 
   .oc-modal {
     max-width: 600px;
-    color: #e2e8f0;
-    background: #1e293b;
+    color: ${OS_LEGAL_COLORS.border};
+    background: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   .oc-modal-body {
-    background: #1e293b;
+    background: ${OS_LEGAL_COLORS.textPrimary};
     padding: 1.5rem;
   }
 
   .oc-modal-footer {
-    background: #1e293b;
-    border-top: 1px solid #334155;
+    background: ${OS_LEGAL_COLORS.textPrimary};
+    border-top: 1px solid ${OS_LEGAL_COLORS.textTertiary};
     display: flex;
     justify-content: center;
   }
@@ -75,7 +76,7 @@ const SectionHeading = styled.h4`
   font-weight: 600;
 
   u {
-    text-decoration-color: #94a3b8;
+    text-decoration-color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -91,11 +92,11 @@ const DataListItem = styled.li`
   gap: 0.75rem;
   padding: 0.4rem 0;
   font-size: 0.95rem;
-  color: #cbd5e1;
+  color: ${OS_LEGAL_COLORS.borderHover};
 
   svg {
     flex-shrink: 0;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 

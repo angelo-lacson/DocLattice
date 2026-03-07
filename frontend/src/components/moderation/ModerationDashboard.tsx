@@ -550,7 +550,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                           <div
                             style={{
                               fontSize: "0.9em",
-                              color: "#666",
+                              color: OS_LEGAL_COLORS.textSecondary,
                               display: "flex",
                               alignItems: "center",
                               gap: "0.5rem",

@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const HeaderContainer = styled.div`
   margin: 0;
@@ -38,7 +39,7 @@ export const MetadataRow = styled.div`
     gap: 0.5rem;
     transition: color 0.2s ease;
     &:hover {
-      color: #2185d0;
+      color: ${OS_LEGAL_COLORS.primaryBlue};
     }
 
     svg {

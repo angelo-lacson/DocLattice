@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { SearchBox, FilterTabs } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
 import {
@@ -35,7 +36,7 @@ const HeroTitle = styled.h1`
   font-size: 48px;
   font-weight: 400;
   line-height: 1.2;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 20px;
 
   @media (max-width: 768px) {
@@ -44,13 +45,13 @@ const HeroTitle = styled.h1`
 `;
 
 const TealText = styled.span`
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
 `;
 
 const HeroSubtitle = styled.p`
   font-size: 18px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0 0 36px;
   max-width: 620px;
 `;

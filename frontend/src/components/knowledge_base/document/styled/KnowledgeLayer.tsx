@@ -1,12 +1,13 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const KnowledgeLayerContainer = styled.div`
   display: flex;
   height: 100%;
   width: 100%;
   position: relative;
-  background: #fafbfc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 
   @media (max-width: 768px) {
     flex-direction: column;
@@ -19,7 +20,7 @@ export const VersionHistorySidebar = styled.div<{
 }>`
   width: ${(props) => (props.collapsed ? "60px" : "320px")};
   background: white;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   flex-direction: column;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -36,14 +37,18 @@ export const VersionHistorySidebar = styled.div<{
     z-index: 10;
     display: ${(props) => (props.$mobileVisible ? "flex" : "none")};
     border-right: none;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   }
 `;
 
 export const VersionHistoryHeader = styled.div`
   padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    ${OS_LEGAL_COLORS.surfaceLight} 100%
+  );
   position: relative;
 
   @media (max-width: 768px) {
@@ -54,20 +59,20 @@ export const VersionHistoryHeader = styled.div`
     margin: 0;
     font-size: 1.125rem;
     font-weight: 600;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     display: flex;
     align-items: center;
     gap: 0.5rem;
 
     svg {
-      color: #3b82f6;
+      color: ${OS_LEGAL_COLORS.primaryBlue};
     }
   }
 
   .version-count {
     margin-top: 0.375rem;
     font-size: 0.875rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -82,17 +87,17 @@ export const MobileBackButton = styled.button`
     top: 1rem;
     right: 1rem;
     padding: 0.5rem 1rem;
-    background: #eff6ff;
-    border: 1px solid #3b82f6;
+    background: ${OS_LEGAL_COLORS.blueSurface};
+    border: 1px solid ${OS_LEGAL_COLORS.primaryBlue};
     border-radius: 8px;
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
 
     &:hover {
-      background: #3b82f6;
+      background: ${OS_LEGAL_COLORS.primaryBlue};
       color: white;
     }
 
@@ -118,15 +123,15 @@ export const VersionList = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -139,10 +144,18 @@ export const VersionItem = styled(motion.button)<{
   padding: 1rem;
   margin-bottom: 0.5rem;
   background: ${(props) =>
-    props.$isActive ? "#eff6ff" : props.$isCurrent ? "#f0fdf4" : "white"};
+    props.$isActive
+      ? OS_LEGAL_COLORS.blueSurface
+      : props.$isCurrent
+      ? OS_LEGAL_COLORS.successSurface
+      : "white"};
   border: 1px solid
     ${(props) =>
-      props.$isActive ? "#3b82f6" : props.$isCurrent ? "#10b981" : "#e2e8f0"};
+      props.$isActive
+        ? OS_LEGAL_COLORS.primaryBlue
+        : props.$isCurrent
+        ? OS_LEGAL_COLORS.greenMedium
+        : OS_LEGAL_COLORS.border};
   border-radius: 12px;
   text-align: left;
   cursor: pointer;
@@ -150,7 +163,8 @@ export const VersionItem = styled(motion.button)<{
 
   &:hover {
     transform: translateX(4px);
-    border-color: ${(props) => (props.$isActive ? "#3b82f6" : "#93c5fd")};
+    border-color: ${(props) =>
+      props.$isActive ? OS_LEGAL_COLORS.primaryBlue : "#93c5fd"};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
 
@@ -164,7 +178,11 @@ export const VersionItem = styled(motion.button)<{
       font-weight: 600;
       font-size: 0.875rem;
       color: ${(props) =>
-        props.$isActive ? "#3b82f6" : props.$isCurrent ? "#10b981" : "#1e293b"};
+        props.$isActive
+          ? OS_LEGAL_COLORS.primaryBlue
+          : props.$isCurrent
+          ? OS_LEGAL_COLORS.greenMedium
+          : OS_LEGAL_COLORS.textPrimary};
     }
 
     .version-badge {
@@ -173,9 +191,15 @@ export const VersionItem = styled(motion.button)<{
       font-size: 0.75rem;
       font-weight: 500;
       background: ${(props) =>
-        props.$isActive ? "#3b82f6" : props.$isCurrent ? "#10b981" : "#e2e8f0"};
+        props.$isActive
+          ? OS_LEGAL_COLORS.primaryBlue
+          : props.$isCurrent
+          ? OS_LEGAL_COLORS.greenMedium
+          : OS_LEGAL_COLORS.border};
       color: ${(props) =>
-        props.$isActive || props.$isCurrent ? "white" : "#64748b"};
+        props.$isActive || props.$isCurrent
+          ? "white"
+          : OS_LEGAL_COLORS.textSecondary};
     }
   }
 
@@ -184,7 +208,7 @@ export const VersionItem = styled(motion.button)<{
     flex-direction: column;
     gap: 0.25rem;
     font-size: 0.8125rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
 
     .meta-row {
       display: flex;
@@ -218,8 +242,12 @@ export const KnowledgeContent = styled.div<{ $mobileVisible?: boolean }>`
 
 export const KnowledgeHeader = styled.div`
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: linear-gradient(
+    135deg,
+    #ffffff 0%,
+    ${OS_LEGAL_COLORS.surfaceHover} 100%
+  );
 
   @media (max-width: 768px) {
     padding: 1rem;
@@ -240,7 +268,7 @@ export const KnowledgeHeader = styled.div`
       margin: 0;
       font-size: 1.5rem;
       font-weight: 600;
-      color: #1e293b;
+      color: ${OS_LEGAL_COLORS.textPrimary};
       display: flex;
       align-items: center;
       gap: 0.75rem;
@@ -250,7 +278,7 @@ export const KnowledgeHeader = styled.div`
       }
 
       svg {
-        color: #3b82f6;
+        color: ${OS_LEGAL_COLORS.primaryBlue};
       }
     }
 
@@ -272,7 +300,7 @@ export const KnowledgeHeader = styled.div`
   .version-info {
     margin-top: 0.5rem;
     font-size: 0.875rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -301,7 +329,8 @@ export const KnowledgeBody = styled.div<{ $isEditing?: boolean }>`
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
-  background: ${(props) => (props.$isEditing ? "#f8fafc" : "white")};
+  background: ${(props) =>
+    props.$isEditing ? OS_LEGAL_COLORS.surfaceHover : "white"};
 
   @media (max-width: 768px) {
     padding: 1rem;
@@ -322,7 +351,7 @@ export const EditModeToolbar = styled(motion.div)`
   top: 0;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 1rem 2rem;
   margin: -2rem -2rem 2rem -2rem;
   display: flex;
@@ -348,7 +377,7 @@ export const EditModeToolbar = styled(motion.div)`
       gap: 0.5rem;
       padding: 0.375rem 0.75rem;
       background: #fef3c7;
-      color: #d97706;
+      color: ${OS_LEGAL_COLORS.folderIcon};
       border-radius: 8px;
       font-size: 0.875rem;
       font-weight: 500;
@@ -382,7 +411,7 @@ export const EditToolbarCloseButton = styled.button`
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     background: white;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -391,15 +420,15 @@ export const EditToolbarCloseButton = styled.button`
     svg {
       width: 16px;
       height: 16px;
-      color: #64748b;
+      color: ${OS_LEGAL_COLORS.textSecondary};
     }
 
     &:hover {
-      background: #f8fafc;
-      border-color: #cbd5e1;
+      background: ${OS_LEGAL_COLORS.surfaceHover};
+      border-color: ${OS_LEGAL_COLORS.borderHover};
 
       svg {
-        color: #475569;
+        color: ${OS_LEGAL_COLORS.textTertiary};
       }
     }
 
@@ -414,7 +443,7 @@ export const MarkdownEditor = styled.textarea`
   min-height: 500px;
   padding: 1.5rem;
   background: white;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
   font-size: 0.875rem;
@@ -430,7 +459,7 @@ export const MarkdownEditor = styled.textarea`
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 `;
@@ -442,7 +471,7 @@ export const CollapseSidebarButton = styled(motion.button)`
   width: 24px;
   height: 24px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -453,14 +482,14 @@ export const CollapseSidebarButton = styled(motion.button)`
   transition: all 0.2s;
 
   &:hover {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     transform: scale(1.1);
   }
 
   svg {
     width: 14px;
     height: 14px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 
   @media (max-width: 768px) {

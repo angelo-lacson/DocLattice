@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 export const PostItNote = styled(motion.button)<{ $readOnly?: boolean }>`
   background: #fff7b1;
@@ -42,7 +43,7 @@ export const PostItNote = styled(motion.button)<{ $readOnly?: boolean }>`
     right: 8px;
     opacity: 0;
     transition: opacity 0.2s ease;
-    color: #666;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     background: rgba(255, 255, 255, 0.8);
     padding: 4px;
     border-radius: 4px;
@@ -92,7 +93,7 @@ export const PostItNote = styled(motion.button)<{ $readOnly?: boolean }>`
   .meta {
     margin-top: 1rem;
     font-size: 0.75rem;
-    color: #666;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   }
   &:hover {
@@ -153,10 +154,10 @@ export const NoteModalWrapper = styled.div`
 
   .meta {
     padding: 1rem 1.5rem;
-    background: #f8f9fa;
-    border-top: 1px solid #eee;
+    background: ${OS_LEGAL_COLORS.gray50};
+    border-top: 1px solid ${OS_LEGAL_COLORS.border};
     font-size: 0.875rem;
-    color: #666;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     @media (min-width: 768px) {
       padding: 1rem 2rem;
     }

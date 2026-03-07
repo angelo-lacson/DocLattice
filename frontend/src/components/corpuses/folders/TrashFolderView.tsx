@@ -179,7 +179,7 @@ const DocumentCard = styled.div<{ $isSelected: boolean }>`
   ${(props) =>
     props.$isSelected &&
     `
-    background: #eff6ff;
+    background: ${OS_LEGAL_COLORS.blueSurface};
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   `}
 
@@ -324,7 +324,7 @@ const EmptyState = styled.div`
 `;
 
 const SelectionBar = styled.div`
-  background: #eff6ff;
+  background: ${OS_LEGAL_COLORS.blueSurface};
   border: 1px solid ${OS_LEGAL_COLORS.primaryBlue};
   border-radius: 8px;
   padding: 12px 16px;
@@ -662,7 +662,10 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               loading={emptyTrashLoading}
               leftIcon={<Trash2 size={16} />}
               title="Permanently delete all items in trash"
-              style={{ color: "#dc2626", borderColor: "#dc2626" }}
+              style={{
+                color: OS_LEGAL_COLORS.danger,
+                borderColor: OS_LEGAL_COLORS.danger,
+              }}
             >
               <span className="hide-mobile-text">Empty Trash</span>
             </Button>
@@ -690,7 +693,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: "#166534",
+              color: OS_LEGAL_COLORS.successText,
               padding: "0.75rem 0.25rem 0",
               display: "flex",
               alignItems: "center",
@@ -721,7 +724,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: "#991b1b",
+              color: OS_LEGAL_COLORS.dangerText,
               padding: "0.75rem 0.25rem 0",
               display: "flex",
               alignItems: "center",

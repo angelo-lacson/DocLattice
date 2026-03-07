@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { User, Clock, GitBranch, Crown } from "lucide-react";
@@ -36,7 +37,9 @@ const CardContainer = styled(motion.div)<{ $isHovered: boolean }>`
   height: ${(props) => (props.$isHovered ? "190px" : "180px")};
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(12px);
-  border: 1px solid ${(props) => (props.$isHovered ? "#4a90e2" : "#e2e8f0")};
+  border: 1px solid
+    ${(props) =>
+      props.$isHovered ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 16px;
   padding: 16px;
   box-shadow: ${(props) =>
@@ -64,8 +67,10 @@ const VersionBadge = styled.div<{ $isCurrent?: boolean }>`
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: ${(props) => (props.$isCurrent ? "#4a90e2" : "#e2e8f0")};
-  color: ${(props) => (props.$isCurrent ? "white" : "#64748b")};
+  background: ${(props) =>
+    props.$isCurrent ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
+  color: ${(props) =>
+    props.$isCurrent ? "white" : OS_LEGAL_COLORS.textSecondary};
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
@@ -76,7 +81,7 @@ const AuthorInfo = styled.div`
   flex-direction: column;
   align-items: flex-end;
   font-size: 11px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   gap: 2px;
 `;
 
@@ -86,7 +91,7 @@ const ContentPreview = styled(motion.div)<{ $isHovered: boolean }>`
   position: relative;
   font-size: ${(props) => (props.$isHovered ? "13px" : "12px")};
   line-height: 1.5;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   max-height: ${(props) => (props.$isHovered ? "160px" : "120px")};
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 
@@ -162,7 +167,7 @@ const ContentPreview = styled(motion.div)<{ $isHovered: boolean }>`
   blockquote {
     margin: 4px 0;
     padding-left: 8px;
-    border-left: 2px solid #e2e8f0;
+    border-left: 2px solid ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -171,7 +176,7 @@ const CardDate = styled.div`
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 8px;
 `;
 
@@ -287,8 +292,18 @@ export const SummaryPreviewCard: React.FC<SummaryPreviewCardProps> = ({
             <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
               {isMyVersion ? (
                 <>
-                  <Crown size={10} style={{ color: "#f59e0b" }} />
-                  <span style={{ color: "#f59e0b", fontWeight: 600 }}>You</span>
+                  <Crown
+                    size={10}
+                    style={{ color: OS_LEGAL_COLORS.folderIcon }}
+                  />
+                  <span
+                    style={{
+                      color: OS_LEGAL_COLORS.folderIcon,
+                      fontWeight: 600,
+                    }}
+                  >
+                    You
+                  </span>
                 </>
               ) : (
                 <>

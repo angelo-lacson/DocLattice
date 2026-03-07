@@ -27,6 +27,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { spacing } from "../../theme/spacing";
 import { MessageComposer } from "./MessageComposer";
 import {
@@ -245,8 +246,8 @@ const ErrorMessage = styled.div`
   align-items: center;
   gap: 0.375rem;
   padding: 0.625rem 0.875rem;
-  background: #fee2e2;
-  color: #dc2626;
+  background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+  color: ${OS_LEGAL_COLORS.danger};
   border: 1px solid #fca5a5;
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
@@ -344,11 +345,11 @@ const UnsavedWarningButton = styled.button<{ $variant: "cancel" | "discard" }>`
   ${(props) =>
     props.$variant === "discard" &&
     `
-    background: #dc2626;
+    background: ${OS_LEGAL_COLORS.danger};
     color: white;
 
     &:hover {
-      background: #b91c1c;
+      background: ${OS_LEGAL_COLORS.dangerHover};
     }
   `}
 `;

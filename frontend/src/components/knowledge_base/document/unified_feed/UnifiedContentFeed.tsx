@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { Loader, Button, Icon } from "semantic-ui-react";
 import { toast } from "react-toastify";
 import { List, useListCallbackRef } from "react-window";
@@ -71,27 +72,31 @@ const FeedViewport = styled.div`
     width: 8px;
   }
   & > div > div::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   & > div > div::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 4px;
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
 
 const PageHeader = styled.div`
-  background: linear-gradient(to right, #f8fafc 0%, #ffffff 100%);
+  background: linear-gradient(
+    to right,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    #ffffff 100%
+  );
   backdrop-filter: blur(8px);
   padding: 0.625rem 1.25rem;
   margin: 0 -0.5rem;
-  border-bottom: 2px solid #e2e8f0;
-  border-top: 1px solid #f1f5f9;
+  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
+  border-top: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   font-weight: 600;
   font-size: 0.9375rem;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -103,7 +108,11 @@ const PageHeader = styled.div`
 `;
 
 const PageNumber = styled.span`
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.primaryBlue} 0%,
+    ${OS_LEGAL_COLORS.primaryBlueHover} 100%
+  );
   color: white;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
@@ -120,7 +129,11 @@ const SelectionToolbar = styled(motion.div)`
   position: sticky;
   top: 0;
   z-index: 20;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.primaryBlue} 0%,
+    ${OS_LEGAL_COLORS.primaryBlueHover} 100%
+  );
   color: white;
   padding: 0.75rem 1rem;
   display: flex;
@@ -584,7 +597,9 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
         <ContentWrapper
           style={{
             background: isSelected ? "rgba(59, 130, 246, 0.1)" : undefined,
-            borderLeft: isSelected ? "4px solid #3b82f6" : undefined,
+            borderLeft: isSelected
+              ? `4px solid ${OS_LEGAL_COLORS.primaryBlue}`
+              : undefined,
           }}
         >
           <ContentItemRenderer

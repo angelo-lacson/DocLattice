@@ -31,6 +31,7 @@ import {
   Link2,
 } from "lucide-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import { SearchBox, FilterTabs } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
@@ -219,10 +220,10 @@ const SearchToConversationInput = styled.div<{ $isExpanded: boolean }>`
     outline: none;
     font-size: 1rem;
     background: transparent;
-    color: #0f172a;
+    color: ${OS_LEGAL_COLORS.textPrimary};
 
     &::placeholder {
-      color: #94a3b8;
+      color: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 
@@ -272,9 +273,9 @@ const ActionButton = styled(motion.button)`
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,8 +284,8 @@ const ActionButton = styled(motion.button)`
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
-    background: #e2e8f0;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   &:disabled {
@@ -293,9 +294,9 @@ const ActionButton = styled(motion.button)`
   }
 
   &.primary {
-    background: #4a90e2;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
-    border-color: #4a90e2;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
 
     &:hover:not(:disabled) {
       background: #357abd;
@@ -331,7 +332,7 @@ const ChatNavigationHeader = styled.div`
 const NavigationTitle = styled.div`
   font-size: 1.125rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   flex: 1;
   text-align: center;
 `;
@@ -343,15 +344,15 @@ const BackButton = styled(motion.button)`
   padding: 0.5rem 1rem;
   background: transparent;
   border: none;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-weight: 500;
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s ease;
 
   &:hover {
-    background: #f8fafc;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   @media (max-width: 768px) {
@@ -651,7 +652,7 @@ const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
   width: ${(props) => (props.$isExpanded ? "280px" : "80px")};
   background: linear-gradient(180deg, #ffffff 0%, #fafbfc 50%, #f8f9fa 100%);
   backdrop-filter: blur(10px);
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid ${OS_LEGAL_COLORS.border};
   box-shadow: ${(props) =>
     props.$isExpanded
       ? "2px 0 8px rgba(0, 0, 0, 0.06)"
@@ -672,7 +673,7 @@ const NavigationSidebar = styled(motion.div)<{ $isExpanded: boolean }>`
     height: ${(props) => (props.$isExpanded ? "70vh" : "0")};
     max-height: min(600px, 70vh);
     border-right: none;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid ${OS_LEGAL_COLORS.border};
     border-radius: 24px 24px 0 0;
     box-shadow: ${(props) =>
       props.$isExpanded ? "0 -8px 32px rgba(0, 0, 0, 0.12)" : "none"};
@@ -701,7 +702,7 @@ const BottomSheetHandle = styled.div`
       content: "";
       width: 40px;
       height: 4px;
-      background: #cbd5e1;
+      background: ${OS_LEGAL_COLORS.borderHover};
       border-radius: 2px;
       transition: background 0.2s ease;
     }
@@ -710,7 +711,7 @@ const BottomSheetHandle = styled.div`
       cursor: grabbing;
 
       &::after {
-        background: #94a3b8;
+        background: ${OS_LEGAL_COLORS.textMuted};
       }
     }
   }
@@ -718,7 +719,7 @@ const BottomSheetHandle = styled.div`
 
 const NavigationHeader = styled.div<{ $isExpanded: boolean }>`
   padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   display: flex;
   align-items: center;
@@ -744,7 +745,7 @@ const NavigationToggle = styled(motion.button)`
     rgba(248, 250, 252, 0.9) 100%
   );
   border: 1px solid rgba(226, 232, 240, 0.6);
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -779,7 +780,7 @@ const NavigationToggle = styled(motion.button)`
       rgba(99, 102, 241, 0.08) 100%
     );
     border-color: rgba(74, 144, 226, 0.3);
-    color: #4a90e2;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
     transform: translateY(-1px);
     box-shadow: 0 4px 6px rgba(74, 144, 226, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
 
@@ -959,7 +960,10 @@ const NavigationItem = styled(motion.button)<{
   }};
   border: 1px solid
     ${(props) => (props.isActive ? "rgba(74, 144, 226, 0.2)" : "transparent")};
-  color: ${(props) => (props.isActive ? "#4a90e2" : "#64748b")};
+  color: ${(props) =>
+    props.isActive
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   font-weight: ${(props) => (props.isActive ? "600" : "500")};
   font-size: 0.9375rem;
   cursor: pointer;
@@ -1026,7 +1030,10 @@ const NavigationItem = styled(motion.button)<{
     }};
     border-color: ${(props) =>
       props.isActive ? "rgba(74, 144, 226, 0.3)" : "rgba(226, 232, 240, 0.5)"};
-    color: ${(props) => (props.isActive ? "#4a90e2" : "#475569")};
+    color: ${(props) =>
+      props.isActive
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.textTertiary};
     transform: ${(props) =>
       props.$isExpanded ? "translateX(2px)" : "scale(1.05)"};
 
@@ -1068,7 +1075,7 @@ const NavigationItem = styled(motion.button)<{
 
   /* Accessibility - focus visible */
   &:focus-visible {
-    outline: 2px solid #4a90e2;
+    outline: 2px solid ${OS_LEGAL_COLORS.primaryBlue};
     outline-offset: 2px;
   }
 
@@ -1126,14 +1133,14 @@ const SearchBarWithNav = styled.div`
   align-items: stretch;
   width: 100%;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
 
   &:focus-within {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
   }
 `;
@@ -1145,19 +1152,19 @@ const MobileBackButton = styled.button`
   min-width: auto;
   background: transparent;
   border: none;
-  border-right: 1px solid #e2e8f0;
-  color: #64748b;
+  border-right: 1px solid ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   transition: all 0.2s ease;
   cursor: pointer;
   flex-shrink: 0;
 
   &:hover {
-    background: #f8fafc;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   &:active {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
 
   svg {
@@ -1179,7 +1186,7 @@ const TabNavigationHeader = styled.div`
   gap: 0.75rem;
   padding: 0.875rem 1.25rem;
   background: white;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   flex-shrink: 0;
   min-height: 56px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -1201,15 +1208,15 @@ const MobileKebabButton = styled.button`
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
   margin-left: auto;
 
   &:hover {
-    background: #f0fdfa;
-    color: #0f766e;
+    background: ${OS_LEGAL_COLORS.successSurface};
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   &:active {
@@ -1230,9 +1237,9 @@ const BackNavButton = styled(motion.button)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   padding: 0;
   width: 36px;
@@ -1243,8 +1250,8 @@ const BackNavButton = styled(motion.button)`
 
   &:hover {
     background: white;
-    border-color: #4a90e2;
-    color: #4a90e2;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
+    color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 2px 8px rgba(74, 144, 226, 0.15);
   }
 
@@ -1272,7 +1279,7 @@ const BackNavButton = styled(motion.button)`
 const TabTitle = styled.h2`
   font-size: 1.5rem;
   font-weight: 800;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
   flex: 1;
   letter-spacing: -0.025em;
@@ -1312,7 +1319,11 @@ const NotificationBadge = styled.div`
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.danger} 0%,
+    ${OS_LEGAL_COLORS.danger} 100%
+  );
   color: white;
   border-radius: 10px;
   display: flex;
@@ -1373,13 +1384,13 @@ const ExtractsSplitView = styled.div`
   flex: 1;
   overflow: hidden;
   gap: 1px;
-  background: #e2e8f0;
+  background: ${OS_LEGAL_COLORS.border};
 `;
 
 const ExtractsListPane = styled.div<{ $hasSelection: boolean }>`
   flex: ${(props) => (props.$hasSelection ? "0 0 360px" : "1")};
   overflow: hidden;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   transition: flex 0.2s ease;
 
   @media (max-width: 1024px) {
@@ -1411,7 +1422,7 @@ const ExtractsToolbar = styled.div`
   gap: 12px;
   padding: 16px 20px;
   background: white;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   flex-shrink: 0;
 `;
 
@@ -2778,7 +2789,7 @@ export const Corpuses = () => {
                   style={{
                     fontSize: "0.6875rem",
                     fontWeight: 500,
-                    color: "#94a3b8",
+                    color: OS_LEGAL_COLORS.textMuted,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
                   }}
@@ -2789,7 +2800,7 @@ export const Corpuses = () => {
                   style={{
                     fontSize: "1rem",
                     fontWeight: 600,
-                    color: "#0f172a",
+                    color: OS_LEGAL_COLORS.textPrimary,
                     letterSpacing: "-0.015em",
                     overflow: "hidden",
                     textOverflow: "ellipsis",

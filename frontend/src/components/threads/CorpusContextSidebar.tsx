@@ -36,6 +36,7 @@ import { SafeMarkdown } from "../knowledge_base/markdown/SafeMarkdown";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { useCorpusMdDescription } from "../../hooks/useCorpusMdDescription";
 
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   ContextSidebarContainer,
   SidebarHeader,
@@ -205,7 +206,12 @@ export const CorpusContextSidebar: React.FC<CorpusContextSidebarProps> =
                 <FileText />
                 Documents
                 {stats?.totalDocs != null && (
-                  <span style={{ fontWeight: 400, color: "#94a3b8" }}>
+                  <span
+                    style={{
+                      fontWeight: 400,
+                      color: OS_LEGAL_COLORS.textMuted,
+                    }}
+                  >
                     ({stats.totalDocs})
                   </span>
                 )}

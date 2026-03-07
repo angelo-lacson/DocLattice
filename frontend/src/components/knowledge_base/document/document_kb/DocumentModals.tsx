@@ -1,4 +1,5 @@
 import React, { Dispatch, SetStateAction } from "react";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { X, Edit } from "lucide-react";
 import {
   Button,
@@ -112,7 +113,7 @@ export const DocumentModals: React.FC<DocumentModalsProps> = ({
             <div
               style={{
                 fontSize: "0.85em",
-                color: "#64748b",
+                color: OS_LEGAL_COLORS.textSecondary,
                 marginTop: "1rem",
               }}
             >

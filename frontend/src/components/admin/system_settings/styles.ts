@@ -147,7 +147,7 @@ export const AdvancedSettingsContent = styled.div<{ $expanded: boolean }>`
   display: ${(props) => (props.$expanded ? "block" : "none")};
   margin-top: 0.75rem;
   padding: 1rem;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 `;
@@ -309,7 +309,7 @@ export const ErrorContainer = styled.div`
   svg {
     width: 48px;
     height: 48px;
-    color: #ef4444;
+    color: ${OS_LEGAL_COLORS.danger};
   }
 `;
 
@@ -332,7 +332,7 @@ export const WarningBanner = styled.div`
   svg {
     width: 20px;
     height: 20px;
-    color: #d97706;
+    color: ${OS_LEGAL_COLORS.folderIcon};
     flex-shrink: 0;
     margin-top: 0.125rem;
   }
@@ -414,11 +414,16 @@ export const FilterChip = styled.button<{ $active: boolean }>`
   font-size: 0.8125rem;
   font-weight: 500;
   border: 1px solid
-    ${(props) => (props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#e2e8f0")};
+    ${(props) =>
+      props.$active
+        ? PIPELINE_UI.PRIMARY_ACCENT_COLOR
+        : OS_LEGAL_COLORS.border};
   background: ${(props) =>
     props.$active ? `${PIPELINE_UI.PRIMARY_ACCENT_COLOR}10` : "white"};
   color: ${(props) =>
-    props.$active ? PIPELINE_UI.PRIMARY_ACCENT_COLOR : "#64748b"};
+    props.$active
+      ? PIPELINE_UI.PRIMARY_ACCENT_COLOR
+      : OS_LEGAL_COLORS.textSecondary};
   border-radius: 9999px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -440,14 +445,14 @@ export const ComponentListItem = styled.div<{ $disabled: boolean }>`
   align-items: flex-start;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   background: white;
   transition: all 0.2s ease;
   opacity: ${(props) => (props.$disabled ? 0.5 : 1)};
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   }
 `;
@@ -460,12 +465,12 @@ export const ComponentInfo = styled.div`
 export const ComponentTitle = styled.span`
   font-size: 0.875rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 export const ComponentDescription = styled.span`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.4;
 `;
 
@@ -496,8 +501,8 @@ export const FileTypeBadge = styled.span`
   font-size: 0.625rem;
   font-weight: 500;
   border-radius: 9999px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 // ============================================================================
@@ -519,7 +524,7 @@ export const DefaultsHeaderRow = styled.div`
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 
   @media (max-width: 768px) {
     display: none;
@@ -532,8 +537,8 @@ export const FiletypeRow = styled.div`
   gap: 0.75rem;
   align-items: center;
   padding: 0.75rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 
   @media (max-width: 768px) {
@@ -548,12 +553,12 @@ export const FiletypeLabel = styled.div`
   gap: 0.5rem;
   font-weight: 600;
   font-size: 0.875rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 
   svg {
     width: 16px;
     height: 16px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -563,7 +568,7 @@ export const StageDropdownLabel = styled.label`
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-bottom: 0.25rem;
 
   @media (max-width: 768px) {
@@ -575,9 +580,10 @@ export const StyledSelect = styled.select<{ $warning?: boolean }>`
   width: 100%;
   padding: 0.5rem 0.75rem;
   font-size: 0.8125rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   background: white;
-  border: 1px solid ${(props) => (props.$warning ? "#f59e0b" : "#e2e8f0")};
+  border: 1px solid
+    ${(props) => (props.$warning ? "#f59e0b" : OS_LEGAL_COLORS.border)};
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.15s ease;
@@ -585,7 +591,9 @@ export const StyledSelect = styled.select<{ $warning?: boolean }>`
 
   &:hover {
     border-color: ${(props) =>
-      props.$warning ? "#d97706" : PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+      props.$warning
+        ? OS_LEGAL_COLORS.folderIcon
+        : PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 
   &:focus {

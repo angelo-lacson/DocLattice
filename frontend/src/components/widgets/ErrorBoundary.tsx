@@ -1,6 +1,7 @@
 import React, { Component, ReactNode } from "react";
 import { Button } from "@os-legal/ui";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -32,9 +33,9 @@ const ErrorDetails = styled.pre`
 `;
 
 const ErrorAlert = styled.div`
-  background: #fff6f6;
-  color: #9f3a38;
-  border: 1px solid #e0b4b4;
+  background: ${OS_LEGAL_COLORS.dangerSurface};
+  color: ${OS_LEGAL_COLORS.dangerText};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 4px;
   padding: 1.5rem;
 `;

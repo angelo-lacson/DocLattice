@@ -90,7 +90,7 @@ const ScrollableContent = styled.div`
     background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 4px;
     &:hover {
       background: ${OS_LEGAL_COLORS.textMuted};
@@ -101,9 +101,9 @@ const ScrollableContent = styled.div`
 const ModeSection = styled.div`
   margin-bottom: 1.5rem;
   padding: 1rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const DocumentPill = styled.div<{ $variant?: "source" | "target" }>`
@@ -115,11 +115,18 @@ const DocumentPill = styled.div<{ $variant?: "source" | "target" }>`
   border-radius: 6px;
   font-size: 0.875rem;
   background: ${(props) =>
-    props.$variant === "source" ? "#dbeafe" : "#dcfce7"};
+    props.$variant === "source"
+      ? OS_LEGAL_COLORS.blueBorder
+      : OS_LEGAL_COLORS.successBorder};
   border: 2px solid
     ${(props) =>
-      props.$variant === "source" ? OS_LEGAL_COLORS.primaryBlue : "#22c55e"};
-  color: ${(props) => (props.$variant === "source" ? "#1e40af" : "#166534")};
+      props.$variant === "source"
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.green};
+  color: ${(props) =>
+    props.$variant === "source"
+      ? OS_LEGAL_COLORS.blueDark
+      : OS_LEGAL_COLORS.successText};
 `;
 
 const PillButton = styled.button`
@@ -180,7 +187,7 @@ const DocumentSection = styled.div`
   margin-top: 1rem;
   padding: 1rem;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
 
   .section-title {
@@ -198,7 +205,7 @@ const DocumentSection = styled.div`
     gap: 0.25rem;
     min-height: 40px;
     padding: 0.5rem;
-    background: #fafafa;
+    background: ${OS_LEGAL_COLORS.background};
     border-radius: 4px;
   }
 `;
@@ -207,11 +214,13 @@ const SearchResultItem = styled.div<{ $selected: boolean }>`
   padding: 0.75rem;
   margin: 0.25rem 0;
   border: 1px solid
-    ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
-  background: ${(props) => (props.$selected ? "#eff6ff" : "white")};
+  background: ${(props) =>
+    props.$selected ? OS_LEGAL_COLORS.blueSurface : "white"};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -291,7 +300,9 @@ export const DocumentRelationshipModal: React.FC<
   const [labelSearchTerm, setLabelSearchTerm] = useState("");
   const [showCreateLabel, setShowCreateLabel] = useState(false);
   const [newLabelText, setNewLabelText] = useState("");
-  const [newLabelColor, setNewLabelColor] = useState("#10b981");
+  const [newLabelColor, setNewLabelColor] = useState<string>(
+    OS_LEGAL_COLORS.greenMedium
+  );
   const [newLabelDescription, setNewLabelDescription] = useState("");
 
   // Notes data (for NOTES mode)
@@ -671,7 +682,7 @@ export const DocumentRelationshipModal: React.FC<
     setLabelSearchTerm("");
     setShowCreateLabel(false);
     setNewLabelText("");
-    setNewLabelColor("#10b981");
+    setNewLabelColor(OS_LEGAL_COLORS.greenMedium);
     setNewLabelDescription("");
     setNotesContent("");
     onClose();
@@ -775,7 +786,7 @@ export const DocumentRelationshipModal: React.FC<
               <DocumentSection>
                 <ColumnHeader>
                   <div className="column-title">
-                    <Target size={14} color="#22c55e" />
+                    <Target size={14} color={OS_LEGAL_COLORS.green} />
                     Target Documents
                   </div>
                   <span className="column-count">{targetIds.length}</span>
@@ -999,7 +1010,9 @@ export const DocumentRelationshipModal: React.FC<
                                     width: 10,
                                     height: 10,
                                     borderRadius: 2,
-                                    backgroundColor: label.color || "#10b981",
+                                    backgroundColor:
+                                      label.color ||
+                                      OS_LEGAL_COLORS.greenMedium,
                                     flexShrink: 0,
                                   }}
                                 />
@@ -1160,7 +1173,9 @@ export const DocumentRelationshipModal: React.FC<
                               width: 12,
                               height: 12,
                               borderRadius: 3,
-                              backgroundColor: selectedLabel.color || "#10b981",
+                              backgroundColor:
+                                selectedLabel.color ||
+                                OS_LEGAL_COLORS.greenMedium,
                             }}
                           />
                           {selectedLabel.text}
@@ -1213,14 +1228,22 @@ export const DocumentRelationshipModal: React.FC<
               : Each source document will be linked to each target document.
               {sourceIds.length === 0 && (
                 <span
-                  style={{ color: "#ef4444", display: "block", marginTop: 4 }}
+                  style={{
+                    color: OS_LEGAL_COLORS.danger,
+                    display: "block",
+                    marginTop: 4,
+                  }}
                 >
                   ⚠ Add at least one source document
                 </span>
               )}
               {targetIds.length === 0 && (
                 <span
-                  style={{ color: "#ef4444", display: "block", marginTop: 4 }}
+                  style={{
+                    color: OS_LEGAL_COLORS.danger,
+                    display: "block",
+                    marginTop: 4,
+                  }}
                 >
                   ⚠ Add at least one target document
                 </span>

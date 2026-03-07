@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../assets/configurations/osLegalStyles";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -80,7 +81,7 @@ import { useExtractCompletionNotification } from "../hooks/useExtractCompletionN
 
 const PageContainer = styled.div`
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-y: auto;
   overflow-x: hidden;
@@ -104,7 +105,7 @@ const BackButton = styled.button`
   padding: 8px 0;
   font-size: 14px;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-decoration: none;
   background: none;
   border: none;
@@ -112,7 +113,7 @@ const BackButton = styled.button`
   transition: color 0.15s;
 
   &:hover {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -145,7 +146,7 @@ const Title = styled.h1`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 32px;
   font-weight: 400;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
   line-height: 1.2;
 
@@ -156,7 +157,7 @@ const Title = styled.h1`
 
 const Meta = styled.div`
   font-size: 14px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   display: flex;
   align-items: center;
   gap: 12px;
@@ -167,7 +168,7 @@ const MetaSeparator = styled.span`
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #94a3b8;
+  background: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const Actions = styled.div`
@@ -198,20 +199,20 @@ const DataHeader = styled.div`
 const DataTitle = styled.span`
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `;
 
 const DataCount = styled.span`
   font-size: 13px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const GridContainer = styled.div`
   min-height: 400px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
 `;
@@ -228,12 +229,12 @@ const DocumentItem = styled.div`
   gap: 12px;
   padding: 14px 16px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   transition: border-color 0.15s;
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -244,8 +245,8 @@ const DocumentIcon = styled.div`
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   flex-shrink: 0;
 `;
 
@@ -257,7 +258,7 @@ const DocumentInfo = styled.div`
 const DocumentName = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -265,7 +266,7 @@ const DocumentName = styled.div`
 
 const DocumentMeta = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   display: flex;
   align-items: center;
   gap: 8px;
@@ -284,7 +285,7 @@ const SchemaColumn = styled.div`
   gap: 12px;
   padding: 12px 16px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 `;
 
@@ -295,8 +296,8 @@ const SchemaColumnIcon = styled.div`
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const SchemaColumnInfo = styled.div`
@@ -306,12 +307,12 @@ const SchemaColumnInfo = styled.div`
 const SchemaColumnName = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const SchemaColumnType = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 2px;
 `;
 
@@ -328,16 +329,16 @@ const IconButton = styled.button`
   height: 32px;
   padding: 0;
   background: transparent;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 
   &:disabled {
@@ -350,7 +351,7 @@ const RunningState = styled.div`
   padding: 48px 24px;
   text-align: center;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
 `;
 
@@ -359,7 +360,7 @@ const Spinner = styled.div`
   height: 48px;
   margin: 0 auto 16px;
   border-radius: 50%;
-  border: 4px solid #e2e8f0;
+  border: 4px solid ${OS_LEGAL_COLORS.border};
   border-top-color: #e85a4f;
   animation: spin 1s linear infinite;
 
@@ -374,19 +375,19 @@ const RunningTitle = styled.h3`
   margin: 0 0 8px;
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const RunningDescription = styled.p`
   margin: 0;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 14px;
 `;
 
 const EmptyWrapper = styled.div`
   padding: 48px 24px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
 `;
 

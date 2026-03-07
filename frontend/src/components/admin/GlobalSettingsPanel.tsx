@@ -203,7 +203,7 @@ const settingsItems: SettingItem[] = [
     description:
       "Create and manage badges that can be awarded to users for achievements and contributions.",
     icon: Trophy,
-    gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    gradient: `linear-gradient(135deg, #f59e0b 0%, ${OS_LEGAL_COLORS.folderIcon} 100%)`,
     route: "/admin/badges",
   },
   {
@@ -221,7 +221,7 @@ const settingsItems: SettingItem[] = [
     description:
       "Manage service accounts used by automated pipelines to upload and process documents.",
     icon: Upload,
-    gradient: "linear-gradient(135deg, #0f766e 0%, #0d6860 100%)",
+    gradient: `linear-gradient(135deg, ${OS_LEGAL_COLORS.accent} 0%, ${OS_LEGAL_COLORS.accentHover} 100%)`,
     route: "/admin/worker-accounts",
   },
   {
@@ -230,7 +230,7 @@ const settingsItems: SettingItem[] = [
     description:
       "Configure system-wide pipeline settings including parsers, embedders, and document processing.",
     icon: Settings,
-    gradient: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+    gradient: `linear-gradient(135deg, ${OS_LEGAL_COLORS.textSecondary} 0%, ${OS_LEGAL_COLORS.textTertiary} 100%)`,
     route: "/system_settings",
   },
   {
@@ -239,7 +239,7 @@ const settingsItems: SettingItem[] = [
     description:
       "View and manage user accounts, permissions, and access controls.",
     icon: Users,
-    gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+    gradient: `linear-gradient(135deg, ${OS_LEGAL_COLORS.greenMedium} 0%, ${OS_LEGAL_COLORS.greenDark} 100%)`,
     comingSoon: true,
   },
 ];

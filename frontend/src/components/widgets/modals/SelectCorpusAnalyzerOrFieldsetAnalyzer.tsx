@@ -62,6 +62,7 @@ import {
   AnalyzerType,
 } from "../../../types/graphql-api";
 import { UnifiedFieldsetSelector } from "../selectors/UnifiedFieldsetSelector";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // Styled Components
 const ModalOverlay = styled(motion.div)`
@@ -90,7 +91,7 @@ const ModalContainer = styled(motion.div)`
 
 const ModalHeader = styled.div`
   padding: 2rem 2rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   background: linear-gradient(180deg, #fafbfc 0%, rgba(250, 251, 252, 0) 100%);
 `;
 
@@ -98,7 +99,7 @@ const HeaderTitle = styled.h2`
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -106,7 +107,7 @@ const HeaderTitle = styled.h2`
 
 const HeaderSubtitle = styled.p`
   margin: 0.5rem 0 0;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.9375rem;
   line-height: 1.5;
 `;
@@ -118,7 +119,7 @@ const CloseButton = styled(motion.button)`
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   display: flex;
   align-items: center;
@@ -129,14 +130,14 @@ const CloseButton = styled(motion.button)`
   svg {
     width: 20px;
     height: 20px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     svg {
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   }
 `;
@@ -150,12 +151,18 @@ const TabContainer = styled.div`
 const TabButton = styled(motion.button)<{ $active: boolean }>`
   flex: 1;
   padding: 1rem 1.5rem;
-  border: 2px solid ${(props) => (props.$active ? "#3b82f6" : "#e2e8f0")};
-  background: ${(props) => (props.$active ? "#eff6ff" : "white")};
+  border: 2px solid
+    ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.blueSurface : "white"};
   border-radius: 12px;
   font-weight: 600;
   font-size: 0.9375rem;
-  color: ${(props) => (props.$active ? "#3b82f6" : "#64748b")};
+  color: ${(props) =>
+    props.$active
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -169,8 +176,14 @@ const TabButton = styled(motion.button)<{ $active: boolean }>`
   }
 
   &:hover:not(:disabled) {
-    background: ${(props) => (props.$active ? "#eff6ff" : "#f8fafc")};
-    border-color: ${(props) => (props.$active ? "#3b82f6" : "#cbd5e1")};
+    background: ${(props) =>
+      props.$active
+        ? OS_LEGAL_COLORS.blueSurface
+        : OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${(props) =>
+      props.$active
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -184,7 +197,7 @@ const ModalContent = styled.div`
 const SearchSection = styled.div`
   padding: 1.5rem 2rem;
   background: linear-gradient(to bottom, #ffffff 90%, rgba(255, 255, 255, 0.9));
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   position: sticky;
   top: 0;
   z-index: 10;
@@ -199,7 +212,7 @@ const SearchWrapper = styled.div`
 const SearchInput = styled.input`
   width: 100%;
   padding: 0.75rem 1rem 0.75rem 3rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   font-size: 0.9375rem;
   transition: all 0.2s ease;
@@ -207,12 +220,12 @@ const SearchInput = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -223,7 +236,7 @@ const SearchIcon = styled(Search)`
   transform: translateY(-50%);
   width: 18px;
   height: 18px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const ResultCount = styled.span`
@@ -232,8 +245,8 @@ const ResultCount = styled.span`
   top: 50%;
   transform: translateY(-50%);
   font-size: 0.875rem;
-  color: #64748b;
-  background: #f1f5f9;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   padding: 0.25rem 0.75rem;
   border-radius: 8px;
 `;
@@ -251,7 +264,9 @@ const AnalyzerCard = styled(motion.div)<{ $selected?: boolean }>`
     props.$selected
       ? "linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%)"
       : "white"};
-  border: 2px solid ${(props) => (props.$selected ? "#3b82f6" : "#e2e8f0")};
+  border: 2px solid
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 1.25rem;
   cursor: pointer;
@@ -266,7 +281,10 @@ const AnalyzerCard = styled(motion.div)<{ $selected?: boolean }>`
   `}
 
   &:hover {
-    border-color: ${(props) => (props.$selected ? "#3b82f6" : "#cbd5e1")};
+    border-color: ${(props) =>
+      props.$selected
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.borderHover};
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
@@ -280,8 +298,8 @@ const AnalyzerCard = styled(motion.div)<{ $selected?: boolean }>`
     height: 3px;
     background: ${(props) =>
       props.$selected
-        ? "linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)"
-        : "linear-gradient(90deg, #e2e8f0 0%, #cbd5e1 100%)"};
+        ? `linear-gradient(90deg, ${OS_LEGAL_COLORS.primaryBlue} 0%, ${OS_LEGAL_COLORS.primaryBlueHover} 100%)`
+        : `linear-gradient(90deg, ${OS_LEGAL_COLORS.border} 0%, ${OS_LEGAL_COLORS.borderHover} 100%)`};
   }
 `;
 
@@ -295,7 +313,7 @@ const CardHeader = styled.div`
 const CardTitle = styled.h3`
   font-size: 0.95rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
   line-height: 1.3;
   flex: 1;
@@ -305,8 +323,8 @@ const CardTitle = styled.h3`
 const TaskName = styled.div`
   font-family: "SF Mono", "Monaco", "Inconsolata", monospace;
   font-size: 0.7rem;
-  color: #64748b;
-  background: #f8fafc;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
   margin-top: 0.25rem;
@@ -347,8 +365,8 @@ const StatusBadge = styled.div<{ $type: "configurable" | "ready" | "public" }>`
         `;
       case "public":
         return `
-          background: #dbeafe;
-          color: #1e40af;
+          background: ${OS_LEGAL_COLORS.blueBorder};
+          color: ${OS_LEGAL_COLORS.blueDark};
         `;
     }
   }}
@@ -361,7 +379,7 @@ const StatusBadge = styled.div<{ $type: "configurable" | "ready" | "public" }>`
 
 const CardDescription = styled.div`
   font-size: 0.8rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   line-height: 1.4;
   max-height: 60px;
   overflow: hidden;
@@ -381,7 +399,7 @@ const CardDescription = styled.div`
 const SchemaToggle = styled.button`
   background: none;
   border: none;
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
@@ -392,7 +410,7 @@ const SchemaToggle = styled.button`
   margin-top: 0.5rem;
 
   &:hover {
-    color: #2563eb;
+    color: ${OS_LEGAL_COLORS.primaryBlueHover};
   }
 
   svg {
@@ -402,7 +420,7 @@ const SchemaToggle = styled.button`
 `;
 
 const SchemaPreview = styled(motion.pre)`
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 6px;
   padding: 0.5rem;
   font-size: 0.65rem;
@@ -416,7 +434,7 @@ const SchemaPreview = styled(motion.pre)`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 2px;
   }
 `;
@@ -427,23 +445,33 @@ const PaginationContainer = styled.div`
   justify-content: center;
   align-items: center;
   padding: 1rem 2rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
   gap: 0.5rem;
 `;
 
 const PageButton = styled.button<{ $active?: boolean }>`
   padding: 0.5rem 0.75rem;
-  border: 1px solid ${(props) => (props.$active ? "#3b82f6" : "#e2e8f0")};
-  background: ${(props) => (props.$active ? "#3b82f6" : "white")};
-  color: ${(props) => (props.$active ? "white" : "#64748b")};
+  border: 1px solid
+    ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.primaryBlue : "white"};
+  color: ${(props) =>
+    props.$active ? "white" : OS_LEGAL_COLORS.textSecondary};
   border-radius: 8px;
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
-    background: ${(props) => (props.$active ? "#2563eb" : "#f8fafc")};
-    border-color: ${(props) => (props.$active ? "#2563eb" : "#cbd5e1")};
+    background: ${(props) =>
+      props.$active
+        ? OS_LEGAL_COLORS.primaryBlueHover
+        : OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${(props) =>
+      props.$active
+        ? OS_LEGAL_COLORS.primaryBlueHover
+        : OS_LEGAL_COLORS.borderHover};
   }
 
   &:disabled {
@@ -456,14 +484,18 @@ const PageButton = styled.button<{ $active?: boolean }>`
 const EmptyState = styled.div`
   text-align: center;
   padding: 4rem 2rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const EmptyStateIcon = styled.div`
   width: 80px;
   height: 80px;
   margin: 0 auto 1.5rem;
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.surfaceLight} 0%,
+    ${OS_LEGAL_COLORS.border} 100%
+  );
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -472,7 +504,7 @@ const EmptyStateIcon = styled.div`
   svg {
     width: 40px;
     height: 40px;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -490,14 +522,14 @@ const Label = styled.label`
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin-bottom: 0.5rem;
 `;
 
 const Input = styled.input`
   width: 100%;
   padding: 0.875rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   font-size: 0.9375rem;
   transition: all 0.2s ease;
@@ -505,19 +537,19 @@ const Input = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   &:disabled {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     cursor: not-allowed;
   }
 `;
 
 const InfoBox = styled(motion.div)`
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: ${OS_LEGAL_COLORS.infoSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.infoBorder};
   border-radius: 12px;
   padding: 1.25rem;
   margin: 1.5rem 2rem;
@@ -527,7 +559,7 @@ const InfoBox = styled(motion.div)`
   svg {
     width: 20px;
     height: 20px;
-    color: #0284c7;
+    color: ${OS_LEGAL_COLORS.infoText};
     flex-shrink: 0;
     margin-top: 0.125rem;
   }
@@ -541,12 +573,12 @@ const InfoTitle = styled.h4`
   margin: 0 0 0.5rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #0c4a6e;
+  color: ${OS_LEGAL_COLORS.infoText};
 `;
 
 const InfoDescription = styled.div`
   font-size: 0.875rem;
-  color: #075985;
+  color: ${OS_LEGAL_COLORS.infoText};
   line-height: 1.5;
 
   h1,
@@ -579,8 +611,8 @@ const InfoDescription = styled.div`
 
 const ModalFooter = styled.div`
   padding: 1.5rem 2rem;
-  border-top: 1px solid #e2e8f0;
-  background: #fafbfc;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
@@ -600,30 +632,30 @@ const Button = styled(motion.button)<{ $variant?: "primary" | "secondary" }>`
   ${(props) =>
     props.$variant === "primary"
       ? `
-    background: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
-    border: 2px solid #3b82f6;
+    border: 2px solid ${OS_LEGAL_COLORS.primaryBlue};
 
     &:hover:not(:disabled) {
-      background: #2563eb;
-      border-color: #2563eb;
+      background: ${OS_LEGAL_COLORS.primaryBlueHover};
+      border-color: ${OS_LEGAL_COLORS.primaryBlueHover};
     }
 
     &:disabled {
-      background: #94a3b8;
-      border-color: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
+      border-color: ${OS_LEGAL_COLORS.textMuted};
       cursor: not-allowed;
     }
   `
       : `
     background: white;
-    color: #64748b;
-    border: 2px solid #e2e8f0;
+    color: ${OS_LEGAL_COLORS.textSecondary};
+    border: 2px solid ${OS_LEGAL_COLORS.border};
 
     &:hover:not(:disabled) {
-      background: #f8fafc;
-      border-color: #cbd5e1;
-      color: #475569;
+      background: ${OS_LEGAL_COLORS.surfaceHover};
+      border-color: ${OS_LEGAL_COLORS.borderHover};
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   `}
 `;
@@ -647,12 +679,12 @@ const LoadingContent = styled.div`
 `;
 
 const SpinningLoader = styled(motion.div)`
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
 `;
 
 const LoadingText = styled.p`
   font-size: 0.9375rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-weight: 500;
 `;
 
@@ -1297,7 +1329,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                                 <span
                                   style={{
                                     padding: "0 0.5rem",
-                                    color: "#94a3b8",
+                                    color: OS_LEGAL_COLORS.textMuted,
                                   }}
                                 >
                                   ...
@@ -1366,7 +1398,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                             <div
                               style={{
                                 fontSize: "0.875rem",
-                                color: "#64748b",
+                                color: OS_LEGAL_COLORS.textSecondary,
                                 marginTop: "0.25rem",
                               }}
                             >
@@ -1376,10 +1408,10 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                         </InfoBox>
                         <div
                           style={{
-                            background: "#f8fafc",
+                            background: OS_LEGAL_COLORS.surfaceHover,
                             borderRadius: "12px",
                             padding: "1.5rem",
-                            border: "2px solid #e2e8f0",
+                            border: "2px solid ${OS_LEGAL_COLORS.border}",
                           }}
                         >
                           <Form

@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../assets/configurations/osLegalStyles";
 import {
   SearchBox,
   FilterTabs,
@@ -96,7 +97,7 @@ interface DocumentQueryVariables {
 
 const PageContainer = styled.div`
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-y: auto;
   overflow-x: hidden;
@@ -121,11 +122,11 @@ const HeroTitle = styled.h1`
   font-size: 42px;
   font-weight: 400;
   line-height: 1.2;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 16px;
 
   span {
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   @media (max-width: 768px) {
@@ -136,7 +137,7 @@ const HeroTitle = styled.h1`
 const HeroSubtitle = styled.p`
   font-size: 17px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0 0 32px;
   max-width: 600px;
 `;
@@ -159,18 +160,23 @@ const FilterButton = styled.button<{
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: ${(props) => (props.$active ? "#f1f5f9" : "white")};
-  border: 1px solid ${(props) => (props.$hasFilters ? "#0f766e" : "#e2e8f0")};
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.surfaceLight : "white"};
+  border: 1px solid
+    ${(props) =>
+      props.$hasFilters ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  color: ${(props) => (props.$hasFilters ? "#0f766e" : "#64748b")};
+  color: ${(props) =>
+    props.$hasFilters ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
-    background: #f8fafc;
-    border-color: ${(props) => (props.$hasFilters ? "#0f766e" : "#cbd5e1")};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${(props) =>
+      props.$hasFilters ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.borderHover};
   }
 
   svg {
@@ -186,7 +192,7 @@ const FilterBadge = styled.span`
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background: #0f766e;
+  background: ${OS_LEGAL_COLORS.accent};
   color: white;
   font-size: 11px;
   font-weight: 600;
@@ -205,14 +211,14 @@ const FilterPopup = styled.div`
   min-width: 320px;
   padding: 16px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
 
   /* Override the harsh gradient labels from filter components */
   .ui.label {
-    background: #f1f5f9 !important;
-    color: #475569 !important;
+    background: ${OS_LEGAL_COLORS.surfaceLight} !important;
+    color: ${OS_LEGAL_COLORS.textTertiary} !important;
     box-shadow: none !important;
     font-size: 0.6875rem !important;
     font-weight: 600 !important;
@@ -233,13 +239,13 @@ const FilterPopupHeader = styled.div`
   justify-content: space-between;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const FilterPopupTitle = styled.span`
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const FilterPopupClose = styled.button`
@@ -252,12 +258,12 @@ const FilterPopupClose = styled.button`
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   cursor: pointer;
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 `;
 
@@ -289,18 +295,18 @@ const ClearFiltersButton = styled.button`
   margin-top: 8px;
   padding: 8px 12px;
   background: transparent;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
-    background: #fef2f2;
-    border-color: #fca5a5;
-    color: #dc2626;
+    background: ${OS_LEGAL_COLORS.dangerSurface};
+    border-color: ${OS_LEGAL_COLORS.dangerBorder};
+    color: ${OS_LEGAL_COLORS.danger};
   }
 `;
 
@@ -337,7 +343,7 @@ const SectionTitle = styled.h2`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 24px;
   font-weight: 400;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   margin: 0;
 `;
 
@@ -351,7 +357,7 @@ const ViewToggle = styled.div`
   display: flex;
   align-items: center;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 3px;
 `;
@@ -363,15 +369,17 @@ const ViewToggleButton = styled.button<{ $active?: boolean }>`
   width: 32px;
   height: 32px;
   padding: 0;
-  background: ${(props) => (props.$active ? "#f1f5f9" : "transparent")};
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.surfaceLight : "transparent"};
   border: none;
   border-radius: 6px;
-  color: ${(props) => (props.$active ? "#1e293b" : "#94a3b8")};
+  color: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.textPrimary : OS_LEGAL_COLORS.textMuted};
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 `;
 
@@ -383,7 +391,7 @@ const DocumentsListContainer = styled.section`
 const EmptyStateWrapper = styled.div`
   padding: 48px 24px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
 `;
 
@@ -402,7 +410,9 @@ const DocumentCardWrapper = styled.div<{ $selected?: boolean }>`
   display: flex;
   flex-direction: column;
   background: white;
-  border: 1px solid ${(props) => (props.$selected ? "#0f766e" : "#e2e8f0")};
+  border: 1px solid
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.15s;
@@ -411,7 +421,8 @@ const DocumentCardWrapper = styled.div<{ $selected?: boolean }>`
     props.$selected ? "0 0 0 2px rgba(15, 118, 110, 0.2)" : "none"};
 
   &:hover {
-    border-color: ${(props) => (props.$selected ? "#0f766e" : "#cbd5e1")};
+    border-color: ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.borderHover};
     box-shadow: ${(props) =>
       props.$selected
         ? "0 0 0 2px rgba(15, 118, 110, 0.2)"
@@ -436,7 +447,11 @@ const CardCheckbox = styled.div<{ $visible?: boolean }>`
 const CardPreview = styled.div`
   position: relative;
   height: 160px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    ${OS_LEGAL_COLORS.surfaceLight} 100%
+  );
   display: flex;
   align-items: center;
   justify-content: center;
@@ -456,7 +471,7 @@ const CardPreviewPlaceholder = styled.div`
   align-items: center;
   gap: 8px;
   padding: 20px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const PreviewLines = styled.div`
@@ -469,7 +484,7 @@ const PreviewLines = styled.div`
 
 const PreviewLine = styled.div<{ $width?: string }>`
   height: 6px;
-  background: #e2e8f0;
+  background: ${OS_LEGAL_COLORS.border};
   border-radius: 3px;
   width: ${(props) => props.$width || "100%"};
 `;
@@ -495,7 +510,7 @@ const ProcessingOverlay = styled.div`
 const ProcessingText = styled.span`
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 const CardBody = styled.div`
@@ -509,7 +524,7 @@ const CardBody = styled.div`
 const CardTitle = styled.h4`
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -525,14 +540,14 @@ const CardMeta = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const MetaSeparator = styled.span`
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #94a3b8;
+  background: ${OS_LEGAL_COLORS.textMuted};
   opacity: 0.5;
 `;
 
@@ -541,8 +556,8 @@ const CardFooter = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-top: 1px solid #e2e8f0;
-  background: #fafafa;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const CardUploader = styled.div`
@@ -550,7 +565,7 @@ const CardUploader = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 const CardMenuButton = styled.button`
@@ -562,7 +577,7 @@ const CardMenuButton = styled.button`
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   cursor: pointer;
   opacity: 0;
   transition: all 0.15s;
@@ -572,8 +587,8 @@ const CardMenuButton = styled.button`
   }
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 `;
 
@@ -586,7 +601,7 @@ const DocumentsListView = styled.div`
   flex-direction: column;
   gap: 2px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
 `;
@@ -596,13 +611,13 @@ const ListHeader = styled.div`
   grid-template-columns: 40px 1fr 100px 100px 120px 150px 48px;
   gap: 16px;
   padding: 12px 16px;
-  background: #fafafa;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.background};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 
   @media (max-width: 768px) {
     grid-template-columns: 32px 1fr 80px 48px;
@@ -628,11 +643,13 @@ const ListItem = styled.div<{ $selected?: boolean }>`
 
   &:hover {
     background: ${(props) =>
-      props.$selected ? "rgba(15, 118, 110, 0.06)" : "#f8fafc"};
+      props.$selected
+        ? "rgba(15, 118, 110, 0.06)"
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   }
 
   @media (max-width: 768px) {
@@ -652,13 +669,13 @@ const ListItemIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const ListItemName = styled.span`
   font-size: 14px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -667,12 +684,12 @@ const ListItemName = styled.span`
 const ListItemType = styled.span`
   font-size: 12px;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const ListItemSize = styled.span`
   font-size: 13px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 const ListItemUploader = styled.div`
@@ -680,7 +697,7 @@ const ListItemUploader = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 const ListItemActions = styled.div`
@@ -703,7 +720,7 @@ const DocumentsCompactView = styled.div`
   flex-direction: column;
   gap: 2px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
 `;
@@ -720,11 +737,13 @@ const CompactItem = styled.div<{ $selected?: boolean }>`
 
   &:hover {
     background: ${(props) =>
-      props.$selected ? "rgba(15, 118, 110, 0.06)" : "#f8fafc"};
+      props.$selected
+        ? "rgba(15, 118, 110, 0.06)"
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -732,7 +751,7 @@ const CompactItemName = styled.span`
   flex: 1;
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -740,7 +759,7 @@ const CompactItemName = styled.span`
 
 const CompactItemMeta = styled.span`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   flex-shrink: 0;
 `;
 
@@ -755,7 +774,7 @@ const FloatingMenu = styled(Menu)`
     min-width: 200px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     padding: 4px 0;
 
     .item {
@@ -766,19 +785,19 @@ const FloatingMenu = styled(Menu)`
       gap: 10px !important;
 
       &:hover {
-        background: #f1f5f9 !important;
+        background: ${OS_LEGAL_COLORS.surfaceLight} !important;
       }
 
       &.danger {
-        color: #dc2626 !important;
+        color: ${OS_LEGAL_COLORS.danger} !important;
 
         &:hover {
-          background: #fef2f2 !important;
+          background: ${OS_LEGAL_COLORS.dangerSurface} !important;
         }
       }
 
       &.primary {
-        color: #0f766e !important;
+        color: ${OS_LEGAL_COLORS.accent} !important;
         font-weight: 500 !important;
       }
 
@@ -796,8 +815,8 @@ const MenuHeader = styled.div`
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
-  border-bottom: 1px solid #e2e8f0;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -1384,7 +1403,7 @@ export const Documents = () => {
                       variant="secondary"
                       size="sm"
                       onClick={() => showDeleteDocumentsModal(true)}
-                      style={{ color: "#dc2626" }}
+                      style={{ color: OS_LEGAL_COLORS.danger }}
                     >
                       Delete ({selected_document_ids.length})
                     </Button>

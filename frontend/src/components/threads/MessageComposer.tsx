@@ -17,6 +17,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
 import {
   UnifiedMentionPicker,
@@ -291,8 +292,8 @@ const SendButton = styled.button`
 
 const ErrorMessage = styled.div`
   padding: 0.5rem 0.75rem;
-  background: #fee2e2;
-  color: #dc2626;
+  background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+  color: ${OS_LEGAL_COLORS.danger};
   font-family: ${CORPUS_FONTS.sans};
   font-size: 0.8125rem;
   border-top: 1px solid #fca5a5;

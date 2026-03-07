@@ -3,6 +3,7 @@ import { useQuery, useReactiveVar } from "@apollo/client";
 import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import _ from "lodash";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { labelsetSearchTerm } from "../../../graphql/cache";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
 import {
@@ -122,7 +123,7 @@ export const LabelSetSelector = ({
         style={{
           margin: 0,
           padding: "0.75rem 1rem",
-          background: "#f9fafb",
+          background: OS_LEGAL_COLORS.gray50,
           border: "1px solid rgba(34,36,38,.15)",
           borderBottom: "none",
           borderRadius: "4px 4px 0 0",

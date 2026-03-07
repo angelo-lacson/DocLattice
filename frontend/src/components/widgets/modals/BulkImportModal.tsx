@@ -28,6 +28,7 @@ import {
   Loader,
 } from "lucide-react";
 
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   showBulkImportModal,
   selectedFolderId as selectedFolderIdVar,
@@ -282,9 +283,9 @@ export const BulkImportModal: React.FC = () => {
     <div>
       <div
         style={{
-          background: "#fffaf3",
-          color: "#573a08",
-          border: "1px solid #c9ba9b",
+          background: OS_LEGAL_COLORS.warningSurface,
+          color: OS_LEGAL_COLORS.warningText,
+          border: `1px solid ${OS_LEGAL_COLORS.warningBorder}`,
           borderRadius: "4px",
           padding: "1rem",
           marginBottom: "1rem",
@@ -326,9 +327,9 @@ export const BulkImportModal: React.FC = () => {
 
       <div
         style={{
-          background: "#f8ffff",
-          color: "#276f86",
-          border: "1px solid #a9d5de",
+          background: OS_LEGAL_COLORS.infoSurface,
+          color: OS_LEGAL_COLORS.infoText,
+          border: `1px solid ${OS_LEGAL_COLORS.infoBorder}`,
           borderRadius: "4px",
           padding: "1rem",
           display: "flex",

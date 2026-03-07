@@ -87,7 +87,7 @@ const Container = styled(motion.div)<{ $fullScreen?: boolean; $size?: string }>`
     right: 0;
     bottom: 0;
     transform: none;
-    background: linear-gradient(135deg, #fafafa 0%, #f0fdfa 100%);
+    background: linear-gradient(135deg, ${OS_LEGAL_COLORS.background} 0%, #f0fdfa 100%);
     backdrop-filter: blur(12px);
   `}
 `;

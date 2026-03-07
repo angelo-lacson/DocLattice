@@ -23,6 +23,7 @@ import {
   Spinner,
 } from "@os-legal/ui";
 import { formatDistanceToNow, format } from "date-fns";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // GraphQL query for fetching version history
 export const GET_DOCUMENT_VERSION_HISTORY = gql`
@@ -83,7 +84,7 @@ const Timeline = styled.div`
     top: 0;
     bottom: 0;
     width: 2px;
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -100,14 +101,23 @@ const TimelineItem = styled.div<{ $isCurrent: boolean }>`
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: ${(props) => (props.$isCurrent ? "#3b82f6" : "#cbd5e1")};
-    border: 2px solid ${(props) => (props.$isCurrent ? "#1d4ed8" : "#94a3b8")};
+    background: ${(props) =>
+      props.$isCurrent
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.borderHover};
+    border: 2px solid
+      ${(props) => (props.$isCurrent ? "#1d4ed8" : OS_LEGAL_COLORS.textMuted)};
   }
 `;
 
 const VersionCard = styled.div<{ $isCurrent: boolean }>`
-  background: ${(props) => (props.$isCurrent ? "#eff6ff" : "#f8fafc")};
-  border: 1px solid ${(props) => (props.$isCurrent ? "#3b82f6" : "#e2e8f0")};
+  background: ${(props) =>
+    props.$isCurrent
+      ? OS_LEGAL_COLORS.blueSurface
+      : OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid
+    ${(props) =>
+      props.$isCurrent ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 12px 16px;
   transition: all 0.2s ease;
@@ -148,13 +158,13 @@ const VersionBadge = styled.span<{ $type: string }>`
       case "MAJOR_REVISION":
         return "#fce7f3";
       default:
-        return "#f1f5f9";
+        return OS_LEGAL_COLORS.surfaceLight;
     }
   }};
   color: ${(props) => {
     switch (props.$type) {
       case "INITIAL":
-        return "#15803d";
+        return OS_LEGAL_COLORS.successHover;
       case "CONTENT_UPDATE":
         return "#1d4ed8";
       case "MINOR_EDIT":
@@ -162,14 +172,14 @@ const VersionBadge = styled.span<{ $type: string }>`
       case "MAJOR_REVISION":
         return "#be185d";
       default:
-        return "#475569";
+        return OS_LEGAL_COLORS.textTertiary;
     }
   }};
 `;
 
 const VersionMeta = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -190,7 +200,7 @@ const VersionActions = styled.div`
 const EmptyState = styled.div`
   text-align: center;
   padding: 40px 20px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   .icon {
     font-size: 48px;
@@ -199,7 +209,7 @@ const EmptyState = styled.div`
   }
 
   h3 {
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
     margin-bottom: 8px;
   }
 
@@ -340,7 +350,12 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
       return (
         <div style={{ padding: "40px", textAlign: "center" }}>
           <Spinner size="md" />
-          <div style={{ marginTop: "0.5rem", color: "#64748b" }}>
+          <div
+            style={{
+              marginTop: "0.5rem",
+              color: OS_LEGAL_COLORS.textSecondary,
+            }}
+          >
             Loading version history...
           </div>
         </div>
@@ -352,10 +367,10 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
         <div
           style={{
             padding: "1rem",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
+            background: OS_LEGAL_COLORS.dangerSurface,
+            border: `1px solid ${OS_LEGAL_COLORS.dangerBorder}`,
             borderRadius: "8px",
-            color: "#991b1b",
+            color: OS_LEGAL_COLORS.dangerText,
           }}
         >
           <strong
@@ -470,11 +485,11 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
                       style={{
                         margin: "8px 0 0",
                         padding: "0.5rem 0.75rem",
-                        background: "#eff6ff",
-                        border: "1px solid #bfdbfe",
+                        background: OS_LEGAL_COLORS.blueSurface,
+                        border: `1px solid ${OS_LEGAL_COLORS.blueBorder}`,
                         borderRadius: "6px",
                         fontSize: "0.75rem",
-                        color: "#1e40af",
+                        color: OS_LEGAL_COLORS.blueDark,
                         display: "flex",
                         alignItems: "center",
                         gap: "0.5rem",
@@ -505,7 +520,7 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
             style={{
               fontSize: "14px",
               fontWeight: "normal",
-              color: "#64748b",
+              color: OS_LEGAL_COLORS.textSecondary,
               marginTop: "4px",
             }}
           >
@@ -521,10 +536,10 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
               style={{
                 marginBottom: "16px",
                 padding: "1rem",
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
+                background: OS_LEGAL_COLORS.successSurface,
+                border: `1px solid ${OS_LEGAL_COLORS.successBorder}`,
                 borderRadius: "8px",
-                color: "#166534",
+                color: OS_LEGAL_COLORS.successText,
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
@@ -549,7 +564,7 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "#166534",
+                  color: OS_LEGAL_COLORS.successText,
                 }}
                 aria-label="Dismiss"
               >
@@ -562,10 +577,10 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
               style={{
                 marginBottom: "16px",
                 padding: "1rem",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
+                background: OS_LEGAL_COLORS.dangerSurface,
+                border: `1px solid ${OS_LEGAL_COLORS.dangerBorder}`,
                 borderRadius: "8px",
-                color: "#991b1b",
+                color: OS_LEGAL_COLORS.dangerText,
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
@@ -590,7 +605,7 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "#991b1b",
+                  color: OS_LEGAL_COLORS.dangerText,
                 }}
                 aria-label="Dismiss"
               >

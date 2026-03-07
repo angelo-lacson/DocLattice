@@ -17,6 +17,7 @@ import {
 } from "../annotator/hooks/AnalysisHooks";
 import { ExtractItem } from "../extracts/ExtractItem";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 /**
  * Props for ExtractTraySelector.
@@ -42,7 +43,7 @@ const SearchSegment = styled.div`
   flex: 0 0 auto;
   padding: 1.25rem;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-bottom: none;
   border-radius: 12px 12px 0 0;
   z-index: 1;
@@ -53,7 +54,7 @@ const ExtractListSegment = styled.div`
   min-height: 0;
   overflow-y: auto;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 0 0 12px 12px;
   padding: 1rem;
 
@@ -76,20 +77,20 @@ const EmptyState = styled.div`
   margin: 2rem 0;
   padding: 2.5rem;
   text-align: center;
-  background: linear-gradient(165deg, #f8fafc, #fff);
-  border: 1px dashed #e2e8f0;
+  background: linear-gradient(165deg, ${OS_LEGAL_COLORS.surfaceHover}, #fff);
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
   box-shadow: none;
 
   h4 {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-size: 1.125rem;
     font-weight: 600;
     margin-bottom: 0.75rem;
   }
 
   p {
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     font-size: 0.875rem;
     line-height: 1.5;
     max-width: 24rem;
@@ -204,7 +205,7 @@ const ExtractTraySelector: React.FC<ExtractTraySelectorProps> = ({
               padding: "4px",
               display: "flex",
               alignItems: "center",
-              color: "#94a3b8",
+              color: OS_LEGAL_COLORS.textMuted,
             }}
             aria-label={searchTerm ? "Clear search" : "Search"}
           >

@@ -25,6 +25,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { useCorpusState } from "../annotator/context/CorpusAtom";
@@ -62,7 +63,7 @@ const TrayContainer = styled.div`
 const SearchSegment = styled.div`
   padding: 1rem;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-bottom: none;
   border-radius: 12px 12px 0 0;
 `;
@@ -71,7 +72,7 @@ const AnalysisListSegment = styled.div`
   flex: 1;
   overflow-y: auto;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 0 0 12px 12px;
   padding: 0.75rem;
 
@@ -97,7 +98,8 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     props.$selected
       ? "linear-gradient(165deg, rgba(74, 144, 226, 0.03), rgba(255, 255, 255, 0.5))"
       : "#ffffff"};
-  border: 1px solid ${(props) => (props.$selected ? "#4a90e2" : "#edf2f7")};
+  border: 1px solid
+    ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#edf2f7")};
   border-radius: ${(props) => (props.$compact ? "12px" : "20px")};
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
@@ -129,7 +131,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
       .label {
         font-size: 0.7rem;
         letter-spacing: 0.03em;
-        color: #94a3b8;
+        color: ${OS_LEGAL_COLORS.textMuted};
         margin-bottom: 0.5rem;
 
         svg {
@@ -162,14 +164,17 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     margin-top: ${(props) => (props.$compact ? "0.75rem" : "1.5rem")};
     padding-top: ${(props) => (props.$compact ? "0.75rem" : "1.5rem")};
     border-top: 1px solid
-      ${(props) => (props.$selected ? "rgba(74, 144, 226, 0.12)" : "#f1f5f9")};
+      ${(props) =>
+        props.$selected
+          ? "rgba(74, 144, 226, 0.12)"
+          : OS_LEGAL_COLORS.surfaceLight};
   }
 
   .annotations-container {
     margin-top: 1rem;
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 `;
@@ -201,14 +206,17 @@ const AnalysisTitle = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     background: ${(props) =>
       props.$selected
         ? "linear-gradient(135deg, rgba(74, 144, 226, 0.1), rgba(74, 144, 226, 0.05))"
-        : "#f8fafc"};
+        : OS_LEGAL_COLORS.surfaceHover};
     border-radius: ${(props) => (props.$compact ? "8px" : "10px")};
     transition: all 0.3s ease;
 
     svg {
       width: ${(props) => (props.$compact ? "16px" : "18px")};
       height: ${(props) => (props.$compact ? "16px" : "18px")};
-      color: ${(props) => (props.$selected ? "#4a90e2" : "#94a3b8")};
+      color: ${(props) =>
+        props.$selected
+          ? OS_LEGAL_COLORS.primaryBlue
+          : OS_LEGAL_COLORS.textMuted};
     }
   }
 
@@ -222,7 +230,7 @@ const AnalysisTitle = styled.div<{ $selected?: boolean; $compact?: boolean }>`
 
     .id {
       font-size: 0.75rem;
-      color: #94a3b8;
+      color: ${OS_LEGAL_COLORS.textMuted};
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
         monospace;
       display: ${(props) => (props.$compact ? "none" : "block")};
@@ -257,7 +265,10 @@ const Badge = styled.div<{
         : "rgba(226, 232, 240, 0.8)"};
   border-radius: ${(props) => (props.$compact ? "6px" : "10px")};
   font-size: ${(props) => (props.$compact ? "0.75rem" : "0.8125rem")};
-  color: ${(props) => (props.$variant === "primary" ? "#4a90e2" : "#64748b")};
+  color: ${(props) =>
+    props.$variant === "primary"
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   backdrop-filter: blur(8px);
 
   svg {
@@ -274,9 +285,13 @@ const NoAnalysesMessage = styled.div`
   justify-content: center;
   padding: 2rem;
   text-align: center;
-  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.surfaceHover},
+    ${OS_LEGAL_COLORS.surfaceLight}
+  );
   border-radius: 12px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
 
   h4 {
     margin: 0 0 0.5rem 0;
@@ -288,13 +303,13 @@ const NoAnalysesMessage = styled.div`
   p {
     margin: 0;
     font-size: 0.875rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     max-width: 280px;
     line-height: 1.5;
   }
 
   svg {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
     margin-bottom: 1rem;
   }
 `;
@@ -310,7 +325,7 @@ const DescriptionContainer = styled.div<{
   max-height: ${(props) => (props.$expanded ? "400px" : "120px")};
   overflow-y: ${(props) => (props.$expanded ? "auto" : "hidden")};
   padding: 1rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 12px;
   border: 1px solid #e8edf5;
   display: ${(props) => (props.$compact ? "none" : "block")};
@@ -332,7 +347,7 @@ const DescriptionContainer = styled.div<{
 const AnalyzerDescriptionHeader = styled.div<{ $compact?: boolean }>`
   font-size: 0.8rem;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 1rem 0 0.5rem 0;
@@ -344,13 +359,13 @@ const AnalyzerDescriptionHeader = styled.div<{ $compact?: boolean }>`
   svg {
     width: 14px;
     height: 14px;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
 const MarkdownContent = styled(ReactMarkdown)`
   font-size: 0.9rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   line-height: 1.6;
   height: 100%;
 
@@ -359,7 +374,7 @@ const MarkdownContent = styled(ReactMarkdown)`
   }
 
   code {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
     font-size: 0.85em;
@@ -385,14 +400,14 @@ const ExpandButton = styled.button<{ $visible?: boolean }>`
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #4a90e2;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   font-size: 0.8rem;
   font-weight: 500;
   opacity: ${(props) => (props.$visible ? 1 : 0)};
   transition: opacity 0.2s ease;
 
   &:hover {
-    color: #2563eb;
+    color: ${OS_LEGAL_COLORS.primaryBlueHover};
   }
 
   svg {
@@ -404,16 +419,16 @@ const EmptyDescription = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 0.9rem;
   font-style: italic;
   padding: 0.75rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 6px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
 
   svg {
-    color: #cbd5e1;
+    color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -431,9 +446,13 @@ const AnnotationsToggle = styled.button<{
       ? "linear-gradient(135deg, rgba(74, 144, 226, 0.08), rgba(74, 144, 226, 0.04))"
       : "#ffffff"};
   border: 1px solid
-    ${(props) => (props.$isVisible ? "rgba(74, 144, 226, 0.2)" : "#e2e8f0")};
+    ${(props) =>
+      props.$isVisible ? "rgba(74, 144, 226, 0.2)" : OS_LEGAL_COLORS.border};
   border-radius: ${(props) => (props.$compact ? "8px" : "12px")};
-  color: ${(props) => (props.$isVisible ? "#4a90e2" : "#64748b")};
+  color: ${(props) =>
+    props.$isVisible
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   font-size: ${(props) => (props.$compact ? "0.8125rem" : "0.875rem")};
   font-weight: 500;
   cursor: pointer;
@@ -489,7 +508,10 @@ const AnnotationsToggle = styled.button<{
       width: ${(props) => (props.$compact ? "12px" : "14px")};
       height: ${(props) => (props.$compact ? "12px" : "14px")};
       transition: all 0.3s ease;
-      color: ${(props) => (props.$isVisible ? "#4a90e2" : "#94a3b8")};
+      color: ${(props) =>
+        props.$isVisible
+          ? OS_LEGAL_COLORS.primaryBlue
+          : OS_LEGAL_COLORS.textMuted};
     }
   }
 
@@ -506,7 +528,10 @@ const AnnotationsToggle = styled.button<{
     border-radius: ${(props) => (props.$compact ? "4px" : "6px")};
     font-size: ${(props) => (props.$compact ? "0.7rem" : "0.75rem")};
     font-weight: 600;
-    color: ${(props) => (props.$isVisible ? "#4a90e2" : "#64748b")};
+    color: ${(props) =>
+      props.$isVisible
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -649,7 +674,7 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
                 padding: "4px",
                 display: "flex",
                 alignItems: "center",
-                color: "#94a3b8",
+                color: OS_LEGAL_COLORS.textMuted,
               }}
               aria-label={searchTerm ? "Clear search" : "Search"}
             >

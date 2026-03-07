@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from "react";
 import { Box } from "lucide-react";
 import Form from "@rjsf/semantic-ui";
 import validator from "@rjsf/validator-ajv8";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   HorizontallyCenteredDiv,
   VerticallyCenteredDiv,
@@ -131,7 +132,7 @@ export const CRUDWidget = <T extends Record<string, any>>({
               boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
               borderRadius: "8px",
               border: "1px solid rgba(34,36,38,.15)",
-              background: "#fff",
+              background: OS_LEGAL_COLORS.surface,
             }}
           >
             <div>
@@ -145,7 +146,7 @@ export const CRUDWidget = <T extends Record<string, any>>({
                       fontWeight: 600,
                       borderRadius: "4px",
                       border: "1px solid rgba(34,36,38,.15)",
-                      background: "#f9fafb",
+                      background: OS_LEGAL_COLORS.gray50,
                       marginBottom: "0.5rem",
                     }}
                   >

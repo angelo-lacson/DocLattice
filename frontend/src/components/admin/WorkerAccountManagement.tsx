@@ -151,8 +151,10 @@ const StatusBadge = styled.span<{ $active: boolean }>`
   font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
   font-size: 0.75rem;
   font-weight: 600;
-  background: ${({ $active }) => ($active ? "#dcfce7" : "#fee2e2")};
-  color: ${({ $active }) => ($active ? "#166534" : "#991b1b")};
+  background: ${({ $active }) =>
+    $active ? "#dcfce7" : OS_LEGAL_COLORS.dangerSurfaceHover};
+  color: ${({ $active }) =>
+    $active ? OS_LEGAL_COLORS.successText : OS_LEGAL_COLORS.dangerText};
 `;
 
 const TruncatedCell = styled.span`

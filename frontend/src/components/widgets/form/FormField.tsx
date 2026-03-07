@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * Shared form field wrapper with label styling.
@@ -18,7 +19,7 @@ export const FormField = styled.div<{ $required?: boolean }>`
       `
       &::after {
         content: " *";
-        color: #ef4444;
+        color: ${OS_LEGAL_COLORS.danger};
       }
     `}
   }

@@ -2,6 +2,7 @@ import React from "react";
 import { Chip } from "@os-legal/ui";
 import styled from "styled-components";
 import { FileText, Image, Layers } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 const StyledBadge = styled(Chip)<{ $badgeColor: string }>`
   display: inline-flex;
@@ -53,7 +54,7 @@ export const ModalityBadge: React.FC<ModalityBadgeProps> = ({ modalities }) => {
   // Text only (or default)
   if (hasText) {
     return (
-      <StyledBadge $badgeColor="#3b82f6" size="sm">
+      <StyledBadge $badgeColor={OS_LEGAL_COLORS.primaryBlue} size="sm">
         <FileText size={12} />
         Text
       </StyledBadge>

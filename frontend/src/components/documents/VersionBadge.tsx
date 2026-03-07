@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Badge container with conditional styling based on version state
 const BadgeWrapper = styled.div`
@@ -39,7 +40,7 @@ const BadgeContainer = styled.div<{
     } else if (props.$hasHistory) {
       return "#1d4ed8";
     } else {
-      return "#64748b";
+      return OS_LEGAL_COLORS.textSecondary;
     }
   }};
 
@@ -93,8 +94,8 @@ const Tooltip = styled.div`
   right: 0;
   min-width: 200px;
   padding: 10px 12px;
-  background: #1e293b;
-  color: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.textPrimary};
+  color: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 8px;
   font-size: 12px;
   font-weight: 400;
@@ -111,7 +112,7 @@ const TooltipTitle = styled.div`
 `;
 
 const TooltipLine = styled.div`
-  color: #cbd5e1;
+  color: ${OS_LEGAL_COLORS.borderHover};
 `;
 
 export interface VersionBadgeProps {

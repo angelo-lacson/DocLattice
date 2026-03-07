@@ -209,7 +209,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                                 size={14}
                                 style={{
                                   marginRight: "0.25rem",
-                                  color: "#16a34a",
+                                  color: OS_LEGAL_COLORS.success,
                                 }}
                               />
                               Pre-authorized tools:{" "}
@@ -273,7 +273,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       onClick={() => onDeleteAction(action.id)}
                       aria-label="Delete action"
                       title="Delete action"
-                      style={{ color: "#dc2626" }}
+                      style={{ color: OS_LEGAL_COLORS.danger }}
                     >
                       <Trash2 size={14} />
                     </IconButton>

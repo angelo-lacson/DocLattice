@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, memo, useCallback } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import {
   MessageSquare,
   FileText,
@@ -43,7 +44,7 @@ interface SidebarControlBarProps {
 /* Styled Components */
 const ControlBarContainer = styled.div`
   background: white;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 1.25rem;
   position: relative;
   z-index: 20;
@@ -72,13 +73,18 @@ const DropdownContainer = styled.div`
 const MultiSelectDropdown = styled.div<{ $isOpen: boolean }>`
   position: relative;
   background: white;
-  border: 1px solid ${(props) => (props.$isOpen ? "#3b82f6" : "#e2e8f0")};
+  border: 1px solid
+    ${(props) =>
+      props.$isOpen ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: ${(props) => (props.$isOpen ? "#3b82f6" : "#cbd5e1")};
+    border-color: ${(props) =>
+      props.$isOpen
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -96,18 +102,18 @@ const DropdownLabel = styled.div`
   align-items: center;
   gap: 0.625rem;
   font-size: 0.9375rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-weight: 500;
 
   svg {
     width: 18px;
     height: 18px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
 const SelectedCount = styled.span`
-  background: #3b82f6;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
@@ -119,7 +125,7 @@ const SelectedCount = styled.span`
 const ChevronIcon = styled(ChevronDown)<{ $isOpen: boolean }>`
   width: 18px;
   height: 18px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   transform: rotate(${(props) => (props.$isOpen ? 180 : 0)}deg);
   transition: transform 0.2s ease;
 `;
@@ -130,7 +136,7 @@ const DropdownMenu = styled(motion.div)`
   left: 0;
   right: 0;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
   z-index: 50;
@@ -144,16 +150,19 @@ const DropdownMenuItem = styled.div<{ $isSelected?: boolean }>`
   padding: 0.875rem 1rem;
   cursor: pointer;
   transition: all 0.15s ease;
-  background: ${(props) => (props.$isSelected ? "#f0f9ff" : "transparent")};
+  background: ${(props) =>
+    props.$isSelected ? OS_LEGAL_COLORS.infoSurface : "transparent"};
   border-left: 3px solid
-    ${(props) => (props.$isSelected ? "#3b82f6" : "transparent")};
+    ${(props) =>
+      props.$isSelected ? OS_LEGAL_COLORS.primaryBlue : "transparent"};
 
   &:hover {
-    background: ${(props) => (props.$isSelected ? "#e0f2fe" : "#f8fafc")};
+    background: ${(props) =>
+      props.$isSelected ? "#e0f2fe" : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   }
 `;
 
@@ -162,7 +171,7 @@ const MenuItemLabel = styled.div`
   align-items: center;
   gap: 0.75rem;
   font-size: 0.9375rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-weight: 500;
 
   svg {
@@ -174,22 +183,22 @@ const MenuItemLabel = styled.div`
 const CheckIcon = styled(Check)`
   width: 18px;
   height: 18px;
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
 `;
 
 const QuickActions = styled.div`
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border-top: 1px solid #f1f5f9;
-  background: #fafbfc;
+  border-top: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const QuickActionButton = styled.button`
   flex: 1;
   background: white;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
@@ -198,9 +207,9 @@ const QuickActionButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   &:active {
@@ -218,7 +227,7 @@ const SearchIconWrapper = styled.div`
   left: 0.875rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   pointer-events: none;
 
   svg {
@@ -230,21 +239,21 @@ const SearchIconWrapper = styled.div`
 const StyledSearchInput = styled.input`
   width: 100%;
   padding: 0.75rem 1rem 0.75rem 2.75rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   font-size: 0.9375rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   background: white;
   transition: all 0.2s ease;
   min-height: 48px;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 `;
@@ -256,26 +265,26 @@ const SortDropdownStyled = styled(Dropdown)`
     min-height: 48px;
 
     &.ui.dropdown {
-      border: 1px solid #e2e8f0;
+      border: 1px solid ${OS_LEGAL_COLORS.border};
       border-radius: 8px;
       padding: 0.75rem 1rem;
       background: white;
       font-weight: 500;
-      color: #1e293b;
+      color: ${OS_LEGAL_COLORS.textPrimary};
 
       &:hover {
-        border-color: #cbd5e1;
+        border-color: ${OS_LEGAL_COLORS.borderHover};
       }
 
       &:focus {
-        border-color: #3b82f6;
+        border-color: ${OS_LEGAL_COLORS.primaryBlue};
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
       }
     }
 
     .menu {
       border-radius: 8px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid ${OS_LEGAL_COLORS.border};
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
       margin-top: 4px;
     }
@@ -286,7 +295,7 @@ const SortDropdownStyled = styled(Dropdown)`
       font-weight: 500;
 
       &:hover {
-        background: #f8fafc !important;
+        background: ${OS_LEGAL_COLORS.surfaceHover} !important;
       }
     }
   }
@@ -307,10 +316,10 @@ const contentTypeLabels: Record<ContentItemType, string> = {
 };
 
 const contentTypeColors: Record<ContentItemType, string> = {
-  note: "#f59e0b",
-  annotation: "#3b82f6",
+  note: OS_LEGAL_COLORS.folderIcon,
+  annotation: OS_LEGAL_COLORS.primaryBlue,
   relationship: "#8b5cf6",
-  search: "#10b981",
+  search: OS_LEGAL_COLORS.greenMedium,
 };
 
 const AnnotationFiltersWrapper = styled(motion.div)`
@@ -511,7 +520,12 @@ export const SidebarControlBar: React.FC<SidebarControlBarProps> = memo(
             <SortDropdownStyled
               fluid
               selection
-              icon={<SortDesc size={18} style={{ color: "#64748b" }} />}
+              icon={
+                <SortDesc
+                  size={18}
+                  style={{ color: OS_LEGAL_COLORS.textSecondary }}
+                />
+              }
               options={sortOptions}
               value={sortBy}
               onChange={(_: any, data: any) =>

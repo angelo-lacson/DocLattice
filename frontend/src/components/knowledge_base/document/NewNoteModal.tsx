@@ -15,6 +15,7 @@ import {
   CreateNoteMutation,
   CreateNoteMutationVariables,
 } from "../../../graphql/types/NoteTypes";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface NewNoteModalProps {
   isOpen: boolean;
@@ -116,7 +117,7 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
           style={{
             padding: "0.75rem",
             background: "#eef6fc",
-            border: "1px solid #a9d5de",
+            border: `1px solid ${OS_LEGAL_COLORS.infoBorder}`,
             borderRadius: "8px",
             fontSize: "0.85rem",
           }}

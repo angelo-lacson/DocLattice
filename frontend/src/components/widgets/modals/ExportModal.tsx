@@ -29,6 +29,7 @@ import {
 import { ExportObject } from "../../../types/graphql-api";
 import { exportSearchTerm, showExportModal } from "../../../graphql/cache";
 import { toast } from "react-toastify";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 export interface ExportModalProps {
   /**
@@ -166,11 +167,11 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
         <div
           style={{
             padding: "0.75rem",
-            background: "#fffaf3",
-            border: "1px solid #c9ba9b",
+            background: OS_LEGAL_COLORS.warningSurface,
+            border: `1px solid ${OS_LEGAL_COLORS.warningBorder}`,
             borderRadius: "8px",
             fontSize: "0.85rem",
-            color: "#573a08",
+            color: OS_LEGAL_COLORS.warningText,
             marginBottom: "1rem",
             textAlign: "center",
           }}

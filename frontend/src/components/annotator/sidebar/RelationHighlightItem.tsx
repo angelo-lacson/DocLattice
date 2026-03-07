@@ -82,12 +82,12 @@ const RemoveButton = styled.button`
   flex-shrink: 0;
 
   &:hover {
-    background-color: #fee2e2;
-    color: #dc2626;
+    background-color: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+    color: ${OS_LEGAL_COLORS.danger};
   }
 
   &:active {
-    background-color: #fecaca;
+    background-color: ${OS_LEGAL_COLORS.dangerBorder};
   }
 `;
 

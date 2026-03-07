@@ -225,10 +225,10 @@ const DataTypeBadge = styled.span<{ dataType: string }>`
     switch (props.dataType) {
       case "STRING":
       case "TEXT":
-        return "#2563eb";
+        return OS_LEGAL_COLORS.primaryBlueHover;
       case "INTEGER":
       case "FLOAT":
-        return "#d97706";
+        return OS_LEGAL_COLORS.folderIcon;
       case "BOOLEAN":
         return OS_LEGAL_COLORS.success;
       case "DATE":

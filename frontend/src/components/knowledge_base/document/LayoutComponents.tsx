@@ -1,6 +1,7 @@
 import React from "react";
 import { Modal } from "@os-legal/ui";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 const FullScreenModalWrapper = styled.div`
   .oc-modal-overlay {
@@ -19,7 +20,7 @@ const FullScreenModalWrapper = styled.div`
     max-width: none !important;
     max-height: none !important;
     border-radius: 0 !important;
-    background: #f8f9fa;
+    background: ${OS_LEGAL_COLORS.gray50};
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;

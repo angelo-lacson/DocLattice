@@ -94,6 +94,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
 import { routingLogger } from "../../../utils/routingLogger";
 
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   ContentArea,
   HeaderContainer,
@@ -1519,7 +1520,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             }}
           >
             <Spinner size={24} />
-            <span style={{ color: "#64748b", fontSize: "0.875rem" }}>
+            <span
+              style={{
+                color: OS_LEGAL_COLORS.textSecondary,
+                fontSize: "0.875rem",
+              }}
+            >
               Loading PDF...
             </span>
           </div>
@@ -1549,7 +1555,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             }}
           >
             <Spinner size={24} />
-            <span style={{ color: "#64748b", fontSize: "0.875rem" }}>
+            <span
+              style={{
+                color: OS_LEGAL_COLORS.textSecondary,
+                fontSize: "0.875rem",
+              }}
+            >
               Loading Text...
             </span>
           </div>
@@ -1585,7 +1596,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             }}
           >
             <Spinner size={24} />
-            <span style={{ color: "#64748b", fontSize: "0.875rem" }}>
+            <span
+              style={{
+                color: OS_LEGAL_COLORS.textSecondary,
+                fontSize: "0.875rem",
+              }}
+            >
               Loading Document...
             </span>
           </div>

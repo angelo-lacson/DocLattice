@@ -341,7 +341,7 @@ export const AnalysisItem = ({
               left: 0,
               right: 0,
               background: "white",
-              border: "1px solid #e2e8f0",
+              border: `1px solid ${OS_LEGAL_COLORS.border}`,
               borderRadius: "8px",
               padding: "1em",
               boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",

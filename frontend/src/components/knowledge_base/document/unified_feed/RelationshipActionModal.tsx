@@ -63,7 +63,7 @@ const ScrollableContent = styled.div`
     background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 4px;
     &:hover {
       background: ${OS_LEGAL_COLORS.textMuted};
@@ -75,11 +75,13 @@ const RelationshipOption = styled.div<{ $selected: boolean }>`
   padding: 1rem;
   margin: 0.5rem 0;
   border: 2px solid
-    ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#e5e7eb")};
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  background: ${(props) => (props.$selected ? "#eff6ff" : "white")};
+  background: ${(props) =>
+    props.$selected ? OS_LEGAL_COLORS.blueSurface : "white"};
 
   &:hover {
     border-color: ${OS_LEGAL_COLORS.primaryBlue};
@@ -115,9 +117,9 @@ const InfoBox = styled.div`
 const ModeSection = styled.div`
   margin-bottom: 1.5rem;
   padding: 1rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const AnnotationPill = styled.div<{
@@ -134,22 +136,22 @@ const AnnotationPill = styled.div<{
   transition: all 0.2s;
   background: ${(props) =>
     props.$role === "source"
-      ? "#dbeafe"
+      ? OS_LEGAL_COLORS.blueBorder
       : props.$role === "target"
-      ? "#dcfce7"
+      ? OS_LEGAL_COLORS.successSurface
       : OS_LEGAL_COLORS.surfaceLight};
   border: 2px solid
     ${(props) =>
       props.$role === "source"
         ? OS_LEGAL_COLORS.primaryBlue
         : props.$role === "target"
-        ? "#22c55e"
-        : "#e5e7eb"};
+        ? OS_LEGAL_COLORS.green
+        : OS_LEGAL_COLORS.border};
   color: ${(props) =>
     props.$role === "source"
-      ? "#1e40af"
+      ? OS_LEGAL_COLORS.blueDark
       : props.$role === "target"
-      ? "#166534"
+      ? OS_LEGAL_COLORS.successText
       : OS_LEGAL_COLORS.textSecondary};
 
   &:hover {
@@ -162,7 +164,7 @@ const AssignmentSection = styled.div`
   margin-top: 1rem;
   padding: 1rem;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
 
   .section-title {
@@ -180,7 +182,7 @@ const AssignmentSection = styled.div`
     gap: 0.25rem;
     min-height: 40px;
     padding: 0.5rem;
-    background: #fafafa;
+    background: ${OS_LEGAL_COLORS.background};
     border-radius: 4px;
   }
 `;
@@ -223,7 +225,9 @@ export const RelationshipActionModal: React.FC<
   const [labelSearchTerm, setLabelSearchTerm] = useState("");
   const [showCreateLabel, setShowCreateLabel] = useState(false);
   const [newLabelText, setNewLabelText] = useState("");
-  const [newLabelColor, setNewLabelColor] = useState("#10b981");
+  const [newLabelColor, setNewLabelColor] = useState<string>(
+    OS_LEGAL_COLORS.greenMedium
+  );
   const [newLabelDescription, setNewLabelDescription] = useState("");
 
   const [smartLabelSearchOrCreate] = useMutation<
@@ -747,7 +751,7 @@ export const RelationshipActionModal: React.FC<
 
                       <AssignmentSection>
                         <div className="section-title">
-                          <Target size={14} color="#22c55e" />
+                          <Target size={14} color={OS_LEGAL_COLORS.green} />
                           Target Annotations
                         </div>
                         <div className="pills-container">

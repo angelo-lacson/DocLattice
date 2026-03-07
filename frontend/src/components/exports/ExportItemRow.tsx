@@ -3,6 +3,7 @@ import { Loader2, Trash2, Download } from "lucide-react";
 import { IconButton } from "@os-legal/ui";
 import { ExportObject } from "../../types/graphql-api";
 import { DateTimeWidget } from "../widgets/data-display/DateTimeWidget";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ExportItemRowProps {
   style?: Record<string, any>;
@@ -65,7 +66,7 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
             aria-label="Delete export"
             size="sm"
             onClick={() => onDelete(item.id)}
-            style={{ color: "#ef4444" }}
+            style={{ color: OS_LEGAL_COLORS.dangerBorderHover }}
           >
             <Trash2 size={14} />
           </IconButton>
@@ -76,7 +77,7 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
               onClick={() => {
                 window.location.href = item.file;
               }}
-              style={{ color: "#3b82f6" }}
+              style={{ color: OS_LEGAL_COLORS.primaryBlue }}
             >
               <Download size={14} />
             </IconButton>

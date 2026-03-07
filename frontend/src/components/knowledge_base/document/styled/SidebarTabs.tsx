@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const TabBadge = styled.span<{ $isActive: boolean }>`
   position: absolute;
@@ -9,7 +10,9 @@ export const TabBadge = styled.span<{ $isActive: boolean }>`
   height: 18px;
   padding: 0 4px;
   background: ${(props) =>
-    props.$isActive ? "rgba(255, 255, 255, 0.25)" : "#3b82f6"};
+    props.$isActive
+      ? "rgba(255, 255, 255, 0.25)"
+      : OS_LEGAL_COLORS.primaryBlue};
   color: white;
   font-size: 10px;
   font-weight: 600;
@@ -31,7 +34,7 @@ export const MobileTabBar = styled.div`
   @media (max-width: 768px) {
     display: flex;
     background: white;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
     position: sticky;
     top: 0;
     z-index: 20;
@@ -42,21 +45,28 @@ export const MobileTab = styled.button<{ $active?: boolean }>`
   flex: 1;
   padding: 1rem;
   border: none;
-  background: ${(props) => (props.$active ? "#eff6ff" : "white")};
-  color: ${(props) => (props.$active ? "#3b82f6" : "#64748b")};
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.blueSurface : "white"};
+  color: ${(props) =>
+    props.$active
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   font-weight: ${(props) => (props.$active ? "600" : "500")};
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s;
   border-bottom: 2px solid
-    ${(props) => (props.$active ? "#3b82f6" : "transparent")};
+    ${(props) => (props.$active ? OS_LEGAL_COLORS.primaryBlue : "transparent")};
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
 
   &:hover:not(:disabled) {
-    background: ${(props) => (props.$active ? "#eff6ff" : "#f8fafc")};
+    background: ${(props) =>
+      props.$active
+        ? OS_LEGAL_COLORS.blueSurface
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 
   svg {
@@ -136,7 +146,8 @@ export const SidebarTab = styled(motion.button)<{
   svg {
     width: 20px;
     height: 20px;
-    color: ${(props) => (props.$isActive ? "white" : "#64748b")};
+    color: ${(props) =>
+      props.$isActive ? "white" : OS_LEGAL_COLORS.textSecondary};
     transition: all 0.3s ease;
     position: relative;
     z-index: 1;
@@ -149,7 +160,8 @@ export const SidebarTab = styled(motion.button)<{
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.05em;
-    color: ${(props) => (props.$isActive ? "white" : "#64748b")};
+    color: ${(props) =>
+      props.$isActive ? "white" : OS_LEGAL_COLORS.textSecondary};
     text-transform: uppercase;
     white-space: nowrap;
     position: relative;
@@ -185,11 +197,13 @@ export const SidebarTab = styled(motion.button)<{
 
     svg {
       transform: ${(props) => (props.$isActive ? "scale(1.1)" : "scale(1.05)")};
-      color: ${(props) => (props.$isActive ? "white" : "#3b82f6")};
+      color: ${(props) =>
+        props.$isActive ? "white" : OS_LEGAL_COLORS.primaryBlue};
     }
 
     .tab-label {
-      color: ${(props) => (props.$isActive ? "white" : "#3b82f6")};
+      color: ${(props) =>
+        props.$isActive ? "white" : OS_LEGAL_COLORS.primaryBlue};
     }
   }
 

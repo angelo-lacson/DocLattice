@@ -1,5 +1,6 @@
 import React from "react";
 import { BookOpen, Edit, Plus, Activity, Sparkles } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { SafeMarkdown } from "../../knowledge_base/markdown/SafeMarkdown";
 import {
   AboutCard,
@@ -136,12 +137,15 @@ export const CorpusAbout: React.FC<CorpusAboutProps> = ({
           <>
             <Sparkles
               size={48}
-              style={{ marginBottom: "1rem", color: "#cbd5e1" }}
+              style={{
+                marginBottom: "1rem",
+                color: OS_LEGAL_COLORS.borderHover,
+              }}
             />
             <p
               style={{
                 fontSize: "1.125rem",
-                color: "#64748b",
+                color: OS_LEGAL_COLORS.textSecondary,
                 marginBottom: "1.5rem",
               }}
             >

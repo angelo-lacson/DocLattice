@@ -1135,14 +1135,13 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   data-testid="compaction-banner"
                   style={{
                     padding: "0.5rem 1rem",
-                    borderTop: "1px solid #bfdbfe",
-                    background:
-                      "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                    borderTop: `1px solid ${OS_LEGAL_COLORS.blueBorder}`,
+                    background: `linear-gradient(135deg, ${OS_LEGAL_COLORS.blueSurface} 0%, #dbeafe 100%)`,
                     display: "flex",
                     alignItems: "center",
                     gap: "0.5rem",
                     fontSize: "0.8125rem",
-                    color: "#1e40af",
+                    color: OS_LEGAL_COLORS.blueDark,
                     flexShrink: 0,
                     animation: "compaction-pulse 2s ease-in-out infinite",
                   }}
@@ -1216,12 +1215,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                           contextStatus.used_tokens /
                             contextStatus.context_window >
                           0.85
-                            ? "#ef4444"
+                            ? OS_LEGAL_COLORS.dangerBorderHover
                             : contextStatus.used_tokens /
                                 contextStatus.context_window >
                               0.6
                             ? "#f59e0b"
-                            : "#22c55e",
+                            : OS_LEGAL_COLORS.green,
                         transition: "width 0.3s ease, background 0.3s ease",
                       }}
                     />

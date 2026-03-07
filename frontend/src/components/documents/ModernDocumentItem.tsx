@@ -26,6 +26,7 @@ import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 import { X } from "lucide-react";
 import { FAILURE_COLORS } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 import {
   editingDocument,
@@ -61,7 +62,7 @@ const spin = keyframes`
 const CardContainer = styled.div<{ isLongPressing?: boolean }>`
   position: relative;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   overflow: visible;
   transition: all 0.2s ease;
@@ -72,7 +73,7 @@ const CardContainer = styled.div<{ isLongPressing?: boolean }>`
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     transform: translateY(-2px);
 
@@ -82,7 +83,7 @@ const CardContainer = styled.div<{ isLongPressing?: boolean }>`
   }
 
   &.is-selected {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   }
 
@@ -98,14 +99,14 @@ const CardContainer = styled.div<{ isLongPressing?: boolean }>`
   &.long-pressing {
     transform: scale(0.98);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    border-color: #94a3b8;
+    border-color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
 const CardPreview = styled.div`
   position: relative;
   height: 90px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   overflow: hidden;
   border-radius: 7px 7px 0 0;
 
@@ -139,7 +140,7 @@ const CardContent = styled.div`
 const CardTitle = styled.div`
   font-size: 0.875rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -152,7 +153,7 @@ const CardMeta = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: auto;
   overflow: visible;
 
@@ -185,7 +186,7 @@ const CardCheckbox = styled.div`
   height: 20px;
   border-radius: 4px;
   background: white;
-  border: 2px solid #cbd5e1;
+  border: 2px solid ${OS_LEGAL_COLORS.borderHover};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -194,12 +195,12 @@ const CardCheckbox = styled.div`
   transition: all 0.15s ease;
 
   &:hover {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 
   &.selected {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
 
     .icon {
       color: white;
@@ -266,7 +267,11 @@ const RelationshipBadge = styled.div`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    background: linear-gradient(
+      135deg,
+      #0d9488 0%,
+      ${OS_LEGAL_COLORS.accent} 100%
+    );
     transform: scale(1.05);
     box-shadow: 0 4px 12px rgba(20, 184, 166, 0.4);
   }
@@ -336,10 +341,10 @@ const PopupContent = styled.div`
     width: 6px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 3px;
   }
 `;
@@ -349,7 +354,7 @@ const RelationshipItem = styled.div`
   align-items: flex-start;
   gap: 10px;
   padding: 10px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
 
   &:last-child {
     border-bottom: none;
@@ -365,7 +370,7 @@ const RelationshipIcon = styled.div<{ $color?: string }>`
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: ${(props) => props.$color || "#f1f5f9"};
+  background: ${(props) => props.$color || OS_LEGAL_COLORS.surfaceLight};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -374,7 +379,8 @@ const RelationshipIcon = styled.div<{ $color?: string }>`
   svg {
     width: 14px;
     height: 14px;
-    color: ${(props) => (props.$color ? "white" : "#64748b")};
+    color: ${(props) =>
+      props.$color ? "white" : OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -387,8 +393,9 @@ const RelationshipLabel = styled.div<{ $color?: string }>`
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: ${(props) => (props.$color ? `${props.$color}20` : "#f1f5f9")};
-  color: ${(props) => props.$color || "#64748b"};
+  background: ${(props) =>
+    props.$color ? `${props.$color}20` : OS_LEGAL_COLORS.surfaceLight};
+  color: ${(props) => props.$color || OS_LEGAL_COLORS.textSecondary};
   border-radius: 4px;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -400,7 +407,7 @@ const RelationshipLabel = styled.div<{ $color?: string }>`
 const LinkedDocTitle = styled.div`
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -409,7 +416,7 @@ const LinkedDocTitle = styled.div`
 
 const RelationshipDirection = styled.div`
   font-size: 0.6875rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 2px;
 `;
 
@@ -433,7 +440,11 @@ const ListRelationshipBadge = styled.div`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    background: linear-gradient(
+      135deg,
+      #0d9488 0%,
+      ${OS_LEGAL_COLORS.accent} 100%
+    );
   }
 `;
 
@@ -511,7 +522,7 @@ const ProcessingDeleteButton = styled.button`
 const ListContainer = styled.div<{ isLongPressing?: boolean }>`
   position: relative;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 12px;
   display: flex;
@@ -523,13 +534,13 @@ const ListContainer = styled.div<{ isLongPressing?: boolean }>`
   overflow: visible;
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 
   &.is-selected {
-    border-color: #3b82f6;
-    background: #eff6ff;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
+    background: ${OS_LEGAL_COLORS.blueSurface};
   }
 
   &.backend-locked {
@@ -550,8 +561,8 @@ const ListContainer = styled.div<{ isLongPressing?: boolean }>`
   &.long-pressing {
     transform: scale(0.99);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-    border-color: #94a3b8;
-    background: #f8fafc;
+    border-color: ${OS_LEGAL_COLORS.textMuted};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
@@ -562,8 +573,8 @@ const ListThumbnail = styled.div`
   flex-shrink: 0;
   border-radius: 6px;
   overflow: hidden;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
 
   img {
     width: 100%;
@@ -594,7 +605,7 @@ const ListContent = styled.div`
 const ListTitle = styled.div`
   font-size: 0.875rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -603,7 +614,7 @@ const ListTitle = styled.div`
 
 const ListDescription = styled.div`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -615,7 +626,7 @@ const ListMeta = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   overflow: visible;
   position: relative;
 
@@ -638,7 +649,7 @@ const ListCheckbox = styled.div`
   flex-shrink: 0;
   border-radius: 4px;
   background: white;
-  border: 2px solid #cbd5e1;
+  border: 2px solid ${OS_LEGAL_COLORS.borderHover};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -646,12 +657,12 @@ const ListCheckbox = styled.div`
   transition: all 0.15s ease;
 
   &:hover {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 
   &.selected {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
 
     .icon {
       color: white;
@@ -760,11 +771,11 @@ const ActionButton = styled.button`
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s ease;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   &:hover {
     background: white;
-    color: #0f172a;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     transform: scale(1.05);
   }
 
@@ -773,11 +784,11 @@ const ActionButton = styled.button`
   }
 
   &.primary {
-    background: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
 
     &:hover {
-      background: #2563eb;
+      background: ${OS_LEGAL_COLORS.primaryBlueHover};
     }
   }
 
@@ -895,9 +906,9 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
       }
     : isDocumentDragOver
     ? {
-        outline: "2px dashed #3b82f6",
+        outline: `2px dashed ${OS_LEGAL_COLORS.primaryBlue}`,
         outlineOffset: "2px",
-        background: "#eff6ff",
+        background: OS_LEGAL_COLORS.blueSurface,
       }
     : undefined;
 
@@ -1190,7 +1201,11 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
       ) : (
         <>
           <div
-            style={{ width: "100%", height: "100%", background: "#f8fafc" }}
+            style={{
+              width: "100%",
+              height: "100%",
+              background: OS_LEGAL_COLORS.surfaceHover,
+            }}
           />
           <img
             src={fallback_doc_icon}
@@ -1388,7 +1403,12 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                         );
                       })
                     ) : (
-                      <div style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
+                      <div
+                        style={{
+                          color: OS_LEGAL_COLORS.textMuted,
+                          fontSize: "0.75rem",
+                        }}
+                      >
                         Loading relationships...
                       </div>
                     )}
@@ -1618,7 +1638,12 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                         );
                       })
                     ) : (
-                      <div style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
+                      <div
+                        style={{
+                          color: OS_LEGAL_COLORS.textMuted,
+                          fontSize: "0.75rem",
+                        }}
+                      >
                         Loading relationships...
                       </div>
                     )}

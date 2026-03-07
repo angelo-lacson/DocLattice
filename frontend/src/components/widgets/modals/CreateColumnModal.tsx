@@ -8,6 +8,7 @@ import { ExtractionConfigSection } from "./sections/ExtractionConfigSection";
 import { AdvancedOptionsSection } from "./sections/AdvancedOptionsSection";
 import { LooseObject } from "../../types";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { ColumnType } from "../../../types/graphql-api";
 import { parsePydanticModel } from "../../../utils/parseOutputType";
 import { FieldType } from "../ModelFieldBuilder";
@@ -59,7 +60,7 @@ const ModalDialog = styled.div`
 
 const ModalHeaderStyled = styled.div`
   padding: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -75,7 +76,7 @@ const ModalBodyStyled = styled.div`
 
 const ModalFooterStyled = styled.div`
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   justify-content: flex-end;
   gap: 1rem;

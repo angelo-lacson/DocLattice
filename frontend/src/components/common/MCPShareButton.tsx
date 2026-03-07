@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { Cable, Copy, Check, ExternalLink } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button, Input } from "@os-legal/ui";
@@ -22,7 +23,7 @@ const Popover = styled.div<{ $visible: boolean }>`
   z-index: 1000;
   width: 340px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
   opacity: ${(props) => (props.$visible ? 1 : 0)};
@@ -39,14 +40,14 @@ const Popover = styled.div<{ $visible: boolean }>`
 
 const PopoverHeader = styled.div`
   padding: 16px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
 `;
 
 const PopoverTitle = styled.h4`
   margin: 0 0 4px;
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 8px;
@@ -54,14 +55,14 @@ const PopoverTitle = styled.h4`
   svg {
     width: 16px;
     height: 16px;
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 `;
 
 const PopoverDescription = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.4;
 `;
 
@@ -73,7 +74,7 @@ const UrlLabel = styled.label`
   display: block;
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-bottom: 6px;
 `;
 
@@ -116,7 +117,7 @@ const SetupHint = styled.div`
   background: #f0fdfa;
   border-radius: 8px;
   font-size: 12px;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   line-height: 1.5;
 
   svg {
@@ -128,13 +129,13 @@ const SetupHint = styled.div`
 `;
 
 const SetupLink = styled.a`
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 2px;
 
   &:hover {
-    color: #0d6560;
+    color: ${OS_LEGAL_COLORS.accentHover};
   }
 `;
 

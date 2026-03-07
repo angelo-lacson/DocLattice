@@ -3,6 +3,7 @@ import {
   PIPELINE_UI,
   KNOWN_ACRONYMS,
 } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import doclingLogo from "../../assets/icons/pipeline/docling.svg";
 import llamaindexLogo from "../../assets/icons/pipeline/llamaindex.svg";
 import sentenceTransformersLogo from "../../assets/icons/pipeline/sentence-transformers.svg";
@@ -66,7 +67,14 @@ export const TextParserIcon: React.FC<IconProps> = ({
     className={className}
   >
     {/* Document */}
-    <rect x="8" y="4" width="32" height="40" rx="2" fill="#64748B" />
+    <rect
+      x="8"
+      y="4"
+      width="32"
+      height="40"
+      rx="2"
+      fill={OS_LEGAL_COLORS.textSecondary}
+    />
     {/* Text lines */}
     <rect x="12" y="10" width="20" height="3" rx="1" fill="white" />
     <rect
@@ -175,9 +183,30 @@ export const TextThumbnailIcon: React.FC<IconProps> = ({
     <rect x="9" y="11" width="30" height="26" rx="2" fill="white" />
     {/* Text preview lines */}
     <rect x="12" y="15" width="18" height="2" rx="1" fill="#FCD34D" />
-    <rect x="12" y="20" width="24" height="2" rx="1" fill="#FDE68A" />
-    <rect x="12" y="25" width="20" height="2" rx="1" fill="#FDE68A" />
-    <rect x="12" y="30" width="16" height="2" rx="1" fill="#FDE68A" />
+    <rect
+      x="12"
+      y="20"
+      width="24"
+      height="2"
+      rx="1"
+      fill={OS_LEGAL_COLORS.warningBorder}
+    />
+    <rect
+      x="12"
+      y="25"
+      width="20"
+      height="2"
+      rx="1"
+      fill={OS_LEGAL_COLORS.warningBorder}
+    />
+    <rect
+      x="12"
+      y="30"
+      width="16"
+      height="2"
+      rx="1"
+      fill={OS_LEGAL_COLORS.warningBorder}
+    />
     {/* TXT badge */}
     <rect x="28" y="30" width="14" height="10" rx="1" fill="#B45309" />
     <text
@@ -211,9 +240,9 @@ export const ModernBertIcon: React.FC<IconProps> = ({
   >
     {/* Neural network nodes */}
     {/* Input layer */}
-    <circle cx="10" cy="14" r="4" fill="#10B981" />
-    <circle cx="10" cy="24" r="4" fill="#10B981" />
-    <circle cx="10" cy="34" r="4" fill="#10B981" />
+    <circle cx="10" cy="14" r="4" fill={OS_LEGAL_COLORS.greenMedium} />
+    <circle cx="10" cy="24" r="4" fill={OS_LEGAL_COLORS.greenMedium} />
+    <circle cx="10" cy="34" r="4" fill={OS_LEGAL_COLORS.greenMedium} />
     {/* Hidden layer */}
     <circle cx="24" cy="12" r="4" fill="#34D399" />
     <circle cx="24" cy="24" r="4" fill="#34D399" />
@@ -227,7 +256,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
       y1="14"
       x2="20"
       y2="12"
-      stroke="#10B981"
+      stroke={OS_LEGAL_COLORS.greenMedium}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -236,7 +265,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
       y1="14"
       x2="20"
       y2="24"
-      stroke="#10B981"
+      stroke={OS_LEGAL_COLORS.greenMedium}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -245,7 +274,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
       y1="24"
       x2="20"
       y2="12"
-      stroke="#10B981"
+      stroke={OS_LEGAL_COLORS.greenMedium}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -254,7 +283,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
       y1="24"
       x2="20"
       y2="24"
-      stroke="#10B981"
+      stroke={OS_LEGAL_COLORS.greenMedium}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -263,7 +292,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
       y1="24"
       x2="20"
       y2="36"
-      stroke="#10B981"
+      stroke={OS_LEGAL_COLORS.greenMedium}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -272,7 +301,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
       y1="34"
       x2="20"
       y2="24"
-      stroke="#10B981"
+      stroke={OS_LEGAL_COLORS.greenMedium}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -281,7 +310,7 @@ export const ModernBertIcon: React.FC<IconProps> = ({
       y1="34"
       x2="20"
       y2="36"
-      stroke="#10B981"
+      stroke={OS_LEGAL_COLORS.greenMedium}
       strokeWidth="1"
       opacity="0.5"
     />
@@ -404,19 +433,19 @@ export const MultimodalIcon: React.FC<IconProps> = ({
     <rect x="26" y="8" width="18" height="24" rx="2" fill="#0EA5E9" />
     <rect x="28" y="10" width="14" height="18" rx="1" fill="white" />
     <path d="M28 24 L33 18 L38 22 L42 16 L42 26 L28 26 Z" fill="#7DD3FC" />
-    <circle cx="37" cy="14" r="2" fill="#BAE6FD" />
+    <circle cx="37" cy="14" r="2" fill={OS_LEGAL_COLORS.infoBorder} />
 
     {/* Merge arrow / connection */}
     <path
       d="M13 34 L13 38 L24 44 L35 38 L35 34"
-      stroke="#0284C7"
+      stroke={OS_LEGAL_COLORS.infoText}
       strokeWidth="2"
       fill="none"
     />
-    <circle cx="24" cy="44" r="3" fill="#0284C7" />
+    <circle cx="24" cy="44" r="3" fill={OS_LEGAL_COLORS.infoText} />
 
     {/* Plus symbol in center */}
-    <circle cx="24" cy="20" r="6" fill="#0369A1" />
+    <circle cx="24" cy="20" r="6" fill={OS_LEGAL_COLORS.infoText} />
     <rect x="22" y="17" width="4" height="6" rx="1" fill="white" />
     <rect x="21" y="18.5" width="6" height="3" rx="1" fill="white" />
   </svg>
@@ -440,10 +469,10 @@ export const GenericComponentIcon: React.FC<IconProps> = ({
     {/* Gear/cog shape */}
     <path
       d="M24 8 L27 8 L28 12 L32 13 L35 10 L37 12 L35 16 L36 20 L40 21 L40 24 L36 25 L35 29 L38 32 L36 35 L32 32 L28 34 L27 38 L24 38 L23 34 L19 33 L16 36 L13 34 L15 30 L14 26 L10 25 L10 22 L14 21 L15 17 L12 14 L14 11 L18 14 L22 12 L23 8 Z"
-      fill="#94A3B8"
+      fill={OS_LEGAL_COLORS.textMuted}
     />
     <circle cx="24" cy="23" r="6" fill="white" />
-    <circle cx="24" cy="23" r="3" fill="#94A3B8" />
+    <circle cx="24" cy="23" r="3" fill={OS_LEGAL_COLORS.textMuted} />
   </svg>
 );
 

@@ -204,7 +204,8 @@ const TypeBadge = styled.span<{ $type: "RELATIONSHIP" | "NOTES" }>`
   font-weight: 500;
   background: ${(props) =>
     props.$type === "RELATIONSHIP" ? "#dbeafe" : "#fef3c7"};
-  color: ${(props) => (props.$type === "RELATIONSHIP" ? "#1e40af" : "#92400e")};
+  color: ${(props) =>
+    props.$type === "RELATIONSHIP" ? OS_LEGAL_COLORS.blueDark : "#92400e"};
 `;
 
 const LabelBadge = styled.span<{ $color: string }>`
@@ -245,7 +246,7 @@ const ActionButton = styled.button`
 
   &:hover {
     background: ${OS_LEGAL_COLORS.surfaceHover};
-    color: #ef4444;
+    color: ${OS_LEGAL_COLORS.dangerBorderHover};
   }
 
   &:disabled {
