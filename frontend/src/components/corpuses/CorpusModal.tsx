@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import styled from "styled-components";
+import styled, { createGlobalStyle } from "styled-components";
 import {
   Modal,
   ModalHeader,
@@ -45,68 +45,46 @@ export interface CorpusModalProps {
 // Breakpoints
 const TABLET_BREAKPOINT = 1024;
 
-// Styled Components - minimal overrides for @os-legal/ui components
-const StyledModalWrapper = styled.div`
-  /* Override modal sizing and mobile behavior */
-  .oc-modal-overlay {
-    padding: var(--oc-spacing-md);
+// Global styles for the corpus modal — Modal renders via portal outside the
+// React tree, so we must use createGlobalStyle instead of wrapper descendant selectors.
+// TODO: Fix upstream in @os-legal/ui — .oc-modal-body needs min-height: 0
+// to allow flex shrinking in the column layout.
+const CorpusModalStyles = createGlobalStyle`
+  /* Fix flexbox min-height gotcha: without min-height: 0 the body won't
+     shrink below its content size, preventing overflow-y: auto from working */
+  .oc-modal .oc-modal-body {
+    min-height: 0;
+    background: var(--oc-bg-subtle, #f1f5f9);
+  }
 
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .oc-modal .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+
+  .oc-modal .oc-modal-footer {
+    border-top: 1px solid var(--oc-border-default);
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .oc-modal-overlay {
       padding: 0;
       align-items: flex-end;
     }
-  }
 
-  .oc-modal {
-    width: 100%;
-    max-width: 640px;
-    /* Allow modal to scroll internally while dropdowns overflow */
-    overflow-y: auto;
-    overflow-x: visible;
-
-    @media (max-width: ${TABLET_BREAKPOINT}px) {
-      max-width: 90vw;
-    }
-
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .oc-modal {
       max-width: 100%;
       max-height: 95vh;
       border-radius: var(--oc-radius-lg) var(--oc-radius-lg) 0 0;
       animation: oc-slide-up-fade 0.3s var(--oc-easing-spring);
     }
 
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) and (orientation: landscape) {
-      max-height: 100vh;
-      border-radius: 0;
-    }
-  }
-
-  /* Ensure Semantic UI dropdowns appear above modal content */
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
-  }
-
-  .oc-modal-body {
-    background: var(--oc-bg-subtle, #f1f5f9);
-    padding: var(--oc-spacing-lg);
-    /* Allow dropdowns to overflow the modal body */
-    overflow: visible;
-
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .oc-modal .oc-modal-body {
       padding: var(--oc-spacing-md);
-      /* Extra padding for content to scroll above sticky footer */
       padding-bottom: calc(var(--oc-spacing-xl) + 80px);
-      -webkit-overflow-scrolling: touch;
-      /* On mobile, we need scrolling */
-      overflow-y: auto;
     }
-  }
 
-  .oc-modal-footer {
-    background: var(--oc-bg-surface);
-    border-top: 1px solid var(--oc-border-default);
-
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .oc-modal .oc-modal-footer {
       position: sticky;
       bottom: 0;
       flex-direction: column-reverse;
@@ -119,6 +97,19 @@ const StyledModalWrapper = styled.div`
         width: 100%;
         justify-content: center;
       }
+    }
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) and (orientation: landscape) {
+    .oc-modal {
+      max-height: 100vh;
+      border-radius: 0;
+    }
+  }
+
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    .oc-modal {
+      max-width: 90vw;
     }
   }
 `;
@@ -590,7 +581,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   );
 
   return (
-    <StyledModalWrapper>
+    <>
+      <CorpusModalStyles />
       <Modal open={open} onClose={onClose} size="lg" closeOnEscape={!loading}>
         <ModalHeader
           title={headerTitle}
@@ -735,7 +727,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
           )}
         </ModalFooter>
       </Modal>
-    </StyledModalWrapper>
+    </>
   );
 };
 
