@@ -218,7 +218,8 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
     <div>
       <div style={{ marginBottom: "1rem" }}>
         <label>
-          Auto-Award Criteria Type <span style={{ color: "red" }}>*</span>
+          Auto-Award Criteria Type{" "}
+          <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
         </label>
         <Dropdown
           placeholder="Select criteria type"
@@ -241,7 +242,9 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
             <div key={field.name} style={{ marginBottom: "1rem" }}>
               <label>
                 {field.label}
-                {field.required && <span style={{ color: "red" }}> *</span>}
+                {field.required && (
+                  <span style={{ color: OS_LEGAL_COLORS.danger }}> *</span>
+                )}
               </label>
               {field.description && (
                 <p

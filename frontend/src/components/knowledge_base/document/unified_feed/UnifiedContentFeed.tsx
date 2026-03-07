@@ -1,3 +1,4 @@
+// TODO: migrate Loader, Button, and Icon from semantic-ui-react to @os-legal/ui (Spinner, Button) and lucide-react (icons)
 import React, {
   useCallback,
   useEffect,

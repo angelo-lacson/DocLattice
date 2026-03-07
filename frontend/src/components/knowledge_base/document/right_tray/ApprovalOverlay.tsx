@@ -114,7 +114,12 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
         </div>
 
         <div style={{ marginBottom: "1.5rem" }}>
-          <p style={{ margin: "0 0 1rem 0", color: "#374151" }}>
+          <p
+            style={{
+              margin: "0 0 1rem 0",
+              color: OS_LEGAL_COLORS.textTertiary,
+            }}
+          >
             The assistant wants to execute the following tool:
           </p>
           <div

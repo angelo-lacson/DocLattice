@@ -1,3 +1,4 @@
+// TODO: migrate Button to @os-legal/ui; Segment has no direct equivalent yet
 import { Button, Segment } from "semantic-ui-react";
 import styled, { css } from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";

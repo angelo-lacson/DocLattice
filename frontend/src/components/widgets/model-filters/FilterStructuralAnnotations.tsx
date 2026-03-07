@@ -1,3 +1,4 @@
+// TODO: migrate Label from semantic-ui-react to @os-legal/ui Chip or equivalent
 import { useReactiveVar } from "@apollo/client";
 import { Label } from "semantic-ui-react";
 import Select, { SelectOption } from "../../common/Select";
