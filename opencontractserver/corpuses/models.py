@@ -1284,6 +1284,14 @@ class CorpusActionTemplate(BaseOCModel):
     def to_action_kwargs(self, corpus, creator=None):
         """Return kwargs dict for constructing a CorpusAction from this template.
 
+        Note:
+            The returned ``agent_config`` is a FK reference to the *same*
+            ``AgentConfiguration`` that the template uses.  All corpus actions
+            cloned from a template therefore share one configuration object.
+            If an admin later edits that ``AgentConfiguration``, every cloned
+            action is affected.  This is intentional — templates act as a
+            single source of truth for agent behaviour.
+
         Raises:
             ValueError: If neither ``creator`` nor ``corpus.creator`` is set.
         """
