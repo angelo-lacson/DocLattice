@@ -1,7 +1,7 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { MockedProvider } from "@apollo/client/testing";
-import { TemplateActionsSection } from "../src/components/corpuses/settings/TemplateActionsSection";
+import { CorpusActionsSection } from "../src/components/corpuses/settings/CorpusActionsSection";
 import { GET_CORPUS_ACTION_TEMPLATES } from "../src/graphql/queries";
 import { docScreenshot } from "./utils/docScreenshot";
 
@@ -37,27 +37,26 @@ const mockActions = [
     id: "action-1",
     name: "Document Description Updater",
     trigger: "ADD_DOCUMENT",
-    disabled: true,
+    disabled: false,
     sourceTemplate: { id: "tmpl-1", name: "Document Description Updater" },
-    taskInstructions: "Read the document text...",
+    taskInstructions: "Read the document text and write a description.",
     agentConfig: {
       id: "agent-1",
       name: "Doc Desc Agent",
       description: "Writes descriptions",
     },
+    creator: { username: "testuser" },
+    created: "2026-01-15T10:00:00Z",
   },
   {
-    id: "action-3",
-    name: "Key Terms Annotator",
+    id: "action-2",
+    name: "Custom Extract Action",
     trigger: "ADD_DOCUMENT",
-    disabled: false,
-    sourceTemplate: { id: "tmpl-3", name: "Key Terms Annotator" },
-    taskInstructions: "Identify key terms...",
-    agentConfig: {
-      id: "agent-3",
-      name: "Key Terms Agent",
-      description: "Annotates key terms",
-    },
+    disabled: true,
+    taskInstructions: null,
+    fieldset: { id: "fs-1", name: "Contract Fields" },
+    creator: { username: "testuser" },
+    created: "2026-02-01T10:00:00Z",
   },
 ];
 
@@ -75,86 +74,64 @@ const templatesMock = {
   },
 };
 
-const emptyTemplatesMock = {
-  request: {
-    query: GET_CORPUS_ACTION_TEMPLATES,
-    variables: { isActive: true },
-  },
-  result: {
-    data: {
-      corpusActionTemplates: {
-        edges: [],
-      },
-    },
-  },
-};
-
-test.describe("TemplateActionsSection", () => {
-  test("renders action library with available and added sections", async ({
+test.describe("CorpusActionsSection with Template Library", () => {
+  test("shows template badge on template-sourced actions", async ({
     mount,
     page,
   }) => {
     await mount(
       <MockedProvider mocks={[templatesMock]} addTypename={false}>
-        <TemplateActionsSection
+        <CorpusActionsSection
           corpusId="corpus-1"
-          actions={mockActions}
+          actions={mockActions as any}
+          onAddAction={() => {}}
+          onEditAction={() => {}}
+          onDeleteAction={() => {}}
           onUpdate={() => {}}
         />
       </MockedProvider>
     );
 
-    // Wait for the GraphQL mock to resolve and the section to render
-    await expect(page.locator("text=Action Library")).toBeVisible({
-      timeout: 10000,
-    });
-
-    // Both section labels visible
-    await expect(page.getByText("Available", { exact: true })).toBeVisible();
+    // The template-sourced action should show a "Template" badge
     await expect(
-      page.getByText("Added to this corpus", { exact: true })
+      page.getByText("Template", { exact: true }).first()
     ).toBeVisible();
 
-    // The one template not yet added should be visible in Available
-    await expect(
-      page.locator("text=Corpus Description Updater").first()
-    ).toBeVisible();
+    // Both actions should be rendered
+    await expect(page.getByText("Document Description Updater")).toBeVisible();
+    await expect(page.getByText("Custom Extract Action")).toBeVisible();
 
-    // All three template names should be visible somewhere on the page
-    await expect(
-      page.locator("text=Document Description Updater").first()
-    ).toBeVisible();
-    await expect(
-      page.locator("text=Key Terms Annotator").first()
-    ).toBeVisible();
-
-    // Toggle switches present only for added templates (2)
-    const toggles = page.locator(".ui.toggle.checkbox");
-    await expect(toggles).toHaveCount(2);
-
-    // Add button visible for the available template
-    await expect(page.locator("text=Add").first()).toBeVisible();
-
-    await docScreenshot(page, "corpus-settings--action-library--mixed-state", {
+    await docScreenshot(page, "corpus-settings--actions-with-template-badge", {
       fullPage: true,
     });
   });
 
-  test("renders nothing when no templates returned", async ({
-    mount,
-    page,
-  }) => {
+  test("opens template picker dropdown", async ({ mount, page }) => {
     await mount(
-      <MockedProvider mocks={[emptyTemplatesMock]} addTypename={false}>
-        <TemplateActionsSection
+      <MockedProvider mocks={[templatesMock]} addTypename={false}>
+        <CorpusActionsSection
           corpusId="corpus-1"
-          actions={[]}
+          actions={mockActions as any}
+          onAddAction={() => {}}
+          onEditAction={() => {}}
+          onDeleteAction={() => {}}
           onUpdate={() => {}}
         />
       </MockedProvider>
     );
 
-    // Should not render the section at all
-    await expect(page.locator("text=Action Library")).not.toBeVisible();
+    // Click the "Add from Library" button
+    await page.getByText("Add from Library").click();
+
+    // Wait for the dropdown to appear with available templates
+    // tmpl-1 is already added, so tmpl-2 and tmpl-3 should be available
+    await expect(
+      page.getByText("Corpus Description Updater").first()
+    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Key Terms Annotator").first()).toBeVisible();
+
+    await docScreenshot(page, "corpus-settings--template-picker-open", {
+      fullPage: true,
+    });
   });
 });

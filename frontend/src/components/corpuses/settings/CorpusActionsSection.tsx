@@ -1,8 +1,12 @@
 /**
  * CorpusActionsSection - Corpus actions list with add/edit/delete functionality
+ * and integrated template library picker.
  */
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "semantic-ui-react";
+import { useQuery, useMutation } from "@apollo/client";
+import styled from "styled-components";
+import { toast } from "react-toastify";
 import {
   Plus,
   Play,
@@ -15,6 +19,7 @@ import {
   User,
   Calendar,
   CheckCircle,
+  Library,
 } from "lucide-react";
 import { CorpusActionData } from "../CreateCorpusActionModal";
 import {
@@ -29,7 +34,24 @@ import {
   AgentPromptBox,
   InfoNote,
 } from "../styles/corpusSettingsStyles";
-import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import {
+  ADD_TEMPLATE_TO_CORPUS,
+  AddTemplateToCorpusInput,
+  AddTemplateToCorpusOutput,
+} from "../../../graphql/mutations";
+import {
+  GET_CORPUS_ACTION_TEMPLATES,
+  GetCorpusActionTemplatesInput,
+  GetCorpusActionTemplatesOutput,
+} from "../../../graphql/queries";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_TYPOGRAPHY,
+} from "../../../assets/configurations/osLegalStyles";
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface CorpusAction {
   id: string;
@@ -44,25 +66,190 @@ interface CorpusAction {
   preAuthorizedTools?: string[] | null;
   creator: { username: string };
   created: string;
+  sourceTemplate?: { id: string; name: string } | null;
 }
 
 interface CorpusActionsSectionProps {
+  corpusId: string;
   actions: CorpusAction[];
   onAddAction: () => void;
   onEditAction: (action: CorpusActionData) => void;
   onDeleteAction: (id: string) => void;
   onRunAction?: (action: CorpusAction) => void;
+  onUpdate?: () => void;
   isSuperuser?: boolean;
 }
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+const TRIGGER_LABELS: Record<string, string> = {
+  ADD_DOCUMENT: "On Add",
+  EDIT_DOCUMENT: "On Edit",
+  NEW_THREAD: "On Thread",
+  NEW_MESSAGE: "On Message",
+};
+
+// ============================================================================
+// Styled components for template picker dropdown
+// ============================================================================
+
+const PickerContainer = styled.div`
+  position: relative;
+  display: inline-block;
+`;
+
+const PickerDropdown = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 380px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  padding: 0.5rem;
+`;
+
+const PickerItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
+`;
+
+const PickerItemInfo = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const PickerItemName = styled.div`
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+`;
+
+const PickerItemDesc = styled.div`
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  font-size: 0.75rem;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const PickerEmpty = styled.div`
+  padding: 1rem;
+  text-align: center;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  font-size: 0.875rem;
+  color: ${OS_LEGAL_COLORS.textMuted};
+`;
+
+const TemplateBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 100px;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  font-size: 0.6875rem;
+  font-weight: 500;
+  background: ${OS_LEGAL_COLORS.accentLight};
+  color: ${OS_LEGAL_COLORS.accent};
+  margin-left: 0.5rem;
+`;
+
+// ============================================================================
+// Component
+// ============================================================================
+
 export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
+  corpusId,
   actions,
   onAddAction,
   onEditAction,
   onDeleteAction,
   onRunAction,
+  onUpdate,
   isSuperuser,
 }) => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!pickerOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        pickerContainerRef.current &&
+        !pickerContainerRef.current.contains(target)
+      ) {
+        setPickerOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [pickerOpen]);
+
+  // Fetch available templates
+  const { data: templatesData } = useQuery<
+    GetCorpusActionTemplatesOutput,
+    GetCorpusActionTemplatesInput
+  >(GET_CORPUS_ACTION_TEMPLATES, {
+    variables: { isActive: true },
+  });
+
+  const [addTemplate, { loading: addingTemplate }] = useMutation<
+    AddTemplateToCorpusOutput,
+    AddTemplateToCorpusInput
+  >(ADD_TEMPLATE_TO_CORPUS);
+
+  const templates =
+    templatesData?.corpusActionTemplates?.edges.map((e) => e.node) || [];
+
+  // Filter out templates already added to the corpus
+  const addedTemplateIds = new Set(
+    actions.filter((a) => a.sourceTemplate?.id).map((a) => a.sourceTemplate!.id)
+  );
+  const availableTemplates = templates.filter(
+    (t) => !addedTemplateIds.has(t.id)
+  );
+
+  const handleAddTemplate = async (templateId: string) => {
+    try {
+      const { data } = await addTemplate({
+        variables: { templateId, corpusId },
+      });
+      if (data?.addTemplateToCorpus?.ok) {
+        toast.success("Action added to corpus");
+        onUpdate?.();
+      } else {
+        toast.error(
+          data?.addTemplateToCorpus?.message || "Failed to add template"
+        );
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add template");
+    }
+    setPickerOpen(false);
+  };
+
   const getTriggerType = (trigger: string): "add" | "edit" => {
     return trigger.toLowerCase().includes("add") ? "add" : "edit";
   };
@@ -90,9 +277,51 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
     <SettingsCard>
       <SettingsCardHeader>
         <SettingsCardTitle>Corpus Actions</SettingsCardTitle>
-        <Button primary size="small" onClick={onAddAction}>
-          <Plus size={14} /> Add Action
-        </Button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <PickerContainer ref={pickerContainerRef}>
+            <Button size="small" onClick={() => setPickerOpen(!pickerOpen)}>
+              <Library size={14} /> Add from Library
+            </Button>
+            {pickerOpen && (
+              <PickerDropdown>
+                {availableTemplates.length === 0 ? (
+                  <PickerEmpty>All templates have been added</PickerEmpty>
+                ) : (
+                  availableTemplates.map((template) => (
+                    <PickerItem
+                      key={template.id}
+                      onClick={() =>
+                        !addingTemplate && handleAddTemplate(template.id)
+                      }
+                    >
+                      <Cpu
+                        size={16}
+                        style={{
+                          color: OS_LEGAL_COLORS.accent,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <PickerItemInfo>
+                        <PickerItemName>{template.name}</PickerItemName>
+                        {template.description && (
+                          <PickerItemDesc>
+                            {template.description}
+                          </PickerItemDesc>
+                        )}
+                      </PickerItemInfo>
+                      <TriggerBadge type={getTriggerType(template.trigger)}>
+                        {TRIGGER_LABELS[template.trigger] || template.trigger}
+                      </TriggerBadge>
+                    </PickerItem>
+                  ))
+                )}
+              </PickerDropdown>
+            )}
+          </PickerContainer>
+          <Button primary size="small" onClick={onAddAction}>
+            <Plus size={14} /> Add Action
+          </Button>
+        </div>
       </SettingsCardHeader>
 
       <SettingsCardContent>
@@ -141,6 +370,12 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                       >
                         {action.name}
                       </h3>
+                      {action.sourceTemplate && (
+                        <TemplateBadge>
+                          <Library size={10} />
+                          Template
+                        </TemplateBadge>
+                      )}
                       <TriggerBadge type={triggerType}>
                         {triggerType === "add" ? "On Add" : "On Edit"}
                       </TriggerBadge>
