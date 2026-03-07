@@ -1055,6 +1055,14 @@ class CorpusAction(BaseOCModel):
     run_on_all_corpuses = django.db.models.BooleanField(
         null=False, default=False, blank=True
     )
+    source_template = django.db.models.ForeignKey(
+        "CorpusActionTemplate",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cloned_actions",
+        help_text="The template this action was cloned from, if any.",
+    )
 
     class Meta:
         constraints = [
@@ -1286,6 +1294,7 @@ class CorpusActionTemplate(BaseOCModel):
             trigger=self.trigger,
             disabled=self.disabled_on_clone,
             creator=resolved_creator,
+            source_template=self,
         )
 
     def clone_to_corpus(self, corpus, creator=None):
