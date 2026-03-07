@@ -7,6 +7,7 @@ import {
   UserBadgeType,
   AgentConfigurationType,
 } from "../../types/graphql-api";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 const BadgeContainer = styled.div`
   display: inline-flex;
@@ -47,20 +48,20 @@ const BadgeContent = styled.div`
 const BadgeTitle = styled.div`
   font-weight: 700;
   font-size: 1em;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const BadgeDescription = styled.div`
   font-size: 0.85em;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.4;
 `;
 
 const BadgeMetadata = styled.div`
   font-size: 0.75em;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 0.3em;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
   padding-top: 0.5em;
 `;
 
@@ -143,7 +144,7 @@ function getAgentBadgeData(
     name: agentConfig.name,
     description: agentConfig.description || undefined,
     icon: badgeConfig.icon || "Bot",
-    color: badgeConfig.color || "#4A90E2",
+    color: badgeConfig.color || OS_LEGAL_COLORS.primaryBlue,
     label: badgeConfig.label || agentConfig.name,
   };
 }
@@ -258,7 +259,10 @@ export const MessageBadges: React.FC<MessageBadgesProps> = ({
 
       {/* Show "+X more" if there are more badges */}
       {userBadges.length > maxBadges && (
-        <MiniStyledBadge $badgeColor="#6b7280" title="More badges available">
+        <MiniStyledBadge
+          $badgeColor={OS_LEGAL_COLORS.textSecondary}
+          title="More badges available"
+        >
           +{userBadges.length - maxBadges} more
         </MiniStyledBadge>
       )}

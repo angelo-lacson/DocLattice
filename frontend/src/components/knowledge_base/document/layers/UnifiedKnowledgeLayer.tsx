@@ -33,6 +33,7 @@ import {
   LoadingPlaceholders,
   MarkdownEditor,
 } from "../StyledContainers";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { useSummaryVersions } from "../floating_summary_preview/hooks/useSummaryVersions";
 import { SafeMarkdown } from "../../markdown/SafeMarkdown";
 import { toast } from "react-toastify";
@@ -266,7 +267,10 @@ const UnifiedKnowledgeLayer: React.FC<Props> = ({
               {selectedSummaryVersion || currentSummaryVersion || 1}
             </div>
             {!isViewingCurrent && (
-              <div className="info-item" style={{ color: "#d97706" }}>
+              <div
+                className="info-item"
+                style={{ color: OS_LEGAL_COLORS.folderIcon }}
+              >
                 <AlertCircle /> Viewing historical version - changes will create
                 a new version
               </div>
@@ -283,7 +287,12 @@ const UnifiedKnowledgeLayer: React.FC<Props> = ({
                 </div>
               </div>
               <div className="toolbar-actions">
-                <span style={{ fontSize: "0.875rem", color: "#64748b" }}>
+                <span
+                  style={{
+                    fontSize: "0.875rem",
+                    color: OS_LEGAL_COLORS.textSecondary,
+                  }}
+                >
                   {editedSummaryContent.length} characters
                 </span>
                 <EditToolbarCloseButton

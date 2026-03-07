@@ -56,7 +56,9 @@ const CardContainer = styled.div<{ $isDropTarget: boolean }>`
         ? "rgba(34, 197, 94, 0.7)"
         : OS_LEGAL_COLORS.textMuted};
     background-color: ${(props) =>
-      props.$isDropTarget ? "rgba(34, 197, 94, 0.12)" : "#f1f5f9"};
+      props.$isDropTarget
+        ? "rgba(34, 197, 94, 0.12)"
+        : OS_LEGAL_COLORS.surfaceLight};
     transform: translateY(-2px);
     box-shadow: ${OS_LEGAL_SPACING.shadowCard};
   }
@@ -76,7 +78,9 @@ const IconWrapper = styled.div<{ $isDropTarget: boolean }>`
   margin-bottom: 12px;
   transition: all 0.2s ease;
   color: ${(props) =>
-    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textSecondary};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.success
+      : OS_LEGAL_COLORS.textSecondary};
 
   ${CardContainer}:hover & {
     background: ${(props) =>
@@ -84,7 +88,9 @@ const IconWrapper = styled.div<{ $isDropTarget: boolean }>`
         ? "linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.35) 100%)"
         : `linear-gradient(135deg, ${OS_LEGAL_COLORS.borderHover} 0%, ${OS_LEGAL_COLORS.textMuted} 100%)`};
     color: ${(props) =>
-      props.$isDropTarget ? "#15803d" : OS_LEGAL_COLORS.textPrimary};
+      props.$isDropTarget
+        ? OS_LEGAL_COLORS.successHover
+        : OS_LEGAL_COLORS.textPrimary};
     transform: scale(1.05);
   }
 `;
@@ -93,7 +99,9 @@ const CardTitle = styled.div<{ $isDropTarget: boolean }>`
   font-size: 14px;
   font-weight: 600;
   color: ${(props) =>
-    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textPrimary};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.success
+      : OS_LEGAL_COLORS.textPrimary};
   text-align: center;
 `;
 
@@ -133,7 +141,9 @@ const ListContainer = styled.div<{ $isDropTarget: boolean }>`
         ? "rgba(34, 197, 94, 0.7)"
         : OS_LEGAL_COLORS.textMuted};
     background-color: ${(props) =>
-      props.$isDropTarget ? "rgba(34, 197, 94, 0.12)" : "#f1f5f9"};
+      props.$isDropTarget
+        ? "rgba(34, 197, 94, 0.12)"
+        : OS_LEGAL_COLORS.surfaceLight};
   }
 
   @media (max-width: 640px) {
@@ -155,7 +165,9 @@ const ListIconWrapper = styled.div<{ $isDropTarget: boolean }>`
   align-items: center;
   justify-content: center;
   color: ${(props) =>
-    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textSecondary};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.success
+      : OS_LEGAL_COLORS.textSecondary};
   transition: all 0.15s ease;
 
   @media (max-width: 640px) {
@@ -176,7 +188,9 @@ const ListTitle = styled.div<{ $isDropTarget: boolean }>`
   font-size: 14px;
   font-weight: 600;
   color: ${(props) =>
-    props.$isDropTarget ? "#16a34a" : OS_LEGAL_COLORS.textPrimary};
+    props.$isDropTarget
+      ? OS_LEGAL_COLORS.success
+      : OS_LEGAL_COLORS.textPrimary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

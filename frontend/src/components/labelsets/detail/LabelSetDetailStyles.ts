@@ -3,6 +3,7 @@ import {
   DEFAULT_LABEL_COLOR,
   PRIMARY_LABEL_COLOR,
 } from "../../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS FOR LABELSET DETAIL PAGE
@@ -12,7 +13,7 @@ export const PageContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: calc(100vh - 60px);
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
 `;
 
@@ -26,7 +27,7 @@ export const Sidebar = styled.aside`
   width: 260px;
   min-width: 260px;
   background: #fff;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   flex-direction: column;
 
@@ -37,7 +38,7 @@ export const Sidebar = styled.aside`
 
 export const SidebarHeader = styled.div`
   padding: 24px 20px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 export const BackLink = styled.button`
@@ -46,7 +47,7 @@ export const BackLink = styled.button`
   gap: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   text-decoration: none;
   padding: 6px 10px 6px 6px;
   margin: -6px -10px -6px -6px;
@@ -57,8 +58,8 @@ export const BackLink = styled.button`
   border: none;
 
   &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -79,7 +80,8 @@ export const NavItem = styled.button<NavItemProps>`
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 500;
-  color: ${(props) => (props.$active ? "#0f766e" : "#475569")};
+  color: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textTertiary};
   cursor: pointer;
   transition: all 0.15s ease;
   border: none;
@@ -90,12 +92,14 @@ export const NavItem = styled.button<NavItemProps>`
   width: 100%;
   text-align: left;
   border-left: 2px solid
-    ${(props) => (props.$active ? "#0f766e" : "transparent")};
+    ${(props) => (props.$active ? OS_LEGAL_COLORS.accent : "transparent")};
   padding-left: ${(props) => (props.$active ? "18px" : "20px")};
 
   &:hover {
-    background: ${(props) => (props.$active ? undefined : "#f8fafc")};
-    color: ${(props) => (props.$active ? "#0f766e" : "#1e293b")};
+    background: ${(props) =>
+      props.$active ? undefined : OS_LEGAL_COLORS.surfaceHover};
+    color: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
   }
 
   .nav-icon {
@@ -112,7 +116,8 @@ export const NavItem = styled.button<NavItemProps>`
     font-size: 12px;
     font-weight: 600;
     color: ${(props) => (props.$active ? "#fff" : `#${DEFAULT_LABEL_COLOR}`)};
-    background: ${(props) => (props.$active ? "#0f766e" : "#f1f5f9")};
+    background: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.surfaceLight};
     padding: 2px 8px;
     border-radius: 10px;
   }
@@ -120,14 +125,14 @@ export const NavItem = styled.button<NavItemProps>`
 
 export const SidebarFooter = styled.div`
   padding: 16px 20px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 // Mobile Navigation
 export const MobileNav = styled.nav`
   display: none;
   background: #fff;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 0 24px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -159,11 +164,12 @@ export const MobileNavTab = styled.button<MobileNavTabProps>`
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: ${(props) => (props.$active ? "#0f766e" : "#475569")};
+  color: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textTertiary};
   background: none;
   border: none;
   border-bottom: 2px solid
-    ${(props) => (props.$active ? "#0f766e" : "transparent")};
+    ${(props) => (props.$active ? OS_LEGAL_COLORS.accent : "transparent")};
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.15s ease;
@@ -173,7 +179,8 @@ export const MobileNavTab = styled.button<MobileNavTabProps>`
   }
 
   &:hover {
-    color: ${(props) => (props.$active ? "#0f766e" : "#1e293b")};
+    color: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
   }
 
   .nav-icon {
@@ -189,7 +196,8 @@ export const MobileNavTab = styled.button<MobileNavTabProps>`
     font-weight: 600;
     padding: 2px 6px;
     border-radius: 10px;
-    background: ${(props) => (props.$active ? "#0f766e" : "#f1f5f9")};
+    background: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.surfaceLight};
     color: ${(props) => (props.$active ? "#fff" : `#${DEFAULT_LABEL_COLOR}`)};
   }
 `;
@@ -202,17 +210,17 @@ export const EditDetailsButton = styled.button`
   width: 100%;
   padding: 10px 16px;
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -226,7 +234,7 @@ export const MainContainer = styled.main`
 export const MainHeader = styled.header`
   padding: 24px 40px;
   background: #fff;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 
   @media (max-width: 900px) {
     padding: 16px 24px;
@@ -239,7 +247,7 @@ export const MobileBackLink = styled.button`
   gap: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   text-decoration: none;
   padding: 6px 10px 6px 6px;
   margin: -6px -10px 12px -6px;
@@ -250,8 +258,8 @@ export const MobileBackLink = styled.button`
   border: none;
 
   &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   @media (max-width: 900px) {
@@ -280,7 +288,7 @@ export const TitleRow = styled.div`
 export const Title = styled.h1`
   font-size: 24px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
 
   @media (max-width: 900px) {
@@ -292,24 +300,24 @@ export const Badge = styled.span`
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
   font-size: 12px;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 export const Meta = styled.div`
   font-size: 14px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   display: flex;
   align-items: center;
   gap: 8px;
 `;
 
 export const MetaSep = styled.span`
-  color: #e2e8f0;
+  color: ${OS_LEGAL_COLORS.border};
 `;
 
 export const HeaderActions = styled.div`
@@ -324,7 +332,7 @@ export const ShareButton = styled.button`
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: #0f766e;
+  background: ${OS_LEGAL_COLORS.accent};
   border: none;
   border-radius: 6px;
   color: #fff;
@@ -374,8 +382,12 @@ export const OverviewHero = styled.div`
 export const OverviewIconBox = styled.div`
   width: 120px;
   height: 120px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    ${OS_LEGAL_COLORS.surfaceLight} 100%
+  );
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -405,7 +417,7 @@ export const OverviewDetails = styled.div`
 export const OverviewDescription = styled.p`
   font-size: 15px;
   line-height: 1.6;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0 0 24px 0;
   max-width: 600px;
 
@@ -431,7 +443,7 @@ export const OverviewStats = styled.div`
 
 export const StatCard = styled.div`
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 16px 20px;
 
@@ -443,7 +455,7 @@ export const StatCard = styled.div`
 export const StatValue = styled.div`
   font-size: 28px;
   font-weight: 600;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   line-height: 1;
   margin-bottom: 4px;
 
@@ -454,7 +466,7 @@ export const StatValue = styled.div`
 
 export const StatLabel = styled.div`
   font-size: 13px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 export const OverviewActions = styled.div`
@@ -473,25 +485,25 @@ export const ActionButton = styled.button`
   gap: 6px;
   padding: 8px 14px;
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 
   &.danger {
-    color: #dc2626;
+    color: ${OS_LEGAL_COLORS.danger};
 
     &:hover {
-      background: #fef2f2;
-      border-color: #fecaca;
+      background: ${OS_LEGAL_COLORS.dangerSurface};
+      border-color: ${OS_LEGAL_COLORS.dangerBorder};
     }
   }
 `;
@@ -512,15 +524,15 @@ export const SearchInput = styled.input`
   width: 100%;
   padding: 10px 12px 10px 40px;
   font-size: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   background: #fff;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   outline: none;
   transition: all 0.15s ease;
 
   &:focus {
-    border-color: #0f766e;
+    border-color: ${OS_LEGAL_COLORS.accent};
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
   }
 
@@ -550,12 +562,12 @@ export const LabelItem = styled.div`
   gap: 16px;
   padding: 16px 20px;
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   transition: all 0.15s ease;
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
 
@@ -598,13 +610,13 @@ export const LabelContent = styled.div`
 export const LabelName = styled.p`
   font-size: 15px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 2px 0;
 `;
 
 export const LabelDescription = styled.p`
   font-size: 13px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0;
 `;
 
@@ -629,29 +641,29 @@ export const LabelActionButton = styled.button`
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &.danger {
-    background: #fef2f2;
-    color: #f87171;
-    border: 1px solid #fecaca;
+    background: ${OS_LEGAL_COLORS.dangerSurface};
+    color: ${OS_LEGAL_COLORS.dangerBorderHover};
+    border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
 
     &:hover {
-      background: #fee2e2;
-      color: #dc2626;
+      background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+      color: ${OS_LEGAL_COLORS.danger};
     }
   }
 
   &.success {
-    background: #f0fdf4;
+    background: ${OS_LEGAL_COLORS.successSurface};
     color: #4ade80;
-    border: 1px solid #bbf7d0;
+    border: 1px solid ${OS_LEGAL_COLORS.successBorder};
 
     &:hover {
-      background: #dcfce7;
-      color: #16a34a;
+      background: ${OS_LEGAL_COLORS.successBorder};
+      color: ${OS_LEGAL_COLORS.success};
     }
   }
 `;
@@ -662,7 +674,7 @@ export const LabelEditForm = styled.div`
   gap: 12px;
   padding: 16px 20px;
   background: #fff;
-  border: 2px solid #0f766e;
+  border: 2px solid ${OS_LEGAL_COLORS.accent};
   border-radius: 10px;
 `;
 
@@ -676,15 +688,15 @@ export const LabelEditInput = styled.input`
   flex: 1;
   padding: 8px 12px;
   font-size: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
   background: #fff;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   outline: none;
   transition: all 0.15s ease;
 
   &:focus {
-    border-color: #0f766e;
+    border-color: ${OS_LEGAL_COLORS.accent};
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
   }
 `;
@@ -693,17 +705,17 @@ export const LabelEditTextarea = styled.textarea`
   flex: 1;
   padding: 8px 12px;
   font-size: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
   background: #fff;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   outline: none;
   resize: vertical;
   min-height: 60px;
   transition: all 0.15s ease;
 
   &:focus {
-    border-color: #0f766e;
+    border-color: ${OS_LEGAL_COLORS.accent};
     box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
   }
 `;
@@ -711,7 +723,7 @@ export const LabelEditTextarea = styled.textarea`
 export const LabelEditLabel = styled.label`
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   min-width: 80px;
 `;
 
@@ -719,7 +731,7 @@ export const ColorInput = styled.input`
   width: 40px;
   height: 32px;
   padding: 2px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
   cursor: pointer;
 `;
@@ -737,9 +749,9 @@ export const AddLabelButton = styled.button`
   gap: 6px;
   padding: 8px 14px;
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -747,8 +759,8 @@ export const AddLabelButton = styled.button`
   align-self: flex-start;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -756,7 +768,7 @@ export const EmptyState = styled.div`
   text-align: center;
   padding: 48px 24px;
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
 `;
 
@@ -770,13 +782,13 @@ export const EmptyStateIcon = styled.div`
 export const EmptyStateTitle = styled.h3`
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 8px;
 `;
 
 export const EmptyStateDescription = styled.p`
   font-size: 14px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0 0 20px;
 `;
 

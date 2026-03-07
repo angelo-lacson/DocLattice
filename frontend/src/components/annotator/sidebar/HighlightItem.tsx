@@ -84,12 +84,12 @@ const DeleteButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background-color: #fee2e2;
-    color: #dc2626;
+    background-color: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+    color: ${OS_LEGAL_COLORS.danger};
   }
 
   &:active {
-    background-color: #fecaca;
+    background-color: ${OS_LEGAL_COLORS.dangerBorder};
   }
 `;
 
@@ -119,11 +119,18 @@ const RelationshipLabel = styled.span<{ $direction?: "right" | "left" }>`
   border-radius: 4px;
   font-weight: 500;
   background-color: ${(props) =>
-    props.$direction === "left" ? "#f0fdf4" : "#eff6ff"};
+    props.$direction === "left"
+      ? OS_LEGAL_COLORS.successSurface
+      : OS_LEGAL_COLORS.blueSurface};
   color: ${(props) =>
-    props.$direction === "left" ? "#22c55e" : OS_LEGAL_COLORS.primaryBlue};
+    props.$direction === "left"
+      ? OS_LEGAL_COLORS.green
+      : OS_LEGAL_COLORS.primaryBlue};
   border: 1px solid
-    ${(props) => (props.$direction === "left" ? "#bbf7d0" : "#bfdbfe")};
+    ${(props) =>
+      props.$direction === "left"
+        ? OS_LEGAL_COLORS.successBorder
+        : OS_LEGAL_COLORS.blueBorder};
 `;
 
 const LocationText = styled.div`

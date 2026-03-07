@@ -97,7 +97,7 @@ const StyledCard = styled.div`
     transform: translateY(-4px);
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
       0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
 
     .card-header {
       &::after {
@@ -129,7 +129,7 @@ const StyledCard = styled.div`
   &.backend-locked {
     pointer-events: none;
     opacity: 0.6;
-    background: #f9fafb;
+    background: ${OS_LEGAL_COLORS.gray50};
   }
 
   &.failed {
@@ -198,7 +198,7 @@ const Title = styled.h3`
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.4;
   letter-spacing: -0.01em;
   display: -webkit-box;
@@ -252,7 +252,7 @@ const MetaPill = styled.div`
 
   &.success {
     background: #dcfce7;
-    color: #15803d;
+    color: ${OS_LEGAL_COLORS.successHover};
   }
 
   &.warning {
@@ -291,7 +291,7 @@ const ActionButton = styled.button`
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
@@ -305,20 +305,20 @@ const ActionButton = styled.button`
     color: white;
 
     &:hover {
-      background: #2563eb;
-      border-color: #2563eb;
+      background: ${OS_LEGAL_COLORS.primaryBlueHover};
+      border-color: ${OS_LEGAL_COLORS.primaryBlueHover};
     }
   }
 
   &.danger:hover {
-    background: #ef4444;
-    border-color: #ef4444;
+    background: ${OS_LEGAL_COLORS.danger};
+    border-color: ${OS_LEGAL_COLORS.danger};
     color: white;
   }
 
   &.success:hover {
-    background: #10b981;
-    border-color: #10b981;
+    background: ${OS_LEGAL_COLORS.greenMedium};
+    border-color: ${OS_LEGAL_COLORS.greenMedium};
     color: white;
   }
 
@@ -358,7 +358,7 @@ const SelectionControl = styled.div`
   height: 20px;
   border-radius: 4px;
   background: white;
-  border: 2px solid #cbd5e1;
+  border: 2px solid ${OS_LEGAL_COLORS.borderHover};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -388,7 +388,7 @@ const FileTypeBadge = styled.div`
   top: 12px;
   right: 12px;
   padding: 3px 8px;
-  background: #0f172a;
+  background: ${OS_LEGAL_COLORS.textPrimary};
   color: white;
   border-radius: 4px;
   font-size: 0.625rem;

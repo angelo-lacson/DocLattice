@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 
 import { ExtractListCard } from "./ExtractListCard";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExtractType, CorpusType, PageInfo } from "../../types/graphql-api";
 import {
@@ -30,7 +31,7 @@ const Container = styled.div`
   overflow-y: auto;
   position: relative;
   padding: 1rem;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const ListContainer = styled.section`
@@ -41,7 +42,7 @@ const ListContainer = styled.section`
 const EmptyStateWrapper = styled.div`
   padding: 48px 24px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
 `;
 

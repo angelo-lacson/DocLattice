@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import { Trash2 } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 import "./AnnotatorSidebar.css";
 import { RelationHighlightItem } from "./RelationHighlightItem";
@@ -59,12 +60,12 @@ const DeleteButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background-color: #fee2e2;
-    color: #dc2626;
+    background-color: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+    color: ${OS_LEGAL_COLORS.danger};
   }
 
   &:active {
-    background-color: #fecaca;
+    background-color: ${OS_LEGAL_COLORS.dangerBorder};
   }
 `;
 
@@ -102,7 +103,7 @@ const DividerRow = styled.div`
 const DividerLine = styled.div`
   flex: 1;
   height: 1px;
-  background-color: #e2e8f0;
+  background-color: ${OS_LEGAL_COLORS.border};
 `;
 
 export function RelationItem({

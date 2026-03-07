@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
 import { Check } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   GET_CORPUS_CATEGORIES,
   GetCorpusCategoriesOutput,
@@ -104,7 +105,7 @@ const EmptyText = styled.div`
 `;
 
 const ErrorText = styled.div`
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   font-size: 0.875rem;
   padding: 0.5rem;
 `;

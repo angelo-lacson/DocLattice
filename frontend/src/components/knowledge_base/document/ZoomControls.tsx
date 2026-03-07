@@ -1,5 +1,6 @@
 import React from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { ZoomIn, ZoomOut } from "lucide-react";
 
 interface ZoomControlsProps {
@@ -46,12 +47,12 @@ const StyledZoomControls = styled.div`
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #475569;
+        color: ${OS_LEGAL_COLORS.textTertiary};
         transition: all 0.2s ease;
 
         &:hover {
           background: rgba(0, 0, 0, 0.04);
-          color: #3b82f6;
+          color: ${OS_LEGAL_COLORS.primaryBlue};
         }
 
         &:disabled {
@@ -71,7 +72,7 @@ const StyledZoomControls = styled.div`
       min-width: 48px;
       text-align: center;
       font-size: 0.875rem;
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
       font-weight: 500;
       padding: 0 0.5rem;
     }

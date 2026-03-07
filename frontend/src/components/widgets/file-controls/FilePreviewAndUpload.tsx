@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { FileText, Upload, Pencil } from "lucide-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 import default_image from "../../../assets/images/defaults/default_image.png";
 import default_file from "../../../assets/images/defaults/default_file.png";
@@ -30,12 +31,15 @@ const UploadContainer = styled.div<{ $isReadOnly: boolean }>`
   border-radius: 8px;
   overflow: hidden;
   border: ${(props) =>
-    props.$isReadOnly ? "1px solid #e0e0e0" : "2px dashed #2185d0"};
+    props.$isReadOnly
+      ? `1px solid ${OS_LEGAL_COLORS.border}`
+      : `2px dashed ${OS_LEGAL_COLORS.primaryBlue}`};
   background: ${(props) => (props.$isReadOnly ? "#f9f9f9" : "#fff")};
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: ${(props) => (props.$isReadOnly ? "#e0e0e0" : "#1678c2")};
+    border-color: ${(props) =>
+      props.$isReadOnly ? OS_LEGAL_COLORS.border : "#1678c2"};
     cursor: ${(props) => (props.$isReadOnly ? "default" : "pointer")};
   }
 `;
@@ -98,7 +102,7 @@ const EditBadge = styled.div`
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: #2185d0;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   padding: 0.5rem;
   border-radius: 4px;
@@ -190,14 +194,14 @@ export const FilePreviewAndUpload = ({
         </>
       ) : (
         <FilePreview>
-          <FileText size={48} color="#2185d0" />
+          <FileText size={48} color={OS_LEGAL_COLORS.primaryBlue} />
           <FileName>{displayedFilename || "No file selected"}</FileName>
         </FilePreview>
       )}
 
       {!readOnly && !disabled && (
         <UploadOverlay $isReadOnly={readOnly || disabled}>
-          <Upload size={32} color="#2185d0" />
+          <Upload size={32} color={OS_LEGAL_COLORS.primaryBlue} />
         </UploadOverlay>
       )}
 

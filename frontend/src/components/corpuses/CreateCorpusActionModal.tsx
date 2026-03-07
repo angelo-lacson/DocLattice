@@ -672,7 +672,11 @@ export const CreateCorpusActionModal: React.FC<
           />
           {isThreadTrigger && (
             <small
-              style={{ color: "#666", marginTop: "0.5em", display: "block" }}
+              style={{
+                color: OS_LEGAL_COLORS.textSecondary,
+                marginTop: "0.5em",
+                display: "block",
+              }}
             >
               Thread/message triggers only support agent-based actions.
             </small>
@@ -904,7 +908,7 @@ export const CreateCorpusActionModal: React.FC<
                       />
                       <small
                         style={{
-                          color: "#666",
+                          color: OS_LEGAL_COLORS.textSecondary,
                           marginTop: "0.5em",
                           display: "block",
                         }}
@@ -929,7 +933,7 @@ export const CreateCorpusActionModal: React.FC<
                       />
                       <small
                         style={{
-                          color: "#666",
+                          color: OS_LEGAL_COLORS.textSecondary,
                           marginTop: "0.5em",
                           display: "block",
                         }}
@@ -956,10 +960,10 @@ export const CreateCorpusActionModal: React.FC<
                       </label>
                       <div
                         style={{
-                          background: "#f8f9fa",
+                          background: OS_LEGAL_COLORS.gray50,
                           borderRadius: "8px",
                           padding: "1rem",
-                          border: "1px solid #e9ecef",
+                          border: `1px solid ${OS_LEGAL_COLORS.gray200}`,
                         }}
                       >
                         {(isThreadTrigger
@@ -972,7 +976,7 @@ export const CreateCorpusActionModal: React.FC<
                               display: "flex",
                               alignItems: "center",
                               padding: "0.5rem 0",
-                              borderBottom: "1px solid #e9ecef",
+                              borderBottom: `1px solid ${OS_LEGAL_COLORS.gray200}`,
                             }}
                           >
                             <label
@@ -1006,7 +1010,7 @@ export const CreateCorpusActionModal: React.FC<
                               {tool.name.replace(/_/g, " ")}
                               <span
                                 style={{
-                                  color: "#666",
+                                  color: OS_LEGAL_COLORS.textSecondary,
                                   fontWeight: 400,
                                   marginLeft: "0.5rem",
                                 }}
@@ -1226,7 +1230,7 @@ export const CreateCorpusActionModal: React.FC<
                         />
                         <small
                           style={{
-                            color: "#666",
+                            color: OS_LEGAL_COLORS.textSecondary,
                             marginTop: "0.5em",
                             display: "block",
                           }}

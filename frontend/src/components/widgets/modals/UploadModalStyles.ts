@@ -81,7 +81,7 @@ export const StyledUploadModal = styled(Modal)`
   .oc-modal-footer {
     padding: 1rem 1.5rem !important;
     background: #f8f9fa !important;
-    border-top: 1px solid #e9ecef !important;
+    border-top: 1px solid ${OS_LEGAL_COLORS.gray200} !important;
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
@@ -184,7 +184,7 @@ export const Step = styled.div<{ $active?: boolean; $completed?: boolean }>`
         `
       : css`
           background: #f1f3f5;
-          color: #868e96;
+          color: ${OS_LEGAL_COLORS.gray500};
         `}
 `;
 
@@ -210,7 +210,7 @@ export const DropZone = styled.div<{
   background: ${({ $isDragActive }) =>
     $isDragActive
       ? "linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)"
-      : "#fafbfc"};
+      : OS_LEGAL_COLORS.surfaceHover};
   min-height: 250px;
   display: flex;
   flex-direction: column;
@@ -260,7 +260,7 @@ export const DropZoneText = styled.div`
   .primary-text {
     font-size: 1.1rem;
     font-weight: 500;
-    color: #495057;
+    color: ${OS_LEGAL_COLORS.gray700};
     margin-bottom: 0.5rem;
 
     @media (max-width: ${breakpoints.mobile}) {
@@ -270,7 +270,7 @@ export const DropZoneText = styled.div`
 
   .secondary-text {
     font-size: 0.875rem;
-    color: #868e96;
+    color: ${OS_LEGAL_COLORS.gray500};
 
     @media (max-width: ${breakpoints.mobile}) {
       font-size: 0.8rem;
@@ -311,7 +311,7 @@ export const DropZoneButton = styled.button`
 // File list container
 export const FileListContainer = styled.div`
   border-radius: 12px;
-  border: 1px solid #e9ecef;
+  border: 1px solid ${OS_LEGAL_COLORS.gray200};
   max-height: 300px;
   overflow-y: auto;
   padding: 0.5rem;
@@ -430,7 +430,7 @@ export const FileItemDetails = styled.div`
 
   .file-status {
     font-size: 0.75rem;
-    color: #868e96;
+    color: ${OS_LEGAL_COLORS.gray500};
     margin-top: 0.25rem;
 
     &.error {
@@ -454,7 +454,7 @@ export const DeleteButton = styled.button`
   padding: 0.5rem !important;
   margin: 0 !important;
   background: transparent !important;
-  color: #868e96 !important;
+  color: ${OS_LEGAL_COLORS.gray500} !important;
   border-radius: 6px !important;
   min-width: 36px;
   min-height: 36px;
@@ -495,7 +495,7 @@ export const EditPanel = styled.div`
 export const EditPanelHeader = styled.h4`
   font-size: 1rem;
   font-weight: 600;
-  color: #495057;
+  color: ${OS_LEGAL_COLORS.gray700};
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
   border-bottom: 2px solid #667eea;
@@ -503,7 +503,7 @@ export const EditPanelHeader = styled.h4`
 
 export const FormContainer = styled.div`
   border-radius: 12px;
-  border: 1px solid #e9ecef;
+  border: 1px solid ${OS_LEGAL_COLORS.gray200};
   padding: 1.5rem;
   height: 100%;
   background: #fff;
@@ -518,7 +518,7 @@ export const UploadProgress = styled.div<{ $percent?: number }>`
   margin: 1rem 0;
   border-radius: 8px;
   overflow: hidden;
-  background: #e9ecef;
+  background: ${OS_LEGAL_COLORS.gray200};
   height: 20px;
   position: relative;
 
@@ -587,10 +587,10 @@ export const ActionButton = styled.button<{
     $variant === "secondary" &&
     css`
       background: #f1f3f5 !important;
-      color: #495057 !important;
+      color: ${OS_LEGAL_COLORS.gray700} !important;
 
       &:hover:not(:disabled) {
-        background: #e9ecef !important;
+        background: ${OS_LEGAL_COLORS.gray200} !important;
       }
     `}
 
@@ -614,7 +614,7 @@ export const ActionButton = styled.button<{
 export const FieldLabel = styled.label`
   display: block;
   font-weight: 500;
-  color: #495057;
+  color: ${OS_LEGAL_COLORS.gray700};
   margin-bottom: 0.5rem;
   font-size: 0.9375rem;
 
@@ -666,6 +666,6 @@ export const MobileActionBar = styled.div`
     gap: 0.5rem;
     padding: 1rem;
     background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid ${OS_LEGAL_COLORS.gray200};
   }
 `;

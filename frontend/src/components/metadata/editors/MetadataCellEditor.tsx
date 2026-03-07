@@ -87,7 +87,7 @@ const StyledTextArea = styled(BaseStyledTextArea)`
   line-height: 1.4;
 
   &[readOnly] {
-    background: #f9fafb;
+    background: ${OS_LEGAL_COLORS.gray50};
     cursor: default;
   }
 `;

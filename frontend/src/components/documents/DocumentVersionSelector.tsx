@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useLazyQuery, useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { Spinner } from "@os-legal/ui";
 import { selectedDocVersion } from "../../graphql/cache";
@@ -49,7 +50,7 @@ const VersionPill = styled.button<{
   color: ${(props) => {
     if (props.$isOutdated) return "#c2410c";
     if (props.$hasHistory) return "#1d4ed8";
-    return "#64748b";
+    return OS_LEGAL_COLORS.textSecondary;
   }};
 
   border-color: ${(props) => {
@@ -84,7 +85,7 @@ const DropdownMenu = styled.div`
   z-index: 1000;
   min-width: 220px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   overflow: hidden;
@@ -101,42 +102,46 @@ const DropdownItem = styled.button<{
   padding: 10px 14px;
   border: none;
   background: ${(props) => {
-    if (props.$isActive) return "#eff6ff";
-    if (props.$isFocused) return "#f8fafc";
+    if (props.$isActive) return OS_LEGAL_COLORS.blueSurface;
+    if (props.$isFocused) return OS_LEGAL_COLORS.surfaceHover;
     return "transparent";
   }};
   cursor: pointer;
   text-align: left;
   transition: background 0.15s ease;
-  outline: ${(props) => (props.$isFocused ? "2px solid #3b82f6" : "none")};
+  outline: ${(props) =>
+    props.$isFocused ? `2px solid ${OS_LEGAL_COLORS.primaryBlue}` : "none"};
   outline-offset: -2px;
 
   &:hover {
-    background: ${(props) => (props.$isActive ? "#dbeafe" : "#f8fafc")};
+    background: ${(props) =>
+      props.$isActive
+        ? OS_LEGAL_COLORS.blueBorder
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   }
 `;
 
 const VersionLabel = styled.span`
   font-size: 13px;
   font-weight: 500;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const VersionDate = styled.span`
   font-size: 11px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-left: 8px;
 `;
 
 const CurrentTag = styled.span`
   font-size: 10px;
   font-weight: 600;
-  color: #3b82f6;
-  background: #eff6ff;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
+  background: ${OS_LEGAL_COLORS.blueSurface};
   padding: 1px 6px;
   border-radius: 4px;
   text-transform: uppercase;

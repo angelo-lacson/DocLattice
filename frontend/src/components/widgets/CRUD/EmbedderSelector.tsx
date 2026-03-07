@@ -1,6 +1,7 @@
 import { useQuery } from "@apollo/client";
 import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   GetEmbeddersInput,
   GetEmbeddersOutput,
@@ -105,7 +106,7 @@ export const EmbedderSelector = ({
         style={{
           margin: 0,
           padding: "0.75rem 1rem",
-          background: "#f9fafb",
+          background: OS_LEGAL_COLORS.gray50,
           border: "1px solid rgba(34,36,38,.15)",
           borderBottom: "none",
           borderRadius: "4px 4px 0 0",
@@ -125,9 +126,9 @@ export const EmbedderSelector = ({
         {error && (
           <div
             style={{
-              background: "#fff6f6",
-              color: "#9f3a38",
-              border: "1px solid #e0b4b4",
+              background: OS_LEGAL_COLORS.dangerSurface,
+              color: OS_LEGAL_COLORS.dangerText,
+              border: `1px solid ${OS_LEGAL_COLORS.dangerBorder}`,
               borderRadius: "4px",
               padding: "0.75rem 1rem",
               marginBottom: "0.75rem",
@@ -142,9 +143,9 @@ export const EmbedderSelector = ({
         {!loading && !error && !hasEmbedders && (
           <div
             style={{
-              background: "#f8ffff",
-              color: "#276f86",
-              border: "1px solid #a9d5de",
+              background: OS_LEGAL_COLORS.infoSurface,
+              color: OS_LEGAL_COLORS.infoText,
+              border: `1px solid ${OS_LEGAL_COLORS.infoBorder}`,
               borderRadius: "4px",
               padding: "0.75rem 1rem",
               marginBottom: "0.75rem",

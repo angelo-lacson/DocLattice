@@ -87,14 +87,14 @@ const ColorPreview = styled.div<{ $color: string }>`
 
   &:hover {
     transform: scale(1.05);
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
 const ColorInput = styled.input`
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid ${OS_LEGAL_COLORS.borderHover};
   border-radius: 6px;
   font-size: 14px;
   font-family: monospace;

@@ -57,12 +57,12 @@ const CloseButton = styled.button`
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   transition: all 0.15s ease;
 
   &:hover {
-    background: #fecaca;
-    color: #991b1b;
+    background: ${OS_LEGAL_COLORS.dangerBorder};
+    color: ${OS_LEGAL_COLORS.dangerText};
   }
 `;
 
@@ -70,11 +70,11 @@ const WarningBox = styled.div`
   display: flex;
   gap: 12px;
   padding: 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: ${OS_LEGAL_COLORS.dangerSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 8px;
   margin-bottom: 16px;
-  color: #991b1b;
+  color: ${OS_LEGAL_COLORS.dangerText};
 `;
 
 const WarningIcon = styled(AlertTriangle)`

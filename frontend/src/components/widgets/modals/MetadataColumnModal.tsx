@@ -70,8 +70,8 @@ const ErrorChip = styled.span`
   padding: 0.15em 0.5em;
   font-size: 0.75rem;
   color: ${OS_LEGAL_COLORS.danger};
-  background: #fff6f6;
-  border: 1px solid #e0b4b4;
+  background: ${OS_LEGAL_COLORS.dangerSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 4px;
 `;
 

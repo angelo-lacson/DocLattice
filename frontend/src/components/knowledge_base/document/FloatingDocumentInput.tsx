@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import styled, { css } from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MessageSquare, Send, X, ChevronUp } from "lucide-react";
 import _ from "lodash";
@@ -58,7 +59,7 @@ const FloatingContainer = styled(motion.div)<{
   background: white;
   border-radius: ${(props) => (props.$isExpanded ? "16px" : "28px")};
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   overflow: hidden;
   z-index: 1000;
   pointer-events: auto;
@@ -76,7 +77,7 @@ const FloatingContainer = styled(motion.div)<{
 
   &:hover {
     box-shadow: 0 6px 32px rgba(0, 0, 0, 0.12);
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 
   @media (max-width: 768px) {
@@ -132,8 +133,12 @@ const ToggleButton = styled(motion.button)<{ $isActive: boolean }>`
   height: 36px;
   border-radius: 12px;
   border: none;
-  background: ${(props) => (props.$isActive ? "#eff6ff" : "transparent")};
-  color: ${(props) => (props.$isActive ? "#3b82f6" : "#64748b")};
+  background: ${(props) =>
+    props.$isActive ? OS_LEGAL_COLORS.blueSurface : "transparent"};
+  color: ${(props) =>
+    props.$isActive
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -146,8 +151,14 @@ const ToggleButton = styled(motion.button)<{ $isActive: boolean }>`
   }
 
   &:hover {
-    background: ${(props) => (props.$isActive ? "#dbeafe" : "#f8fafc")};
-    color: ${(props) => (props.$isActive ? "#3b82f6" : "#475569")};
+    background: ${(props) =>
+      props.$isActive
+        ? OS_LEGAL_COLORS.blueBorder
+        : OS_LEGAL_COLORS.surfaceHover};
+    color: ${(props) =>
+      props.$isActive
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.textTertiary};
   }
 
   @media (max-width: 768px) {
@@ -183,13 +194,13 @@ const StyledInput = styled.input`
   background: none;
   outline: none;
   font-size: 0.9375rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   padding: 0.5rem 0;
   min-width: 0; /* Allow shrinking */
   width: 100%;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -199,7 +210,7 @@ const StyledTextarea = styled.textarea`
   background: none;
   outline: none;
   font-size: 0.9375rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   padding: 0.5rem 0;
   resize: none;
   min-height: 24px;
@@ -210,7 +221,7 @@ const StyledTextarea = styled.textarea`
   width: 100%;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -219,7 +230,7 @@ const ActionButton = styled(motion.button)`
   height: 40px;
   border-radius: 12px;
   border: none;
-  background: #3b82f6;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   cursor: pointer;
   display: flex;
@@ -233,12 +244,12 @@ const ActionButton = styled(motion.button)`
   }
 
   &:hover {
-    background: #2563eb;
+    background: ${OS_LEGAL_COLORS.primaryBlueHover};
   }
 
   &:disabled {
-    background: #e2e8f0;
-    color: #94a3b8;
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textMuted};
     cursor: not-allowed;
   }
 
@@ -259,7 +270,7 @@ const CloseButton = styled(motion.button)`
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -272,8 +283,8 @@ const CloseButton = styled(motion.button)`
   }
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   @media (max-width: 768px) {
@@ -290,7 +301,7 @@ const CloseButton = styled(motion.button)`
 
 const SearchStatus = styled.div`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-right: 0.5rem;
   white-space: nowrap;
 `;
@@ -300,7 +311,8 @@ const ModeIndicator = styled(motion.div)<{ $mode: "search" | "chat" }>`
   top: -24px;
   left: 50%;
   transform: translateX(-50%);
-  background: ${(props) => (props.$mode === "search" ? "#3b82f6" : "#8b5cf6")};
+  background: ${(props) =>
+    props.$mode === "search" ? OS_LEGAL_COLORS.primaryBlue : "#8b5cf6"};
   color: white;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;

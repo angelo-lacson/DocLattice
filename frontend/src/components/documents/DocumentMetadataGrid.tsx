@@ -152,23 +152,29 @@ const EditableCell = styled.div.attrs<{
   display: flex;
   align-items: center;
   background: ${(props) =>
-    props.isEditing ? "#f0f9ff" : props.hasError ? "#fef2f2" : "transparent"};
+    props.isEditing
+      ? OS_LEGAL_COLORS.infoSurface
+      : props.hasError
+      ? OS_LEGAL_COLORS.dangerSurface
+      : "transparent"};
   border: 1px solid
     ${(props) =>
       props.isEditing
         ? OS_LEGAL_COLORS.primaryBlue
         : props.hasError
-        ? "#ef4444"
+        ? OS_LEGAL_COLORS.danger
         : "transparent"};
 
   &:hover {
     background: ${(props) =>
-      props.isEditing ? "#f0f9ff" : OS_LEGAL_COLORS.surfaceHover};
+      props.isEditing
+        ? OS_LEGAL_COLORS.infoSurface
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
 const EmptyValue = styled.span`
-  color: #cbd5e1;
+  color: ${OS_LEGAL_COLORS.borderHover};
   font-style: italic;
 `;
 
@@ -177,7 +183,7 @@ const ErrorTooltip = styled.div`
   bottom: -2rem;
   left: 0.5rem;
   z-index: 10;
-  background: #dc2626;
+  background: ${OS_LEGAL_COLORS.danger};
   color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
@@ -563,7 +569,12 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                 <Table.HeaderCell key={column.id}>
                   {column.name}
                   {column.validationConfig?.required && (
-                    <span style={{ color: "#ef4444", marginLeft: "0.25rem" }}>
+                    <span
+                      style={{
+                        color: OS_LEGAL_COLORS.danger,
+                        marginLeft: "0.25rem",
+                      }}
+                    >
                       *
                     </span>
                   )}

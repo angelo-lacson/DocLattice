@@ -262,7 +262,8 @@ const ToolItem = styled.div<{ $selected: boolean }>`
   border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   cursor: pointer;
   transition: background 0.15s ease;
-  background: ${(props) => (props.$selected ? "#eff6ff" : "transparent")};
+  background: ${(props) =>
+    props.$selected ? OS_LEGAL_COLORS.blueSurface : "transparent"};
 
   &:hover {
     background: ${(props) =>
@@ -278,7 +279,10 @@ const ToolCheckbox = styled.div<{ $checked: boolean }>`
   width: 18px;
   height: 18px;
   border: 2px solid
-    ${(props) => (props.$checked ? OS_LEGAL_COLORS.primaryBlue : "#cbd5e1")};
+    ${(props) =>
+      props.$checked
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.borderHover};
   border-radius: 4px;
   margin-right: 0.75rem;
   flex-shrink: 0;
@@ -340,7 +344,7 @@ const CorpusBadge = styled.span`
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
   background: #dbeafe;
-  color: #1e40af;
+  color: ${OS_LEGAL_COLORS.blueDark};
   font-weight: 500;
 `;
 

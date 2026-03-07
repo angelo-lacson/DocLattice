@@ -37,6 +37,7 @@ import { PermissionTypes } from "../types";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 import { MCPShareButton } from "../common/MCPShareButton";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS - Following DiscoveryLanding patterns
@@ -44,7 +45,7 @@ import { MCPShareButton } from "../common/MCPShareButton";
 
 const PageContainer = styled.div`
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-y: auto;
   overflow-x: hidden;
@@ -69,11 +70,11 @@ const HeroTitle = styled.h1`
   font-size: 42px;
   font-weight: 400;
   line-height: 1.2;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 16px;
 
   span {
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   @media (max-width: 768px) {
@@ -84,7 +85,7 @@ const HeroTitle = styled.h1`
 const HeroSubtitle = styled.p`
   font-size: 17px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0 0 32px;
   max-width: 600px;
 `;
@@ -132,7 +133,7 @@ const SectionTitle = styled.h2`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 24px;
   font-weight: 400;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   margin: 0;
 `;
 
@@ -174,12 +175,12 @@ const MenuButton = styled.button`
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     cursor: pointer;
     transition: all 0.15s;
 
     &:hover {
-      background: #f1f5f9;
+      background: ${OS_LEGAL_COLORS.surfaceLight};
       color: #334155;
     }
   }
@@ -188,7 +189,7 @@ const MenuButton = styled.button`
 const EmptyStateWrapper = styled.div`
   padding: 48px 24px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
 `;
 
@@ -224,7 +225,7 @@ const FloatingMenu = styled(Menu)`
     min-width: 180px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     padding: 4px 0;
 
     .item {
@@ -235,14 +236,14 @@ const FloatingMenu = styled(Menu)`
       gap: 10px !important;
 
       &:hover {
-        background: #f1f5f9 !important;
+        background: ${OS_LEGAL_COLORS.surfaceLight} !important;
       }
 
       &.danger {
-        color: #dc2626 !important;
+        color: ${OS_LEGAL_COLORS.danger} !important;
 
         &:hover {
-          background: #fef2f2 !important;
+          background: ${OS_LEGAL_COLORS.dangerSurface} !important;
         }
       }
 

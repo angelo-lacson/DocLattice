@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const ResizeHandle = styled(motion.div)<{ $isDragging: boolean }>`
   position: absolute;
@@ -124,7 +125,7 @@ export const ResizeHandleControl = styled(motion.button)`
   .settings-icon {
     width: 16px;
     height: 16px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     opacity: 0.7;
     transform: scale(0.9);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -147,7 +148,7 @@ export const ResizeHandleControl = styled(motion.button)`
     }
 
     .settings-icon {
-      color: #4299e1;
+      color: ${OS_LEGAL_COLORS.primaryBlue};
       opacity: 1;
       transform: scale(1) rotate(90deg);
     }
@@ -229,7 +230,10 @@ export const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
     props.$isActive
       ? "linear-gradient(135deg, rgba(66, 153, 225, 0.08), rgba(66, 153, 225, 0.05))"
       : "transparent"};
-  color: ${(props) => (props.$isActive ? "#4299e1" : "#64748b")};
+  color: ${(props) =>
+    props.$isActive
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -252,7 +256,7 @@ export const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
     transform: translateY(-50%);
     width: 2px;
     height: ${(props) => (props.$isActive ? "60%" : "0")};
-    background: #4299e1;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     border-radius: 1px;
     transition: height 0.2s ease;
   }
@@ -262,7 +266,10 @@ export const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
       props.$isActive
         ? "linear-gradient(135deg, rgba(66, 153, 225, 0.12), rgba(66, 153, 225, 0.08))"
         : "rgba(0, 0, 0, 0.02)"};
-    color: ${(props) => (props.$isActive ? "#4299e1" : "#475569")};
+    color: ${(props) =>
+      props.$isActive
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.textTertiary};
     transform: translateX(2px);
   }
 
@@ -286,8 +293,10 @@ export const MenuDivider = styled.div`
 export const WidthButton = styled(motion.button)<{ $isActive: boolean }>`
   padding: 0.5rem 1rem;
   border: none;
-  background: ${(props) => (props.$isActive ? "#4299e1" : "transparent")};
-  color: ${(props) => (props.$isActive ? "white" : "#4a5568")};
+  background: ${(props) =>
+    props.$isActive ? OS_LEGAL_COLORS.primaryBlue : "transparent"};
+  color: ${(props) =>
+    props.$isActive ? "white" : OS_LEGAL_COLORS.textTertiary};
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 500;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDropzone } from "react-dropzone";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { FileText, Upload } from "lucide-react";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 
@@ -120,7 +121,7 @@ const EmptyStateIcon = styled.div`
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1),
     0 2px 4px -1px rgba(59, 130, 246, 0.06);
 
@@ -132,7 +133,7 @@ const EmptyStateIcon = styled.div`
 `;
 
 const EmptyStateTitle = styled.h3`
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0 0 8px;
@@ -140,7 +141,7 @@ const EmptyStateTitle = styled.h3`
 `;
 
 const EmptyStateDescription = styled.p`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.95rem;
   line-height: 1.6;
   margin: 0;
@@ -150,10 +151,10 @@ const EmptyStateDescription = styled.p`
 const DropHint = styled.button`
   margin-top: 24px;
   padding: 12px 20px;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px dashed ${OS_LEGAL_COLORS.borderHover};
   border-radius: 8px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
   display: flex;
   align-items: center;
@@ -162,19 +163,19 @@ const DropHint = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background: #eff6ff;
-    border-color: #3b82f6;
-    color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.blueSurface};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
+    color: ${OS_LEGAL_COLORS.primaryBlue};
 
     svg {
-      color: #3b82f6;
+      color: ${OS_LEGAL_COLORS.primaryBlue};
     }
   }
 
   svg {
     width: 18px;
     height: 18px;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
     transition: color 0.2s ease;
   }
 `;
@@ -216,13 +217,13 @@ const DropZoneContent = styled.div`
     margin: 0 0 12px 0;
     font-size: 1.75rem;
     font-weight: 600;
-    color: #0f172a;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     letter-spacing: -0.02em;
   }
 
   p {
     margin: 0;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     font-size: 1rem;
     font-weight: 400;
   }
@@ -360,7 +361,7 @@ export const DocumentCards = ({
         position: "relative",
         display: "flex",
         flexDirection: "column",
-        background: "#f8fafc",
+        background: OS_LEGAL_COLORS.surfaceHover,
         ...containerStyle,
       }}
     >

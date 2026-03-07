@@ -52,6 +52,8 @@ export const OS_LEGAL_COLORS = {
   // Interactive colors - blue theme
   /** Primary interactive blue - buttons, focus rings, toggles, active states. */
   primaryBlue: "#3b82f6",
+  /** Hover/active state for primary blue. Slightly darker for visual feedback. */
+  primaryBlueHover: "#2563eb",
 
   // Text colors - slate scale
   /** Primary text color - dark slate. Use for headings and main content. */
@@ -145,6 +147,32 @@ export const OS_LEGAL_COLORS = {
   warningBorder: "#fde68a",
   /** Warning text color - dark amber. */
   warningText: "#854d0e",
+
+  // Extended blue palette
+  /** Dark blue - headings and strong emphasis on info surfaces. */
+  blueDark: "#1e40af",
+  /** Light blue surface - subtle blue backgrounds. */
+  blueSurface: "#eff6ff",
+  /** Light blue border - borders on blue surfaces. */
+  blueBorder: "#bfdbfe",
+
+  // Extended green palette
+  /** Bright green - positive indicators, online status. */
+  green: "#22c55e",
+  /** Medium green - success accents. */
+  greenMedium: "#10b981",
+  /** Dark green - success accents on dark backgrounds. */
+  greenDark: "#059669",
+
+  // Neutral gray palette
+  /** Near-white surface - barely visible gray backgrounds. */
+  gray50: "#f9fafb",
+  /** Light gray border - input borders, dividers. */
+  gray200: "#e9ecef",
+  /** Medium gray text - labels and secondary content. */
+  gray500: "#868e96",
+  /** Dark gray text - stronger secondary text. */
+  gray700: "#495057",
 } as const;
 
 /**

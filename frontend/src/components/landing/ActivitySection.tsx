@@ -14,6 +14,7 @@ import { ActivityFeed } from "@os-legal/ui";
 import type { ActivityItemData } from "@os-legal/ui";
 import { GetRecentDiscussionsOutput } from "../../graphql/landing-queries";
 import { getCorpusThreadUrl } from "../../utils/navigationUtils";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ActivitySectionProps {
   discussions: GetRecentDiscussionsOutput["conversations"]["edges"] | null;
@@ -24,7 +25,7 @@ interface ActivitySectionProps {
 const FeedWrapper = styled.div`
   background: white;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 `;
@@ -40,7 +41,7 @@ const SkeletonItem = styled.div`
   align-items: flex-start;
   gap: 1rem;
   padding: 0.75rem 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 
   &:last-child {
     border-bottom: none;
@@ -50,7 +51,12 @@ const SkeletonItem = styled.div`
 const SkeletonAvatar = styled.div`
   width: 40px;
   height: 40px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${OS_LEGAL_COLORS.border} 25%,
+    ${OS_LEGAL_COLORS.surfaceLight} 50%,
+    ${OS_LEGAL_COLORS.border} 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 50%;
@@ -73,7 +79,12 @@ const SkeletonContent = styled.div`
 const SkeletonLine = styled.div<{ $width?: string; $height?: string }>`
   width: ${(props) => props.$width || "100%"};
   height: ${(props) => props.$height || "12px"};
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${OS_LEGAL_COLORS.border} 25%,
+    ${OS_LEGAL_COLORS.surfaceLight} 50%,
+    ${OS_LEGAL_COLORS.border} 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
@@ -83,7 +94,7 @@ const SkeletonLine = styled.div<{ $width?: string; $height?: string }>`
 const EmptyState = styled.div`
   text-align: center;
   padding: 3rem 2rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 /**

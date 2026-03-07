@@ -18,6 +18,7 @@ import CountUp from "react-countup";
 import { CorpusType } from "../../types/graphql-api";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import styled from "styled-components";
 
 interface NewQuerySearchProps {
@@ -53,7 +54,7 @@ const StatisticWrapper = styled.div`
   display: flex;
   align-items: center;
   padding: 0.75rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;

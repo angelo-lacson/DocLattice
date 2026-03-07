@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import styled from "styled-components";
 import { Code, Check, X, Eye, Edit3, EyeOff } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { useNavigate, useLocation } from "react-router-dom";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
 import { CellEditor } from "./CellEditor";
@@ -471,18 +472,18 @@ const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   table-layout: fixed;
 `;
 
 const TableHeader = styled.th`
   position: sticky;
   top: 0;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   padding: 12px 16px;
   text-align: left;
   font-weight: 600;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
   z-index: 1;
   color: #0f172a;
 
@@ -494,10 +495,11 @@ const TableHeader = styled.th`
 const TableRow = styled.tr<{ isHovered: boolean }>`
   cursor: default;
   transition: background-color 0.2s ease;
-  background-color: ${(props) => (props.isHovered ? "#f8fafc" : "#fff")};
+  background-color: ${(props) =>
+    props.isHovered ? OS_LEGAL_COLORS.surfaceHover : "#fff"};
 
   &:hover {
-    background-color: #f1f5f9;
+    background-color: ${OS_LEGAL_COLORS.surfaceLight};
   }
 
   &:last-child td {
@@ -507,7 +509,7 @@ const TableRow = styled.tr<{ isHovered: boolean }>`
 
 const TableCell = styled.td`
   padding: 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   vertical-align: top;
 `;
 
@@ -541,7 +543,7 @@ const JsonViewButton = styled.div`
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   font-size: 0.9rem;
   position: relative;
   padding: 4px 8px;
@@ -572,12 +574,12 @@ const CellContainer = styled.div`
 `;
 
 const AnnotationRow = styled.tr`
-  background-color: #f9fafb;
+  background-color: ${OS_LEGAL_COLORS.gray50};
 `;
 
 const AnnotationsContainer = styled.div`
   padding: 8px 16px;
-  background-color: #f9fafb;
+  background-color: ${OS_LEGAL_COLORS.gray50};
 `;
 
 const CellStatus = styled.div`
@@ -605,7 +607,7 @@ const ButtonContainer = styled.div`
 
   .status-message {
     font-size: 0.75rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     text-align: center;
     margin-top: 4px;
     font-weight: 500;
@@ -632,18 +634,34 @@ const ButtonContainer = styled.div`
     }
 
     &.green {
-      background: linear-gradient(135deg, #22c55e, #16a34a);
+      background: linear-gradient(
+        135deg,
+        ${OS_LEGAL_COLORS.green},
+        ${OS_LEGAL_COLORS.success}
+      );
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #16a34a, #15803d);
+        background: linear-gradient(
+          135deg,
+          ${OS_LEGAL_COLORS.success},
+          ${OS_LEGAL_COLORS.successHover}
+        );
       }
     }
 
     &.red {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
+      background: linear-gradient(
+        135deg,
+        ${OS_LEGAL_COLORS.dangerBorderHover},
+        ${OS_LEGAL_COLORS.danger}
+      );
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        background: linear-gradient(
+          135deg,
+          ${OS_LEGAL_COLORS.danger},
+          ${OS_LEGAL_COLORS.dangerHover}
+        );
       }
     }
   }
@@ -716,19 +734,19 @@ const AnnotationShield = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
   padding: 4px 8px;
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.2s ease;
   margin-top: 4px;
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 
   svg {
@@ -760,7 +778,7 @@ const EditIcon = styled.button`
   left: 20px;
   background: none;
   border: none;
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -785,13 +803,13 @@ const ActionButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   transition: all 0.2s ease;
   margin-right: 4px;
 
   &:hover:not(:disabled) {
     background-color: #fff;
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 
   &:disabled {
@@ -800,15 +818,15 @@ const ActionButton = styled.button`
   }
 
   &.approve:hover:not(:disabled) {
-    color: #22c55e;
+    color: ${OS_LEGAL_COLORS.green};
   }
 
   &.reject:hover:not(:disabled) {
-    color: #ef4444;
+    color: ${OS_LEGAL_COLORS.dangerBorderHover};
   }
 
   &.edit:hover:not(:disabled) {
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 
   svg {

@@ -9,6 +9,7 @@ import React, {
 import { createPortal } from "react-dom";
 import { isTextFileType } from "../../../utils/files";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -161,7 +162,7 @@ const Avatar = styled.div<{ $isAssistant: boolean }>`
     props.$isAssistant
       ? "0 4px 12px rgba(33, 133, 208, 0.2)"
       : "0 4px 12px rgba(45, 55, 72, 0.2)"};
-  color: ${(props) => (props.$isAssistant ? "white" : "#e2e8f0")};
+  color: ${(props) => (props.$isAssistant ? "white" : OS_LEGAL_COLORS.border)};
   transform: translateY(0);
   transition: all 0.2s ease;
 
@@ -232,7 +233,7 @@ const MessageContent = styled.div<{ $isAssistant: boolean }>`
     background: ${(props) =>
       props.$isAssistant
         ? "linear-gradient(135deg, #f8f9fa, #ffffff)"
-        : "linear-gradient(135deg, #e9ecef, #f1f3f5)"};
+        : "linear-gradient(135deg, ${OS_LEGAL_COLORS.gray200}, ${OS_LEGAL_COLORS.surfaceLight})"};
     transform: rotate(45deg);
     border-radius: 0.125rem;
   }
@@ -265,7 +266,7 @@ const MessageContent = styled.div<{ $isAssistant: boolean }>`
 
   th,
   td {
-    border: 1px solid #dee2e6;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     padding: 0.5rem;
   }
 
@@ -573,7 +574,8 @@ const AutoScrollIndicator = styled(motion.div)<{ $active: boolean }>`
     ${(props) =>
       props.$active ? "rgba(59, 130, 246, 0.2)" : "rgba(156, 163, 175, 0.2)"};
   font-size: 0.7rem;
-  color: ${(props) => (props.$active ? "#3b82f6" : "#9ca3af")};
+  color: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.primaryBlue : "#9ca3af"};
   cursor: ${(props) => (props.$active ? "default" : "pointer")};
   transition: all 0.2s ease;
 
@@ -637,9 +639,9 @@ const TimelineIcon = styled.div<{ $type: TimelineEntry["type"] }>`
       case "thought":
         return "#a855f7";
       case "tool_call":
-        return "#3b82f6";
+        return OS_LEGAL_COLORS.primaryBlue;
       case "tool_result":
-        return "#22c55e";
+        return OS_LEGAL_COLORS.green;
       case "content":
         return "#f97316";
       case "sources":
@@ -647,7 +649,7 @@ const TimelineIcon = styled.div<{ $type: TimelineEntry["type"] }>`
       case "status":
         return "#9ca3af";
       case "compaction":
-        return "#2563eb";
+        return OS_LEGAL_COLORS.primaryBlueHover;
       default:
         return "#9ca3af";
     }
@@ -716,8 +718,11 @@ const ToolBadge = styled.div<{ $isSelected?: boolean }>`
   gap: 0.375rem;
   padding: 0.35rem 0.7rem;
   background: ${(props) =>
-    props.$isSelected ? "#3b82f6" : "rgba(59, 130, 246, 0.1)"};
-  color: ${(props) => (props.$isSelected ? "white" : "#3b82f6")};
+    props.$isSelected
+      ? OS_LEGAL_COLORS.primaryBlue
+      : "rgba(59, 130, 246, 0.1)"};
+  color: ${(props) =>
+    props.$isSelected ? "white" : OS_LEGAL_COLORS.primaryBlue};
   border-radius: 1rem;
   font-size: 0.8rem;
   font-weight: 500;
@@ -737,7 +742,9 @@ const ToolBadge = styled.div<{ $isSelected?: boolean }>`
 
   &:hover {
     background: ${(props) =>
-      props.$isSelected ? "#2563eb" : "rgba(59, 130, 246, 0.18)"};
+      props.$isSelected
+        ? OS_LEGAL_COLORS.primaryBlueHover
+        : "rgba(59, 130, 246, 0.18)"};
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
   }
@@ -775,7 +782,7 @@ const ToolPopoverHeader = styled.div`
   border-bottom: 1px solid rgba(59, 130, 246, 0.1);
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #1e40af;
+  color: ${OS_LEGAL_COLORS.blueDark};
 
   svg {
     width: 16px;
@@ -812,13 +819,13 @@ const ToolCallName = styled.div`
   gap: 0.375rem;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin-bottom: 0.375rem;
 
   svg {
     width: 14px;
     height: 14px;
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 `;
 
@@ -829,7 +836,7 @@ const ToolCallSection = styled.div`
 const ToolCallSectionLabel = styled.div`
   font-size: 0.6875rem;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-bottom: 0.25rem;
@@ -862,7 +869,7 @@ const ToolCallResultBlock = styled.div`
   border: 1px solid rgba(34, 197, 94, 0.15);
   border-radius: 0.375rem;
   font-size: 0.75rem;
-  color: #166534;
+  color: ${OS_LEGAL_COLORS.successText};
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1711,8 +1718,8 @@ const ApprovalIndicator = styled.div<{
     return "rgba(245, 158, 11, 0.1)";
   }};
   color: ${(props) => {
-    if (props.$status === "approved") return "#059669";
-    if (props.$status === "rejected") return "#dc2626";
+    if (props.$status === "approved") return OS_LEGAL_COLORS.greenDark;
+    if (props.$status === "rejected") return OS_LEGAL_COLORS.danger;
     return "#f59e0b";
   }};
   border-radius: 1rem;
@@ -1742,7 +1749,7 @@ const ApprovalIndicator = styled.div<{
 `;
 
 const Timestamp = styled.div`
-  color: #868e96;
+  color: ${OS_LEGAL_COLORS.gray500};
   font-size: 0.75rem;
   margin-top: 0.25rem;
   padding-left: 0.25rem;

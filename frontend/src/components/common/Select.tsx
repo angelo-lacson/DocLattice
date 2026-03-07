@@ -1,4 +1,5 @@
 import React from "react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import ReactSelect, {
   Props as ReactSelectProps,
   StylesConfig,
@@ -95,21 +96,23 @@ export const Select: React.FC<SelectProps> = ({ customStyles, ...props }) => {
       minWidth: "260px",
       fontSize: "0.875rem",
       background: "white",
-      border: state.isFocused ? "1px solid #4a90e2" : "1px solid #e2e8f0",
+      border: state.isFocused
+        ? `1px solid ${OS_LEGAL_COLORS.primaryBlue}`
+        : `1px solid ${OS_LEGAL_COLORS.border}`,
       borderRadius: "8px",
       boxShadow: state.isFocused
-        ? "0 0 0 1px #4a90e2"
+        ? `0 0 0 1px ${OS_LEGAL_COLORS.primaryBlue}`
         : "0 1px 2px rgba(0, 0, 0, 0.05)",
       transition: "all 0.2s ease",
       "&:hover": {
-        borderColor: "#cbd5e1",
+        borderColor: OS_LEGAL_COLORS.borderHover,
       },
       minHeight: "38px",
     }),
     menu: (base) => ({
       ...base,
       borderRadius: "8px",
-      border: "1px solid #e2e8f0",
+      border: `1px solid ${OS_LEGAL_COLORS.border}`,
       boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
       overflow: "hidden",
       zIndex: 1000,
@@ -124,7 +127,7 @@ export const Select: React.FC<SelectProps> = ({ customStyles, ...props }) => {
       padding: "0.75rem 1rem",
       fontSize: "0.875rem",
       backgroundColor: state.isSelected
-        ? "#4a90e2"
+        ? OS_LEGAL_COLORS.primaryBlue
         : state.isFocused
         ? "rgba(74, 144, 226, 0.1)"
         : "white",
@@ -133,13 +136,13 @@ export const Select: React.FC<SelectProps> = ({ customStyles, ...props }) => {
       transition: "all 0.15s ease",
       "&:active": {
         backgroundColor: state.isSelected
-          ? "#357abd"
+          ? OS_LEGAL_COLORS.primaryBlueHover
           : "rgba(74, 144, 226, 0.2)",
       },
     }),
     placeholder: (base) => ({
       ...base,
-      color: "#94a3b8",
+      color: OS_LEGAL_COLORS.textMuted,
       fontSize: "0.875rem",
     }),
     singleValue: (base) => ({
@@ -149,25 +152,25 @@ export const Select: React.FC<SelectProps> = ({ customStyles, ...props }) => {
     }),
     multiValue: (base) => ({
       ...base,
-      backgroundColor: "#e0f2fe",
+      backgroundColor: OS_LEGAL_COLORS.infoSurface,
       borderRadius: "6px",
-      border: "1px solid #bae6fd",
+      border: `1px solid ${OS_LEGAL_COLORS.infoBorder}`,
       padding: "0.125rem 0.25rem",
     }),
     multiValueLabel: (base) => ({
       ...base,
-      color: "#0369a1",
+      color: OS_LEGAL_COLORS.infoText,
       fontSize: "0.8125rem",
       fontWeight: 500,
       padding: "0.125rem 0.25rem",
     }),
     multiValueRemove: (base) => ({
       ...base,
-      color: "#0369a1",
+      color: OS_LEGAL_COLORS.infoText,
       cursor: "pointer",
       "&:hover": {
-        backgroundColor: "#bae6fd",
-        color: "#075985",
+        backgroundColor: OS_LEGAL_COLORS.infoBorder,
+        color: OS_LEGAL_COLORS.infoText,
       },
       borderRadius: "0 4px 4px 0",
     }),
@@ -182,29 +185,31 @@ export const Select: React.FC<SelectProps> = ({ customStyles, ...props }) => {
     }),
     dropdownIndicator: (base, state) => ({
       ...base,
-      color: state.isFocused ? "#4a90e2" : "#94a3b8",
+      color: state.isFocused
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.textMuted,
       transition: "all 0.2s ease",
       "&:hover": {
-        color: "#4a90e2",
+        color: OS_LEGAL_COLORS.primaryBlue,
       },
     }),
     clearIndicator: (base) => ({
       ...base,
-      color: "#94a3b8",
+      color: OS_LEGAL_COLORS.textMuted,
       cursor: "pointer",
       transition: "all 0.2s ease",
       "&:hover": {
-        color: "#ef4444",
+        color: OS_LEGAL_COLORS.danger,
       },
     }),
     loadingIndicator: (base) => ({
       ...base,
-      color: "#4a90e2",
+      color: OS_LEGAL_COLORS.primaryBlue,
     }),
     noOptionsMessage: (base) => ({
       ...base,
       fontSize: "0.875rem",
-      color: "#94a3b8",
+      color: OS_LEGAL_COLORS.textMuted,
       padding: "1rem",
     }),
   };

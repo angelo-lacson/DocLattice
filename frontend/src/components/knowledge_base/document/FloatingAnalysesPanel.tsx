@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, BarChart3, Grid3x3, List, Search } from "lucide-react";
 import AnalysisTraySelector from "../../analyses/AnalysisTraySelector";
@@ -58,11 +59,15 @@ const ExpandedPanel = styled(motion.div)`
 
 const Header = styled.div`
   padding: 1.5rem 1.75rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(180deg, #fafbfc 0%, rgba(250, 251, 252, 0) 100%);
+  background: linear-gradient(
+    180deg,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    rgba(250, 251, 252, 0) 100%
+  );
   flex-shrink: 0;
 `;
 
@@ -70,13 +75,13 @@ const Title = styled.h3`
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.75rem;
 
   svg {
-    color: #f59e0b;
+    color: ${OS_LEGAL_COLORS.folderIcon};
   }
 `;
 
@@ -88,7 +93,7 @@ const HeaderControls = styled.div`
 
 const ViewToggle = styled.div`
   display: flex;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 10px;
   padding: 0.25rem;
   gap: 0.25rem;
@@ -99,7 +104,10 @@ const ViewButton = styled(motion.button)<{ $active: boolean }>`
   border-radius: 8px;
   border: none;
   background: ${(props) => (props.$active ? "white" : "transparent")};
-  color: ${(props) => (props.$active ? "#0f172a" : "#64748b")};
+  color: ${(props) =>
+    props.$active
+      ? OS_LEGAL_COLORS.textPrimary
+      : OS_LEGAL_COLORS.textSecondary};
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -116,7 +124,10 @@ const ViewButton = styled(motion.button)<{ $active: boolean }>`
   }
 
   &:hover:not(:disabled) {
-    color: ${(props) => (props.$active ? "#0f172a" : "#475569")};
+    color: ${(props) =>
+      props.$active
+        ? OS_LEGAL_COLORS.textPrimary
+        : OS_LEGAL_COLORS.textTertiary};
   }
 `;
 
@@ -124,7 +135,7 @@ const ActionButton = styled(motion.button)`
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   display: flex;
   align-items: center;
@@ -135,28 +146,28 @@ const ActionButton = styled(motion.button)`
   svg {
     width: 18px;
     height: 18px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
 
     svg {
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   }
 `;
 
 const SearchBar = styled.div`
   padding: 1rem 1.75rem;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fafbfc;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 
   input {
     width: 100%;
     padding: 0.75rem 1rem 0.75rem 2.75rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid ${OS_LEGAL_COLORS.border};
     border-radius: 12px;
     font-size: 0.9375rem;
     background: white;
@@ -164,12 +175,12 @@ const SearchBar = styled.div`
 
     &:focus {
       outline: none;
-      border-color: #f59e0b;
+      border-color: ${OS_LEGAL_COLORS.folderIcon};
       box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
     }
 
     &::placeholder {
-      color: #94a3b8;
+      color: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 
@@ -182,7 +193,7 @@ const SearchBar = styled.div`
     transform: translateY(-50%);
     width: 18px;
     height: 18px;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -190,17 +201,21 @@ const Content = styled.div`
   flex: 1;
   overflow: hidden;
   position: relative;
-  background: #fafbfc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const StatsBar = styled.div`
   padding: 1rem 1.75rem;
-  background: linear-gradient(180deg, #f8fafc 0%, #fafbfc 100%);
-  border-bottom: 1px solid #f1f5f9;
+  background: linear-gradient(
+    180deg,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    ${OS_LEGAL_COLORS.surfaceHover} 100%
+  );
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   display: flex;
   gap: 2rem;
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const Stat = styled.div`
@@ -209,7 +224,7 @@ const Stat = styled.div`
   gap: 0.5rem;
 
   strong {
-    color: #0f172a;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-weight: 600;
   }
 `;
@@ -218,7 +233,7 @@ const Badge = styled.span`
   position: absolute;
   top: -8px;
   right: -8px;
-  background: #ef4444;
+  background: ${OS_LEGAL_COLORS.danger};
   color: white;
   width: 24px;
   height: 24px;

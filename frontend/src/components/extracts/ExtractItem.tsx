@@ -23,6 +23,7 @@ import { getPermissions } from "../../utils/transform";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ExtractItemProps {
   extract: ExtractType;
@@ -44,7 +45,9 @@ const ExtractCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     props.$selected
       ? "linear-gradient(165deg, rgba(34, 197, 94, 0.05), rgba(255, 255, 255, 0.6))"
       : "#ffffff"};
-  border: 1px solid ${(props) => (props.$selected ? "#22c55e" : "#e2e8f0")};
+  border: 1px solid
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.green : OS_LEGAL_COLORS.border};
   border-radius: 16px;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: ${(props) =>
@@ -71,9 +74,9 @@ const CardHeader = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     border-radius: 10px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     transition: all 0.2s ease;
   }
 
@@ -84,21 +87,21 @@ const CardHeader = styled.div`
     h3 {
       font-size: 1.125rem;
       font-weight: 600;
-      color: #1e293b;
+      color: ${OS_LEGAL_COLORS.textPrimary};
       margin: 0 0 0.375rem 0;
       word-break: break-word;
     }
 
     .date {
       font-size: 0.75rem;
-      color: #64748b;
+      color: ${OS_LEGAL_COLORS.textSecondary};
     }
   }
 `;
 
 const Description = styled.div`
   font-size: 0.875rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   line-height: 1.5;
   margin-bottom: 1.25rem;
 `;
@@ -113,9 +116,9 @@ const Badge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   border-radius: 8px;
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
@@ -129,7 +132,7 @@ const ActionBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  background: #22c55e;
+  background: ${OS_LEGAL_COLORS.green};
   color: white;
   border-radius: 20px;
   padding: 0.375rem 0.75rem;
@@ -149,7 +152,7 @@ const DeleteButton = styled.button`
   align-items: center;
   justify-content: center;
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: ${OS_LEGAL_COLORS.dangerBorderHover};
   border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: 50%;
   box-shadow: none;

@@ -127,7 +127,7 @@ const styles = {
     height: "32px",
     padding: 0,
     borderRadius: "10px",
-    border: "2px dashed #cbd5e1",
+    border: `2px dashed ${OS_LEGAL_COLORS.borderHover}`,
     background: "rgba(59, 130, 246, 0.05)",
     color: OS_LEGAL_COLORS.primaryBlue,
     display: "flex",
@@ -212,11 +212,11 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
   approvedDot: {
-    backgroundColor: "#10b981",
+    backgroundColor: OS_LEGAL_COLORS.greenMedium,
     boxShadow: "0 0 0 3px rgba(16, 185, 129, 0.1)",
   } as React.CSSProperties,
   rejectedDot: {
-    backgroundColor: "#ef4444",
+    backgroundColor: OS_LEGAL_COLORS.dangerBorderHover,
     boxShadow: "0 0 0 3px rgba(239, 68, 68, 0.1)",
   } as React.CSSProperties,
   pendingDot: {
@@ -225,7 +225,7 @@ const styles = {
   } as React.CSSProperties,
   emptyDot: {
     backgroundColor: OS_LEGAL_COLORS.border,
-    border: "2px solid #cbd5e1",
+    border: `2px solid ${OS_LEGAL_COLORS.borderHover}`,
   } as React.CSSProperties,
   actionButton: {
     padding: "6px 12px",
@@ -242,7 +242,7 @@ const styles = {
     gap: "6px",
     "&:hover": {
       background: OS_LEGAL_COLORS.surfaceHover,
-      borderColor: "#cbd5e1",
+      borderColor: OS_LEGAL_COLORS.borderHover,
       color: "#334155",
       transform: "translateY(-1px)",
     },
@@ -256,7 +256,7 @@ const styles = {
   } as React.CSSProperties,
   emptyStateIcon: {
     fontSize: "48px",
-    color: "#cbd5e1",
+    color: OS_LEGAL_COLORS.borderHover,
     marginBottom: "16px",
   } as React.CSSProperties,
   emptyStateTitle: {
@@ -876,7 +876,10 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               <div style={styles.emptyState}>
                 <FileText
                   size={48}
-                  style={{ color: "#cbd5e1", marginBottom: "16px" }}
+                  style={{
+                    color: OS_LEGAL_COLORS.borderHover,
+                    marginBottom: "16px",
+                  }}
                 />
                 <h3 style={styles.emptyStateTitle}>No documents yet</h3>
                 <p style={styles.emptyStateText}>
@@ -997,7 +1000,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                                     style={{
                                       ...styles.actionButton,
                                       padding: "4px 8px",
-                                      color: "#ef4444",
+                                      color: OS_LEGAL_COLORS.dangerBorderHover,
                                     }}
                                     disabled={loading}
                                   >
@@ -1038,7 +1041,9 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                       <Table.Row
                         key={row.id}
                         style={{
-                          backgroundColor: isSelected ? "#eff6ff" : undefined,
+                          backgroundColor: isSelected
+                            ? OS_LEGAL_COLORS.blueSurface
+                            : undefined,
                         }}
                       >
                         {!extract.started && (
@@ -1213,7 +1218,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               onClick={confirmDeleteColumn}
               style={{
                 borderRadius: "6px",
-                backgroundColor: "#ef4444",
+                backgroundColor: OS_LEGAL_COLORS.dangerBorderHover,
                 marginLeft: "0.75rem",
               }}
             >

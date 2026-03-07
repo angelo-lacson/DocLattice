@@ -33,6 +33,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "../threads/styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { threadSortAtom, ThreadSortOption } from "../../atoms/threadAtoms";
 import {
   GET_CONVERSATIONS,
@@ -48,7 +49,7 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const Header = styled.div`
@@ -99,7 +100,7 @@ const Title = styled.h1`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 24px;
   font-weight: 400;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   margin: 0;
 `;
 

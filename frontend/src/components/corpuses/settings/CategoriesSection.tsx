@@ -4,6 +4,7 @@
 import React from "react";
 import { AlertTriangle, Save } from "lucide-react";
 import { Button } from "@os-legal/ui";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { CategorySelector } from "../CategorySelector";
 import {
   SettingsCard,
@@ -75,7 +76,7 @@ export const CategoriesSection: React.FC<CategoriesSectionProps> = ({
             onClick={onSave}
             leftIcon={<Save size={16} />}
             style={{
-              background: !canUpdate ? "#e2e8f0" : undefined,
+              background: !canUpdate ? OS_LEGAL_COLORS.border : undefined,
               cursor: !canUpdate ? "not-allowed" : undefined,
             }}
           >

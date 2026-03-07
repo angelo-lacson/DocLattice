@@ -28,6 +28,7 @@ import { AnnotationLabelType, LabelType } from "../../types/graphql-api";
 import { toast } from "react-toastify";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Import extracted components from detail folder
 import {
@@ -481,7 +482,9 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
       <PageContainer>
         <LoadingContainer>
           <Spinner size="lg" />
-          <div style={{ marginTop: "1rem", color: "#64748b" }}>
+          <div
+            style={{ marginTop: "1rem", color: OS_LEGAL_COLORS.textSecondary }}
+          >
             Loading label set...
           </div>
         </LoadingContainer>
@@ -498,9 +501,9 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
             style={{
               padding: "1rem 1.5rem",
               borderRadius: "8px",
-              background: "#fee2e2",
+              background: OS_LEGAL_COLORS.dangerSurfaceHover,
               border: "1px solid #fca5a5",
-              color: "#991b1b",
+              color: OS_LEGAL_COLORS.dangerText,
             }}
           >
             <strong>Error loading label set</strong>
@@ -981,9 +984,9 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
             style={{
               padding: "1rem 1.5rem",
               borderRadius: "8px",
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              color: "#1e40af",
+              background: OS_LEGAL_COLORS.blueSurface,
+              border: `1px solid ${OS_LEGAL_COLORS.blueBorder}`,
+              color: OS_LEGAL_COLORS.blueDark,
             }}
           >
             <strong>Sharing Settings</strong>
@@ -1012,7 +1015,9 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
           }}
         >
           <Spinner size="lg" />
-          <div style={{ marginTop: "1rem", color: "#64748b" }}>
+          <div
+            style={{ marginTop: "1rem", color: OS_LEGAL_COLORS.textSecondary }}
+          >
             {delete_loading ? "Deleting..." : "Loading..."}
           </div>
         </div>

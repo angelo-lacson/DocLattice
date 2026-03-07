@@ -400,7 +400,7 @@ const HistoryList = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 3px;
 
     &:hover {
@@ -412,8 +412,8 @@ const HistoryList = styled.div`
 const VersionDetails = styled(motion.div)`
   padding: 1rem;
   margin: 0.5rem;
-  background: #f0f9ff;
-  border: 1px solid #bfdbfe;
+  background: ${OS_LEGAL_COLORS.blueSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.blueBorder};
   border-radius: 8px;
   overflow: hidden;
 
@@ -475,7 +475,11 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
         : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   background: ${(props) =>
-    props.$isActive ? "#eff6ff" : props.$isViewing ? "#f3f4f6" : "white"};
+    props.$isActive
+      ? OS_LEGAL_COLORS.blueSurface
+      : props.$isViewing
+      ? "#f3f4f6"
+      : "white"};
   text-align: left;
   cursor: pointer;
   margin-bottom: 0.5rem;
@@ -483,7 +487,8 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
 
   &:hover {
     border-color: ${(props) => (props.$isActive ? "#4a90e2" : "#a78bfa")};
-    background: ${(props) => (props.$isActive ? "#eff6ff" : "#f9fafb")};
+    background: ${(props) =>
+      props.$isActive ? OS_LEGAL_COLORS.blueSurface : OS_LEGAL_COLORS.gray50};
     transform: translateX(2px);
   }
 
@@ -633,17 +638,17 @@ const StyledButton = styled.button<StyledButtonProps>`
     border: 1px solid ${OS_LEGAL_COLORS.border};
     &:hover {
       background: ${OS_LEGAL_COLORS.surfaceHover};
-      border-color: #cbd5e1;
+      border-color: ${OS_LEGAL_COLORS.borderHover};
     }
   `}
 
   ${(props) =>
     props.$variant === "success" &&
     `
-    background: #10b981;
+    background: ${OS_LEGAL_COLORS.greenMedium};
     color: white;
     &:hover {
-      background: #059669;
+      background: ${OS_LEGAL_COLORS.greenDark};
       transform: translateY(-1px);
     }
   `}
@@ -652,11 +657,11 @@ const StyledButton = styled.button<StyledButtonProps>`
     props.$variant === "danger" &&
     `
     background: white;
-    color: #ef4444;
-    border: 1px solid #fecaca;
+    color: ${OS_LEGAL_COLORS.dangerBorderHover};
+    border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
     &:hover {
-      background: #fef2f2;
-      border-color: #f87171;
+      background: ${OS_LEGAL_COLORS.dangerSurface};
+      border-color: ${OS_LEGAL_COLORS.dangerBorderHover};
     }
   `}
 
@@ -1157,7 +1162,8 @@ export const CorpusDescriptionEditor: React.FC<
                                           <div
                                             style={{
                                               fontSize: "0.75rem",
-                                              color: "#ef4444",
+                                              color:
+                                                OS_LEGAL_COLORS.dangerBorderHover,
                                               width: "100%",
                                               marginTop: "0.5rem",
                                             }}
@@ -1233,7 +1239,7 @@ export const CorpusDescriptionEditor: React.FC<
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: "#10b981",
+                    background: OS_LEGAL_COLORS.greenMedium,
                     marginLeft: 8,
                   }}
                 />

@@ -34,6 +34,7 @@ import {
   CorpusEngagementMetrics,
 } from "../../graphql/queries";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 
 // Map of icon identifiers to lucide-react components
@@ -99,7 +100,9 @@ export const CorpusEngagementDashboard: React.FC<
     return (
       <LoadingContainer>
         <Spinner size="md" />
-        <div style={{ marginTop: "0.5rem", color: "#64748b" }}>
+        <div
+          style={{ marginTop: "0.5rem", color: OS_LEGAL_COLORS.textSecondary }}
+        >
           Loading engagement metrics...
         </div>
       </LoadingContainer>
@@ -174,7 +177,7 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.activeThreads}
             label="Active Threads"
             icon="comment alternate outline"
-            color="#22c55e"
+            color={OS_LEGAL_COLORS.green}
           />
           <StatisticWithAnimation
             value={
@@ -202,13 +205,13 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.messagesLast7Days}
             label="Last 7 Days"
             icon="calendar check"
-            color="#10b981"
+            color={OS_LEGAL_COLORS.greenMedium}
           />
           <StatisticWithAnimation
             value={metrics.messagesLast30Days}
             label="Last 30 Days"
             icon="calendar alternate outline"
-            color="#3b82f6"
+            color={OS_LEGAL_COLORS.primaryBlue}
           />
         </StatsGrid>
 
@@ -216,13 +219,16 @@ export const CorpusEngagementDashboard: React.FC<
           <ChartTitle>Message Activity Comparison</ChartTitle>
           <ResponsiveContainer width="100%" height={isMobile ? 200 : 300}>
             <BarChart data={activityData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="period" stroke="#64748b" />
-              <YAxis stroke="#64748b" />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={OS_LEGAL_COLORS.border}
+              />
+              <XAxis dataKey="period" stroke={OS_LEGAL_COLORS.textSecondary} />
+              <YAxis stroke={OS_LEGAL_COLORS.textSecondary} />
               <Tooltip
                 contentStyle={{
                   background: "white",
-                  border: "1px solid #e2e8f0",
+                  border: `1px solid ${OS_LEGAL_COLORS.border}`,
                   borderRadius: "8px",
                 }}
               />
@@ -297,7 +303,7 @@ const DashboardHeader = styled.div`
 const Title = styled.h2`
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -316,7 +322,7 @@ const Title = styled.h2`
 
 const LastUpdated = styled.div`
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-style: italic;
 `;
 
@@ -327,10 +333,10 @@ const Section = styled.div`
 const SectionTitle = styled.h3`
   font-size: 1.125rem;
   font-weight: 600;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 1rem 0;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     font-size: 1.25rem;
@@ -354,7 +360,7 @@ const StatisticWrapper = styled.div`
   display: flex;
   align-items: center;
   padding: 0.75rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
@@ -397,10 +403,18 @@ const AlertBox = styled.div<{ $variant: "error" | "info" }>`
   padding: 1rem 1.5rem;
   border-radius: 8px;
   background: ${(props) =>
-    props.$variant === "error" ? "#fee2e2" : "#eff6ff"};
+    props.$variant === "error"
+      ? OS_LEGAL_COLORS.dangerSurfaceHover
+      : OS_LEGAL_COLORS.blueSurface};
   border: 1px solid
-    ${(props) => (props.$variant === "error" ? "#fca5a5" : "#bfdbfe")};
-  color: ${(props) => (props.$variant === "error" ? "#991b1b" : "#1e40af")};
+    ${(props) =>
+      props.$variant === "error"
+        ? OS_LEGAL_COLORS.dangerBorder
+        : OS_LEGAL_COLORS.blueBorder};
+  color: ${(props) =>
+    props.$variant === "error"
+      ? OS_LEGAL_COLORS.dangerText
+      : OS_LEGAL_COLORS.blueDark};
 
   strong {
     display: block;
@@ -443,7 +457,7 @@ const StatisticLabel = styled.div`
 
 const ChartContainer = styled.div`
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 1rem;
   margin-top: 1rem;
@@ -456,7 +470,7 @@ const ChartContainer = styled.div`
 const ChartTitle = styled.h4`
   font-size: 1rem;
   font-weight: 600;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0 0 1rem 0;
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {

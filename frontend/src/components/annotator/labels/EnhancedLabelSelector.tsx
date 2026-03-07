@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   Tag,
   FileText,
@@ -774,7 +775,8 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
     transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
 
     .tag-icon {
-      color: ${(props) => (props.$isReadOnly ? "#94a3b8" : "#1a75bc")};
+      color: ${(props) =>
+        props.$isReadOnly ? OS_LEGAL_COLORS.textMuted : "#1a75bc"};
       stroke-width: 2.2;
       transition: all 0.3s;
     }
@@ -801,7 +803,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
     gap: 8px;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
 
     .color-dot {
       width: 8px;
@@ -813,7 +815,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
     .clear-button {
       background: none;
       border: none;
-      color: #64748b;
+      color: ${OS_LEGAL_COLORS.textSecondary};
       font-size: 1.2rem;
       width: 20px;
       height: 20px;
@@ -828,7 +830,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
 
       &:hover:not(:disabled) {
         background: rgba(0, 0, 0, 0.05);
-        color: #ef4444;
+        color: ${OS_LEGAL_COLORS.dangerBorderHover};
       }
 
       &:disabled {
@@ -868,7 +870,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
       .search-icon {
         position: absolute;
         left: 12px;
-        color: #64748b;
+        color: ${OS_LEGAL_COLORS.textSecondary};
         pointer-events: none;
       }
 
@@ -879,10 +881,10 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
         padding: 0.25rem 0.5rem 0.25rem 2rem;
         font-size: 0.875rem;
         outline: none;
-        color: #1e293b;
+        color: ${OS_LEGAL_COLORS.textPrimary};
 
         &::placeholder {
-          color: #94a3b8;
+          color: ${OS_LEGAL_COLORS.textMuted};
         }
       }
     }
@@ -927,7 +929,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
       .section-title {
         font-size: 0.75rem;
         font-weight: 600;
-        color: #64748b;
+        color: ${OS_LEGAL_COLORS.textSecondary};
         text-transform: uppercase;
         letter-spacing: 0.5px;
         padding: 0 0.5rem;
@@ -942,7 +944,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
       border-radius: 10px;
       font-size: 0.875rem;
       font-weight: 500;
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
       display: flex;
       align-items: center;
       gap: 0.75rem;
@@ -964,7 +966,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
 
       &:hover {
         background: rgba(0, 0, 0, 0.03);
-        color: #1e293b;
+        color: ${OS_LEGAL_COLORS.textPrimary};
 
         .color-dot {
           transform: scale(1.2);
@@ -994,7 +996,7 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
 
     .empty-state {
       padding: 0.75rem 1rem;
-      color: #64748b;
+      color: ${OS_LEGAL_COLORS.textSecondary};
       font-size: 0.875rem;
       text-align: center;
       font-style: italic;
@@ -1038,7 +1040,11 @@ const ModalHeader = styled.div`
   padding: 2rem 2.5rem 1.75rem;
   border-bottom: 1px solid #e5e7eb;
   position: relative;
-  background: linear-gradient(to bottom, #fbfcfd 0%, #f9fafb 100%);
+  background: linear-gradient(
+    to bottom,
+    #fbfcfd 0%,
+    ${OS_LEGAL_COLORS.gray50} 100%
+  );
 `;
 
 const ModalTitle = styled.h2`
@@ -1052,7 +1058,7 @@ const ModalTitle = styled.h2`
 const ModalSubtitle = styled.p`
   margin: 0.625rem 0 0;
   font-size: 0.9375rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.5;
   max-width: 85%;
 `;
@@ -1122,7 +1128,7 @@ const Label = styled.label`
   letter-spacing: 0.025em;
 
   .required {
-    color: #dc2626;
+    color: ${OS_LEGAL_COLORS.danger};
     font-weight: 400;
   }
 `;
@@ -1131,26 +1137,26 @@ const StyledInput = styled.input`
   width: 100%;
   padding: 0.75rem 1rem;
   font-size: 0.9375rem;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   transition: all 0.2s ease;
   background: #ffffff;
   color: #0f172a;
 
   &:hover:not(:focus) {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     background: #fafbfc;
   }
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.12);
     background: #ffffff;
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -1158,7 +1164,7 @@ const StyledTextarea = styled.textarea`
   width: 100%;
   padding: 0.75rem 1rem;
   font-size: 0.9375rem;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   transition: all 0.2s ease;
   background: #ffffff;
@@ -1168,19 +1174,19 @@ const StyledTextarea = styled.textarea`
   line-height: 1.5;
 
   &:hover:not(:focus) {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     background: #fafbfc;
   }
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.12);
     background: #ffffff;
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -1195,11 +1201,11 @@ const ColorPreview = styled.div<{ color: string }>`
   align-items: center;
   gap: 0.75rem;
   padding: 0.625rem 1rem;
-  background: #f8fafc;
-  border: 1.5px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1.5px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   font-size: 0.875rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   font-weight: 500;
   min-width: 140px;
 `;
@@ -1216,7 +1222,7 @@ const ColorSwatch = styled.div<{ color: string }>`
 const StyledColorInput = styled.input`
   width: 48px;
   height: 48px;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   cursor: pointer;
   background: white;
@@ -1232,12 +1238,12 @@ const StyledColorInput = styled.input`
   }
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.12);
   }
 `;
@@ -1245,7 +1251,7 @@ const StyledColorInput = styled.input`
 const HelperText = styled.p`
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.5;
 `;
 
@@ -1253,11 +1259,11 @@ const InfoMessage = styled.div`
   display: flex;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  background: #eff6ff;
-  border: 1.5px solid #bfdbfe;
+  background: ${OS_LEGAL_COLORS.blueSurface};
+  border: 1.5px solid ${OS_LEGAL_COLORS.blueBorder};
   border-radius: 10px;
   margin-bottom: 1.75rem;
-  color: #1e40af;
+  color: ${OS_LEGAL_COLORS.blueDark};
 
   svg {
     flex-shrink: 0;
@@ -1278,7 +1284,7 @@ const InfoMessage = styled.div`
   p {
     margin: 0;
     font-size: 0.875rem;
-    color: #1e40af;
+    color: ${OS_LEGAL_COLORS.blueDark};
     opacity: 0.9;
   }
 `;
@@ -1292,7 +1298,7 @@ const SectionTitle = styled.h3`
   margin: 0;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   background: white;
@@ -1307,14 +1313,18 @@ const SectionTitle = styled.h3`
     left: 100%;
     width: 500px;
     height: 1px;
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 `;
 
 const ModalFooter = styled.div`
   padding: 1.5rem 2.5rem 1.75rem;
   border-top: 1px solid #e5e7eb;
-  background: linear-gradient(to top, #fbfcfd 0%, #f9fafb 100%);
+  background: linear-gradient(
+    to top,
+    #fbfcfd 0%,
+    ${OS_LEGAL_COLORS.gray50} 100%
+  );
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1328,7 +1338,7 @@ const ModalFooter = styled.div`
 
 const FooterInfo = styled.div`
   font-size: 0.8125rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1367,14 +1377,14 @@ const StyledButton = styled(motion.button)<{
   ${(props) =>
     props.$variant === "primary"
       ? `
-    background: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
-    border: 1.5px solid #3b82f6;
+    border: 1.5px solid ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 
     &:hover:not(:disabled) {
-      background: #2563eb;
-      border-color: #2563eb;
+      background: ${OS_LEGAL_COLORS.primaryBlueHover};
+      border-color: ${OS_LEGAL_COLORS.primaryBlueHover};
       box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
       transform: translateY(-0.5px);
     }
@@ -1385,21 +1395,21 @@ const StyledButton = styled(motion.button)<{
     }
 
     &:disabled {
-      background: #94a3b8;
-      border-color: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
+      border-color: ${OS_LEGAL_COLORS.textMuted};
       cursor: not-allowed;
       opacity: 1;
     }
   `
       : `
     background: white;
-    color: #475569;
-    border: 1.5px solid #e2e8f0;
+    color: ${OS_LEGAL_COLORS.textTertiary};
+    border: 1.5px solid ${OS_LEGAL_COLORS.border};
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 
     &:hover:not(:disabled) {
-      background: #f8fafc;
-      border-color: #cbd5e1;
+      background: ${OS_LEGAL_COLORS.surfaceHover};
+      border-color: ${OS_LEGAL_COLORS.borderHover};
       color: #334155;
       transform: translateY(-0.5px);
     }
