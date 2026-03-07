@@ -13,6 +13,7 @@ from graphql_relay import from_global_id
 from config.graphql.graphene_types import (
     AgentActionResultType,
     CorpusActionExecutionType,
+    CorpusActionTemplateType,
     CorpusActionTrailStatsType,
     CorpusActionType,
     DocumentCorpusActionsType,
@@ -24,6 +25,29 @@ logger = logging.getLogger(__name__)
 
 class ActionQueryMixin:
     """Query fields and resolvers for corpus action and execution queries."""
+
+    # CORPUS ACTION TEMPLATE RESOLVERS #####################################
+    corpus_action_templates = DjangoConnectionField(
+        CorpusActionTemplateType,
+        is_active=graphene.Boolean(required=False),
+    )
+
+    @login_required
+    def resolve_corpus_action_templates(self, info, **kwargs):
+        """Return available corpus action templates.
+
+        Templates are system-level and read-only — any authenticated user
+        can see active templates.
+        """
+        from opencontractserver.corpuses.models import CorpusActionTemplate
+
+        queryset = CorpusActionTemplate.objects.all()
+
+        is_active = kwargs.get("is_active")
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active)
+
+        return queryset.order_by("sort_order", "name")
 
     # CORPUS ACTION RESOLVERS #####################################
     corpus_actions = DjangoConnectionField(
