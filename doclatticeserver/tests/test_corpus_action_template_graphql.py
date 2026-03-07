@@ -37,8 +37,7 @@ class CorpusActionTemplateGraphQLTest(GraphQLTestCase):
             creator=self.user,
         )
 
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 corpusActionTemplates(isActive: true) {
                     edges {
@@ -52,8 +51,7 @@ class CorpusActionTemplateGraphQLTest(GraphQLTestCase):
                     }
                 }
             }
-            """
-        )
+            """)
         self.assertResponseNoErrors(response)
         content = response.json()
         edges = content["data"]["corpusActionTemplates"]["edges"]
@@ -63,14 +61,12 @@ class CorpusActionTemplateGraphQLTest(GraphQLTestCase):
 
     def test_unauthenticated_returns_error(self):
         self.client.logout()
-        response = self.query(
-            """
+        response = self.query("""
             query {
                 corpusActionTemplates {
                     edges { node { name } }
                 }
             }
-            """
-        )
+            """)
         content = response.json()
         self.assertTrue(len(content.get("errors", [])) > 0)
