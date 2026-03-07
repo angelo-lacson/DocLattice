@@ -1,7 +1,7 @@
 """
 Rate limiting configuration for OpenContracts.
 
-This module contains settings for django-ratelimit integration.
+This module contains settings consumed by the ``config.ratelimit`` package.
 """
 
 import os
@@ -10,13 +10,7 @@ import environ
 
 env = environ.Env()
 
-# Django-ratelimit settings
-RATELIMIT_ENABLE = True  # Enable rate limiting globally
 RATELIMIT_USE_CACHE = "default"  # Use default cache backend
-RATELIMIT_VIEW = (
-    "config.graphql.ratelimits.RateLimitExceeded"  # Custom rate limit exceeded view
-)
-
 # Whether to disable rate limiting
 # By default, disable in test environments unless explicitly enabled
 RATELIMIT_DISABLE = env.bool("RATELIMIT_DISABLE", default=False)
@@ -24,8 +18,13 @@ RATELIMIT_DISABLE = env.bool("RATELIMIT_DISABLE", default=False)
 # Rate limit key prefix (useful for multi-tenant setups)
 RATELIMIT_KEY_PREFIX = "rl"
 
-# Whether to fail "open" (allow requests) or "closed" (deny requests) when cache is unavailable
-RATELIMIT_FAIL_OPEN = False
+# Controls whether rate limiting fails open (allows requests) or closed (denies
+# requests) when the cache backend (Redis) is unavailable.  Setting this to True
+# ensures application availability is not impacted by a cache outage — requests
+# are allowed through without rate limiting.  Setting to False (deny) is safer
+# from an abuse perspective but may cause downtime if Redis is unreachable.
+# Read by config/ratelimit/engine.py in the cache-error exception handler.
+RATELIMIT_FAIL_OPEN = True
 
 # Custom rate limits can be overridden via environment variables
 # Example: RATELIMIT_AUTH_LOGIN=10/m would set login rate to 10 per minute
@@ -47,14 +46,29 @@ RATE_LIMIT_OVERRIDES = {
     "EXPORT": os.environ.get("RATELIMIT_EXPORT"),
     "IMPORT": os.environ.get("RATELIMIT_IMPORT"),
     "ADMIN_OPERATION": os.environ.get("RATELIMIT_ADMIN_OPERATION"),
+    # WebSocket rate limits
+    "WS_CONNECT": os.environ.get("RATELIMIT_WS_CONNECT"),
+    "WS_HEARTBEAT": os.environ.get("RATELIMIT_WS_HEARTBEAT"),
+    # MCP rate limits
+    "MCP_GLOBAL": os.environ.get("RATELIMIT_MCP_GLOBAL"),
 }
 
 # Remove None values
 RATE_LIMIT_OVERRIDES = {k: v for k, v in RATE_LIMIT_OVERRIDES.items() if v is not None}
 
-# IP address extraction for rate limiting behind proxies
-# This is important when running behind Traefik or other reverse proxies
-RATELIMIT_IP_META_KEY = "HTTP_X_FORWARDED_FOR"
+# Number of trusted reverse proxies in front of the application.
+# Controls which entry in X-Forwarded-For is used for rate limit keying:
+#   1 (default): rightmost entry (single proxy, e.g. Traefik/nginx)
+#   2: second from right (two proxies, e.g. CDN + load balancer)
+#   0: ignore X-Forwarded-For entirely (app receives connections directly
+#      without a reverse proxy — REMOTE_ADDR is used instead)
+# Set this to match your deployment's proxy chain depth.
+#
+# WARNING: The default of 1 assumes a reverse proxy (e.g. Traefik or nginx)
+# is present. Deployments without a reverse proxy MUST set this to 0,
+# otherwise X-Forwarded-For is client-controlled and an attacker can spoof
+# their IP to bypass rate limits.
+RATELIMIT_PROXIES_COUNT = env.int("RATELIMIT_PROXIES_COUNT", default=1)
 
 # Whether to group IPv6 addresses by subnet for rate limiting
 # This prevents users from bypassing rate limits by using different IPv6 addresses

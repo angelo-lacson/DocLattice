@@ -65,7 +65,6 @@ django-guardian
 # ------------------------------------------------------------------------------
 graphene-django==3.2.3  # TODO - evaluate migration path; Django 5.2 not officially supported, slow maintenance pace
 django-graphql-jwt==0.4.0
-django-ratelimit==4.1.0  # https://github.com/jsocol/django-ratelimit
 
 # Telemetry
 # ------------------------------------------------------------------------------
