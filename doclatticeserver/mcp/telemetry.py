@@ -308,34 +308,32 @@ async def arecord_mcp_request(
     return await arecord_event("mcp_request", properties)
 
 
-def get_client_ip_from_scope(scope: dict[str, Any]) -> str | None:
+def get_claimed_client_ip_from_scope(scope: dict[str, Any]) -> str | None:
+    """Extract client IP address from an ASGI scope for telemetry purposes.
+
+    Unlike the rate-limiting IP extractor (which picks the rightmost trusted
+    proxy entry for anti-spoofing), this function returns the **leftmost**
+    ``X-Forwarded-For`` entry -- the claimed original client IP.  For
+    telemetry (hashed, privacy-preserving) this is the right choice: we want
+    to identify the true origin, even if it could be spoofed.
+
+    Returns ``None`` when no IP can be determined.
     """
-    Extract client IP address from an ASGI scope.
-
-    Checks X-Forwarded-For header first (for reverse proxy setups),
-    then falls back to the direct client connection.
-
-    Args:
-        scope: ASGI scope dictionary
-
-    Returns:
-        Client IP address string, or None if not available
-    """
-    # Check headers for X-Forwarded-For (reverse proxy)
     headers = dict(scope.get("headers", []))
 
-    # Headers are bytes in ASGI
+    # X-Forwarded-For: pick leftmost (original client claim)
     xff = headers.get(b"x-forwarded-for")
     if xff:
-        # X-Forwarded-For can contain multiple IPs, take the first (original client)
-        return xff.decode().split(",")[0].strip()
+        parts = [p.strip() for p in xff.decode().split(",") if p.strip()]
+        if parts:
+            return parts[0]
 
-    # Check X-Real-IP header (common in nginx setups)
+    # X-Real-IP
     x_real_ip = headers.get(b"x-real-ip")
     if x_real_ip:
         return x_real_ip.decode().strip()
 
-    # Fall back to direct client connection
+    # Direct client connection
     client = scope.get("client")
     if client and len(client) >= 1:
         return client[0]

@@ -154,6 +154,7 @@ LOCAL_APPS = [
     "doclatticeserver.notifications",
     "doclatticeserver.agents",
     "doclatticeserver.worker_uploads",
+    "doclatticeserver.discovery",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps

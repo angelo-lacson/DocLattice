@@ -19,29 +19,20 @@ from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.decorators.csrf import csrf_protect
-from django_ratelimit.decorators import ratelimit
+
+from config.ratelimit.decorators import view_ratelimit
+from config.ratelimit.rates import RateLimits
 
 logger = logging.getLogger(__name__)
 
-# Rate limits for admin login endpoints.
-# Can be overridden via RATELIMIT_AUTH_LOGIN and RATELIMIT_ADMIN_LOGIN_PAGE
-# environment variables through the RATE_LIMIT_OVERRIDES mechanism.
-_overrides = getattr(settings, "RATE_LIMIT_OVERRIDES", {})
-ADMIN_LOGIN_RATE = _overrides.get("AUTH_LOGIN", "5/m")
-ADMIN_LOGIN_PAGE_RATE = _overrides.get("ADMIN_LOGIN_PAGE", "20/m")
-
-
-def _ratelimit_ip_key(group: str, request) -> str:
-    """
-    Extract client IP for rate-limit keying.
-
-    Falls back to REMOTE_ADDR when the X-Forwarded-For header is absent
-    (e.g. in tests or direct connections without a reverse proxy).
-    """
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "unknown")
+# Rate limits for admin login endpoints — read from shared RateLimits singleton.
+# NOTE: These are captured at import time since @view_ratelimit evaluates the
+# rate parameter at decoration time.  Calling RateLimits.reload() will NOT
+# affect admin login rates; a server restart is required.
+# Direct attribute access (no getattr fallback) so missing attributes surface
+# as AttributeError at startup rather than silently falling back to a default.
+ADMIN_LOGIN_RATE = RateLimits.AUTH_LOGIN
+ADMIN_LOGIN_PAGE_RATE = RateLimits.ADMIN_LOGIN_PAGE
 
 
 def _get_login_url():
@@ -165,9 +156,7 @@ class Auth0AdminLoginView(View):
     template_name = "admin/auth0_login.html"
 
     @method_decorator(csrf_protect)
-    @method_decorator(
-        ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_PAGE_RATE, block=False)
-    )
+    @method_decorator(view_ratelimit(rate=ADMIN_LOGIN_PAGE_RATE, block=False))
     def get(self, request):
         """Display the appropriate login form."""
         if getattr(request, "limited", False):
@@ -206,9 +195,7 @@ class Auth0AdminLoginView(View):
         return render(request, self.template_name, context)
 
     @method_decorator(csrf_protect)
-    @method_decorator(
-        ratelimit(key=_ratelimit_ip_key, rate=ADMIN_LOGIN_RATE, block=False)
-    )
+    @method_decorator(view_ratelimit(rate=ADMIN_LOGIN_RATE, block=False))
     def post(self, request):
         """Handle token-based login via POST or password authentication."""
         if getattr(request, "limited", False):
