@@ -77,7 +77,7 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
   };
 
   return (
-    <Modal open={isOpen} onClose={handleClose} size="lg">
+    <Modal open={isOpen} onClose={handleClose} size="md">
       <ModalHeader title="Create New Note" onClose={handleClose} />
       <ModalBody>
         <div style={{ marginBottom: "1rem" }}>
@@ -107,32 +107,22 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
             placeholder="Write your note here..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            rows={10}
+            rows={6}
             disabled={loading}
             style={{ fontFamily: "monospace" }}
           />
         </div>
         <div
           style={{
-            padding: "1rem",
+            padding: "0.75rem",
             background: "#eef6fc",
             border: "1px solid #a9d5de",
             borderRadius: "8px",
+            fontSize: "0.85rem",
           }}
         >
-          <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-            Markdown Support
-          </div>
-          <div>
-            You can use Markdown formatting in your notes. For example:
-            <ul>
-              <li>**bold text**</li>
-              <li>*italic text*</li>
-              <li># Heading</li>
-              <li>- List item</li>
-              <li>`code`</li>
-            </ul>
-          </div>
+          <strong>Markdown supported:</strong> **bold**, *italic*, # heading, -
+          list, `code`
         </div>
       </ModalBody>
       <ModalFooter>

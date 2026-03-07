@@ -71,10 +71,8 @@ test.describe("NewNoteModal - Rendering", () => {
       page.locator('textarea[placeholder="Write your note here..."]')
     ).toBeVisible();
 
-    // Markdown support info box should be visible
-    await expect(
-      page.getByText("Markdown Support", { exact: true })
-    ).toBeVisible();
+    // Markdown support info should be visible
+    await expect(page.getByText("Markdown supported:")).toBeVisible();
 
     // Action buttons should be present
     await expect(page.locator('button:has-text("Cancel")')).toBeVisible();
