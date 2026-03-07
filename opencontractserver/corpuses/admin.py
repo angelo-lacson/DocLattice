@@ -69,6 +69,9 @@ class CorpusActionAdmin(GuardedModelAdmin):
 
 @admin.register(CorpusActionTemplate)
 class CorpusActionTemplateAdmin(admin.ModelAdmin):
+    """Plain ModelAdmin (not GuardedModelAdmin) — CorpusActionTemplate has no
+    django-guardian permission tables; it is a global/system-level model."""
+
     list_display = ["name", "trigger", "is_active", "sort_order", "disabled_on_clone"]
     list_filter = ["is_active", "trigger"]
     search_fields = ["name"]

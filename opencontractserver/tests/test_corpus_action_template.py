@@ -240,12 +240,17 @@ class DefaultTemplatesMigrationTest(TestCase):
         super().setUpClass()
         # Ensure a superuser exists so the migration function can run,
         # then invoke the migration logic if templates are missing.
+        # Guard with existence check for --keepdb compatibility.
         from django.apps import apps
 
-        cls._superuser = User.objects.create_superuser(
+        cls._superuser, _ = User.objects.get_or_create(
             username="migration_admin",
-            password="testpass",
-            email="admin@test.com",
+            defaults={
+                "password": "testpass",
+                "email": "admin@test.com",
+                "is_superuser": True,
+                "is_staff": True,
+            },
         )
         _create_default_action_templates(apps, None)
 
