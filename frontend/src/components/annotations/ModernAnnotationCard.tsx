@@ -56,8 +56,8 @@ const CardContainer = styled.div<{ $isSelected?: boolean }>`
   ${(props) =>
     props.$isSelected &&
     `
-    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
-    background: #f0fdfa;
+    box-shadow: 0 0 0 2px ${OS_LEGAL_COLORS.accentMedium};
+    background: ${OS_LEGAL_COLORS.accentSurface};
   `}
 
   &:hover {
@@ -113,9 +113,9 @@ const SourceBadge = styled.div<{ $variant: AnnotationSourceType }>`
       case "human":
         return OS_LEGAL_COLORS.blueBorder;
       case "agent":
-        return "#ede9fe";
+        return OS_LEGAL_COLORS.agentPurpleLight;
       case "structural":
-        return "#fef3c7";
+        return OS_LEGAL_COLORS.structuralLight;
       default:
         return OS_LEGAL_COLORS.surfaceLight;
     }
@@ -125,7 +125,7 @@ const SourceBadge = styled.div<{ $variant: AnnotationSourceType }>`
       case "human":
         return OS_LEGAL_COLORS.primaryBlueHover;
       case "agent":
-        return "#7c3aed";
+        return OS_LEGAL_COLORS.agentPurple;
       case "structural":
         return OS_LEGAL_COLORS.folderIcon;
       default:
@@ -145,7 +145,9 @@ const TypeBadge = styled.div<{ $type: "doc" | "text" }>`
   letter-spacing: 0.03em;
   border-radius: 4px;
   background: ${(props) =>
-    props.$type === "doc" ? OS_LEGAL_COLORS.blueBorder : "#f0fdfa"};
+    props.$type === "doc"
+      ? OS_LEGAL_COLORS.blueBorder
+      : OS_LEGAL_COLORS.accentSurface};
   color: ${(props) =>
     props.$type === "doc"
       ? OS_LEGAL_COLORS.primaryBlueHover
@@ -163,7 +165,7 @@ const SimilarityBadge = styled.div<{ $score: number }>`
   background: ${(props) => {
     // Color gradient based on score: green for high, yellow for medium, gray for low
     if (props.$score >= 0.8) return OS_LEGAL_COLORS.successSurface; // green
-    if (props.$score >= 0.6) return "#fef9c3"; // yellow
+    if (props.$score >= 0.6) return OS_LEGAL_COLORS.yellowLight;
     return OS_LEGAL_COLORS.surfaceLight; // gray
   }};
   color: ${(props) => {

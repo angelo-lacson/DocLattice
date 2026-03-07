@@ -48,6 +48,10 @@ export const OS_LEGAL_COLORS = {
   accentHover: "#0d6860",
   /** Light accent background. Use for selected items and subtle highlights. */
   accentLight: "rgba(15, 118, 110, 0.1)",
+  /** Medium accent opacity. Use for focus rings and selected outlines. */
+  accentMedium: "rgba(15, 118, 110, 0.2)",
+  /** Light accent surface (teal-50). Use for selected item backgrounds. */
+  accentSurface: "#f0fdfa",
 
   // Interactive colors - blue theme
   /** Primary interactive blue - buttons, focus rings, toggles, active states. */
@@ -189,7 +193,26 @@ export const OS_LEGAL_COLORS = {
   chartPink: "#ec4899",
   /** Chart teal - vivid teal for chart series and data points. */
   chartTeal: "#14b8a6",
+
+  // Annotation source badge colors
+  /** Agent badge color - purple for AI-generated annotations. */
+  agentPurple: "#7c3aed",
+  /** Agent badge background - light purple (violet-100). */
+  agentPurpleLight: "#ede9fe",
+  /** Structural badge background - light amber (amber-100). */
+  structuralLight: "#fef3c7",
+
+  // Extended yellow palette
+  /** Light yellow surface - medium score indicators (yellow-100). */
+  yellowLight: "#fef9c3",
 } as const;
+
+/**
+ * Create an rgba color string from primaryBlue (#3b82f6 = rgb(59, 130, 246))
+ * with a given opacity. Use instead of hardcoded rgba(74, 144, 226, ...) values.
+ */
+export const primaryBlueAlpha = (opacity: number): string =>
+  `rgba(59, 130, 246, ${opacity})`;
 
 /**
  * Typography definitions for the OS Legal design system.
