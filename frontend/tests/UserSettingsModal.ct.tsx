@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { MockedResponse } from "@apollo/client/testing";
 import { UPDATE_ME } from "../src/graphql/mutations";
 import UserSettingsModalHarness from "./UserSettingsModalHarness";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test("@slug profile modal updates user slug", async ({ mount, page }) => {
   const mocks: ReadonlyArray<MockedResponse> = [
@@ -30,6 +31,8 @@ test("@slug profile modal updates user slug", async ({ mount, page }) => {
 
   await mount(<UserSettingsModalHarness mocks={mocks} />);
   await expect(page.getByTestId("user-settings-modal")).toBeVisible();
+
+  await docScreenshot(page, "settings--user-settings-modal--initial");
 
   const slugInput = page.getByPlaceholder("your-slug");
   await slugInput.fill("Alice-Pro");
