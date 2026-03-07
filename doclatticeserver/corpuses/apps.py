@@ -14,8 +14,6 @@ class CorpusesConfig(AppConfig):
             # This enables:
             # - NEW_THREAD: Trigger corpus actions when a discussion thread is created
             # - NEW_MESSAGE: Trigger corpus actions when a human message is posted
-            # - Template cloning: Auto-clone active CorpusActionTemplates into
-            #   newly created corpuses (post_save on Corpus)
             # Note: Document-based triggers (ADD_DOCUMENT, EDIT_DOCUMENT) are
             # handled via direct invocation in add_document(), import_document(),
             # and set_doc_lock_state().
