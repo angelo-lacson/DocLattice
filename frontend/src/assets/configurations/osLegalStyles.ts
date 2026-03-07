@@ -181,6 +181,14 @@ export const OS_LEGAL_COLORS = {
   gray500: "#868e96",
   /** Dark gray text - stronger secondary text. */
   gray700: "#495057",
+
+  // Chart accent colors - for data visualizations
+  /** Chart purple - vivid violet for chart series and data points. */
+  chartPurple: "#8b5cf6",
+  /** Chart pink - vivid pink for chart series and data points. */
+  chartPink: "#ec4899",
+  /** Chart teal - vivid teal for chart series and data points. */
+  chartTeal: "#14b8a6",
 } as const;
 
 /**

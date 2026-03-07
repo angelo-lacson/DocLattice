@@ -1518,6 +1518,7 @@ export type AgentConfigurationType = Node & {
   __typename?: "AgentConfigurationType";
   id: Scalars["ID"];
   name: Scalars["String"];
+  slug?: Maybe<Scalars["String"]>;
   description?: Maybe<Scalars["String"]>;
   systemInstructions: Scalars["String"];
   availableTools?: Maybe<Scalars["GenericScalar"]>;
@@ -1532,6 +1533,19 @@ export type AgentConfigurationType = Node & {
   created: Scalars["DateTime"];
   modified: Scalars["DateTime"];
   myPermissions?: PermissionTypes[];
+};
+
+export type AgentConfigurationTypeConnection = {
+  __typename?: "AgentConfigurationTypeConnection";
+  pageInfo: PageInfo;
+  edges: Array<Maybe<AgentConfigurationTypeEdge>>;
+  totalCount?: Maybe<Scalars["Int"]>;
+};
+
+export type AgentConfigurationTypeEdge = {
+  __typename?: "AgentConfigurationTypeEdge";
+  node?: Maybe<AgentConfigurationType>;
+  cursor: Scalars["String"];
 };
 
 /**

@@ -82,12 +82,17 @@ vi.mock("react-cool-inview", () => ({
 }));
 
 /**
+ * Sequential counter for deterministic annotation IDs
+ */
+let mockAnnotationCounter = 0;
+
+/**
  * Factory function to create mock annotation data
  */
 const createMockAnnotation = (
   overrides: Partial<ServerAnnotationType> = {}
 ): ServerAnnotationType => ({
-  id: `annotation-${Math.random().toString(36).substr(2, 9)}`,
+  id: `annotation-${++mockAnnotationCounter}`,
   page: 0,
   annotationLabel: {
     id: "label-1",
@@ -145,6 +150,7 @@ describe("AnnotationsPanel", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAnnotationCounter = 0;
   });
 
   describe("Filter Tabs", () => {

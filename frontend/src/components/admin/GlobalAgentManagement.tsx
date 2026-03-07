@@ -20,7 +20,10 @@ import { StyledTextArea } from "../widgets/modals/styled";
 import { FormField } from "../widgets/form/FormField";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
-import { AgentConfigurationType } from "../../types/graphql-api";
+import {
+  AgentConfigurationType,
+  AgentConfigurationTypeEdge,
+} from "../../types/graphql-api";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { CardSegment as StyledSegment } from "../layout/SharedSegments";
 
@@ -156,24 +159,6 @@ const PageTitle = styled.h1`
   gap: 0.5rem;
 `;
 
-interface AgentNode {
-  id: string;
-  name: string;
-  slug?: string;
-  description?: string;
-  systemInstructions: string;
-  availableTools?: string[];
-  permissionRequiredTools?: string[];
-  badgeConfig?: Record<string, any>;
-  avatarUrl?: string;
-  scope: string;
-  isActive: boolean;
-  isPublic?: boolean;
-  creator: { id: string; username: string };
-  created: string;
-  modified: string;
-}
-
 interface FormState {
   name: string;
   description: string;
@@ -300,8 +285,11 @@ export const GlobalAgentManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [agentToDelete, setAgentToDelete] = useState<AgentNode | null>(null);
-  const [agentToEdit, setAgentToEdit] = useState<AgentNode | null>(null);
+  const [agentToDelete, setAgentToDelete] =
+    useState<AgentConfigurationType | null>(null);
+  const [agentToEdit, setAgentToEdit] = useState<AgentConfigurationType | null>(
+    null
+  );
   const [formState, setFormState] = useState<FormState>(initialFormState);
 
   const { loading, error, data, refetch } = useQuery(GET_GLOBAL_AGENTS);
@@ -426,7 +414,7 @@ export const GlobalAgentManagement: React.FC = () => {
     });
   };
 
-  const openEditModal = (agent: AgentNode) => {
+  const openEditModal = (agent: AgentConfigurationType) => {
     setAgentToEdit(agent);
     setFormState({
       name: agent.name,
@@ -448,8 +436,10 @@ export const GlobalAgentManagement: React.FC = () => {
     setShowEditModal(true);
   };
 
-  const agents: AgentNode[] =
-    data?.agentConfigurations?.edges?.map((e: any) => e.node) || [];
+  const agents: AgentConfigurationType[] =
+    data?.agentConfigurations?.edges
+      ?.map((e: AgentConfigurationTypeEdge) => e.node)
+      .filter(Boolean) || [];
 
   if (loading) {
     return (
