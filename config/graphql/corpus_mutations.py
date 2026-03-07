@@ -772,10 +772,16 @@ class CreateCorpusAction(graphene.Mutation):
             corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Check if user has update permission on the corpus
-            if corpus.creator.id != user.id:
+            if not (
+                user.is_superuser
+                or corpus.creator_id == user.id
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                )
+            ):
                 return CreateCorpusAction(
                     ok=False,
-                    message="You can only create actions for your own corpuses",
+                    message="You don't have permission to create actions on this corpus",
                     obj=None,
                 )
 
@@ -1306,7 +1312,7 @@ class AddTemplateToCorpus(graphene.Mutation):
     Prevents duplicates: the same template cannot be added twice to the same
     corpus (checked via source_template FK).
 
-    Requires the user to be the corpus creator.
+    Requires the user to be the corpus creator or have CRUD permission.
     """
 
     class Arguments:
@@ -1332,10 +1338,16 @@ class AddTemplateToCorpus(graphene.Mutation):
             corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Check if user has update permission on the corpus
-            if corpus.creator.id != user.id:
+            if not (
+                user.is_superuser
+                or corpus.creator_id == user.id
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                )
+            ):
                 return AddTemplateToCorpus(
                     ok=False,
-                    message="You can only add templates to your own corpuses",
+                    message="You don't have permission to add templates to this corpus",
                     obj=None,
                 )
 

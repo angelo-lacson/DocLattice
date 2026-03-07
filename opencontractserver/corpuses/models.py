@@ -1198,15 +1198,17 @@ class CorpusActionGroupObjectPermission(GroupObjectPermissionBase):
 class CorpusActionTemplate(BaseOCModel):
     """Reusable template for agent-based corpus actions.
 
-    Templates are cloned into ``CorpusAction`` records when a new corpus is
-    created.  They define the agent configuration, task instructions, and
-    trigger type that the cloned action will use.
+    Templates define the agent configuration, task instructions, and trigger
+    type that a cloned ``CorpusAction`` will use.  Users browse available
+    templates via the Action Library UI and add them to individual corpuses
+    on demand (no auto-cloning).
 
     Templates are agent-only — no fieldset or analyzer support.
 
-    Note: Intentionally NOT exposed via GraphQL. Templates are a system-level
-    concern managed through Django admin. Users interact with the cloned
-    ``CorpusAction`` instances on their corpuses, not the templates directly.
+    Exposed via GraphQL (``CorpusActionTemplateType`` query and
+    ``AddTemplateToCorpus`` mutation).  Template records themselves are
+    managed through Django admin; users interact with the cloned
+    ``CorpusAction`` instances on their corpuses.
     """
 
     # Override BaseOCModel.creator to use SET_NULL — system-level templates
@@ -1246,7 +1248,7 @@ class CorpusActionTemplate(BaseOCModel):
 
     is_active = django.db.models.BooleanField(
         default=True,
-        help_text="Whether this template is used when creating new corpuses.",
+        help_text="Whether this template appears in the Action Library for users to add.",
     )
     disabled_on_clone = django.db.models.BooleanField(
         default=True,
@@ -1260,21 +1262,11 @@ class CorpusActionTemplate(BaseOCModel):
     class Meta:
         ordering = ["sort_order", "name"]
 
-    def clean(self):
-        if not self.task_instructions:
-            raise ValidationError("task_instructions is required for templates.")
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        return super().save(*args, **kwargs)
-
     def __str__(self):
         return f"CorpusActionTemplate: {self.name} ({self.get_trigger_display()})"
 
     def to_action_kwargs(self, corpus, creator=None):
         """Return kwargs dict for constructing a CorpusAction from this template.
-
-        Used by both ``clone_to_corpus`` (single) and the bulk clone signal.
 
         Raises:
             ValueError: If neither ``creator`` nor ``corpus.creator`` is set.
@@ -1304,7 +1296,7 @@ class CorpusActionTemplate(BaseOCModel):
         """
         kwargs = self.to_action_kwargs(corpus, creator)
         action = CorpusAction(**kwargs)
-        action.save()  # save() calls full_clean() internally
+        action.save()
         return action
 
 

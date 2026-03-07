@@ -56,11 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Pre-installed Corpus Action Templates
-- **CorpusActionTemplate model** for reusable, agent-based action definitions that auto-clone into new corpuses (`opencontractserver/corpuses/models.py`)
+#### Action Library (Corpus Action Templates)
+- **CorpusActionTemplate model** for reusable, agent-based action definitions that users can browse and add to individual corpuses (`opencontractserver/corpuses/models.py`)
 - **5 default action templates** seeded via data migration: Document Description Updater, Corpus Description Updater, Document Summary Generator, Key Terms Annotator, Document Notes Generator — each with a dedicated `AgentConfiguration` and curated tool set (`opencontractserver/agents/migrations/0010_create_default_action_templates.py`)
-- **Auto-clone signal**: `clone_templates_on_corpus_create` clones all active templates into disabled `CorpusAction` records when a new corpus is created, so users can opt-in per corpus (`opencontractserver/corpuses/signals.py`)
-- **Template Actions UI**: "Quick Actions" settings card in Corpus Settings showing auto-cloned template actions with enable/disable toggles (`frontend/src/components/corpuses/settings/TemplateActionsSection.tsx`)
+- **Action Library UI**: "Add from Library" picker in Corpus Settings lets users browse available templates and add them to a corpus on demand. New corpora start empty — no auto-cloning (`frontend/src/components/corpuses/settings/CorpusActionsSection.tsx`)
+- **`addTemplateToCorpus` mutation**: Clones a template into a `CorpusAction` for a given corpus with duplicate prevention (`config/graphql/corpus_mutations.py`)
 - **`source_template` FK on CorpusAction**: Links cloned actions back to their source template for provenance tracking (`opencontractserver/corpuses/models.py`)
 - **GraphQL query `corpusActionTemplates`**: Read-only query exposing available templates with optional `isActive` filter (`config/graphql/action_queries.py`)
 - **`sourceTemplate` field on CorpusActionType**: Exposes template provenance in the existing corpus actions GraphQL type (`config/graphql/agent_types.py`)

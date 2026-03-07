@@ -207,12 +207,13 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [pickerOpen]);
 
-  // Fetch available templates
+  // Fetch available templates only when picker is open
   const { data: templatesData } = useQuery<
     GetCorpusActionTemplatesOutput,
     GetCorpusActionTemplatesInput
   >(GET_CORPUS_ACTION_TEMPLATES, {
     variables: { isActive: true },
+    skip: !pickerOpen,
   });
 
   const [addTemplate, { loading: addingTemplate }] = useMutation<
@@ -252,6 +253,10 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
 
   const getTriggerType = (trigger: string): "add" | "edit" => {
     return trigger.toLowerCase().includes("add") ? "add" : "edit";
+  };
+
+  const getTriggerLabel = (trigger: string): string => {
+    return TRIGGER_LABELS[trigger] || trigger;
   };
 
   const getActionTypeInfo = (action: CorpusAction) => {
@@ -377,7 +382,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                         </TemplateBadge>
                       )}
                       <TriggerBadge type={triggerType}>
-                        {triggerType === "add" ? "On Add" : "On Edit"}
+                        {getTriggerLabel(action.trigger)}
                       </TriggerBadge>
                     </div>
 
