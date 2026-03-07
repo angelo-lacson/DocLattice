@@ -86,7 +86,7 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
             style={{ display: "block", marginBottom: "0.25rem" }}
             htmlFor="note-title"
           >
-            Title <span style={{ color: "red" }}>*</span>
+            Title <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
           </label>
           <Input
             id="note-title"
@@ -101,7 +101,8 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
             style={{ display: "block", marginBottom: "0.25rem" }}
             htmlFor="note-content"
           >
-            Content (Markdown supported) <span style={{ color: "red" }}>*</span>
+            Content (Markdown supported){" "}
+            <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
           </label>
           <Textarea
             id="note-content"

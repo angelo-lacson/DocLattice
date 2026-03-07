@@ -55,7 +55,7 @@ const CorpusModalStyles = createGlobalStyle`
     background: var(--oc-bg-subtle, ${OS_LEGAL_COLORS.surfaceLight});
   }
 
-  /* Ensure Semantic UI dropdowns appear above modal content */
+  /* Ensure dropdown menus appear above modal content (still needed for SUI Dropdown inside LabelSetSelector/EmbedderSelector) */
   .corpus-modal .ui.dropdown .menu {
     z-index: 1000 !important;
   }
@@ -153,7 +153,7 @@ const SectionTitle = styled.h3`
   }
 `;
 
-const FormField = styled.div`
+const CorpusFormField = styled.div`
   margin-bottom: var(--oc-spacing-md);
 
   &:last-child {
@@ -218,6 +218,7 @@ const IconPreview = styled.div`
 
   &:hover {
     border-color: var(--oc-accent);
+    /* Very subtle accent tint on hover — intentionally lighter than accentLight (0.1) */
     background: rgba(15, 118, 110, 0.03);
   }
 
@@ -608,7 +609,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
             </SectionTitle>
 
             <FormRow>
-              <FormField>
+              <CorpusFormField>
                 <Input
                   id="corpus-title"
                   label="Title *"
@@ -619,9 +620,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                   size="lg"
                   fullWidth
                 />
-              </FormField>
+              </CorpusFormField>
 
-              <FormField>
+              <CorpusFormField>
                 <Input
                   id="corpus-slug"
                   label="Slug"
@@ -633,10 +634,10 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                   size="lg"
                   fullWidth
                 />
-              </FormField>
+              </CorpusFormField>
             </FormRow>
 
-            <FormField>
+            <CorpusFormField>
               <Textarea
                 id="corpus-description"
                 label="Description *"
@@ -648,7 +649,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 autoResize
                 maxRows={6}
               />
-            </FormField>
+            </CorpusFormField>
           </FormSection>
 
           {/* Icon Section */}
@@ -685,15 +686,15 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
               Settings
             </SectionTitle>
 
-            <FormField>
+            <CorpusFormField>
               <CategorySelector
                 selectedIds={categories}
                 onChange={setCategories}
                 disabled={isReadOnly || loading}
               />
-            </FormField>
+            </CorpusFormField>
 
-            <FormField>
+            <CorpusFormField>
               <LabelSetSelector
                 read_only={isReadOnly || loading}
                 labelSet={labelSetObj}
@@ -701,9 +702,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 upward
                 scrolling
               />
-            </FormField>
+            </CorpusFormField>
 
-            <FormField>
+            <CorpusFormField>
               <EmbedderSelector
                 read_only={isReadOnly || loading}
                 preferredEmbedder={preferredEmbedder || undefined}
@@ -711,7 +712,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 upward
                 scrolling
               />
-            </FormField>
+            </CorpusFormField>
           </FormSection>
         </ModalBody>
 

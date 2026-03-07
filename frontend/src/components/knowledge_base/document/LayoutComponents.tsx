@@ -68,6 +68,7 @@ export const FullScreenModal: React.FC<FullScreenModalProps> = ({
   </>
 );
 
+/* Indigo palette — no OS_LEGAL_COLORS tokens yet; add when indigo tokens are introduced */
 export const SourceIndicator = styled.div`
   padding: 0.5rem;
   background: #eef2ff;

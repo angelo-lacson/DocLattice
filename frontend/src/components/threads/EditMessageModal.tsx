@@ -1,3 +1,4 @@
+// TODO: migrate Modal and Button from semantic-ui-react to @os-legal/ui equivalents
 /**
  * EditMessageModal - Mobile-responsive modal for editing thread messages
  *

@@ -265,7 +265,8 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
           <div>
             <div style={{ marginBottom: "1rem" }}>
               <label>
-                Badge Name <span style={{ color: "red" }}>*</span>
+                Badge Name{" "}
+                <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
               </label>
               <Input
                 fullWidth
@@ -279,7 +280,8 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
 
             <div style={{ marginBottom: "1rem" }}>
               <label>
-                Description <span style={{ color: "red" }}>*</span>
+                Description{" "}
+                <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
               </label>
               <StyledTextArea
                 placeholder="Describe what this badge represents"
@@ -291,7 +293,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
 
             <div style={{ marginBottom: "1rem" }}>
               <label>
-                Icon <span style={{ color: "red" }}>*</span>
+                Icon <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
               </label>
               <Dropdown
                 fluid
@@ -304,7 +306,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
 
             <div style={{ marginBottom: "1rem" }}>
               <label>
-                Color <span style={{ color: "red" }}>*</span>
+                Color <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
               </label>
               <input
                 type="color"
@@ -315,7 +317,8 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
 
             <div style={{ marginBottom: "1rem" }}>
               <label>
-                Badge Type <span style={{ color: "red" }}>*</span>
+                Badge Type{" "}
+                <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
               </label>
               <Dropdown
                 fluid

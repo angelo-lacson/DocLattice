@@ -735,7 +735,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", damping: 15 }}
-                style={{ background: "#ddd6fe", color: "#6b21a8" }}
+                style={{
+                  background: OS_LEGAL_COLORS.agentPurpleLight,
+                  color: OS_LEGAL_COLORS.agentPurple,
+                }}
               >
                 <GitBranch size={14} />
                 Editing from v{editingFromVersion}

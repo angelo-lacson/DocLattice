@@ -1,3 +1,4 @@
+// TODO: migrate Card from semantic-ui-react to @os-legal/ui Card
 import { Card } from "semantic-ui-react";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
