@@ -6,7 +6,7 @@ import logging
 
 import graphene
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from graphql import GraphQLError
 from graphql_jwt.decorators import login_required, user_passes_test
@@ -772,10 +772,16 @@ class CreateCorpusAction(graphene.Mutation):
             corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Check if user has update permission on the corpus
-            if corpus.creator.id != user.id:
+            if not (
+                user.is_superuser
+                or corpus.creator_id == user.id
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                )
+            ):
                 return CreateCorpusAction(
                     ok=False,
-                    message="You can only create actions for your own corpuses",
+                    message="You don't have permission to create actions on this corpus",
                     obj=None,
                 )
 
@@ -1306,7 +1312,7 @@ class AddTemplateToCorpus(graphene.Mutation):
     Prevents duplicates: the same template cannot be added twice to the same
     corpus (checked via source_template FK).
 
-    Requires the user to be the corpus creator.
+    Requires the user to be the corpus creator or have CRUD permission.
     """
 
     class Arguments:
@@ -1332,10 +1338,16 @@ class AddTemplateToCorpus(graphene.Mutation):
             corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Check if user has update permission on the corpus
-            if corpus.creator.id != user.id:
+            if not (
+                user.is_superuser
+                or corpus.creator_id == user.id
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                )
+            ):
                 return AddTemplateToCorpus(
                     ok=False,
-                    message="You can only add templates to your own corpuses",
+                    message="You don't have permission to add templates to this corpus",
                     obj=None,
                 )
 
@@ -1353,7 +1365,14 @@ class AddTemplateToCorpus(graphene.Mutation):
                 )
 
             # Clone the template into a CorpusAction
-            action = template.clone_to_corpus(corpus, creator=user)
+            try:
+                action = template.clone_to_corpus(corpus, creator=user)
+            except IntegrityError:
+                return AddTemplateToCorpus(
+                    ok=False,
+                    message="This template has already been added to the corpus",
+                    obj=None,
+                )
 
             set_permissions_for_obj_to_user(user, action, [PermissionTypes.CRUD])
 
@@ -1371,10 +1390,10 @@ class AddTemplateToCorpus(graphene.Mutation):
                 ok=False, message="Template not found or inactive", obj=None
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to add template to corpus")
             return AddTemplateToCorpus(
                 ok=False,
-                message=f"Failed to add template: {str(e)}",
+                message="Failed to add template. Please try again.",
                 obj=None,
             )

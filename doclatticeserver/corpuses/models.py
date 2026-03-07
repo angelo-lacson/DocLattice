@@ -1101,7 +1101,12 @@ class CorpusAction(BaseOCModel):
                     )
                 ),
                 name="valid_action_type_configuration",
-            )
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["corpus", "source_template"],
+                condition=django.db.models.Q(source_template__isnull=False),
+                name="unique_template_per_corpus",
+            ),
         ]
         permissions = (
             ("permission_corpusaction", "permission corpusaction"),
@@ -1198,15 +1203,17 @@ class CorpusActionGroupObjectPermission(GroupObjectPermissionBase):
 class CorpusActionTemplate(BaseOCModel):
     """Reusable template for agent-based corpus actions.
 
-    Templates are cloned into ``CorpusAction`` records when a new corpus is
-    created.  They define the agent configuration, task instructions, and
-    trigger type that the cloned action will use.
+    Templates define the agent configuration, task instructions, and trigger
+    type that a cloned ``CorpusAction`` will use.  Users browse available
+    templates via the Action Library UI and add them to individual corpuses
+    on demand (no auto-cloning).
 
     Templates are agent-only — no fieldset or analyzer support.
 
-    Note: Intentionally NOT exposed via GraphQL. Templates are a system-level
-    concern managed through Django admin. Users interact with the cloned
-    ``CorpusAction`` instances on their corpuses, not the templates directly.
+    Exposed via GraphQL (``CorpusActionTemplateType`` query and
+    ``AddTemplateToCorpus`` mutation).  Template records themselves are
+    managed through Django admin; users interact with the cloned
+    ``CorpusAction`` instances on their corpuses.
     """
 
     # Override BaseOCModel.creator to use SET_NULL — system-level templates
@@ -1246,7 +1253,7 @@ class CorpusActionTemplate(BaseOCModel):
 
     is_active = django.db.models.BooleanField(
         default=True,
-        help_text="Whether this template is used when creating new corpuses.",
+        help_text="Whether this template appears in the Action Library for users to add.",
     )
     disabled_on_clone = django.db.models.BooleanField(
         default=True,
@@ -1261,8 +1268,11 @@ class CorpusActionTemplate(BaseOCModel):
         ordering = ["sort_order", "name"]
 
     def clean(self):
+        super().clean()
         if not self.task_instructions:
-            raise ValidationError("task_instructions is required for templates.")
+            raise ValidationError(
+                {"task_instructions": "Task instructions cannot be empty."}
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -1274,7 +1284,13 @@ class CorpusActionTemplate(BaseOCModel):
     def to_action_kwargs(self, corpus, creator=None):
         """Return kwargs dict for constructing a CorpusAction from this template.
 
-        Used by both ``clone_to_corpus`` (single) and the bulk clone signal.
+        Note:
+            The returned ``agent_config`` is a FK reference to the *same*
+            ``AgentConfiguration`` that the template uses.  All corpus actions
+            cloned from a template therefore share one configuration object.
+            If an admin later edits that ``AgentConfiguration``, every cloned
+            action is affected.  This is intentional — templates act as a
+            single source of truth for agent behaviour.
 
         Raises:
             ValueError: If neither ``creator`` nor ``corpus.creator`` is set.
@@ -1304,7 +1320,7 @@ class CorpusActionTemplate(BaseOCModel):
         """
         kwargs = self.to_action_kwargs(corpus, creator)
         action = CorpusAction(**kwargs)
-        action.save()  # save() calls full_clean() internally
+        action.save()
         return action
 
 

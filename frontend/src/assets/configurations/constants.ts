@@ -137,6 +137,14 @@ export const TOOL_UNKNOWN_LABEL = "Unknown Tool";
 // Tool popover positioning constants (used by ToolUsageIndicator portal)
 /** Z-index for the fixed-position tool popover rendered via portal */
 export const POPOVER_Z_INDEX = 100002;
+
+// Z-index layer constants for consistent stacking
+export const Z_INDEX = {
+  /** Standard dropdown overlays (pickers, menus) */
+  DROPDOWN: 100,
+  /** Modal-level overlays (dialogs, full-screen) */
+  MODAL: 1000,
+} as const;
 /** Gap in pixels between the badge and the popover */
 export const POPOVER_GAP = 8;
 /**
@@ -317,3 +325,12 @@ export const KNOWN_ACRONYMS: Record<string, string> = {
   nlp: "NLP",
   nlm: "NLM",
 };
+
+// Corpus action trigger display labels
+// Maps backend trigger enum values to user-facing short labels
+export const TRIGGER_LABELS: Record<string, string> = {
+  ADD_DOCUMENT: "On Add",
+  EDIT_DOCUMENT: "On Edit",
+  NEW_THREAD: "On Thread",
+  NEW_MESSAGE: "On Message",
+} as const;

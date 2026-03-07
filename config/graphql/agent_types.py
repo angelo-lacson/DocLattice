@@ -41,9 +41,6 @@ class CorpusActionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """Resolve pre_authorized_tools as a list of strings."""
         return self.pre_authorized_tools or []
 
-    def resolve_source_template(self, info):
-        return self.source_template
-
 
 class AgentActionResultType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for AgentActionResult - results from agent-based corpus actions."""
@@ -260,6 +257,7 @@ class CorpusActionTemplateType(DjangoObjectType):
             "disabled_on_clone",
             "sort_order",
             "agent_config",
+            "pre_authorized_tools",
             "created",
         )
 

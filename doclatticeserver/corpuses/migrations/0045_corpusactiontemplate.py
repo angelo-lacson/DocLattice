@@ -62,7 +62,7 @@ class Migration(migrations.Migration):
                     "is_active",
                     models.BooleanField(
                         default=True,
-                        help_text="Whether this template is used when creating new corpuses.",
+                        help_text="Whether this template appears in the Action Library for users to add.",
                     ),
                 ),
                 (
@@ -112,5 +112,25 @@ class Migration(migrations.Migration):
             options={
                 "ordering": ["sort_order", "name"],
             },
+        ),
+        migrations.AddField(
+            model_name="corpusaction",
+            name="source_template",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="The template this action was cloned from, if any.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="cloned_actions",
+                to="corpuses.corpusactiontemplate",
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="corpusaction",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(source_template__isnull=False),
+                fields=["corpus", "source_template"],
+                name="unique_template_per_corpus",
+            ),
         ),
     ]
