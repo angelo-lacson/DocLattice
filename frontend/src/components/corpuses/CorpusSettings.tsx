@@ -339,9 +339,6 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
   // Transform actions data for the component
   const actions =
     actionsData?.corpusActions?.edges.map(({ node }) => node) || [];
-  const templateActions = actions.filter(
-    (action: any) => action.sourceTemplate != null
-  );
 
   return (
     <SettingsContainer>
@@ -373,8 +370,9 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
         />
 
         <TemplateActionsSection
-          actions={templateActions}
-          onToggle={() => refetchActions()}
+          corpusId={corpus.id}
+          actions={actions}
+          onUpdate={() => refetchActions()}
         />
 
         <CorpusActionsSection
