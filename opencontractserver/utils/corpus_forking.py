@@ -1,10 +1,9 @@
 from django.contrib.auth import get_user_model
 
-from opencontractserver.annotations.models import Annotation, Relationship
-from opencontractserver.corpuses.models import Corpus, CorpusFolder
-from opencontractserver.extracts.models import Datacell
+from opencontractserver.corpuses.models import Corpus
 from opencontractserver.tasks import fork_corpus
 from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.corpus_collector import collect_corpus_objects
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
@@ -24,85 +23,40 @@ def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
     Returns:
         Celery task signature for fork_corpus
     """
-    # Get corpus obj
-    corpus_copy = Corpus.objects.get(pk=corpus_pk_to_fork)
+    source_corpus = Corpus.objects.get(pk=corpus_pk_to_fork)
 
-    # Collect annotation IDs (user annotations only, not analysis-generated)
-    annotation_ids = list(
-        Annotation.objects.filter(
-            corpus_id=corpus_pk_to_fork,
-            analysis__isnull=True,
-        ).values_list("id", flat=True)
-    )
-
-    # Get ids to related objects that need copyin'
-    # Use get_documents() to respect DocumentPath soft-deletes
-    doc_ids = list(corpus_copy.get_documents().values_list("id", flat=True))
-    label_set_id = corpus_copy.label_set.pk if corpus_copy.label_set else None
-
-    # Collect folder IDs (in tree order for proper parent mapping)
-    # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
-    folder_ids = list(
-        CorpusFolder.objects.filter(corpus_id=corpus_pk_to_fork)
-        .with_tree_fields()
-        .values_list("id", flat=True)
-    )
-
-    # Collect relationship IDs (user relationships only, not analysis-generated)
-    relationship_ids = list(
-        Relationship.objects.filter(
-            corpus_id=corpus_pk_to_fork,
-            analysis__isnull=True,
-        ).values_list("id", flat=True)
-    )
-
-    # Collect metadata column IDs if metadata schema exists
-    metadata_column_ids = []
-    if hasattr(corpus_copy, "metadata_schema") and corpus_copy.metadata_schema:
-        metadata_column_ids = list(
-            corpus_copy.metadata_schema.columns.filter(
-                is_manual_entry=True
-            ).values_list("id", flat=True)
-        )
-
-    # Collect metadata datacell IDs for documents being forked
-    # Only manual metadata (extract IS NULL)
-    metadata_datacell_ids = []
-    if metadata_column_ids and doc_ids:
-        metadata_datacell_ids = list(
-            Datacell.objects.filter(
-                document_id__in=doc_ids,
-                column_id__in=metadata_column_ids,
-                extract__isnull=True,
-            ).values_list("id", flat=True)
-        )
+    # Collect all object IDs using the shared collector
+    collected = collect_corpus_objects(source_corpus, include_metadata=True)
 
     # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
-    corpus_copy.pk = None
-    corpus_copy.slug = ""  # Clear slug so save() generates a new unique one
+    source_corpus.pk = None
+    source_corpus.slug = ""  # Clear slug so save() generates a new unique one
 
-    # Adjust the title to indicate it's a fork
-    corpus_copy.title = f"[FORK] {corpus_copy.title}"
-    corpus_copy.backend_lock = True  # lock corpus to tell frontend to show this as loading and disable selection
-    corpus_copy.creator = user  # switch the creator to the current user
-    corpus_copy.parent_id = corpus_pk_to_fork
-    corpus_copy.save()
+    # At this point the in-memory instance is detached from the original row;
+    # saving it will INSERT a new Corpus.  Rename for clarity.
+    corpus_clone = source_corpus
+    corpus_clone.title = f"[FORK] {corpus_clone.title}"
+    # Lock corpus to tell frontend to show this as loading and disable selection
+    corpus_clone.backend_lock = True
+    corpus_clone.creator = user
+    corpus_clone.parent_id = corpus_pk_to_fork
+    corpus_clone.save()
 
-    set_permissions_for_obj_to_user(user, corpus_copy, [PermissionTypes.CRUD])
+    set_permissions_for_obj_to_user(user, corpus_clone, [PermissionTypes.CRUD])
 
-    # Now remove references to related objects on our new object, as these point to original docs and labels
+    # Remove references to related objects on the new object, as these point to original docs and labels
     # Note: New forked corpus has no DocumentPath records yet, so no document cleanup needed
-    corpus_copy.label_set = None
+    corpus_clone.label_set = None
 
     # Copy docs, annotations, folders, relationships, and metadata using async task
     return fork_corpus.si(
-        corpus_copy.id,
-        doc_ids,
-        label_set_id,
-        annotation_ids,
-        folder_ids,
-        relationship_ids,
+        corpus_clone.id,
+        collected.document_ids,
+        collected.label_set_id,
+        collected.annotation_ids,
+        collected.folder_ids,
+        collected.relationship_ids,
         user.id,
-        metadata_column_ids,
-        metadata_datacell_ids,
+        collected.metadata_column_ids,
+        collected.metadata_datacell_ids,
     )

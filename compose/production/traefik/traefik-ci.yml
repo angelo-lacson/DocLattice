@@ -21,7 +21,7 @@ http:
       priority: 0
 
     frontend-router:
-      rule: "Host(`localhost`) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
+      rule: "Host(`localhost`) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`) && !Path(`/robots.txt`) && !Path(`/llms.txt`) && !Path(`/llms-full.txt`) && !Path(`/sitemap.xml`) && !PathPrefix(`/.well-known`)"
       entryPoints:
         - "web"
       middlewares:
@@ -31,7 +31,7 @@ http:
       priority: 1
 
     web-router:
-      rule: "Host(`localhost`) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`) || PathPrefix(`/mcp`) || PathPrefix(`/sse`))"
+      rule: "Host(`localhost`) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`) || PathPrefix(`/mcp`) || PathPrefix(`/sse`) || Path(`/robots.txt`) || Path(`/llms.txt`) || Path(`/llms-full.txt`) || Path(`/sitemap.xml`) || PathPrefix(`/.well-known`))"
       entryPoints:
         - "web"
       middlewares:

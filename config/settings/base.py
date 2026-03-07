@@ -154,6 +154,7 @@ LOCAL_APPS = [
     "opencontractserver.notifications",
     "opencontractserver.agents",
     "opencontractserver.worker_uploads",
+    "opencontractserver.discovery",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps

@@ -299,44 +299,92 @@ class MCPConfigTest(TestCase):
 
 
 class MCPRateLimiterTest(TestCase):
-    """Tests for MCP rate limiter."""
+    """Tests for MCP rate limiting via the shared engine."""
 
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_allows_requests(self):
-        """Test that rate limiter allows requests under limit."""
-        from opencontractserver.mcp.permissions import RateLimiter
+        """Test that the shared engine allows requests under the MCP global limit."""
+        import asyncio
 
-        limiter = RateLimiter(max_requests=5, window_seconds=60)
+        from config.ratelimit.decorators import check_mcp_rate_limit
 
-        # First 5 requests should be allowed
-        for i in range(5):
-            self.assertTrue(limiter.check_rate_limit("test-client"))
+        scope = {"headers": [], "client": ("10.0.0.1", 8080)}
 
+        # First request should be allowed
+        is_limited, _, _ = asyncio.run(check_mcp_rate_limit(scope))
+        self.assertFalse(is_limited)
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_blocks_excess_requests(self):
-        """Test that rate limiter blocks requests over limit."""
-        from opencontractserver.mcp.permissions import RateLimiter
+        """Test that the shared engine blocks requests over the MCP global limit."""
+        import asyncio
+        from unittest.mock import patch
 
-        limiter = RateLimiter(max_requests=2, window_seconds=60)
+        from config.ratelimit.decorators import check_mcp_rate_limit
+        from config.ratelimit.rates import RateLimits
 
-        # First 2 requests allowed
-        self.assertTrue(limiter.check_rate_limit("test-client-2"))
-        self.assertTrue(limiter.check_rate_limit("test-client-2"))
+        scope = {"headers": [], "client": ("10.0.0.2", 8080)}
+        test_limit = 3
 
-        # Third request blocked
-        self.assertFalse(limiter.check_rate_limit("test-client-2"))
+        async def _exhaust_and_check():
+            # Exhaust the limit
+            for _ in range(test_limit):
+                await check_mcp_rate_limit(scope)
+            # Next should be blocked
+            return await check_mcp_rate_limit(scope)
 
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            original_rate = RateLimits.MCP_GLOBAL
+            RateLimits.MCP_GLOBAL = f"{test_limit}/m"
+            try:
+                is_limited, _, _ = asyncio.run(_exhaust_and_check())
+                self.assertTrue(is_limited)
+            finally:
+                RateLimits.MCP_GLOBAL = original_rate
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_rate_limiter_separate_clients(self):
-        """Test that rate limiter tracks clients separately."""
-        from opencontractserver.mcp.permissions import RateLimiter
+        """Test that different IPs have independent rate limit buckets."""
+        import asyncio
+        from unittest.mock import patch
 
-        limiter = RateLimiter(max_requests=1, window_seconds=60)
+        from config.ratelimit.decorators import check_mcp_rate_limit
+        from config.ratelimit.rates import RateLimits
 
-        # Each client gets their own limit
-        self.assertTrue(limiter.check_rate_limit("client-a"))
-        self.assertTrue(limiter.check_rate_limit("client-b"))
+        scope_a = {"headers": [], "client": ("10.0.0.3", 8080)}
+        scope_b = {"headers": [], "client": ("10.0.0.4", 8080)}
+        test_limit = 3
 
-        # But each is limited individually
-        self.assertFalse(limiter.check_rate_limit("client-a"))
-        self.assertFalse(limiter.check_rate_limit("client-b"))
+        async def _exhaust_a_and_check_both():
+            # Exhaust client-a
+            for _ in range(test_limit):
+                await check_mcp_rate_limit(scope_a)
+            is_limited_a, _, _ = await check_mcp_rate_limit(scope_a)
+            # client-b should still be fine
+            is_limited_b, _, _ = await check_mcp_rate_limit(scope_b)
+            return is_limited_a, is_limited_b
+
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            original_rate = RateLimits.MCP_GLOBAL
+            RateLimits.MCP_GLOBAL = f"{test_limit}/m"
+            try:
+                is_limited_a, is_limited_b = asyncio.run(_exhaust_a_and_check_both())
+                self.assertTrue(is_limited_a)
+                self.assertFalse(is_limited_b)
+            finally:
+                RateLimits.MCP_GLOBAL = original_rate
 
 
 class MCPToolsDocumentsTest(TestCase):
@@ -1974,19 +2022,19 @@ class MCPTelemetryTest(TestCase):
 
     def test_get_client_ip_from_scope_direct(self):
         """Test extracting client IP from direct connection."""
-        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+        from opencontractserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "client": ("192.168.1.100", 54321),
             "headers": [],
         }
 
-        ip = get_client_ip_from_scope(scope)
+        ip = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(ip, "192.168.1.100")
 
     def test_get_client_ip_from_scope_x_forwarded_for(self):
         """Test extracting client IP from X-Forwarded-For header."""
-        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+        from opencontractserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "client": ("127.0.0.1", 80),  # Proxy address
@@ -1995,13 +2043,15 @@ class MCPTelemetryTest(TestCase):
             ],
         }
 
-        ip = get_client_ip_from_scope(scope)
-        # Should return first IP (original client)
+        ip = get_claimed_client_ip_from_scope(scope)
+        # Telemetry uses leftmost (original client claim) for privacy-
+        # preserving analytics deduplication, unlike rate limiting which
+        # uses rightmost for anti-spoofing.
         self.assertEqual(ip, "203.0.113.195")
 
     def test_get_client_ip_from_scope_x_real_ip(self):
         """Test extracting client IP from X-Real-IP header."""
-        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+        from opencontractserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "client": ("127.0.0.1", 80),
@@ -2010,18 +2060,18 @@ class MCPTelemetryTest(TestCase):
             ],
         }
 
-        ip = get_client_ip_from_scope(scope)
+        ip = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(ip, "203.0.113.50")
 
     def test_get_client_ip_from_scope_no_client(self):
         """Test extracting client IP when no client info available."""
-        from opencontractserver.mcp.telemetry import get_client_ip_from_scope
+        from opencontractserver.mcp.telemetry import get_claimed_client_ip_from_scope
 
         scope = {
             "headers": [],
         }
 
-        ip = get_client_ip_from_scope(scope)
+        ip = get_claimed_client_ip_from_scope(scope)
         self.assertIsNone(ip)
 
     def test_record_mcp_tool_call_success(self):

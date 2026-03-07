@@ -144,6 +144,20 @@ Superusers can configure the pipeline at runtime through the Admin UI:
 2. Configure preferred components per MIME type
 3. Add API keys via the **Component Secrets** section
 
+### UI Overview
+
+On desktop, the Pipeline Configuration page uses a **two-column layout** with the Component Library on the left and Filetype Defaults on the right:
+
+![Pipeline Configuration — desktop two-column layout](../assets/images/screenshots/auto/admin--pipeline-settings--two-column-desktop.png)
+
+On mobile and tablet viewports, the two sections collapse into a **tabbed interface**:
+
+![Pipeline Configuration — mobile tab view](../assets/images/screenshots/auto/admin--pipeline-settings--mobile-tabs.png)
+
+Switching to the Filetype Defaults tab shows the per-MIME-type parser/embedder/thumbnailer assignment:
+
+![Pipeline Configuration — mobile filetype defaults tab](../assets/images/screenshots/auto/admin--pipeline-settings--mobile-filetype-tab.png)
+
 ### Component Secrets
 
 Sensitive configuration (API keys, credentials) is stored encrypted in the database. Secrets are encrypted using Django's `SECRET_KEY`.

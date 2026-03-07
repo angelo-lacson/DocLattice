@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 WS_CLOSE_UNAUTHENTICATED = 4000  # No token or generic auth failure
 WS_CLOSE_TOKEN_EXPIRED = 4001  # Token has expired, client should refresh
 WS_CLOSE_TOKEN_INVALID = 4002  # Token is invalid, client should re-authenticate
+WS_CLOSE_RATE_LIMITED = 4029  # Connection rejected due to rate limiting
 
 
 @database_sync_to_async

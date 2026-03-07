@@ -1114,6 +1114,7 @@ class StartCorpusExport(graphene.Mutation):
                     except Exception:  # If invalid, just skip for safety
                         pass
 
+            # TODO(#816): refactor export path to use collect_corpus_objects
             # Collect doc_ids in the corpus via DocumentPath
             doc_ids = DocumentPath.objects.filter(
                 corpus_id=corpus_pk, is_current=True, is_deleted=False

@@ -22,18 +22,17 @@ from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from config.graphql.serializers import CorpusSerializer
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analyzer
-from opencontractserver.annotations.models import Annotation, Relationship
 from opencontractserver.corpuses.models import (
     Corpus,
     CorpusAction,
     CorpusActionTemplate,
-    CorpusFolder,
 )
 from opencontractserver.documents.models import Document
-from opencontractserver.extracts.models import Datacell, Fieldset
+from opencontractserver.extracts.models import Fieldset
 from opencontractserver.tasks import fork_corpus
 from opencontractserver.tasks.permissioning_tasks import make_corpus_public_task
 from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.corpus_collector import collect_corpus_objects
 from opencontractserver.utils.permissioning import (
     set_permissions_for_obj_to_user,
     user_has_permission_for_obj,
@@ -483,54 +482,8 @@ class StartCorpusFork(graphene.Mutation):
                     ok=False, message="Corpus not found", new_corpus=None
                 )
 
-            annotation_ids = list(
-                Annotation.objects.filter(
-                    corpus_id=corpus_pk,
-                    analysis__isnull=True,
-                ).values_list("id", flat=True)
-            )
-
-            # Get ids to related objects that need copyin'
-            # Use new DocumentPath-based method to get active documents
-            doc_ids = list(corpus.get_documents().values_list("id", flat=True))
-            label_set_id = corpus.label_set.pk if corpus.label_set else None
-
-            # Collect folder IDs for cloning (in tree order for proper parent mapping)
-            # Note: with_tree_fields() provides default tree_ordering which ensures parents before children
-            folder_ids = list(
-                CorpusFolder.objects.filter(corpus_id=corpus_pk)
-                .with_tree_fields()
-                .values_list("id", flat=True)
-            )
-
-            # Collect relationship IDs (user relationships only, not analysis-generated)
-            relationship_ids = list(
-                Relationship.objects.filter(
-                    corpus_id=corpus_pk,
-                    analysis__isnull=True,
-                ).values_list("id", flat=True)
-            )
-
-            # Collect metadata column IDs if metadata schema exists
-            metadata_column_ids = []
-            if hasattr(corpus, "metadata_schema") and corpus.metadata_schema:
-                metadata_column_ids = list(
-                    corpus.metadata_schema.columns.filter(
-                        is_manual_entry=True
-                    ).values_list("id", flat=True)
-                )
-
-            # Collect metadata datacell IDs for documents being forked
-            # Only manual metadata (extract IS NULL)
-            metadata_datacell_ids = []
-            if metadata_column_ids and doc_ids:
-                metadata_datacell_ids = list(
-                    Datacell.objects.filter(
-                        document_id__in=doc_ids,
-                        column_id__in=metadata_column_ids,
-                        extract__isnull=True,
-                    ).values_list("id", flat=True)
-                )
+            # Collect all object IDs using the shared collector
+            collected = collect_corpus_objects(corpus, include_metadata=True)
 
             # Clone the corpus: https://docs.djangoproject.com/en/3.1/topics/db/queries/copying-model-instances
             corpus.pk = None
@@ -565,25 +518,19 @@ class StartCorpusFork(graphene.Mutation):
             # Capture args as defaults to avoid late-binding closure issues.
             def dispatch_fork_task(
                 _corpus_id=corpus.id,
-                _doc_ids=doc_ids,
-                _label_set_id=label_set_id,
-                _annotation_ids=annotation_ids,
-                _folder_ids=folder_ids,
-                _relationship_ids=relationship_ids,
+                _collected=collected,
                 _user_id=info.context.user.id,
-                _metadata_column_ids=metadata_column_ids,
-                _metadata_datacell_ids=metadata_datacell_ids,
             ):
                 fork_corpus.si(
                     _corpus_id,
-                    _doc_ids,
-                    _label_set_id,
-                    _annotation_ids,
-                    _folder_ids,
-                    _relationship_ids,
+                    _collected.document_ids,
+                    _collected.label_set_id,
+                    _collected.annotation_ids,
+                    _collected.folder_ids,
+                    _collected.relationship_ids,
                     _user_id,
-                    _metadata_column_ids,
-                    _metadata_datacell_ids,
+                    _collected.metadata_column_ids,
+                    _collected.metadata_datacell_ids,
                 ).apply_async()
 
             transaction.on_commit(dispatch_fork_task)
