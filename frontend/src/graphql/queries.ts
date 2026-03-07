@@ -972,6 +972,10 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
           corpus {
             id
             slug
+            creator {
+              id
+              slug
+            }
             labelSet {
               id
               title
@@ -982,6 +986,10 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
           document {
             id
             slug
+            creator {
+              id
+              slug
+            }
             title
             __typename
           }

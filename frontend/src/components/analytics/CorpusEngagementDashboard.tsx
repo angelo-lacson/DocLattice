@@ -26,7 +26,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import {
   GET_CORPUS_ENGAGEMENT_METRICS,
   GetCorpusEngagementMetricsOutput,
@@ -201,7 +201,7 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.totalMessages}
             label="Total Messages"
             icon="envelope"
-            color="#8b5cf6"
+            color={OS_LEGAL_COLORS.chartPurple}
           />
           <StatisticWithAnimation
             value={metrics.messagesLast7Days}
@@ -229,7 +229,7 @@ export const CorpusEngagementDashboard: React.FC<
               <YAxis stroke={OS_LEGAL_COLORS.textSecondary} />
               <Tooltip
                 contentStyle={{
-                  background: "white",
+                  background: OS_LEGAL_COLORS.surface,
                   border: `1px solid ${OS_LEGAL_COLORS.border}`,
                   borderRadius: "8px",
                 }}
@@ -253,13 +253,13 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.uniqueContributors}
             label="All Contributors"
             icon="users"
-            color="#ec4899"
+            color={OS_LEGAL_COLORS.chartPink}
           />
           <StatisticWithAnimation
             value={metrics.activeContributors30Days}
             label="Active (30d)"
             icon="user plus"
-            color="#14b8a6"
+            color={OS_LEGAL_COLORS.chartTeal}
           />
           <StatisticWithAnimation
             value={metrics.totalUpvotes}
@@ -312,7 +312,7 @@ const Title = styled.h2`
   margin: 0;
 
   svg {
-    color: #4a90e2;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
     width: 24px;
     height: 24px;
   }
@@ -436,7 +436,7 @@ const StatisticContent = styled.div`
 const StatisticValue = styled.div`
   font-size: 1.5rem;
   font-weight: 600;
-  color: #2d3748;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.2;
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
@@ -448,7 +448,7 @@ const StatisticValue = styled.div`
 const StatisticLabel = styled.div`
   font-size: 0.75rem;
   font-weight: 500;
-  color: #718096;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 
