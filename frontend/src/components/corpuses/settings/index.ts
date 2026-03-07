@@ -7,3 +7,4 @@ export { VisibilitySlugSection } from "./VisibilitySlugSection";
 export { CategoriesSection } from "./CategoriesSection";
 export { CorpusActionsSection } from "./CorpusActionsSection";
 export { WorkerTokensSection } from "./WorkerTokensSection";
+export { TemplateActionsSection } from "./TemplateActionsSection";
