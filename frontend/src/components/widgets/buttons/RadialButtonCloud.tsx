@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import styled, { createGlobalStyle, keyframes } from "styled-components";
+import styled, { keyframes } from "styled-components";
 import { Modal, ModalBody, ModalFooter, Button } from "@os-legal/ui";
 import { DynamicIcon } from "../icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
@@ -127,9 +127,9 @@ const CloudButtonStyled = styled.button<CloudButtonStyledProps>`
   }
 `;
 
-const GlobalStyle = createGlobalStyle`
-  .oc-modal[style] {
-    z-index: 20001 !important;
+const HighZModal = styled(Modal)`
+  && {
+    z-index: 20001;
   }
 `;
 
@@ -267,7 +267,6 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
         onMouseEnter={() => setCloudVisible(true)}
         $backgroundColor={dotColor}
       />
-      <GlobalStyle />
       {cloudVisible && (
         <CloudContainer ref={cloudRef}>
           {buttonList.map((btn, index) => (
@@ -287,7 +286,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
           ))}
         </CloudContainer>
       )}
-      <Modal
+      <HighZModal
         open={confirmModal.open}
         onClose={() => setConfirmModal({ ...confirmModal, open: false })}
         size="sm"
@@ -315,7 +314,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
             Yes
           </Button>
         </ModalFooter>
-      </Modal>
+      </HighZModal>
     </div>
   );
 };

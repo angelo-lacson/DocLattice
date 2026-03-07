@@ -251,11 +251,10 @@ export const DeleteFolderModal: React.FC = () => {
             Cancel
           </Button>
           <Button
-            variant="primary"
+            variant="danger"
             onClick={handleConfirmDelete}
             loading={loading}
             disabled={loading}
-            style={{ backgroundColor: "#dc2626", borderColor: "#dc2626" }}
           >
             Delete Folder
           </Button>

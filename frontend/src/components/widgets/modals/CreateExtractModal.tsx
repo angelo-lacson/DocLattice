@@ -21,7 +21,8 @@ import {
 } from "../../../graphql/mutations";
 import { toast } from "react-toastify";
 
-// Modern styled components with professional design
+// TODO: Migrate to @os-legal/ui Modal when available — currently uses custom
+// ModalOverlay/ModalContainer for framer-motion animation support
 const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
