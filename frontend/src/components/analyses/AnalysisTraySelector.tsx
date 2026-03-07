@@ -25,7 +25,10 @@ import {
   EyeOff,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  primaryBlueAlpha,
+} from "../../assets/configurations/osLegalStyles";
 
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { useCorpusState } from "../annotator/context/CorpusAtom";
@@ -82,11 +85,11 @@ const AnalysisListSegment = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(74, 144, 226, 0.15);
+    background: ${primaryBlueAlpha(0.15)};
     border-radius: 2px;
 
     &:hover {
-      background: rgba(74, 144, 226, 0.25);
+      background: ${primaryBlueAlpha(0.25)};
     }
   }
 `;
@@ -96,7 +99,9 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
   margin-bottom: ${(props) => (props.$compact ? "0.75rem" : "1.5rem")};
   background: ${(props) =>
     props.$selected
-      ? "linear-gradient(165deg, rgba(74, 144, 226, 0.03), rgba(255, 255, 255, 0.5))"
+      ? `linear-gradient(165deg, ${primaryBlueAlpha(
+          0.03
+        )}, rgba(255, 255, 255, 0.5))`
       : "#ffffff"};
   border: 1px solid
     ${(props) =>
@@ -108,7 +113,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
   overflow: hidden;
   box-shadow: ${(props) =>
     props.$selected
-      ? "0 8px 32px rgba(74, 144, 226, 0.06)"
+      ? `0 8px 32px ${primaryBlueAlpha(0.06)}`
       : "0 1px 3px rgba(0, 0, 0, 0.01)"};
 
   .timestamps {
@@ -117,7 +122,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     gap: 1.25rem;
     padding: 0.5rem;
     background: ${(props) =>
-      props.$selected ? "rgba(74, 144, 226, 0.02)" : "#fafbfc"};
+      props.$selected ? primaryBlueAlpha(0.02) : "#fafbfc"};
     border-radius: 16px;
 
     .timestamp-row {
@@ -128,7 +133,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
       border-radius: 12px;
       border: 1px solid
         ${(props) =>
-          props.$selected ? "rgba(74, 144, 226, 0.1)" : OS_LEGAL_COLORS.border};
+          props.$selected ? primaryBlueAlpha(0.1) : OS_LEGAL_COLORS.border};
 
       .label {
         font-size: 0.7rem;
@@ -157,7 +162,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     transform: translateY(${(props) => (props.$compact ? "-1px" : "-2px")});
     box-shadow: ${(props) =>
       props.$selected
-        ? "0 12px 32px rgba(74, 144, 226, 0.12)"
+        ? `0 12px 32px ${primaryBlueAlpha(0.12)}`
         : "0 8px 24px rgba(0, 0, 0, 0.04)"};
   }
 
@@ -171,7 +176,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     border-top: 1px solid
       ${(props) =>
         props.$selected
-          ? "rgba(74, 144, 226, 0.12)"
+          ? primaryBlueAlpha(0.12)
           : OS_LEGAL_COLORS.surfaceLight};
   }
 
@@ -192,7 +197,7 @@ const AnalysisHeader = styled.div<{ $selected?: boolean; $compact?: boolean }>`
   padding: ${(props) => (props.$compact ? "1rem" : "1.75rem")};
   background: ${(props) =>
     props.$selected
-      ? "linear-gradient(165deg, rgba(74, 144, 226, 0.04), transparent)"
+      ? `linear-gradient(165deg, ${primaryBlueAlpha(0.04)}, transparent)`
       : "transparent"};
 `;
 
@@ -210,7 +215,9 @@ const AnalysisTitle = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     justify-content: center;
     background: ${(props) =>
       props.$selected
-        ? "linear-gradient(135deg, rgba(74, 144, 226, 0.1), rgba(74, 144, 226, 0.05))"
+        ? `linear-gradient(135deg, ${primaryBlueAlpha(0.1)}, ${primaryBlueAlpha(
+            0.05
+          )})`
         : OS_LEGAL_COLORS.surfaceHover};
     border-radius: ${(props) => (props.$compact ? "8px" : "10px")};
     transition: all 0.3s ease;
@@ -229,7 +236,7 @@ const AnalysisTitle = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     h4 {
       font-size: ${(props) => (props.$compact ? "1rem" : "1.125rem")};
       font-weight: 600;
-      color: #1a202c;
+      color: ${OS_LEGAL_COLORS.textPrimary};
       margin-bottom: ${(props) => (props.$compact ? "0" : "0.25rem")};
     }
 
@@ -261,12 +268,12 @@ const Badge = styled.div<{
     props.$compact ? "0.375rem 0.625rem" : "0.625rem 0.875rem"};
   background: ${(props) =>
     props.$variant === "primary"
-      ? "rgba(74, 144, 226, 0.04)"
+      ? primaryBlueAlpha(0.04)
       : "rgba(255, 255, 255, 0.8)"};
   border: 1px solid
     ${(props) =>
       props.$variant === "primary"
-        ? "rgba(74, 144, 226, 0.15)"
+        ? primaryBlueAlpha(0.15)
         : "rgba(226, 232, 240, 0.8)"};
   border-radius: ${(props) => (props.$compact ? "6px" : "10px")};
   font-size: ${(props) => (props.$compact ? "0.75rem" : "0.8125rem")};
@@ -301,7 +308,7 @@ const NoAnalysesMessage = styled.div`
   h4 {
     margin: 0 0 0.5rem 0;
     font-size: 1rem;
-    color: #1a202c;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-weight: 600;
   }
 
@@ -341,10 +348,10 @@ const DescriptionContainer = styled.div<{
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(74, 144, 226, 0.15);
+    background: ${primaryBlueAlpha(0.15)};
     border-radius: 4px;
     &:hover {
-      background: rgba(74, 144, 226, 0.25);
+      background: ${primaryBlueAlpha(0.25)};
     }
   }
 `;
@@ -448,11 +455,13 @@ const AnnotationsToggle = styled.button<{
     props.$compact ? "0.5rem 0.875rem" : "0.75rem 1.25rem"};
   background: ${(props) =>
     props.$isVisible
-      ? "linear-gradient(135deg, rgba(74, 144, 226, 0.08), rgba(74, 144, 226, 0.04))"
+      ? `linear-gradient(135deg, ${primaryBlueAlpha(0.08)}, ${primaryBlueAlpha(
+          0.04
+        )})`
       : "#ffffff"};
   border: 1px solid
     ${(props) =>
-      props.$isVisible ? "rgba(74, 144, 226, 0.2)" : OS_LEGAL_COLORS.border};
+      props.$isVisible ? primaryBlueAlpha(0.2) : OS_LEGAL_COLORS.border};
   border-radius: ${(props) => (props.$compact ? "8px" : "12px")};
   color: ${(props) =>
     props.$isVisible
@@ -474,7 +483,7 @@ const AnnotationsToggle = styled.button<{
     height: 100%;
     background: ${(props) =>
       props.$isVisible
-        ? "linear-gradient(135deg, rgba(74, 144, 226, 0.1), transparent)"
+        ? `linear-gradient(135deg, ${primaryBlueAlpha(0.1)}, transparent)`
         : "linear-gradient(135deg, rgba(226, 232, 240, 0.5), transparent)"};
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -484,7 +493,7 @@ const AnnotationsToggle = styled.button<{
     transform: translateY(-1px);
     box-shadow: ${(props) =>
       props.$isVisible
-        ? "0 4px 12px rgba(74, 144, 226, 0.1)"
+        ? `0 4px 12px ${primaryBlueAlpha(0.1)}`
         : "0 4px 12px rgba(0, 0, 0, 0.05)"};
 
     &::before {
@@ -503,9 +512,7 @@ const AnnotationsToggle = styled.button<{
     width: ${(props) => (props.$compact ? "20px" : "24px")};
     height: ${(props) => (props.$compact ? "20px" : "24px")};
     background: ${(props) =>
-      props.$isVisible
-        ? "rgba(74, 144, 226, 0.1)"
-        : "rgba(226, 232, 240, 0.5)"};
+      props.$isVisible ? primaryBlueAlpha(0.1) : "rgba(226, 232, 240, 0.5)"};
     border-radius: ${(props) => (props.$compact ? "4px" : "6px")};
     transition: all 0.3s ease;
 
@@ -527,9 +534,7 @@ const AnnotationsToggle = styled.button<{
     padding: ${(props) =>
       props.$compact ? "0.125rem 0.375rem" : "0.25rem 0.5rem"};
     background: ${(props) =>
-      props.$isVisible
-        ? "rgba(74, 144, 226, 0.1)"
-        : "rgba(226, 232, 240, 0.5)"};
+      props.$isVisible ? primaryBlueAlpha(0.1) : "rgba(226, 232, 240, 0.5)"};
     border-radius: ${(props) => (props.$compact ? "4px" : "6px")};
     font-size: ${(props) => (props.$compact ? "0.7rem" : "0.75rem")};
     font-weight: 600;
@@ -614,24 +619,14 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
 
   const filteredItems = useMemo((): AnalysisType[] => {
     if (!searchTerm) return analyses;
-    return fuseOptions
-      ? analysesFuse.search(searchTerm).map((result) => result.item)
-      : analyses;
-  }, [analyses, searchTerm, analysesFuse, fuseOptions]);
+    return analysesFuse.search(searchTerm).map((result) => result.item);
+  }, [analyses, searchTerm, analysesFuse]);
 
   const handleSearchChange = (value: string) => {
     if (externalSearchTerm === undefined) {
       setInternalSearchTerm(value);
     }
   };
-
-  const mountedRef = useRef<boolean>(false);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   // Memoized calculation of unique labels for each analysis
   const analysisLabelsCount = useMemo(() => {
@@ -664,6 +659,7 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
               }
               value={searchTerm}
               fullWidth
+              aria-label="Search analyses"
             />
             <button
               type="button"
@@ -690,7 +686,7 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
       )}
 
       <AnalysisListSegment>
-        {mountedRef.current && filteredItems.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <NoAnalysesMessage>
             <ChartNetwork size={32} />
             <h4>No Analyses Available</h4>
