@@ -43,7 +43,7 @@ http:
         certResolver: letsencrypt
 
     frontend-secure-router:
-      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`)"
+      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && !PathPrefix(`/graphql`) && !PathPrefix(`/admin`) && !PathPrefix(`/flower`) && !Path(`/robots.txt`) && !Path(`/llms.txt`) && !Path(`/llms-full.txt`) && !Path(`/sitemap.xml`) && !PathPrefix(`/.well-known`)"
       entryPoints:
         - "web-secure"
       middlewares:
@@ -55,7 +55,7 @@ http:
         certResolver: letsencrypt
 
     web-secure-router:
-      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`) || PathPrefix(`/mcp`) || PathPrefix(`/sse`))"
+      rule: "(Host(`opencontracts.opensource.legal`) || Host(`www.opencontracts.opensource.legal`)) && (PathPrefix(`/graphql`) || PathPrefix(`/admin`) || PathPrefix(`/mcp`) || PathPrefix(`/sse`) || Path(`/robots.txt`) || Path(`/llms.txt`) || Path(`/llms-full.txt`) || Path(`/sitemap.xml`) || PathPrefix(`/.well-known`))"
       entryPoints:
         - "web-secure"
       middlewares:

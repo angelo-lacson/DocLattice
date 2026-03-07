@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-04
 
+### Changed
+
+- **Extracted shared corpus object collection logic** into `opencontractserver/utils/corpus_collector.py`: New `collect_corpus_objects()` utility and `CorpusObjectCollection` dataclass consolidate duplicated corpus forking/export collection logic (Issue #816)
+
+### Added
+
+- **Dynamic discovery endpoints for crawlers and AI agents**: Replaced static `robots.txt`, `llms.txt`, and `llms-full.txt` files with Django views that dynamically generate content with live data from the database. New endpoints:
+  - `robots.txt`: Includes explicit `Allow` directives for AI crawler user-agents (GPTBot, ClaudeBot, anthropic-ai, Google-Extended, PerplexityBot, Bytespider, cohere-ai) and a proper `Sitemap:` reference to `sitemap.xml`
+  - `llms.txt` / `llms-full.txt`: Now auto-populate an "Available Collections" section listing all public corpuses with titles, slugs, document counts, and descriptions. Hostnames are resolved from the request instead of using placeholder text. Links use proper inline Markdown format per the llmstxt.org spec
+  - `sitemap.xml`: New XML sitemap listing homepage, public corpuses, their documents (via DocumentPath), and discovery endpoints
+  - `.well-known/mcp.json`: New MCP server discovery endpoint listing the global MCP server and per-corpus scoped servers
+  (`opencontractserver/discovery/views.py`, `opencontractserver/discovery/urls.py`, `config/urls.py`)
+- **Traefik routing for discovery endpoints**: Updated production and CI Traefik configs to route `/robots.txt`, `/llms.txt`, `/llms-full.txt`, `/sitemap.xml`, and `/.well-known/*` to Django instead of the frontend nginx container (`compose/production/traefik/traefik.yml`, `compose/production/traefik/traefik-ci.yml`)
+- **MCP discovery link in HTML head**: Added `<link rel="alternate" type="application/json" href="/.well-known/mcp.json">` to `frontend/index.html` for agent discovery
+- **Comprehensive test suite** for all five discovery endpoints covering content types, spec conformance, public/private corpus filtering, hostname resolution, and edge cases (`opencontractserver/discovery/tests/test_discovery_views.py`)
+
 ### Removed
 
 - **Unused `django-crispy-forms` and `crispy-bootstrap5` dependencies**: These were cookiecutter-django boilerplate never used by the project (React frontend uses its own form components). Removed packages from `requirements/base.txt`, `INSTALLED_APPS`, and `CRISPY_*` settings from `config/settings/base.py`.
@@ -24,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Stale postProcessors in PipelineComponentsType**: Removed unused `postProcessors` field from the `PipelineComponentsType` TypeScript type to match the system settings GQL query. (`frontend/src/types/graphql-api.ts`)
 
 ### Added
+
+#### Unified Rate Limiting for WebSocket and MCP (Closes #730, #745)
+- Replaced `django-ratelimit` with a custom protocol-agnostic rate limiting engine (`config/ratelimit/`) supporting GraphQL, WebSocket, MCP, and Django views through a single shared infrastructure
+- **Engine** (`config/ratelimit/engine.py`): Fixed-window counter algorithm using Django cache (Redis in production), with sync `is_rate_limited()` and async `ais_rate_limited()` APIs
+- **Identity resolution** (`config/ratelimit/keys.py`): Unified IP extraction from both `HttpRequest` (GraphQL/views) and ASGI scope (WebSocket/MCP), plus key building with `user_or_ip`, `ip`, and `user` strategies
+- **Rate categories** (`config/ratelimit/rates.py`): `RateLimits` singleton with 17 categories including new `WS_CONNECT` (10/m), `WS_HEARTBEAT` (120/m), and `MCP_GLOBAL` (100/m)
+- **WebSocket rate limiting**: All 3 consumers (`UnifiedAgentConversationConsumer`, `NotificationConsumer`, `ThreadUpdatesConsumer`) now enforce connection-rate and per-message limits. Rate-limited messages receive a JSON `RATE_LIMITED` error; the connection stays open
+- **MCP rate limiting**: Two-layer check — global cap (`MCP_GLOBAL`) plus per-tool limits mapped to existing categories (e.g., `search_corpus` → `READ_HEAVY`). ASGI scope threaded into tool handlers via `ContextVar`
+- **Django view adapter** (`view_ratelimit`): Drop-in replacement for `django_ratelimit.decorators.ratelimit`, used in admin login views
+- **Backward-compatible re-exports**: `config/graphql/ratelimits.py` remains a valid import path for all existing GraphQL files
+- Comprehensive test suite (`opencontractserver/tests/test_unified_rate_limiting.py`) covering engine, keys, rates, and all protocol adapters
 
 - Backend mutation test for the all-enabled-to-explicit toggle transition, verifying the mutation succeeds and the query reflects the change (issue #1036 item 7). (`opencontractserver/tests/test_pipeline_settings.py`)
 
@@ -44,6 +71,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GraphQL annotation mention search** now uses full-text search via `SearchQuery` on GIN-indexed `search_vector` instead of `raw_text__icontains` (`config/graphql/search_queries.py`)
 
 - **IconPicker Lucide Rebuild (SUI Migration Step 3)**: Replaced the Semantic UI icon catalog with a curated Lucide icon catalog (~440 icons across 16 categories). New `IconPickerModal` component displays Lucide icons in a searchable, category-filtered grid with live preview. New `IconDropdown` component provides a compact trigger that opens the modal. Updated `iconCompat.ts` with dynamic fallback resolution so `resolveIcon()` supports all Lucide icons via `kebabToPascal` conversion against the full `lucide-react` export. Legacy SUI icon names remain backward-compatible through the existing `SEMANTIC_TO_LUCIDE` mapping. Includes 16 Playwright component tests and automated documentation screenshots. (`frontend/src/components/widgets/icon-picker/icons.ts`, `frontend/src/components/widgets/icon-picker/IconPickerModal.tsx`, `frontend/src/components/widgets/icon-picker/IconDropdown.tsx`, `frontend/src/utils/iconCompat.ts`)
+
+### Changed
+
+- Removed `django-ratelimit` dependency from `requirements/base.txt` — all rate limiting now handled by `config.ratelimit`
+- `config/admin_auth/views.py`: Replaced `django_ratelimit.decorators.ratelimit` with `config.ratelimit.decorators.view_ratelimit`
+- `opencontractserver/mcp/server.py`: Replaced custom `RateLimiter` class with unified `check_mcp_rate_limit`; added `ContextVar` for ASGI scope propagation
+- `opencontractserver/mcp/permissions.py`: Removed `RateLimiter` class (moved to shared package)
+- `opencontractserver/mcp/telemetry.py`: `get_client_ip_from_scope` now delegates to shared `config.ratelimit.keys`
+- Removed `X-RateLimit-*` response headers that `django-ratelimit` previously set on GraphQL responses — the new engine communicates rate limit state through `RateLimitExceeded` errors (GraphQL), `RATE_LIMITED` WebSocket frames, or HTTP 429 status (views)
+- Removed `RATELIMIT_ENABLE` dead-code setting from `config/settings/ratelimit.py` — the engine only checks `RATELIMIT_DISABLE`
 
 - **Pipeline Component Management Redesign**: Separated component management from filetype default assignment in the Pipeline Configuration UI. New `enabled_components` JSON field on `PipelineSettings` tracks which components are available. Frontend splits into two sections: ComponentLibrary (flat filterable list with enable/disable toggles, search, stage filter chips) and FiletypeDefaults (MIME type rows with parser/embedder/thumbnailer dropdowns). Removed old stage-centric layout with MIME type filter buttons. (`opencontractserver/documents/models.py`, `config/graphql/pipeline_types.py`, `config/graphql/pipeline_queries.py`, `config/graphql/pipeline_settings_mutations.py`, `frontend/src/components/admin/SystemSettings.tsx`, `frontend/src/components/admin/system_settings/ComponentLibrary.tsx`, `frontend/src/components/admin/system_settings/FiletypeDefaults.tsx`)
 - **Clean corpus landing page with Power User mode toggle**: Default corpus view is now a full-page landing without sidebar navigation, providing a cleaner experience for anonymous browsers and casual users. Users with edit permissions see a "Power User" toggle (`?mode=power` URL param) to access the full sidebar+tabs layout (`frontend/src/views/Corpuses.tsx`)

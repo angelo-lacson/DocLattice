@@ -31,7 +31,6 @@ from opencontractserver.mcp.formatters import (
     format_thread_summary,
 )
 from opencontractserver.mcp.permissions import (
-    RateLimiter,
     get_anonymous_user,
     sanitize_and_validate_slugs,
 )
@@ -41,7 +40,7 @@ from opencontractserver.mcp.telemetry import (
     IP_HASH_LENGTH,
     _hash_ip,
     clear_request_context,
-    get_client_ip_from_scope,
+    get_claimed_client_ip_from_scope,
     isolated_telemetry_context,
     record_mcp_request,
     record_mcp_resource_read,
@@ -212,17 +211,17 @@ class TestGetClientIpFromScope(TestCase):
 
     def test_x_forwarded_for_single(self):
         scope = {"headers": [(b"x-forwarded-for", b"1.2.3.4")]}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "1.2.3.4")
 
     def test_x_forwarded_for_multiple(self):
         scope = {"headers": [(b"x-forwarded-for", b"1.2.3.4, 5.6.7.8, 9.10.11.12")]}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "1.2.3.4")
 
     def test_x_real_ip(self):
         scope = {"headers": [(b"x-real-ip", b"10.0.0.1")]}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "10.0.0.1")
 
     def test_x_forwarded_for_takes_precedence(self):
@@ -232,21 +231,21 @@ class TestGetClientIpFromScope(TestCase):
                 (b"x-real-ip", b"5.6.7.8"),
             ]
         }
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "1.2.3.4")
 
     def test_direct_client_connection(self):
         scope = {"headers": [], "client": ("192.168.1.1", 12345)}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertEqual(result, "192.168.1.1")
 
     def test_no_ip_available(self):
         scope = {"headers": []}
-        result = get_client_ip_from_scope(scope)
+        result = get_claimed_client_ip_from_scope(scope)
         self.assertIsNone(result)
 
     def test_empty_scope(self):
-        result = get_client_ip_from_scope({})
+        result = get_claimed_client_ip_from_scope({})
         self.assertIsNone(result)
 
 
@@ -367,35 +366,52 @@ class TestTTLLRUCache(TestCase):
 
 
 # --------------------------------------------------------------------------
-# RateLimiter tests
+# RateLimiter tests (now using shared engine)
 # --------------------------------------------------------------------------
 class TestRateLimiter(TestCase):
-    """Tests for the MCP RateLimiter."""
+    """Tests for MCP rate limiting via the shared config.ratelimit engine."""
 
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_allows_under_limit(self):
-        limiter = RateLimiter(max_requests=5, window_seconds=60)
-        for _ in range(5):
-            self.assertTrue(limiter.check_rate_limit("client1"))
+        from config.ratelimit.engine import is_rate_limited
 
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            for _ in range(5):
+                self.assertFalse(is_rate_limited("mcp:test", "client1", "5/m"))
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_blocks_over_limit(self):
-        limiter = RateLimiter(max_requests=3, window_seconds=60)
-        for _ in range(3):
-            limiter.check_rate_limit("client1")
-        self.assertFalse(limiter.check_rate_limit("client1"))
+        from config.ratelimit.engine import is_rate_limited
 
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            for _ in range(3):
+                is_rate_limited("mcp:test", "client1", "3/m")
+            self.assertTrue(is_rate_limited("mcp:test", "client1", "3/m"))
+
+    @override_settings(RATELIMIT_DISABLE=False)
     def test_different_clients_independent(self):
-        limiter = RateLimiter(max_requests=2, window_seconds=60)
-        limiter.check_rate_limit("client1")
-        limiter.check_rate_limit("client1")
-        # client1 is at limit
-        self.assertFalse(limiter.check_rate_limit("client1"))
-        # client2 should still be allowed
-        self.assertTrue(limiter.check_rate_limit("client2"))
+        from config.ratelimit.engine import is_rate_limited
 
-    def test_default_values(self):
-        limiter = RateLimiter()
-        self.assertEqual(limiter.max_requests, RATE_LIMIT_REQUESTS)
-        self.assertEqual(limiter.window_seconds, RATE_LIMIT_WINDOW)
+        with patch("config.ratelimit.engine.time") as mock_time:
+            mock_time.time.return_value = 1000000.0
+            for _ in range(2):
+                is_rate_limited("mcp:test", "client1", "2/m")
+            # client1 is at limit
+            self.assertTrue(is_rate_limited("mcp:test", "client1", "2/m"))
+            # client2 should still be allowed
+            self.assertFalse(is_rate_limited("mcp:test", "client2", "2/m"))
 
 
 # --------------------------------------------------------------------------
