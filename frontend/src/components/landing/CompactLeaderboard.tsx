@@ -307,10 +307,10 @@ function getInitials(username?: string): string {
  */
 function getAvatarColor(userId?: string): string {
   const colors = [
-    "#3B82F6",
-    "#10B981",
-    "#F59E0B",
-    "#EF4444",
+    OS_LEGAL_COLORS.primaryBlue,
+    OS_LEGAL_COLORS.greenMedium,
+    OS_LEGAL_COLORS.folderIcon,
+    OS_LEGAL_COLORS.dangerBorderHover,
     "#8B5CF6",
     "#EC4899",
   ];

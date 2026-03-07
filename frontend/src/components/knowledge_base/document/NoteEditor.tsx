@@ -331,7 +331,7 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
   border: 1px solid
     ${(props) =>
       props.$isActive
-        ? "#4a90e2"
+        ? OS_LEGAL_COLORS.primaryBlue
         : props.$isViewing
         ? "#a78bfa"
         : OS_LEGAL_COLORS.border};
@@ -340,7 +340,7 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
     props.$isActive
       ? OS_LEGAL_COLORS.blueSurface
       : props.$isViewing
-      ? "#f3f4f6"
+      ? OS_LEGAL_COLORS.surfaceLight
       : "white"};
   text-align: left;
   cursor: pointer;
@@ -348,7 +348,8 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
   transition: all 0.2s;
 
   &:hover {
-    border-color: ${(props) => (props.$isActive ? "#4a90e2" : "#a78bfa")};
+    border-color: ${(props) =>
+      props.$isActive ? OS_LEGAL_COLORS.primaryBlue : "#a78bfa"};
     background: ${(props) =>
       props.$isActive ? OS_LEGAL_COLORS.blueSurface : OS_LEGAL_COLORS.gray50};
     transform: translateX(2px);
@@ -364,7 +365,7 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
       font-weight: 600;
       color: ${(props) =>
         props.$isActive
-          ? "#4a90e2"
+          ? OS_LEGAL_COLORS.primaryBlue
           : props.$isViewing
           ? "#7c3aed"
           : OS_LEGAL_COLORS.textPrimary};
@@ -380,7 +381,7 @@ const VersionItem = styled(motion.button)<VersionItemProps>`
       font-weight: 500;
       background: ${(props) =>
         props.$isActive
-          ? "#4a90e2"
+          ? OS_LEGAL_COLORS.primaryBlue
           : props.$isViewing
           ? "#a78bfa"
           : OS_LEGAL_COLORS.border};

@@ -12,7 +12,7 @@ interface RelationContainerProps {
 }
 
 const RelationContainer = styled.div<RelationContainerProps>`
-  border-left: 4px solid ${(props) => props.$color || "#e0e1e2"};
+  border-left: 4px solid ${(props) => props.$color || OS_LEGAL_COLORS.border};
   background-color: ${(props) =>
     props.$selected ? "rgba(46, 204, 113, 0.08)" : "white"};
   box-shadow: ${(props) =>
@@ -50,7 +50,7 @@ const DeleteButton = styled.button`
   padding: 0.4em;
   margin: 0;
   background-color: transparent;
-  color: #99a1a7;
+  color: ${OS_LEGAL_COLORS.textMuted};
   border: none;
   border-radius: 50%;
   cursor: pointer;

@@ -584,7 +584,8 @@ export const StyledSelect = styled.select<{ $warning?: boolean }>`
   color: ${OS_LEGAL_COLORS.textPrimary};
   background: white;
   border: 1px solid
-    ${(props) => (props.$warning ? "#f59e0b" : OS_LEGAL_COLORS.border)};
+    ${(props) =>
+      props.$warning ? OS_LEGAL_COLORS.folderIcon : OS_LEGAL_COLORS.border};
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.15s ease;

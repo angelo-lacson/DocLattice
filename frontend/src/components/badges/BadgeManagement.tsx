@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
+// TODO: migrate to @os-legal/ui once Table and Dropdown components are available
 import { Table, Dropdown } from "semantic-ui-react";
 import { Plus, Check, X, Trash2 } from "lucide-react";
 import {
@@ -226,7 +227,7 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                 <Table.Cell>{badge.description}</Table.Cell>
                 <Table.Cell>
                   {badge.isAutoAwarded ? (
-                    <Check size={16} color="#21ba45" />
+                    <Check size={16} color={OS_LEGAL_COLORS.success} />
                   ) : (
                     <X size={16} color={OS_LEGAL_COLORS.danger} />
                   )}

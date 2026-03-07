@@ -99,7 +99,6 @@ const StatsContainer = styled.div`
   padding: 32px 0;
 
   /* Override stat value size like StatsSection does */
-  [class*="StatBlock"] > *:first-child,
   [data-testid="stat-value"] {
     font-size: 36px !important;
   }
@@ -107,7 +106,6 @@ const StatsContainer = styled.div`
   @media (max-width: 768px) {
     padding: 24px 0;
 
-    [class*="StatBlock"] > *:first-child,
     [data-testid="stat-value"] {
       font-size: 28px !important;
     }

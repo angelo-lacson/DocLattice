@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
+// TODO: migrate to @os-legal/ui once Table component is available
 import { Table } from "semantic-ui-react";
 import styled from "styled-components";
 import { gql } from "@apollo/client";

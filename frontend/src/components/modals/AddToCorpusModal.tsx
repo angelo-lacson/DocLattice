@@ -68,9 +68,11 @@ const StyledCard = styled.div<{ $selected?: boolean }>`
   margin-bottom: 0.5rem;
   padding: 1rem;
   border: 1px solid
-    ${(props) => (props.$selected ? "#21ba45" : OS_LEGAL_COLORS.border)};
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.success : OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  background: ${(props) => (props.$selected ? "#e2ffdb" : "#ffffff")};
+  background: ${(props) =>
+    props.$selected ? OS_LEGAL_COLORS.successSurface : "#ffffff"};
 
   &:hover {
     transform: translateY(-2px);

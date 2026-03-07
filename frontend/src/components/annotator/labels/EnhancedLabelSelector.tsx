@@ -76,7 +76,9 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
   const [showCreateLabelModal, setShowCreateLabelModal] = useState(false);
   const [showCreateLabelsetModal, setShowCreateLabelsetModal] = useState(false);
   const [newLabelText, setNewLabelText] = useState("");
-  const [newLabelColor, setNewLabelColor] = useState("#1a75bc");
+  const [newLabelColor, setNewLabelColor] = useState<string>(
+    OS_LEGAL_COLORS.primaryBlueHover
+  );
   const [newLabelDescription, setNewLabelDescription] = useState("");
   const [newLabelsetTitle, setNewLabelsetTitle] = useState("");
   const [newLabelsetDescription, setNewLabelsetDescription] = useState("");
@@ -384,7 +386,10 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
             >
               <span
                 className="color-dot"
-                style={{ backgroundColor: activeSpanLabel.color || "#1a75bc" }}
+                style={{
+                  backgroundColor:
+                    activeSpanLabel.color || OS_LEGAL_COLORS.primaryBlueHover,
+                }}
               />
               <span>{activeSpanLabel.text}</span>
               <button
@@ -463,7 +468,8 @@ export const EnhancedLabelSelector: React.FC<EnhancedLabelSelectorProps> = ({
                           <span
                             className="color-dot"
                             style={{
-                              backgroundColor: label.color || "#1a75bc",
+                              backgroundColor:
+                                label.color || OS_LEGAL_COLORS.primaryBlueHover,
                             }}
                           />
                           {label.text}
@@ -776,7 +782,9 @@ const StyledEnhancedSelector = styled.div<StyledEnhancedSelectorProps>`
 
     .tag-icon {
       color: ${(props) =>
-        props.$isReadOnly ? OS_LEGAL_COLORS.textMuted : "#1a75bc"};
+        props.$isReadOnly
+          ? OS_LEGAL_COLORS.textMuted
+          : OS_LEGAL_COLORS.primaryBlueHover};
       stroke-width: 2.2;
       transition: all 0.3s;
     }

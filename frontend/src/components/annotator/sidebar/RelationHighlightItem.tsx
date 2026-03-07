@@ -42,7 +42,7 @@ const AnnotationPill = styled.span<AnnotationPillProps>`
   font-size: 0.8rem;
   font-weight: 500;
   color: white;
-  background-color: ${(props) => props.$color || "#9ca3af"};
+  background-color: ${(props) => props.$color || OS_LEGAL_COLORS.textMuted};
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: opacity 0.15s ease;
@@ -71,7 +71,7 @@ const RemoveButton = styled.button`
   padding: 0.35em;
   margin-left: 0.375rem;
   background-color: transparent;
-  color: #b0b7bf;
+  color: ${OS_LEGAL_COLORS.textMuted};
   border: none;
   border-radius: 50%;
   cursor: pointer;

@@ -50,7 +50,7 @@ const PRESET_COLORS = [
   { name: "Pink", value: "#ec4899" },
   { name: "Rose", value: "#f43f5e" },
   { name: "Orange", value: "#f97316" },
-  { name: "Amber", value: "#f59e0b" },
+  { name: "Amber", value: OS_LEGAL_COLORS.folderIcon },
   { name: "Green", value: OS_LEGAL_COLORS.green },
   { name: "Teal", value: "#14b8a6" },
   { name: "Cyan", value: "#06b6d4" },

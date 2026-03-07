@@ -704,7 +704,7 @@ const StyledButton = styled.button<{ color?: string; hoverColor?: string }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: ${({ color }) => color || "#e5e7eb"};
+  background-color: ${({ color }) => color || OS_LEGAL_COLORS.border};
   color: #fff;
   border: none;
   border-radius: 4px;
@@ -715,11 +715,12 @@ const StyledButton = styled.button<{ color?: string; hoverColor?: string }>`
   margin-right: 8px;
 
   &:hover {
-    background-color: ${({ hoverColor }) => hoverColor || "#d1d5db"};
+    background-color: ${({ hoverColor }) =>
+      hoverColor || OS_LEGAL_COLORS.borderHover};
   }
 
   &:disabled {
-    background-color: #e5e7eb;
+    background-color: ${OS_LEGAL_COLORS.border};
     cursor: not-allowed;
     opacity: 0.6;
   }
@@ -761,7 +762,7 @@ const ActionButtonsWrapper = styled.div`
   right: 30px;
   z-index: 100;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
   padding: 8px;
   box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);

@@ -106,7 +106,10 @@ const TimelineItem = styled.div<{ $isCurrent: boolean }>`
         ? OS_LEGAL_COLORS.primaryBlue
         : OS_LEGAL_COLORS.borderHover};
     border: 2px solid
-      ${(props) => (props.$isCurrent ? "#1d4ed8" : OS_LEGAL_COLORS.textMuted)};
+      ${(props) =>
+        props.$isCurrent
+          ? OS_LEGAL_COLORS.primaryBlueHover
+          : OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -150,9 +153,9 @@ const VersionBadge = styled.span<{ $type: string }>`
   background: ${(props) => {
     switch (props.$type) {
       case "INITIAL":
-        return "#dcfce7";
+        return OS_LEGAL_COLORS.successSurface;
       case "CONTENT_UPDATE":
-        return "#dbeafe";
+        return OS_LEGAL_COLORS.blueBorder;
       case "MINOR_EDIT":
         return "#fef3c7";
       case "MAJOR_REVISION":
@@ -166,7 +169,7 @@ const VersionBadge = styled.span<{ $type: string }>`
       case "INITIAL":
         return OS_LEGAL_COLORS.successHover;
       case "CONTENT_UPDATE":
-        return "#1d4ed8";
+        return OS_LEGAL_COLORS.primaryBlueHover;
       case "MINOR_EDIT":
         return "#b45309";
       case "MAJOR_REVISION":

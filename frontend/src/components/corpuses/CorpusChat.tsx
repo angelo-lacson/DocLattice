@@ -1151,7 +1151,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#2563eb"
+                    stroke={OS_LEGAL_COLORS.primaryBlueHover}
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1215,11 +1215,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                           contextStatus.used_tokens /
                             contextStatus.context_window >
                           0.85
-                            ? OS_LEGAL_COLORS.dangerBorderHover
+                            ? OS_LEGAL_COLORS.danger
                             : contextStatus.used_tokens /
                                 contextStatus.context_window >
                               0.6
-                            ? "#f59e0b"
+                            ? OS_LEGAL_COLORS.folderIcon
                             : OS_LEGAL_COLORS.green,
                         transition: "width 0.3s ease, background 0.3s ease",
                       }}
@@ -1240,8 +1240,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     <span
                       data-testid="context-meter-compacted"
                       style={{
-                        background: "#dbeafe",
-                        color: "#2563eb",
+                        background: OS_LEGAL_COLORS.blueBorder,
+                        color: OS_LEGAL_COLORS.primaryBlueHover,
                         padding: "0.125rem 0.375rem",
                         borderRadius: 4,
                         fontSize: "0.6875rem",

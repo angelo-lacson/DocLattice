@@ -116,7 +116,7 @@ export const NewNoteModal: React.FC<NewNoteModalProps> = ({
         <div
           style={{
             padding: "0.75rem",
-            background: "#eef6fc",
+            background: OS_LEGAL_COLORS.blueSurface,
             border: `1px solid ${OS_LEGAL_COLORS.infoBorder}`,
             borderRadius: "8px",
             fontSize: "0.85rem",

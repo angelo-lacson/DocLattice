@@ -77,7 +77,7 @@ const StatisticIconWrapper = styled.div`
   justify-content: center;
   margin: 0 1rem 0 0;
   opacity: 0.8;
-  color: #4a90e2;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
 
   svg {
     width: 1.75rem;
@@ -102,7 +102,7 @@ const StatisticContent = styled.div`
 const StatisticValue = styled.div`
   font-size: 1.5rem;
   font-weight: 600;
-  color: #2d3748;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.2;
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
@@ -114,7 +114,7 @@ const StatisticValue = styled.div`
 const StatisticLabel = styled.div`
   font-size: 0.75rem;
   font-weight: 500;
-  color: #718096;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 
@@ -152,7 +152,7 @@ const StatsGrid = styled.div`
 `;
 
 const DashboardHeader = styled.h2`
-  color: #4a90e2;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   font-weight: 500;
   letter-spacing: -0.01em;
   font-size: 1.5rem;

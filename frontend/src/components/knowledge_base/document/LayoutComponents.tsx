@@ -1,14 +1,18 @@
 import React from "react";
 import { Modal } from "@os-legal/ui";
-import styled from "styled-components";
+import styled, { createGlobalStyle } from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
-const FullScreenModalWrapper = styled.div`
-  .oc-modal-overlay {
-    padding: 0;
+// @os-legal/ui Modal renders via a portal outside the React tree,
+// so wrapper descendant selectors never reach the portal DOM.
+// We must use createGlobalStyle instead. Scoped via .fullscreen-modal class.
+// TODO: Fix upstream in @os-legal/ui — add a size="fullscreen" variant
+const FullScreenModalStyles = createGlobalStyle`
+  .oc-modal-overlay:has(.fullscreen-modal) {
+    padding: 0 !important;
   }
 
-  .oc-modal {
+  .fullscreen-modal {
     position: fixed !important;
     margin: 0 !important;
     top: 0 !important;
@@ -26,11 +30,12 @@ const FullScreenModalWrapper = styled.div`
     overflow: hidden !important;
   }
 
-  .oc-modal-body {
+  .fullscreen-modal .oc-modal-body {
     flex: 1 1 auto !important;
     overflow: hidden !important;
     padding: 0 !important;
     margin: 0 !important;
+    min-height: 0;
   }
 `;
 
@@ -47,17 +52,20 @@ export const FullScreenModal: React.FC<FullScreenModalProps> = ({
   onClose,
   children,
 }) => (
-  <FullScreenModalWrapper id={id}>
+  <>
+    <FullScreenModalStyles />
     <Modal
+      id={id}
       open={open}
       onClose={onClose}
       size="lg"
+      className="fullscreen-modal"
       closeOnEscape={false}
       closeOnOverlay={false}
     >
       {children}
     </Modal>
-  </FullScreenModalWrapper>
+  </>
 );
 
 export const SourceIndicator = styled.div`

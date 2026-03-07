@@ -26,7 +26,7 @@ interface HighlightContainerProps {
 }
 
 const HighlightContainer = styled.div<HighlightContainerProps>`
-  border-left: 4px solid ${(props) => props.color || "#e0e1e2"};
+  border-left: 4px solid ${(props) => props.color || OS_LEGAL_COLORS.border};
   background-color: ${(props) =>
     props.selected ? "rgba(46, 204, 113, 0.08)" : "white"};
   box-shadow: ${(props) =>
@@ -57,7 +57,7 @@ interface AnnotationLabelProps {
 }
 
 const AnnotationLabel = styled.span<AnnotationLabelProps>`
-  background-color: ${(props) => props.$labelColor || "#e0e1e2"};
+  background-color: ${(props) => props.$labelColor || OS_LEGAL_COLORS.border};
   color: white;
   margin: 0 0.5rem 0.5rem 0;
   padding: 0.5em 1em;
@@ -74,7 +74,7 @@ const DeleteButton = styled.button`
   padding: 0.4em;
   margin-left: 0.5rem;
   background-color: transparent;
-  color: #99a1a7;
+  color: ${OS_LEGAL_COLORS.textMuted};
   border: none;
   border-radius: 50%;
   cursor: pointer;

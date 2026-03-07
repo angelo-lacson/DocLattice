@@ -38,7 +38,7 @@ const BadgeContainer = styled.div<{
     if (props.$isOutdated) {
       return "#c2410c";
     } else if (props.$hasHistory) {
-      return "#1d4ed8";
+      return OS_LEGAL_COLORS.primaryBlueHover;
     } else {
       return OS_LEGAL_COLORS.textSecondary;
     }

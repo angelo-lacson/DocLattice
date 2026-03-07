@@ -325,7 +325,7 @@ export const ProcessingIndicator = styled(motion.div)`
   gap: 0.75rem;
   padding: 0.875rem 1.5rem;
   background: linear-gradient(135deg, #f0f7ff 0%, #e6f2ff 100%);
-  color: #4a90e2;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   border-radius: 24px;
   font-weight: 500;
   font-size: 0.9375rem;
@@ -362,7 +362,7 @@ export const ProcessingIndicator = styled(motion.div)`
   .pulse-dot {
     width: 6px;
     height: 6px;
-    background: #4a90e2;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     border-radius: 50%;
     animation: pulse 1.5s ease-in-out infinite;
     box-shadow: 0 0 4px rgba(74, 144, 226, 0.4);
@@ -383,7 +383,7 @@ export const ProcessingIndicator = styled(motion.div)`
   /* Loader color override */
   .ui.loader {
     &:after {
-      border-color: #4a90e2 transparent transparent !important;
+      border-color: ${OS_LEGAL_COLORS.primaryBlue} transparent transparent !important;
     }
   }
 `;

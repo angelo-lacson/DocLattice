@@ -45,7 +45,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
         return "0 0 0 3px rgba(16, 185, 129, 0.15)";
       case "#ef4444":
         return "0 0 0 3px rgba(239, 68, 68, 0.15)";
-      case "#f59e0b":
+      case OS_LEGAL_COLORS.folderIcon:
         return "0 0 0 3px rgba(245, 158, 11, 0.15)";
       default:
         return "0 0 0 3px rgba(148, 163, 184, 0.15)";
@@ -60,7 +60,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
           return "0 0 0 4px rgba(16, 185, 129, 0.25)";
         case "#ef4444":
           return "0 0 0 4px rgba(239, 68, 68, 0.25)";
-        case "#f59e0b":
+        case OS_LEGAL_COLORS.folderIcon:
           return "0 0 0 4px rgba(245, 158, 11, 0.25)";
         default:
           return "0 0 0 4px rgba(148, 163, 184, 0.25)";
@@ -255,7 +255,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
   const statusColor = () => {
     if (cellStatus?.isApproved) return OS_LEGAL_COLORS.greenMedium; // Modern green
     if (cellStatus?.isRejected) return OS_LEGAL_COLORS.dangerBorderHover; // Modern red
-    if (cellStatus?.isEdited) return "#f59e0b"; // Modern amber
+    if (cellStatus?.isEdited) return OS_LEGAL_COLORS.folderIcon; // Modern amber
     return OS_LEGAL_COLORS.textMuted; // Modern gray
   };
 

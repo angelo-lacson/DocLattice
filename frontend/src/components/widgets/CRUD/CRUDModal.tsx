@@ -15,6 +15,7 @@ import {
   HorizontallyCenteredDiv,
   VerticallyCenteredDiv,
 } from "../../layout/Wrappers";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * Props for the ObjectCRUDModal component.
@@ -146,7 +147,10 @@ export function CRUDModal({
                 <div>
                   <h2 style={{ margin: 0 }}>{headerText}</h2>
                   <div
-                    style={{ fontSize: "0.875rem", color: "#666" }}
+                    style={{
+                      fontSize: "0.875rem",
+                      color: OS_LEGAL_COLORS.textSecondary,
+                    }}
                   >{`Values for: ${descriptiveName}`}</div>
                 </div>
               </div>

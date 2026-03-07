@@ -32,18 +32,18 @@ const StyledModalWrapper = styled.div`
 
   .oc-modal {
     max-width: 600px;
-    color: ${OS_LEGAL_COLORS.border};
-    background: ${OS_LEGAL_COLORS.textPrimary};
+    color: ${OS_LEGAL_COLORS.darkSurfaceText};
+    background: ${OS_LEGAL_COLORS.darkSurface};
   }
 
   .oc-modal-body {
-    background: ${OS_LEGAL_COLORS.textPrimary};
+    background: ${OS_LEGAL_COLORS.darkSurface};
     padding: 1.5rem;
   }
 
   .oc-modal-footer {
-    background: ${OS_LEGAL_COLORS.textPrimary};
-    border-top: 1px solid ${OS_LEGAL_COLORS.textTertiary};
+    background: ${OS_LEGAL_COLORS.darkSurface};
+    border-top: 1px solid ${OS_LEGAL_COLORS.darkSurfaceBorder};
     display: flex;
     justify-content: center;
   }
@@ -92,11 +92,11 @@ const DataListItem = styled.li`
   gap: 0.75rem;
   padding: 0.4rem 0;
   font-size: 0.95rem;
-  color: ${OS_LEGAL_COLORS.borderHover};
+  color: ${OS_LEGAL_COLORS.darkSurfaceText};
 
   svg {
     flex-shrink: 0;
-    color: ${OS_LEGAL_COLORS.textMuted};
+    color: ${OS_LEGAL_COLORS.darkSurfaceBorder};
   }
 `;
 

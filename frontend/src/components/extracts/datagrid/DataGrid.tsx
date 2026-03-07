@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
+// TODO: migrate to @os-legal/ui once Table, Popup, Modal, and Button components are available
 import { Button, Popup, Modal, Table } from "semantic-ui-react";
 import {
   Trash2,
@@ -220,7 +221,7 @@ const styles = {
     boxShadow: "0 0 0 3px rgba(239, 68, 68, 0.1)",
   } as React.CSSProperties,
   pendingDot: {
-    backgroundColor: "#f59e0b",
+    backgroundColor: OS_LEGAL_COLORS.folderIcon,
     boxShadow: "0 0 0 3px rgba(245, 158, 11, 0.1)",
   } as React.CSSProperties,
   emptyDot: {
