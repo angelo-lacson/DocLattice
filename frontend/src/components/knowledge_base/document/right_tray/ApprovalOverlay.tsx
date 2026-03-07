@@ -143,27 +143,17 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
         >
           <Button
             size="md"
-            variant="secondary"
+            variant="danger"
             leftIcon={<XCircle size={16} />}
             onClick={() => sendApprovalDecision(false)}
-            style={{
-              backgroundColor: "#dc2626",
-              color: "white",
-              border: "none",
-            }}
           >
             Reject
           </Button>
           <Button
             size="md"
-            variant="secondary"
+            variant="primary"
             leftIcon={<CheckCircle size={16} />}
             onClick={() => sendApprovalDecision(true)}
-            style={{
-              backgroundColor: "#059669",
-              color: "white",
-              border: "none",
-            }}
           >
             Approve
           </Button>

@@ -929,7 +929,7 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
             Cancel
           </Button>
           <Button
-            variant="primary"
+            variant="danger"
             loading={emptyTrashLoading}
             disabled={emptyTrashLoading}
             onClick={() => {
@@ -938,7 +938,6 @@ export const TrashFolderView: React.FC<TrashFolderViewProps> = ({
               });
             }}
             leftIcon={<Trash2 size={14} />}
-            style={{ backgroundColor: "#dc2626", borderColor: "#dc2626" }}
           >
             Permanently Delete All
           </Button>

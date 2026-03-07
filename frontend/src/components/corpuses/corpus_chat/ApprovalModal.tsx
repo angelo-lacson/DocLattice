@@ -138,28 +138,18 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
             }}
           >
             <Button
-              variant="secondary"
+              variant="danger"
               size="md"
               onClick={() => onDecision(false)}
               leftIcon={<X size={16} />}
-              style={{
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-              }}
             >
               Reject
             </Button>
             <Button
-              variant="secondary"
+              variant="primary"
               size="md"
               onClick={() => onDecision(true)}
               leftIcon={<CheckCircle size={16} />}
-              style={{
-                backgroundColor: "#059669",
-                color: "white",
-                border: "none",
-              }}
             >
               Approve
             </Button>

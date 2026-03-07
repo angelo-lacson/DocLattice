@@ -16,16 +16,11 @@ vi.mock("@os-legal/ui", () => ({
   ),
   Chip: ({
     children,
-    size,
-    ...rest
   }: {
     children: React.ReactNode;
     size?: string;
-  }) => (
-    <span data-testid="chip" {...rest}>
-      {children}
-    </span>
-  ),
+    [key: string]: unknown;
+  }) => <span data-testid="chip">{children}</span>,
 }));
 
 /**
