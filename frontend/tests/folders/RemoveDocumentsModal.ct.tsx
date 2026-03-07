@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { FolderTestWrapper } from "./utils/FolderTestWrapper";
 import { RemoveDocumentsModalFixture } from "./utils/testFixtures";
+import { docScreenshot } from "../utils/docScreenshot";
 
 test.describe("RemoveDocumentsModal", () => {
   test.describe("Modal Visibility", () => {
@@ -21,6 +22,11 @@ test.describe("RemoveDocumentsModal", () => {
       await expect(page.getByText("Remove Documents from Corpus")).toBeVisible({
         timeout: 5000,
       });
+
+      await docScreenshot(
+        page,
+        "folders--remove-documents-modal--confirmation"
+      );
     });
 
     test("does not render when showModal is false", async ({ mount, page }) => {
