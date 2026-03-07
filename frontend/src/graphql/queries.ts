@@ -3461,6 +3461,10 @@ export const GET_CORPUS_ACTIONS = gql`
           }
           taskInstructions
           preAuthorizedTools
+          sourceTemplate {
+            id
+            name
+          }
           created
           modified
         }
@@ -3501,6 +3505,7 @@ export interface GetCorpusActionsOutput {
         };
         taskInstructions?: string;
         preAuthorizedTools?: string[];
+        sourceTemplate?: { id: string; name: string } | null;
         created: string;
         modified: string;
       };
@@ -5098,3 +5103,45 @@ export const GET_CORPUS_DOCUMENTS_FOR_TOC = gql`
     }
   }
 `;
+
+// ============================================================================
+// CORPUS ACTION TEMPLATES
+// ============================================================================
+
+export const GET_CORPUS_ACTION_TEMPLATES = gql`
+  query GetCorpusActionTemplates($isActive: Boolean) {
+    corpusActionTemplates(isActive: $isActive) {
+      edges {
+        node {
+          id
+          name
+          description
+          trigger
+          sortOrder
+          isActive
+        }
+      }
+    }
+  }
+`;
+
+export interface CorpusActionTemplateNode {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface GetCorpusActionTemplatesInput {
+  isActive?: boolean;
+}
+
+export interface GetCorpusActionTemplatesOutput {
+  corpusActionTemplates: {
+    edges: Array<{
+      node: CorpusActionTemplateNode;
+    }>;
+  };
+}
