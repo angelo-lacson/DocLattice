@@ -9,7 +9,7 @@ import {
   ModalFooter,
   Button,
 } from "@os-legal/ui";
-import { FileArchive, X } from "lucide-react";
+import { X } from "lucide-react";
 import _ from "lodash";
 import { CreateAndSearchBar } from "../../layout/CreateAndSearchBar";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
@@ -161,29 +161,23 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
 
   return (
     <Modal open={visible} onClose={() => toggleModal()} size="lg">
-      <ModalHeader
-        title={
-          <div
-            style={{
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            <FileArchive size={32} style={{ marginBottom: "0.5rem" }} />
-            <span>Corpus Exports</span>
-            <div
-              style={{ fontSize: "0.85rem", color: "#666", fontWeight: 400 }}
-            >
-              WARNING - If you have a free account, your exports will be deleted
-              within 24 hours of completion.
-            </div>
-          </div>
-        }
-        onClose={() => toggleModal()}
-      />
+      <ModalHeader title="Corpus Exports" onClose={() => toggleModal()} />
       <ModalBody style={{ position: "relative" }}>
+        <div
+          style={{
+            padding: "0.75rem",
+            background: "#fffaf3",
+            border: "1px solid #c9ba9b",
+            borderRadius: "8px",
+            fontSize: "0.85rem",
+            color: "#573a08",
+            marginBottom: "1rem",
+            textAlign: "center",
+          }}
+        >
+          WARNING - If you have a free account, your exports will be deleted
+          within 24 hours of completion.
+        </div>
         <LoadingOverlay
           active={exports_loading}
           inverted

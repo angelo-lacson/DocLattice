@@ -1248,7 +1248,13 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
             setAnnotationToEdit(null);
           }}
         >
-          <ModalHeader>Edit Annotation Label</ModalHeader>
+          <ModalHeader
+            title="Edit Annotation Label"
+            onClose={() => {
+              setEditModalOpen(false);
+              setAnnotationToEdit(null);
+            }}
+          />
           <ModalBody>
             {annotationToEdit && (
               <Dropdown

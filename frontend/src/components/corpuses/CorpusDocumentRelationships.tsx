@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
+// TODO: Migrate Dropdown to @os-legal/ui when available
 import { Dropdown } from "semantic-ui-react";
 import { Button, IconButton, Spinner } from "@os-legal/ui";
 import { AlertCircle, StickyNote } from "lucide-react";

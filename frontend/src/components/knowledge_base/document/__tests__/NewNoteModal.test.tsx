@@ -82,7 +82,7 @@ describe("NewNoteModal", () => {
       expect(
         screen.getByPlaceholderText("Write your note here...")
       ).toBeInTheDocument();
-      expect(screen.getByText("Markdown Support")).toBeInTheDocument();
+      expect(screen.getByText("Markdown supported:")).toBeInTheDocument();
     });
 
     it("should not render when closed", () => {
