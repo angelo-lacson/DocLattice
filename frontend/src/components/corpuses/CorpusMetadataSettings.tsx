@@ -40,6 +40,7 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../assets/configurations/osLegalStyles";
 
 interface CorpusMetadataSettingsProps {
@@ -128,7 +129,7 @@ const StyledTable = styled(Table)`
   &.ui.table {
     border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
     overflow: hidden;
-    box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+    box-shadow: ${OS_LEGAL_SHADOWS.card};
     border: 1px solid ${OS_LEGAL_COLORS.border};
     background: ${OS_LEGAL_COLORS.surface};
     font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};

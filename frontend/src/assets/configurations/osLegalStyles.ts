@@ -208,6 +208,13 @@ export const OS_LEGAL_COLORS = {
 } as const;
 
 /**
+ * Create an rgba color string from the accent color (#0f766e = rgb(15, 118, 110))
+ * with a given opacity. Use instead of hardcoded rgba(15, 118, 110, ...) values.
+ */
+export const accentAlpha = (opacity: number): string =>
+  `rgba(15, 118, 110, ${opacity})`;
+
+/**
  * Create an rgba color string from primaryBlue (#3b82f6 = rgb(59, 130, 246))
  * with a given opacity. Use instead of hardcoded rgba(74, 144, 226, ...) values.
  */
@@ -232,8 +239,15 @@ export const OS_LEGAL_SPACING = {
   borderRadiusCard: "12px",
   /** Border radius for buttons and smaller elements. */
   borderRadiusButton: "8px",
+} as const;
+
+/**
+ * Shadow constants for the OS Legal design system.
+ * Separated from spacing for semantic clarity.
+ */
+export const OS_LEGAL_SHADOWS = {
   /** Default card shadow - subtle elevation. */
-  shadowCard: "0 4px 12px rgba(0, 0, 0, 0.04)",
+  card: "0 4px 12px rgba(0, 0, 0, 0.04)",
   /** Hover card shadow - more prominent elevation. */
-  shadowCardHover: "0 8px 24px rgba(0, 0, 0, 0.08)",
+  cardHover: "0 8px 24px rgba(0, 0, 0, 0.08)",
 } as const;

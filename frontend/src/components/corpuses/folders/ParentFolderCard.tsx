@@ -6,6 +6,7 @@ import { useDroppable } from "@dnd-kit/core";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../../assets/configurations/osLegalStyles";
 
 /**
@@ -60,7 +61,7 @@ const CardContainer = styled.div<{ $isDropTarget: boolean }>`
         ? "rgba(34, 197, 94, 0.12)"
         : OS_LEGAL_COLORS.surfaceLight};
     transform: translateY(-2px);
-    box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+    box-shadow: ${OS_LEGAL_SHADOWS.card};
   }
 `;
 

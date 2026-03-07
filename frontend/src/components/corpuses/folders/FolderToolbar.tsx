@@ -32,6 +32,7 @@ import {
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../../assets/configurations/osLegalStyles";
 import { Button } from "@os-legal/ui";
 import { FolderViewMode } from "../../../types/ui";
@@ -444,7 +445,7 @@ const MobileMenu = styled.div<{ $visible: boolean }>`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
   min-width: 180px;
   z-index: 100;
   overflow: hidden;
@@ -562,7 +563,7 @@ const UploadDropdownMenu = styled.div<{ $visible: boolean }>`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
   min-width: 180px;
   z-index: 100;
   overflow: hidden;

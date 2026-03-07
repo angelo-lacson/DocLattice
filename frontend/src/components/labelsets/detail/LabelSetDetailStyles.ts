@@ -3,7 +3,10 @@ import {
   DEFAULT_LABEL_COLOR,
   PRIMARY_LABEL_COLOR,
 } from "../../../assets/configurations/constants";
-import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../../assets/configurations/osLegalStyles";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS FOR LABELSET DETAIL PAGE
@@ -87,7 +90,7 @@ export const NavItem = styled.button<NavItemProps>`
   border: none;
   background: ${(props) =>
     props.$active
-      ? "linear-gradient(90deg, rgba(15, 118, 110, 0.08) 0%, transparent 100%)"
+      ? `linear-gradient(90deg, ${accentAlpha(0.08)} 0%, transparent 100%)`
       : "none"};
   width: 100%;
   text-align: left;
@@ -533,7 +536,7 @@ export const SearchInput = styled.input`
 
   &:focus {
     border-color: ${OS_LEGAL_COLORS.accent};
-    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+    box-shadow: 0 0 0 3px ${accentAlpha(0.1)};
   }
 
   &::placeholder {
@@ -697,7 +700,7 @@ export const LabelEditInput = styled.input`
 
   &:focus {
     border-color: ${OS_LEGAL_COLORS.accent};
-    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+    box-shadow: 0 0 0 3px ${accentAlpha(0.1)};
   }
 `;
 
@@ -716,7 +719,7 @@ export const LabelEditTextarea = styled.textarea`
 
   &:focus {
     border-color: ${OS_LEGAL_COLORS.accent};
-    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+    box-shadow: 0 0 0 3px ${accentAlpha(0.1)};
   }
 `;
 

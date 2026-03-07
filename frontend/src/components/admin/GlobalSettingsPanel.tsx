@@ -7,6 +7,7 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../assets/configurations/osLegalStyles";
 
 const Container = styled.div`
@@ -84,7 +85,7 @@ const SettingsCard = styled.div<{ $disabled?: boolean }>`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+  box-shadow: ${OS_LEGAL_SHADOWS.card};
   padding: 1.5rem;
   cursor: ${({ $disabled }) => ($disabled ? "default" : "pointer")};
   opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};
@@ -95,7 +96,7 @@ const SettingsCard = styled.div<{ $disabled?: boolean }>`
     `
     &:hover {
       transform: translateY(-2px);
-      box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+      box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
       border-color: ${OS_LEGAL_COLORS.borderHover};
     }
 
@@ -103,7 +104,7 @@ const SettingsCard = styled.div<{ $disabled?: boolean }>`
     @media (hover: none) {
       &:hover {
         transform: none;
-        box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+        box-shadow: ${OS_LEGAL_SHADOWS.card};
         border-color: ${OS_LEGAL_COLORS.border};
       }
 

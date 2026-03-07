@@ -27,6 +27,7 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../assets/configurations/osLegalStyles";
 import { backendUserObj } from "../../graphql/cache";
 
@@ -140,7 +141,7 @@ const StyledSegment = styled.div`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+  box-shadow: ${OS_LEGAL_SHADOWS.card};
   padding: 1.5rem;
 `;
 
