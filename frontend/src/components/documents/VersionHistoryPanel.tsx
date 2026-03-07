@@ -73,13 +73,13 @@ const PanelContainer = styled.div`
 
 const Timeline = styled.div`
   position: relative;
-  padding-left: 40px;
+  padding-left: 24px;
   margin-top: 20px;
 
   &::before {
     content: "";
     position: absolute;
-    left: 15px;
+    left: 8px;
     top: 0;
     bottom: 0;
     width: 2px;
@@ -95,7 +95,7 @@ const TimelineItem = styled.div<{ $isCurrent: boolean }>`
   &::before {
     content: "";
     position: absolute;
-    left: -31px;
+    left: -22px;
     top: 24px;
     width: 12px;
     height: 12px;
@@ -103,21 +103,6 @@ const TimelineItem = styled.div<{ $isCurrent: boolean }>`
     background: ${(props) => (props.$isCurrent ? "#3b82f6" : "#cbd5e1")};
     border: 2px solid ${(props) => (props.$isCurrent ? "#1d4ed8" : "#94a3b8")};
   }
-
-  ${(props) =>
-    props.$isCurrent &&
-    `
-    &::after {
-      content: "Current";
-      position: absolute;
-      left: -85px;
-      top: 22px;
-      font-size: 10px;
-      font-weight: 600;
-      color: #3b82f6;
-      text-transform: uppercase;
-    }
-  `}
 `;
 
 const VersionCard = styled.div<{ $isCurrent: boolean }>`
