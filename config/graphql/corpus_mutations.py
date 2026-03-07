@@ -6,7 +6,7 @@ import logging
 
 import graphene
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from graphql import GraphQLError
 from graphql_jwt.decorators import login_required, user_passes_test
@@ -1365,7 +1365,14 @@ class AddTemplateToCorpus(graphene.Mutation):
                 )
 
             # Clone the template into a CorpusAction
-            action = template.clone_to_corpus(corpus, creator=user)
+            try:
+                action = template.clone_to_corpus(corpus, creator=user)
+            except IntegrityError:
+                return AddTemplateToCorpus(
+                    ok=False,
+                    message="This template has already been added to the corpus",
+                    obj=None,
+                )
 
             set_permissions_for_obj_to_user(user, action, [PermissionTypes.CRUD])
 
@@ -1383,10 +1390,10 @@ class AddTemplateToCorpus(graphene.Mutation):
                 ok=False, message="Template not found or inactive", obj=None
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to add template to corpus")
             return AddTemplateToCorpus(
                 ok=False,
-                message=f"Failed to add template: {str(e)}",
+                message="Failed to add template. Please try again.",
                 obj=None,
             )

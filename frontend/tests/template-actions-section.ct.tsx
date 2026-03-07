@@ -1,7 +1,6 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
-import { MockedProvider } from "@apollo/client/testing";
-import { CorpusActionsSection } from "../src/components/corpuses/settings/CorpusActionsSection";
+import { CorpusActionsSectionTestWrapper } from "./CorpusActionsSectionTestWrapper";
 import { GET_CORPUS_ACTION_TEMPLATES } from "../src/graphql/queries";
 import { docScreenshot } from "./utils/docScreenshot";
 
@@ -80,16 +79,11 @@ test.describe("CorpusActionsSection with Template Library", () => {
     page,
   }) => {
     await mount(
-      <MockedProvider mocks={[templatesMock]} addTypename={false}>
-        <CorpusActionsSection
-          corpusId="corpus-1"
-          actions={mockActions as any}
-          onAddAction={() => {}}
-          onEditAction={() => {}}
-          onDeleteAction={() => {}}
-          onUpdate={() => {}}
-        />
-      </MockedProvider>
+      <CorpusActionsSectionTestWrapper
+        mocks={[templatesMock]}
+        corpusId="corpus-1"
+        actions={mockActions as any}
+      />
     );
 
     // The template-sourced action should show a "Template" badge
@@ -108,16 +102,11 @@ test.describe("CorpusActionsSection with Template Library", () => {
 
   test("opens template picker dropdown", async ({ mount, page }) => {
     await mount(
-      <MockedProvider mocks={[templatesMock]} addTypename={false}>
-        <CorpusActionsSection
-          corpusId="corpus-1"
-          actions={mockActions as any}
-          onAddAction={() => {}}
-          onEditAction={() => {}}
-          onDeleteAction={() => {}}
-          onUpdate={() => {}}
-        />
-      </MockedProvider>
+      <CorpusActionsSectionTestWrapper
+        mocks={[templatesMock]}
+        corpusId="corpus-1"
+        actions={mockActions as any}
+      />
     );
 
     // Click the "Add from Library" button

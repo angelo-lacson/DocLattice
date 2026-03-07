@@ -208,7 +208,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
   }, [pickerOpen]);
 
   // Fetch available templates only when picker is open
-  const { data: templatesData } = useQuery<
+  const { data: templatesData, loading: templatesLoading } = useQuery<
     GetCorpusActionTemplatesOutput,
     GetCorpusActionTemplatesInput
   >(GET_CORPUS_ACTION_TEMPLATES, {
@@ -289,7 +289,9 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
             </Button>
             {pickerOpen && (
               <PickerDropdown>
-                {availableTemplates.length === 0 ? (
+                {templatesLoading ? (
+                  <PickerEmpty>Loading templates…</PickerEmpty>
+                ) : availableTemplates.length === 0 ? (
                   <PickerEmpty>All templates have been added</PickerEmpty>
                 ) : (
                   availableTemplates.map((template) => (
@@ -315,7 +317,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                         )}
                       </PickerItemInfo>
                       <TriggerBadge type={getTriggerType(template.trigger)}>
-                        {TRIGGER_LABELS[template.trigger] || template.trigger}
+                        {getTriggerLabel(template.trigger)}
                       </TriggerBadge>
                     </PickerItem>
                   ))

@@ -260,6 +260,7 @@ class CorpusActionTemplateType(DjangoObjectType):
             "disabled_on_clone",
             "sort_order",
             "agent_config",
+            "pre_authorized_tools",
             "created",
         )
 

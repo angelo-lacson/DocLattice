@@ -1101,7 +1101,12 @@ class CorpusAction(BaseOCModel):
                     )
                 ),
                 name="valid_action_type_configuration",
-            )
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["corpus", "source_template"],
+                condition=django.db.models.Q(source_template__isnull=False),
+                name="unique_template_per_corpus",
+            ),
         ]
         permissions = (
             ("permission_corpusaction", "permission corpusaction"),
@@ -1261,6 +1266,17 @@ class CorpusActionTemplate(BaseOCModel):
 
     class Meta:
         ordering = ["sort_order", "name"]
+
+    def clean(self):
+        super().clean()
+        if not self.task_instructions:
+            raise ValidationError(
+                {"task_instructions": "Task instructions cannot be empty."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"CorpusActionTemplate: {self.name} ({self.get_trigger_display()})"
