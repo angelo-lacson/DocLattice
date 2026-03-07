@@ -45,6 +45,7 @@ import {
   CategoriesSection,
   CorpusActionsSection,
   WorkerTokensSection,
+  TemplateActionsSection,
 } from "./settings";
 
 // Shared styles
@@ -338,6 +339,9 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
   // Transform actions data for the component
   const actions =
     actionsData?.corpusActions?.edges.map(({ node }) => node) || [];
+  const templateActions = actions.filter(
+    (action: any) => action.sourceTemplate != null
+  );
 
   return (
     <SettingsContainer>
@@ -366,6 +370,11 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
           canUpdate={canUpdate}
           onSave={handleCategoriesSave}
           loading={updatingCorpus}
+        />
+
+        <TemplateActionsSection
+          actions={templateActions}
+          onToggle={() => refetchActions()}
         />
 
         <CorpusActionsSection
