@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,6 +26,7 @@ import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { PipelineComponentType } from "../../types/graphql-api";
 import { getComponentDisplayName } from "./PipelineIcons";
 import { PIPELINE_UI } from "../../assets/configurations/constants";
+import { CORPUS_BREAKPOINTS } from "../corpuses/styles/corpusDesignTokens";
 import { formatSettingLabel } from "../../utils/formatters";
 
 // Sub-module imports
@@ -62,6 +63,12 @@ import {
   FormField,
   FormLabel,
   FormHelperText,
+  SettingsTwoColumnLayout,
+  SettingsLeftColumn,
+  SettingsRightColumn,
+  MobileSettingsTabContainer,
+  MobileSettingsTabList,
+  MobileSettingsTab,
 } from "./system_settings/styles";
 import { ComponentLibrary } from "./system_settings/ComponentLibrary";
 import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
@@ -72,6 +79,19 @@ import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
 
 export const SystemSettings: React.FC = () => {
   const navigate = useNavigate();
+
+  // Layout state - JS-based media query so only one layout mounts at a time
+  const [isMobile, setIsMobile] = useState(
+    () => window.innerWidth <= CORPUS_BREAKPOINTS.tablet
+  );
+  const [activeTab, setActiveTab] = useState<"library" | "defaults">("library");
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${CORPUS_BREAKPOINTS.tablet}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   // Modal states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -596,40 +616,115 @@ export const SystemSettings: React.FC = () => {
         </WarningText>
       </WarningBanner>
 
-      {/* Component Library */}
-      <ComponentLibrary
-        components={componentsByStage}
-        updating={updating}
-        componentsLoading={componentsLoading}
-        settingsLoading={settingsLoading}
-        onToggleEnabled={handleToggleEnabled}
-        onAddSecrets={handleAddSecrets}
-        onDeleteSecrets={handleDeleteSecretsClick}
-        onSaveConfig={handleSaveComponentSettings}
-        getConfigSettings={getNonSecretSettingsForComponent}
-        getSecretSettings={getSecretSettingsForComponent}
-      />
+      {/* Conditionally render one layout to avoid double-mounting */}
+      {isMobile ? (
+        <MobileSettingsTabContainer>
+          <MobileSettingsTabList role="tablist">
+            <MobileSettingsTab
+              id="settings-tab-library"
+              role="tab"
+              aria-selected={activeTab === "library"}
+              aria-controls="settings-panel-library"
+              $active={activeTab === "library"}
+              onClick={() => setActiveTab("library")}
+            >
+              Component Library
+            </MobileSettingsTab>
+            <MobileSettingsTab
+              id="settings-tab-defaults"
+              role="tab"
+              aria-selected={activeTab === "defaults"}
+              aria-controls="settings-panel-defaults"
+              $active={activeTab === "defaults"}
+              onClick={() => setActiveTab("defaults")}
+            >
+              Filetype Defaults
+            </MobileSettingsTab>
+          </MobileSettingsTabList>
 
-      {/* Filetype Defaults */}
-      <FiletypeDefaults
-        components={componentsByStage}
-        enabledComponents={
-          (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-        }
-        preferredParsers={
-          (settings?.preferredParsers as Record<string, string>) || {}
-        }
-        preferredEmbedders={
-          (settings?.preferredEmbedders as Record<string, string>) || {}
-        }
-        preferredThumbnailers={
-          (settings?.preferredThumbnailers as Record<string, string>) || {}
-        }
-        defaultEmbedder={settings?.defaultEmbedder || ""}
-        updating={updating}
-        onAssign={handleAssign}
-        onEditDefaultEmbedder={handleEditDefaultEmbedder}
-      />
+          <div
+            id={`settings-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`settings-tab-${activeTab}`}
+          >
+            {activeTab === "library" ? (
+              <ComponentLibrary
+                components={componentsByStage}
+                updating={updating}
+                componentsLoading={componentsLoading}
+                settingsLoading={settingsLoading}
+                onToggleEnabled={handleToggleEnabled}
+                onAddSecrets={handleAddSecrets}
+                onDeleteSecrets={handleDeleteSecretsClick}
+                onSaveConfig={handleSaveComponentSettings}
+                getConfigSettings={getNonSecretSettingsForComponent}
+                getSecretSettings={getSecretSettingsForComponent}
+              />
+            ) : (
+              <FiletypeDefaults
+                components={componentsByStage}
+                enabledComponents={
+                  (settings?.enabledComponents?.filter(Boolean) as string[]) ??
+                  []
+                }
+                preferredParsers={
+                  (settings?.preferredParsers as Record<string, string>) || {}
+                }
+                preferredEmbedders={
+                  (settings?.preferredEmbedders as Record<string, string>) || {}
+                }
+                preferredThumbnailers={
+                  (settings?.preferredThumbnailers as Record<string, string>) ||
+                  {}
+                }
+                defaultEmbedder={settings?.defaultEmbedder || ""}
+                updating={updating}
+                onAssign={handleAssign}
+                onEditDefaultEmbedder={handleEditDefaultEmbedder}
+              />
+            )}
+          </div>
+        </MobileSettingsTabContainer>
+      ) : (
+        <SettingsTwoColumnLayout>
+          <SettingsLeftColumn>
+            <ComponentLibrary
+              components={componentsByStage}
+              updating={updating}
+              componentsLoading={componentsLoading}
+              settingsLoading={settingsLoading}
+              onToggleEnabled={handleToggleEnabled}
+              onAddSecrets={handleAddSecrets}
+              onDeleteSecrets={handleDeleteSecretsClick}
+              onSaveConfig={handleSaveComponentSettings}
+              getConfigSettings={getNonSecretSettingsForComponent}
+              getSecretSettings={getSecretSettingsForComponent}
+            />
+          </SettingsLeftColumn>
+          <SettingsRightColumn>
+            <FiletypeDefaults
+              components={componentsByStage}
+              enabledComponents={
+                (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
+              }
+              preferredParsers={
+                (settings?.preferredParsers as Record<string, string>) || {}
+              }
+              preferredEmbedders={
+                (settings?.preferredEmbedders as Record<string, string>) || {}
+              }
+              preferredThumbnailers={
+                (settings?.preferredThumbnailers as Record<string, string>) ||
+                {}
+              }
+              defaultEmbedder={settings?.defaultEmbedder || ""}
+              updating={updating}
+              onAssign={handleAssign}
+              onEditDefaultEmbedder={handleEditDefaultEmbedder}
+            />
+          </SettingsRightColumn>
+        </SettingsTwoColumnLayout>
+      )}
 
       {/* Reset to Defaults */}
       <ActionButtons>

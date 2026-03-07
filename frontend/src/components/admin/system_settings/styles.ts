@@ -1,6 +1,7 @@
 import styled from "styled-components";
 import { PIPELINE_UI } from "../../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import { mediaQuery } from "../../corpuses/styles/corpusDesignTokens";
 
 // ============================================================================
 // Layout Styled Components
@@ -8,14 +9,14 @@ import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 export const Container = styled.div`
   padding: 2rem;
-  max-width: 900px;
+  max-width: 1400px;
   margin: 0 auto;
   min-height: 100%;
   overflow-y: auto;
   overflow-x: clip;
 
-  @media (max-width: 768px) {
-    padding: 1rem;
+  ${mediaQuery.tablet} {
+    padding: 2rem 1rem 3rem;
   }
 `;
 
@@ -62,7 +63,7 @@ export const PageTitle = styled.h1`
     color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     font-size: 1.5rem;
   }
 `;
@@ -526,7 +527,7 @@ export const DefaultsHeaderRow = styled.div`
   letter-spacing: 0.05em;
   color: ${OS_LEGAL_COLORS.textMuted};
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     display: none;
   }
 `;
@@ -541,7 +542,7 @@ export const FiletypeRow = styled.div`
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     grid-template-columns: 1fr;
     gap: 0.5rem;
   }
@@ -571,7 +572,7 @@ export const StageDropdownLabel = styled.label`
   color: ${OS_LEGAL_COLORS.textMuted};
   margin-bottom: 0.25rem;
 
-  @media (max-width: 768px) {
+  ${mediaQuery.tablet} {
     display: block;
   }
 `;
@@ -605,5 +606,68 @@ export const StyledSelect = styled.select<{ $warning?: boolean }>`
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+`;
+
+// ============================================================================
+// Two-Column Layout (Desktop) + Mobile Tab Fallback
+// ============================================================================
+
+export const SettingsTwoColumnLayout = styled.div`
+  display: flex;
+  gap: 1.5rem;
+`;
+
+export const SettingsLeftColumn = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+export const SettingsRightColumn = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+export const MobileSettingsTabContainer = styled.div`
+  display: block;
+`;
+
+export const MobileSettingsTabList = styled.div`
+  display: flex;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  margin-bottom: 1rem;
+`;
+
+export const MobileSettingsTab = styled.button<{ $active: boolean }>`
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: ${(props) => (props.$active ? "600" : "500")};
+  color: ${(props) =>
+    props.$active
+      ? PIPELINE_UI.PRIMARY_ACCENT_COLOR
+      : OS_LEGAL_COLORS.textSecondary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+
+  ${(props) =>
+    props.$active &&
+    `
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
+    }
+  `}
+
+  &:hover {
+    color: ${PIPELINE_UI.PRIMARY_ACCENT_COLOR};
   }
 `;
