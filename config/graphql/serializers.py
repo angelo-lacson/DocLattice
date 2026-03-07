@@ -52,6 +52,8 @@ class CorpusSerializer(serializers.ModelSerializer):
             "corpus_agent_instructions",
             "document_agent_instructions",
             "categories",
+            "license",
+            "license_link",
         ]
         # NOTE: is_public is read-only - use SetCorpusVisibility mutation to change it
         # This prevents bypassing permission checks via serializer updates.

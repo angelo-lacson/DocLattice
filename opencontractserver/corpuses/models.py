@@ -22,6 +22,11 @@ from opencontractserver.constants.document_processing import (
     PERSONAL_CORPUS_DESCRIPTION,
     PERSONAL_CORPUS_TITLE,
 )
+from opencontractserver.constants.licenses import (
+    LICENSE_CHOICES,
+    LICENSE_LINK_MAX_LENGTH,
+    LICENSE_SPDX_MAX_LENGTH,
+)
 from opencontractserver.corpuses.managers import CorpusActionExecutionManager
 from opencontractserver.shared.Models import BaseOCModel
 from opencontractserver.shared.QuerySets import PermissionedTreeQuerySet
@@ -186,6 +191,24 @@ class Corpus(TreeNode):
         help_text=(
             "Custom system instructions for document-level agents in this corpus. "
             "If not set, uses DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS from settings."
+        ),
+    )
+
+    # Licensing
+    license = django.db.models.CharField(
+        max_length=LICENSE_SPDX_MAX_LENGTH,
+        choices=LICENSE_CHOICES,
+        default="",
+        blank=True,
+        help_text="SPDX identifier of the license applied to this corpus.",
+    )
+    license_link = django.db.models.URLField(
+        max_length=LICENSE_LINK_MAX_LENGTH,
+        default="",
+        blank=True,
+        help_text=(
+            "URL to the full license text. Required when license is 'CUSTOM', "
+            "optional for standard CC licenses."
         ),
     )
 

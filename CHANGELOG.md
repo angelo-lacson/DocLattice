@@ -5,7 +5,18 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-04
+## [Unreleased] - 2026-03-07
+
+### Added
+
+- **Creative Commons license support for corpuses**: Corpuses can now have a license applied, choosing from standard Creative Commons licenses (CC BY, CC BY-SA, CC BY-NC, CC BY-NC-SA, CC BY-ND, CC BY-NC-ND, CC0) or a custom license with a URL. Changes include:
+  - New `license` (CharField with SPDX identifiers) and `license_link` (URLField) fields on the Corpus model (`opencontractserver/corpuses/models.py`)
+  - License constants in `opencontractserver/constants/licenses.py` and `frontend/src/assets/configurations/constants.ts`
+  - Database migration `0045_corpus_license_fields`
+  - GraphQL create/update mutations accept `license` and `licenseLink` arguments
+  - New `LicenseSelector` frontend component (`frontend/src/components/widgets/CRUD/LicenseSelector.tsx`)
+  - CorpusModal updated with License section for create/edit flows
+  - CorpusInfoSection displays the selected license in corpus settings
 
 ### Changed
 

@@ -301,6 +301,34 @@ export const FAILURE_COLORS = {
 /** Number of recent discussion threads shown on the corpus landing page */
 export const RECENT_THREAD_LIMIT = 3;
 
+// Creative Commons license options for corpus licensing.
+// SPDX identifiers: https://spdx.org/licenses/
+export const LICENSE_OPTIONS = [
+  { value: "", label: "No license selected" },
+  { value: "CC-BY-4.0", label: "CC BY 4.0 — Attribution" },
+  { value: "CC-BY-SA-4.0", label: "CC BY-SA 4.0 — Attribution-ShareAlike" },
+  {
+    value: "CC-BY-NC-4.0",
+    label: "CC BY-NC 4.0 — Attribution-NonCommercial",
+  },
+  {
+    value: "CC-BY-NC-SA-4.0",
+    label: "CC BY-NC-SA 4.0 — Attribution-NonCommercial-ShareAlike",
+  },
+  {
+    value: "CC-BY-ND-4.0",
+    label: "CC BY-ND 4.0 — Attribution-NoDerivatives",
+  },
+  {
+    value: "CC-BY-NC-ND-4.0",
+    label: "CC BY-NC-ND 4.0 — Attribution-NonCommercial-NoDerivatives",
+  },
+  { value: "CC0-1.0", label: "CC0 1.0 — Public Domain Dedication" },
+  { value: "CUSTOM", label: "Custom License" },
+] as const;
+
+export type LicenseValue = (typeof LICENSE_OPTIONS)[number]["value"];
+
 /**
  * Known acronyms that should be preserved in display names.
  * Used by getComponentDisplayName to properly capitalize technology names.
