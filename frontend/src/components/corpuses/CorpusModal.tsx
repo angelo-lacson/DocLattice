@@ -47,14 +47,10 @@ const TABLET_BREAKPOINT = 1024;
 
 // Global styles for the corpus modal — Modal renders via portal outside the
 // React tree, so we must use createGlobalStyle instead of wrapper descendant selectors.
-// TODO: Fix upstream in @os-legal/ui — .oc-modal-body needs min-height: 0
-// to allow flex shrinking in the column layout.
 const CorpusModalStyles = createGlobalStyle`
-  /* Fix flexbox min-height gotcha: without min-height: 0 the body won't
-     shrink below its content size, preventing overflow-y: auto from working */
   .oc-modal .oc-modal-body {
-    min-height: 0;
     background: var(--oc-bg-subtle, #f1f5f9);
+  }
   }
 
   /* Ensure Semantic UI dropdowns appear above modal content */
