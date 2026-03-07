@@ -94,13 +94,17 @@ class TestCollectCorpusObjects(TestCase):
         self.assertCountEqual(result.document_ids, [doc1.id, doc2.id])
 
     def test_document_ids_are_distinct(self):
-        """Multiple active DocumentPaths for the same document produce one ID."""
+        """Defensive coverage for data integrity bugs upstream.
+
+        Multiple active DocumentPaths for the same document should still
+        produce a single ID in the collected results.
+        """
         corpus = self._make_corpus()
         doc = Document.objects.create(title="Shared Doc", creator=self.user)
 
         # Two is_current=True DocumentPath records for the same document is not
-        # a normal application state, but we test it as defensive coverage against
-        # the edge case to ensure collect_corpus_objects de-duplicates correctly.
+        # a normal application state; this is defensive coverage for data
+        # integrity bugs upstream to ensure collect_corpus_objects de-duplicates.
         DocumentPath.objects.create(
             document=doc,
             corpus=corpus,
