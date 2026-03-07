@@ -31,7 +31,10 @@ import {
   Link2,
 } from "lucide-react";
 import styled from "styled-components";
-import { OS_LEGAL_COLORS } from "../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import { SearchBox, FilterTabs } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
@@ -930,7 +933,7 @@ const NavItemBadge = styled.span<{ isActive: boolean; $isZero?: boolean }>`
     props.$isZero
       ? "none"
       : props.isActive
-      ? `0 2px 4px rgba(15, 118, 110, 0.25)`
+      ? `0 2px 4px ${accentAlpha(0.25)}`
       : CORPUS_SHADOWS.sm};
 `;
 

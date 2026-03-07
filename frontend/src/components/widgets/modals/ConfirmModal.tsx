@@ -10,9 +10,12 @@ import { X, Check, AlertCircle } from "lucide-react";
 interface ConfirmModalProps {
   message: string;
   visible: boolean;
-  yesAction: (args?: any) => void;
-  noAction: (args?: any) => void;
-  toggleModal: (args?: any) => void;
+  /** Called when the user clicks "Yes". Must NOT close the modal — toggleModal handles that. */
+  yesAction: () => void;
+  /** Called when the user clicks "No". Must NOT close the modal — toggleModal handles that. */
+  noAction: () => void;
+  /** Closes the modal. Called automatically after yesAction/noAction and on overlay/escape close. */
+  toggleModal: () => void;
   /** Variant for the confirm button. Defaults to "danger" for destructive actions. */
   confirmVariant?: "primary" | "secondary" | "danger" | "ghost";
   /** Label for the confirm button. Defaults to "Yes". */

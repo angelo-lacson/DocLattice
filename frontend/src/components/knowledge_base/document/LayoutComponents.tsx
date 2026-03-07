@@ -5,7 +5,9 @@ import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // @os-legal/ui Modal renders via a portal outside the React tree,
 // so wrapper descendant selectors never reach the portal DOM.
-// We must use createGlobalStyle instead. Scoped via .fullscreen-modal class.
+// We must use createGlobalStyle instead. Scoped via .fullscreen-modal class
+// to prevent leakage. Injected unconditionally when FullScreenModal is mounted
+// (even when closed), but the scoping class ensures no side effects.
 // TODO: Fix upstream in @os-legal/ui — add a size="fullscreen" variant
 const FullScreenModalStyles = createGlobalStyle`
   .oc-modal-overlay:has(.fullscreen-modal) {

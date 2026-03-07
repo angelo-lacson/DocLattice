@@ -4,7 +4,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import styled from "styled-components";
-import { OS_LEGAL_COLORS } from "../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../assets/configurations/osLegalStyles";
 import {
   SearchBox,
   FilterTabs,
@@ -418,14 +421,14 @@ const DocumentCardWrapper = styled.div<{ $selected?: boolean }>`
   transition: all 0.15s;
   cursor: pointer;
   box-shadow: ${(props) =>
-    props.$selected ? "0 0 0 2px rgba(15, 118, 110, 0.2)" : "none"};
+    props.$selected ? `0 0 0 2px ${accentAlpha(0.2)}` : "none"};
 
   &:hover {
     border-color: ${(props) =>
       props.$selected ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.borderHover};
     box-shadow: ${(props) =>
       props.$selected
-        ? "0 0 0 2px rgba(15, 118, 110, 0.2)"
+        ? `0 0 0 2px ${accentAlpha(0.2)}`
         : "0 4px 6px rgba(15, 23, 42, 0.04)"};
     transform: translateY(-2px);
   }
@@ -639,13 +642,11 @@ const ListItem = styled.div<{ $selected?: boolean }>`
   cursor: pointer;
   transition: background 0.1s;
   background: ${(props) =>
-    props.$selected ? "rgba(15, 118, 110, 0.04)" : "transparent"};
+    props.$selected ? accentAlpha(0.04) : "transparent"};
 
   &:hover {
     background: ${(props) =>
-      props.$selected
-        ? "rgba(15, 118, 110, 0.06)"
-        : OS_LEGAL_COLORS.surfaceHover};
+      props.$selected ? accentAlpha(0.06) : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {
@@ -733,13 +734,11 @@ const CompactItem = styled.div<{ $selected?: boolean }>`
   cursor: pointer;
   transition: background 0.1s;
   background: ${(props) =>
-    props.$selected ? "rgba(15, 118, 110, 0.04)" : "transparent"};
+    props.$selected ? accentAlpha(0.04) : "transparent"};
 
   &:hover {
     background: ${(props) =>
-      props.$selected
-        ? "rgba(15, 118, 110, 0.06)"
-        : OS_LEGAL_COLORS.surfaceHover};
+      props.$selected ? accentAlpha(0.06) : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {

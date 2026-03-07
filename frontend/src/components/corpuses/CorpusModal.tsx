@@ -18,7 +18,10 @@ import { CategorySelector } from "./CategorySelector";
 import { CorpusType, LabelSetType } from "../../types/graphql-api";
 import { arraysEqualUnordered } from "../../utils/arrayUtils";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 
 // Types
 export type CorpusModalMode = "CREATE" | "EDIT" | "VIEW";
@@ -50,6 +53,7 @@ const TWO_COLUMN_BREAKPOINT = 1024;
 // Global styles for the corpus modal — Modal renders via portal outside the
 // React tree, so we must use createGlobalStyle instead of wrapper descendant selectors.
 // Scoped via .corpus-modal class to avoid leaking to other concurrent modals.
+// Injected unconditionally when CorpusModal is mounted, but scoping prevents side effects.
 const CorpusModalStyles = createGlobalStyle`
   .corpus-modal .oc-modal-body {
     background: var(--oc-bg-subtle, ${OS_LEGAL_COLORS.surfaceLight});
@@ -219,7 +223,7 @@ const IconPreview = styled.div`
   &:hover {
     border-color: var(--oc-accent);
     /* Very subtle accent tint on hover — intentionally lighter than accentLight (0.1) */
-    background: rgba(15, 118, 110, 0.03);
+    background: ${accentAlpha(0.03)};
   }
 
   /* Completely restyle the FilePreviewAndUpload component */

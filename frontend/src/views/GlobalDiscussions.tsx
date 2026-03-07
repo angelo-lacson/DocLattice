@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import styled from "styled-components";
+import { accentAlpha } from "../assets/configurations/osLegalStyles";
 import { motion } from "framer-motion";
 import { MessageSquare, Database, FileText, Plus, Search } from "lucide-react";
 import { useQuery } from "@apollo/client";
@@ -185,11 +186,11 @@ const FAB = styled(motion.button)`
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(15, 118, 110, 0.4);
+  box-shadow: 0 8px 24px ${accentAlpha(0.4)};
   z-index: 100;
 
   &:hover {
-    box-shadow: 0 12px 32px rgba(15, 118, 110, 0.5);
+    box-shadow: 0 12px 32px ${accentAlpha(0.5)};
   }
 
   ${mediaQuery.mobile} {

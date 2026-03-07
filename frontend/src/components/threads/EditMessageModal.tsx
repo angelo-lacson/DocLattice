@@ -28,7 +28,10 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 import { spacing } from "../../theme/spacing";
 import { MessageComposer } from "./MessageComposer";
 import {
@@ -205,15 +208,19 @@ const ActionButton = styled(Button)<{ $variant?: "primary" | "secondary" }>`
     ${(props) =>
       props.$variant === "primary" &&
       `
-      background: linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[700]} 100%);
+      background: linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${
+        CORPUS_COLORS.teal[700]
+      } 100%);
       color: white;
       border: none;
-      box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+      box-shadow: 0 4px 12px ${accentAlpha(0.35)};
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, ${CORPUS_COLORS.teal[500]} 0%, ${CORPUS_COLORS.teal[600]} 100%);
+        background: linear-gradient(135deg, ${CORPUS_COLORS.teal[500]} 0%, ${
+        CORPUS_COLORS.teal[600]
+      } 100%);
         transform: translateY(-1px);
-        box-shadow: 0 6px 16px rgba(15, 118, 110, 0.45);
+        box-shadow: 0 6px 16px ${accentAlpha(0.45)};
       }
 
       &:active:not(:disabled) {

@@ -1,7 +1,10 @@
 import React from "react";
 import styled from "styled-components";
 import { Avatar } from "@os-legal/ui";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 import {
   FileText,
   User,
@@ -203,7 +206,7 @@ const HighlightedText = styled.span`
   background: linear-gradient(
     to bottom,
     transparent 60%,
-    rgba(15, 118, 110, 0.15) 60%
+    ${accentAlpha(0.15)} 60%
   );
 `;
 

@@ -24,7 +24,10 @@ import {
   CORPUS_BREAKPOINTS,
   mediaQuery,
 } from "../../corpuses/styles/corpusDesignTokens";
-import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../../assets/configurations/osLegalStyles";
 
 // Re-export for external use
 export {
@@ -470,11 +473,11 @@ export const PrimaryButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all ${CORPUS_TRANSITIONS.normal};
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+  box-shadow: 0 4px 12px ${accentAlpha(0.35)};
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(15, 118, 110, 0.45);
+    box-shadow: 0 6px 20px ${accentAlpha(0.45)};
     background: linear-gradient(
       135deg,
       ${CORPUS_COLORS.teal[500]} 0%,
@@ -484,7 +487,7 @@ export const PrimaryButton = styled.button`
 
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
+    box-shadow: 0 2px 8px ${accentAlpha(0.3)};
   }
 
   &:disabled {

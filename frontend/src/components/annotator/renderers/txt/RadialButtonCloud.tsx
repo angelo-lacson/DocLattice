@@ -4,7 +4,10 @@ import styled, { css, keyframes } from "styled-components";
 import { DynamicIcon } from "../../../widgets/icon-picker/DynamicIcon";
 import { ConfirmModal } from "../../../widgets/modals/ConfirmModal";
 import { getLuminance } from "polished";
-import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../../../assets/configurations/osLegalStyles";
 
 // Helper function to ensure valid hex color
 const ensureValidHexColor = (color: string): string => {
@@ -42,15 +45,15 @@ const getContrastColor = (bgColor: string): string => {
 
 const pulse = keyframes`
   0% {
-    box-shadow: 0 0 0 0 rgba(15, 118, 110, 0.4);
+    box-shadow: 0 0 0 0 ${accentAlpha(0.4)};
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(15, 118, 110, 0);
+    box-shadow: 0 0 0 8px ${accentAlpha(0)};
     transform: scale(1.1);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(15, 118, 110, 0);
+    box-shadow: 0 0 0 0 ${accentAlpha(0)};
     transform: scale(1);
   }
 `;

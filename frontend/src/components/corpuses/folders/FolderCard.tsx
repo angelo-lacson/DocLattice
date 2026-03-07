@@ -13,6 +13,7 @@ import { FolderTreeNode } from "../../../graphql/queries/folders";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../../assets/configurations/osLegalStyles";
 
 /**
@@ -46,7 +47,7 @@ const CardContainer = styled.div<{ $isDropTarget: boolean }>`
   height: 200px;
   display: flex;
   flex-direction: column;
-  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+  box-shadow: ${OS_LEGAL_SHADOWS.card};
   background-color: ${(props) =>
     props.$isDropTarget
       ? OS_LEGAL_COLORS.dropTargetBg
@@ -61,7 +62,7 @@ const CardContainer = styled.div<{ $isDropTarget: boolean }>`
       props.$isDropTarget
         ? "rgba(34, 197, 94, 0.5)"
         : OS_LEGAL_COLORS.borderHover};
-    box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+    box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
     transform: translateY(-2px);
 
     .action-button {
@@ -279,7 +280,7 @@ const ContextMenu = styled.div<{ $x: number; $y: number }>`
   left: ${(props) => props.$x}px;
   background: ${OS_LEGAL_COLORS.surface};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 4px;
   min-width: 180px;

@@ -17,7 +17,10 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 import { MENTION_PREVIEW_LENGTH } from "../../assets/configurations/constants";
 import {
   UnifiedMentionPicker,
@@ -259,12 +262,12 @@ const SendButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all ${CORPUS_TRANSITIONS.normal};
-  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.25);
+  box-shadow: 0 2px 8px ${accentAlpha(0.25)};
   letter-spacing: -0.01em;
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(15, 118, 110, 0.45);
+    box-shadow: 0 6px 20px ${accentAlpha(0.45)};
     background: linear-gradient(
       135deg,
       ${CORPUS_COLORS.teal[500]} 0%,
@@ -274,14 +277,14 @@ const SendButton = styled.button`
 
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
+    box-shadow: 0 2px 8px ${accentAlpha(0.3)};
   }
 
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
     transform: none;
-    box-shadow: 0 2px 6px rgba(15, 118, 110, 0.2);
+    box-shadow: 0 2px 6px ${accentAlpha(0.2)};
   }
 
   svg {
