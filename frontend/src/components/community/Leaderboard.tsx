@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
 import { Table, Dropdown } from "semantic-ui-react";
-import { StatBlock, StatGrid } from "@os-legal/ui";
+import { StatBlock } from "@os-legal/ui";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import {
