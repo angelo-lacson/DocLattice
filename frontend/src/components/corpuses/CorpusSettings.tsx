@@ -45,7 +45,6 @@ import {
   CategoriesSection,
   CorpusActionsSection,
   WorkerTokensSection,
-  TemplateActionsSection,
 } from "./settings";
 
 // Shared styles
@@ -369,13 +368,8 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
           loading={updatingCorpus}
         />
 
-        <TemplateActionsSection
-          corpusId={corpus.id}
-          actions={actions}
-          onUpdate={() => refetchActions()}
-        />
-
         <CorpusActionsSection
+          corpusId={corpus.id}
           actions={actions}
           onAddAction={() => setIsModalOpen(true)}
           onEditAction={(action) => {
@@ -386,6 +380,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
           onRunAction={(action) =>
             setActionToRun({ id: action.id, name: action.name })
           }
+          onUpdate={() => refetchActions()}
           isSuperuser={isSuperuser}
         />
 
