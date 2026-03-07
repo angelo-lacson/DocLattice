@@ -23,7 +23,12 @@ from config.graphql.serializers import CorpusSerializer
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analyzer
 from opencontractserver.annotations.models import Annotation, Relationship
-from opencontractserver.corpuses.models import Corpus, CorpusAction, CorpusFolder
+from opencontractserver.corpuses.models import (
+    Corpus,
+    CorpusAction,
+    CorpusActionTemplate,
+    CorpusFolder,
+)
 from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Datacell, Fieldset
 from opencontractserver.tasks import fork_corpus
@@ -1341,3 +1346,88 @@ class RunCorpusAction(graphene.Mutation):
             message="Action queued successfully.",
             obj=execution,
         )
+
+
+class AddTemplateToCorpus(graphene.Mutation):
+    """
+    Add an action template to a corpus by cloning it into a CorpusAction.
+
+    This is the core of the Action Library feature: users browse available
+    templates and opt-in per corpus. Once cloned, the action is a regular
+    CorpusAction that can be edited/toggled/deleted like any other.
+
+    Prevents duplicates: the same template cannot be added twice to the same
+    corpus (checked via source_template FK).
+
+    Requires the user to be the corpus creator.
+    """
+
+    class Arguments:
+        template_id = graphene.ID(
+            required=True, description="ID of the CorpusActionTemplate to clone"
+        )
+        corpus_id = graphene.ID(
+            required=True, description="ID of the corpus to add the template to"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    obj = graphene.Field(CorpusActionType)
+
+    @login_required
+    def mutate(root, info, template_id: str, corpus_id: str):
+        try:
+            user = info.context.user
+            corpus_pk = from_global_id(corpus_id)[1]
+            template_pk = from_global_id(template_id)[1]
+
+            # Get corpus with visibility filter to prevent IDOR
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+
+            # Check if user has update permission on the corpus
+            if corpus.creator.id != user.id:
+                return AddTemplateToCorpus(
+                    ok=False,
+                    message="You can only add templates to your own corpuses",
+                    obj=None,
+                )
+
+            # Get the template (templates are global, no user filter needed)
+            template = CorpusActionTemplate.objects.get(pk=template_pk, is_active=True)
+
+            # Prevent duplicates: same template can't be added twice
+            if CorpusAction.objects.filter(
+                corpus=corpus, source_template=template
+            ).exists():
+                return AddTemplateToCorpus(
+                    ok=False,
+                    message="This template has already been added to the corpus",
+                    obj=None,
+                )
+
+            # Clone the template into a CorpusAction
+            action = template.clone_to_corpus(corpus, creator=user)
+
+            set_permissions_for_obj_to_user(user, action, [PermissionTypes.CRUD])
+
+            return AddTemplateToCorpus(
+                ok=True,
+                message="Template added to corpus successfully",
+                obj=action,
+            )
+
+        except Corpus.DoesNotExist:
+            return AddTemplateToCorpus(ok=False, message="Corpus not found", obj=None)
+
+        except CorpusActionTemplate.DoesNotExist:
+            return AddTemplateToCorpus(
+                ok=False, message="Template not found or inactive", obj=None
+            )
+
+        except Exception as e:
+            logger.exception("Failed to add template to corpus")
+            return AddTemplateToCorpus(
+                ok=False,
+                message=f"Failed to add template: {str(e)}",
+                obj=None,
+            )

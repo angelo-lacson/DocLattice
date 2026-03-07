@@ -2399,6 +2399,45 @@ export interface RunCorpusActionOutput {
   };
 }
 
+export const ADD_TEMPLATE_TO_CORPUS = gql`
+  mutation AddTemplateToCorpus($templateId: ID!, $corpusId: ID!) {
+    addTemplateToCorpus(templateId: $templateId, corpusId: $corpusId) {
+      ok
+      message
+      obj {
+        id
+        name
+        trigger
+        disabled
+        sourceTemplate {
+          id
+          name
+        }
+        agentConfig {
+          id
+          name
+          description
+        }
+        taskInstructions
+        preAuthorizedTools
+      }
+    }
+  }
+`;
+
+export interface AddTemplateToCorpusInput {
+  templateId: string;
+  corpusId: string;
+}
+
+export interface AddTemplateToCorpusOutput {
+  addTemplateToCorpus: {
+    ok: boolean;
+    message: string;
+    obj: CorpusActionType | null;
+  };
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// BADGE-RELATED MUTATIONS
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
