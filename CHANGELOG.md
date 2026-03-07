@@ -5,10 +5,12 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-04
+## [Unreleased] - 2026-03-07
 
 ### Changed
 
+- **Migrated frontend from Semantic UI React to @os-legal/ui design system**: Replaced Modal, Button, Input, and other UI components across the entire frontend with `@os-legal/ui` equivalents. Updated icon system from Semantic UI icons to lucide-react. Introduced `OS_LEGAL_COLORS`, `OS_LEGAL_TYPOGRAPHY`, and `OS_LEGAL_SPACING` design tokens for consistent styling. Upgraded `@os-legal/ui` from 0.1.8 to 0.1.12.
+- **Replaced hardcoded hex colors with design system tokens**: Consolidated ~50 color tokens and replaced hardcoded hex color literals across 150+ files with `OS_LEGAL_COLORS` constants from `osLegalStyles.ts`.
 - **Extracted shared corpus object collection logic** into `opencontractserver/utils/corpus_collector.py`: New `collect_corpus_objects()` utility and `CorpusObjectCollection` dataclass consolidate duplicated corpus forking/export collection logic (Issue #816)
 
 ### Added

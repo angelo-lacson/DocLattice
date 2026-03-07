@@ -342,7 +342,7 @@ export const ShareButton = styled.button`
   transition: all 0.15s ease;
 
   &:hover {
-    background: #0d9488;
+    background: ${OS_LEGAL_COLORS.accent};
   }
 `;
 

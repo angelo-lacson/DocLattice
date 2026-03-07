@@ -9,6 +9,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@os-legal/ui";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import type { ChatMessageProps } from "../../../widgets/chat/ChatMessage";
 
 /** Shape of the pending approval state passed from ChatTray. */
@@ -85,7 +86,10 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
             marginBottom: "1.5rem",
           }}
         >
-          <AlertTriangle size={24} style={{ color: "#f59e0b" }} />
+          <AlertTriangle
+            size={24}
+            style={{ color: OS_LEGAL_COLORS.folderIcon }}
+          />
           <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
             Tool Approval Required
           </h3>
@@ -115,7 +119,7 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
           </p>
           <div
             style={{
-              backgroundColor: "#f3f4f6",
+              backgroundColor: OS_LEGAL_COLORS.surfaceLight,
               padding: "1rem",
               borderRadius: "8px",
               fontFamily: "monospace",
@@ -209,7 +213,7 @@ export const ReopenApprovalButton: React.FC<ReopenApprovalButtonProps> = ({
       variant="secondary"
       onClick={() => setShowApprovalModal(true)}
       style={{
-        background: "#f59e0b",
+        background: OS_LEGAL_COLORS.folderIcon,
         color: "white",
         marginLeft: "1rem",
       }}

@@ -116,7 +116,10 @@ export const CRUDWidget = <T extends Record<string, any>>({
               <span style={{ marginLeft: "0.5rem" }}>
                 {headerText}
                 <div
-                  style={{ fontSize: "0.875rem", color: "#666" }}
+                  style={{
+                    fontSize: "0.875rem",
+                    color: OS_LEGAL_COLORS.textSecondary,
+                  }}
                 >{`Values for: ${descriptiveName}`}</div>
               </span>
             </h2>

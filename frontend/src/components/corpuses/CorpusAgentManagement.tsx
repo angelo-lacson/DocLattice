@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
+// TODO: migrate to @os-legal/ui once Table component is available
 import { Table } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
@@ -267,7 +268,9 @@ const ToolItem = styled.div<{ $selected: boolean }>`
 
   &:hover {
     background: ${(props) =>
-      props.$selected ? "#dbeafe" : OS_LEGAL_COLORS.surfaceHover};
+      props.$selected
+        ? OS_LEGAL_COLORS.blueBorder
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:last-child {
@@ -343,7 +346,7 @@ const CorpusBadge = styled.span`
   font-size: 0.65rem;
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
-  background: #dbeafe;
+  background: ${OS_LEGAL_COLORS.blueBorder};
   color: ${OS_LEGAL_COLORS.blueDark};
   font-weight: 500;
 `;

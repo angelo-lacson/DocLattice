@@ -139,7 +139,7 @@ export const DiscussionBadge = styled.span<{
     switch ($variant) {
       case "green":
         return `
-          background: #dcfce7;
+          background: ${OS_LEGAL_COLORS.successSurface};
           color: ${OS_LEGAL_COLORS.successText};
           border: 1px solid #86efac;
         `;
@@ -153,7 +153,7 @@ export const DiscussionBadge = styled.span<{
         return `
           background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
           color: ${OS_LEGAL_COLORS.dangerText};
-          border: 1px solid #fca5a5;
+          border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
         `;
       case "slate":
         return `

@@ -1,3 +1,4 @@
+// TODO: migrate to @os-legal/ui once Table component is available
 import { Table } from "semantic-ui-react";
 import { Loader2, Trash2, Download } from "lucide-react";
 import { IconButton } from "@os-legal/ui";

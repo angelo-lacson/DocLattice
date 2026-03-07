@@ -164,6 +164,14 @@ export const OS_LEGAL_COLORS = {
   /** Dark green - success accents on dark backgrounds. */
   greenDark: "#059669",
 
+  // Dark surface colors (for dark-themed panels like cookie consent)
+  /** Dark surface background - slate. */
+  darkSurface: "#1e293b",
+  /** Dark surface text - light gray for readability on dark backgrounds. */
+  darkSurfaceText: "#e2e8f0",
+  /** Dark surface border - muted separator on dark backgrounds. */
+  darkSurfaceBorder: "#475569",
+
   // Neutral gray palette
   /** Near-white surface - barely visible gray backgrounds. */
   gray50: "#f9fafb",

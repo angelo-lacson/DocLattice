@@ -49,7 +49,7 @@ const VersionPill = styled.button<{
 
   color: ${(props) => {
     if (props.$isOutdated) return "#c2410c";
-    if (props.$hasHistory) return "#1d4ed8";
+    if (props.$hasHistory) return OS_LEGAL_COLORS.primaryBlueHover;
     return OS_LEGAL_COLORS.textSecondary;
   }};
 

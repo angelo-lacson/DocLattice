@@ -99,7 +99,8 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
       ? "linear-gradient(165deg, rgba(74, 144, 226, 0.03), rgba(255, 255, 255, 0.5))"
       : "#ffffff"};
   border: 1px solid
-    ${(props) => (props.$selected ? OS_LEGAL_COLORS.primaryBlue : "#edf2f7")};
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: ${(props) => (props.$compact ? "12px" : "20px")};
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
@@ -126,7 +127,8 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
         props.$selected ? "rgba(255, 255, 255, 0.8)" : "#ffffff"};
       border-radius: 12px;
       border: 1px solid
-        ${(props) => (props.$selected ? "rgba(74, 144, 226, 0.1)" : "#edf2f7")};
+        ${(props) =>
+          props.$selected ? "rgba(74, 144, 226, 0.1)" : OS_LEGAL_COLORS.border};
 
       .label {
         font-size: 0.7rem;
@@ -143,7 +145,10 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
 
       .value {
         font-size: 0.8125rem;
-        color: ${(props) => (props.$selected ? "#2d3748" : "#4a5568")};
+        color: ${(props) =>
+          props.$selected
+            ? OS_LEGAL_COLORS.textPrimary
+            : OS_LEGAL_COLORS.textTertiary};
       }
     }
   }

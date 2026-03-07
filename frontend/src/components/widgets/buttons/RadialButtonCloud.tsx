@@ -5,6 +5,7 @@ import { DynamicIcon } from "../icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 const pulse = keyframes`
   0% {
@@ -279,7 +280,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
               title={btn.tooltip}
               $delay={index * 0.1}
               $position={buttonPositions[index]}
-              style={{ background: btn.color || "#eee" }}
+              style={{ background: btn.color || OS_LEGAL_COLORS.border }}
             >
               <DynamicIcon name={btn.name} size={14} />
             </CloudButtonStyled>

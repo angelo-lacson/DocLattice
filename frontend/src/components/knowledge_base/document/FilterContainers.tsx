@@ -24,7 +24,10 @@ export const IconButton = styled(motion.button)<{ $isActive?: boolean }>`
   border-radius: 8px;
   border: none;
   background: ${(props) => (props.$isActive ? "#EBF8FF" : "#F7FAFC")};
-  color: ${(props) => (props.$isActive ? "#3182CE" : "#4A5568")};
+  color: ${(props) =>
+    props.$isActive
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textTertiary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -32,7 +35,8 @@ export const IconButton = styled(motion.button)<{ $isActive?: boolean }>`
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${(props) => (props.$isActive ? "#BEE3F8" : "#EDF2F7")};
+    background: ${(props) =>
+      props.$isActive ? "#BEE3F8" : OS_LEGAL_COLORS.border};
   }
 
   svg {

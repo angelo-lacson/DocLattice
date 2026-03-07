@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
+// TODO: migrate to @os-legal/ui once Table and Dropdown components are available
 import { Table, Dropdown } from "semantic-ui-react";
 import { StatBlock } from "@os-legal/ui";
 import styled from "styled-components";

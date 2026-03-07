@@ -327,7 +327,7 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
                 <p
                   style={{
                     fontSize: "0.85em",
-                    color: "#e74c3c",
+                    color: OS_LEGAL_COLORS.danger,
                     marginTop: "0.25em",
                   }}
                 >

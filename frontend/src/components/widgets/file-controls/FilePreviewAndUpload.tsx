@@ -34,12 +34,15 @@ const UploadContainer = styled.div<{ $isReadOnly: boolean }>`
     props.$isReadOnly
       ? `1px solid ${OS_LEGAL_COLORS.border}`
       : `2px dashed ${OS_LEGAL_COLORS.primaryBlue}`};
-  background: ${(props) => (props.$isReadOnly ? "#f9f9f9" : "#fff")};
+  background: ${(props) =>
+    props.$isReadOnly ? OS_LEGAL_COLORS.gray50 : "#fff"};
   transition: all 0.2s ease;
 
   &:hover {
     border-color: ${(props) =>
-      props.$isReadOnly ? OS_LEGAL_COLORS.border : "#1678c2"};
+      props.$isReadOnly
+        ? OS_LEGAL_COLORS.border
+        : OS_LEGAL_COLORS.primaryBlueHover};
     cursor: ${(props) => (props.$isReadOnly ? "default" : "pointer")};
   }
 `;

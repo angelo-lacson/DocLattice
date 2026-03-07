@@ -42,7 +42,8 @@ const StyledCard = styled.div<{
   margin: 0.75em;
   width: ${(props) => (props.$useMobileLayout ? "200px" : "300px")};
   min-width: ${(props) => (props.$useMobileLayout ? "200px" : "300px")};
-  background-color: ${(props) => (props.$selected ? "#e2ffdb" : "white")};
+  background-color: ${(props) =>
+    props.$selected ? OS_LEGAL_COLORS.successSurface : "white"};
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   border-radius: 4px;

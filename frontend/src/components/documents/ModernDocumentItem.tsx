@@ -1572,7 +1572,10 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                 className="meta-item"
                 style={{
                   cursor: hasVersionHistory ? "pointer" : "default",
-                  color: isLatestVersion === false ? "#c2410c" : "#1d4ed8",
+                  color:
+                    isLatestVersion === false
+                      ? "#c2410c"
+                      : OS_LEGAL_COLORS.primaryBlueHover,
                 }}
                 onClick={
                   hasVersionHistory

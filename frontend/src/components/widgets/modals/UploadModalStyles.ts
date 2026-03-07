@@ -384,12 +384,12 @@ export const FileListItem = styled.li<{
     $status === "FAILED" &&
     css`
       background: #ffebee;
-      border: 1px solid #ffcdd2;
+      border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
     `}
 
   &:hover {
     background: ${({ $selected }) =>
-      $selected ? "rgba(102, 126, 234, 0.15)" : "#f8f9fa"};
+      $selected ? "rgba(102, 126, 234, 0.15)" : OS_LEGAL_COLORS.gray50};
   }
 `;
 
@@ -407,7 +407,7 @@ export const FileItemIcon = styled.div<{ $status?: string }>`
     $status === "SUCCESS"
       ? "#2e7d32"
       : $status === "FAILED"
-      ? "#c62828"
+      ? OS_LEGAL_COLORS.dangerText
       : "#667eea"};
   flex-shrink: 0;
 `;
@@ -627,7 +627,7 @@ export const FieldLabel = styled.label`
 // Error message styling
 export const ErrorMessage = styled.div`
   background: #ffebee;
-  border: 1px solid #ffcdd2;
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1rem;

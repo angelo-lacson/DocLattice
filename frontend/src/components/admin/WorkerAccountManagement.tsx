@@ -152,7 +152,9 @@ const StatusBadge = styled.span<{ $active: boolean }>`
   font-size: 0.75rem;
   font-weight: 600;
   background: ${({ $active }) =>
-    $active ? "#dcfce7" : OS_LEGAL_COLORS.dangerSurfaceHover};
+    $active
+      ? OS_LEGAL_COLORS.successSurface
+      : OS_LEGAL_COLORS.dangerSurfaceHover};
   color: ${({ $active }) =>
     $active ? OS_LEGAL_COLORS.successText : OS_LEGAL_COLORS.dangerText};
 `;

@@ -69,7 +69,9 @@ const StatisticWithAnimation = ({
   const IconComponent = ICON_MAP[icon] || TrendingUp;
   return (
     <StatisticWrapper>
-      <StatisticIconWrapper style={{ color: color || "#4a90e2" }}>
+      <StatisticIconWrapper
+        style={{ color: color || OS_LEGAL_COLORS.primaryBlue }}
+      >
         <IconComponent />
       </StatisticIconWrapper>
       <StatisticContent>
@@ -171,7 +173,7 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.totalThreads}
             label="Total Threads"
             icon="comments"
-            color="#4a90e2"
+            color={OS_LEGAL_COLORS.primaryBlue}
           />
           <StatisticWithAnimation
             value={metrics.activeThreads}
@@ -187,7 +189,7 @@ export const CorpusEngagementDashboard: React.FC<
             }
             label="Avg Msgs/Thread"
             icon="exchange"
-            color="#f59e0b"
+            color={OS_LEGAL_COLORS.folderIcon}
           />
         </StatsGrid>
       </Section>
@@ -235,7 +237,7 @@ export const CorpusEngagementDashboard: React.FC<
               <Legend />
               <Bar
                 dataKey="messages"
-                fill="#4a90e2"
+                fill={OS_LEGAL_COLORS.primaryBlue}
                 name="Messages"
                 radius={[8, 8, 0, 0]}
               />
@@ -263,7 +265,7 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.totalUpvotes}
             label="Total Upvotes"
             icon="thumbs up"
-            color="#f59e0b"
+            color={OS_LEGAL_COLORS.folderIcon}
           />
         </StatsGrid>
       </Section>

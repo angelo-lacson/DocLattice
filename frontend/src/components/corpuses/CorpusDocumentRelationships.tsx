@@ -203,7 +203,7 @@ const TypeBadge = styled.span<{ $type: "RELATIONSHIP" | "NOTES" }>`
   font-size: 0.75rem;
   font-weight: 500;
   background: ${(props) =>
-    props.$type === "RELATIONSHIP" ? "#dbeafe" : "#fef3c7"};
+    props.$type === "RELATIONSHIP" ? OS_LEGAL_COLORS.blueBorder : "#fef3c7"};
   color: ${(props) =>
     props.$type === "RELATIONSHIP" ? OS_LEGAL_COLORS.blueDark : "#92400e"};
 `;

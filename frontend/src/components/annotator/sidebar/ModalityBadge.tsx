@@ -44,7 +44,7 @@ export const ModalityBadge: React.FC<ModalityBadgeProps> = ({ modalities }) => {
   // Image only
   if (hasImage) {
     return (
-      <StyledBadge $badgeColor="#f59e0b" size="sm">
+      <StyledBadge $badgeColor={OS_LEGAL_COLORS.folderIcon} size="sm">
         <Image size={12} />
         Image
       </StyledBadge>

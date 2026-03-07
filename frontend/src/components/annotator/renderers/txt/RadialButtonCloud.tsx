@@ -4,6 +4,7 @@ import styled, { createGlobalStyle, css, keyframes } from "styled-components";
 import { Button, Modal, ModalBody, ModalFooter } from "@os-legal/ui";
 import { DynamicIcon } from "../../../widgets/icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 // Helper function to ensure valid hex color
 const ensureValidHexColor = (color: string): string => {
@@ -290,8 +291,8 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
   const buttonColors = [
     "#00B5AD", // Teal
     "#2185D0", // Blue
-    "#21BA45", // Green
-    "#DB2828", // Red
+    OS_LEGAL_COLORS.success, // Green
+    OS_LEGAL_COLORS.danger, // Red
     "#A333C8", // Purple
   ];
 

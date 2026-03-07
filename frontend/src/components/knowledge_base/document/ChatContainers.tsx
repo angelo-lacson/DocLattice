@@ -648,7 +648,7 @@ export const MessageCount = styled(motion.div)<{
       : "linear-gradient(135deg, #2B6CB0 0%, #2C5282 100%)")};
   color: ${(props) =>
     props.$colorStyle?.textColor ||
-    (props.children === "0" ? "#4A5568" : "white")};
+    (props.children === "0" ? OS_LEGAL_COLORS.textTertiary : "white")};
   padding: 0.4rem 0.75rem;
   border-radius: 20px;
   font-size: 0.85rem;

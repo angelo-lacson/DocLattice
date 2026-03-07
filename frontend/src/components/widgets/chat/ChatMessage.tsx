@@ -415,12 +415,15 @@ const SourceTitle = styled.div<{ $isSelected: boolean }>`
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
-  color: ${(props) => (props.$isSelected ? "#2d3748" : "#4a5568")};
+  color: ${(props) =>
+    props.$isSelected
+      ? OS_LEGAL_COLORS.textPrimary
+      : OS_LEGAL_COLORS.textTertiary};
 `;
 
 const SourceText = styled(motion.div)<{ $isExpanded: boolean }>`
   font-size: 0.8125rem;
-  color: #4a5568;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   line-height: 1.5;
   position: relative;
   overflow: hidden;
@@ -575,7 +578,7 @@ const AutoScrollIndicator = styled(motion.div)<{ $active: boolean }>`
       props.$active ? "rgba(59, 130, 246, 0.2)" : "rgba(156, 163, 175, 0.2)"};
   font-size: 0.7rem;
   color: ${(props) =>
-    props.$active ? OS_LEGAL_COLORS.primaryBlue : "#9ca3af"};
+    props.$active ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.textMuted};
   cursor: ${(props) => (props.$active ? "default" : "pointer")};
   transition: all 0.2s ease;
 
@@ -647,11 +650,11 @@ const TimelineIcon = styled.div<{ $type: TimelineEntry["type"] }>`
       case "sources":
         return "#5c7c9d";
       case "status":
-        return "#9ca3af";
+        return OS_LEGAL_COLORS.textMuted;
       case "compaction":
         return OS_LEGAL_COLORS.primaryBlueHover;
       default:
-        return "#9ca3af";
+        return OS_LEGAL_COLORS.textMuted;
     }
   }};
 
@@ -1009,7 +1012,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
                   marginRight: 6,
                   width: 8,
                   height: 8,
-                  background: lab.color || "#1a75bc",
+                  background: lab.color || OS_LEGAL_COLORS.primaryBlueHover,
                   display: "inline-block",
                   borderRadius: 4,
                 }}
@@ -1720,7 +1723,7 @@ const ApprovalIndicator = styled.div<{
   color: ${(props) => {
     if (props.$status === "approved") return OS_LEGAL_COLORS.greenDark;
     if (props.$status === "rejected") return OS_LEGAL_COLORS.danger;
-    return "#f59e0b";
+    return OS_LEGAL_COLORS.folderIcon;
   }};
   border-radius: 1rem;
   font-size: 0.8rem;

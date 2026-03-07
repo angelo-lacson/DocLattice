@@ -109,7 +109,12 @@ export const LabelSetSelector = ({
             )}
             {node.title}
           </div>
-          <div style={{ fontSize: "0.85rem", color: "#666" }}>
+          <div
+            style={{
+              fontSize: "0.85rem",
+              color: OS_LEGAL_COLORS.textSecondary,
+            }}
+          >
             {node.description}
           </div>
         </div>

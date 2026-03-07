@@ -33,7 +33,7 @@ const STATUS_CONFIG: Record<
   },
   running: {
     color: OS_LEGAL_COLORS.primaryBlueHover,
-    bgColor: "#dbeafe",
+    bgColor: OS_LEGAL_COLORS.blueBorder,
     icon: Loader2,
     label: "Running",
   },
@@ -51,7 +51,7 @@ const STATUS_CONFIG: Record<
   },
   skipped: {
     color: "#6b7280",
-    bgColor: "#f3f4f6",
+    bgColor: OS_LEGAL_COLORS.surfaceLight,
     icon: FastForward,
     label: "Skipped",
   },

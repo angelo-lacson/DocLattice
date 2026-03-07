@@ -437,7 +437,9 @@ export const BulkImportModal: React.FC = () => {
       />
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       <h3>Importing Documents...</h3>
-      <p style={{ color: "#666", marginBottom: "1.5rem" }}>
+      <p
+        style={{ color: OS_LEGAL_COLORS.textSecondary, marginBottom: "1.5rem" }}
+      >
         This may take a few moments depending on the size of your ZIP file.
       </p>
       <UploadProgress $percent={uploadProgress} />

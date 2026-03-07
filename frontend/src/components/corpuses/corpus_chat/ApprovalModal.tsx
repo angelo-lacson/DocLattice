@@ -2,6 +2,7 @@ import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, CheckCircle, X } from "lucide-react";
 import { Button } from "@os-legal/ui";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * Shape of the pending approval data passed from the parent chat component.
@@ -80,7 +81,10 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
               marginBottom: "1.5rem",
             }}
           >
-            <AlertCircle size={24} style={{ color: "#f59e0b" }} />
+            <AlertCircle
+              size={24}
+              style={{ color: OS_LEGAL_COLORS.folderIcon }}
+            />
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
               Tool Approval Required
             </h3>
@@ -103,7 +107,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
             </p>
             <div
               style={{
-                backgroundColor: "#f3f4f6",
+                backgroundColor: OS_LEGAL_COLORS.surfaceLight,
                 padding: "1rem",
                 borderRadius: "8px",
                 fontFamily: "monospace",

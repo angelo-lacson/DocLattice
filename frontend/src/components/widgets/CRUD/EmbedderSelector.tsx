@@ -91,7 +91,9 @@ export const EmbedderSelector = ({
     content: (
       <div>
         <div style={{ fontWeight: 600 }}>{embedder.title || embedder.name}</div>
-        <div style={{ fontSize: "0.85rem", color: "#666" }}>
+        <div
+          style={{ fontSize: "0.85rem", color: OS_LEGAL_COLORS.textSecondary }}
+        >
           {`${embedder.description || ""} (${
             embedder.vectorSize || "Unknown"
           } dimensions)`}

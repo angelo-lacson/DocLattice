@@ -18,6 +18,7 @@ import { CategorySelector } from "./CategorySelector";
 import { CorpusType, LabelSetType } from "../../types/graphql-api";
 import { arraysEqualUnordered } from "../../utils/arrayUtils";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Types
 export type CorpusModalMode = "CREATE" | "EDIT" | "VIEW";
@@ -42,45 +43,46 @@ export interface CorpusModalProps {
   onClose: () => void;
 }
 
-// Breakpoints
-const TABLET_BREAKPOINT = 1024;
+// 1024px: point where the modal's two-column layout collapses to single-column
+// (wider than TABLET_BREAKPOINT in constants.ts because the modal content needs more room)
+const TWO_COLUMN_BREAKPOINT = 1024;
 
 // Global styles for the corpus modal — Modal renders via portal outside the
 // React tree, so we must use createGlobalStyle instead of wrapper descendant selectors.
+// Scoped via .corpus-modal class to avoid leaking to other concurrent modals.
 const CorpusModalStyles = createGlobalStyle`
-  .oc-modal .oc-modal-body {
-    background: var(--oc-bg-subtle, #f1f5f9);
-  }
+  .corpus-modal .oc-modal-body {
+    background: var(--oc-bg-subtle, ${OS_LEGAL_COLORS.surfaceLight});
   }
 
   /* Ensure Semantic UI dropdowns appear above modal content */
-  .oc-modal .ui.dropdown .menu {
+  .corpus-modal .ui.dropdown .menu {
     z-index: 1000 !important;
   }
 
-  .oc-modal .oc-modal-footer {
+  .corpus-modal .oc-modal-footer {
     border-top: 1px solid var(--oc-border-default);
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    .oc-modal-overlay {
+    .corpus-modal-overlay {
       padding: 0;
       align-items: flex-end;
     }
 
-    .oc-modal {
+    .corpus-modal {
       max-width: 100%;
       max-height: 95vh;
       border-radius: var(--oc-radius-lg) var(--oc-radius-lg) 0 0;
       animation: oc-slide-up-fade 0.3s var(--oc-easing-spring);
     }
 
-    .oc-modal .oc-modal-body {
+    .corpus-modal .oc-modal-body {
       padding: var(--oc-spacing-md);
       padding-bottom: calc(var(--oc-spacing-xl) + 80px);
     }
 
-    .oc-modal .oc-modal-footer {
+    .corpus-modal .oc-modal-footer {
       position: sticky;
       bottom: 0;
       flex-direction: column-reverse;
@@ -97,14 +99,14 @@ const CorpusModalStyles = createGlobalStyle`
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) and (orientation: landscape) {
-    .oc-modal {
+    .corpus-modal {
       max-height: 100vh;
       border-radius: 0;
     }
   }
 
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    .oc-modal {
+  @media (max-width: ${TWO_COLUMN_BREAKPOINT}px) {
+    .corpus-modal {
       max-width: 90vw;
     }
   }
@@ -186,7 +188,7 @@ const FormRow = styled.div`
   grid-template-columns: 1fr 1fr;
   gap: var(--oc-spacing-md);
 
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
+  @media (max-width: ${TWO_COLUMN_BREAKPOINT}px) {
     grid-template-columns: 1fr;
   }
 `;
@@ -579,7 +581,13 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   return (
     <>
       <CorpusModalStyles />
-      <Modal open={open} onClose={onClose} size="lg" closeOnEscape={!loading}>
+      <Modal
+        open={open}
+        onClose={onClose}
+        size="lg"
+        closeOnEscape={!loading}
+        className="corpus-modal"
+      >
         <ModalHeader
           title={headerTitle}
           subtitle={getSubtitle()}

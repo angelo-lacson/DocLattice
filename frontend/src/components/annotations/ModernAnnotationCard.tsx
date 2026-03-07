@@ -111,7 +111,7 @@ const SourceBadge = styled.div<{ $variant: AnnotationSourceType }>`
   background: ${(props) => {
     switch (props.$variant) {
       case "human":
-        return "#dbeafe";
+        return OS_LEGAL_COLORS.blueBorder;
       case "agent":
         return "#ede9fe";
       case "structural":
@@ -144,7 +144,8 @@ const TypeBadge = styled.div<{ $type: "doc" | "text" }>`
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-radius: 4px;
-  background: ${(props) => (props.$type === "doc" ? "#dbeafe" : "#f0fdfa")};
+  background: ${(props) =>
+    props.$type === "doc" ? OS_LEGAL_COLORS.blueBorder : "#f0fdfa"};
   color: ${(props) =>
     props.$type === "doc"
       ? OS_LEGAL_COLORS.primaryBlueHover
@@ -161,7 +162,7 @@ const SimilarityBadge = styled.div<{ $score: number }>`
   border-radius: 4px;
   background: ${(props) => {
     // Color gradient based on score: green for high, yellow for medium, gray for low
-    if (props.$score >= 0.8) return "#dcfce7"; // green
+    if (props.$score >= 0.8) return OS_LEGAL_COLORS.successSurface; // green
     if (props.$score >= 0.6) return "#fef9c3"; // yellow
     return OS_LEGAL_COLORS.surfaceLight; // gray
   }};
