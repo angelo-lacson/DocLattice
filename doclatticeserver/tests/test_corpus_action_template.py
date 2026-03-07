@@ -112,6 +112,39 @@ class CorpusActionTemplateModelTest(TestCase):
         self.assertTrue(action.disabled)
         self.assertEqual(action.creator, self.user)
 
+    def test_clone_to_corpus_sets_source_template(self):
+        template = CorpusActionTemplate.objects.create(
+            name="Source Test",
+            agent_config=self.agent_config,
+            task_instructions="Test source tracking.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        corpus = Corpus.objects.create(title="Source Target", creator=self.user)
+        CorpusAction.objects.filter(corpus=corpus).delete()
+
+        action = template.clone_to_corpus(corpus)
+        self.assertEqual(action.source_template, template)
+
+    def test_source_template_survives_template_deletion(self):
+        template = CorpusActionTemplate.objects.create(
+            name="Delete Test",
+            agent_config=self.agent_config,
+            task_instructions="Test SET_NULL.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        corpus = Corpus.objects.create(title="Delete Target", creator=self.user)
+        CorpusAction.objects.filter(corpus=corpus).delete()
+
+        action = template.clone_to_corpus(corpus)
+        action_pk = action.pk
+        template.delete()
+
+        action.refresh_from_db()
+        self.assertEqual(action.pk, action_pk)
+        self.assertIsNone(action.source_template)
+
     def test_ordering_by_sort_order(self):
         t1 = CorpusActionTemplate.objects.create(
             name="Second",
@@ -208,6 +241,18 @@ class CorpusActionTemplateCloneSignalTest(TestCase):
             )
         corpus = Corpus.objects.create(title="Multi Test", creator=self.user)
         self.assertEqual(CorpusAction.objects.filter(corpus=corpus).count(), 3)
+
+    def test_signal_clone_sets_source_template(self):
+        template = CorpusActionTemplate.objects.create(
+            name="Signal Source",
+            agent_config=self.agent_config,
+            task_instructions="Signal tracking.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        corpus = Corpus.objects.create(title="Signal Source Test", creator=self.user)
+        action = CorpusAction.objects.get(corpus=corpus, name="Signal Source")
+        self.assertEqual(action.source_template, template)
 
     def test_corpus_update_does_not_clone(self):
         CorpusActionTemplate.objects.create(
