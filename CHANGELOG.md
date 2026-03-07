@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CorpusActionTemplate model** for reusable, agent-based action definitions that auto-clone into new corpuses (`opencontractserver/corpuses/models.py`)
 - **5 default action templates** seeded via data migration: Document Description Updater, Corpus Description Updater, Document Summary Generator, Key Terms Annotator, Document Notes Generator — each with a dedicated `AgentConfiguration` and curated tool set (`opencontractserver/agents/migrations/0010_create_default_action_templates.py`)
 - **Auto-clone signal**: `clone_templates_on_corpus_create` clones all active templates into disabled `CorpusAction` records when a new corpus is created, so users can opt-in per corpus (`opencontractserver/corpuses/signals.py`)
+- **Template Actions UI**: "Quick Actions" settings card in Corpus Settings showing auto-cloned template actions with enable/disable toggles (`frontend/src/components/corpuses/settings/TemplateActionsSection.tsx`)
+- **`source_template` FK on CorpusAction**: Links cloned actions back to their source template for provenance tracking (`opencontractserver/corpuses/models.py`)
+- **GraphQL query `corpusActionTemplates`**: Read-only query exposing available templates with optional `isActive` filter (`config/graphql/action_queries.py`)
+- **`sourceTemplate` field on CorpusActionType**: Exposes template provenance in the existing corpus actions GraphQL type (`config/graphql/agent_types.py`)
+- **`seed_action_templates` management command**: Idempotent command for seeding default templates on fresh databases (`opencontractserver/corpuses/management/commands/seed_action_templates.py`)
 
 #### Optimize Vector Search and Index Scalability for Million-Scale Corpora
 - **HNSW indexes on all Embedding vector columns** (384–4096 dimensions): Approximate nearest neighbor search reduces vector queries from O(n) sequential scan to O(log n). Created via `AddIndexConcurrently` to avoid table locks during index creation (`opencontractserver/annotations/models.py`, `opencontractserver/annotations/migrations/0063_add_hnsw_indexes_and_search_vector.py`)
