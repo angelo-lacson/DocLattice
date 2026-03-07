@@ -1,9 +1,13 @@
+import importlib
+
 from django.apps import apps
 from django.core.management.base import BaseCommand
 
-from opencontractserver.agents.migrations.0010_create_default_action_templates import (
-    create_default_action_templates,
+# Migration module name starts with a digit, so we must use importlib.
+_migration_mod = importlib.import_module(
+    "opencontractserver.agents.migrations.0010_create_default_action_templates"
 )
+_create_default_action_templates = _migration_mod.create_default_action_templates
 
 
 class Command(BaseCommand):
@@ -13,5 +17,5 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args, **options):
-        create_default_action_templates(apps, None)
+        _create_default_action_templates(apps, None)
         self.stdout.write(self.style.SUCCESS("Default action templates seeded."))
