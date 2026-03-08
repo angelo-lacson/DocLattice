@@ -1280,10 +1280,6 @@ class CorpusActionTemplate(BaseOCModel):
                 {"task_instructions": "Task instructions cannot be empty."}
             )
 
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        return super().save(*args, **kwargs)
-
     def __str__(self):
         return f"CorpusActionTemplate: {self.name} ({self.get_trigger_display()})"
 

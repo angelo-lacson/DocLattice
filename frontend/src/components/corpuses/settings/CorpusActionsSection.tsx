@@ -253,8 +253,11 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
     setPickerOpen(false);
   };
 
-  const getTriggerType = (trigger: string): "add" | "edit" => {
-    return trigger.toLowerCase().includes("add") ? "add" : "edit";
+  const getTriggerType = (trigger: string): "add" | "edit" | "chat" => {
+    const t = trigger.toLowerCase();
+    if (t.includes("add")) return "add";
+    if (t.includes("thread") || t.includes("message")) return "chat";
+    return "edit";
   };
 
   const getTriggerLabel = (trigger: string): string => {

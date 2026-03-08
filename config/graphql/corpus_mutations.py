@@ -1366,9 +1366,12 @@ class AddTemplateToCorpus(graphene.Mutation):
                     obj=None,
                 )
 
-            # Clone the template into a CorpusAction
+            # Clone the template into a CorpusAction.
+            # Wrap in a savepoint so that a race-condition IntegrityError
+            # does not abort the outer transaction (PostgreSQL requirement).
             try:
-                action = template.clone_to_corpus(corpus, creator=user)
+                with transaction.atomic():
+                    action = template.clone_to_corpus(corpus, creator=user)
             except IntegrityError:
                 return AddTemplateToCorpus(
                     ok=False,
