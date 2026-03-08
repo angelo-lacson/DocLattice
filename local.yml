@@ -45,6 +45,7 @@ services:
     # Dev-friendly memory settings (production uses 1GB/512MB respectively)
     command: >
       postgres
+      -c shared_preload_libraries=vector
       -c shared_buffers=512MB
       -c maintenance_work_mem=256MB
       -c effective_cache_size=2GB

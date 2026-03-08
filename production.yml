@@ -49,6 +49,7 @@ services:
     # Revert to 512MB after the migration completes.
     command: >
       postgres
+      -c shared_preload_libraries=vector
       -c shared_buffers=1GB
       -c maintenance_work_mem=512MB
       -c effective_cache_size=4GB
