@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Dropdown, DropdownProps } from "semantic-ui-react";
+import { Dropdown, DropdownOption } from "@os-legal/ui";
 import { useQuery } from "@apollo/client";
 import _ from "lodash";
 import {
   GET_REGISTERED_EXTRACT_TASKS,
   GetRegisteredExtractTasksOutput,
 } from "../../../graphql/queries";
-import styled from "styled-components";
 
 interface ExtractTaskDropdownProps {
   read_only?: boolean;
@@ -14,27 +13,6 @@ interface ExtractTaskDropdownProps {
   style?: React.CSSProperties;
   onChange?: (taskName: string | null) => void;
 }
-
-const StyledDropdown = styled(Dropdown)`
-  &.ui.dropdown {
-    width: 100%; // Remove the hardcoded minWidth
-
-    // Handle long text in the selected value
-    .text {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
-    }
-
-    // Style the dropdown menu
-    .menu {
-      width: max-content;
-      min-width: 100%;
-      max-width: 80vw;
-    }
-  }
-`;
 
 export const ExtractTaskDropdown: React.FC<ExtractTaskDropdownProps> = ({
   read_only,
@@ -71,56 +49,24 @@ export const ExtractTaskDropdown: React.FC<ExtractTaskDropdownProps> = ({
     []
   );
 
-  const handleSearchChange = (
-    event: React.SyntheticEvent<HTMLElement>,
-    { searchQuery }: { searchQuery: string }
-  ) => {
-    debouncedSetSearchQuery(searchQuery);
+  const handleSearchChange = (query: string) => {
+    debouncedSetSearchQuery(query);
   };
 
-  const handleSelectionChange = (
-    event: React.SyntheticEvent<HTMLElement>,
-    data: DropdownProps
-  ) => {
+  const handleSelectionChange = (value: string | string[] | null) => {
     if (onChange) {
-      const selected = _.find(tasks, { name: data.value as string });
+      const selected = _.find(tasks, { name: value as string });
       onChange(selected ? selected.name : null);
     }
   };
 
   // Memoize options to prevent unnecessary recalculations
-  const dropdownOptions = useMemo(
+  const dropdownOptions = useMemo<DropdownOption[]>(
     () =>
       tasks.map((task) => ({
-        key: task.name,
-        text: task.name,
         value: task.name,
-        content: (
-          <div>
-            <div
-              style={{
-                fontWeight: 600,
-                whiteSpace: "normal",
-                wordBreak: "break-word",
-                fontSize: "0.9em",
-                marginBottom: "0.2em",
-              }}
-            >
-              {task.name}
-            </div>
-            <div
-              style={{
-                fontSize: "0.8em",
-                color: "rgba(0, 0, 0, 0.6)",
-                whiteSpace: "normal",
-                wordBreak: "break-word",
-                lineHeight: 1.3,
-              }}
-            >
-              {task.description}
-            </div>
-          </div>
-        ),
+        label: task.name,
+        description: task.description,
       })),
     [tasks]
   );
@@ -130,13 +76,13 @@ export const ExtractTaskDropdown: React.FC<ExtractTaskDropdownProps> = ({
   }
 
   return (
-    <StyledDropdown
+    <Dropdown
+      mode="select"
       fluid
-      selection
-      search
+      searchable="async"
       disabled={read_only}
-      options={dropdownOptions} // Use memoized options
-      value={taskName}
+      options={dropdownOptions}
+      value={taskName ?? null}
       placeholder="Select a task"
       onChange={read_only ? () => {} : handleSelectionChange}
       onSearchChange={handleSearchChange}

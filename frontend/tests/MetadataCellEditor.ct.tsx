@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { MetadataCellEditor } from "../src/components/metadata/editors/MetadataCellEditor";
 import { MetadataDataType } from "../src/types/metadata";
 import { createMockColumn } from "./factories/metadataFactories";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("MetadataCellEditor", () => {
   test("renders string editor", async ({ mount, page }) => {
@@ -24,6 +25,8 @@ test.describe("MetadataCellEditor", () => {
     const input = page.getByRole("textbox");
     await expect(input).toBeVisible();
     await expect(input).toHaveValue("Initial value");
+
+    await docScreenshot(page, "metadata--cell-editor--string-input");
 
     // Test that max length is enforced
     await input.fill("a".repeat(60)); // Try to enter 60 characters
@@ -84,6 +87,8 @@ test.describe("MetadataCellEditor", () => {
     const checkbox = page.getByRole("checkbox");
     await expect(checkbox).toBeVisible();
     await expect(checkbox).toBeChecked();
+
+    await docScreenshot(page, "metadata--cell-editor--boolean-checkbox");
   });
 
   test("renders date editor", async ({ mount, page }) => {
@@ -128,20 +133,23 @@ test.describe("MetadataCellEditor", () => {
       />
     );
 
-    const select = page.getByRole("combobox");
-    await expect(select).toBeVisible();
-    // Semantic UI may use div or span for the text
-    await expect(select.locator(".text").first()).toHaveText("Option B");
+    const dropdown = page.locator(".oc-dropdown").first();
+    await expect(dropdown).toBeVisible();
+    // Should show the selected value
+    await expect(dropdown.locator(".oc-dropdown__value")).toHaveText(
+      "Option B"
+    );
 
-    // Semantic UI Dropdown doesn't use <option> elements
-    // Instead, we should click to open the dropdown and check the menu items
-    await select.click();
+    // Click to open the dropdown and check the options
+    await dropdown.locator(".oc-dropdown__trigger").click();
 
-    const menuItems = page.locator(".ui.dropdown .menu .item");
-    await expect(menuItems).toHaveCount(3); // No empty option in clearable dropdown
-    await expect(menuItems.nth(0)).toHaveText("Option A");
-    await expect(menuItems.nth(1)).toHaveText("Option B");
-    await expect(menuItems.nth(2)).toHaveText("Option C");
+    const options = page.locator(".oc-dropdown__option");
+    await expect(options).toHaveCount(3);
+    await expect(options.nth(0)).toContainText("Option A");
+    await expect(options.nth(1)).toContainText("Option B");
+    await expect(options.nth(2)).toContainText("Option C");
+
+    await docScreenshot(page, "metadata--cell-editor--select-dropdown");
   });
 
   test("renders JSON editor", async ({ mount, page }) => {
@@ -369,17 +377,18 @@ test.describe("MetadataCellEditor", () => {
     );
 
     // Should render multi-select dropdown
-    const multiselect = page.getByRole("combobox");
+    const multiselect = page.locator(".oc-dropdown").first();
     await expect(multiselect).toBeVisible();
 
-    // Check selected items are displayed
-    // Semantic UI shows selected items as labels within the dropdown
+    // Check selected items are displayed as tags in @os-legal/ui dropdown
     await expect(
-      multiselect.locator("a.ui.label").filter({ hasText: "Tag1" })
+      multiselect.locator(".oc-dropdown__tag").filter({ hasText: "Tag1" })
     ).toBeVisible();
     await expect(
-      multiselect.locator("a.ui.label").filter({ hasText: "Tag2" })
+      multiselect.locator(".oc-dropdown__tag").filter({ hasText: "Tag2" })
     ).toBeVisible();
+
+    await docScreenshot(page, "metadata--cell-editor--multiselect-tags");
   });
 
   test("respects readOnly prop", async ({ mount, page }) => {

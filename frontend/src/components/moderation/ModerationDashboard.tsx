@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-// TODO: migrate to @os-legal/ui once Table and Dropdown components are available
-import { Table, Dropdown } from "semantic-ui-react";
+import { Table } from "semantic-ui-react";
 import {
   Button,
+  Dropdown,
   Modal,
   ModalHeader,
   ModalBody,
@@ -71,54 +71,46 @@ interface ModerationDashboardProps {
 }
 
 const ACTION_TYPE_OPTIONS = [
-  { key: "all", value: "", text: "All Actions" },
+  { value: "", label: "All Actions" },
   {
-    key: ModerationActionTypeEnum.LOCK_THREAD,
     value: ModerationActionTypeEnum.LOCK_THREAD,
-    text: "Lock Thread",
+    label: "Lock Thread",
   },
   {
-    key: ModerationActionTypeEnum.UNLOCK_THREAD,
     value: ModerationActionTypeEnum.UNLOCK_THREAD,
-    text: "Unlock Thread",
+    label: "Unlock Thread",
   },
   {
-    key: ModerationActionTypeEnum.PIN_THREAD,
     value: ModerationActionTypeEnum.PIN_THREAD,
-    text: "Pin Thread",
+    label: "Pin Thread",
   },
   {
-    key: ModerationActionTypeEnum.UNPIN_THREAD,
     value: ModerationActionTypeEnum.UNPIN_THREAD,
-    text: "Unpin Thread",
+    label: "Unpin Thread",
   },
   {
-    key: ModerationActionTypeEnum.DELETE_MESSAGE,
     value: ModerationActionTypeEnum.DELETE_MESSAGE,
-    text: "Delete Message",
+    label: "Delete Message",
   },
   {
-    key: ModerationActionTypeEnum.RESTORE_MESSAGE,
     value: ModerationActionTypeEnum.RESTORE_MESSAGE,
-    text: "Restore Message",
+    label: "Restore Message",
   },
   {
-    key: ModerationActionTypeEnum.DELETE_THREAD,
     value: ModerationActionTypeEnum.DELETE_THREAD,
-    text: "Delete Thread",
+    label: "Delete Thread",
   },
   {
-    key: ModerationActionTypeEnum.RESTORE_THREAD,
     value: ModerationActionTypeEnum.RESTORE_THREAD,
-    text: "Restore Thread",
+    label: "Restore Thread",
   },
 ];
 
 const TIME_RANGE_OPTIONS = [
-  { key: "1h", value: 1, text: "Last hour" },
-  { key: "24h", value: 24, text: "Last 24 hours" },
-  { key: "7d", value: 168, text: "Last 7 days" },
-  { key: "30d", value: 720, text: "Last 30 days" },
+  { value: 1, label: "Last hour" },
+  { value: 24, label: "Last 24 hours" },
+  { value: 168, label: "Last 7 days" },
+  { value: 720, label: "Last 30 days" },
 ];
 
 const formatActionType = (actionType: string): string => {
@@ -330,11 +322,12 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         >
           <BarChart3 size={16} />
           Moderation Metrics
-          <Dropdown
-            inline
+          <Dropdown<number>
+            mode="select"
+            clearable={false}
             options={TIME_RANGE_OPTIONS}
             value={timeRangeHours}
-            onChange={(_, { value }) => setTimeRangeHours(value as number)}
+            onChange={(value) => setTimeRangeHours(value as number)}
             style={{ marginLeft: "1rem" }}
           />
         </h4>
@@ -421,12 +414,11 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
           <div>
             <label>Action Type</label>
             <Dropdown
-              selection
+              mode="select"
+              clearable={false}
               options={ACTION_TYPE_OPTIONS}
               value={selectedActionType}
-              onChange={(_, { value }) =>
-                setSelectedActionType(value as string)
-              }
+              onChange={(value) => setSelectedActionType(value as string)}
             />
           </div>
           <div>

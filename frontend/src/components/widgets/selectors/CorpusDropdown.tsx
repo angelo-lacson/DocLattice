@@ -1,6 +1,6 @@
-import React, { SyntheticEvent, useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
-import { Dropdown, DropdownProps } from "semantic-ui-react";
+import { Dropdown, DropdownOption } from "@os-legal/ui";
 import {
   GET_CORPUSES,
   GetCorpusesInputs,
@@ -9,12 +9,6 @@ import {
 import { selectedCorpus } from "../../../graphql/cache";
 import _ from "lodash";
 import { CorpusType } from "../../../types/graphql-api";
-
-interface CorpusOption {
-  key: string;
-  text: string;
-  value: string;
-}
 
 /**
  * Props for the CorpusDropdown component.
@@ -74,18 +68,12 @@ export const CorpusDropdown: React.FC<CorpusDropdownProps> = ({
     []
   );
 
-  const handleSearchChange = (
-    event: React.SyntheticEvent<HTMLElement>,
-    { searchQuery }: { searchQuery: string }
-  ) => {
-    debouncedSetSearchQuery(searchQuery);
+  const handleSearchChange = (query: string) => {
+    debouncedSetSearchQuery(query);
   };
 
-  const handleSelectionChange = (
-    event: SyntheticEvent<HTMLElement, Event>,
-    data: DropdownProps
-  ) => {
-    const selected = _.find(corpuses, { id: data.value as string });
+  const handleSelectionChange = (value: string | string[] | null) => {
+    const selected = _.find(corpuses, { id: value as string });
     const resultCorpus = selected ? (selected as CorpusType) : null;
 
     // If onChange prop is provided, use it (controlled component behavior)
@@ -97,37 +85,37 @@ export const CorpusDropdown: React.FC<CorpusDropdownProps> = ({
     }
   };
 
-  const getDropdownOptions = (): CorpusOption[] => {
+  const getDropdownOptions = (): DropdownOption[] => {
     return corpuses.map((node) => ({
-      key: node.id,
-      text: node.title ?? "Untitled Corpus", // Provide fallback for potentially null/undefined title
       value: node.id,
+      label: node.title ?? "Untitled Corpus", // Provide fallback for potentially null/undefined title
     }));
   };
 
   // Determine the value to display: controlled value first, then global state
   const displayValue =
-    value !== undefined ? value : global_selected_corpus?.id ?? undefined;
+    value !== undefined ? value : global_selected_corpus?.id ?? null;
 
   if (error) {
     // Consider a more user-friendly error display, maybe a disabled dropdown with an error message
     console.error("Error loading corpuses:", error);
-    return <Dropdown placeholder="Error loading corpuses" disabled error />;
+    return (
+      <Dropdown mode="select" placeholder="Error loading corpuses" disabled />
+    );
   }
 
   return (
     <Dropdown
+      mode="select"
       fluid={fluid}
-      selection
-      search
+      searchable="async"
       clearable={clearable}
       options={getDropdownOptions()}
-      value={displayValue === null ? undefined : displayValue}
+      value={displayValue ?? null}
       placeholder={placeholder}
       onChange={handleSelectionChange}
       onSearchChange={handleSearchChange}
       loading={loading}
-      selectOnNavigation={false} // Prevents closing dropdown on search result navigation
     />
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { Dropdown } from "semantic-ui-react";
 import {
   Button,
+  Dropdown,
   Input,
   Modal,
   ModalHeader,
@@ -558,18 +558,17 @@ export const RelationshipActionModal: React.FC<
                               <Dropdown
                                 placeholder="Select relationship label"
                                 fluid
-                                selection
+                                mode="select"
+                                searchable="local"
                                 options={filteredRelationshipLabels.map(
                                   (label) => ({
-                                    key: label.id,
-                                    text: label.text,
                                     value: label.id,
-                                    icon: label.icon || undefined,
+                                    label: label.text || "",
                                   })
                                 )}
-                                value={newLabelId || undefined}
-                                onChange={(_, data) =>
-                                  setNewLabelId(data.value as string)
+                                value={newLabelId ?? null}
+                                onChange={(value) =>
+                                  setNewLabelId(value as string)
                                 }
                               />
                             </div>

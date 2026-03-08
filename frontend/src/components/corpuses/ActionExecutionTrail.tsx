@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
-import { Dropdown } from "semantic-ui-react";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
-import { Spinner } from "@os-legal/ui";
+import { Dropdown, Spinner } from "@os-legal/ui";
 import { AlertTriangle, History, RefreshCw } from "lucide-react";
 import { ActionExecutionRow } from "./ActionExecutionRow";
 import {
@@ -42,11 +41,6 @@ const FiltersRow = styled.div`
 
 const FilterGroup = styled.div`
   min-width: 130px;
-
-  .ui.dropdown {
-    min-width: 130px;
-    font-size: 0.85rem;
-  }
 
   @media (max-width: 480px) {
     min-width: 100%;
@@ -180,27 +174,27 @@ const RetryButton = styled.button`
 `;
 
 const STATUS_OPTIONS = [
-  { key: "all", value: "", text: "All Statuses" },
-  { key: "queued", value: "queued", text: "Queued" },
-  { key: "running", value: "running", text: "Running" },
-  { key: "completed", value: "completed", text: "Completed" },
-  { key: "failed", value: "failed", text: "Failed" },
-  { key: "skipped", value: "skipped", text: "Skipped" },
+  { value: "", label: "All Statuses" },
+  { value: "queued", label: "Queued" },
+  { value: "running", label: "Running" },
+  { value: "completed", label: "Completed" },
+  { value: "failed", label: "Failed" },
+  { value: "skipped", label: "Skipped" },
 ];
 
 const TYPE_OPTIONS = [
-  { key: "all", value: "", text: "All Types" },
-  { key: "fieldset", value: "fieldset", text: "Fieldset" },
-  { key: "analyzer", value: "analyzer", text: "Analyzer" },
-  { key: "agent", value: "agent", text: "Agent" },
+  { value: "", label: "All Types" },
+  { value: "fieldset", label: "Fieldset" },
+  { value: "analyzer", label: "Analyzer" },
+  { value: "agent", label: "Agent" },
 ];
 
 const TIME_RANGE_OPTIONS = [
-  { key: "all", value: "", text: "All Time" },
-  { key: "1h", value: "1", text: "Last Hour" },
-  { key: "24h", value: "24", text: "Last 24 Hours" },
-  { key: "7d", value: "168", text: "Last 7 Days" },
-  { key: "30d", value: "720", text: "Last 30 Days" },
+  { value: "", label: "All Time" },
+  { value: "1", label: "Last Hour" },
+  { value: "24", label: "Last 24 Hours" },
+  { value: "168", label: "Last 7 Days" },
+  { value: "720", label: "Last 30 Days" },
 ];
 
 const PAGE_SIZE = 25;
@@ -242,11 +236,10 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
   });
 
   const actionOptions = [
-    { key: "all", value: "", text: "All Actions" },
+    { value: "", label: "All Actions" },
     ...(actionsData?.corpusActions?.edges?.map(({ node }) => ({
-      key: node.id,
       value: node.id,
-      text: node.name,
+      label: node.name,
     })) || []),
   ];
 
@@ -332,49 +325,53 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
       <FiltersRow role="search" aria-label="Filter action executions">
         <FilterGroup>
           <Dropdown
-            selection
+            mode="select"
             fluid
             options={STATUS_OPTIONS}
             value={statusFilter}
-            onChange={(_, { value }) => setStatusFilter(value as string)}
+            onChange={(value) => setStatusFilter(value as string)}
             aria-label="Filter by status"
             placeholder="Status"
+            clearable={false}
           />
         </FilterGroup>
 
         <FilterGroup>
           <Dropdown
-            selection
+            mode="select"
             fluid
             options={TYPE_OPTIONS}
             value={typeFilter}
-            onChange={(_, { value }) => setTypeFilter(value as string)}
+            onChange={(value) => setTypeFilter(value as string)}
             aria-label="Filter by type"
             placeholder="Type"
+            clearable={false}
           />
         </FilterGroup>
 
         <FilterGroup>
           <Dropdown
-            selection
+            mode="select"
             fluid
             options={actionOptions}
             value={actionFilter}
-            onChange={(_, { value }) => setActionFilter(value as string)}
+            onChange={(value) => setActionFilter(value as string)}
             aria-label="Filter by action"
             placeholder="Action"
+            clearable={false}
           />
         </FilterGroup>
 
         <FilterGroup>
           <Dropdown
-            selection
+            mode="select"
             fluid
             options={TIME_RANGE_OPTIONS}
             value={timeRangeHours}
-            onChange={(_, { value }) => setTimeRangeHours(value as string)}
+            onChange={(value) => setTimeRangeHours(value as string)}
             aria-label="Filter by time"
             placeholder="Time"
+            clearable={false}
           />
         </FilterGroup>
 

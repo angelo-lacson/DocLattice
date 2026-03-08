@@ -7,6 +7,7 @@ import {
   GET_MODERATION_ACTIONS,
   GET_MODERATION_METRICS,
 } from "../src/graphql/queries";
+import { docScreenshot } from "./utils/docScreenshot";
 
 /* -------------------------------------------------------------------------- */
 /* Mock Data                                                                   */
@@ -194,6 +195,8 @@ test(
 
     // Check actions section
     await expect(page.getByText("Moderation Actions")).toBeVisible();
+
+    await docScreenshot(page, "moderation--dashboard--initial");
   }
 );
 
@@ -429,7 +432,7 @@ test(
 
     // Find the time range dropdown and check default
     const dropdown = page
-      .locator(".dropdown")
+      .locator(".oc-dropdown")
       .filter({ hasText: "Last 24 hours" })
       .first();
     await expect(dropdown).toBeVisible();
@@ -441,5 +444,7 @@ test(
     await expect(page.getByText("Last hour")).toBeVisible();
     await expect(page.getByText("Last 7 days")).toBeVisible();
     await expect(page.getByText("Last 30 days")).toBeVisible();
+
+    await docScreenshot(page, "moderation--dashboard--time-filter");
   }
 );

@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { MemoryRouter } from "react-router-dom";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { ActionExecutionTrail } from "../src/components/corpuses/ActionExecutionTrail";
+import { docScreenshot } from "./utils/docScreenshot";
 import {
   GET_CORPUS_ACTION_EXECUTIONS,
   GET_CORPUS_ACTION_TRAIL_STATS,
@@ -180,6 +181,8 @@ test.describe("ActionExecutionTrail Component", () => {
       page.getByRole("button", { name: /Extract Contract Fields/ })
     ).toBeVisible();
     await expect(page.getByText("Sample Contract.pdf")).toBeVisible();
+
+    await docScreenshot(page, "corpus-actions--execution-trail--with-data");
   });
 
   test("should display filter dropdowns", async ({ mount, page }) => {
@@ -199,6 +202,8 @@ test.describe("ActionExecutionTrail Component", () => {
     await expect(page.locator('[aria-label="Filter by type"]')).toBeVisible();
     await expect(page.locator('[aria-label="Filter by action"]')).toBeVisible();
     await expect(page.locator('[aria-label="Filter by time"]')).toBeVisible();
+
+    await docScreenshot(page, "corpus-actions--execution-trail--filters");
   });
 
   test("should show empty state when no executions", async ({
