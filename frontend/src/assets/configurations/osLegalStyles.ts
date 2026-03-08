@@ -205,6 +205,16 @@ export const OS_LEGAL_COLORS = {
   // Extended yellow palette
   /** Light yellow surface - medium score indicators (yellow-100). */
   yellowLight: "#fef9c3",
+
+  // Search and chat source highlight colors
+  /** Active/selected search result highlight. */
+  searchHighlightActive: "#FFFF00",
+  /** Inactive search result highlight. */
+  searchHighlight: "#FFFF99",
+  /** Active/selected chat source highlight. */
+  chatSourceHighlightActive: "#A8FFA8",
+  /** Inactive chat source highlight. */
+  chatSourceHighlight: "#D2FFD2",
 } as const;
 
 /**
@@ -220,6 +230,27 @@ export const accentAlpha = (opacity: number): string =>
  */
 export const primaryBlueAlpha = (opacity: number): string =>
   `rgba(59, 130, 246, ${opacity})`;
+
+/**
+ * Create an rgba color string from the chat-source blue-gray (#5c7c9d = rgb(92, 124, 157))
+ * with a given opacity. Use instead of hardcoded rgba(92, 124, 157, ...) values.
+ */
+export const chatSourceBlueAlpha = (opacity: number): string =>
+  `rgba(92, 124, 157, ${opacity})`;
+
+/**
+ * Create an rgba color string for success glow effects (rgb(0, 255, 0))
+ * with a given opacity. Use instead of hardcoded rgba(0, 255, 0, ...) values.
+ */
+export const successGlowAlpha = (opacity: number): string =>
+  `rgba(0, 255, 0, ${opacity})`;
+
+/**
+ * Create an rgba color string for danger glow effects (rgb(255, 0, 0))
+ * with a given opacity. Use instead of hardcoded rgba(255, 0, 0, ...) values.
+ */
+export const dangerGlowAlpha = (opacity: number): string =>
+  `rgba(255, 0, 0, ${opacity})`;
 
 /**
  * Typography definitions for the OS Legal design system.

@@ -26,9 +26,9 @@ import {
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
-  OS_LEGAL_SPACING,
-  OS_LEGAL_SHADOWS,
 } from "../../assets/configurations/osLegalStyles";
+import { CardSegment as StyledSegment } from "../layout/SharedSegments";
+import { StatusBadge } from "../agents/AgentBadges";
 import { backendUserObj } from "../../graphql/cache";
 
 // ---------------------------------------------------------------------------
@@ -135,29 +135,6 @@ const PageSubtitle = styled.p`
   font-size: 1rem;
   margin: 0;
   line-height: 1.5;
-`;
-
-const StyledSegment = styled.div`
-  background: ${OS_LEGAL_COLORS.surface};
-  border: 1px solid ${OS_LEGAL_COLORS.border};
-  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
-  box-shadow: ${OS_LEGAL_SHADOWS.card};
-  padding: 1.5rem;
-`;
-
-const StatusBadge = styled.span<{ $active: boolean }>`
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: ${({ $active }) =>
-    $active
-      ? OS_LEGAL_COLORS.successSurface
-      : OS_LEGAL_COLORS.dangerSurfaceHover};
-  color: ${({ $active }) =>
-    $active ? OS_LEGAL_COLORS.successText : OS_LEGAL_COLORS.dangerText};
 `;
 
 const TruncatedCell = styled.span`
@@ -454,34 +431,32 @@ export const WorkerAccountManagement: React.FC = () => {
       </Modal>
 
       {/* Deactivate Confirmation */}
-      {accountToDeactivate !== null && (
-        <Modal
-          open={accountToDeactivate !== null}
+      <Modal
+        open={accountToDeactivate !== null}
+        onClose={() => setAccountToDeactivate(null)}
+        size="sm"
+      >
+        <ModalHeader
+          title="Confirm Deactivation"
           onClose={() => setAccountToDeactivate(null)}
-          size="sm"
-        >
-          <ModalHeader
-            title="Confirm Deactivation"
-            onClose={() => setAccountToDeactivate(null)}
-          />
-          <ModalBody>
-            Are you sure you want to deactivate &quot;
-            {accountToDeactivate?.name}&quot;? This will invalidate all access
-            tokens for this account.
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="secondary"
-              onClick={() => setAccountToDeactivate(null)}
-            >
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleConfirmDeactivate}>
-              Deactivate
-            </Button>
-          </ModalFooter>
-        </Modal>
-      )}
+        />
+        <ModalBody>
+          Are you sure you want to deactivate &quot;
+          {accountToDeactivate?.name}&quot;? This will invalidate all access
+          tokens for this account.
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => setAccountToDeactivate(null)}
+          >
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleConfirmDeactivate}>
+            Deactivate
+          </Button>
+        </ModalFooter>
+      </Modal>
     </Container>
   );
 };

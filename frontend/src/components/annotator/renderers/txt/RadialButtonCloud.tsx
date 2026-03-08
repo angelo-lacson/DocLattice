@@ -9,6 +9,13 @@ import {
   accentAlpha,
 } from "../../../../assets/configurations/osLegalStyles";
 
+/** Spiral growth rate — higher values spread buttons outward faster. */
+const SPIRAL_GROWTH_RATE = 6;
+/** Fixed arc-length spacing (px) between successive buttons on the spiral. */
+const SPIRAL_SPACING_PX = 50;
+/** Number of inner spiral positions to skip (keeps buttons away from center). */
+const SPIRAL_SKIP_COUNT = 2;
+
 // Helper function to ensure valid hex color
 const ensureValidHexColor = (color: string): string => {
   // If it's already a valid hex color, return it
@@ -268,15 +275,12 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
   }, [cloudVisible, handleClickOutside]);
 
   const numButtons = buttonList.length;
-  const a = 6;
-  const spacingAlong = 50;
-  const skipCount = 2;
 
   const buttonPositions = calculateButtonPositions(
     numButtons,
-    a,
-    spacingAlong,
-    skipCount
+    SPIRAL_GROWTH_RATE,
+    SPIRAL_SPACING_PX,
+    SPIRAL_SKIP_COUNT
   );
 
   const dotColor = ensureValidHexColor(parentBackgroundColor);
@@ -286,7 +290,7 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
     OS_LEGAL_COLORS.primaryBlue, // Blue
     OS_LEGAL_COLORS.success, // Green
     OS_LEGAL_COLORS.danger, // Red
-    "#A333C8", // Purple
+    OS_LEGAL_COLORS.agentPurple,
   ];
 
   return (
