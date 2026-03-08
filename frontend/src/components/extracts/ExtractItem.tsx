@@ -1,6 +1,13 @@
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
-import { Button, Card, Icon, Label } from "semantic-ui-react";
+import {
+  Settings,
+  Trash2,
+  Grid3X3,
+  File,
+  Table2,
+  LayoutGrid,
+} from "lucide-react";
 import { LoadingOverlay } from "../common/LoadingOverlay";
 import {
   RequestDeleteExtractInputType,
@@ -16,6 +23,7 @@ import { getPermissions } from "../../utils/transform";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ExtractItemProps {
   extract: ExtractType;
@@ -26,31 +34,30 @@ interface ExtractItemProps {
   onSelect?: () => any | never;
 }
 
-const ExtractCard = styled(Card)<{ $selected?: boolean; $compact?: boolean }>`
-  padding: 1.25rem !important;
-  margin: 0 0 1rem 0 !important;
-  width: 100% !important;
-  min-width: 0 !important;
+const ExtractCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
+  padding: 1.25rem;
+  margin: 0 0 1rem 0;
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  cursor: pointer;
   background: ${(props) =>
     props.$selected
       ? "linear-gradient(165deg, rgba(34, 197, 94, 0.05), rgba(255, 255, 255, 0.6))"
-      : "#ffffff"} !important;
-  border: 1px solid ${(props) => (props.$selected ? "#22c55e" : "#e2e8f0")} !important;
-  border-radius: 16px !important;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      : "#ffffff"};
+  border: 1px solid
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.green : OS_LEGAL_COLORS.border};
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: ${(props) =>
     props.$selected
       ? "0 8px 24px rgba(34, 197, 94, 0.08)"
-      : "0 1px 3px rgba(0, 0, 0, 0.01)"} !important;
+      : "0 1px 3px rgba(0, 0, 0, 0.01)"};
 
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.05) !important;
-  }
-
-  .content {
-    padding: 0 !important;
-    border: none !important;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.05);
   }
 `;
 
@@ -67,15 +74,10 @@ const CardHeader = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     border-radius: 10px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     transition: all 0.2s ease;
-
-    i.icon {
-      margin: 0 !important;
-      font-size: 1.25rem !important;
-    }
   }
 
   .text {
@@ -85,21 +87,21 @@ const CardHeader = styled.div`
     h3 {
       font-size: 1.125rem;
       font-weight: 600;
-      color: #1e293b;
+      color: ${OS_LEGAL_COLORS.textPrimary};
       margin: 0 0 0.375rem 0;
       word-break: break-word;
     }
 
     .date {
       font-size: 0.75rem;
-      color: #64748b;
+      color: ${OS_LEGAL_COLORS.textSecondary};
     }
   }
 `;
 
 const Description = styled.div`
   font-size: 0.875rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   line-height: 1.5;
   margin-bottom: 1.25rem;
 `;
@@ -110,59 +112,56 @@ const MetadataBadges = styled.div`
   gap: 0.75rem;
 `;
 
-const Badge = styled(Label)`
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #64748b !important;
-  border-radius: 8px !important;
-  padding: 0.5rem 0.75rem !important;
-  font-size: 0.75rem !important;
-  font-weight: 500 !important;
-
-  i.icon {
-    margin-right: 0.375rem !important;
-    opacity: 0.7;
-  }
+const Badge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
 `;
 
-const ActionBadge = styled(Label)`
-  position: absolute !important;
-  top: -0.5rem !important;
-  right: 1rem !important;
-  background: #22c55e !important;
-  color: white !important;
-  border-radius: 20px !important;
-  padding: 0.375rem 0.75rem !important;
-  font-size: 0.75rem !important;
-  font-weight: 500 !important;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15) !important;
-
-  i.icon {
-    margin-right: 0.375rem !important;
-  }
+const ActionBadge = styled.span`
+  position: absolute;
+  top: -0.5rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: ${OS_LEGAL_COLORS.green};
+  color: white;
+  border-radius: 20px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
 `;
 
-const DeleteButton = styled(Button)`
-  position: absolute !important;
-  top: 1rem !important;
-  right: 1rem !important;
-  padding: 0.5rem !important;
-  width: 32px !important;
-  height: 32px !important;
-  background: rgba(239, 68, 68, 0.1) !important;
-  color: #ef4444 !important;
-  border: 1px solid rgba(239, 68, 68, 0.2) !important;
-  box-shadow: none !important;
-  transition: all 0.2s ease !important;
+const DeleteButton = styled.button`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.5rem;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.1);
+  color: ${OS_LEGAL_COLORS.dangerBorderHover};
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 50%;
+  box-shadow: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.15) !important;
+    background: rgba(239, 68, 68, 0.15);
     transform: scale(1.05);
-  }
-
-  i.icon {
-    margin: 0 !important;
-    font-size: 0.875rem !important;
   }
 `;
 
@@ -235,25 +234,25 @@ export const ExtractItem: React.FC<ExtractItemProps> = ({
       />
 
       {extract.corpusAction && (
-        <ActionBadge size="tiny">
-          <Icon name="cog" /> {extract.corpusAction.name}
+        <ActionBadge>
+          <Settings size={12} /> {extract.corpusAction.name}
         </ActionBadge>
       )}
 
       {!read_only && can_delete && (
         <DeleteButton
-          circular
-          icon="trash"
-          onClick={(e: { stopPropagation: () => void }) => {
+          onClick={(e) => {
             e.stopPropagation();
             requestDeleteExtract();
           }}
-        />
+        >
+          <Trash2 size={14} />
+        </DeleteButton>
       )}
 
       <CardHeader>
         <div className="icon-wrapper">
-          <Icon name="grid layout" />
+          <LayoutGrid size={20} />
         </div>
         <div className="text">
           <h3>{extract.name}</h3>
@@ -271,11 +270,11 @@ export const ExtractItem: React.FC<ExtractItemProps> = ({
 
       <MetadataBadges>
         <Badge>
-          <Icon name="file" />
+          <File size={14} />
           {extract.fullDocumentList?.length || 0} Documents
         </Badge>
         <Badge>
-          <Icon name="table" />
+          <Table2 size={14} />
           {extract.fieldset?.fullColumnList?.length || 0} Columns
         </Badge>
       </MetadataBadges>

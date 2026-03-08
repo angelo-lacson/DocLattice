@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
-import { Form, Dropdown } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
 import { Input } from "@os-legal/ui";
 import {
   GET_BADGE_CRITERIA_TYPES,
@@ -10,6 +10,7 @@ import {
   CriteriaField,
 } from "../../graphql/queries";
 import { ErrorMessage, InfoMessage, WarningMessage } from "../widgets/feedback";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface BadgeCriteriaConfigProps {
   badgeType: "GLOBAL" | "CORPUS";
@@ -215,8 +216,11 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
   return (
     <div>
-      <Form.Field required>
-        <label>Auto-Award Criteria Type</label>
+      <div style={{ marginBottom: "1rem" }}>
+        <label>
+          Auto-Award Criteria Type{" "}
+          <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
+        </label>
         <Dropdown
           placeholder="Select criteria type"
           fluid
@@ -226,7 +230,7 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
           value={selectedType}
           onChange={(_, { value }) => handleTypeChange(value as string)}
         />
-      </Form.Field>
+      </div>
 
       {currentType && (
         <>
@@ -235,24 +239,18 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
           </InfoMessage>
 
           {currentType.fields.map((field) => (
-            <Form.Field
-              key={field.name}
-              required={field.required}
-              error={
-                validationErrors[field.name]
-                  ? {
-                      content: validationErrors[field.name],
-                      pointing: "below",
-                    }
-                  : undefined
-              }
-            >
-              <label>{field.label}</label>
+            <div key={field.name} style={{ marginBottom: "1rem" }}>
+              <label>
+                {field.label}
+                {field.required && (
+                  <span style={{ color: OS_LEGAL_COLORS.danger }}> *</span>
+                )}
+              </label>
               {field.description && (
                 <p
                   style={{
                     fontSize: "0.9em",
-                    color: "#666",
+                    color: OS_LEGAL_COLORS.textSecondary,
                     marginBottom: "0.5em",
                   }}
                 >
@@ -327,7 +325,19 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
                   error={!!validationErrors[field.name]}
                 />
               )}
-            </Form.Field>
+
+              {validationErrors[field.name] && (
+                <p
+                  style={{
+                    fontSize: "0.85em",
+                    color: OS_LEGAL_COLORS.danger,
+                    marginTop: "0.25em",
+                  }}
+                >
+                  {validationErrors[field.name]}
+                </p>
+              )}
+            </div>
           ))}
 
           {Object.keys(validationErrors).length > 0 && (

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import styled from "styled-components";
-import { Form, Input, Label } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   Bot,
   Brain,
@@ -43,17 +44,17 @@ const AVAILABLE_ICONS: { name: string; icon: LucideIcon; label: string }[] = [
 
 // Preset colors for badges
 const PRESET_COLORS = [
-  { name: "Blue", value: "#3b82f6" },
+  { name: "Blue", value: OS_LEGAL_COLORS.primaryBlue },
   { name: "Purple", value: "#8b5cf6" },
   { name: "Indigo", value: "#6366f1" },
   { name: "Pink", value: "#ec4899" },
   { name: "Rose", value: "#f43f5e" },
   { name: "Orange", value: "#f97316" },
-  { name: "Amber", value: "#f59e0b" },
-  { name: "Green", value: "#22c55e" },
+  { name: "Amber", value: OS_LEGAL_COLORS.folderIcon },
+  { name: "Green", value: OS_LEGAL_COLORS.green },
   { name: "Teal", value: "#14b8a6" },
   { name: "Cyan", value: "#06b6d4" },
-  { name: "Slate", value: "#64748b" },
+  { name: "Slate", value: OS_LEGAL_COLORS.textSecondary },
   { name: "Gray", value: "#6b7280" },
 ];
 
@@ -69,10 +70,10 @@ interface BadgeConfiguratorProps {
 }
 
 const Container = styled.div`
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 1rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const PreviewSection = styled.div`
@@ -81,7 +82,7 @@ const PreviewSection = styled.div`
   gap: 1rem;
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const BadgePreview = styled.div<{ $color: string }>`
@@ -104,13 +105,13 @@ const BadgePreview = styled.div<{ $color: string }>`
 
 const PreviewLabel = styled.span`
   font-size: 0.8rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const SectionTitle = styled.h4`
   font-size: 0.8rem;
   font-weight: 600;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0 0 0.5rem 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -134,7 +135,8 @@ const IconButton = styled.button<{ $selected: boolean; $color: string }>`
   justify-content: center;
   gap: 0.25rem;
   padding: 0.5rem;
-  border: 2px solid ${(props) => (props.$selected ? props.$color : "#e2e8f0")};
+  border: 2px solid
+    ${(props) => (props.$selected ? props.$color : OS_LEGAL_COLORS.border)};
   border-radius: 8px;
   background: ${(props) => (props.$selected ? `${props.$color}10` : "white")};
   cursor: pointer;
@@ -148,12 +150,14 @@ const IconButton = styled.button<{ $selected: boolean; $color: string }>`
   svg {
     width: 20px;
     height: 20px;
-    color: ${(props) => (props.$selected ? props.$color : "#64748b")};
+    color: ${(props) =>
+      props.$selected ? props.$color : OS_LEGAL_COLORS.textSecondary};
   }
 
   span {
     font-size: 0.65rem;
-    color: ${(props) => (props.$selected ? props.$color : "#94a3b8")};
+    color: ${(props) =>
+      props.$selected ? props.$color : OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -169,7 +173,9 @@ const ColorButton = styled.button<{ $color: string; $selected: boolean }>`
   height: 32px;
   border-radius: 8px;
   background: ${(props) => props.$color};
-  border: 3px solid ${(props) => (props.$selected ? "#1e293b" : "transparent")};
+  border: 3px solid
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.textPrimary : "transparent"};
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
@@ -222,7 +228,7 @@ const ColorSwatch = styled.div<{ $color: string }>`
   height: 32px;
   border-radius: 8px;
   background: ${(props) => props.$color};
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed ${OS_LEGAL_COLORS.borderHover};
 `;
 
 const LabelInputWrapper = styled.div`
@@ -311,7 +317,11 @@ export const BadgeConfigurator: React.FC<BadgeConfiguratorProps> = ({
         ))}
         <CustomColorInput>
           <ColorInputWrapper>
-            <ColorSwatch $color={showCustomColor ? value.color : "#cbd5e1"} />
+            <ColorSwatch
+              $color={
+                showCustomColor ? value.color : OS_LEGAL_COLORS.borderHover
+              }
+            />
             <input
               type="color"
               value={value.color}
@@ -325,7 +335,7 @@ export const BadgeConfigurator: React.FC<BadgeConfiguratorProps> = ({
       {/* Label Input */}
       <SectionTitle>Label Text</SectionTitle>
       <LabelInputWrapper>
-        <Form.Field>
+        <div>
           <Input
             placeholder="AI Assistant"
             value={value.label}
@@ -333,11 +343,15 @@ export const BadgeConfigurator: React.FC<BadgeConfiguratorProps> = ({
             maxLength={20}
           />
           <small
-            style={{ color: "#64748b", marginTop: "0.25rem", display: "block" }}
+            style={{
+              color: OS_LEGAL_COLORS.textSecondary,
+              marginTop: "0.25rem",
+              display: "block",
+            }}
           >
             Short label shown on the badge (max 20 chars)
           </small>
-        </Form.Field>
+        </div>
       </LabelInputWrapper>
     </Container>
   );

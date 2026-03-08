@@ -1,6 +1,5 @@
 import React from "react";
-import { X } from "lucide-react";
-import { Icon } from "semantic-ui-react";
+import { X, TrendingUp, Table2, Tag } from "lucide-react";
 import { AnalysisType, ExtractType } from "../../../../types/graphql-api";
 import { PdfAnnotations } from "../../../annotator/types/annotations";
 
@@ -52,12 +51,12 @@ export const AnalysisExtractContextBar: React.FC<
         <ContextBarBadge>
           {selectedAnalysis ? (
             <>
-              <Icon name="chart line" />
+              <TrendingUp size={14} />
               ANALYSIS
             </>
           ) : (
             <>
-              <Icon name="table" />
+              <Table2 size={14} />
               EXTRACT
             </>
           )}
@@ -70,18 +69,18 @@ export const AnalysisExtractContextBar: React.FC<
         </ContextBarLabel>
         <ContextBarStats>
           <StatPill title="Annotations visible">
-            <Icon name="tag" />
+            <Tag size={14} />
             {pdfAnnotations?.annotations?.length || 0}
           </StatPill>
           {selectedAnalysis && (
             <StatPill title="Total analyses available">
-              <Icon name="chart line" />
+              <TrendingUp size={14} />
               {analysesCount}
             </StatPill>
           )}
           {selectedExtract && (
             <StatPill title="Total extracts available">
-              <Icon name="table" />
+              <Table2 size={14} />
               {extractsCount}
             </StatPill>
           )}

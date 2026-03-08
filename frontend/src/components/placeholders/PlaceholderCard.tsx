@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { FileQuestion } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface PlaceholderCardProps {
   title?: string;
@@ -17,7 +18,7 @@ const CardContainer = styled.div<{ $compact?: boolean }>`
   text-align: center;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
   transition: all 0.2s ease;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   position: relative;
   overflow: hidden;
   display: flex;
@@ -30,7 +31,7 @@ const CardContainer = styled.div<{ $compact?: boolean }>`
     transform: translateY(-4px);
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
       0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -38,13 +39,13 @@ const IconWrapper = styled.div`
   width: 56px;
   height: 56px;
   margin: 0 auto 1.5rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
 
   svg {
     width: 28px;
@@ -86,7 +87,7 @@ const Title = styled.h3<{ $compact?: boolean }>`
 `;
 
 const Description = styled.p<{ $compact?: boolean }>`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: ${(props) => (props.$compact ? "0.875rem" : "0.9375rem")};
   line-height: 1.5;
   margin: 0;
@@ -103,7 +104,11 @@ const Wave = styled.div`
   left: 0;
   right: 0;
   height: 80px;
-  background: linear-gradient(180deg, transparent 0%, #f8fafc 100%);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    ${OS_LEGAL_COLORS.surfaceHover} 100%
+  );
   border-radius: 0 0 12px 12px;
   z-index: 0;
   opacity: 0.5;

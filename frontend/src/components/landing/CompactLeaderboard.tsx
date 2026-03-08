@@ -14,6 +14,7 @@ import { Avatar, Chip } from "@os-legal/ui";
 import { ArrowRight, Trophy } from "lucide-react";
 import { LeaderboardEntry } from "../../graphql/landing-queries";
 import { color } from "../../theme/colors";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface CompactLeaderboardProps {
   contributors: LeaderboardEntry[] | null;
@@ -23,7 +24,7 @@ interface CompactLeaderboardProps {
 const FeedWrapper = styled.div`
   background: white;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 `;
@@ -47,7 +48,7 @@ const LeaderboardRow = styled.div`
   }
 
   &:not(:last-child) {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -188,14 +189,19 @@ const SkeletonRow = styled.div`
   padding: 0.75rem 0.5rem;
 
   &:not(:last-child) {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   }
 `;
 
 const SkeletonRank = styled.div`
   width: 28px;
   height: 28px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${OS_LEGAL_COLORS.border} 25%,
+    ${OS_LEGAL_COLORS.surfaceLight} 50%,
+    ${OS_LEGAL_COLORS.border} 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 8px;
@@ -214,7 +220,12 @@ const SkeletonRank = styled.div`
 const SkeletonAvatar = styled.div`
   width: 32px;
   height: 32px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${OS_LEGAL_COLORS.border} 25%,
+    ${OS_LEGAL_COLORS.surfaceLight} 50%,
+    ${OS_LEGAL_COLORS.border} 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 50%;
@@ -224,7 +235,12 @@ const SkeletonAvatar = styled.div`
 const SkeletonText = styled.div<{ $width?: string }>`
   width: ${(props) => props.$width || "100px"};
   height: 14px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${OS_LEGAL_COLORS.border} 25%,
+    ${OS_LEGAL_COLORS.surfaceLight} 50%,
+    ${OS_LEGAL_COLORS.border} 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
@@ -233,7 +249,12 @@ const SkeletonText = styled.div<{ $width?: string }>`
 const SkeletonRep = styled.div`
   width: 40px;
   height: 24px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(
+    90deg,
+    ${OS_LEGAL_COLORS.border} 25%,
+    ${OS_LEGAL_COLORS.surfaceLight} 50%,
+    ${OS_LEGAL_COLORS.border} 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
@@ -286,10 +307,10 @@ function getInitials(username?: string): string {
  */
 function getAvatarColor(userId?: string): string {
   const colors = [
-    "#3B82F6",
-    "#10B981",
-    "#F59E0B",
-    "#EF4444",
+    OS_LEGAL_COLORS.primaryBlue,
+    OS_LEGAL_COLORS.greenMedium,
+    OS_LEGAL_COLORS.folderIcon,
+    OS_LEGAL_COLORS.dangerBorderHover,
     "#8B5CF6",
     "#EC4899",
   ];

@@ -2,7 +2,14 @@
  * A modal for viewing and searching exports, with lazy loading and infinite scroll.
  */
 import { useEffect, useRef, useState } from "react";
-import { Button, Modal, Icon, Header } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from "@os-legal/ui";
+import { X } from "lucide-react";
 import _ from "lodash";
 import { CreateAndSearchBar } from "../../layout/CreateAndSearchBar";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
@@ -22,6 +29,7 @@ import {
 import { ExportObject } from "../../../types/graphql-api";
 import { exportSearchTerm, showExportModal } from "../../../graphql/cache";
 import { toast } from "react-toastify";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 export interface ExportModalProps {
   /**
@@ -153,29 +161,24 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
     .filter((item): item is ExportObject => !!item);
 
   return (
-    <Modal closeIcon open={visible} onClose={() => toggleModal()}>
-      <Modal.Header>
+    <Modal open={visible} onClose={() => toggleModal()} size="lg">
+      <ModalHeader title="Corpus Exports" onClose={() => toggleModal()} />
+      <ModalBody style={{ position: "relative" }}>
         <div
           style={{
-            width: "100%",
-            display: "flex",
-            flexDirection: "row",
-            justifyContent: "center",
+            padding: "0.75rem",
+            background: OS_LEGAL_COLORS.warningSurface,
+            border: `1px solid ${OS_LEGAL_COLORS.warningBorder}`,
+            borderRadius: "8px",
+            fontSize: "0.85rem",
+            color: OS_LEGAL_COLORS.warningText,
+            marginBottom: "1rem",
+            textAlign: "center",
           }}
         >
-          <div>
-            <Header as="h2" icon>
-              <Icon name="zip" />
-              Corpus Exports
-              <Header.Subheader>
-                WARNING - If you have a free account, your exports will be
-                deleted within 24 hours of completion.
-              </Header.Subheader>
-            </Header>
-          </div>
+          WARNING - If you have a free account, your exports will be deleted
+          within 24 hours of completion.
         </div>
-      </Modal.Header>
-      <Modal.Content style={{ position: "relative" }}>
         <LoadingOverlay
           active={exports_loading}
           inverted
@@ -205,12 +208,16 @@ export function ExportModal({ visible, toggleModal }: ExportModalProps) {
           fetchMore={fetchMoreExports}
           onDelete={handleDelete}
         />
-      </Modal.Content>
-      <Modal.Actions>
-        <Button basic color="grey" onClick={() => toggleModal()}>
-          <Icon name="remove" /> Close
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          variant="secondary"
+          onClick={() => toggleModal()}
+          leftIcon={<X size={16} />}
+        >
+          Close
         </Button>
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 }

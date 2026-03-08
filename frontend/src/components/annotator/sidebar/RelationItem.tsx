@@ -1,6 +1,6 @@
-import { Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { Trash2 } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 import "./AnnotatorSidebar.css";
 import { RelationHighlightItem } from "./RelationHighlightItem";
@@ -12,7 +12,7 @@ interface RelationContainerProps {
 }
 
 const RelationContainer = styled.div<RelationContainerProps>`
-  border-left: 4px solid ${(props) => props.$color || "#e0e1e2"};
+  border-left: 4px solid ${(props) => props.$color || OS_LEGAL_COLORS.border};
   background-color: ${(props) =>
     props.$selected ? "rgba(46, 204, 113, 0.08)" : "white"};
   box-shadow: ${(props) =>
@@ -46,22 +46,26 @@ const RelationHeader = styled.div`
   margin-bottom: 0.25rem;
 `;
 
-const DeleteButton = styled(Button)`
-  &&& {
-    padding: 0.4em;
-    margin: 0;
-    background-color: transparent;
-    color: #99a1a7;
-    transition: all 0.2s ease;
+const DeleteButton = styled.button`
+  padding: 0.4em;
+  margin: 0;
+  background-color: transparent;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background-color: #fee2e2;
-      color: #dc2626;
-    }
+  &:hover {
+    background-color: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+    color: ${OS_LEGAL_COLORS.danger};
+  }
 
-    &:active {
-      background-color: #fecaca;
-    }
+  &:active {
+    background-color: ${OS_LEGAL_COLORS.dangerBorder};
   }
 `;
 
@@ -99,7 +103,7 @@ const DividerRow = styled.div`
 const DividerLine = styled.div`
   flex: 1;
   height: 1px;
-  background-color: #e2e8f0;
+  background-color: ${OS_LEGAL_COLORS.border};
 `;
 
 export function RelationItem({
@@ -161,14 +165,14 @@ export function RelationItem({
       {!relation.structural && (
         <RelationHeader>
           <DeleteButton
-            icon={<Trash2 size={16} />}
-            size="mini"
-            circular
+            aria-label="Delete relation"
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onDeleteRelation(relation.id);
             }}
-          />
+          >
+            <Trash2 size={16} />
+          </DeleteButton>
         </RelationHeader>
       )}
 

@@ -19,13 +19,14 @@ import {
 } from "./ExtractDetailContent";
 import { getExtractStatus } from "../../utils/extractUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Styled Components
 const Container = styled.div`
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   overflow: hidden;
 `;
 
@@ -36,7 +37,7 @@ const Header = styled.header`
   gap: 16px;
   padding: 16px 20px;
   background: white;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   flex-shrink: 0;
 `;
 
@@ -52,7 +53,7 @@ const Title = styled.h2`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 20px;
   font-weight: 400;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -73,16 +74,16 @@ const IconButton = styled.button`
   height: 32px;
   padding: 0;
   background: transparent;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 
   &:disabled {

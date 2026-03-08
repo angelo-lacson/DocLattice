@@ -102,7 +102,7 @@ const LabelDisplayDropdown = styled(Dropdown)`
       color: ${OS_LEGAL_COLORS.textPrimary};
 
       &:hover {
-        border-color: #cbd5e1;
+        border-color: ${OS_LEGAL_COLORS.borderHover};
       }
     }
 

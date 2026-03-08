@@ -1,7 +1,8 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, CheckCircle, X } from "lucide-react";
-import { Button } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * Shape of the pending approval data passed from the parent chat component.
@@ -80,7 +81,10 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
               marginBottom: "1.5rem",
             }}
           >
-            <AlertCircle size={24} style={{ color: "#f59e0b" }} />
+            <AlertCircle
+              size={24}
+              style={{ color: OS_LEGAL_COLORS.folderIcon }}
+            />
             <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
               Tool Approval Required
             </h3>
@@ -98,12 +102,17 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
           </div>
 
           <div style={{ marginBottom: "1.5rem" }}>
-            <p style={{ margin: "0 0 1rem 0", color: "#374151" }}>
+            <p
+              style={{
+                margin: "0 0 1rem 0",
+                color: OS_LEGAL_COLORS.textTertiary,
+              }}
+            >
               The assistant wants to execute the following tool:
             </p>
             <div
               style={{
-                backgroundColor: "#f3f4f6",
+                backgroundColor: OS_LEGAL_COLORS.surfaceLight,
                 padding: "1rem",
                 borderRadius: "8px",
                 fontFamily: "monospace",
@@ -138,33 +147,19 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
             }}
           >
             <Button
-              size="medium"
+              variant="danger"
+              size="md"
               onClick={() => onDecision(false)}
-              style={{
-                backgroundColor: "#dc2626",
-                color: "white",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
+              leftIcon={<X size={16} />}
             >
-              <X size={16} />
               Reject
             </Button>
             <Button
-              size="medium"
+              variant="primary"
+              size="md"
               onClick={() => onDecision(true)}
-              style={{
-                backgroundColor: "#059669",
-                color: "white",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
+              leftIcon={<CheckCircle size={16} />}
             >
-              <CheckCircle size={16} />
               Approve
             </Button>
           </div>

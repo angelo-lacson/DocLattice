@@ -365,7 +365,8 @@ test("shows yellow bar at medium usage", async ({ mount, page }) => {
   const bgColor = await fill.evaluate(
     (el) => window.getComputedStyle(el).backgroundColor
   );
-  expect(bgColor).toBe("rgb(245, 158, 11)");
+  // OS_LEGAL_COLORS.folderIcon = #D97706
+  expect(bgColor).toBe("rgb(217, 119, 6)");
 
   await page.setViewportSize(CHAT_VIEWPORT);
   await page.waitForTimeout(200);
@@ -411,7 +412,8 @@ test("shows red bar at high usage", async ({ mount, page }) => {
   const bgColor = await fill.evaluate(
     (el) => window.getComputedStyle(el).backgroundColor
   );
-  expect(bgColor).toBe("rgb(239, 68, 68)");
+  // OS_LEGAL_COLORS.danger = #dc2626
+  expect(bgColor).toBe("rgb(220, 38, 38)");
 
   await page.setViewportSize(CHAT_VIEWPORT);
   await page.waitForTimeout(200);

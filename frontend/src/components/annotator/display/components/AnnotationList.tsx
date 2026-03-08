@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import styled from "styled-components";
 
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import "../../sidebar/AnnotatorSidebar.css";
 import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
 import { usePdfAnnotations } from "../../hooks/AnnotationHooks";
@@ -38,13 +39,13 @@ const ListViewport = styled.div`
     width: 8px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 4px;
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;

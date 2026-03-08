@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { motion } from "framer-motion";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { UnifiedContentItem, Note } from "./types";
 import {
   ServerSpanAnnotation,
@@ -42,15 +43,15 @@ const ItemContainer = styled.div`
 
 const SearchResultCard = styled(motion.div)`
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
@@ -83,7 +84,7 @@ const SearchResultText = styled.div`
   flex: 1;
   font-size: 0.875rem;
   line-height: 1.5;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   .highlight {
     background: #fef3c7;
@@ -95,7 +96,7 @@ const SearchResultText = styled.div`
 
 const PageIndicator = styled.span`
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-left: 0.5rem;
 `;
 

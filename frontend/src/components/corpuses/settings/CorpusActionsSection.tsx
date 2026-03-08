@@ -3,7 +3,7 @@
  * and integrated template library picker.
  */
 import React, { useState, useRef, useEffect } from "react";
-import { Button } from "semantic-ui-react";
+import { Button, IconButton } from "@os-legal/ui";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
 import { toast } from "react-toastify";
@@ -294,8 +294,12 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
         <SettingsCardTitle>Corpus Actions</SettingsCardTitle>
         <HeaderButtonRow>
           <PickerContainer ref={pickerContainerRef}>
-            <Button size="small" onClick={() => setPickerOpen(!pickerOpen)}>
-              <Library size={14} /> Add from Library
+            <Button
+              size="sm"
+              onClick={() => setPickerOpen(!pickerOpen)}
+              leftIcon={<Library size={14} />}
+            >
+              Add from Library
             </Button>
             {pickerOpen && (
               <PickerDropdown>
@@ -334,8 +338,13 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
               </PickerDropdown>
             )}
           </PickerContainer>
-          <Button primary size="small" onClick={onAddAction}>
-            <Plus size={14} /> Add Action
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onAddAction}
+            leftIcon={<Plus size={14} />}
+          >
+            Add Action
           </Button>
         </HeaderButtonRow>
       </SettingsCardHeader>
@@ -455,7 +464,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                                 size={14}
                                 style={{
                                   marginRight: "0.25rem",
-                                  color: "#16a34a",
+                                  color: OS_LEGAL_COLORS.success,
                                 }}
                               />
                               Pre-authorized tools:{" "}
@@ -484,10 +493,14 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                     </ActionStatusBadge>
 
                     {isSuperuser && (
-                      <Button
-                        icon
-                        size="tiny"
+                      <IconButton
+                        size="sm"
                         disabled={!!action.fieldset || !!action.analyzer}
+                        aria-label={
+                          action.fieldset || action.analyzer
+                            ? "Only agent actions can be manually triggered"
+                            : "Run this action on a document"
+                        }
                         title={
                           action.fieldset || action.analyzer
                             ? "Only agent actions can be manually triggered"
@@ -496,29 +509,29 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                         onClick={() => onRunAction?.(action)}
                       >
                         <Play size={14} />
-                      </Button>
+                      </IconButton>
                     )}
 
-                    <Button
-                      icon
-                      size="tiny"
+                    <IconButton
+                      size="sm"
                       onClick={() =>
                         onEditAction(action as unknown as CorpusActionData)
                       }
+                      aria-label="Edit action"
                       title="Edit action"
                     >
                       <Edit size={14} />
-                    </Button>
+                    </IconButton>
 
-                    <Button
-                      icon
-                      negative
-                      size="tiny"
+                    <IconButton
+                      size="sm"
                       onClick={() => onDeleteAction(action.id)}
+                      aria-label="Delete action"
                       title="Delete action"
+                      style={{ color: OS_LEGAL_COLORS.danger }}
                     >
                       <Trash2 size={14} />
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
               </ActionCard>

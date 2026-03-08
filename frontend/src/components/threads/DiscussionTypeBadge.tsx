@@ -7,6 +7,7 @@ import {
   CORPUS_RADII,
   CORPUS_TRANSITIONS,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 /**
  * Discussion category types that can be inferred from thread content
@@ -48,14 +49,14 @@ const BadgeContainer = styled.span<{ $category: DiscussionCategory }>`
         `;
       case "help":
         return `
-          background: #fee2e2;
-          color: #991b1b;
+          background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+          color: ${OS_LEGAL_COLORS.dangerText};
           border: 1px solid #fca5a5;
         `;
       case "answered":
         return `
           background: #dcfce7;
-          color: #166534;
+          color: ${OS_LEGAL_COLORS.successText};
           border: 1px solid #86efac;
         `;
       default:

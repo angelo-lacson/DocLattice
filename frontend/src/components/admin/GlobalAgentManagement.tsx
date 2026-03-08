@@ -1,16 +1,29 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-import { Button, Table, Modal, Form } from "semantic-ui-react";
+// TODO: migrate to @os-legal/ui once Table component is available
+import { Table } from "semantic-ui-react";
 import styled from "styled-components";
 import { gql } from "@apollo/client";
 import { toast } from "react-toastify";
 import { Plus, Edit, Trash2, Cpu } from "lucide-react";
-import { Input } from "@os-legal/ui";
+import {
+  Button,
+  IconButton,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { StyledTextArea } from "../widgets/modals/styled";
+import { FormField } from "../widgets/form/FormField";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import { StatusBadge, ToolBadge, ToolsList } from "../agents/AgentBadges";
-import { AgentConfigurationType } from "../../types/graphql-api";
+import {
+  AgentConfigurationType,
+  AgentConfigurationTypeEdge,
+} from "../../types/graphql-api";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { CardSegment as StyledSegment } from "../layout/SharedSegments";
 
@@ -146,24 +159,6 @@ const PageTitle = styled.h1`
   gap: 0.5rem;
 `;
 
-interface AgentNode {
-  id: string;
-  name: string;
-  slug?: string;
-  description?: string;
-  systemInstructions: string;
-  availableTools?: string[];
-  permissionRequiredTools?: string[];
-  badgeConfig?: Record<string, any>;
-  avatarUrl?: string;
-  scope: string;
-  isActive: boolean;
-  isPublic?: boolean;
-  creator: { id: string; username: string };
-  created: string;
-  modified: string;
-}
-
 interface FormState {
   name: string;
   description: string;
@@ -183,14 +178,20 @@ const CheckboxLabel = styled.label`
   cursor: pointer;
 `;
 
+const FormGroup = styled.div`
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+`;
+
 /** Shared form fields for both create and edit agent modals. */
 const AgentFormFields: React.FC<{
   formState: FormState;
   onChange: (updates: Partial<FormState>) => void;
   children?: React.ReactNode;
 }> = ({ formState, onChange, children }) => (
-  <Form>
-    <Form.Field required>
+  <form>
+    <FormField $required>
       <label>Name</label>
       <Input
         fullWidth
@@ -200,8 +201,8 @@ const AgentFormFields: React.FC<{
           onChange({ name: e.target.value })
         }
       />
-    </Form.Field>
-    <Form.Field required>
+    </FormField>
+    <FormField $required>
       <label>Description</label>
       <StyledTextArea
         placeholder="Brief description of what this agent does"
@@ -210,8 +211,8 @@ const AgentFormFields: React.FC<{
         rows={2}
         style={{ minHeight: "auto" }}
       />
-    </Form.Field>
-    <Form.Field required>
+    </FormField>
+    <FormField $required>
       <label>System Instructions</label>
       <StyledTextArea
         placeholder="System prompt for the agent..."
@@ -220,8 +221,8 @@ const AgentFormFields: React.FC<{
         rows={6}
         style={{ fontFamily: "monospace" }}
       />
-    </Form.Field>
-    <Form.Field>
+    </FormField>
+    <FormField>
       <label>Available Tools (comma-separated)</label>
       <Input
         fullWidth
@@ -231,8 +232,8 @@ const AgentFormFields: React.FC<{
           onChange({ availableTools: e.target.value })
         }
       />
-    </Form.Field>
-    <Form.Field>
+    </FormField>
+    <FormField>
       <label>Permission Required Tools (comma-separated)</label>
       <Input
         fullWidth
@@ -242,8 +243,8 @@ const AgentFormFields: React.FC<{
           onChange({ permissionRequiredTools: e.target.value })
         }
       />
-    </Form.Field>
-    <Form.Field>
+    </FormField>
+    <FormField>
       <label>Badge Config (JSON)</label>
       <StyledTextArea
         placeholder='{"icon": "robot", "color": "#6366f1", "label": "AI"}'
@@ -252,8 +253,8 @@ const AgentFormFields: React.FC<{
         rows={3}
         style={{ fontFamily: "monospace" }}
       />
-    </Form.Field>
-    <Form.Field>
+    </FormField>
+    <FormField>
       <label>Avatar URL</label>
       <Input
         fullWidth
@@ -263,9 +264,9 @@ const AgentFormFields: React.FC<{
           onChange({ avatarUrl: e.target.value })
         }
       />
-    </Form.Field>
+    </FormField>
     {children}
-  </Form>
+  </form>
 );
 
 const initialFormState: FormState = {
@@ -284,8 +285,11 @@ export const GlobalAgentManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [agentToDelete, setAgentToDelete] = useState<AgentNode | null>(null);
-  const [agentToEdit, setAgentToEdit] = useState<AgentNode | null>(null);
+  const [agentToDelete, setAgentToDelete] =
+    useState<AgentConfigurationType | null>(null);
+  const [agentToEdit, setAgentToEdit] = useState<AgentConfigurationType | null>(
+    null
+  );
   const [formState, setFormState] = useState<FormState>(initialFormState);
 
   const { loading, error, data, refetch } = useQuery(GET_GLOBAL_AGENTS);
@@ -410,7 +414,7 @@ export const GlobalAgentManagement: React.FC = () => {
     });
   };
 
-  const openEditModal = (agent: AgentNode) => {
+  const openEditModal = (agent: AgentConfigurationType) => {
     setAgentToEdit(agent);
     setFormState({
       name: agent.name,
@@ -432,8 +436,10 @@ export const GlobalAgentManagement: React.FC = () => {
     setShowEditModal(true);
   };
 
-  const agents: AgentNode[] =
-    data?.agentConfigurations?.edges?.map((e: any) => e.node) || [];
+  const agents: AgentConfigurationType[] =
+    data?.agentConfigurations?.edges
+      ?.map((e: AgentConfigurationTypeEdge) => e.node)
+      .filter(Boolean) || [];
 
   if (loading) {
     return (
@@ -460,15 +466,13 @@ export const GlobalAgentManagement: React.FC = () => {
           <Cpu size={24} /> Global Agent Management
         </PageTitle>
         <Button
-          primary
-          icon
-          labelPosition="left"
+          variant="primary"
+          leftIcon={<Plus size={14} />}
           onClick={() => {
             setFormState(initialFormState);
             setShowCreateModal(true);
           }}
         >
-          <Plus size={14} />
           Create Agent
         </Button>
       </PageHeader>
@@ -534,24 +538,27 @@ export const GlobalAgentManagement: React.FC = () => {
                     </StatusBadge>
                   </Table.Cell>
                   <Table.Cell>
-                    <Button
-                      icon
-                      size="tiny"
-                      onClick={() => openEditModal(agent)}
-                    >
-                      <Edit size={14} />
-                    </Button>
-                    <Button
-                      icon
-                      size="tiny"
-                      negative
-                      onClick={() => {
-                        setAgentToDelete(agent);
-                        setDeleteModalOpen(true);
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <div style={{ display: "flex", gap: "0.25rem" }}>
+                      <IconButton
+                        variant="ghost"
+                        size="sm"
+                        aria-label="Edit agent"
+                        onClick={() => openEditModal(agent)}
+                      >
+                        <Edit size={14} />
+                      </IconButton>
+                      <IconButton
+                        variant="danger"
+                        size="sm"
+                        onClick={() => {
+                          setAgentToDelete(agent);
+                          setDeleteModalOpen(true);
+                        }}
+                        aria-label="Delete agent"
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
+                    </div>
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -564,17 +571,20 @@ export const GlobalAgentManagement: React.FC = () => {
       <Modal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        size="large"
+        size="lg"
       >
-        <Modal.Header>Create Global Agent</Modal.Header>
-        <Modal.Content scrolling>
+        <ModalHeader
+          title="Create Global Agent"
+          onClose={() => setShowCreateModal(false)}
+        />
+        <ModalBody>
           <AgentFormFields
             formState={formState}
             onChange={(updates) =>
               setFormState((prev) => ({ ...prev, ...updates }))
             }
           >
-            <Form.Field>
+            <FormField>
               <CheckboxLabel>
                 <input
                   type="checkbox"
@@ -585,13 +595,15 @@ export const GlobalAgentManagement: React.FC = () => {
                 />
                 Publicly visible
               </CheckboxLabel>
-            </Form.Field>
+            </FormField>
           </AgentFormFields>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
+            Cancel
+          </Button>
           <Button
-            primary
+            variant="primary"
             loading={creating}
             disabled={
               !formState.name ||
@@ -602,25 +614,28 @@ export const GlobalAgentManagement: React.FC = () => {
           >
             Create Agent
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
       {/* Edit Modal */}
       <Modal
         open={showEditModal}
         onClose={() => setShowEditModal(false)}
-        size="large"
+        size="lg"
       >
-        <Modal.Header>Edit Agent: {agentToEdit?.name}</Modal.Header>
-        <Modal.Content scrolling>
+        <ModalHeader
+          title={`Edit Agent: ${agentToEdit?.name}`}
+          onClose={() => setShowEditModal(false)}
+        />
+        <ModalBody>
           <AgentFormFields
             formState={formState}
             onChange={(updates) =>
               setFormState((prev) => ({ ...prev, ...updates }))
             }
           >
-            <Form.Group>
-              <Form.Field>
+            <FormGroup>
+              <FormField>
                 <CheckboxLabel>
                   <input
                     type="checkbox"
@@ -631,8 +646,8 @@ export const GlobalAgentManagement: React.FC = () => {
                   />
                   Active
                 </CheckboxLabel>
-              </Form.Field>
-              <Form.Field>
+              </FormField>
+              <FormField>
                 <CheckboxLabel>
                   <input
                     type="checkbox"
@@ -643,14 +658,16 @@ export const GlobalAgentManagement: React.FC = () => {
                   />
                   Publicly visible
                 </CheckboxLabel>
-              </Form.Field>
-            </Form.Group>
+              </FormField>
+            </FormGroup>
           </AgentFormFields>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowEditModal(false)}>Cancel</Button>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowEditModal(false)}>
+            Cancel
+          </Button>
           <Button
-            primary
+            variant="primary"
             loading={updating}
             disabled={
               !formState.name ||
@@ -661,7 +678,7 @@ export const GlobalAgentManagement: React.FC = () => {
           >
             Save Changes
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
       {/* Delete Confirmation */}

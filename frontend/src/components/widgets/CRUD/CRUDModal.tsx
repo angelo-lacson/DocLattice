@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Modal, Icon, Header } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from "@os-legal/ui";
+import { Box, X, Check } from "lucide-react";
 import _ from "lodash";
 import { CRUDWidget } from "./CRUDWidget";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
@@ -8,6 +15,7 @@ import {
   HorizontallyCenteredDiv,
   VerticallyCenteredDiv,
 } from "../../layout/Wrappers";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * Props for the ObjectCRUDModal component.
@@ -127,21 +135,31 @@ export function CRUDModal({
   }, [mode, descriptiveName, instanceObj.title]);
 
   return (
-    <Modal centered size="large" closeIcon open={open} onClose={onClose}>
-      <Modal.Header>
-        <HorizontallyCenteredDiv>
-          <div style={{ marginTop: "1rem", textAlign: "left", width: "100%" }}>
-            <Header as="h2">
-              <Icon name="box" />
-              <Header.Content>
-                {headerText}
-                <Header.Subheader>{`Values for: ${descriptiveName}`}</Header.Subheader>
-              </Header.Content>
-            </Header>
-          </div>
-        </HorizontallyCenteredDiv>
-      </Modal.Header>
-      <Modal.Content scrolling style={{ position: "relative" }}>
+    <Modal open={open} onClose={onClose} size="lg">
+      <ModalHeader
+        title={
+          <HorizontallyCenteredDiv>
+            <div
+              style={{ marginTop: "1rem", textAlign: "left", width: "100%" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Box size={24} />
+                <div>
+                  <h2 style={{ margin: 0 }}>{headerText}</h2>
+                  <div
+                    style={{
+                      fontSize: "0.875rem",
+                      color: OS_LEGAL_COLORS.textSecondary,
+                    }}
+                  >{`Values for: ${descriptiveName}`}</div>
+                </div>
+              </div>
+            </div>
+          </HorizontallyCenteredDiv>
+        }
+        onClose={onClose}
+      />
+      <ModalBody style={{ position: "relative", overflow: "auto" }}>
         {/* Overlay while the mutation is running */}
         <LoadingOverlay active={loading} inverted content="Saving..." />
         <CRUDWidget
@@ -160,27 +178,32 @@ export function CRUDModal({
         />
         <VerticallyCenteredDiv>{listeningChildren}</VerticallyCenteredDiv>
         {children}
-      </Modal.Content>
-      <Modal.Actions>
+      </ModalBody>
+      <ModalFooter>
         <HorizontallyCenteredDiv>
-          <Button basic color="grey" onClick={onClose} disabled={loading}>
-            <Icon name="remove" /> Close
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={loading}
+            leftIcon={<X size={16} />}
+          >
+            Close
           </Button>
           {canWrite && onSubmit && !_.isEqual(oldInstance, instanceObj) && (
             <Button
-              color="green"
-              inverted
+              variant="primary"
               loading={loading}
               disabled={loading}
+              leftIcon={<Check size={16} />}
               onClick={() => {
                 onSubmit(mode === "EDIT" ? updatedFieldsObj : instanceObj);
               }}
             >
-              <Icon name="checkmark" /> {mode === "EDIT" ? "Update" : "Create"}
+              {mode === "EDIT" ? "Update" : "Create"}
             </Button>
           )}
         </HorizontallyCenteredDiv>
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 }

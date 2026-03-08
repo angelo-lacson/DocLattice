@@ -1,7 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
-import { Dropdown, Icon, Loader } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { Spinner } from "@os-legal/ui";
+import { AlertTriangle, History, RefreshCw } from "lucide-react";
 import { ActionExecutionRow } from "./ActionExecutionRow";
 import {
   GET_CORPUS_ACTION_EXECUTIONS,
@@ -51,7 +54,7 @@ const FilterGroup = styled.div`
 `;
 
 const ResultsInfo = styled.div`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.8rem;
   margin-left: auto;
 
@@ -72,15 +75,15 @@ const ExecutionsList = styled.div`
     width: 6px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -89,7 +92,7 @@ const LoadingMore = styled.div`
   align-items: center;
   justify-content: center;
   padding: 16px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 0.8rem;
   gap: 8px;
 `;
@@ -101,7 +104,7 @@ const ScrollSentinel = styled.div`
 const EmptyState = styled.div`
   text-align: center;
   padding: 40px 20px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 
   .empty-icon {
     font-size: 2rem;
@@ -112,7 +115,7 @@ const EmptyState = styled.div`
   .empty-title {
     font-size: 0.95rem;
     font-weight: 500;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     margin-bottom: 4px;
   }
 
@@ -124,13 +127,13 @@ const EmptyState = styled.div`
 const LoadingContainer = styled.div`
   text-align: center;
   padding: 40px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const ErrorState = styled.div`
   text-align: center;
   padding: 40px 20px;
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
 
   .error-icon {
     font-size: 2rem;
@@ -141,20 +144,20 @@ const ErrorState = styled.div`
   .error-title {
     font-size: 0.95rem;
     font-weight: 500;
-    color: #991b1b;
+    color: ${OS_LEGAL_COLORS.dangerText};
     margin-bottom: 4px;
   }
 
   .error-description {
     font-size: 0.85rem;
-    color: #b91c1c;
+    color: ${OS_LEGAL_COLORS.dangerHover};
   }
 `;
 
 const RetryButton = styled.button`
   margin-top: 16px;
   padding: 8px 16px;
-  background: #dc2626;
+  background: ${OS_LEGAL_COLORS.danger};
   color: white;
   border: none;
   border-radius: 6px;
@@ -167,11 +170,11 @@ const RetryButton = styled.button`
   transition: background 0.2s ease;
 
   &:hover {
-    background: #b91c1c;
+    background: ${OS_LEGAL_COLORS.dangerHover};
   }
 
   &:focus {
-    outline: 2px solid #dc2626;
+    outline: 2px solid ${OS_LEGAL_COLORS.danger};
     outline-offset: 2px;
   }
 `;
@@ -385,7 +388,7 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
       {/* Loading State */}
       {executionsLoading && executions.length === 0 && !executionsError && (
         <LoadingContainer role="status">
-          <Loader active inline="centered" size="small" />
+          <Spinner size="sm" />
           <p style={{ marginTop: "12px" }}>Loading executions...</p>
         </LoadingContainer>
       )}
@@ -393,13 +396,13 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
       {/* Error State */}
       {executionsError && (
         <ErrorState role="alert">
-          <Icon name="exclamation triangle" className="error-icon" />
+          <AlertTriangle size={32} className="error-icon" />
           <div className="error-title">Error Loading Executions</div>
           <div className="error-description">
             Unable to load execution history. Please try again later.
           </div>
           <RetryButton onClick={() => refetch()} aria-label="Retry loading">
-            <Icon name="refresh" />
+            <RefreshCw size={14} />
             Retry
           </RetryButton>
         </ErrorState>
@@ -408,7 +411,7 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
       {/* Empty State */}
       {!executionsLoading && !executionsError && executions.length === 0 && (
         <EmptyState role="status">
-          <Icon name="history" className="empty-icon" />
+          <History size={32} className="empty-icon" />
           <div className="empty-title">No Executions Found</div>
           <div className="empty-description">
             {statusFilter || typeFilter || actionFilter || timeRangeHours
@@ -431,7 +434,7 @@ export const ActionExecutionTrail: React.FC<ActionExecutionTrailProps> = ({
           {/* Loading more indicator */}
           {executionsLoading && executions.length > 0 && (
             <LoadingMore>
-              <Loader active inline size="tiny" />
+              <Spinner size="sm" />
               Loading more...
             </LoadingMore>
           )}

@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const EmptyStateContainer = styled(motion.div)`
   display: flex;
@@ -18,14 +19,14 @@ export const EmptyStateContainer = styled(motion.div)`
   }
 
   h3 {
-    color: #495057;
+    color: ${OS_LEGAL_COLORS.gray700};
     font-size: 1.25rem;
     font-weight: 500;
     margin-bottom: 0.5rem;
   }
 
   p {
-    color: #868e96;
+    color: ${OS_LEGAL_COLORS.gray500};
     font-size: 0.875rem;
     max-width: 280px;
     line-height: 1.5;

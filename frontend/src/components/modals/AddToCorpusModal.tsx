@@ -1,5 +1,12 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { Modal, Button, Card } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Input,
+} from "@os-legal/ui";
 import { useQuery, useMutation, gql } from "@apollo/client";
 import { toast } from "react-toastify";
 import _ from "lodash";
@@ -11,7 +18,6 @@ import {
   FileText,
   Tags,
 } from "lucide-react";
-import { Input } from "@os-legal/ui";
 import { ErrorMessage, InfoMessage, LoadingState } from "../widgets/feedback";
 import {
   GET_CORPUSES,
@@ -56,19 +62,21 @@ const CorpusListWrapper = styled.div`
   }
 `;
 
-const StyledCard = styled(Card)`
+const StyledCard = styled.div<{ $selected?: boolean }>`
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-bottom: 0.5rem !important;
+  margin-bottom: 0.5rem;
+  padding: 1rem;
+  border: 1px solid
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.success : OS_LEGAL_COLORS.border};
+  border-radius: 8px;
+  background: ${(props) =>
+    props.$selected ? OS_LEGAL_COLORS.successSurface : "#ffffff"};
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-  }
-
-  &.selected {
-    background-color: #e2ffdb !important;
-    border-color: #21ba45 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 `;
 
@@ -291,8 +299,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
         {corpuses.map((corpus) => (
           <StyledCard
             key={corpus.id}
-            fluid
-            className={selectedCorpus?.id === corpus.id ? "selected" : ""}
+            $selected={selectedCorpus?.id === corpus.id}
             onClick={() => {
               if (multiStep) {
                 setSelectedCorpus(corpus);
@@ -302,25 +309,58 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
             }}
             data-testid={`corpus-item-${corpus.id}`}
           >
-            <Card.Content>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <div
+                  style={{ fontWeight: 600, marginBottom: "0.25rem" }}
+                  data-testid={`corpus-title-${corpus.id}`}
+                >
+                  {corpus.title || "Untitled Corpus"}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    color: OS_LEGAL_COLORS.textSecondary,
+                  }}
+                >
+                  by {corpus.creator?.email || "Unknown"}
+                </div>
+                {corpus.description && (
+                  <div
+                    style={{
+                      fontSize: "0.875rem",
+                      color: OS_LEGAL_COLORS.textSecondary,
+                      marginTop: "0.5rem",
+                    }}
+                  >
+                    {corpus.description}
+                  </div>
+                )}
+              </div>
               {corpus.icon && (
                 <Folder
                   size={16}
                   style={{
-                    float: "right",
                     color: OS_LEGAL_COLORS.textSecondary,
+                    flexShrink: 0,
                   }}
                 />
               )}
-              <Card.Header data-testid={`corpus-title-${corpus.id}`}>
-                {corpus.title || "Untitled Corpus"}
-              </Card.Header>
-              <Card.Meta>by {corpus.creator?.email || "Unknown"}</Card.Meta>
-              {corpus.description && (
-                <Card.Description>{corpus.description}</Card.Description>
-              )}
-            </Card.Content>
-            <Card.Content extra>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginTop: "0.75rem",
+              }}
+            >
               <MetaLabel>
                 <FileText size={12} />
                 {corpus.documentCount || 0} documents
@@ -333,21 +373,21 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
               )}
               {!multiStep && (
                 <Button
-                  primary
-                  size="small"
-                  floated="right"
+                  variant="primary"
+                  size="sm"
                   loading={addingToCorpusId === corpus.id}
                   disabled={addingToCorpusId !== null}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleAdd(corpus);
                   }}
+                  style={{ marginLeft: "auto" }}
                   data-testid={`add-to-corpus-btn-${corpus.id}`}
                 >
                   Add
                 </Button>
               )}
-            </Card.Content>
+            </div>
           </StyledCard>
         ))}
       </CorpusListWrapper>
@@ -412,20 +452,23 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
     <Modal
       open={open}
       onClose={onClose}
-      size="small"
+      size="sm"
       data-testid="add-to-corpus-modal"
     >
-      <Modal.Header>
-        <Folder
-          size={16}
-          style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
-        />
-        {multiStep && view === "CONFIRM" ? "Confirm Selection" : title}
-      </Modal.Header>
-      <Modal.Content data-testid="add-to-corpus-modal-content">
+      <ModalHeader
+        title={
+          <span
+            style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+          >
+            <Folder size={16} />
+            {multiStep && view === "CONFIRM" ? "Confirm Selection" : title}
+          </span>
+        }
+      />
+      <ModalBody data-testid="add-to-corpus-modal-content">
         {renderContent()}
-      </Modal.Content>
-      <Modal.Actions>
+      </ModalBody>
+      <ModalFooter>
         {multiStep && view === "CONFIRM" ? (
           <>
             <Button onClick={() => setView("SELECT")} data-testid="back-button">
@@ -436,7 +479,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
               Cancel
             </Button>
             <Button
-              primary
+              variant="primary"
               onClick={() => handleAdd()}
               loading={addingToCorpusId !== null}
               disabled={!selectedCorpus || addingToCorpusId !== null}
@@ -453,7 +496,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
             </Button>
             {multiStep && selectedCorpus && (
               <Button
-                primary
+                variant="primary"
                 onClick={() => setView("CONFIRM")}
                 data-testid="next-button"
               >
@@ -463,7 +506,7 @@ export const AddToCorpusModal: React.FC<AddToCorpusModalProps> = ({
             )}
           </>
         )}
-      </Modal.Actions>
+      </ModalFooter>
     </Modal>
   );
 };

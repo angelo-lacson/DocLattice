@@ -1,13 +1,16 @@
 import React, { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@apollo/client";
+// TODO: migrate to @os-legal/ui once Table and Dropdown components are available
+import { Table, Dropdown } from "semantic-ui-react";
 import {
-  Table,
-  Dropdown,
   Button,
   Modal,
-  Form,
-  Statistic,
-} from "semantic-ui-react";
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  StatBlock,
+  Textarea,
+} from "@os-legal/ui";
 import {
   Shield,
   BarChart3,
@@ -366,24 +369,19 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                 gap: "1rem",
               }}
             >
-              <Statistic size="small">
-                <Statistic.Value>{metrics.totalActions}</Statistic.Value>
-                <Statistic.Label>Total Actions</Statistic.Label>
-              </Statistic>
-              <Statistic size="small" color="blue">
-                <Statistic.Value>{metrics.automatedActions}</Statistic.Value>
-                <Statistic.Label>Automated</Statistic.Label>
-              </Statistic>
-              <Statistic size="small" color="green">
-                <Statistic.Value>{metrics.manualActions}</Statistic.Value>
-                <Statistic.Label>Manual</Statistic.Label>
-              </Statistic>
-              <Statistic size="small">
-                <Statistic.Value>
-                  {metrics.hourlyActionRate.toFixed(1)}
-                </Statistic.Value>
-                <Statistic.Label>Actions/Hour</Statistic.Label>
-              </Statistic>
+              <StatBlock
+                value={String(metrics.totalActions)}
+                label="Total Actions"
+              />
+              <StatBlock
+                value={String(metrics.automatedActions)}
+                label="Automated"
+              />
+              <StatBlock value={String(metrics.manualActions)} label="Manual" />
+              <StatBlock
+                value={metrics.hourlyActionRate.toFixed(1)}
+                label="Actions/Hour"
+              />
             </div>
           </>
         ) : (
@@ -412,38 +410,43 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
           <Filter size={16} />
           Filters
         </h4>
-        <Form>
-          <Form.Group inline>
-            <Form.Field>
-              <label>Action Type</label>
-              <Dropdown
-                selection
-                options={ACTION_TYPE_OPTIONS}
-                value={selectedActionType}
-                onChange={(_, { value }) =>
-                  setSelectedActionType(value as string)
-                }
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            gap: "1.5rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <label>Action Type</label>
+            <Dropdown
+              selection
+              options={ACTION_TYPE_OPTIONS}
+              value={selectedActionType}
+              onChange={(_, { value }) =>
+                setSelectedActionType(value as string)
+              }
+            />
+          </div>
+          <div>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={automatedOnly}
+                onChange={(e) => setAutomatedOnly(e.target.checked)}
               />
-            </Form.Field>
-            <Form.Field>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={automatedOnly}
-                  onChange={(e) => setAutomatedOnly(e.target.checked)}
-                />
-                Automated actions only
-              </label>
-            </Form.Field>
-          </Form.Group>
-        </Form>
+              Automated actions only
+            </label>
+          </div>
+        </div>
       </div>
 
       {/* Actions Table */}
@@ -548,7 +551,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                           <div
                             style={{
                               fontSize: "0.9em",
-                              color: "#666",
+                              color: OS_LEGAL_COLORS.textSecondary,
                               display: "flex",
                               alignItems: "center",
                               gap: "0.5rem",
@@ -602,11 +605,11 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                       <Table.Cell>
                         {node.canRollback && (
                           <Button
-                            size="tiny"
-                            color="orange"
+                            size="sm"
+                            variant="secondary"
+                            leftIcon={<Undo2 size={14} />}
                             onClick={() => openRollbackModal(node)}
                           >
-                            <Undo2 size={14} />
                             Rollback
                           </Button>
                         )}
@@ -619,12 +622,12 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
             {actionsData?.moderationActions?.pageInfo?.hasNextPage && (
               <div style={{ textAlign: "center", marginTop: "1rem" }}>
                 <Button
+                  variant="secondary"
+                  leftIcon={<Plus size={14} />}
                   onClick={handleLoadMore}
-                  loading={isLoadingMore}
                   disabled={isLoadingMore}
                 >
-                  <Plus size={14} />
-                  Load More
+                  {isLoadingMore ? "Loading..." : "Load More"}
                 </Button>
               </div>
             )}
@@ -636,16 +639,21 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
       <Modal
         open={rollbackModalOpen}
         onClose={() => setRollbackModalOpen(false)}
-        size="small"
+        size="sm"
       >
-        <Modal.Header>
-          <Undo2
-            size={16}
-            style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
-          />
-          Confirm Rollback
-        </Modal.Header>
-        <Modal.Content>
+        <ModalHeader
+          title={
+            <span>
+              <Undo2
+                size={16}
+                style={{ marginRight: "0.5rem", verticalAlign: "middle" }}
+              />
+              Confirm Rollback
+            </span>
+          }
+          onClose={() => setRollbackModalOpen(false)}
+        />
+        <ModalBody>
           {selectedAction && (
             <>
               <p>
@@ -658,31 +666,33 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
                   Thread: <strong>{selectedAction.conversation.title}</strong>
                 </p>
               )}
-              <Form>
-                <Form.TextArea
-                  label="Reason for rollback (optional)"
+              <div style={{ marginTop: "1rem" }}>
+                <label>Reason for rollback (optional)</label>
+                <Textarea
                   placeholder="Enter a reason for this rollback..."
                   value={rollbackReason}
-                  onChange={(_, { value }) =>
-                    setRollbackReason(value as string)
-                  }
+                  onChange={(e) => setRollbackReason(e.target.value)}
                 />
-              </Form>
+              </div>
             </>
           )}
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setRollbackModalOpen(false)}>Cancel</Button>
+        </ModalBody>
+        <ModalFooter>
           <Button
-            color="orange"
+            variant="secondary"
+            onClick={() => setRollbackModalOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            leftIcon={<Undo2 size={14} />}
             onClick={handleRollback}
-            loading={rollbackLoading}
             disabled={rollbackLoading}
           >
-            <Undo2 size={14} />
-            Rollback
+            {rollbackLoading ? "Rolling back..." : "Rollback"}
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
     </div>
   );

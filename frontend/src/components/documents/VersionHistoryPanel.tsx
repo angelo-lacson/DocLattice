@@ -1,8 +1,29 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useLazyQuery, useMutation, gql } from "@apollo/client";
 import styled from "styled-components";
-import { Modal, Button, Icon, Loader, Message } from "semantic-ui-react";
+import {
+  GitBranch,
+  User,
+  Clock,
+  Calendar,
+  File,
+  Undo2,
+  Download,
+  Info,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
+import {
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Spinner,
+} from "@os-legal/ui";
 import { formatDistanceToNow, format } from "date-fns";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // GraphQL query for fetching version history
 export const GET_DOCUMENT_VERSION_HISTORY = gql`
@@ -53,17 +74,17 @@ const PanelContainer = styled.div`
 
 const Timeline = styled.div`
   position: relative;
-  padding-left: 40px;
+  padding-left: 24px;
   margin-top: 20px;
 
   &::before {
     content: "";
     position: absolute;
-    left: 15px;
+    left: 8px;
     top: 0;
     bottom: 0;
     width: 2px;
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -75,34 +96,31 @@ const TimelineItem = styled.div<{ $isCurrent: boolean }>`
   &::before {
     content: "";
     position: absolute;
-    left: -31px;
+    left: -22px;
     top: 24px;
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: ${(props) => (props.$isCurrent ? "#3b82f6" : "#cbd5e1")};
-    border: 2px solid ${(props) => (props.$isCurrent ? "#1d4ed8" : "#94a3b8")};
+    background: ${(props) =>
+      props.$isCurrent
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.borderHover};
+    border: 2px solid
+      ${(props) =>
+        props.$isCurrent
+          ? OS_LEGAL_COLORS.primaryBlueHover
+          : OS_LEGAL_COLORS.textMuted};
   }
-
-  ${(props) =>
-    props.$isCurrent &&
-    `
-    &::after {
-      content: "Current";
-      position: absolute;
-      left: -85px;
-      top: 22px;
-      font-size: 10px;
-      font-weight: 600;
-      color: #3b82f6;
-      text-transform: uppercase;
-    }
-  `}
 `;
 
 const VersionCard = styled.div<{ $isCurrent: boolean }>`
-  background: ${(props) => (props.$isCurrent ? "#eff6ff" : "#f8fafc")};
-  border: 1px solid ${(props) => (props.$isCurrent ? "#3b82f6" : "#e2e8f0")};
+  background: ${(props) =>
+    props.$isCurrent
+      ? OS_LEGAL_COLORS.blueSurface
+      : OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid
+    ${(props) =>
+      props.$isCurrent ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 12px 16px;
   transition: all 0.2s ease;
@@ -135,36 +153,36 @@ const VersionBadge = styled.span<{ $type: string }>`
   background: ${(props) => {
     switch (props.$type) {
       case "INITIAL":
-        return "#dcfce7";
+        return OS_LEGAL_COLORS.successSurface;
       case "CONTENT_UPDATE":
-        return "#dbeafe";
+        return OS_LEGAL_COLORS.blueBorder;
       case "MINOR_EDIT":
         return "#fef3c7";
       case "MAJOR_REVISION":
         return "#fce7f3";
       default:
-        return "#f1f5f9";
+        return OS_LEGAL_COLORS.surfaceLight;
     }
   }};
   color: ${(props) => {
     switch (props.$type) {
       case "INITIAL":
-        return "#15803d";
+        return OS_LEGAL_COLORS.successHover;
       case "CONTENT_UPDATE":
-        return "#1d4ed8";
+        return OS_LEGAL_COLORS.primaryBlueHover;
       case "MINOR_EDIT":
         return "#b45309";
       case "MAJOR_REVISION":
         return "#be185d";
       default:
-        return "#475569";
+        return OS_LEGAL_COLORS.textTertiary;
     }
   }};
 `;
 
 const VersionMeta = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -173,11 +191,6 @@ const VersionMeta = styled.div`
     display: flex;
     align-items: center;
     gap: 4px;
-
-    i.icon {
-      margin: 0 !important;
-      font-size: 11px;
-    }
   }
 `;
 
@@ -187,17 +200,10 @@ const VersionActions = styled.div`
   gap: 8px;
 `;
 
-const ActionButton = styled(Button)`
-  &.ui.button {
-    padding: 6px 12px;
-    font-size: 11px;
-  }
-`;
-
 const EmptyState = styled.div`
   text-align: center;
   padding: 40px 20px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   .icon {
     font-size: 48px;
@@ -206,7 +212,7 @@ const EmptyState = styled.div`
   }
 
   h3 {
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
     margin-bottom: 8px;
   }
 
@@ -346,26 +352,45 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     if (loading) {
       return (
         <div style={{ padding: "40px", textAlign: "center" }}>
-          <Loader active inline="centered" size="medium">
+          <Spinner size="md" />
+          <div
+            style={{
+              marginTop: "0.5rem",
+              color: OS_LEGAL_COLORS.textSecondary,
+            }}
+          >
             Loading version history...
-          </Loader>
+          </div>
         </div>
       );
     }
 
     if (error) {
       return (
-        <Message negative>
-          <Message.Header>Failed to load version history</Message.Header>
-          <p>{error.message}</p>
-        </Message>
+        <div
+          style={{
+            padding: "1rem",
+            background: OS_LEGAL_COLORS.dangerSurface,
+            border: `1px solid ${OS_LEGAL_COLORS.dangerBorder}`,
+            borderRadius: "8px",
+            color: OS_LEGAL_COLORS.dangerText,
+          }}
+        >
+          <strong
+            style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+          >
+            <XCircle size={16} />
+            Failed to load version history
+          </strong>
+          <p style={{ margin: "0.5rem 0 0 0" }}>{error.message}</p>
+        </div>
       );
     }
 
     if (!versionHistory || versionHistory.versions.length === 0) {
       return (
         <EmptyState>
-          <Icon name="code branch" />
+          <GitBranch size={48} />
           <h3>No Version History</h3>
           <p>This document has no previous versions.</p>
         </EmptyState>
@@ -407,62 +432,75 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
 
                 <VersionMeta>
                   <div className="meta-item">
-                    <Icon name="user" />
+                    <User size={11} />
                     {version.createdBy.username}
                   </div>
                   <div className="meta-item">
-                    <Icon name="clock" />
+                    <Clock size={11} />
                     {formatDistanceToNow(new Date(version.createdAt), {
                       addSuffix: true,
                     })}
                   </div>
                   <div className="meta-item">
-                    <Icon name="calendar" />
+                    <Calendar size={11} />
                     {format(new Date(version.createdAt), "MMM d, yyyy h:mm a")}
                   </div>
                   <div className="meta-item">
-                    <Icon name="file" />
+                    <File size={11} />
                     {formatBytes(version.sizeBytes)}
                   </div>
                 </VersionMeta>
 
                 {isSelected && !isCurrent && (
                   <VersionActions>
-                    <ActionButton
-                      primary
-                      size="tiny"
-                      loading={restoreLoading}
+                    <Button
+                      size="sm"
+                      variant="primary"
                       disabled={restoreLoading}
-                      onClick={(e: React.MouseEvent) => {
+                      loading={restoreLoading}
+                      leftIcon={<Undo2 size={12} />}
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                         e.stopPropagation();
                         handleRestore(version.id);
                       }}
                     >
-                      <Icon name="undo" />
                       Restore This Version
-                    </ActionButton>
+                    </Button>
                     {onDownload && (
-                      <ActionButton
-                        basic
-                        size="tiny"
-                        onClick={(e: React.MouseEvent) => {
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        leftIcon={<Download size={12} />}
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                           e.stopPropagation();
                           onDownload(version.id);
                         }}
                       >
-                        <Icon name="download" />
                         Download
-                      </ActionButton>
+                      </Button>
                     )}
                   </VersionActions>
                 )}
 
                 {isSelected && isCurrent && (
                   <VersionActions>
-                    <Message info size="tiny" style={{ margin: "8px 0 0" }}>
-                      <Icon name="info circle" />
+                    <div
+                      style={{
+                        margin: "8px 0 0",
+                        padding: "0.5rem 0.75rem",
+                        background: OS_LEGAL_COLORS.blueSurface,
+                        border: `1px solid ${OS_LEGAL_COLORS.blueBorder}`,
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        color: OS_LEGAL_COLORS.blueDark,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <Info size={14} />
                       This is the current version
-                    </Message>
+                    </div>
                   </VersionActions>
                 )}
               </VersionCard>
@@ -474,57 +512,119 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
   };
 
   return (
-    <Modal
-      open={isOpen}
-      onClose={onClose}
-      size="small"
-      closeOnDimmerClick
-      closeOnEscape
-    >
-      <Modal.Header>
-        <Icon name="code branch" style={{ marginRight: "8px" }} />
-        Version History
-        <div
-          style={{
-            fontSize: "14px",
-            fontWeight: "normal",
-            color: "#64748b",
-            marginTop: "4px",
-          }}
-        >
-          {documentTitle}
+    <Modal open={isOpen} onClose={onClose} size="md">
+      <ModalHeader>
+        <div>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <GitBranch size={20} style={{ marginRight: "8px" }} />
+            Version History
+          </div>
+          <div
+            style={{
+              fontSize: "14px",
+              fontWeight: "normal",
+              color: OS_LEGAL_COLORS.textSecondary,
+              marginTop: "4px",
+            }}
+          >
+            {documentTitle}
+          </div>
         </div>
-      </Modal.Header>
+      </ModalHeader>
 
-      <Modal.Content scrolling>
+      <ModalBody>
         <PanelContainer>
           {restoreSuccess && (
-            <Message
-              positive
-              onDismiss={() => setRestoreSuccess(null)}
-              style={{ marginBottom: "16px" }}
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "1rem",
+                background: OS_LEGAL_COLORS.successSurface,
+                border: `1px solid ${OS_LEGAL_COLORS.successBorder}`,
+                borderRadius: "8px",
+                color: OS_LEGAL_COLORS.successText,
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+              }}
             >
-              <Message.Header>Version Restored</Message.Header>
-              <p>{restoreSuccess}</p>
-            </Message>
+              <div>
+                <strong
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <CheckCircle size={16} />
+                  Version Restored
+                </strong>
+                <p style={{ margin: "0.5rem 0 0 0" }}>{restoreSuccess}</p>
+              </div>
+              <button
+                onClick={() => setRestoreSuccess(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: OS_LEGAL_COLORS.successText,
+                }}
+                aria-label="Dismiss"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
           )}
           {restoreError && (
-            <Message
-              negative
-              onDismiss={() => setRestoreError(null)}
-              style={{ marginBottom: "16px" }}
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "1rem",
+                background: OS_LEGAL_COLORS.dangerSurface,
+                border: `1px solid ${OS_LEGAL_COLORS.dangerBorder}`,
+                borderRadius: "8px",
+                color: OS_LEGAL_COLORS.dangerText,
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+              }}
             >
-              <Message.Header>Restore Failed</Message.Header>
-              <p>{restoreError}</p>
-            </Message>
+              <div>
+                <strong
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  Restore Failed
+                </strong>
+                <p style={{ margin: "0.5rem 0 0 0" }}>{restoreError}</p>
+              </div>
+              <button
+                onClick={() => setRestoreError(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: OS_LEGAL_COLORS.dangerText,
+                }}
+                aria-label="Dismiss"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
           )}
           {renderVersionList()}
         </PanelContainer>
-      </Modal.Content>
+      </ModalBody>
 
-      <Modal.Actions>
-        <Button onClick={onClose}>Close</Button>
-      </Modal.Actions>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      </ModalFooter>
     </Modal>
   );
 };

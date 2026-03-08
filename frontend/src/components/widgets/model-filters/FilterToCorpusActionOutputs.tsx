@@ -1,6 +1,6 @@
 import React from "react";
 import { useReactiveVar } from "@apollo/client";
-import { Checkbox, Menu, Label } from "semantic-ui-react";
+import { ToggleSwitch } from "../ToggleSwitch";
 import { showCorpusActionOutputs } from "../../../graphql/cache";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
@@ -25,7 +25,7 @@ export const FilterToCorpusActionOutputs: React.FC = () => {
         width: "100%",
       }}
     >
-      <Label
+      <span
         style={{
           margin: "0",
           background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
@@ -42,15 +42,15 @@ export const FilterToCorpusActionOutputs: React.FC = () => {
         }}
       >
         Corpus Actions
-      </Label>
-      <Checkbox
-        toggle
-        checked={show_corpus_action_analyses}
-        onChange={() => showCorpusActionOutputs(!show_corpus_action_analyses)}
-        style={{
-          marginLeft: "auto",
-        }}
-      />
+      </span>
+      <ToggleSwitch style={{ marginLeft: "auto" }}>
+        <input
+          type="checkbox"
+          checked={show_corpus_action_analyses}
+          onChange={() => showCorpusActionOutputs(!show_corpus_action_analyses)}
+        />
+        <span />
+      </ToggleSwitch>
     </div>
   );
 };

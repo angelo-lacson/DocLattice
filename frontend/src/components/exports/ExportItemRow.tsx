@@ -1,6 +1,10 @@
-import { Table, Icon, Button } from "semantic-ui-react";
+// TODO: migrate to @os-legal/ui once Table component is available
+import { Table } from "semantic-ui-react";
+import { Loader2, Trash2, Download } from "lucide-react";
+import { IconButton } from "@os-legal/ui";
 import { ExportObject } from "../../types/graphql-api";
 import { DateTimeWidget } from "../widgets/data-display/DateTimeWidget";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ExportItemRowProps {
   style?: Record<string, any>;
@@ -42,14 +46,14 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
       </Table.Cell>
       <Table.Cell textAlign="center">
         {!item.started ? (
-          <Icon size="large" loading name="cog" />
+          <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
         ) : (
           <DateTimeWidget timeString={startedTime} dateString={startedDate} />
         )}
       </Table.Cell>
       <Table.Cell textAlign="center">
         {!item.finished || !item.started ? (
-          <Icon size="large" loading name="cog" />
+          <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
         ) : (
           <DateTimeWidget
             timeString={completedTime}
@@ -58,26 +62,26 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
         )}
       </Table.Cell>
       <Table.Cell textAlign="center">
-        <div>
-          <Button
-            circular
-            size="mini"
-            icon="trash"
-            color="red"
+        <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
+          <IconButton
+            aria-label="Delete export"
+            size="sm"
             onClick={() => onDelete(item.id)}
-          />
-          {item.finished ? (
-            <Button
-              circular
-              size="mini"
-              icon="download"
-              color="blue"
+            style={{ color: OS_LEGAL_COLORS.dangerBorderHover }}
+          >
+            <Trash2 size={14} />
+          </IconButton>
+          {item.finished && (
+            <IconButton
+              aria-label="Download export"
+              size="sm"
               onClick={() => {
                 window.location.href = item.file;
               }}
-            />
-          ) : (
-            <></>
+              style={{ color: OS_LEGAL_COLORS.primaryBlue }}
+            >
+              <Download size={14} />
+            </IconButton>
           )}
         </div>
       </Table.Cell>

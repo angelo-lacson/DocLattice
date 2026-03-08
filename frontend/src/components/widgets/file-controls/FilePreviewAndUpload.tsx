@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
-import { Segment, Icon } from "semantic-ui-react";
+import { FileText, Upload, Pencil } from "lucide-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 import default_image from "../../../assets/images/defaults/default_image.png";
 import default_file from "../../../assets/images/defaults/default_file.png";
@@ -21,24 +22,28 @@ interface FilePreviewAndUploadProps {
   }) => void;
 }
 
-const UploadContainer = styled(Segment)<{ $isReadOnly: boolean }>`
-  &&& {
-    position: relative;
-    width: 100%;
-    max-width: 400px;
-    margin: 0 auto;
-    padding: 0;
-    border-radius: 8px;
-    overflow: hidden;
-    border: ${(props) =>
-      props.$isReadOnly ? "1px solid #e0e0e0" : "2px dashed #2185d0"};
-    background: ${(props) => (props.$isReadOnly ? "#f9f9f9" : "#fff")};
-    transition: all 0.2s ease;
+const UploadContainer = styled.div<{ $isReadOnly: boolean }>`
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: ${(props) =>
+    props.$isReadOnly
+      ? `1px solid ${OS_LEGAL_COLORS.border}`
+      : `2px dashed ${OS_LEGAL_COLORS.primaryBlue}`};
+  background: ${(props) =>
+    props.$isReadOnly ? OS_LEGAL_COLORS.gray50 : "#fff"};
+  transition: all 0.2s ease;
 
-    &:hover {
-      border-color: ${(props) => (props.$isReadOnly ? "#e0e0e0" : "#1678c2")};
-      cursor: ${(props) => (props.$isReadOnly ? "default" : "pointer")};
-    }
+  &:hover {
+    border-color: ${(props) =>
+      props.$isReadOnly
+        ? OS_LEGAL_COLORS.border
+        : OS_LEGAL_COLORS.primaryBlueHover};
+    cursor: ${(props) => (props.$isReadOnly ? "default" : "pointer")};
   }
 `;
 
@@ -63,14 +68,6 @@ const FilePreview = styled.div`
   align-items: center;
   padding: 2rem;
   gap: 1rem;
-`;
-
-const FileIcon = styled(Icon)`
-  &&& {
-    font-size: 3rem;
-    color: #2185d0;
-    margin: 0;
-  }
 `;
 
 const FileName = styled.span`
@@ -104,19 +101,11 @@ const UploadOverlay = styled.div<{ $isReadOnly: boolean }>`
   `}
 `;
 
-const UploadIcon = styled(Icon)`
-  &&& {
-    font-size: 2rem;
-    color: #2185d0;
-    margin: 0;
-  }
-`;
-
 const EditBadge = styled.div`
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: #2185d0;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   padding: 0.5rem;
   border-radius: 4px;
@@ -201,21 +190,21 @@ export const FilePreviewAndUpload = ({
           />
           {!readOnly && !disabled && (
             <EditBadge>
-              <Icon name="edit" />
+              <Pencil size={12} />
               Edit
             </EditBadge>
           )}
         </>
       ) : (
         <FilePreview>
-          <FileIcon name="file alternate outline" />
+          <FileText size={48} color={OS_LEGAL_COLORS.primaryBlue} />
           <FileName>{displayedFilename || "No file selected"}</FileName>
         </FilePreview>
       )}
 
       {!readOnly && !disabled && (
         <UploadOverlay $isReadOnly={readOnly || disabled}>
-          <UploadIcon name="cloud upload" />
+          <Upload size={32} color={OS_LEGAL_COLORS.primaryBlue} />
         </UploadOverlay>
       )}
 
