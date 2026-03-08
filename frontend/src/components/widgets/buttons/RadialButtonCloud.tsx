@@ -5,17 +5,20 @@ import { DynamicIcon } from "../icon-picker/DynamicIcon";
 import { getLuminance } from "polished";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
-import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../../assets/configurations/osLegalStyles";
 
 const pulse = keyframes`
   0% {
-    box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7);
+    box-shadow: 0 0 0 0 ${accentAlpha(0.7)};
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(0, 255, 0, 0);
+    box-shadow: 0 0 0 10px ${accentAlpha(0)};
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 255, 0, 0);
+    box-shadow: 0 0 0 0 ${accentAlpha(0)};
   }
 `;
 
