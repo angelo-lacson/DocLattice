@@ -1520,13 +1520,17 @@ async def aduplicate_annotations_with_label(
 
 
 def add_annotations_from_exact_strings(
-    items: list[tuple[str, str, int, int]],
+    items: list[dict[str, str | int]],
     *,
     creator_id: int,
 ) -> list[int]:
     """Create annotations for exact string matches in documents.
 
-    Each *item* is ``(label_text, exact_string, document_id, corpus_id)``.
+    Each *item* is a dict with keys:
+    - ``label_text`` (str): The label to apply.
+    - ``exact_string`` (str): The exact text to find in the document.
+    - ``document_id`` (int): The document to annotate.
+    - ``corpus_id`` (int): The corpus the document belongs to.
 
     • PDF (application/pdf): builds token‐level annotations (TOKEN_LABEL) via PlasmaPDF.
     • Plain-text (application/txt, text/plain): builds span annotations (SPAN_LABEL).
@@ -1551,7 +1555,11 @@ def add_annotations_from_exact_strings(
 
     # Group items by (doc_id, corpus_id) to avoid loading the same PAWLS layer multiple times.
     grouped: dict[tuple[int, int], list[tuple[str, str]]] = defaultdict(list)
-    for label_text, exact_str, doc_id, corpus_id in items:
+    for item in items:
+        label_text = str(item["label_text"])
+        exact_str = str(item["exact_string"])
+        doc_id = int(item["document_id"])
+        corpus_id = int(item["corpus_id"])
         grouped[(doc_id, corpus_id)].append((label_text, exact_str))
 
     created_ids: list[int] = []
@@ -1675,7 +1683,7 @@ def add_annotations_from_exact_strings(
 
 
 async def aadd_annotations_from_exact_strings(
-    items: list[tuple[str, str, int, int]],
+    items: list[dict[str, str | int]],
     *,
     creator_id: int,
 ):

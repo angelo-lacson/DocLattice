@@ -57,16 +57,16 @@ class TestLLMAnnotationTools(TestCase):
         """Exact-string PDF annotation results in TOKEN_LABEL annotations."""
 
         search_word = "Agreement"  # Appears multiple times in sample contract
-        tuples: list[tuple[str, str, int, int]] = [
-            (
-                "ContractTerm",
-                search_word,
-                self.doc.id,
-                self.corpus.id,
-            )
+        items = [
+            {
+                "label_text": "ContractTerm",
+                "exact_string": search_word,
+                "document_id": self.doc.id,
+                "corpus_id": self.corpus.id,
+            }
         ]
 
-        new_ids = add_annotations_from_exact_strings(tuples, creator_id=self.user.id)
+        new_ids = add_annotations_from_exact_strings(items, creator_id=self.user.id)
 
         self.assertGreaterEqual(len(new_ids), 1)
 
@@ -106,8 +106,15 @@ class TestLLMAnnotationTools(TestCase):
 
         doc = self._create_text_document()
 
-        tuples = [("LegalTerm", "Agreement", doc.id, self.corpus.id)]
-        new_ids = add_annotations_from_exact_strings(tuples, creator_id=self.user.id)
+        items = [
+            {
+                "label_text": "LegalTerm",
+                "exact_string": "Agreement",
+                "document_id": doc.id,
+                "corpus_id": self.corpus.id,
+            }
+        ]
+        new_ids = add_annotations_from_exact_strings(items, creator_id=self.user.id)
 
         self.assertGreaterEqual(len(new_ids), 1)
 
@@ -212,13 +219,23 @@ class AsyncTestLLMAnnotationTools(TransactionTestCase):
     # -------------------- async tests ---------------------------- #
 
     async def test_async_pdf_and_text(self):
-        tuples = [
-            ("ContractTerm", "Agreement", self.pdf_doc.id, self.corpus.id),
-            ("TextTerm", "Agreement", self.txt_doc.id, self.corpus.id),
+        items = [
+            {
+                "label_text": "ContractTerm",
+                "exact_string": "Agreement",
+                "document_id": self.pdf_doc.id,
+                "corpus_id": self.corpus.id,
+            },
+            {
+                "label_text": "TextTerm",
+                "exact_string": "Agreement",
+                "document_id": self.txt_doc.id,
+                "corpus_id": self.corpus.id,
+            },
         ]
 
         new_ids = await aadd_annotations_from_exact_strings(
-            tuples, creator_id=self.user.id
+            items, creator_id=self.user.id
         )
 
         # Expect 2 (Agreement appears twice, Company twice) = 4 annotations
