@@ -306,7 +306,7 @@ export function getAnnotationSource(
     return "structural";
   }
 
-  // Check if it was created by an analyzer (agent)
+  // Check if it was created by an analyzer (analysis) or a corpus action (agent)
   if (annotation.analysis) {
     const analyzerId =
       annotation.analysis?.analyzer?.analyzerId?.toLowerCase() || "";
@@ -317,7 +317,11 @@ export function getAnnotationSource(
     return "agent";
   }
 
-  // No analysis means manually created
+  if (annotation.corpusAction) {
+    return "agent";
+  }
+
+  // No analysis or corpus action means manually created
   return "human";
 }
 

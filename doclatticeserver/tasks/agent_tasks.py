@@ -876,6 +876,7 @@ async def _run_agent_corpus_action_async(
             streaming=False,
             skip_approval_gate=True,
             restrict_tool_names=tools,
+            corpus_action_id=corpus_action_id,
         )
 
         # Execute — the system prompt already contains task_instructions,
