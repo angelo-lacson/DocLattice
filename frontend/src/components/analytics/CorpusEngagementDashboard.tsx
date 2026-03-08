@@ -280,7 +280,7 @@ const DashboardContainer = styled.div`
   flex-direction: column;
   width: 100%;
   padding: 1rem 0.75rem;
-  background: white;
+  background: ${OS_LEGAL_COLORS.surface};
   max-width: 1400px;
   margin: 0 auto;
 
@@ -458,7 +458,7 @@ const StatisticLabel = styled.div`
 `;
 
 const ChartContainer = styled.div`
-  background: #ffffff;
+  background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 1rem;

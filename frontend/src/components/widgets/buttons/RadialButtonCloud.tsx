@@ -10,6 +10,15 @@ import {
   accentAlpha,
 } from "../../../assets/configurations/osLegalStyles";
 
+/** Spiral growth rate — higher values spread buttons outward faster. */
+const SPIRAL_GROWTH_RATE = 6;
+/** Spiral spacing as % of window height on desktop. */
+const SPIRAL_SPACING_DESKTOP_PCT = 3;
+/** Spiral spacing as % of window height on mobile. */
+const SPIRAL_SPACING_MOBILE_PCT = 8;
+/** Number of inner spiral positions to skip (keeps buttons away from center). */
+const SPIRAL_SKIP_COUNT = 2;
+
 const pulse = keyframes`
   0% {
     box-shadow: 0 0 0 0 ${accentAlpha(0.7)};
@@ -204,17 +213,18 @@ const RadialButtonCloud: React.FC<RadialButtonCloudProps> = ({
   }, [cloudVisible]);
 
   const numButtons = buttonList.length;
-  const a = 6; // Controls the growth rate of the spiral
-  const spacingAlongPercent = width <= MOBILE_VIEW_BREAKPOINT ? 8 : 3; // 5% of the container height
+  const spacingAlongPercent =
+    width <= MOBILE_VIEW_BREAKPOINT
+      ? SPIRAL_SPACING_MOBILE_PCT
+      : SPIRAL_SPACING_DESKTOP_PCT;
   const spacingAlong = (height * spacingAlongPercent) / 100;
-  const skipCount = 2; // Number of inner positions to skip
 
   // Calculate button positions
   const buttonPositions = calculateButtonPositions(
     numButtons,
-    a,
+    SPIRAL_GROWTH_RATE,
     spacingAlong,
-    skipCount
+    SPIRAL_SKIP_COUNT
   );
 
   // Calculate dot color with good contrast

@@ -25,6 +25,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import {
   OS_LEGAL_COLORS,
   primaryBlueAlpha,
@@ -339,7 +340,7 @@ const DescriptionContainer = styled.div<{
   padding: 1rem;
   background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 12px;
-  border: 1px solid #e8edf5;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   display: ${(props) => (props.$compact ? "none" : "block")};
 
   &::-webkit-scrollbar {
@@ -400,7 +401,7 @@ const MarkdownContent = styled(ReactMarkdown)`
   }
 `;
 
-const ExpandButton = styled.button<{ $visible?: boolean }>`
+const ExpandButton = styled.button`
   position: absolute;
   bottom: 0;
   left: 0;
@@ -415,8 +416,6 @@ const ExpandButton = styled.button<{ $visible?: boolean }>`
   color: ${OS_LEGAL_COLORS.primaryBlue};
   font-size: 0.8rem;
   font-weight: 500;
-  opacity: ${(props) => (props.$visible ? 1 : 0)};
-  transition: opacity 0.2s ease;
 
   &:hover {
     color: ${OS_LEGAL_COLORS.primaryBlueHover};
@@ -630,21 +629,17 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
 
   // Memoized calculation of unique labels for each analysis
   const analysisLabelsCount = useMemo(() => {
-    return analyses.reduce((acc, item) => {
-      const uniqueLabels =
-        item.fullAnnotationList?.reduce(
-          (labelAcc: string[], curr) =>
-            curr.annotationLabel?.text
-              ? [...new Set([...labelAcc, curr.annotationLabel.text])]
-              : labelAcc,
-          []
-        ) || [];
-
-      return {
-        ...acc,
-        [item.id]: uniqueLabels.length,
-      };
-    }, {} as Record<string, number>);
+    const result: Record<string, number> = {};
+    for (const item of analyses) {
+      const labels = new Set<string>();
+      for (const ann of item.fullAnnotationList ?? []) {
+        if (ann.annotationLabel?.text) {
+          labels.add(ann.annotationLabel.text);
+        }
+      }
+      result[item.id] = labels.size;
+    }
+    return result;
   }, [analyses]);
 
   return (
@@ -866,14 +861,15 @@ const DescriptionExpander: React.FC<DescriptionExpanderProps> = ({
           $compact={isCompact}
           ref={contentRef}
         >
-          <MarkdownContent>{description}</MarkdownContent>
+          <MarkdownContent rehypePlugins={[rehypeSanitize]}>
+            {description}
+          </MarkdownContent>
           {needsExpansion && (
             <ExpandButton
               onClick={(e) => {
                 e.stopPropagation();
                 setExpanded(!expanded);
               }}
-              $visible={needsExpansion}
             >
               {expanded ? (
                 <>
