@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Backend mutation test for the all-enabled-to-explicit toggle transition, verifying the mutation succeeds and the query reflects the change (issue #1036 item 7). (`opencontractserver/tests/test_pipeline_settings.py`)
 
+### Changed
+
+- **`add_annotations_from_exact_strings` API simplified to single-document** (breaking): Replaced per-item `(label, text, doc_id, corpus_id)` tuples with a flat `document_id`/`corpus_id` pair plus `AnnotationItem` TypedDict items containing only `label_text` and `exact_string`. Callers that previously annotated multiple documents in one call must now make separate calls per document. (`opencontractserver/llms/tools/core_tools.py`)
+
 ### Added
 
 #### Action Library (Corpus Action Templates)
