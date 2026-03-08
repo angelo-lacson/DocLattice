@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- pgvector search optimization (requires pgvector 0.8+; built from v0.8.2)
+-- pgvector search optimization (requires pgvector 0.8.2+)
 -- Iterative scans prevent result loss when combining vector search with WHERE clauses.
 -- relaxed_order gives the best performance for filtered ANN queries.
 DO $$
