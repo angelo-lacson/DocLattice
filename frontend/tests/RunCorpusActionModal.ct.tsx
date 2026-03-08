@@ -145,7 +145,7 @@ test.describe("RunCorpusActionModal - Behavior", () => {
     await page.waitForTimeout(500);
 
     // Click the dropdown to show options
-    await page.locator(".ui.dropdown").click();
+    await page.locator(".oc-dropdown").click();
     await page.waitForTimeout(300);
 
     // Documents should appear in the dropdown
