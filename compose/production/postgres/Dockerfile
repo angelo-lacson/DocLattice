@@ -1,7 +1,7 @@
 FROM pgvector/pgvector:pg15
 
 RUN apt-get update && apt-get install -y git build-essential postgresql-server-dev-15
-RUN cd /tmp && git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git && cd pgvector && make && make install
+RUN cd /tmp && git clone --branch v0.8.2 https://github.com/pgvector/pgvector.git && cd pgvector && make && make install
 
 # init.sql enables the pgvector extension and configures HNSW iterative scan
 # settings on fresh databases. Existing databases get these via migration 0063.

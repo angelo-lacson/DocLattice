@@ -5,7 +5,11 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-04
+## [Unreleased] - 2026-03-08
+
+### Fixed
+
+- **PostgreSQL HNSW config warning on startup** (Closes #1074): Fixed `invalid configuration parameter name 'hnsw.iterative_scan', removing it` warning caused by database-level GUC settings being applied before the pgvector extension loaded. Added `shared_preload_libraries=vector` to all Docker Compose postgres commands so pgvector registers its GUC variables at server startup, before database-level settings are applied. Also upgraded pgvector from v0.8.0 to v0.8.2. (`local.yml`, `production.yml`, `test.yml`, `compose/production/postgres/Dockerfile`)
 
 ### Changed
 
