@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 export const BackButton = styled.button`
   position: sticky;
@@ -15,7 +16,7 @@ export const BackButton = styled.button`
   color: #4a5568;
   cursor: pointer;
   width: 100%;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   z-index: 10;
   margin-bottom: 0.75rem;
 
@@ -101,7 +102,7 @@ export const ChatInputWrapper = styled.div`
   display: flex;
   flex-direction: column;
   position: relative;
-  background: #fafbfc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border: 2px solid #e8ecf0;
   border-radius: 14px;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -187,7 +188,7 @@ export const SendButton = styled(motion.button)<{ $hasText?: boolean }>`
     props.$hasText
       ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
       : "#e8ecf0"};
-  color: ${(props) => (props.$hasText ? "white" : "#94a3b8")};
+  color: ${(props) => (props.$hasText ? "white" : OS_LEGAL_COLORS.textMuted)};
   border: none;
   border-radius: 12px;
   width: 44px;
@@ -245,7 +246,7 @@ export const SendButton = styled(motion.button)<{ $hasText?: boolean }>`
 
   &:disabled {
     background: #e8ecf0;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
     cursor: not-allowed;
     transform: none !important;
     box-shadow: none;
@@ -308,7 +309,11 @@ export const ConversationCount = styled(motion.div)`
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2185d0 0%, #1678c2 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.primaryBlue} 0%,
+    #1678c2 100%
+  );
   color: white;
   display: flex;
   align-items: center;
@@ -387,7 +392,7 @@ export const ConversationItem = styled(motion.button)`
 
   .meta {
     font-size: 0.75rem;
-    color: #868e96;
+    color: ${OS_LEGAL_COLORS.gray500};
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -396,7 +401,7 @@ export const ConversationItem = styled(motion.button)`
   .message-count {
     margin-left: auto;
     background: rgba(33, 133, 208, 0.1);
-    color: #2185d0;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
     padding: 0.125rem 0.5rem;
     border-radius: 1rem;
     font-size: 0.75rem;
@@ -410,7 +415,7 @@ export const NewChatButton = styled(motion.button)`
   background: white;
   border: none;
   border-top: 1px solid rgba(231, 234, 237, 0.7);
-  color: #2185d0;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   font-weight: 500;
   font-size: 0.875rem;
   display: flex;
@@ -527,7 +532,11 @@ export const ConversationCard = styled(motion.div)`
     left: 0;
     width: 3px;
     height: 100%;
-    background: linear-gradient(to bottom, #4299e1, #2b6cb0);
+    background: linear-gradient(
+      to bottom,
+      ${OS_LEGAL_COLORS.primaryBlue},
+      #2b6cb0
+    );
     opacity: 0.7;
     transition: width 0.3s ease;
   }
@@ -567,7 +576,11 @@ export const CardTitle = styled.h3`
     left: 0;
     width: 0;
     height: 2px;
-    background: linear-gradient(to right, #4299e1, transparent);
+    background: linear-gradient(
+      to right,
+      ${OS_LEGAL_COLORS.primaryBlue},
+      transparent
+    );
     transition: width 0.3s ease;
   }
 
@@ -598,7 +611,7 @@ export const TimeStamp = styled.span`
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background-color: #4299e1;
+    background-color: ${OS_LEGAL_COLORS.primaryBlue};
     margin-right: 6px;
   }
 `;
@@ -635,7 +648,7 @@ export const MessageCount = styled(motion.div)<{
       : "linear-gradient(135deg, #2B6CB0 0%, #2C5282 100%)")};
   color: ${(props) =>
     props.$colorStyle?.textColor ||
-    (props.children === "0" ? "#4A5568" : "white")};
+    (props.children === "0" ? OS_LEGAL_COLORS.textTertiary : "white")};
   padding: 0.4rem 0.75rem;
   border-radius: 20px;
   font-size: 0.85rem;
@@ -728,7 +741,7 @@ export const NewChatFloatingButton = styled(motion.button)`
   width: 56px;
   height: 56px;
   border-radius: 28px;
-  background: #4299e1;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   border: none;
   box-shadow: 0 4px 6px rgba(66, 153, 225, 0.2);
@@ -758,6 +771,6 @@ export const FilterContainer = styled.div`
   gap: 0.5rem;
   padding: 1rem;
   background: white;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   z-index: 10;
 `;

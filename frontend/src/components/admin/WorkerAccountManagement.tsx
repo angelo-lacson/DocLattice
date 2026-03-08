@@ -1,12 +1,21 @@
 import React, { useState } from "react";
 import { gql, useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import { Button, Table, Modal, Form, Confirm } from "semantic-ui-react";
+// TODO: migrate to @os-legal/ui once Table component is available
+import { Table } from "semantic-ui-react";
+import {
+  Button,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Upload, ArrowLeft } from "lucide-react";
-import { Input } from "@os-legal/ui";
 import { StyledTextArea } from "../widgets/modals/styled";
+import { FormField } from "../widgets/form/FormField";
 import {
   ErrorMessage,
   InfoMessage,
@@ -17,8 +26,9 @@ import {
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
-  OS_LEGAL_SPACING,
 } from "../../assets/configurations/osLegalStyles";
+import { CardSegment as StyledSegment } from "../layout/SharedSegments";
+import { StatusBadge } from "../agents/AgentBadges";
 import { backendUserObj } from "../../graphql/cache";
 
 // ---------------------------------------------------------------------------
@@ -125,25 +135,6 @@ const PageSubtitle = styled.p`
   font-size: 1rem;
   margin: 0;
   line-height: 1.5;
-`;
-
-const StyledSegment = styled.div`
-  background: ${OS_LEGAL_COLORS.surface};
-  border: 1px solid ${OS_LEGAL_COLORS.border};
-  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
-  padding: 1.5rem;
-`;
-
-const StatusBadge = styled.span<{ $active: boolean }>`
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: ${({ $active }) => ($active ? "#dcfce7" : "#fee2e2")};
-  color: ${({ $active }) => ($active ? "#166534" : "#991b1b")};
 `;
 
 const TruncatedCell = styled.span`
@@ -314,7 +305,7 @@ export const WorkerAccountManagement: React.FC = () => {
           </PageSubtitle>
         </PageTitleGroup>
         <Button
-          primary
+          variant="primary"
           onClick={() => {
             setFormState(initialFormState);
             setShowCreateModal(true);
@@ -363,13 +354,23 @@ export const WorkerAccountManagement: React.FC = () => {
                     {new Date(account.created).toLocaleDateString()}
                   </Table.Cell>
                   <Table.Cell>
-                    <Button
-                      size="tiny"
-                      color={account.isActive ? "red" : "green"}
-                      onClick={() => handleToggleActive(account)}
-                    >
-                      {account.isActive ? "Deactivate" : "Activate"}
-                    </Button>
+                    {account.isActive ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleToggleActive(account)}
+                      >
+                        Deactivate
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleToggleActive(account)}
+                      >
+                        Activate
+                      </Button>
+                    )}
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -382,12 +383,15 @@ export const WorkerAccountManagement: React.FC = () => {
       <Modal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        size="small"
+        size="sm"
       >
-        <Modal.Header>Create Worker Account</Modal.Header>
-        <Modal.Content>
-          <Form>
-            <Form.Field required>
+        <ModalHeader
+          title="Create Worker Account"
+          onClose={() => setShowCreateModal(false)}
+        />
+        <ModalBody>
+          <form>
+            <FormField $required>
               <label>Name</label>
               <Input
                 fullWidth
@@ -397,8 +401,8 @@ export const WorkerAccountManagement: React.FC = () => {
                   setFormState({ ...formState, name: e.target.value })
                 }
               />
-            </Form.Field>
-            <Form.Field>
+            </FormField>
+            <FormField>
               <label>Description</label>
               <StyledTextArea
                 placeholder="Optional description of this worker account"
@@ -408,31 +412,51 @@ export const WorkerAccountManagement: React.FC = () => {
                 }
                 rows={3}
               />
-            </Form.Field>
-          </Form>
-        </Modal.Content>
-        <Modal.Actions>
-          <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            </FormField>
+          </form>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
+            Cancel
+          </Button>
           <Button
-            primary
-            loading={creating}
+            variant="primary"
             disabled={!formState.name.trim() || creating}
+            loading={creating}
             onClick={handleCreate}
           >
             Create Account
           </Button>
-        </Modal.Actions>
+        </ModalFooter>
       </Modal>
 
       {/* Deactivate Confirmation */}
-      <Confirm
+      <Modal
         open={accountToDeactivate !== null}
-        onCancel={() => setAccountToDeactivate(null)}
-        onConfirm={handleConfirmDeactivate}
-        content={`Are you sure you want to deactivate "${accountToDeactivate?.name}"? This will invalidate all access tokens for this account.`}
-        confirmButton="Deactivate"
-        cancelButton="Cancel"
-      />
+        onClose={() => setAccountToDeactivate(null)}
+        size="sm"
+      >
+        <ModalHeader
+          title="Confirm Deactivation"
+          onClose={() => setAccountToDeactivate(null)}
+        />
+        <ModalBody>
+          Are you sure you want to deactivate &quot;
+          {accountToDeactivate?.name}&quot;? This will invalidate all access
+          tokens for this account.
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => setAccountToDeactivate(null)}
+          >
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleConfirmDeactivate}>
+            Deactivate
+          </Button>
+        </ModalFooter>
+      </Modal>
     </Container>
   );
 };

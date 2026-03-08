@@ -1,9 +1,20 @@
-import { Modal } from "semantic-ui-react";
-import styled from "styled-components";
+import React from "react";
+import { Modal } from "@os-legal/ui";
+import styled, { createGlobalStyle } from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
-// Enhanced styled components
-export const FullScreenModal = styled(Modal)`
-  &&& {
+// @os-legal/ui Modal renders via a portal outside the React tree,
+// so wrapper descendant selectors never reach the portal DOM.
+// We must use createGlobalStyle instead. Scoped via .fullscreen-modal class
+// to prevent leakage. Injected unconditionally when FullScreenModal is mounted
+// (even when closed), but the scoping class ensures no side effects.
+// TODO: Fix upstream in @os-legal/ui — add a size="fullscreen" variant
+const FullScreenModalStyles = createGlobalStyle`
+  .oc-modal-overlay:has(.fullscreen-modal) {
+    padding: 0 !important;
+  }
+
+  .fullscreen-modal {
     position: fixed !important;
     margin: 0 !important;
     top: 0 !important;
@@ -15,29 +26,51 @@ export const FullScreenModal = styled(Modal)`
     max-width: none !important;
     max-height: none !important;
     border-radius: 0 !important;
-    background: #f8f9fa;
+    background: ${OS_LEGAL_COLORS.gray50};
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+  }
 
-    /* Ensure the close button remains visible and properly positioned */
-    > .close.icon {
-      top: 1rem !important;
-      right: 1rem !important;
-      color: rgba(0, 0, 0, 0.7) !important;
-      z-index: 1000;
-    }
-
-    /* Ensure modal content fills available space */
-    .content {
-      flex: 1 1 auto !important;
-      overflow: hidden !important;
-      padding: 0 !important;
-      margin: 0 !important;
-    }
+  .fullscreen-modal .oc-modal-body {
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0;
   }
 `;
 
+interface FullScreenModalProps {
+  id?: string;
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+export const FullScreenModal: React.FC<FullScreenModalProps> = ({
+  id,
+  open,
+  onClose,
+  children,
+}) => (
+  <>
+    <FullScreenModalStyles />
+    <Modal
+      id={id}
+      open={open}
+      onClose={onClose}
+      size="lg"
+      className="fullscreen-modal"
+      closeOnEscape={false}
+      closeOnOverlay={false}
+    >
+      {children}
+    </Modal>
+  </>
+);
+
+/* Indigo palette — no OS_LEGAL_COLORS tokens yet; add when indigo tokens are introduced */
 export const SourceIndicator = styled.div`
   padding: 0.5rem;
   background: #eef2ff;

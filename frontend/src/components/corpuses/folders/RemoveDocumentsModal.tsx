@@ -1,9 +1,15 @@
 import React, { useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, AlertTriangle } from "lucide-react";
+import {
+  Button,
+  Modal,
+  ModalHeader as OcModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import { toast } from "react-toastify";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
@@ -30,19 +36,11 @@ import { ErrorMessage } from "../../widgets/feedback";
  * - Shows loading and error states
  */
 
-const StyledModal = styled(Modal)`
-  &.ui.modal {
+const StyledModalWrapper = styled.div`
+  .oc-modal {
     max-width: 500px;
+    width: 100%;
   }
-`;
-
-const ModalHeader = styled(Modal.Header)`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: ${OS_LEGAL_COLORS.dangerSurface};
-  border-bottom: 2px solid ${OS_LEGAL_COLORS.dangerBorder};
-  color: ${OS_LEGAL_COLORS.dangerText};
 `;
 
 const CloseButton = styled.button`
@@ -172,61 +170,57 @@ export const RemoveDocumentsModal: React.FC = () => {
   const count = documentIds.length;
 
   return (
-    <StyledModal open={showModal} onClose={handleClose} size="small">
-      <ModalHeader>
-        <span>Remove Documents from Corpus</span>
-        <CloseButton
-          onClick={handleClose}
-          aria-label="Close"
-          disabled={loading}
-        >
-          <X size={20} />
-        </CloseButton>
-      </ModalHeader>
+    <StyledModalWrapper>
+      <Modal open={showModal} onClose={handleClose} size="sm">
+        <OcModalHeader
+          title="Remove Documents from Corpus"
+          onClose={handleClose}
+        />
 
-      <Modal.Content>
-        <WarningBox>
-          <WarningIcon size={24} />
-          <WarningContent>
-            <h4>Confirm Removal</h4>
-            <p>
-              You are about to remove{" "}
-              <strong>
-                {count} document{count !== 1 ? "s" : ""}
-              </strong>{" "}
-              from this corpus. The documents will remain in your library but
-              will no longer be associated with this corpus.
-            </p>
-          </WarningContent>
-        </WarningBox>
+        <ModalBody>
+          <WarningBox>
+            <WarningIcon size={24} />
+            <WarningContent>
+              <h4>Confirm Removal</h4>
+              <p>
+                You are about to remove{" "}
+                <strong>
+                  {count} document{count !== 1 ? "s" : ""}
+                </strong>{" "}
+                from this corpus. The documents will remain in your library but
+                will no longer be associated with this corpus.
+              </p>
+            </WarningContent>
+          </WarningBox>
 
-        <InfoBox>
-          <strong>Documents to remove:</strong> {count}
-        </InfoBox>
+          <InfoBox>
+            <strong>Documents to remove:</strong> {count}
+          </InfoBox>
 
-        {error && (
-          <ErrorMessage
-            title="Error Removing Documents"
-            style={{ marginTop: "16px" }}
+          {error && (
+            <ErrorMessage
+              title="Error Removing Documents"
+              style={{ marginTop: "16px" }}
+            >
+              {error.message}
+            </ErrorMessage>
+          )}
+        </ModalBody>
+
+        <ModalFooter>
+          <Button variant="secondary" onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleConfirmRemove}
+            loading={loading}
+            disabled={loading}
           >
-            {error.message}
-          </ErrorMessage>
-        )}
-      </Modal.Content>
-
-      <Modal.Actions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          negative
-          onClick={handleConfirmRemove}
-          loading={loading}
-          disabled={loading}
-        >
-          Remove {count} Document{count !== 1 ? "s" : ""}
-        </Button>
-      </Modal.Actions>
-    </StyledModal>
+            Remove {count} Document{count !== 1 ? "s" : ""}
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };

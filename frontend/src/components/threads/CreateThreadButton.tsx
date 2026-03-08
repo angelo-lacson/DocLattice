@@ -12,6 +12,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
+import { accentAlpha } from "../../assets/configurations/osLegalStyles";
 import { authToken, openedCorpus } from "../../graphql/cache";
 import { getCorpusThreadUrl } from "../../utils/navigationUtils";
 
@@ -39,9 +40,7 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
   cursor: pointer;
   transition: all ${CORPUS_TRANSITIONS.normal};
   box-shadow: ${(props) =>
-    props.$variant === "primary"
-      ? "0 4px 12px rgba(15, 118, 110, 0.35)"
-      : "none"};
+    props.$variant === "primary" ? `0 4px 12px ${accentAlpha(0.35)}` : "none"};
 
   &:hover {
     background: ${(props) =>
@@ -51,7 +50,7 @@ const Button = styled.button<{ $variant?: "primary" | "secondary" }>`
     transform: translateY(-2px);
     box-shadow: ${(props) =>
       props.$variant === "primary"
-        ? "0 6px 20px rgba(15, 118, 110, 0.45)"
+        ? `0 6px 20px ${accentAlpha(0.45)}`
         : "none"};
   }
 
@@ -88,14 +87,14 @@ const FloatingActionButton = styled.button`
     ${CORPUS_COLORS.teal[700]} 100%
   );
   color: ${CORPUS_COLORS.white};
-  box-shadow: 0 8px 24px rgba(15, 118, 110, 0.4);
+  box-shadow: 0 8px 24px ${accentAlpha(0.4)};
   cursor: pointer;
   transition: all ${CORPUS_TRANSITIONS.normal};
   z-index: 50;
 
   &:hover {
     transform: scale(1.1);
-    box-shadow: 0 12px 32px rgba(15, 118, 110, 0.5);
+    box-shadow: 0 12px 32px ${accentAlpha(0.5)};
   }
 
   &:active {

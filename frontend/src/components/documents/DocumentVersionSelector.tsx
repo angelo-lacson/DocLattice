@@ -2,7 +2,9 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useLazyQuery, useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { Popup, Loader, Icon } from "semantic-ui-react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { ChevronUp, ChevronDown } from "lucide-react";
+import { Spinner } from "@os-legal/ui";
 import { selectedDocVersion } from "../../graphql/cache";
 import { GET_CORPUS_VERSIONS } from "../../graphql/queries";
 
@@ -47,8 +49,8 @@ const VersionPill = styled.button<{
 
   color: ${(props) => {
     if (props.$isOutdated) return "#c2410c";
-    if (props.$hasHistory) return "#1d4ed8";
-    return "#64748b";
+    if (props.$hasHistory) return OS_LEGAL_COLORS.primaryBlueHover;
+    return OS_LEGAL_COLORS.textSecondary;
   }};
 
   border-color: ${(props) => {
@@ -83,7 +85,7 @@ const DropdownMenu = styled.div`
   z-index: 1000;
   min-width: 220px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   overflow: hidden;
@@ -100,42 +102,46 @@ const DropdownItem = styled.button<{
   padding: 10px 14px;
   border: none;
   background: ${(props) => {
-    if (props.$isActive) return "#eff6ff";
-    if (props.$isFocused) return "#f8fafc";
+    if (props.$isActive) return OS_LEGAL_COLORS.blueSurface;
+    if (props.$isFocused) return OS_LEGAL_COLORS.surfaceHover;
     return "transparent";
   }};
   cursor: pointer;
   text-align: left;
   transition: background 0.15s ease;
-  outline: ${(props) => (props.$isFocused ? "2px solid #3b82f6" : "none")};
+  outline: ${(props) =>
+    props.$isFocused ? `2px solid ${OS_LEGAL_COLORS.primaryBlue}` : "none"};
   outline-offset: -2px;
 
   &:hover {
-    background: ${(props) => (props.$isActive ? "#dbeafe" : "#f8fafc")};
+    background: ${(props) =>
+      props.$isActive
+        ? OS_LEGAL_COLORS.blueBorder
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:not(:last-child) {
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   }
 `;
 
 const VersionLabel = styled.span`
   font-size: 13px;
   font-weight: 500;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const VersionDate = styled.span`
   font-size: 11px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-left: 8px;
 `;
 
 const CurrentTag = styled.span`
   font-size: 10px;
   font-weight: 600;
-  color: #3b82f6;
-  background: #eff6ff;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
+  background: ${OS_LEGAL_COLORS.blueSurface};
   padding: 1px 6px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -335,36 +341,25 @@ export const DocumentVersionSelector: React.FC<
 
   return (
     <SelectorContainer ref={containerRef}>
-      <Popup
-        trigger={
-          <VersionPill
-            ref={pillRef}
-            $isOutdated={isOutdated}
-            $hasHistory={hasHistory}
-            onClick={handleToggle}
-            aria-label={`Version ${displayVersion ?? "?"} of ${
-              sortedVersions.length
-            }, click to switch versions`}
-            aria-expanded={isOpen}
-            aria-haspopup="listbox"
-            aria-activedescendant={
-              isOpen && focusedIndex >= 0
-                ? `version-option-${sortedVersions[focusedIndex]?.versionNumber}`
-                : undefined
-            }
-          >
-            v{displayVersion ?? "?"}
-            <span style={{ fontSize: "9px", opacity: 0.7 }}>
-              / {sortedVersions.length}
-            </span>
-            <Icon
-              name={isOpen ? "chevron up" : "chevron down"}
-              style={{ fontSize: "9px", margin: 0 }}
-            />
-          </VersionPill>
+      <VersionPill
+        ref={pillRef}
+        $isOutdated={isOutdated}
+        $hasHistory={hasHistory}
+        onClick={handleToggle}
+        aria-label={`Version ${displayVersion ?? "?"} of ${
+          sortedVersions.length
+        }, click to switch versions`}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-activedescendant={
+          isOpen && focusedIndex >= 0
+            ? `version-option-${sortedVersions[focusedIndex]?.versionNumber}`
+            : undefined
         }
-        content={
-          isOutdated
+        title={
+          isOpen
+            ? undefined
+            : isOutdated
             ? `Viewing version ${displayVersion ?? "?"} of ${
                 sortedVersions.length
               }. A newer version is available.`
@@ -372,16 +367,23 @@ export const DocumentVersionSelector: React.FC<
                 sortedVersions.length
               }. Click to switch versions.`
         }
-        position="bottom left"
-        size="small"
-        disabled={isOpen}
-      />
+      >
+        v{displayVersion ?? "?"}
+        <span style={{ fontSize: "9px", opacity: 0.7 }}>
+          / {sortedVersions.length}
+        </span>
+        {isOpen ? (
+          <ChevronUp size={9} style={{ margin: 0 }} />
+        ) : (
+          <ChevronDown size={9} style={{ margin: 0 }} />
+        )}
+      </VersionPill>
 
       {isOpen && (
         <DropdownMenu role="listbox" aria-label="Document versions">
           {loading ? (
             <DropdownLoading>
-              <Loader active inline="centered" size="tiny" />
+              <Spinner size="sm" />
             </DropdownLoading>
           ) : (
             sortedVersions.map((version, index) => {

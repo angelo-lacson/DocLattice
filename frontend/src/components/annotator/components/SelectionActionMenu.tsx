@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /**
  * Shared styled components for the selection action menu used by both
@@ -7,7 +8,7 @@ import styled from "styled-components";
 
 export const SelectionActionMenu = styled.div`
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   padding: 4px;
@@ -39,7 +40,7 @@ export const ActionMenuItem = styled.button`
 
 export const MenuDivider = styled.div`
   height: 1px;
-  background-color: #e0e0e0;
+  background-color: ${OS_LEGAL_COLORS.border};
   margin: 4px 0;
 `;
 
@@ -64,7 +65,7 @@ export const HelpMessage = styled.div`
   svg {
     flex-shrink: 0;
     margin-top: 2px;
-    color: #f59e0b;
+    color: ${OS_LEGAL_COLORS.folderIcon};
   }
 
   div {

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import styled from "styled-components";
 import { color } from "../../../theme/colors";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   ConversationGrid,
   ChatInputContainer,
@@ -265,7 +266,7 @@ export const ChatContainer = styled.div`
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   position: relative;
   margin: 0;
   padding: 0;
@@ -324,7 +325,7 @@ export const ProcessingIndicator = styled(motion.div)`
   gap: 0.75rem;
   padding: 0.875rem 1.5rem;
   background: linear-gradient(135deg, #f0f7ff 0%, #e6f2ff 100%);
-  color: #4a90e2;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   border-radius: 24px;
   font-weight: 500;
   font-size: 0.9375rem;
@@ -361,7 +362,7 @@ export const ProcessingIndicator = styled(motion.div)`
   .pulse-dot {
     width: 6px;
     height: 6px;
-    background: #4a90e2;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     border-radius: 50%;
     animation: pulse 1.5s ease-in-out infinite;
     box-shadow: 0 0 4px rgba(74, 144, 226, 0.4);
@@ -382,7 +383,7 @@ export const ProcessingIndicator = styled(motion.div)`
   /* Loader color override */
   .ui.loader {
     &:after {
-      border-color: #4a90e2 transparent transparent !important;
+      border-color: ${OS_LEGAL_COLORS.primaryBlue} transparent transparent !important;
     }
   }
 `;
@@ -416,7 +417,11 @@ export const MessagesArea = styled.div<{ $isProcessing?: boolean }>`
   overflow-y: auto;
   overflow-x: hidden;
   padding: 1.5rem;
-  background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
+  background: linear-gradient(
+    to bottom,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    #ffffff 100%
+  );
   min-height: 0;
   max-height: 100%;
   position: relative;
@@ -446,16 +451,16 @@ export const MessagesArea = styled.div<{ $isProcessing?: boolean }>`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
     border-radius: 4px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 4px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 
@@ -472,8 +477,8 @@ export const InputRow = styled.div`
 `;
 
 export const EnhancedChatInput = styled(ChatInput)`
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 0.875rem 1.25rem;
   font-size: 0.9375rem;
@@ -525,7 +530,7 @@ export const NewMessageDot = styled(motion.div)`
   right: 1rem;
   width: 12px;
   height: 12px;
-  background: #ef4444;
+  background: ${OS_LEGAL_COLORS.dangerBorderHover};
   border-radius: 50%;
   box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
 
@@ -536,7 +541,7 @@ export const NewMessageDot = styled(motion.div)`
     left: 0;
     width: 100%;
     height: 100%;
-    background: #ef4444;
+    background: ${OS_LEGAL_COLORS.dangerBorderHover};
     border-radius: 50%;
     animation: pulse 2s infinite;
   }
@@ -577,7 +582,7 @@ export const ChatNavigationHeader = styled.div`
   gap: 1rem;
   padding: 1rem;
   background: white;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   position: sticky;
   top: 0;
   z-index: 100; /* High z-index to ensure it's always visible */
@@ -591,8 +596,8 @@ export const ChatNavigationHeader = styled.div`
 `;
 
 export const BackButton = styled(motion.button)`
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   padding: 0.5rem;
   cursor: pointer;
@@ -602,7 +607,7 @@ export const BackButton = styled(motion.button)`
   transition: all 0.2s ease;
 
   &:hover {
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 `;
 

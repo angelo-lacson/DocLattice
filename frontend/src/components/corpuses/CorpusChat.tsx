@@ -25,8 +25,7 @@ import React, {
 import { useLazyQuery, useQuery, useReactiveVar } from "@apollo/client";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Send, Home } from "lucide-react";
-import { Button } from "semantic-ui-react";
-import { Spinner } from "@os-legal/ui";
+import { Button, Spinner } from "@os-legal/ui";
 import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
@@ -1136,14 +1135,13 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   data-testid="compaction-banner"
                   style={{
                     padding: "0.5rem 1rem",
-                    borderTop: "1px solid #bfdbfe",
-                    background:
-                      "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                    borderTop: `1px solid ${OS_LEGAL_COLORS.blueBorder}`,
+                    background: `linear-gradient(135deg, ${OS_LEGAL_COLORS.blueSurface} 0%, #dbeafe 100%)`,
                     display: "flex",
                     alignItems: "center",
                     gap: "0.5rem",
                     fontSize: "0.8125rem",
-                    color: "#1e40af",
+                    color: OS_LEGAL_COLORS.blueDark,
                     flexShrink: 0,
                     animation: "compaction-pulse 2s ease-in-out infinite",
                   }}
@@ -1153,7 +1151,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#2563eb"
+                    stroke={OS_LEGAL_COLORS.primaryBlueHover}
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1217,12 +1215,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                           contextStatus.used_tokens /
                             contextStatus.context_window >
                           0.85
-                            ? "#ef4444"
+                            ? OS_LEGAL_COLORS.danger
                             : contextStatus.used_tokens /
                                 contextStatus.context_window >
                               0.6
-                            ? "#f59e0b"
-                            : "#22c55e",
+                            ? OS_LEGAL_COLORS.folderIcon
+                            : OS_LEGAL_COLORS.green,
                         transition: "width 0.3s ease, background 0.3s ease",
                       }}
                     />
@@ -1242,8 +1240,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                     <span
                       data-testid="context-meter-compacted"
                       style={{
-                        background: "#dbeafe",
-                        color: "#2563eb",
+                        background: OS_LEGAL_COLORS.blueBorder,
+                        color: OS_LEGAL_COLORS.primaryBlueHover,
                         padding: "0.125rem 0.375rem",
                         borderRadius: 4,
                         fontSize: "0.6875rem",
@@ -1272,14 +1270,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                         >
                           {wsError}
                           <Button
-                            size="small"
+                            size="sm"
+                            variant="danger"
                             onClick={() => window.location.reload()}
                             style={{
                               marginLeft: "0.75rem",
-                              background: "#dc3545",
-                              color: "white",
-                              border: "none",
-                              boxShadow: "0 2px 4px rgba(220,53,69,0.2)",
                             }}
                           >
                             Reconnect

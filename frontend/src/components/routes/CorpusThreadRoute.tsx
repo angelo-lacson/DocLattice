@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { ArrowLeft, Folder, ChevronRight } from "lucide-react";
 import {
   openedCorpus,
@@ -28,8 +29,8 @@ const NavBar = styled.div`
   align-items: center;
   gap: 0.5rem;
   padding: 0.625rem 1.5rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 
   @media (max-width: 768px) {
     padding: 0.5rem 1rem;
@@ -53,9 +54,9 @@ const BackButton = styled.button`
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
   &:hover {
-    background: #f9fafb;
-    border-color: #22c55e;
-    color: #166534;
+    background: ${OS_LEGAL_COLORS.gray50};
+    border-color: ${OS_LEGAL_COLORS.green};
+    color: ${OS_LEGAL_COLORS.successText};
   }
 
   svg {
@@ -80,19 +81,19 @@ const CorpusLink = styled(Link)`
   align-items: center;
   gap: 0.25rem;
   padding: 0.375rem 0.625rem;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   text-decoration: none;
   transition: all 0.15s;
 
   &:hover {
-    background: #e2e8f0;
-    border-color: #cbd5e1;
-    color: #1e293b;
+    background: ${OS_LEGAL_COLORS.border};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   svg {
@@ -103,7 +104,7 @@ const CorpusLink = styled(Link)`
 
 const ThreadLabel = styled.span`
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-weight: 500;
 `;
 

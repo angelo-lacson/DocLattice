@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import styled from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
 import { Filter, X } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { AnnotationControls } from "../../../annotator/controls/AnnotationControls";
 import {
   useAnnotationDisplay,
@@ -22,11 +23,18 @@ const ControlsToggleButton = styled(motion.button)<{
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.875rem;
-  background: ${(props) => (props.$hasActiveFilters ? "#eff6ff" : "white")};
+  background: ${(props) =>
+    props.$hasActiveFilters ? OS_LEGAL_COLORS.blueSurface : "white"};
   border: 1px solid
-    ${(props) => (props.$hasActiveFilters ? "#3b82f6" : "#e2e8f0")};
+    ${(props) =>
+      props.$hasActiveFilters
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  color: ${(props) => (props.$hasActiveFilters ? "#3b82f6" : "#64748b")};
+  color: ${(props) =>
+    props.$hasActiveFilters
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
   font-weight: ${(props) => (props.$hasActiveFilters ? "600" : "500")};
   cursor: pointer;
@@ -35,17 +43,29 @@ const ControlsToggleButton = styled(motion.button)<{
   svg {
     width: 18px;
     height: 18px;
-    color: ${(props) => (props.$hasActiveFilters ? "#3b82f6" : "inherit")};
+    color: ${(props) =>
+      props.$hasActiveFilters ? OS_LEGAL_COLORS.primaryBlue : "inherit"};
   }
 
   &:hover {
-    background: ${(props) => (props.$hasActiveFilters ? "#dbeafe" : "#f8fafc")};
+    background: ${(props) =>
+      props.$hasActiveFilters
+        ? OS_LEGAL_COLORS.blueBorder
+        : OS_LEGAL_COLORS.surfaceHover};
     border-color: ${(props) =>
-      props.$hasActiveFilters ? "#2563eb" : "#cbd5e1"};
-    color: ${(props) => (props.$hasActiveFilters ? "#2563eb" : "#3b82f6")};
+      props.$hasActiveFilters
+        ? OS_LEGAL_COLORS.primaryBlueHover
+        : OS_LEGAL_COLORS.borderHover};
+    color: ${(props) =>
+      props.$hasActiveFilters
+        ? OS_LEGAL_COLORS.primaryBlueHover
+        : OS_LEGAL_COLORS.primaryBlue};
 
     svg {
-      color: ${(props) => (props.$hasActiveFilters ? "#2563eb" : "#3b82f6")};
+      color: ${(props) =>
+        props.$hasActiveFilters
+          ? OS_LEGAL_COLORS.primaryBlueHover
+          : OS_LEGAL_COLORS.primaryBlue};
     }
   }
 
@@ -62,7 +82,7 @@ const PopupContainer = styled(motion.div)`
   background: white;
   border-radius: 12px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   z-index: 100;
   overflow: hidden;
 `;
@@ -72,8 +92,8 @@ const PopupHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const PopupTitle = styled.div`
@@ -82,12 +102,12 @@ const PopupTitle = styled.div`
   gap: 0.5rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 
   svg {
     width: 20px;
     height: 20px;
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 `;
 
@@ -100,7 +120,7 @@ const CloseButton = styled(motion.button)`
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.2s ease;
 
@@ -110,8 +130,8 @@ const CloseButton = styled(motion.button)`
   }
 
   &:hover {
-    background: #e2e8f0;
-    color: #475569;
+    background: ${OS_LEGAL_COLORS.border};
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 `;
 
@@ -126,16 +146,16 @@ const PopupContent = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
     border-radius: 3px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
     }
   }
 `;
@@ -151,7 +171,7 @@ const FilterBadge = styled.span`
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background: #3b82f6;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   border-radius: 10px;
   font-size: 0.75rem;
@@ -165,7 +185,7 @@ const ActiveIndicator = styled.div`
   right: -4px;
   width: 8px;
   height: 8px;
-  background: #ef4444;
+  background: ${OS_LEGAL_COLORS.danger};
   border-radius: 50%;
   border: 2px solid white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);

@@ -188,7 +188,7 @@ const CloseButton = styled(motion.button)`
 
   &:hover {
     background: ${OS_LEGAL_COLORS.surfaceHover};
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
 
     svg {
       color: ${OS_LEGAL_COLORS.textTertiary};
@@ -209,7 +209,9 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
       ? "linear-gradient(135deg, rgba(66, 153, 225, 0.08), rgba(66, 153, 225, 0.05))"
       : "transparent"};
   color: ${(props) =>
-    props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textSecondary};
+    props.$isActive
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -232,7 +234,7 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
     transform: translateY(-50%);
     width: 2px;
     height: ${(props) => (props.$isActive ? "60%" : "0")};
-    background: #4299e1;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     border-radius: 1px;
     transition: height 0.2s ease;
   }
@@ -243,7 +245,9 @@ const WidthMenuItem = styled(motion.button)<{ $isActive: boolean }>`
         ? "linear-gradient(135deg, rgba(66, 153, 225, 0.12), rgba(66, 153, 225, 0.08))"
         : "rgba(0, 0, 0, 0.02)"};
     color: ${(props) =>
-      props.$isActive ? "#4299e1" : OS_LEGAL_COLORS.textTertiary};
+      props.$isActive
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.textTertiary};
     transform: translateX(2px);
   }
 
@@ -480,7 +484,7 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
         // Analyses button
         speedDialButtons.push({
           icon: <BarChart3 />,
-          color: "#f59e0b",
+          color: OS_LEGAL_COLORS.folderIcon,
           onClick: () => {
             if (!analysesOpen && extractsOpen && onExtractsClick) {
               onExtractsClick();
@@ -511,7 +515,7 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
         if (canCreateAnalysis && !readOnly && selectedCorpus) {
           speedDialButtons.push({
             icon: <Plus />,
-            color: "#10b981",
+            color: OS_LEGAL_COLORS.greenMedium,
             onClick: () => {
               if (selectedCorpus) {
                 showSelectCorpusAnalyzerOrFieldsetModal(true);
@@ -814,7 +818,7 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
           </ActionButton>
 
           <ActionButton
-            $color="#f59e0b"
+            $color={OS_LEGAL_COLORS.folderIcon}
             data-testid="analyses-button"
             onClick={() => {
               /*
@@ -842,7 +846,7 @@ export const FloatingDocumentControls: React.FC<FloatingDocumentControlsProps> =
 
             return shouldShowAnalysisButton ? (
               <ActionButton
-                $color="#10b981"
+                $color={OS_LEGAL_COLORS.greenMedium}
                 data-testid="create-analysis-button"
                 onClick={() => {
                   // Note: openedCorpus is managed by CentralRouteManager, not set here

@@ -2,10 +2,33 @@ import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { MockedResponse } from "@apollo/client/testing";
 import { UPDATE_ME } from "../src/graphql/mutations";
+import { GET_USER_BADGES } from "../src/graphql/queries";
 import UserSettingsModalHarness from "./UserSettingsModalHarness";
+import { docScreenshot } from "./utils/docScreenshot";
+
+const badgesMock: MockedResponse = {
+  request: {
+    query: GET_USER_BADGES,
+    variables: { userId: "user-1", corpusId: undefined, limit: 100 },
+  },
+  result: {
+    data: {
+      userBadges: {
+        edges: [],
+        pageInfo: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          startCursor: null,
+          endCursor: null,
+        },
+      },
+    },
+  },
+};
 
 test("@slug profile modal updates user slug", async ({ mount, page }) => {
   const mocks: ReadonlyArray<MockedResponse> = [
+    badgesMock,
     {
       request: {
         query: UPDATE_ME,
@@ -30,6 +53,8 @@ test("@slug profile modal updates user slug", async ({ mount, page }) => {
 
   await mount(<UserSettingsModalHarness mocks={mocks} />);
   await expect(page.getByTestId("user-settings-modal")).toBeVisible();
+
+  await docScreenshot(page, "settings--user-settings-modal--initial");
 
   const slugInput = page.getByPlaceholder("your-slug");
   await slugInput.fill("Alice-Pro");

@@ -15,6 +15,7 @@ import {
   CORPUS_RADII,
   mediaQuery,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { threadSortAtom, threadFiltersAtom } from "../../atoms/threadAtoms";
 import { ThreadListItem } from "./ThreadListItem";
 import { ThreadSortDropdown } from "./ThreadSortDropdown";
@@ -57,7 +58,7 @@ const ThreadListContainer = styled.div<{ $embedded?: boolean }>`
   max-width: ${(props) => (props.$embedded ? "100%" : "900px")};
   margin: 0 auto;
   width: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 
   @media (max-width: 768px) {
     padding: ${(props) => (props.$embedded ? "12px 16px" : "24px 16px")};
@@ -97,7 +98,7 @@ const Title = styled.h2`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 24px;
   font-weight: 400;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   margin: 0;
 
   ${mediaQuery.mobile} {

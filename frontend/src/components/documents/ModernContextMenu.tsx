@@ -48,19 +48,19 @@ const MenuItem = styled.button<{ variant?: "danger" | "primary" }>`
   font-size: 0.875rem;
   color: ${(props) =>
     props.variant === "danger"
-      ? "#ef4444"
+      ? OS_LEGAL_COLORS.danger
       : props.variant === "primary"
       ? OS_LEGAL_COLORS.primaryBlue
-      : "#0f172a"};
+      : OS_LEGAL_COLORS.textPrimary};
   font-weight: 500;
   text-align: left;
 
   &:hover {
     background: ${(props) =>
       props.variant === "danger"
-        ? "#fee2e2"
+        ? OS_LEGAL_COLORS.dangerSurfaceHover
         : props.variant === "primary"
-        ? "#eff6ff"
+        ? OS_LEGAL_COLORS.blueSurface
         : OS_LEGAL_COLORS.surfaceHover};
   }
 

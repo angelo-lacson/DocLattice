@@ -33,6 +33,10 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "../threads/styles/discussionStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 import { threadSortAtom, ThreadSortOption } from "../../atoms/threadAtoms";
 import {
   GET_CONVERSATIONS,
@@ -48,7 +52,7 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const Header = styled.div`
@@ -99,7 +103,7 @@ const Title = styled.h1`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 24px;
   font-weight: 400;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   margin: 0;
 `;
 
@@ -123,11 +127,11 @@ const CreateButton = styled.button`
   transition: all ${CORPUS_TRANSITIONS.normal};
   white-space: nowrap;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+  box-shadow: 0 4px 12px ${accentAlpha(0.35)};
 
   &:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(15, 118, 110, 0.45);
+    box-shadow: 0 6px 20px ${accentAlpha(0.45)};
   }
 
   &:disabled {

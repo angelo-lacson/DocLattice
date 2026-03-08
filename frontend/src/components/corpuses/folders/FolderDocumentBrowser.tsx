@@ -62,6 +62,7 @@ import { TABLET_BREAKPOINT } from "../../../assets/configurations/constants";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../../assets/configurations/osLegalStyles";
 import { FolderViewMode } from "../../../types/ui";
 
@@ -269,7 +270,7 @@ const ContextMenu = styled.div<{ $x: number; $y: number }>`
   left: ${(props) => props.$x}px;
   background: ${OS_LEGAL_COLORS.surface};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 4px;
   min-width: 180px;

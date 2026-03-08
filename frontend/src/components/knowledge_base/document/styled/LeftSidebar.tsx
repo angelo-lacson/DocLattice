@@ -1,18 +1,20 @@
+// TODO: migrate Button to @os-legal/ui; Segment has no direct equivalent yet
 import { Button, Segment } from "semantic-ui-react";
 import styled, { css } from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 const iconColorMap: Record<string, string> = {
   summary: "#0891b2", // Cyan
   chat: "#7c3aed", // Violet
-  notes: "#f59e0b", // Amber
-  document: "#10b981", // Emerald
-  relationships: "#3b82f6", // Blue
+  notes: OS_LEGAL_COLORS.folderIcon, // Amber
+  document: OS_LEGAL_COLORS.greenMedium, // Emerald
+  relationships: OS_LEGAL_COLORS.primaryBlue, // Blue
   annotations: "#ec4899", // Pink
   relations: "#8b5cf6", // Purple
   analyses: "#06b6d4", // Light Blue
   extracts: "#f97316", // Orange
   search: "#6366f1", // Indigo
-  default: "#64748b", // Slate
+  default: OS_LEGAL_COLORS.textSecondary, // Slate
 };
 
 export const TabsColumn = styled(Segment)<{ collapsed: boolean }>`
@@ -104,7 +106,7 @@ export const TabButton = styled(Button)<TabButtonProps>`
       color: ${(props) =>
         props.$active
           ? iconColorMap[props.$tabKey] || iconColorMap.default
-          : "#64748b"};
+          : OS_LEGAL_COLORS.textSecondary};
       margin-left: 1rem; /* Increased spacing between icon and text */
     }
 

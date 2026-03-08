@@ -3,6 +3,7 @@ import { PageInfo } from "../../types/graphql-api";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExportItemRow } from "./ExportItemRow";
 import { LoadingOverlay } from "../common/LoadingOverlay";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ExportListProps {
   items: ExportObject[] | undefined;
@@ -29,8 +30,8 @@ const styles = {
     minHeight: "20vh",
   },
   header: {
-    backgroundColor: "#f8fafc",
-    borderBottom: "1px solid #e2e8f0",
+    backgroundColor: OS_LEGAL_COLORS.surfaceHover,
+    borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
   },
   headerCell: {
     padding: "1rem",

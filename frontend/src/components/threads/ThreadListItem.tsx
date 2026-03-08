@@ -12,6 +12,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { ThreadBadge } from "./ThreadBadge";
 import {
   DiscussionTypeBadge,
@@ -39,7 +40,7 @@ const ThreadCard = styled.div<{
   $isSelected?: boolean;
 }>`
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 20px 24px;
   cursor: pointer;
@@ -51,7 +52,7 @@ const ThreadCard = styled.div<{
   ${(props) =>
     props.$isSelected &&
     `
-    border-left: 4px solid #0f766e;
+    border-left: 4px solid ${OS_LEGAL_COLORS.accent};
     background: #f0fdfa;
   `}
 
@@ -59,7 +60,7 @@ const ThreadCard = styled.div<{
     props.$isPinned &&
     !props.$isSelected &&
     `
-    border-left: 4px solid #14b8a6;
+    border-left: 4px solid ${OS_LEGAL_COLORS.accent};
     background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
   `}
 
@@ -67,11 +68,11 @@ const ThreadCard = styled.div<{
     props.$isDeleted &&
     `
     opacity: 0.6;
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   `}
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
   }
@@ -142,7 +143,7 @@ const ThreadTitle = styled.h3`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 20px;
   font-weight: 400;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
   line-height: 1.4;
 
@@ -154,7 +155,7 @@ const ThreadTitle = styled.h3`
 const ThreadDescription = styled.p`
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 15px;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0;
   line-height: 1.6;
   display: -webkit-box;
@@ -223,7 +224,7 @@ const AuthorName = styled.span`
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   ${mediaQuery.mobile} {
     font-size: 13px;

@@ -32,7 +32,9 @@ import {
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../../assets/configurations/osLegalStyles";
+import { Button } from "@os-legal/ui";
 import { FolderViewMode } from "../../../types/ui";
 
 // Re-export for backward compatibility with existing imports
@@ -362,39 +364,6 @@ const ClearSelectionButton = styled.button`
   }
 `;
 
-const DangerButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: ${OS_LEGAL_COLORS.dangerSurface};
-  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
-  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  font-size: 13px;
-  font-weight: 500;
-  color: ${OS_LEGAL_COLORS.danger};
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
-    border-color: ${OS_LEGAL_COLORS.dangerBorderHover};
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
-    padding: 8px;
-
-    span {
-      display: none;
-    }
-  }
-`;
-
 const SidebarToggleButton = styled.button`
   display: flex;
   align-items: center;
@@ -476,7 +445,7 @@ const MobileMenu = styled.div<{ $visible: boolean }>`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
   min-width: 180px;
   z-index: 100;
   overflow: hidden;
@@ -594,7 +563,7 @@ const UploadDropdownMenu = styled.div<{ $visible: boolean }>`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+  box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
   min-width: 180px;
   z-index: 100;
   overflow: hidden;
@@ -823,15 +792,17 @@ export const FolderToolbar: React.FC<FolderToolbarProps> = ({
 
         {/* Remove from Corpus button - visible when 1+ documents selected */}
         {selectedDocumentCount >= 1 && onRemoveFromCorpus && (
-          <DangerButton
+          <Button
+            variant="danger"
+            size="sm"
+            leftIcon={<Trash2 size={16} />}
             onClick={onRemoveFromCorpus}
             title={`Remove ${selectedDocumentCount} document${
               selectedDocumentCount !== 1 ? "s" : ""
             } from corpus`}
           >
-            <Trash2 />
-            <span>Remove ({selectedDocumentCount})</span>
-          </DangerButton>
+            Remove ({selectedDocumentCount})
+          </Button>
         )}
 
         {/* Link Documents button - visible when 1+ documents selected */}

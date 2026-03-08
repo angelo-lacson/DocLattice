@@ -1,4 +1,3 @@
-import { Button } from "semantic-ui-react";
 import { DynamicIcon } from "../../widgets/icon-picker/DynamicIcon";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
@@ -43,7 +42,7 @@ const AnnotationPill = styled.span<AnnotationPillProps>`
   font-size: 0.8rem;
   font-weight: 500;
   color: white;
-  background-color: ${(props) => props.$color || "#9ca3af"};
+  background-color: ${(props) => props.$color || OS_LEGAL_COLORS.textMuted};
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: opacity 0.15s ease;
@@ -68,23 +67,27 @@ const ContentArea = styled.div`
   margin-left: 0.625rem;
 `;
 
-const RemoveButton = styled(Button)`
-  &&& {
-    padding: 0.35em;
-    margin-left: 0.375rem;
-    background-color: transparent;
-    color: #b0b7bf;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
+const RemoveButton = styled.button`
+  padding: 0.35em;
+  margin-left: 0.375rem;
+  background-color: transparent;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 
-    &:hover {
-      background-color: #fee2e2;
-      color: #dc2626;
-    }
+  &:hover {
+    background-color: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+    color: ${OS_LEGAL_COLORS.danger};
+  }
 
-    &:active {
-      background-color: #fecaca;
-    }
+  &:active {
+    background-color: ${OS_LEGAL_COLORS.dangerBorder};
   }
 `;
 
@@ -153,14 +156,14 @@ export const RelationHighlightItem = ({
       </ContentArea>
       {!read_only && onRemoveAnnotationFromRelation && (
         <RemoveButton
-          icon={<X size={14} />}
-          size="mini"
-          circular
+          aria-label="Remove annotation from relation"
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation();
             onRemoveAnnotationFromRelation(annotation.id);
           }}
-        />
+        >
+          <X size={14} />
+        </RemoveButton>
       )}
     </ItemRow>
   );

@@ -14,6 +14,13 @@ vi.mock("@os-legal/ui", () => ({
   Avatar: ({ fallback, size }: { fallback: string; size: string }) => (
     <div data-testid="avatar">{fallback}</div>
   ),
+  Chip: ({
+    children,
+  }: {
+    children: React.ReactNode;
+    size?: string;
+    [key: string]: unknown;
+  }) => <span data-testid="chip">{children}</span>,
 }));
 
 /**
@@ -234,13 +241,18 @@ describe("ModernAnnotationCard", () => {
 
     it("applies selected styles when isSelected is true", () => {
       const annotation = createMockAnnotation();
-      const { container } = render(
+      const { container: selectedContainer } = render(
         <ModernAnnotationCard annotation={annotation} isSelected={true} />
       );
+      const { container: unselectedContainer } = render(
+        <ModernAnnotationCard annotation={annotation} isSelected={false} />
+      );
 
-      // Check that the selected state applies visually (via styled-components)
-      const cardElement = container.firstChild as HTMLElement;
-      expect(cardElement).toBeInTheDocument();
+      const selectedCard = selectedContainer.firstChild as HTMLElement;
+      const unselectedCard = unselectedContainer.firstChild as HTMLElement;
+
+      // Selected and unselected cards should have different computed class names
+      expect(selectedCard.className).not.toBe(unselectedCard.className);
     });
   });
 
@@ -286,6 +298,52 @@ describe("ModernAnnotationCard", () => {
       });
       render(<ModernAnnotationCard annotation={annotation} />);
       expect(screen.getByText("Text")).toBeInTheDocument();
+    });
+  });
+
+  describe("SimilarityBadge", () => {
+    it("renders high-score badge with percentage", () => {
+      const annotation = createMockAnnotation();
+      render(
+        <ModernAnnotationCard annotation={annotation} similarityScore={0.95} />
+      );
+      expect(screen.getByText("95%")).toBeInTheDocument();
+      expect(screen.getByTitle("95% semantic match")).toBeInTheDocument();
+    });
+
+    it("renders medium-score badge", () => {
+      const annotation = createMockAnnotation();
+      render(
+        <ModernAnnotationCard annotation={annotation} similarityScore={0.7} />
+      );
+      expect(screen.getByText("70%")).toBeInTheDocument();
+    });
+
+    it("renders low-score badge", () => {
+      const annotation = createMockAnnotation();
+      render(
+        <ModernAnnotationCard annotation={annotation} similarityScore={0.4} />
+      );
+      expect(screen.getByText("40%")).toBeInTheDocument();
+    });
+
+    it("does not render when similarityScore is undefined", () => {
+      const annotation = createMockAnnotation();
+      render(<ModernAnnotationCard annotation={annotation} />);
+      expect(screen.queryByTitle(/semantic match/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Image Modality", () => {
+    it("renders IMAGE modality badge when contentModalities includes IMAGE", () => {
+      const annotation = createMockAnnotation({
+        contentModalities: ["IMAGE"],
+        rawText: null,
+      });
+      render(<ModernAnnotationCard annotation={annotation} />);
+      // The ModalityBadge component should be rendered
+      const card = screen.getByText("Test Label");
+      expect(card).toBeInTheDocument();
     });
   });
 

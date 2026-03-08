@@ -8,7 +8,8 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
-import { Button } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import type { ChatMessageProps } from "../../../widgets/chat/ChatMessage";
 
 /** Shape of the pending approval state passed from ChatTray. */
@@ -85,7 +86,10 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
             marginBottom: "1.5rem",
           }}
         >
-          <AlertTriangle size={24} style={{ color: "#f59e0b" }} />
+          <AlertTriangle
+            size={24}
+            style={{ color: OS_LEGAL_COLORS.folderIcon }}
+          />
           <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
             Tool Approval Required
           </h3>
@@ -110,12 +114,17 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
         </div>
 
         <div style={{ marginBottom: "1.5rem" }}>
-          <p style={{ margin: "0 0 1rem 0", color: "#374151" }}>
+          <p
+            style={{
+              margin: "0 0 1rem 0",
+              color: OS_LEGAL_COLORS.textTertiary,
+            }}
+          >
             The assistant wants to execute the following tool:
           </p>
           <div
             style={{
-              backgroundColor: "#f3f4f6",
+              backgroundColor: OS_LEGAL_COLORS.surfaceLight,
               padding: "1rem",
               borderRadius: "8px",
               fontFamily: "monospace",
@@ -142,33 +151,19 @@ export const ApprovalOverlay: React.FC<ApprovalOverlayProps> = ({
           style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}
         >
           <Button
-            size="medium"
+            size="md"
+            variant="danger"
+            leftIcon={<XCircle size={16} />}
             onClick={() => sendApprovalDecision(false)}
-            style={{
-              backgroundColor: "#dc2626",
-              color: "white",
-              border: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
           >
-            <XCircle size={16} />
             Reject
           </Button>
           <Button
-            size="medium"
+            size="md"
+            variant="primary"
+            leftIcon={<CheckCircle size={16} />}
             onClick={() => sendApprovalDecision(true)}
-            style={{
-              backgroundColor: "#059669",
-              color: "white",
-              border: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
           >
-            <CheckCircle size={16} />
             Approve
           </Button>
         </div>
@@ -219,10 +214,11 @@ export const ReopenApprovalButton: React.FC<ReopenApprovalButtonProps> = ({
 
   return (
     <Button
-      size="small"
+      size="sm"
+      variant="secondary"
       onClick={() => setShowApprovalModal(true)}
       style={{
-        background: "#f59e0b",
+        background: OS_LEGAL_COLORS.folderIcon,
         color: "white",
         marginLeft: "1rem",
       }}

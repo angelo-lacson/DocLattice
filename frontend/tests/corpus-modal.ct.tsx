@@ -5,6 +5,7 @@ import { MockedProvider } from "@apollo/client/testing";
 import { CorpusModal } from "../src/components/corpuses/CorpusModal";
 import { GET_LABELSETS, GET_EMBEDDERS } from "../src/graphql/queries";
 import { CorpusType } from "../src/types/graphql-api";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // Mock data
 const mockLabelSet = {
@@ -105,6 +106,8 @@ test.describe("CorpusModal - CREATE Mode", () => {
     await expect(
       page.locator('button:has-text("Create Corpus")')
     ).toBeVisible();
+
+    await docScreenshot(page, "corpus--corpus-modal--initial");
 
     await component.unmount();
   });

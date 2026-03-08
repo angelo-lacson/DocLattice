@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const HeaderButtonGroup = styled.div`
   display: flex;
@@ -16,7 +17,8 @@ export const HeaderButton = styled.button<{
     props.$variant === "primary"
       ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
       : "rgba(255, 255, 255, 0.1)"};
-  color: ${(props) => (props.$variant === "primary" ? "white" : "#64748b")};
+  color: ${(props) =>
+    props.$variant === "primary" ? "white" : OS_LEGAL_COLORS.textSecondary};
   border: 1px solid
     ${(props) =>
       props.$variant === "primary"
@@ -258,8 +260,8 @@ export const FlexColumnPanel = styled.div`
 
 export const ExtractHeader = styled.div`
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -268,12 +270,12 @@ export const ExtractHeader = styled.div`
 export const ExtractHeaderTitle = styled.div`
   font-weight: 600;
   font-size: 1rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 export const ExtractHeaderSubtitle = styled.div`
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 export const OverflowHiddenFill = styled.div`
@@ -283,8 +285,8 @@ export const OverflowHiddenFill = styled.div`
 
 export const SidebarHeader = styled.div`
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -298,7 +300,7 @@ export const SidebarHeaderContent = styled.div`
 export const SidebarHeaderTitle = styled.div`
   font-weight: 600;
   font-size: 1rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   max-height: 8.4rem; /* ~6 lines at 1.4 line-height */
   overflow-y: auto;
   line-height: 1.4;
@@ -311,11 +313,11 @@ export const SidebarHeaderTitle = styled.div`
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.borderHover};
     border-radius: 2px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: ${OS_LEGAL_COLORS.textMuted};
   }
 
   /* Clean markdown rendering */
@@ -335,7 +337,7 @@ export const SidebarHeaderTitle = styled.div`
   }
 
   code {
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
     padding: 0.125rem 0.375rem;
     border-radius: 3px;
     font-size: 0.875rem;
@@ -357,7 +359,7 @@ export const SidebarHeaderTitle = styled.div`
 
 export const SidebarHeaderSubtitle = styled.div`
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.125rem;
 `;
 
@@ -401,14 +403,14 @@ export const CompactAnnotationFeed = styled.div`
     }
 
     code {
-      background: #f1f5f9 !important;
+      background: ${OS_LEGAL_COLORS.surfaceLight} !important;
       padding: 0.125rem 0.375rem !important;
       border-radius: 3px !important;
       font-size: 0.875rem !important;
     }
 
     pre {
-      background: #f8fafc !important;
+      background: ${OS_LEGAL_COLORS.surfaceHover} !important;
       padding: 0.75rem !important;
       border-radius: 6px !important;
       overflow-x: auto !important;
@@ -416,10 +418,10 @@ export const CompactAnnotationFeed = styled.div`
     }
 
     blockquote {
-      border-left: 3px solid #e2e8f0 !important;
+      border-left: 3px solid ${OS_LEGAL_COLORS.border} !important;
       padding-left: 1rem !important;
       margin: 0.5rem 0 !important;
-      color: #64748b !important;
+      color: ${OS_LEGAL_COLORS.textSecondary} !important;
     }
 
     /* Compact spacing for analysis results */
@@ -435,12 +437,12 @@ export const CompactAnnotationFeed = styled.div`
   /* Hide unnecessary metadata in compact view */
   .annotation-metadata {
     font-size: 0.8125rem !important;
-    color: #94a3b8 !important;
+    color: ${OS_LEGAL_COLORS.textMuted} !important;
   }
 
   /* Better page headers */
   .page-header {
     background: linear-gradient(to right, #fef3c7 0%, #fef9e7 100%) !important;
-    border-left: 3px solid #f59e0b !important;
+    border-left: 3px solid ${OS_LEGAL_COLORS.folderIcon} !important;
   }
 `;
