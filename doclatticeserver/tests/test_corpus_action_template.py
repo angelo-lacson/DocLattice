@@ -51,7 +51,7 @@ class CorpusActionTemplateModelTest(TestCase):
         self.assertIsNotNone(template.pk)
         self.assertEqual(template.trigger, CorpusActionTrigger.ADD_DOCUMENT)
         self.assertTrue(template.is_active)
-        self.assertTrue(template.disabled_on_clone)
+        self.assertFalse(template.disabled_on_clone)
 
     def test_create_lightweight_template_no_agent_config(self):
         template = CorpusActionTemplate.objects.create(
@@ -231,14 +231,14 @@ class DefaultTemplatesMigrationTest(TestCase):
                 f"Agent config for '{template.name}' is not active",
             )
 
-    def test_default_templates_are_active_but_disabled_on_clone(self):
+    def test_default_templates_are_active_and_enabled_on_clone(self):
         """Default templates should be active (used for new corpuses)
-        but cloned actions should start disabled."""
+        and cloned actions should start enabled."""
         for template in CorpusActionTemplate.objects.filter(
             name__in=self.EXPECTED_NAMES
         ):
             self.assertTrue(template.is_active)
-            self.assertTrue(template.disabled_on_clone)
+            self.assertFalse(template.disabled_on_clone)
 
     def test_default_templates_all_add_document_trigger(self):
         """All default templates should trigger on ADD_DOCUMENT."""

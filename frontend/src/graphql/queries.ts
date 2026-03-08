@@ -783,6 +783,8 @@ export interface GetAnnotationsInputs {
   usesLabelFromLabelsetId?: string;
   rawText_Contains?: string;
   analysis_Isnull?: boolean;
+  corpusAction_Isnull?: boolean;
+  agentCreated?: boolean;
   annotationLabel_description_search_string?: string;
   annotationLabel_title_search_string?: string;
   annotationLabel_Type?: string;
@@ -815,6 +817,8 @@ export const GET_ANNOTATIONS = gql`
     $createdWithAnalyzerId: String
     $createdByAnalysisIds: String
     $analysis_Isnull: Boolean
+    $corpusAction_Isnull: Boolean
+    $agentCreated: Boolean
     $structural: Boolean
     $cursor: String
     $limit: Int
@@ -830,6 +834,8 @@ export const GET_ANNOTATIONS = gql`
       createdWithAnalyzerId: $createdWithAnalyzerId
       createdByAnalysisIds: $createdByAnalysisIds
       analysisIsnull: $analysis_Isnull
+      corpusActionIsnull: $corpusAction_Isnull
+      agentCreated: $agentCreated
       structural: $structural
       first: $limit
       after: $cursor
@@ -889,6 +895,10 @@ export const GET_ANNOTATIONS = gql`
             }
             __typename
           }
+          corpusAction {
+            id
+            __typename
+          }
           annotationLabel {
             id
             text
@@ -939,6 +949,8 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
     $createdWithAnalyzerId: String
     $createdByAnalysisIds: String
     $analysis_Isnull: Boolean
+    $corpusAction_Isnull: Boolean
+    $agentCreated: Boolean
     $structural: Boolean
     $cursor: String
     $limit: Int
@@ -954,6 +966,8 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
       createdWithAnalyzerId: $createdWithAnalyzerId
       createdByAnalysisIds: $createdByAnalysisIds
       analysisIsnull: $analysis_Isnull
+      corpusActionIsnull: $corpusAction_Isnull
+      agentCreated: $agentCreated
       structural: $structural
       first: $limit
       after: $cursor
@@ -991,6 +1005,10 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
               analyzerId
               __typename
             }
+            __typename
+          }
+          corpusAction {
+            id
             __typename
           }
           annotationLabel {

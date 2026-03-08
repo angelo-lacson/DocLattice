@@ -284,6 +284,9 @@ class AgentConfig:
     # Tool configuration
     tools: list[Any] = field(default_factory=list)
 
+    # Corpus action linkage — set when running as a corpus action agent
+    corpus_action_id: Optional[int] = None
+
     # Context guardrails — controls conversation compaction and tool output
     # truncation.  Defaults are sourced from the constants module.
     compaction: CompactionConfig = field(default_factory=CompactionConfig)

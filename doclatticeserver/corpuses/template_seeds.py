@@ -231,7 +231,7 @@ def create_default_action_templates(apps, schema_editor):
             pre_authorized_tools=tmpl_def["pre_authorized"],
             trigger=tmpl_def["trigger"],
             is_active=True,
-            disabled_on_clone=True,
+            disabled_on_clone=False,
             sort_order=tmpl_def["sort_order"],
             creator=system_user,
         )
