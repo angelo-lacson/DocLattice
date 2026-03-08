@@ -327,10 +327,10 @@ export const KNOWN_ACRONYMS: Record<string, string> = {
 };
 
 // Corpus action trigger display labels
-// Maps backend trigger enum values to user-facing short labels
+// Maps backend trigger enum values (lowercase) to user-facing short labels
 export const TRIGGER_LABELS: Record<string, string> = {
-  ADD_DOCUMENT: "On Add",
-  EDIT_DOCUMENT: "On Edit",
-  NEW_THREAD: "On Thread",
-  NEW_MESSAGE: "On Message",
+  add_document: "On Add",
+  edit_document: "On Edit",
+  new_thread: "On Thread",
+  new_message: "On Message",
 } as const;

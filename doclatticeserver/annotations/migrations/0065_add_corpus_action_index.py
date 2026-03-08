@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ("analyzer", "0020_update_checkconstraint_check_to_condition"),
         ("annotations", "0064_add_corpus_action_fk_to_annotation"),
-        ("corpuses", "0046_change_disabled_on_clone_default_false"),
+        ("corpuses", "0045_corpusactiontemplate"),
         ("documents", "0035_add_enabled_components_to_pipeline_settings"),
         ("extracts", "0028_rename_placeholder_indexes"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

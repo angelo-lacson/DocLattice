@@ -1266,6 +1266,18 @@ class CorpusActionTemplate(BaseOCModel):
 
     class Meta:
         ordering = ["sort_order", "name"]
+        indexes = [
+            django.db.models.Index(
+                fields=["sort_order", "name"],
+                name="corpuses_actio_sort_or_idx",
+            ),
+        ]
+        constraints = [
+            django.db.models.CheckConstraint(
+                condition=~django.db.models.Q(task_instructions=""),
+                name="nonempty_task_instructions",
+            ),
+        ]
 
     def clean(self):
         super().clean()
@@ -1274,10 +1286,6 @@ class CorpusActionTemplate(BaseOCModel):
                 {"task_instructions": "Task instructions cannot be empty."}
             )
 
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        return super().save(*args, **kwargs)
-
     def __str__(self):
         return f"CorpusActionTemplate: {self.name} ({self.get_trigger_display()})"
 
@@ -1285,7 +1293,11 @@ class CorpusActionTemplate(BaseOCModel):
         """Return kwargs dict for constructing a CorpusAction from this template.
 
         Note:
-            The returned ``agent_config`` is a FK reference to the *same*
+            ``task_instructions`` is **copied** into the new ``CorpusAction``.
+            Later edits to the template's instructions do *not* propagate to
+            existing clones.
+
+            By contrast, ``agent_config`` is a FK reference to the *same*
             ``AgentConfiguration`` that the template uses.  All corpus actions
             cloned from a template therefore share one configuration object.
             If an admin later edits that ``AgentConfiguration``, every cloned

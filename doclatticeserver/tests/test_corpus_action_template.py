@@ -64,13 +64,15 @@ class CorpusActionTemplateModelTest(TestCase):
         self.assertIsNone(template.agent_config)
 
     def test_empty_task_instructions_raises(self):
+        """clean() rejects empty task_instructions; DB constraint is the final guard."""
+        t = CorpusActionTemplate(
+            name="Bad Template",
+            task_instructions="",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
         with self.assertRaises(ValidationError):
-            CorpusActionTemplate.objects.create(
-                name="Bad Template",
-                task_instructions="",
-                trigger=CorpusActionTrigger.ADD_DOCUMENT,
-                creator=self.user,
-            )
+            t.full_clean()
 
     def test_str_representation(self):
         template = CorpusActionTemplate.objects.create(

@@ -104,18 +104,23 @@ const PickerDropdown = styled.div`
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  z-index: ${Z_INDEX.DROPDOWN};
+  z-index: ${Z_INDEX.MODAL};
   padding: 0.5rem;
 `;
 
-const PickerItem = styled.div<{ disabled?: boolean }>`
+const PickerItem = styled.button<{ disabled?: boolean }>`
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.625rem 0.75rem;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
   border-radius: 6px;
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
   opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
+  pointer-events: ${({ disabled }) => (disabled ? "none" : "auto")};
   transition: background 0.15s ease, opacity 0.15s ease;
 
   &:hover {
@@ -245,14 +250,19 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
           data?.addTemplateToCorpus?.message || "Failed to add template"
         );
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to add template");
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error ? error.message : "Failed to add template";
+      toast.error(msg);
     }
     setPickerOpen(false);
   };
 
-  const getTriggerType = (trigger: string): "add" | "edit" => {
-    return trigger.toLowerCase().includes("add") ? "add" : "edit";
+  const getTriggerType = (trigger: string): "add" | "edit" | "chat" => {
+    const t = trigger.toLowerCase();
+    if (t.includes("add")) return "add";
+    if (t.includes("thread") || t.includes("message")) return "chat";
+    return "edit";
   };
 
   const getTriggerLabel = (trigger: string): string => {
@@ -298,9 +308,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                     <PickerItem
                       key={template.id}
                       disabled={addingTemplate}
-                      onClick={() =>
-                        !addingTemplate && handleAddTemplate(template.id)
-                      }
+                      onClick={() => handleAddTemplate(template.id)}
                     >
                       <Cpu
                         size={16}

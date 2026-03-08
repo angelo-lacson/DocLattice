@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("annotations", "0063_add_hnsw_indexes_and_search_vector"),
-        ("corpuses", "0046_change_disabled_on_clone_default_false"),
+        ("corpuses", "0045_corpusactiontemplate"),
     ]
 
     operations = [
