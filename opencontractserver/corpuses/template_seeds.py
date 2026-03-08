@@ -9,6 +9,8 @@ model state while the management command uses the live registry.
 
 import logging
 
+from opencontractserver.corpuses.models import CorpusActionTrigger
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -33,7 +35,7 @@ TEMPLATES = [
             "Reads a newly added document and writes a concise description "
             "summarising its type, purpose, and key parties."
         ),
-        "trigger": "add_document",
+        "trigger": CorpusActionTrigger.ADD_DOCUMENT,
         "sort_order": 10,
         "tools": [
             "load_document_text",
@@ -60,7 +62,7 @@ TEMPLATES = [
             "Updates the corpus description to reflect the addition of a new "
             "document, maintaining a high-level summary of the collection."
         ),
-        "trigger": "add_document",
+        "trigger": CorpusActionTrigger.ADD_DOCUMENT,
         "sort_order": 20,
         "tools": [
             "load_document_text",
@@ -92,7 +94,7 @@ TEMPLATES = [
             "Creates a comprehensive structured summary for a newly added "
             "document, covering type, parties, terms, dates, and conclusions."
         ),
-        "trigger": "add_document",
+        "trigger": CorpusActionTrigger.ADD_DOCUMENT,
         "sort_order": 30,
         "tools": [
             "load_document_text",
@@ -123,7 +125,7 @@ TEMPLATES = [
             "Identifies and annotates the most important key terms, defined "
             "terms, and proper nouns in a newly added document."
         ),
-        "trigger": "add_document",
+        "trigger": CorpusActionTrigger.ADD_DOCUMENT,
         "sort_order": 40,
         "tools": [
             "load_document_text",
@@ -151,7 +153,7 @@ TEMPLATES = [
             "Creates a structured analysis note for a newly added document "
             "with metadata, executive summary, and key findings."
         ),
-        "trigger": "add_document",
+        "trigger": CorpusActionTrigger.ADD_DOCUMENT,
         "sort_order": 50,
         "tools": [
             "load_document_text",

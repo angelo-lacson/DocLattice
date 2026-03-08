@@ -1266,6 +1266,12 @@ class CorpusActionTemplate(BaseOCModel):
 
     class Meta:
         ordering = ["sort_order", "name"]
+        indexes = [
+            django.db.models.Index(
+                fields=["sort_order", "name"],
+                name="corpuses_actio_sort_or_idx",
+            ),
+        ]
 
     def clean(self):
         super().clean()

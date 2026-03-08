@@ -245,8 +245,10 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
           data?.addTemplateToCorpus?.message || "Failed to add template"
         );
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to add template");
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error ? error.message : "Failed to add template";
+      toast.error(msg);
     }
     setPickerOpen(false);
   };

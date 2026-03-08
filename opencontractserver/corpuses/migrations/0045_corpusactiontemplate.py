@@ -68,7 +68,7 @@ class Migration(migrations.Migration):
                 (
                     "disabled_on_clone",
                     models.BooleanField(
-                        default=True,
+                        default=False,
                         help_text="If True, cloned actions start disabled (user must opt-in).",
                     ),
                 ),
@@ -111,6 +111,12 @@ class Migration(migrations.Migration):
             ],
             options={
                 "ordering": ["sort_order", "name"],
+                "indexes": [
+                    models.Index(
+                        fields=["sort_order", "name"],
+                        name="corpuses_actio_sort_or_idx",
+                    ),
+                ],
             },
         ),
         migrations.AddField(

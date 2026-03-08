@@ -6,7 +6,7 @@ import logging
 
 import graphene
 from django.conf import settings
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 from graphql import GraphQLError
 from graphql_jwt.decorators import login_required, user_passes_test
@@ -1354,7 +1354,9 @@ class AddTemplateToCorpus(graphene.Mutation):
             # Get the template (templates are global, no user filter needed)
             template = CorpusActionTemplate.objects.get(pk=template_pk, is_active=True)
 
-            # Prevent duplicates: same template can't be added twice
+            # Fast-path duplicate check (avoids wasted clone + rollback).
+            # The unique constraint + IntegrityError catch below handles the
+            # race-condition window between this check and the insert.
             if CorpusAction.objects.filter(
                 corpus=corpus, source_template=template
             ).exists():
@@ -1390,8 +1392,8 @@ class AddTemplateToCorpus(graphene.Mutation):
                 ok=False, message="Template not found or inactive", obj=None
             )
 
-        except Exception:
-            logger.exception("Failed to add template to corpus")
+        except DatabaseError:
+            logger.exception("Database error adding template to corpus")
             return AddTemplateToCorpus(
                 ok=False,
                 message="Failed to add template. Please try again.",
