@@ -433,8 +433,10 @@ export const ActionCard = styled.div`
   }
 `;
 
-/** Badge indicating trigger type (add/edit) */
-export const TriggerBadge = styled.span<{ type: "add" | "edit" }>`
+/** Badge indicating trigger type (add/edit/chat) */
+export const TriggerBadge = styled.span<{
+  type: "add" | "edit" | "chat";
+}>`
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -446,9 +448,15 @@ export const TriggerBadge = styled.span<{ type: "add" | "edit" }>`
   background: ${(props) =>
     props.type === "add"
       ? OS_LEGAL_COLORS.successLight
+      : props.type === "chat"
+      ? OS_LEGAL_COLORS.infoSurface
       : OS_LEGAL_COLORS.accentLight};
   color: ${(props) =>
-    props.type === "add" ? OS_LEGAL_COLORS.success : OS_LEGAL_COLORS.accent};
+    props.type === "add"
+      ? OS_LEGAL_COLORS.success
+      : props.type === "chat"
+      ? OS_LEGAL_COLORS.infoText
+      : OS_LEGAL_COLORS.accent};
 `;
 
 /** Status badge for active/disabled */
