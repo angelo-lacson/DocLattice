@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
-import { Dropdown } from "semantic-ui-react";
-import { Input } from "@os-legal/ui";
+import { Dropdown, Input } from "@os-legal/ui";
 import {
   GET_BADGE_CRITERIA_TYPES,
   GetBadgeCriteriaTypesInput,
@@ -208,9 +207,8 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
 
   // Prepare dropdown options
   const typeOptions = implementedTypes.map((ct) => ({
-    key: ct.typeId,
-    text: ct.name,
     value: ct.typeId,
+    label: ct.name,
     description: ct.description,
   }));
 
@@ -224,11 +222,11 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
         <Dropdown
           placeholder="Select criteria type"
           fluid
-          selection
-          search
+          mode="select"
+          searchable="local"
           options={typeOptions}
-          value={selectedType}
-          onChange={(_, { value }) => handleTypeChange(value as string)}
+          value={selectedType || null}
+          onChange={(value) => handleTypeChange(value as string)}
         />
       </div>
 
@@ -294,35 +292,38 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
               {field.fieldType === "text" && field.allowedValues && (
                 <Dropdown
                   fluid
-                  selection
+                  mode="select"
                   options={field.allowedValues.map((val) => ({
-                    key: val,
-                    text: val,
                     value: val,
+                    label: val,
                   }))}
-                  value={fieldValues[field.name] ?? ""}
-                  onChange={(_, { value }) =>
+                  value={fieldValues[field.name] ?? null}
+                  onChange={(value) =>
                     handleFieldChange(field.name, value as string)
                   }
                   placeholder={`Select ${field.label.toLowerCase()}`}
-                  error={!!validationErrors[field.name]}
                 />
               )}
 
               {field.fieldType === "boolean" && (
                 <Dropdown
                   fluid
-                  selection
+                  mode="select"
                   options={[
-                    { key: "true", text: "Yes", value: true },
-                    { key: "false", text: "No", value: false },
+                    { value: "true", label: "Yes" },
+                    { value: "false", label: "No" },
                   ]}
-                  value={fieldValues[field.name] ?? false}
-                  onChange={(_, { value }) =>
-                    handleFieldChange(field.name, value as boolean)
+                  value={
+                    fieldValues[field.name] === true
+                      ? "true"
+                      : fieldValues[field.name] === false
+                      ? "false"
+                      : null
+                  }
+                  onChange={(value) =>
+                    handleFieldChange(field.name, value === "true")
                   }
                   placeholder={`Select ${field.label.toLowerCase()}`}
-                  error={!!validationErrors[field.name]}
                 />
               )}
 

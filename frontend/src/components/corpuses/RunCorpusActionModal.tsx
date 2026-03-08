@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
-import { Dropdown } from "semantic-ui-react";
 import {
   Button,
+  Dropdown,
   Modal,
   ModalHeader,
   ModalBody,
@@ -27,11 +27,6 @@ const StyledModalWrapper = styled.div`
   .oc-modal {
     max-width: 480px;
     width: 100%;
-  }
-
-  /* Ensure Semantic UI dropdowns appear above modal content */
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
   }
 `;
 
@@ -77,9 +72,8 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
 
   const documentOptions =
     docsData?.documents?.edges?.map(({ node }) => ({
-      key: node.id,
       value: node.id,
-      text: node.title,
+      label: node.title,
     })) ?? [];
 
   const handleRun = async () => {
@@ -120,12 +114,12 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
           <Dropdown
             placeholder="Select document..."
             fluid
-            search
-            selection
+            mode="select"
+            searchable="local"
             loading={docsLoading}
             options={documentOptions}
-            value={selectedDocId ?? undefined}
-            onChange={(_, { value }) => setSelectedDocId(value as string)}
+            value={selectedDocId}
+            onChange={(value) => setSelectedDocId(value as string)}
           />
           {isLimitExceeded && (
             <InfoMessage>

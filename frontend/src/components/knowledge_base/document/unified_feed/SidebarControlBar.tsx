@@ -9,13 +9,12 @@ import {
   Check,
   ChevronDown,
   Search,
-  SortDesc,
   Layers,
   ChartNetwork,
   Notebook,
   Eye,
 } from "lucide-react";
-import { Dropdown } from "semantic-ui-react";
+import { Dropdown } from "@os-legal/ui";
 import {
   ContentFilters,
   SortOption,
@@ -258,49 +257,6 @@ const StyledSearchInput = styled.input`
   }
 `;
 
-const SortDropdownStyled = styled(Dropdown)`
-  &&& {
-    font-size: 0.9375rem;
-    min-width: 100%;
-    min-height: 48px;
-
-    &.ui.dropdown {
-      border: 1px solid ${OS_LEGAL_COLORS.border};
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      background: white;
-      font-weight: 500;
-      color: ${OS_LEGAL_COLORS.textPrimary};
-
-      &:hover {
-        border-color: ${OS_LEGAL_COLORS.borderHover};
-      }
-
-      &:focus {
-        border-color: ${OS_LEGAL_COLORS.primaryBlue};
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      }
-    }
-
-    .menu {
-      border-radius: 8px;
-      border: 1px solid ${OS_LEGAL_COLORS.border};
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-      margin-top: 4px;
-    }
-
-    .item {
-      font-size: 0.9375rem;
-      padding: 0.875rem 1rem !important;
-      font-weight: 500;
-
-      &:hover {
-        background: ${OS_LEGAL_COLORS.surfaceHover} !important;
-      }
-    }
-  }
-`;
-
 const contentTypeIcons: Record<ContentItemType, React.ReactNode> = {
   note: <Notebook />,
   annotation: <FileText />,
@@ -403,14 +359,9 @@ export const SidebarControlBar: React.FC<SidebarControlBarProps> = memo(
     );
 
     const sortOptions = [
-      {
-        key: "page",
-        text: "Page Number",
-        value: "page",
-        icon: "sort numeric down",
-      },
-      { key: "type", text: "Content Type", value: "type", icon: "layer group" },
-      { key: "date", text: "Date Created", value: "date", icon: "calendar" },
+      { value: "page", label: "Page Number" },
+      { value: "type", label: "Content Type" },
+      { value: "date", label: "Date Created" },
     ];
 
     const availableContentTypes: ContentItemType[] = [
@@ -517,20 +468,12 @@ export const SidebarControlBar: React.FC<SidebarControlBarProps> = memo(
             </DropdownContainer>
 
             {/* Sort Dropdown */}
-            <SortDropdownStyled
+            <Dropdown
+              mode="select"
               fluid
-              selection
-              icon={
-                <SortDesc
-                  size={18}
-                  style={{ color: OS_LEGAL_COLORS.textSecondary }}
-                />
-              }
               options={sortOptions}
               value={sortBy}
-              onChange={(_: any, data: any) =>
-                onSortChange(data.value as SortOption)
-              }
+              onChange={(value) => onSortChange(value as SortOption)}
               placeholder="Sort by..."
             />
           </FilterRow>

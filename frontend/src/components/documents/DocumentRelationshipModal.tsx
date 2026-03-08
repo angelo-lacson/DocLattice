@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { Dropdown } from "semantic-ui-react";
+import { Dropdown, DropdownOption } from "@os-legal/ui";
 import styled from "styled-components";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -73,11 +73,7 @@ type RelationshipMode = "RELATIONSHIP" | "NOTES";
 // STYLED COMPONENTS
 // ============================================================================
 
-const StyledModalWrapper = styled.div`
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
-  }
-`;
+const StyledModalWrapper = styled.div``;
 
 const ScrollableContent = styled.div`
   max-height: 70vh;
@@ -986,56 +982,51 @@ export const DocumentRelationshipModal: React.FC<
                           Relationship Label
                         </label>
                         <Dropdown
+                          mode="select"
                           placeholder="Search or type to create..."
                           fluid
-                          selection
-                          search
-                          allowAdditions
-                          additionLabel="Create label: "
-                          noResultsMessage="Type to create a new label"
+                          searchable="local"
                           options={filteredRelationshipLabels.map((label) => ({
-                            key: label.id,
-                            text: label.text,
                             value: label.id,
-                            content: (
+                            label: label.text || "",
+                          }))}
+                          renderOption={(option) => (
+                            <span
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                              }}
+                            >
                               <span
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.5rem",
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: 2,
+                                  backgroundColor:
+                                    filteredRelationshipLabels.find(
+                                      (l) => l.id === option.value
+                                    )?.color || OS_LEGAL_COLORS.greenMedium,
+                                  flexShrink: 0,
                                 }}
-                              >
-                                <span
-                                  style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: 2,
-                                    backgroundColor:
-                                      label.color ||
-                                      OS_LEGAL_COLORS.greenMedium,
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                {label.text}
-                              </span>
-                            ),
-                          }))}
-                          value={selectedLabelId || undefined}
-                          onSearchChange={(_, data) =>
-                            setLabelSearchTerm(data.searchQuery)
-                          }
-                          onChange={(_, data) => {
-                            const value = data.value as string;
-                            // Check if this is an existing label or a new one
+                              />
+                              {option.label}
+                            </span>
+                          )}
+                          renderEmpty={() => (
+                            <span>Type to create a new label</span>
+                          )}
+                          value={selectedLabelId ?? null}
+                          onSearchChange={(query) => setLabelSearchTerm(query)}
+                          onChange={(value) => {
                             const existingLabel =
                               filteredRelationshipLabels.find(
                                 (l) => l.id === value
                               );
                             if (existingLabel) {
-                              setSelectedLabelId(value);
+                              setSelectedLabelId(value as string);
                             } else {
-                              // User selected the "add" option - show create form
-                              setNewLabelText(value);
+                              setNewLabelText(value as string);
                               setShowCreateLabel(true);
                             }
                           }}

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Dropdown, DropdownProps } from "semantic-ui-react";
+import { Dropdown, DropdownOption } from "@os-legal/ui";
 import _ from "lodash";
 import { AnnotationLabelType, LabelType } from "../../../../types/graphql-api";
 import { useCorpusState } from "../../context/CorpusAtom";
@@ -47,33 +47,28 @@ export const ViewLabelSelector: React.FC = () => {
   const annotationControls = useAnnotationControls();
   const { spanLabelsToView, setSpanLabelsToView } = annotationControls;
 
-  const handleChange = (
-    event: React.SyntheticEvent<HTMLElement, Event>,
-    data: DropdownProps
-  ) => {
+  const handleChange = (value: string | string[] | null) => {
     const selectedLabels = allLabelChoices.filter((l) =>
-      data?.value && Array.isArray(data.value) ? data.value.includes(l.id) : []
+      Array.isArray(value) ? value.includes(l.id) : []
     );
     setSpanLabelsToView(selectedLabels);
   };
 
-  const labelOptions = useMemo(() => {
+  const labelOptions = useMemo<DropdownOption[]>(() => {
     return allLabelChoices.map((label: AnnotationLabelType) => ({
-      key: label.id,
-      text: label.text || "?",
       value: label.id,
+      label: label.text || "?",
     }));
   }, [allLabelChoices]);
 
   return (
     <Dropdown
+      mode="multiselect"
+      searchable="local"
       onChange={handleChange}
       value={spanLabelsToView ? spanLabelsToView.map((l) => l.id) : []}
       placeholder="Only Show Labels"
       fluid
-      multiple
-      search
-      selection
       options={labelOptions}
       style={{ minWidth: "10em" }}
     />

@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-// TODO: migrate to @os-legal/ui once Table and Dropdown components are available
-import { Table, Dropdown } from "semantic-ui-react";
+import { Table } from "semantic-ui-react";
 import { Plus, Check, X, Trash2 } from "lucide-react";
 import {
   Button,
+  Dropdown,
   IconButton,
   Input,
   Modal,
@@ -171,9 +171,8 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
   }
 
   const iconOptions = availableIcons.map((iconName) => ({
-    key: iconName,
-    text: iconName,
     value: iconName,
+    label: iconName,
   }));
 
   return (
@@ -296,11 +295,11 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                 Icon <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
               </label>
               <Dropdown
+                mode="select"
                 fluid
-                selection
                 options={iconOptions}
                 value={icon}
-                onChange={(_, { value }) => setIcon(value as string)}
+                onChange={(value) => setIcon(value as string)}
               />
             </div>
 
@@ -321,21 +320,18 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
                 <span style={{ color: OS_LEGAL_COLORS.danger }}>*</span>
               </label>
               <Dropdown
+                mode="select"
                 fluid
-                selection
                 options={[
-                  { key: "global", text: "Global", value: "GLOBAL" },
+                  { value: "GLOBAL", label: "Global" },
                   {
-                    key: "corpus",
-                    text: "Corpus-Specific",
                     value: "CORPUS",
+                    label: "Corpus-Specific",
                     disabled: !corpusId,
                   },
                 ]}
                 value={badgeType}
-                onChange={(_, { value }) =>
-                  setBadgeType(value as "GLOBAL" | "CORPUS")
-                }
+                onChange={(value) => setBadgeType(value as "GLOBAL" | "CORPUS")}
               />
             </div>
 
