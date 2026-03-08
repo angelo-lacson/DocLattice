@@ -61,12 +61,15 @@ class TestLLMAnnotationTools(TestCase):
             {
                 "label_text": "ContractTerm",
                 "exact_string": search_word,
-                "document_id": self.doc.id,
-                "corpus_id": self.corpus.id,
             }
         ]
 
-        new_ids = add_annotations_from_exact_strings(items, creator_id=self.user.id)
+        new_ids = add_annotations_from_exact_strings(
+            items,
+            document_id=self.doc.id,
+            corpus_id=self.corpus.id,
+            creator_id=self.user.id,
+        )
 
         self.assertGreaterEqual(len(new_ids), 1)
 
@@ -110,11 +113,14 @@ class TestLLMAnnotationTools(TestCase):
             {
                 "label_text": "LegalTerm",
                 "exact_string": "Agreement",
-                "document_id": doc.id,
-                "corpus_id": self.corpus.id,
             }
         ]
-        new_ids = add_annotations_from_exact_strings(items, creator_id=self.user.id)
+        new_ids = add_annotations_from_exact_strings(
+            items,
+            document_id=doc.id,
+            corpus_id=self.corpus.id,
+            creator_id=self.user.id,
+        )
 
         self.assertGreaterEqual(len(new_ids), 1)
 
@@ -219,26 +225,34 @@ class AsyncTestLLMAnnotationTools(TransactionTestCase):
     # -------------------- async tests ---------------------------- #
 
     async def test_async_pdf_and_text(self):
-        items = [
+        pdf_items = [
             {
                 "label_text": "ContractTerm",
                 "exact_string": "Agreement",
-                "document_id": self.pdf_doc.id,
-                "corpus_id": self.corpus.id,
             },
+        ]
+        txt_items = [
             {
                 "label_text": "TextTerm",
                 "exact_string": "Agreement",
-                "document_id": self.txt_doc.id,
-                "corpus_id": self.corpus.id,
             },
         ]
 
-        new_ids = await aadd_annotations_from_exact_strings(
-            items, creator_id=self.user.id
+        pdf_ids = await aadd_annotations_from_exact_strings(
+            pdf_items,
+            document_id=self.pdf_doc.id,
+            corpus_id=self.corpus.id,
+            creator_id=self.user.id,
         )
+        txt_ids = await aadd_annotations_from_exact_strings(
+            txt_items,
+            document_id=self.txt_doc.id,
+            corpus_id=self.corpus.id,
+            creator_id=self.user.id,
+        )
+        new_ids = pdf_ids + txt_ids
 
-        # Expect 2 (Agreement appears twice, Company twice) = 4 annotations
+        # Expect at least 1 from each document type
         self.assertGreaterEqual(len(new_ids), 2)
         self.assertEqual(
             await Annotation.objects.filter(pk__in=new_ids).acount(), len(new_ids)

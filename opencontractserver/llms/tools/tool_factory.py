@@ -15,6 +15,7 @@ def build_inject_params_for_context(
     document_id: int | None = None,
     corpus_id: int | None = None,
     user_id: int | None = None,
+    corpus_action_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Inspect a CoreTool's function signature and build inject_params dict
@@ -30,6 +31,7 @@ def build_inject_params_for_context(
         document_id: Document ID to inject if the tool accepts it
         corpus_id: Corpus ID to inject if the tool accepts it
         user_id: User ID to inject for author_id/creator_id params
+        corpus_action_id: CorpusAction ID to inject if the tool accepts it
 
     Returns:
         Dictionary mapping parameter names to values to inject
@@ -44,6 +46,8 @@ def build_inject_params_for_context(
             inject["corpus_id"] = corpus_id
         elif param_name in ("author_id", "creator_id") and user_id is not None:
             inject[param_name] = user_id
+        elif param_name == "corpus_action_id" and corpus_action_id is not None:
+            inject["corpus_action_id"] = corpus_action_id
 
     if inject:
         logger.debug(

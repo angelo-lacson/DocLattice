@@ -143,6 +143,7 @@ def _build_tools_from_registry(
     document_id: int | None = None,
     corpus_id: int | None = None,
     user_id: int | None = None,
+    corpus_action_id: int | None = None,
 ) -> list[Callable]:
     """Auto-build PydanticAI tools from the registry with context injection.
 
@@ -164,6 +165,7 @@ def _build_tools_from_registry(
             document_id=document_id,
             corpus_id=corpus_id,
             user_id=user_id,
+            corpus_action_id=corpus_action_id,
         )
         wrapped = PydanticAIToolFactory.create_tool(
             core_tool, inject_params=inject_params
@@ -2303,14 +2305,16 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 {
                     "label_text": e.label_text,
                     "exact_string": e.exact_string,
-                    "document_id": context.document.id,
-                    "corpus_id": context.corpus.id,
                 }
                 for e in norm_entries
             ]
 
             new_ids = await aadd_annotations_from_exact_strings(
-                items, creator_id=config.user_id
+                items,
+                document_id=context.document.id,
+                corpus_id=context.corpus.id,
+                creator_id=config.user_id,
+                corpus_action_id=config.corpus_action_id,
             )
             return {"annotation_ids": new_ids}
 

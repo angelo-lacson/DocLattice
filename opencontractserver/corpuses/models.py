@@ -1256,7 +1256,7 @@ class CorpusActionTemplate(BaseOCModel):
         help_text="Whether this template appears in the Action Library for users to add.",
     )
     disabled_on_clone = django.db.models.BooleanField(
-        default=True,
+        default=False,
         help_text="If True, cloned actions start disabled (user must opt-in).",
     )
     sort_order = django.db.models.IntegerField(

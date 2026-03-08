@@ -153,6 +153,7 @@ export type RawServerAnnotationType = Node & {
   contentModalities?: string[];
 
   analysis?: Maybe<AnalysisType>;
+  corpusAction?: Maybe<CorpusActionType>;
   assignmentSet?: AssignmentTypeConnection;
   sourceNodeInRelationships?: RelationshipTypeConnection;
   targetNodeInRelationships?: RelationshipTypeConnection;

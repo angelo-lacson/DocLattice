@@ -17,7 +17,6 @@ import {
   filterToLabelsetId,
   filterToLabelId,
   selectedAnalysesIds,
-  showCorpusActionOutputs,
   filterToAnnotationType,
 } from "../../graphql/cache";
 
@@ -52,7 +51,6 @@ export const CorpusAnnotationCards = ({
   const filter_to_labelset_id = useReactiveVar(filterToLabelsetId);
   const filter_to_label_id = useReactiveVar(filterToLabelId);
   const selected_analysis_ids = useReactiveVar(selectedAnalysesIds);
-  const show_action_annotations = useReactiveVar(showCorpusActionOutputs);
   const filter_to_annotation_type = useReactiveVar(filterToAnnotationType);
   const location = useLocation();
 
@@ -79,18 +77,19 @@ export const CorpusAnnotationCards = ({
       vars.corpusId = opened_corpus_id;
     }
 
-    // Source filter determines structural and analysis_Isnull variables
+    // Source filter determines structural and agentCreated.
+    // "human" = non-structural, NOT created by any agent (analysis or corpus action).
+    // "agent" = non-structural, created by an analysis OR a corpus action.
     if (sourceFilter === "structural") {
       vars.structural = true;
     } else if (sourceFilter === "human") {
       vars.structural = false;
-      vars.analysis_Isnull = true;
+      vars.agentCreated = false;
     } else if (sourceFilter === "agent") {
       vars.structural = false;
-      vars.analysis_Isnull = false;
+      vars.agentCreated = true;
     } else {
-      // "all" - use the show_action_annotations setting
-      vars.analysis_Isnull = !show_action_annotations;
+      // "all" - no filters; show everything
     }
 
     // Apply other filters
@@ -115,7 +114,6 @@ export const CorpusAnnotationCards = ({
   }, [
     opened_corpus_id,
     sourceFilter,
-    show_action_annotations,
     selected_analysis_id_string,
     filter_to_annotation_type,
     filter_to_label_id,
@@ -299,12 +297,6 @@ export const CorpusAnnotationCards = ({
       refetchAnnotations();
     }
   }, [selected_analysis_ids, opened_corpus_id, refetchAnnotations]);
-
-  useEffect(() => {
-    if (opened_corpus_id) {
-      refetchAnnotations();
-    }
-  }, [show_action_annotations, opened_corpus_id, refetchAnnotations]);
 
   useEffect(() => {
     if (opened_corpus_id && location.pathname === "/corpuses") {
