@@ -48,6 +48,10 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../../assets/configurations/osLegalStyles";
+import {
+  TRIGGER_LABELS,
+  Z_INDEX,
+} from "../../../assets/configurations/constants";
 
 // ============================================================================
 // Types
@@ -81,17 +85,6 @@ interface CorpusActionsSectionProps {
 }
 
 // ============================================================================
-// Constants
-// ============================================================================
-
-const TRIGGER_LABELS: Record<string, string> = {
-  ADD_DOCUMENT: "On Add",
-  EDIT_DOCUMENT: "On Edit",
-  NEW_THREAD: "On Thread",
-  NEW_MESSAGE: "On Message",
-};
-
-// ============================================================================
 // Styled components for template picker dropdown
 // ============================================================================
 
@@ -111,21 +104,23 @@ const PickerDropdown = styled.div`
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  z-index: 100;
+  z-index: ${Z_INDEX.DROPDOWN};
   padding: 0.5rem;
 `;
 
-const PickerItem = styled.div`
+const PickerItem = styled.div<{ disabled?: boolean }>`
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.625rem 0.75rem;
   border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s ease;
+  cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
+  opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
+  transition: background 0.15s ease, opacity 0.15s ease;
 
   &:hover {
-    background: ${OS_LEGAL_COLORS.surfaceHover};
+    background: ${({ disabled }) =>
+      disabled ? "transparent" : OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
@@ -170,6 +165,11 @@ const TemplateBadge = styled.span`
   background: ${OS_LEGAL_COLORS.accentLight};
   color: ${OS_LEGAL_COLORS.accent};
   margin-left: 0.5rem;
+`;
+
+const HeaderButtonRow = styled.div`
+  display: flex;
+  gap: 0.5rem;
 `;
 
 // ============================================================================
@@ -282,7 +282,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
     <SettingsCard>
       <SettingsCardHeader>
         <SettingsCardTitle>Corpus Actions</SettingsCardTitle>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <HeaderButtonRow>
           <PickerContainer ref={pickerContainerRef}>
             <Button size="small" onClick={() => setPickerOpen(!pickerOpen)}>
               <Library size={14} /> Add from Library
@@ -297,6 +297,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                   availableTemplates.map((template) => (
                     <PickerItem
                       key={template.id}
+                      disabled={addingTemplate}
                       onClick={() =>
                         !addingTemplate && handleAddTemplate(template.id)
                       }
@@ -328,7 +329,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
           <Button primary size="small" onClick={onAddAction}>
             <Plus size={14} /> Add Action
           </Button>
-        </div>
+        </HeaderButtonRow>
       </SettingsCardHeader>
 
       <SettingsCardContent>

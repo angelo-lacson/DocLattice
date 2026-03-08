@@ -62,7 +62,7 @@ class Migration(migrations.Migration):
                     "is_active",
                     models.BooleanField(
                         default=True,
-                        help_text="Whether this template is used when creating new corpuses.",
+                        help_text="Whether this template appears in the Action Library for users to add.",
                     ),
                 ),
                 (

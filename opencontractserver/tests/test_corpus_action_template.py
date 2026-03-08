@@ -1,5 +1,3 @@
-import importlib
-
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -10,12 +8,9 @@ from opencontractserver.corpuses.models import (
     CorpusActionTemplate,
     CorpusActionTrigger,
 )
-
-# Migration module name starts with a digit, so we must use importlib.
-_migration_mod = importlib.import_module(
-    "opencontractserver.agents.migrations.0010_create_default_action_templates"
+from opencontractserver.corpuses.template_seeds import (
+    create_default_action_templates as _create_default_action_templates,
 )
-_create_default_action_templates = _migration_mod.create_default_action_templates
 
 # Shared across test classes that verify default template seeding
 DEFAULT_TEMPLATE_NAMES = [
@@ -163,6 +158,27 @@ class CorpusActionTemplateModelTest(TestCase):
         self.assertEqual(templates[0].pk, t2.pk)
         self.assertEqual(templates[1].pk, t1.pk)
 
+    def test_to_action_kwargs_raises_without_creator(self):
+        """to_action_kwargs raises ValueError if no creator is available."""
+        from unittest.mock import PropertyMock, patch
+
+        template = CorpusActionTemplate.objects.create(
+            name="No Creator Test",
+            task_instructions="Test no creator.",
+            trigger=CorpusActionTrigger.ADD_DOCUMENT,
+            creator=self.user,
+        )
+        corpus = Corpus.objects.create(title="No Creator Corpus", creator=self.user)
+
+        # Corpus.creator is NOT NULL at the DB level, so we mock the
+        # descriptor to return None to exercise the defensive ValueError.
+        with patch.object(type(corpus), "creator", new_callable=PropertyMock) as mock_c:
+            mock_c.return_value = None
+            with self.assertRaises(ValueError) as ctx:
+                template.to_action_kwargs(corpus)
+
+        self.assertIn("no creator provided", str(ctx.exception))
+
 
 class DefaultTemplatesMigrationTest(TestCase):
     """Verify the data migration created the expected default templates.
@@ -240,3 +256,107 @@ class DefaultTemplatesMigrationTest(TestCase):
                 len(template.pre_authorized_tools) > 0,
                 f"Template '{template.name}' has no pre-authorized tools",
             )
+
+    def test_seeding_is_idempotent(self):
+        """Calling create_default_action_templates twice doesn't duplicate records."""
+        from django.apps import apps
+
+        from opencontractserver.corpuses.template_seeds import TEMPLATES
+
+        # First call already happened in setUpClass; call again
+        _create_default_action_templates(apps, None)
+
+        # Verify count is still exactly len(TEMPLATES)
+        for tmpl_def in TEMPLATES:
+            self.assertEqual(
+                CorpusActionTemplate.objects.filter(name=tmpl_def["name"]).count(),
+                1,
+                f"Template '{tmpl_def['name']}' was duplicated",
+            )
+            self.assertEqual(
+                AgentConfiguration.objects.filter(
+                    name=f"{tmpl_def['name']} Agent"
+                ).count(),
+                1,
+                f"AgentConfig for '{tmpl_def['name']}' was duplicated",
+            )
+
+
+class ReverseMigrationTest(TestCase):
+    """Test the reverse_migration function deletes seeded templates and configs."""
+
+    def test_reverse_migration_deletes_templates_and_configs(self):
+        from django.apps import apps
+
+        from opencontractserver.corpuses.template_seeds import (
+            TEMPLATES,
+            create_default_action_templates,
+            reverse_migration,
+        )
+
+        # Ensure a superuser exists for seeding
+        User.objects.create_user(
+            username="reverse_admin",
+            password="testpass",
+            is_superuser=True,
+            is_staff=True,
+        )
+
+        # Clean slate: remove any existing defaults
+        reverse_migration(apps, None)
+
+        # Seed templates
+        create_default_action_templates(apps, None)
+
+        # Verify templates and agent configs exist
+        template_names = [t["name"] for t in TEMPLATES]
+        agent_names = [f"{n} Agent" for n in template_names]
+        self.assertEqual(
+            CorpusActionTemplate.objects.filter(name__in=template_names).count(),
+            len(TEMPLATES),
+        )
+        self.assertTrue(
+            AgentConfiguration.objects.filter(name__in=agent_names).exists()
+        )
+
+        # Run reverse migration
+        reverse_migration(apps, None)
+
+        # Verify templates are deleted
+        self.assertEqual(
+            CorpusActionTemplate.objects.filter(name__in=template_names).count(),
+            0,
+        )
+        # Verify agent configs are deleted
+        self.assertFalse(
+            AgentConfiguration.objects.filter(name__in=agent_names).exists()
+        )
+
+
+class NoSuperuserSeedingTest(TestCase):
+    """Test that seeding gracefully skips when no superuser exists."""
+
+    def test_no_superuser_skips_seeding(self):
+        from django.apps import apps
+
+        from opencontractserver.corpuses.template_seeds import (
+            TEMPLATES,
+            create_default_action_templates,
+            reverse_migration,
+        )
+
+        # Clean slate
+        reverse_migration(apps, None)
+
+        # Ensure no superusers exist
+        User.objects.filter(is_superuser=True).delete()
+
+        # Seed should silently skip
+        create_default_action_templates(apps, None)
+
+        # Verify no templates were created
+        template_names = [t["name"] for t in TEMPLATES]
+        self.assertEqual(
+            CorpusActionTemplate.objects.filter(name__in=template_names).count(),
+            0,
+        )
