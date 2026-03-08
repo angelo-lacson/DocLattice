@@ -51,6 +51,8 @@ class AnnotationQueryMixin:
         annotation_label__description_contains=graphene.String(),
         annotation_label__label_type=graphene.String(),
         analysis_isnull=graphene.Boolean(),
+        corpus_action_isnull=graphene.Boolean(),
+        agent_created=graphene.Boolean(),
         document_id=graphene.ID(),
         corpus_id=graphene.ID(),
         structural=graphene.Boolean(),
@@ -62,7 +64,13 @@ class AnnotationQueryMixin:
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
     def resolve_annotations(
-        self, info, analysis_isnull=None, structural=None, **kwargs
+        self,
+        info,
+        analysis_isnull=None,
+        structural=None,
+        corpus_action_isnull=None,
+        agent_created=None,
+        **kwargs,
     ):
         # Import the query optimizer
         from opencontractserver.annotations.query_optimizer import (
@@ -116,6 +124,7 @@ class AnnotationQueryMixin:
             "corpus",
             "analysis",
             "analysis__analyzer",
+            "corpus_action",
         )
 
         # Filter by uses_label_from_labelset_id
@@ -227,6 +236,18 @@ class AnnotationQueryMixin:
             )
             queryset = queryset.filter(analysis__isnull=analysis_isnull)
             logger.info(f"Filtered by analysis_isnull: {queryset.count()}")
+
+        # Filter by corpus_action
+        if corpus_action_isnull is not None:
+            queryset = queryset.filter(corpus_action__isnull=corpus_action_isnull)
+
+        # Combined agent filter: annotations created by analysis OR corpus action
+        if agent_created is not None:
+            agent_q = Q(analysis__isnull=False) | Q(corpus_action__isnull=False)
+            if agent_created:
+                queryset = queryset.filter(agent_q)
+            else:
+                queryset = queryset.exclude(agent_q)
 
         # Skip document_id and corpus_id filtering if already handled by optimizer
         if not document_id:

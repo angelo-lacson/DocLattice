@@ -10,6 +10,7 @@ from config.graphql.agent_types import (  # noqa: F401
     AgentConfigurationType,
     AvailableToolType,
     CorpusActionExecutionType,
+    CorpusActionTemplateType,
     CorpusActionTrailStatsType,
     CorpusActionType,
     ToolParameterType,

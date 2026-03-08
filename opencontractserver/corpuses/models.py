@@ -1055,6 +1055,14 @@ class CorpusAction(BaseOCModel):
     run_on_all_corpuses = django.db.models.BooleanField(
         null=False, default=False, blank=True
     )
+    source_template = django.db.models.ForeignKey(
+        "CorpusActionTemplate",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cloned_actions",
+        help_text="The template this action was cloned from, if any.",
+    )
 
     class Meta:
         constraints = [
@@ -1093,7 +1101,12 @@ class CorpusAction(BaseOCModel):
                     )
                 ),
                 name="valid_action_type_configuration",
-            )
+            ),
+            django.db.models.UniqueConstraint(
+                fields=["corpus", "source_template"],
+                condition=django.db.models.Q(source_template__isnull=False),
+                name="unique_template_per_corpus",
+            ),
         ]
         permissions = (
             ("permission_corpusaction", "permission corpusaction"),
@@ -1185,6 +1198,142 @@ class CorpusActionGroupObjectPermission(GroupObjectPermissionBase):
         "CorpusAction", on_delete=django.db.models.CASCADE
     )
     # enabled = False
+
+
+class CorpusActionTemplate(BaseOCModel):
+    """Reusable template for agent-based corpus actions.
+
+    Templates define the agent configuration, task instructions, and trigger
+    type that a cloned ``CorpusAction`` will use.  Users browse available
+    templates via the Action Library UI and add them to individual corpuses
+    on demand (no auto-cloning).
+
+    Templates are agent-only — no fieldset or analyzer support.
+
+    Exposed via GraphQL (``CorpusActionTemplateType`` query and
+    ``AddTemplateToCorpus`` mutation).  Template records themselves are
+    managed through Django admin; users interact with the cloned
+    ``CorpusAction`` instances on their corpuses.
+    """
+
+    # Override BaseOCModel.creator to use SET_NULL — system-level templates
+    # are owned by an arbitrary superuser at migration time and must survive
+    # that user being deleted.
+    creator = django.db.models.ForeignKey(
+        get_user_model(),
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+
+    name = django.db.models.CharField(max_length=256, unique=True)
+    description = django.db.models.TextField(blank=True, default="")
+
+    agent_config = django.db.models.ForeignKey(
+        "agents.AgentConfiguration",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="action_templates",
+        help_text="Optional agent configuration for persona/tool defaults.",
+    )
+    task_instructions = django.db.models.TextField(
+        help_text="What the agent should do when this action fires.",
+    )
+    pre_authorized_tools = django.db.models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Tools pre-authorized to run without user approval.",
+    )
+
+    trigger = django.db.models.CharField(
+        max_length=256, choices=CorpusActionTrigger.choices
+    )
+
+    is_active = django.db.models.BooleanField(
+        default=True,
+        help_text="Whether this template appears in the Action Library for users to add.",
+    )
+    disabled_on_clone = django.db.models.BooleanField(
+        default=False,
+        help_text="If True, cloned actions start disabled (user must opt-in).",
+    )
+    sort_order = django.db.models.IntegerField(
+        default=0,
+        help_text="Display ordering in template lists.",
+    )
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        indexes = [
+            django.db.models.Index(
+                fields=["sort_order", "name"],
+                name="corpuses_actio_sort_or_idx",
+            ),
+        ]
+        constraints = [
+            django.db.models.CheckConstraint(
+                condition=~django.db.models.Q(task_instructions=""),
+                name="nonempty_task_instructions",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if not self.task_instructions:
+            raise ValidationError(
+                {"task_instructions": "Task instructions cannot be empty."}
+            )
+
+    def __str__(self):
+        return f"CorpusActionTemplate: {self.name} ({self.get_trigger_display()})"
+
+    def to_action_kwargs(self, corpus, creator=None):
+        """Return kwargs dict for constructing a CorpusAction from this template.
+
+        Note:
+            ``task_instructions`` is **copied** into the new ``CorpusAction``.
+            Later edits to the template's instructions do *not* propagate to
+            existing clones.
+
+            By contrast, ``agent_config`` is a FK reference to the *same*
+            ``AgentConfiguration`` that the template uses.  All corpus actions
+            cloned from a template therefore share one configuration object.
+            If an admin later edits that ``AgentConfiguration``, every cloned
+            action is affected.  This is intentional — templates act as a
+            single source of truth for agent behaviour.
+
+        Raises:
+            ValueError: If neither ``creator`` nor ``corpus.creator`` is set.
+        """
+        resolved_creator = creator or corpus.creator
+        if resolved_creator is None:
+            raise ValueError(
+                f"Cannot clone template {self.name!r}: no creator provided "
+                f"and corpus {corpus.pk} has no creator."
+            )
+        return dict(
+            name=self.name,
+            corpus=corpus,
+            agent_config=self.agent_config,
+            task_instructions=self.task_instructions,
+            pre_authorized_tools=list(self.pre_authorized_tools),
+            trigger=self.trigger,
+            disabled=self.disabled_on_clone,
+            creator=resolved_creator,
+            source_template=self,
+        )
+
+    def clone_to_corpus(self, corpus, creator=None):
+        """Create a CorpusAction from this template for the given corpus.
+
+        Returns the created CorpusAction instance.
+        """
+        kwargs = self.to_action_kwargs(corpus, creator)
+        action = CorpusAction(**kwargs)
+        action.save()
+        return action
 
 
 # -------------------- CorpusDescriptionRevision -------------------- #
