@@ -58,7 +58,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Backend mutation test for the all-enabled-to-explicit toggle transition, verifying the mutation succeeds and the query reflects the change (issue #1036 item 7). (`opencontractserver/tests/test_pipeline_settings.py`)
 
+### Changed
+
+- **`add_annotations_from_exact_strings` API simplified to single-document** (breaking): Replaced per-item `(label, text, doc_id, corpus_id)` tuples with a flat `document_id`/`corpus_id` pair plus `AnnotationItem` TypedDict items containing only `label_text` and `exact_string`. Callers that previously annotated multiple documents in one call must now make separate calls per document. (`opencontractserver/llms/tools/core_tools.py`)
+
 ### Added
+
+#### Action Library (Corpus Action Templates)
+- **CorpusActionTemplate model** for reusable, agent-based action definitions that users can browse and add to individual corpuses (`opencontractserver/corpuses/models.py`)
+- **5 default action templates** seeded via data migration: Document Description Updater, Corpus Description Updater, Document Summary Generator, Key Terms Annotator, Document Notes Generator — each with a dedicated `AgentConfiguration` and curated tool set (`opencontractserver/agents/migrations/0010_create_default_action_templates.py`)
+- **Action Library UI**: "Add from Library" picker in Corpus Settings lets users browse available templates and add them to a corpus on demand. New corpora start empty — no auto-cloning (`frontend/src/components/corpuses/settings/CorpusActionsSection.tsx`)
+- **`addTemplateToCorpus` mutation**: Clones a template into a `CorpusAction` for a given corpus with duplicate prevention (`config/graphql/corpus_mutations.py`)
+- **`source_template` FK on CorpusAction**: Links cloned actions back to their source template for provenance tracking (`opencontractserver/corpuses/models.py`)
+- **GraphQL query `corpusActionTemplates`**: Read-only query exposing available templates with optional `isActive` filter (`config/graphql/action_queries.py`)
+- **`sourceTemplate` field on CorpusActionType**: Exposes template provenance in the existing corpus actions GraphQL type (`config/graphql/agent_types.py`)
+- **`seed_action_templates` management command**: Idempotent command for seeding default templates on fresh databases (`opencontractserver/corpuses/management/commands/seed_action_templates.py`)
 
 #### Optimize Vector Search and Index Scalability for Million-Scale Corpora
 - **HNSW indexes on all Embedding vector columns** (384–4096 dimensions): Approximate nearest neighbor search reduces vector queries from O(n) sequential scan to O(log n). Created via `AddIndexConcurrently` to avoid table locks during index creation (`opencontractserver/annotations/models.py`, `opencontractserver/annotations/migrations/0063_add_hnsw_indexes_and_search_vector.py`)

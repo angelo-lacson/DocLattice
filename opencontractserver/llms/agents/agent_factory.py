@@ -235,6 +235,7 @@ class UnifiedAgentFactory:
                 document_id=doc_obj.id if doc_obj else None,
                 corpus_id=corpus_obj.id if corpus_obj else None,
                 user_id=user_id,
+                corpus_action_id=config.corpus_action_id,
             )
             if tools
             else []
@@ -401,6 +402,7 @@ class UnifiedAgentFactory:
                 document_id=None,
                 corpus_id=corpus_obj.id if corpus_obj else None,
                 user_id=user_id,
+                corpus_action_id=config.corpus_action_id,
             )
             if tools
             else []
@@ -425,6 +427,7 @@ def _convert_tools_for_framework(
     document_id: int | None = None,
     corpus_id: int | None = None,
     user_id: int | None = None,
+    corpus_action_id: int | None = None,
 ) -> list:
     """Convert tools to framework-specific format with context injection.
 
@@ -434,6 +437,7 @@ def _convert_tools_for_framework(
         document_id: Document ID to inject into tools that accept it
         corpus_id: Corpus ID to inject into tools that accept it
         user_id: User ID to inject for author_id/creator_id params
+        corpus_action_id: CorpusAction ID to inject into tools that accept it
 
     Returns:
         List of framework-specific tools
@@ -443,7 +447,7 @@ def _convert_tools_for_framework(
     for tool in tools:
         if isinstance(tool, CoreTool):
             inject_params = build_inject_params_for_context(
-                tool, document_id, corpus_id, user_id
+                tool, document_id, corpus_id, user_id, corpus_action_id
             )
             framework_tools.append(
                 UnifiedToolFactory.create_tool(
@@ -454,7 +458,7 @@ def _convert_tools_for_framework(
             # Convert function to CoreTool
             ct = CoreTool.from_function(tool)
             inject_params = build_inject_params_for_context(
-                ct, document_id, corpus_id, user_id
+                ct, document_id, corpus_id, user_id, corpus_action_id
             )
             framework_tools.append(
                 UnifiedToolFactory.create_tool(

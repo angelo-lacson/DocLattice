@@ -783,6 +783,8 @@ export interface GetAnnotationsInputs {
   usesLabelFromLabelsetId?: string;
   rawText_Contains?: string;
   analysis_Isnull?: boolean;
+  corpusAction_Isnull?: boolean;
+  agentCreated?: boolean;
   annotationLabel_description_search_string?: string;
   annotationLabel_title_search_string?: string;
   annotationLabel_Type?: string;
@@ -815,6 +817,8 @@ export const GET_ANNOTATIONS = gql`
     $createdWithAnalyzerId: String
     $createdByAnalysisIds: String
     $analysis_Isnull: Boolean
+    $corpusAction_Isnull: Boolean
+    $agentCreated: Boolean
     $structural: Boolean
     $cursor: String
     $limit: Int
@@ -830,6 +834,8 @@ export const GET_ANNOTATIONS = gql`
       createdWithAnalyzerId: $createdWithAnalyzerId
       createdByAnalysisIds: $createdByAnalysisIds
       analysisIsnull: $analysis_Isnull
+      corpusActionIsnull: $corpusAction_Isnull
+      agentCreated: $agentCreated
       structural: $structural
       first: $limit
       after: $cursor
@@ -889,6 +895,10 @@ export const GET_ANNOTATIONS = gql`
             }
             __typename
           }
+          corpusAction {
+            id
+            __typename
+          }
           annotationLabel {
             id
             text
@@ -939,6 +949,8 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
     $createdWithAnalyzerId: String
     $createdByAnalysisIds: String
     $analysis_Isnull: Boolean
+    $corpusAction_Isnull: Boolean
+    $agentCreated: Boolean
     $structural: Boolean
     $cursor: String
     $limit: Int
@@ -954,6 +966,8 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
       createdWithAnalyzerId: $createdWithAnalyzerId
       createdByAnalysisIds: $createdByAnalysisIds
       analysisIsnull: $analysis_Isnull
+      corpusActionIsnull: $corpusAction_Isnull
+      agentCreated: $agentCreated
       structural: $structural
       first: $limit
       after: $cursor
@@ -991,6 +1005,10 @@ export const GET_ANNOTATIONS_FOR_CARDS = gql`
               analyzerId
               __typename
             }
+            __typename
+          }
+          corpusAction {
+            id
             __typename
           }
           annotationLabel {
@@ -3461,6 +3479,10 @@ export const GET_CORPUS_ACTIONS = gql`
           }
           taskInstructions
           preAuthorizedTools
+          sourceTemplate {
+            id
+            name
+          }
           created
           modified
         }
@@ -3501,6 +3523,7 @@ export interface GetCorpusActionsOutput {
         };
         taskInstructions?: string;
         preAuthorizedTools?: string[];
+        sourceTemplate?: { id: string; name: string } | null;
         created: string;
         modified: string;
       };
@@ -5098,3 +5121,45 @@ export const GET_CORPUS_DOCUMENTS_FOR_TOC = gql`
     }
   }
 `;
+
+// ============================================================================
+// CORPUS ACTION TEMPLATES
+// ============================================================================
+
+export const GET_CORPUS_ACTION_TEMPLATES = gql`
+  query GetCorpusActionTemplates($isActive: Boolean) {
+    corpusActionTemplates(isActive: $isActive) {
+      edges {
+        node {
+          id
+          name
+          description
+          trigger
+          sortOrder
+          isActive
+        }
+      }
+    }
+  }
+`;
+
+export interface CorpusActionTemplateNode {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface GetCorpusActionTemplatesInput {
+  isActive?: boolean;
+}
+
+export interface GetCorpusActionTemplatesOutput {
+  corpusActionTemplates: {
+    edges: Array<{
+      node: CorpusActionTemplateNode;
+    }>;
+  };
+}

@@ -369,6 +369,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
         />
 
         <CorpusActionsSection
+          corpusId={corpus.id}
           actions={actions}
           onAddAction={() => setIsModalOpen(true)}
           onEditAction={(action) => {
@@ -379,6 +380,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
           onRunAction={(action) =>
             setActionToRun({ id: action.id, name: action.name })
           }
+          onUpdate={() => refetchActions()}
           isSuperuser={isSuperuser}
         />
 
