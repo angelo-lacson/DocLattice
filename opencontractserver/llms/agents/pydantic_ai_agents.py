@@ -2300,7 +2300,12 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                     )
 
             items = [
-                (e.label_text, e.exact_string, context.document.id, context.corpus.id)
+                {
+                    "label_text": e.label_text,
+                    "exact_string": e.exact_string,
+                    "document_id": context.document.id,
+                    "corpus_id": context.corpus.id,
+                }
                 for e in norm_entries
             ]
 
