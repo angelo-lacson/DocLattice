@@ -169,7 +169,7 @@ test.describe("CreateCorpusActionModal - Trigger Options", () => {
 
     // Click on trigger dropdown to open options
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
 
@@ -207,7 +207,7 @@ test.describe("CreateCorpusActionModal - Trigger Options", () => {
 
     // Check default trigger value
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await expect(triggerDropdown).toContainText("On Document Add");
 
@@ -237,7 +237,7 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Select "On New Thread" trigger
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
     await page.locator('[role="option"]:has-text("On New Thread")').click();
@@ -247,12 +247,12 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Action type should be forced to "Agent"
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
     await expect(actionTypeDropdown).toContainText("Agent");
 
     // Action type dropdown should be disabled
-    await expect(actionTypeDropdown).toHaveClass(/disabled/);
+    await expect(actionTypeDropdown).toHaveClass(/oc-dropdown--disabled/);
 
     // Info message about thread triggers should be visible
     await expect(
@@ -281,7 +281,7 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Select "On New Message" trigger
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
     await page.locator('[role="option"]:has-text("On New Message")').click();
@@ -291,12 +291,12 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Action type should be forced to "Agent"
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
     await expect(actionTypeDropdown).toContainText("Agent");
 
     // Action type dropdown should be disabled
-    await expect(actionTypeDropdown).toHaveClass(/disabled/);
+    await expect(actionTypeDropdown).toHaveClass(/oc-dropdown--disabled/);
 
     await component.unmount();
   });
@@ -318,7 +318,7 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Select "On New Thread" trigger
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
     await page.locator('[role="option"]:has-text("On New Thread")').click();
@@ -364,7 +364,7 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Select "On New Message" trigger
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
     await page.locator('[role="option"]:has-text("On New Message")').click();
@@ -397,7 +397,7 @@ test.describe("CreateCorpusActionModal - Thread Trigger Behavior", () => {
 
     // Select "On New Thread" trigger
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
     await page.locator('[role="option"]:has-text("On New Thread")').click();
@@ -447,9 +447,9 @@ test.describe("CreateCorpusActionModal - Action Type Switching", () => {
 
     // Action type dropdown should be enabled for document triggers
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
-    await expect(actionTypeDropdown).not.toHaveClass(/disabled/);
+    await expect(actionTypeDropdown).not.toHaveClass(/oc-dropdown--disabled/);
 
     // Click to open dropdown
     await actionTypeDropdown.click();
@@ -485,7 +485,7 @@ test.describe("CreateCorpusActionModal - Action Type Switching", () => {
 
     // First, select thread trigger
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
     await page.locator('[role="option"]:has-text("On New Thread")').click();
@@ -494,9 +494,9 @@ test.describe("CreateCorpusActionModal - Action Type Switching", () => {
 
     // Action type should be disabled
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
-    await expect(actionTypeDropdown).toHaveClass(/disabled/);
+    await expect(actionTypeDropdown).toHaveClass(/oc-dropdown--disabled/);
 
     // Switch back to document trigger
     await triggerDropdown.click();
@@ -505,7 +505,7 @@ test.describe("CreateCorpusActionModal - Action Type Switching", () => {
     await page.waitForTimeout(200);
 
     // Action type should be enabled again
-    await expect(actionTypeDropdown).not.toHaveClass(/disabled/);
+    await expect(actionTypeDropdown).not.toHaveClass(/oc-dropdown--disabled/);
 
     await component.unmount();
   });
@@ -529,7 +529,7 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
 
     // Select Agent action type
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
     await actionTypeDropdown.click();
     await page
@@ -570,7 +570,7 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
 
     // Select Agent action type
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
     await actionTypeDropdown.click();
     await page
@@ -586,7 +586,7 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
 
     // Select the agent config
     const agentDropdown = page.locator(
-      'div:has(> label:text("Agent")) .ui.dropdown'
+      'div:has(> label:text("Agent")) .oc-dropdown'
     );
     await agentDropdown.click();
     await page
@@ -622,7 +622,7 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
 
     // Select Agent action type
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
     await actionTypeDropdown.click();
     await page
@@ -638,7 +638,7 @@ test.describe("CreateCorpusActionModal - Agent Configuration", () => {
 
     // Select the agent config
     const agentDropdown = page.locator(
-      'div:has(> label:text("Agent")) .ui.dropdown'
+      'div:has(> label:text("Agent")) .oc-dropdown'
     );
     await agentDropdown.click();
     await page
@@ -764,7 +764,7 @@ test.describe("CreateCorpusActionModal - Form Submission", () => {
 
     // Select "On New Thread" trigger
     const triggerDropdown = page.locator(
-      'div:has(> label:text("Trigger")) .ui.dropdown'
+      'div:has(> label:text("Trigger")) .oc-dropdown'
     );
     await triggerDropdown.click();
     await page.locator('[role="option"]:has-text("On New Thread")').click();
@@ -778,7 +778,7 @@ test.describe("CreateCorpusActionModal - Form Submission", () => {
 
     // Select agent config
     const agentDropdown = page.locator(
-      'div:has(> label:text("Agent")) .ui.dropdown'
+      'div:has(> label:text("Agent")) .oc-dropdown'
     );
     await agentDropdown.click();
     await page
@@ -883,7 +883,7 @@ test.describe("CreateCorpusActionModal - Analyzer Configuration", () => {
 
     // Select Analyzer action type
     const actionTypeDropdown = page.locator(
-      'div:has(> label:text("Action Type")) .ui.dropdown'
+      'div:has(> label:text("Action Type")) .oc-dropdown'
     );
     await actionTypeDropdown.click();
     await page

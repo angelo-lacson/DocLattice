@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { CorpusDocumentRelationshipsTestWrapper } from "./CorpusDocumentRelationshipsTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("CorpusDocumentRelationships", () => {
   test("renders relationships header", async ({ mount, page }) => {
@@ -18,6 +19,8 @@ test.describe("CorpusDocumentRelationships", () => {
     });
 
     await expect(page.getByText("No Document Relationships")).toBeVisible();
+
+    await docScreenshot(page, "corpus--document-relationships--empty");
   });
 
   test("shows error state on fetch failure", async ({ mount, page }) => {
@@ -29,6 +32,8 @@ test.describe("CorpusDocumentRelationships", () => {
 
     await expect(page.getByText("Error Loading Relationships")).toBeVisible();
     await expect(page.getByRole("button", { name: /Retry/ })).toBeVisible();
+
+    await docScreenshot(page, "corpus--document-relationships--error");
   });
 
   test("displays relationships in table", async ({ mount, page }) => {
@@ -46,6 +51,8 @@ test.describe("CorpusDocumentRelationships", () => {
     // Check target documents are displayed
     await expect(page.getByText("Target Document 1")).toBeVisible();
     await expect(page.getByText("Target Document 2")).toBeVisible();
+
+    await docScreenshot(page, "corpus--document-relationships--with-data");
   });
 
   test("displays relationship labels", async ({ mount, page }) => {
@@ -88,9 +95,14 @@ test.describe("CorpusDocumentRelationships", () => {
     });
 
     // Filter dropdown should be visible once component renders
-    // Use more specific selector for the Semantic UI dropdown
-    const filterDropdown = page.locator(".ui.dropdown.selection");
+    // Use @os-legal/ui dropdown selector
+    const filterDropdown = page.locator(".oc-dropdown");
     await expect(filterDropdown).toBeVisible({ timeout: 5000 });
+
+    await docScreenshot(
+      page,
+      "corpus--document-relationships--filter-dropdown"
+    );
   });
 
   test("shows delete button for relationships with permission", async ({

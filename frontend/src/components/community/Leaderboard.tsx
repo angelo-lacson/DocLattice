@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
-// TODO: migrate to @os-legal/ui once Table and Dropdown components are available
-import { Table, Dropdown } from "semantic-ui-react";
-import { StatBlock } from "@os-legal/ui";
+import { Table } from "semantic-ui-react";
+import { Dropdown, StatBlock } from "@os-legal/ui";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import {
@@ -150,61 +149,24 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
   });
 
   const metricOptions = [
-    {
-      key: LeaderboardMetric.BADGES,
-      text: "Top Badge Earners",
-      value: LeaderboardMetric.BADGES,
-      icon: "trophy",
-    },
-    {
-      key: LeaderboardMetric.MESSAGES,
-      text: "Most Active Contributors",
-      value: LeaderboardMetric.MESSAGES,
-      icon: "comment",
-    },
-    {
-      key: LeaderboardMetric.THREADS,
-      text: "Top Thread Creators",
-      value: LeaderboardMetric.THREADS,
-      icon: "conversation",
-    },
-    {
-      key: LeaderboardMetric.ANNOTATIONS,
-      text: "Top Annotators",
-      value: LeaderboardMetric.ANNOTATIONS,
-      icon: "marker",
-    },
-    {
-      key: LeaderboardMetric.REPUTATION,
-      text: "Highest Reputation",
-      value: LeaderboardMetric.REPUTATION,
-      icon: "star",
-    },
+    { value: LeaderboardMetric.BADGES, label: "Top Badge Earners" },
+    { value: LeaderboardMetric.MESSAGES, label: "Most Active Contributors" },
+    { value: LeaderboardMetric.THREADS, label: "Top Thread Creators" },
+    { value: LeaderboardMetric.ANNOTATIONS, label: "Top Annotators" },
+    { value: LeaderboardMetric.REPUTATION, label: "Highest Reputation" },
   ];
 
   const scopeOptions = [
-    {
-      key: LeaderboardScope.ALL_TIME,
-      text: "All Time",
-      value: LeaderboardScope.ALL_TIME,
-    },
-    {
-      key: LeaderboardScope.MONTHLY,
-      text: "This Month",
-      value: LeaderboardScope.MONTHLY,
-    },
-    {
-      key: LeaderboardScope.WEEKLY,
-      text: "This Week",
-      value: LeaderboardScope.WEEKLY,
-    },
+    { value: LeaderboardScope.ALL_TIME, label: "All Time" },
+    { value: LeaderboardScope.MONTHLY, label: "This Month" },
+    { value: LeaderboardScope.WEEKLY, label: "This Week" },
   ];
 
   const limitOptions = [
-    { key: 10, text: "Top 10", value: 10 },
-    { key: 25, text: "Top 25", value: 25 },
-    { key: 50, text: "Top 50", value: 50 },
-    { key: 100, text: "Top 100", value: 100 },
+    { value: 10, label: "Top 10" },
+    { value: 25, label: "Top 25" },
+    { value: 50, label: "Top 50" },
+    { value: 100, label: "Top 100" },
   ];
 
   const getMetricIcon = (metric: LeaderboardMetric) => {
@@ -302,26 +264,29 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
       <LeaderboardCard>
         <FilterBar>
           <Dropdown
-            selection
+            mode="select"
             options={metricOptions}
             value={metric}
-            onChange={(_, data) => setMetric(data.value as LeaderboardMetric)}
+            onChange={(value) => setMetric(value as LeaderboardMetric)}
             placeholder="Select Metric"
+            clearable={false}
             style={{ minWidth: "250px" }}
           />
           <Dropdown
-            selection
+            mode="select"
             options={scopeOptions}
             value={scope}
-            onChange={(_, data) => setScope(data.value as LeaderboardScope)}
+            onChange={(value) => setScope(value as LeaderboardScope)}
             placeholder="Select Time Period"
+            clearable={false}
           />
-          <Dropdown
-            selection
+          <Dropdown<number>
+            mode="select"
             options={limitOptions}
             value={limit}
-            onChange={(_, data) => setLimit(data.value as number)}
+            onChange={(value) => setLimit(value as number)}
             placeholder="Number of Users"
+            clearable={false}
           />
         </FilterBar>
 

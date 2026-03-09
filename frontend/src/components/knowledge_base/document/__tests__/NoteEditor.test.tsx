@@ -174,10 +174,9 @@ describe("NoteEditor", () => {
     it("should show edit indicator when content changes", async () => {
       renderComponent();
 
+      // Wait for mock data to load (document title comes from query result)
       await waitFor(() => {
-        expect(
-          screen.getByPlaceholderText("Note title...")
-        ).toBeInTheDocument();
+        expect(screen.getByText("Test Document")).toBeInTheDocument();
       });
 
       const contentField = screen.getByPlaceholderText(
@@ -186,7 +185,10 @@ describe("NoteEditor", () => {
       await userEvent.clear(contentField);
       await userEvent.type(contentField, "Updated content");
 
-      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      // Wait for the hasChanges useEffect to propagate
+      await waitFor(() => {
+        expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      });
     });
   });
 

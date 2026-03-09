@@ -1,5 +1,5 @@
 import { useQuery } from "@apollo/client";
-import { Dropdown } from "semantic-ui-react";
+import { Dropdown } from "@os-legal/ui";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
@@ -14,21 +14,9 @@ const MobileFriendlyWrapper = styled.div`
   width: 100%;
 
   @media (max-width: 768px) {
-    /* Ensure dropdown has adequate touch target size */
-    .ui.dropdown {
-      min-height: 44px; /* iOS minimum touch target */
-      font-size: 16px; /* Prevents iOS zoom on focus */
-    }
-
     /* Add padding for better mobile spacing */
     > div:last-child {
       padding: 1rem;
-    }
-
-    /* Ensure dropdown options are large enough to tap */
-    .ui.dropdown .menu > .item {
-      padding: 0.875rem 1rem !important;
-      min-height: 44px;
     }
   }
 `;
@@ -40,8 +28,6 @@ interface EmbedderSelectorProps {
   onChange?: (values: any) => void;
   /** Open dropdown upward (useful when near bottom of container) */
   upward?: boolean;
-  /** Enable scrolling within the dropdown menu */
-  scrolling?: boolean;
 }
 
 /**
@@ -57,7 +43,6 @@ export const EmbedderSelector = ({
   style,
   preferredEmbedder,
   upward = false,
-  scrolling = true,
 }: EmbedderSelectorProps) => {
   // Use cache-first policy since embedders rarely change during a user session
   // (they are configured by admins and typically require app restart to add new ones).
@@ -72,11 +57,11 @@ export const EmbedderSelector = ({
     nextFetchPolicy: "cache-first",
   });
 
-  const handleChange = (_e: any, { value }: any) => {
+  const handleChange = (value: string | null) => {
     // If user has not actually changed the embedder, do nothing
     if (value === preferredEmbedder) return;
 
-    // If user explicitly clears, value === undefined => preferredEmbedder null
+    // If user explicitly clears, value === null => preferredEmbedder null
     // Otherwise preferredEmbedder is the new value (the className)
     onChange?.({ preferredEmbedder: value ?? null });
   };
@@ -85,21 +70,11 @@ export const EmbedderSelector = ({
   const hasEmbedders = embedders.length > 0;
 
   const options = embedders.map((embedder: PipelineComponentType) => ({
-    key: embedder.className,
-    text: embedder.title || embedder.name,
-    value: embedder.className,
-    content: (
-      <div>
-        <div style={{ fontWeight: 600 }}>{embedder.title || embedder.name}</div>
-        <div
-          style={{ fontSize: "0.85rem", color: OS_LEGAL_COLORS.textSecondary }}
-        >
-          {`${embedder.description || ""} (${
-            embedder.vectorSize || "Unknown"
-          } dimensions)`}
-        </div>
-      </div>
-    ),
+    value: embedder.className || "",
+    label: embedder.title || embedder.name || "",
+    description: `${embedder.description || ""} (${
+      embedder.vectorSize || "Unknown"
+    } dimensions)`,
   }));
 
   return (
@@ -162,20 +137,18 @@ export const EmbedderSelector = ({
         )}
 
         <Dropdown
+          mode="select"
           disabled={read_only || (!loading && !hasEmbedders)}
-          selection
           clearable
           fluid
           upward={upward}
-          scrolling={scrolling}
           options={options}
           style={{ ...style }}
-          onChange={handleChange}
+          onChange={(value) => handleChange(value as string | null)}
           placeholder={
             loading ? "Loading embedders..." : "Choose a preferred embedder"
           }
-          value={preferredEmbedder}
-          noResultsMessage="No embedders match your search"
+          value={preferredEmbedder ?? null}
           loading={loading}
         />
       </div>
