@@ -68,6 +68,7 @@ import {
   convertToDocTypeAnnotations,
   convertToServerAnnotation,
   getPermissions,
+  normalizeTokensToPdfViewport,
 } from "../../../utils/transform";
 import {
   PdfAnnotations,
@@ -861,7 +862,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                       );
                       pageTokens = [];
                     } else {
-                      pageTokens = pageData.tokens;
+                      // Normalize token coordinates from PAWLs coordinate
+                      // space to the PDF.js viewport coordinate space. The
+                      // parser may report different page dimensions than
+                      // PDF.js, causing progressive bbox drift if uncorrected.
+                      const viewport = p.getViewport({ scale: 1 });
+                      pageTokens = normalizeTokensToPdfViewport(
+                        pageData,
+                        viewport.width,
+                        viewport.height
+                      );
                     }
                   }
                   return new PDFPageInfo(p, pageTokens, zoomLevel);
@@ -1080,7 +1090,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                         );
                         pageTokens = [];
                       } else {
-                        pageTokens = pageData.tokens;
+                        // Normalize token coordinates from PAWLs coordinate
+                        // space to the PDF.js viewport coordinate space.
+                        const viewport = p.getViewport({ scale: 1 });
+                        pageTokens = normalizeTokensToPdfViewport(
+                          pageData,
+                          viewport.width,
+                          viewport.height
+                        );
                       }
                     }
                     return new PDFPageInfo(p, pageTokens, zoomLevel);

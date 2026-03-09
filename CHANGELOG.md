@@ -5,9 +5,11 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-08
+## [Unreleased] - 2026-03-09
 
 ### Fixed
+
+- **Token bounding box drift in PDF viewer**: Fixed progressive misalignment between token bounding boxes (blue outlines) and rendered PDF text. PAWLs token coordinates are extracted by the parser in its own coordinate system, which can differ from PDF.js's viewport coordinate system. The frontend now normalizes token coordinates by comparing PAWLs page dimensions (`page.width`/`page.height`) against the PDF.js viewport dimensions at scale 1, rescaling tokens when they differ. Added `normalizeTokensToPdfViewport()` utility in `frontend/src/utils/transform.tsx` and applied it in both PDF loading paths in `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`.
 
 - **PostgreSQL HNSW config warning on startup** (Closes #1074): Fixed `invalid configuration parameter name 'hnsw.iterative_scan', removing it` warning caused by database-level GUC settings being applied before the pgvector extension loaded. Added `shared_preload_libraries=vector` to all Docker Compose postgres commands so pgvector registers its GUC variables at server startup, before database-level settings are applied. Also upgraded pgvector from v0.8.0 to v0.8.2. (`local.yml`, `production.yml`, `test.yml`, `compose/production/postgres/Dockerfile`)
 

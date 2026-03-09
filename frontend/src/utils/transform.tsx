@@ -3,8 +3,10 @@ import { ServerTokenAnnotation } from "../components/annotator/types/annotations
 import { ServerSpanAnnotation } from "../components/annotator/types/annotations";
 import {
   BoundingBox,
+  PageTokens,
   PermissionTypes,
   SpanAnnotationJson,
+  Token,
 } from "../components/types";
 import {
   AnalyzerManifestType,
@@ -330,4 +332,51 @@ export function doOverlap(a: BoundingBox, b: BoundingBox): boolean {
     return false;
   }
   return true;
+}
+
+/**
+ * Normalizes PAWLs token coordinates to match PDF.js viewport coordinates.
+ *
+ * PAWLs tokens are extracted by the parser (e.g. Docling, pdfplumber) using its
+ * own page dimension measurements. PDF.js computes its own page dimensions from
+ * the PDF's MediaBox/CropBox/rotation. If these differ, token bounding boxes
+ * drift progressively from the rendered PDF content.
+ *
+ * This function rescales token x/y/width/height so they align with the PDF.js
+ * coordinate system at scale&nbsp;1.
+ *
+ * @param pawlsPage  - The PAWLs page data containing `page` dimensions and `tokens`.
+ * @param viewportWidth  - PDF.js viewport width at scale 1.
+ * @param viewportHeight - PDF.js viewport height at scale 1.
+ * @returns A new array of tokens with coordinates rescaled to the PDF.js
+ *          coordinate system. If no rescaling is needed the original array is
+ *          returned as-is (no unnecessary copies).
+ */
+export function normalizeTokensToPdfViewport(
+  pawlsPage: PageTokens,
+  viewportWidth: number,
+  viewportHeight: number
+): Token[] {
+  const pawlsWidth = pawlsPage.page.width;
+  const pawlsHeight = pawlsPage.page.height;
+
+  // If dimensions match (within a tiny epsilon) no rescaling is needed.
+  const EPSILON = 0.5; // half a PDF point tolerance
+  if (
+    Math.abs(pawlsWidth - viewportWidth) < EPSILON &&
+    Math.abs(pawlsHeight - viewportHeight) < EPSILON
+  ) {
+    return pawlsPage.tokens;
+  }
+
+  const scaleX = viewportWidth / pawlsWidth;
+  const scaleY = viewportHeight / pawlsHeight;
+
+  return pawlsPage.tokens.map((t) => ({
+    ...t,
+    x: t.x * scaleX,
+    y: t.y * scaleY,
+    width: t.width * scaleX,
+    height: t.height * scaleY,
+  }));
 }
