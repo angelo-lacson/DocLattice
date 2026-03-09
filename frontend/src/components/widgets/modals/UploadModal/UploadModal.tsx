@@ -18,7 +18,6 @@ import {
 import {
   StyledModalWrapper,
   HeaderIcon,
-  FormSection,
   SectionTitle,
   EditSection,
   EditPanel,
@@ -409,7 +408,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               />
 
               {/* Corpus selector for bulk mode */}
-              <FormSection style={{ marginTop: "var(--oc-spacing-md)" }}>
+              <div style={{ marginTop: "var(--oc-spacing-md)" }}>
                 <SectionTitle>Add to Corpus (Optional)</SectionTitle>
                 <Input
                   id="bulk-corpus-search"
@@ -441,22 +440,20 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       ))}
                   </CorpusListContainer>
                 )}
-              </FormSection>
+              </div>
 
               {/* Progress for bulk mode */}
               {zipUploadProgress > 0 && (
-                <div style={{ marginTop: "var(--oc-spacing-md)" }}>
-                  <UploadProgress
-                    files={[
-                      {
-                        file: zipFile!,
-                        formData: { title: "", slug: "", description: "" },
-                        status:
-                          zipUploadProgress === 100 ? "success" : "uploading",
-                      },
-                    ]}
-                  />
-                </div>
+                <UploadProgress
+                  files={[
+                    {
+                      file: zipFile!,
+                      formData: { title: "", slug: "", description: "" },
+                      status:
+                        zipUploadProgress === 100 ? "success" : "uploading",
+                    },
+                  ]}
+                />
               )}
             </>
           )}

@@ -2,7 +2,6 @@ import React, { useState, useCallback } from "react";
 import { Input, Spinner, ScrollArea } from "@os-legal/ui";
 import { Search, FileText, Tag } from "lucide-react";
 import {
-  FormSection,
   SectionTitle,
   CorpusCard,
   CorpusCardHeader,
@@ -62,7 +61,7 @@ export const CorpusSelectorCard: React.FC<CorpusSelectorCardProps> = ({
   );
 
   return (
-    <FormSection>
+    <div>
       <SectionTitle>
         <FileText />
         Select Corpus
@@ -139,7 +138,7 @@ export const CorpusSelectorCard: React.FC<CorpusSelectorCardProps> = ({
           ))
         )}
       </ScrollArea>
-    </FormSection>
+    </div>
   );
 };
 
