@@ -1297,10 +1297,10 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@os-legal/ui@0.1.12":
-  version "0.1.12"
-  resolved "https://registry.yarnpkg.com/@os-legal/ui/-/ui-0.1.12.tgz#193ae884d29cd19c4bfad72e27a881aabc335084"
-  integrity sha512-kRP3Gb+xo6n9V3+xGJ9WFfDeYd6Y9iz6qAMx/KCYmB7/puuS+jymepMsPK4TdlzpzHZsD0p7F3RPgZk702ysAQ==
+"@os-legal/ui@0.1.14":
+  version "0.1.14"
+  resolved "https://registry.yarnpkg.com/@os-legal/ui/-/ui-0.1.14.tgz#8cc975411afb577d178b9aa9576ba9d023c52e6c"
+  integrity sha512-qrd7E4evvhiZ3/YV+VJ6+ZNiZqA9eC4KNmT8/1SrDQiNiFRGm4tUq5/rXE8a+v+A63cOzosAirqnfEgA4AOqIg==
 
 "@pkgjs/parseargs@^0.11.0":
   version "0.11.0"

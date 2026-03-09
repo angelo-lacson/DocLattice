@@ -100,7 +100,12 @@ export const CorpusDropdown: React.FC<CorpusDropdownProps> = ({
     // Consider a more user-friendly error display, maybe a disabled dropdown with an error message
     console.error("Error loading corpuses:", error);
     return (
-      <Dropdown mode="select" placeholder="Error loading corpuses" disabled />
+      <Dropdown
+        mode="select"
+        placeholder="Error loading corpuses"
+        disabled
+        options={[]}
+      />
     );
   }
 
