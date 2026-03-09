@@ -1,5 +1,7 @@
+// TODO: migrate Card from semantic-ui-react to @os-legal/ui Card
 import { Card } from "semantic-ui-react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const RelationshipPanel = styled.div`
   padding: 1.5rem;
@@ -28,7 +30,7 @@ export const RelationshipCard = styled(Card)`
     &:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05) !important;
-      border-color: #2185d0 !important;
+      border-color: ${OS_LEGAL_COLORS.primaryBlue} !important;
     }
 
     .content {
@@ -41,7 +43,7 @@ export const RelationshipType = styled.div`
   display: inline-block;
   font-size: 0.75rem;
   font-weight: 500;
-  color: #2185d0;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   background: rgba(33, 133, 208, 0.1);
   padding: 0.25rem 0.75rem;
   border-radius: 1rem;

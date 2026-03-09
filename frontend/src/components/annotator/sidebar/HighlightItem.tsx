@@ -1,5 +1,4 @@
 import React from "react";
-import { Label, Button, Popup } from "semantic-ui-react";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
@@ -27,7 +26,7 @@ interface HighlightContainerProps {
 }
 
 const HighlightContainer = styled.div<HighlightContainerProps>`
-  border-left: 4px solid ${(props) => props.color || "#e0e1e2"};
+  border-left: 4px solid ${(props) => props.color || OS_LEGAL_COLORS.border};
   background-color: ${(props) =>
     props.selected ? "rgba(46, 204, 113, 0.08)" : "white"};
   box-shadow: ${(props) =>
@@ -57,38 +56,40 @@ interface AnnotationLabelProps {
   $labelColor?: string;
 }
 
-const AnnotationLabel = styled(Label)<AnnotationLabelProps>`
-  &&& {
-    background-color: ${(props) => props.$labelColor || "#e0e1e2"};
-    color: white;
-    margin: 0 0.5rem 0.5rem 0;
-    padding: 0.5em 1em;
-    font-weight: 500;
-    font-size: 0.85rem;
-    border-radius: 99px;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4em;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  }
+const AnnotationLabel = styled.span<AnnotationLabelProps>`
+  background-color: ${(props) => props.$labelColor || OS_LEGAL_COLORS.border};
+  color: white;
+  margin: 0 0.5rem 0.5rem 0;
+  padding: 0.5em 1em;
+  font-weight: 500;
+  font-size: 0.85rem;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 `;
 
-const DeleteButton = styled(Button)`
-  &&& {
-    padding: 0.4em;
-    margin-left: 0.5rem;
-    background-color: transparent;
-    color: #99a1a7;
-    transition: all 0.2s ease;
+const DeleteButton = styled.button`
+  padding: 0.4em;
+  margin-left: 0.5rem;
+  background-color: transparent;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 
-    &:hover {
-      background-color: #fee2e2;
-      color: #dc2626;
-    }
+  &:hover {
+    background-color: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+    color: ${OS_LEGAL_COLORS.danger};
+  }
 
-    &:active {
-      background-color: #fecaca;
-    }
+  &:active {
+    background-color: ${OS_LEGAL_COLORS.dangerBorder};
   }
 `;
 
@@ -108,29 +109,28 @@ const BlockQuote = styled.blockquote`
   }
 `;
 
-const RelationshipLabel = styled(Label)`
-  &&& {
-    margin-top: 0.75rem;
-    font-size: 0.75rem;
-    padding: 0.4em 0.8em;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4em;
-    border-radius: 4px;
-    font-weight: 500;
-
-    &[pointing="right"] {
-      background-color: #eff6ff;
-      color: ${OS_LEGAL_COLORS.primaryBlue};
-      border: 1px solid #bfdbfe;
-    }
-
-    &[pointing="left"] {
-      background-color: #f0fdf4;
-      color: #22c55e;
-      border: 1px solid #bbf7d0;
-    }
-  }
+const RelationshipLabel = styled.span<{ $direction?: "right" | "left" }>`
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  padding: 0.4em 0.8em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  border-radius: 4px;
+  font-weight: 500;
+  background-color: ${(props) =>
+    props.$direction === "left"
+      ? OS_LEGAL_COLORS.successSurface
+      : OS_LEGAL_COLORS.blueSurface};
+  color: ${(props) =>
+    props.$direction === "left"
+      ? OS_LEGAL_COLORS.green
+      : OS_LEGAL_COLORS.primaryBlue};
+  border: 1px solid
+    ${(props) =>
+      props.$direction === "left"
+        ? OS_LEGAL_COLORS.successBorder
+        : OS_LEGAL_COLORS.blueBorder};
 `;
 
 const LocationText = styled.div`
@@ -244,14 +244,14 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
           annotation.myPermissions.includes(PermissionTypes.CAN_REMOVE) &&
           onDelete && (
             <DeleteButton
-              icon={<Trash2 size={16} />}
-              size="mini"
-              circular
-              onClick={(e: { stopPropagation: () => void }) => {
+              aria-label="Delete annotation"
+              onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 onDelete(annotation.id);
               }}
-            />
+            >
+              <Trash2 size={16} />
+            </DeleteButton>
           )}
       </div>
       {/* Show content based on modality:
@@ -275,14 +275,12 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
               />
               {/* Show text below image if it's mixed content */}
               {hasTextModality && hasText && (
-                <Popup
-                  content={annotation.rawText}
-                  trigger={
-                    <BlockQuote style={{ marginTop: "0.5rem" }}>
-                      {`${annotation.rawText.slice(0, 90)}…`}
-                    </BlockQuote>
-                  }
-                />
+                <BlockQuote
+                  style={{ marginTop: "0.5rem" }}
+                  title={annotation.rawText}
+                >
+                  {`${annotation.rawText.slice(0, 90)}…`}
+                </BlockQuote>
               )}
             </>
           );
@@ -291,12 +289,9 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
         // TEXT only modality - just show text
         if (hasText) {
           return (
-            <Popup
-              content={annotation.rawText}
-              trigger={
-                <BlockQuote>{`${annotation.rawText.slice(0, 90)}…`}</BlockQuote>
-              }
-            />
+            <BlockQuote title={annotation.rawText}>
+              {`${annotation.rawText.slice(0, 90)}…`}
+            </BlockQuote>
           );
         }
 
@@ -304,13 +299,13 @@ export const HighlightItem: React.FC<HighlightItemProps> = ({
       })()}
       <HorizontallyJustifiedDiv>
         {my_output_relationships.length > 0 && (
-          <RelationshipLabel pointing="right" basic color="blue">
+          <RelationshipLabel $direction="right">
             <ArrowRight size={14} />
             Points To {my_output_relationships.length}
           </RelationshipLabel>
         )}
         {my_input_relationships.length > 0 && (
-          <RelationshipLabel pointing="left" basic color="green">
+          <RelationshipLabel $direction="left">
             <ArrowLeft size={14} />
             {my_input_relationships.length} Referencing
           </RelationshipLabel>

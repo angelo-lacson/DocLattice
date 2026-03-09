@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Button, Form } from "semantic-ui-react";
+import { IconButton } from "@os-legal/ui";
+import { Dropdown } from "semantic-ui-react";
+import { Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
@@ -66,38 +68,6 @@ const AddFieldButton = styled(motion.button)`
   margin-top: 1rem;
 `;
 
-const DeleteButton = styled(Button)`
-  &.ui.button {
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-
-    &:hover {
-      transform: rotate(90deg);
-    }
-  }
-`;
-
-/**
- * Converts field definitions to a Pydantic model string representation
- * @param fields - Array of field definitions
- * @returns Pydantic model as a string
- */
-const generatePydanticModel = (fields: FieldType[]): string => {
-  if (fields.length === 0) return "";
-
-  const fieldLines = fields
-    .map((field) => `    ${field.fieldName}: ${field.fieldType}`)
-    .join("\n");
-
-  return `class CustomModel(BaseModel):\n${fieldLines}`;
-};
-
 /**
  * Component for building custom model fields with animations.
  */
@@ -143,7 +113,7 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
       animate="visible"
       exit="hidden"
     >
-      <Form>
+      <div>
         <AnimatePresence>
           {fields.map((field, index) => (
             <FieldRow key={field.id} variants={fieldVariants} layout>
@@ -156,19 +126,43 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
                 }}
               >
                 <div>
-                  <Form.Input
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Field Name
+                  </label>
+                  <input
+                    type="text"
                     placeholder="Field Name"
                     value={field.fieldName}
-                    onChange={(e, { value }) =>
-                      updateField(index, "fieldName", value)
+                    onChange={(e) =>
+                      updateField(index, "fieldName", e.target.value)
                     }
                     required
-                    fluid
-                    label="Field Name"
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem 0.75rem",
+                      border: "1px solid rgba(34,36,38,.15)",
+                      borderRadius: "4px",
+                      fontSize: "1rem",
+                    }}
                   />
                 </div>
                 <div>
-                  <Form.Select
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Field Type
+                  </label>
+                  <Dropdown
                     placeholder="Field Type"
                     value={field.fieldType}
                     options={[
@@ -177,24 +171,21 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
                       { key: "str", text: "String", value: "str" },
                       { key: "bool", text: "Boolean", value: "bool" },
                     ]}
-                    onChange={(e, data) =>
+                    onChange={(_e, data) =>
                       updateField(index, "fieldType", data.value as string)
                     }
-                    required
+                    selection
                     fluid
-                    label="Field Type"
                   />
                 </div>
                 <div style={{ textAlign: "center" }}>
-                  <DeleteButton
-                    icon="trash"
-                    color="red"
-                    circular
+                  <IconButton
+                    aria-label="Delete field"
+                    variant="danger"
                     onClick={() => removeField(index)}
-                    as={motion.button}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  />
+                  >
+                    <Trash2 size={16} />
+                  </IconButton>
                 </div>
               </div>
             </FieldRow>
@@ -208,7 +199,7 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
         >
           Add Field
         </AddFieldButton>
-      </Form>
+      </div>
     </motion.div>
   );
 };

@@ -1,6 +1,19 @@
 import React from "react";
 import { useQuery } from "@apollo/client";
-import { Icon, Loader, Message, SemanticICONS } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
+import {
+  TrendingUp,
+  MessageCircle,
+  MessageSquare,
+  ArrowRightLeft,
+  Mail,
+  CalendarCheck,
+  CalendarDays,
+  Users,
+  UserPlus,
+  ThumbsUp,
+  type LucideIcon,
+} from "lucide-react";
 import styled from "styled-components";
 import CountUp from "react-countup";
 import {
@@ -13,7 +26,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import {
   GET_CORPUS_ENGAGEMENT_METRICS,
   GetCorpusEngagementMetricsOutput,
@@ -21,7 +34,22 @@ import {
   CorpusEngagementMetrics,
 } from "../../graphql/queries";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
+
+// Map of icon identifiers to lucide-react components
+const ICON_MAP: Record<string, LucideIcon> = {
+  comments: MessageCircle,
+  "comment alternate outline": MessageSquare,
+  exchange: ArrowRightLeft,
+  envelope: Mail,
+  "calendar check": CalendarCheck,
+  "calendar alternate outline": CalendarDays,
+  users: Users,
+  "user plus": UserPlus,
+  "thumbs up": ThumbsUp,
+  "chart line": TrendingUp,
+};
 
 interface CorpusEngagementDashboardProps {
   corpusId: string;
@@ -35,12 +63,17 @@ const StatisticWithAnimation = ({
 }: {
   value: number;
   label: string;
-  icon: SemanticICONS;
+  icon: string;
   color?: string;
 }) => {
+  const IconComponent = ICON_MAP[icon] || TrendingUp;
   return (
     <StatisticWrapper>
-      <StatisticIcon name={icon} style={{ color: color || "#4a90e2" }} />
+      <StatisticIconWrapper
+        style={{ color: color || OS_LEGAL_COLORS.primaryBlue }}
+      >
+        <IconComponent />
+      </StatisticIconWrapper>
       <StatisticContent>
         <StatisticValue>
           <CountUp end={value} duration={1.5} />
@@ -68,9 +101,12 @@ export const CorpusEngagementDashboard: React.FC<
   if (loading) {
     return (
       <LoadingContainer>
-        <Loader active inline="centered">
+        <Spinner size="md" />
+        <div
+          style={{ marginTop: "0.5rem", color: OS_LEGAL_COLORS.textSecondary }}
+        >
           Loading engagement metrics...
-        </Loader>
+        </div>
       </LoadingContainer>
     );
   }
@@ -78,10 +114,10 @@ export const CorpusEngagementDashboard: React.FC<
   if (error) {
     return (
       <ErrorContainer>
-        <Message error>
-          <Message.Header>Error Loading Metrics</Message.Header>
+        <AlertBox $variant="error">
+          <strong>Error Loading Metrics</strong>
           <p>{error.message}</p>
-        </Message>
+        </AlertBox>
       </ErrorContainer>
     );
   }
@@ -91,13 +127,13 @@ export const CorpusEngagementDashboard: React.FC<
   if (!metrics) {
     return (
       <EmptyStateContainer>
-        <Message info>
-          <Message.Header>No Engagement Data Available</Message.Header>
+        <AlertBox $variant="info">
+          <strong>No Engagement Data Available</strong>
           <p>
             Engagement metrics haven't been calculated for this corpus yet. They
             will be available once the background task has run.
           </p>
-        </Message>
+        </AlertBox>
       </EmptyStateContainer>
     );
   }
@@ -122,7 +158,7 @@ export const CorpusEngagementDashboard: React.FC<
     <DashboardContainer>
       <DashboardHeader>
         <Title>
-          <Icon name="chart line" />
+          <TrendingUp />
           Engagement Analytics
         </Title>
         <LastUpdated>
@@ -137,13 +173,13 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.totalThreads}
             label="Total Threads"
             icon="comments"
-            color="#4a90e2"
+            color={OS_LEGAL_COLORS.primaryBlue}
           />
           <StatisticWithAnimation
             value={metrics.activeThreads}
             label="Active Threads"
             icon="comment alternate outline"
-            color="#22c55e"
+            color={OS_LEGAL_COLORS.green}
           />
           <StatisticWithAnimation
             value={
@@ -153,7 +189,7 @@ export const CorpusEngagementDashboard: React.FC<
             }
             label="Avg Msgs/Thread"
             icon="exchange"
-            color="#f59e0b"
+            color={OS_LEGAL_COLORS.folderIcon}
           />
         </StatsGrid>
       </Section>
@@ -165,19 +201,19 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.totalMessages}
             label="Total Messages"
             icon="envelope"
-            color="#8b5cf6"
+            color={OS_LEGAL_COLORS.chartPurple}
           />
           <StatisticWithAnimation
             value={metrics.messagesLast7Days}
             label="Last 7 Days"
             icon="calendar check"
-            color="#10b981"
+            color={OS_LEGAL_COLORS.greenMedium}
           />
           <StatisticWithAnimation
             value={metrics.messagesLast30Days}
             label="Last 30 Days"
             icon="calendar alternate outline"
-            color="#3b82f6"
+            color={OS_LEGAL_COLORS.primaryBlue}
           />
         </StatsGrid>
 
@@ -185,20 +221,23 @@ export const CorpusEngagementDashboard: React.FC<
           <ChartTitle>Message Activity Comparison</ChartTitle>
           <ResponsiveContainer width="100%" height={isMobile ? 200 : 300}>
             <BarChart data={activityData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="period" stroke="#64748b" />
-              <YAxis stroke="#64748b" />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={OS_LEGAL_COLORS.border}
+              />
+              <XAxis dataKey="period" stroke={OS_LEGAL_COLORS.textSecondary} />
+              <YAxis stroke={OS_LEGAL_COLORS.textSecondary} />
               <Tooltip
                 contentStyle={{
-                  background: "white",
-                  border: "1px solid #e2e8f0",
+                  background: OS_LEGAL_COLORS.surface,
+                  border: `1px solid ${OS_LEGAL_COLORS.border}`,
                   borderRadius: "8px",
                 }}
               />
               <Legend />
               <Bar
                 dataKey="messages"
-                fill="#4a90e2"
+                fill={OS_LEGAL_COLORS.primaryBlue}
                 name="Messages"
                 radius={[8, 8, 0, 0]}
               />
@@ -214,19 +253,19 @@ export const CorpusEngagementDashboard: React.FC<
             value={metrics.uniqueContributors}
             label="All Contributors"
             icon="users"
-            color="#ec4899"
+            color={OS_LEGAL_COLORS.chartPink}
           />
           <StatisticWithAnimation
             value={metrics.activeContributors30Days}
             label="Active (30d)"
             icon="user plus"
-            color="#14b8a6"
+            color={OS_LEGAL_COLORS.chartTeal}
           />
           <StatisticWithAnimation
             value={metrics.totalUpvotes}
             label="Total Upvotes"
             icon="thumbs up"
-            color="#f59e0b"
+            color={OS_LEGAL_COLORS.folderIcon}
           />
         </StatsGrid>
       </Section>
@@ -241,7 +280,7 @@ const DashboardContainer = styled.div`
   flex-direction: column;
   width: 100%;
   padding: 1rem 0.75rem;
-  background: white;
+  background: ${OS_LEGAL_COLORS.surface};
   max-width: 1400px;
   margin: 0 auto;
 
@@ -266,14 +305,16 @@ const DashboardHeader = styled.div`
 const Title = styled.h2`
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin: 0;
 
-  i.icon {
-    color: #4a90e2;
+  svg {
+    color: ${OS_LEGAL_COLORS.primaryBlue};
+    width: 24px;
+    height: 24px;
   }
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
@@ -283,7 +324,7 @@ const Title = styled.h2`
 
 const LastUpdated = styled.div`
   font-size: 0.875rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-style: italic;
 `;
 
@@ -294,10 +335,10 @@ const Section = styled.div`
 const SectionTitle = styled.h3`
   font-size: 1.125rem;
   font-weight: 600;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 1rem 0;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     font-size: 1.25rem;
@@ -321,7 +362,7 @@ const StatisticWrapper = styled.div`
   display: flex;
   align-items: center;
   padding: 0.75rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
@@ -338,14 +379,52 @@ const StatisticWrapper = styled.div`
   }
 `;
 
-const StatisticIcon = styled(Icon)`
-  font-size: 1.75rem !important;
-  margin: 0 1rem 0 0 !important;
+const StatisticIconWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 1rem 0 0;
   opacity: 0.8;
 
+  svg {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    font-size: 2.5rem !important;
-    margin: 0 0 0.75rem 0 !important;
+    margin: 0 0 0.75rem 0;
+
+    svg {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+  }
+`;
+
+const AlertBox = styled.div<{ $variant: "error" | "info" }>`
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  background: ${(props) =>
+    props.$variant === "error"
+      ? OS_LEGAL_COLORS.dangerSurfaceHover
+      : OS_LEGAL_COLORS.blueSurface};
+  border: 1px solid
+    ${(props) =>
+      props.$variant === "error"
+        ? OS_LEGAL_COLORS.dangerBorder
+        : OS_LEGAL_COLORS.blueBorder};
+  color: ${(props) =>
+    props.$variant === "error"
+      ? OS_LEGAL_COLORS.dangerText
+      : OS_LEGAL_COLORS.blueDark};
+
+  strong {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin: 0;
   }
 `;
 
@@ -357,7 +436,7 @@ const StatisticContent = styled.div`
 const StatisticValue = styled.div`
   font-size: 1.5rem;
   font-weight: 600;
-  color: #2d3748;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.2;
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {
@@ -369,7 +448,7 @@ const StatisticValue = styled.div`
 const StatisticLabel = styled.div`
   font-size: 0.75rem;
   font-weight: 500;
-  color: #718096;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 
@@ -379,8 +458,8 @@ const StatisticLabel = styled.div`
 `;
 
 const ChartContainer = styled.div`
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 1rem;
   margin-top: 1rem;
@@ -393,7 +472,7 @@ const ChartContainer = styled.div`
 const ChartTitle = styled.h4`
   font-size: 1rem;
   font-weight: 600;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0 0 1rem 0;
 
   @media (min-width: ${MOBILE_VIEW_BREAKPOINT}px) {

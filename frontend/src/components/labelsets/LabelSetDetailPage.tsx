@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dimmer, Loader, Message } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import Fuse from "fuse.js";
 import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import {
@@ -28,6 +28,7 @@ import { AnnotationLabelType, LabelType } from "../../types/graphql-api";
 import { toast } from "react-toastify";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Import extracted components from detail folder
 import {
@@ -480,9 +481,12 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
     return (
       <PageContainer>
         <LoadingContainer>
-          <Dimmer active inverted>
-            <Loader size="large">Loading label set...</Loader>
-          </Dimmer>
+          <Spinner size="lg" />
+          <div
+            style={{ marginTop: "1rem", color: OS_LEGAL_COLORS.textSecondary }}
+          >
+            Loading label set...
+          </div>
         </LoadingContainer>
       </PageContainer>
     );
@@ -493,10 +497,18 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
     return (
       <PageContainer>
         <MainContent>
-          <Message negative>
-            <Message.Header>Error loading label set</Message.Header>
+          <div
+            style={{
+              padding: "1rem 1.5rem",
+              borderRadius: "8px",
+              background: OS_LEGAL_COLORS.dangerSurfaceHover,
+              border: "1px solid #fca5a5",
+              color: OS_LEGAL_COLORS.dangerText,
+            }}
+          >
+            <strong>Error loading label set</strong>
             <p>{label_set_fetch_error.message}</p>
-          </Message>
+          </div>
         </MainContent>
       </PageContainer>
     );
@@ -968,10 +980,18 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
 
       case "sharing":
         return (
-          <Message info>
-            <Message.Header>Sharing Settings</Message.Header>
+          <div
+            style={{
+              padding: "1rem 1.5rem",
+              borderRadius: "8px",
+              background: OS_LEGAL_COLORS.blueSurface,
+              border: `1px solid ${OS_LEGAL_COLORS.blueBorder}`,
+              color: OS_LEGAL_COLORS.blueDark,
+            }}
+          >
+            <strong>Sharing Settings</strong>
             <p>Sharing configuration will be available here.</p>
-          </Message>
+          </div>
         );
 
       default:
@@ -982,11 +1002,25 @@ export const LabelSetDetailPage: React.FC<LabelSetDetailPageProps> = ({
   return (
     <PageContainer>
       {(label_set_loading || delete_loading) && (
-        <Dimmer active inverted>
-          <Loader size="large">
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(255, 255, 255, 0.85)",
+            zIndex: 100,
+          }}
+        >
+          <Spinner size="lg" />
+          <div
+            style={{ marginTop: "1rem", color: OS_LEGAL_COLORS.textSecondary }}
+          >
             {delete_loading ? "Deleting..." : "Loading..."}
-          </Loader>
-        </Dimmer>
+          </div>
+        </div>
       )}
 
       <PageLayout>

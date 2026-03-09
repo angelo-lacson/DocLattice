@@ -87,7 +87,7 @@ const StyledTextArea = styled(BaseStyledTextArea)`
   line-height: 1.4;
 
   &[readOnly] {
-    background: #f9fafb;
+    background: ${OS_LEGAL_COLORS.gray50};
     cursor: default;
   }
 `;
@@ -165,7 +165,7 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
       return (
         <CheckCircle
           size={16}
-          color="#21ba45"
+          color={OS_LEGAL_COLORS.success}
           data-testid="validation-icon-success"
           className="validation-icon"
           style={{ visibility: "visible", opacity: 1 }}

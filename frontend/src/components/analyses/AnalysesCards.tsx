@@ -1,4 +1,4 @@
-import { Card, SemanticWIDTHS } from "semantic-ui-react";
+import styled from "styled-components";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import _ from "lodash";
@@ -14,6 +14,16 @@ import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { determineCardColCount } from "../../utils/layout";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
 import { updateAnnotationSelectionParams } from "../../utils/navigationUtils";
+
+const CardGrid = styled.div<{ $columns: number }>`
+  display: grid;
+  grid-template-columns: repeat(${(props) => props.$columns}, 1fr);
+  gap: 1rem;
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    grid-template-columns: 1fr;
+  }
+`;
 
 interface AnalysesCardsProps {
   style?: Record<string, any>;
@@ -143,13 +153,9 @@ export const AnalysesCards = ({
       }}
     >
       <LoadingOverlay active={loading} content={loading_message} />
-      <Card.Group
-        stackable
-        itemsPerRow={card_cols as SemanticWIDTHS}
-        style={comp_style}
-      >
+      <CardGrid $columns={card_cols} style={comp_style}>
         {analysis_items}
-      </Card.Group>
+      </CardGrid>
       <FetchMoreOnVisible fetchNextPage={handleUpdate} />
     </div>
   );

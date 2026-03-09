@@ -1,5 +1,6 @@
 import styled, { css, keyframes } from "styled-components";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../../assets/configurations/constants";
+import { accentAlpha } from "../../../../assets/configurations/osLegalStyles";
 
 // Breakpoints
 const TABLET_BREAKPOINT = 1024;
@@ -18,13 +19,13 @@ const fadeIn = keyframes`
 
 const pulse = keyframes`
   0% {
-    box-shadow: 0 0 0 0 rgba(15, 118, 110, 0.3);
+    box-shadow: 0 0 0 0 ${accentAlpha(0.3)};
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(15, 118, 110, 0);
+    box-shadow: 0 0 0 10px ${accentAlpha(0)};
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(15, 118, 110, 0);
+    box-shadow: 0 0 0 0 ${accentAlpha(0)};
   }
 `;
 
@@ -209,9 +210,7 @@ export const DropZone = styled.div<{
       $isDragActive ? "var(--oc-accent)" : "var(--oc-border-default)"};
   border-radius: var(--oc-radius-lg);
   background: ${({ $isDragActive }) =>
-    $isDragActive
-      ? "rgba(15, 118, 110, 0.05)"
-      : "var(--oc-bg-surface-hover, #f8fafc)"};
+    $isDragActive ? accentAlpha(0.05) : "var(--oc-bg-surface-hover, #f8fafc)"};
   min-height: 200px;
   display: flex;
   flex-direction: column;
@@ -232,7 +231,7 @@ export const DropZone = styled.div<{
     border-color: ${({ $hasFiles }) =>
       $hasFiles ? "var(--oc-border-default)" : "var(--oc-accent)"};
     background: ${({ $hasFiles }) =>
-      $hasFiles ? "var(--oc-bg-surface-hover)" : "rgba(15, 118, 110, 0.03)"};
+      $hasFiles ? "var(--oc-bg-surface-hover)" : accentAlpha(0.03)};
   }
 
   ${({ $isDragActive }) =>
@@ -342,8 +341,8 @@ export const FileItem = styled.div<{
   ${({ $selected }) =>
     $selected &&
     css`
-      background: rgba(15, 118, 110, 0.08);
-      border-color: rgba(15, 118, 110, 0.25);
+      background: ${accentAlpha(0.08)};
+      border-color: ${accentAlpha(0.25)};
     `}
 
   ${({ $status }) =>
@@ -362,7 +361,7 @@ export const FileItem = styled.div<{
 
   &:hover {
     background: ${({ $selected }) =>
-      $selected ? "rgba(15, 118, 110, 0.12)" : "var(--oc-bg-surface-hover)"};
+      $selected ? accentAlpha(0.12) : "var(--oc-bg-surface-hover)"};
   }
 `;
 
@@ -550,8 +549,8 @@ export const CorpusCard = styled.div<{ $selected?: boolean }>`
   ${({ $selected }) =>
     $selected &&
     css`
-      background: rgba(15, 118, 110, 0.05);
-      box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
+      background: ${accentAlpha(0.05)};
+      box-shadow: 0 0 0 2px ${accentAlpha(0.2)};
     `}
 
   &:hover {
@@ -703,7 +702,7 @@ export const InlineCorpusItem = styled.div<{ $selected?: boolean }>`
   cursor: pointer;
   border-radius: var(--oc-radius-md);
   background: ${(props) =>
-    props.$selected ? "rgba(15, 118, 110, 0.1)" : "transparent"};
+    props.$selected ? accentAlpha(0.1) : "transparent"};
   border: 1px solid
     ${(props) => (props.$selected ? "var(--oc-accent)" : "transparent")};
   margin-bottom: var(--oc-spacing-xs);
@@ -711,7 +710,7 @@ export const InlineCorpusItem = styled.div<{ $selected?: boolean }>`
 
   &:hover {
     background: ${(props) =>
-      props.$selected ? "rgba(15, 118, 110, 0.15)" : "var(--oc-bg-subtle)"};
+      props.$selected ? accentAlpha(0.15) : "var(--oc-bg-subtle)"};
   }
 
   .corpus-title {

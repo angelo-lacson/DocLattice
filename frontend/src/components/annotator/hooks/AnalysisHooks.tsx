@@ -239,7 +239,7 @@ export const useAnalysisManager = () => {
   // Reset states when the selected analysis or extract changes.
   useEffect(() => {
     resetStates();
-    if (!selected_analysis && !selected_extract) {
+    if (!selected_analysis && !selected_extract && selectedDocument?.id) {
       fetchDocumentAnalysesAndExtracts();
     }
   }, [selected_analysis, selected_extract]);

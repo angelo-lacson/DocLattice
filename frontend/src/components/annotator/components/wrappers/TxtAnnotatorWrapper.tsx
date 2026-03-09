@@ -200,7 +200,6 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
         selectedLabelTypeId={activeSpanLabel?.id ?? null}
         read_only={readOnly}
         allowInput={allowInput}
-        zoom_level={zoomLevel}
         createAnnotation={handleCreateAnnotation}
         updateAnnotation={handleUpdateAnnotation}
         approveAnnotation={handleApproveAnnotation}

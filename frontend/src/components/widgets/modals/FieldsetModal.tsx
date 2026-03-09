@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DndContext,
@@ -89,15 +90,19 @@ const ModalContainer = styled(motion.div)`
 
 const ModalHeader = styled.div`
   padding: 2rem 2rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fafbfc 0%, rgba(250, 251, 252, 0) 100%);
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: linear-gradient(
+    180deg,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    rgba(250, 251, 252, 0) 100%
+  );
 `;
 
 const HeaderTitle = styled.h2`
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -105,7 +110,7 @@ const HeaderTitle = styled.h2`
 
 const HeaderSubtitle = styled.p`
   margin: 0.5rem 0 0;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.9375rem;
   line-height: 1.5;
 `;
@@ -117,7 +122,7 @@ const CloseButton = styled(motion.button)`
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   display: flex;
   align-items: center;
@@ -128,14 +133,14 @@ const CloseButton = styled(motion.button)`
   svg {
     width: 20px;
     height: 20px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     svg {
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   }
 `;
@@ -154,14 +159,14 @@ const Label = styled.label`
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin-bottom: 0.5rem;
 `;
 
 const Input = styled.input`
   width: 100%;
   padding: 0.875rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   font-size: 0.9375rem;
   transition: all 0.2s ease;
@@ -169,12 +174,12 @@ const Input = styled.input`
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   &:disabled {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     cursor: not-allowed;
   }
 `;
@@ -182,7 +187,7 @@ const Input = styled.input`
 const TextArea = styled.textarea`
   width: 100%;
   padding: 0.875rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   font-size: 0.9375rem;
   font-family: inherit;
@@ -193,12 +198,12 @@ const TextArea = styled.textarea`
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   &:disabled {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     cursor: not-allowed;
   }
 `;
@@ -217,7 +222,7 @@ const SectionHeader = styled.div`
 const SectionTitle = styled.h3`
   font-size: 1.125rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
 `;
 
@@ -228,7 +233,7 @@ const AddColumnButton = styled(motion.button).attrs({
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: #3b82f6;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   border: none;
   border-radius: 8px;
@@ -238,7 +243,7 @@ const AddColumnButton = styled(motion.button).attrs({
   transition: all 0.2s ease;
 
   &:hover {
-    background: #2563eb;
+    background: ${OS_LEGAL_COLORS.primaryBlueHover};
   }
 `;
 
@@ -251,21 +256,21 @@ const ColumnsList = styled.div`
 const EmptyState = styled.div`
   text-align: center;
   padding: 3rem 1rem;
-  border: 2px dashed #e2e8f0;
+  border: 2px dashed ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
-  background: #fafbfc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const EmptyStateText = styled.p`
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.9375rem;
   margin: 0 0 1rem;
 `;
 
 const ModalFooter = styled.div`
   padding: 1.5rem 2rem;
-  border-top: 1px solid #e2e8f0;
-  background: #fafbfc;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -275,7 +280,7 @@ const ValidationMessage = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   font-size: 0.875rem;
 
   svg {
@@ -303,42 +308,44 @@ const Button = styled(motion.button)<{ $variant?: "primary" | "secondary" }>`
   ${(props) =>
     props.$variant === "primary"
       ? `
-    background: #3b82f6;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     color: white;
-    border: 2px solid #3b82f6;
+    border: 2px solid ${OS_LEGAL_COLORS.primaryBlue};
 
     &:hover:not(:disabled) {
-      background: #2563eb;
-      border-color: #2563eb;
+      background: ${OS_LEGAL_COLORS.primaryBlueHover};
+      border-color: ${OS_LEGAL_COLORS.primaryBlueHover};
     }
 
     &:disabled {
-      background: #94a3b8;
-      border-color: #94a3b8;
+      background: ${OS_LEGAL_COLORS.textMuted};
+      border-color: ${OS_LEGAL_COLORS.textMuted};
       cursor: not-allowed;
     }
   `
       : `
     background: white;
-    color: #64748b;
-    border: 2px solid #e2e8f0;
+    color: ${OS_LEGAL_COLORS.textSecondary};
+    border: 2px solid ${OS_LEGAL_COLORS.border};
 
     &:hover:not(:disabled) {
-      background: #f8fafc;
-      border-color: #cbd5e1;
-      color: #475569;
+      background: ${OS_LEGAL_COLORS.surfaceHover};
+      border-color: ${OS_LEGAL_COLORS.borderHover};
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   `}
 `;
 
 const SpinningLoader = styled(motion.div)`
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
 `;
 
 // Collapsible Column Card Component
 const ColumnCard = styled(motion.div)<{ $isDragging?: boolean }>`
   background: white;
-  border: 2px solid ${(props) => (props.$isDragging ? "#3b82f6" : "#e2e8f0")};
+  border: 2px solid
+    ${(props) =>
+      props.$isDragging ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s ease;
@@ -357,12 +364,12 @@ const ColumnHeader = styled.div`
   user-select: none;
 
   &:hover {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
 const DragHandle = styled.div`
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   cursor: grab;
 
   &:active {
@@ -383,13 +390,13 @@ const ColumnName = styled.h4`
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const ColumnType = styled.span`
   font-size: 0.75rem;
-  color: #64748b;
-  background: #f1f5f9;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   margin-top: 0.25rem;
@@ -405,7 +412,7 @@ const IconButton = styled(motion.button)`
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   display: flex;
   align-items: center;
@@ -416,14 +423,14 @@ const IconButton = styled(motion.button)`
   svg {
     width: 16px;
     height: 16px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
     svg {
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   }
 `;
@@ -431,7 +438,7 @@ const IconButton = styled(motion.button)`
 const ExpandIcon = styled.div<{ $expanded: boolean }>`
   transition: transform 0.2s ease;
   transform: rotate(${(props) => (props.$expanded ? "180deg" : "0")});
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   svg {
     width: 20px;
@@ -441,7 +448,7 @@ const ExpandIcon = styled.div<{ $expanded: boolean }>`
 
 const ColumnDetails = styled(motion.div)`
   padding: 0 1rem 1rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const DetailRow = styled.div`
@@ -451,7 +458,7 @@ const DetailRow = styled.div`
 const DetailLabel = styled.span`
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `;
@@ -459,7 +466,7 @@ const DetailLabel = styled.span`
 const DetailValue = styled.p`
   margin: 0.25rem 0 0;
   font-size: 0.875rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   white-space: pre-wrap;
 `;
 

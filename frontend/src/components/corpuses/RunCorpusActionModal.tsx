@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client";
-import { Button, Dropdown, Modal } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
+import {
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
+import styled from "styled-components";
 import { toast } from "react-toastify";
 
 import { CORPUS_DOCUMENTS_TOC_LIMIT } from "../../assets/configurations/constants";
@@ -14,6 +22,18 @@ import {
   RunCorpusActionInput,
   RunCorpusActionOutput,
 } from "../../graphql/mutations";
+
+const StyledModalWrapper = styled.div`
+  .oc-modal {
+    max-width: 480px;
+    width: 100%;
+  }
+
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+`;
 
 interface RunCorpusActionModalProps {
   open: boolean;
@@ -87,43 +107,47 @@ export const RunCorpusActionModal: React.FC<RunCorpusActionModalProps> = ({
   };
 
   return (
-    <Modal open={open} onClose={handleClose} size="tiny">
-      <Modal.Header>Run: {actionName}</Modal.Header>
-      <Modal.Content>
-        <p>Select a document to run this action against:</p>
-        {docsError && (
-          <ErrorMessage title="Failed to load documents">
-            Please try again or check your permissions for this corpus.
-          </ErrorMessage>
-        )}
-        <Dropdown
-          placeholder="Select document..."
-          fluid
-          search
-          selection
-          loading={docsLoading}
-          options={documentOptions}
-          value={selectedDocId ?? undefined}
-          onChange={(_, { value }) => setSelectedDocId(value as string)}
-        />
-        {isLimitExceeded && (
-          <InfoMessage>
-            Showing first {CORPUS_DOCUMENTS_TOC_LIMIT} of {totalCount}{" "}
-            documents. Use the search box above to filter.
-          </InfoMessage>
-        )}
-      </Modal.Content>
-      <Modal.Actions>
-        <Button onClick={handleClose}>Cancel</Button>
-        <Button
-          primary
-          loading={running}
-          disabled={!selectedDocId || running}
-          onClick={handleRun}
-        >
-          Run
-        </Button>
-      </Modal.Actions>
-    </Modal>
+    <StyledModalWrapper>
+      <Modal open={open} onClose={handleClose} size="sm">
+        <ModalHeader title={`Run: ${actionName}`} onClose={handleClose} />
+        <ModalBody>
+          <p>Select a document to run this action against:</p>
+          {docsError && (
+            <ErrorMessage title="Failed to load documents">
+              Please try again or check your permissions for this corpus.
+            </ErrorMessage>
+          )}
+          <Dropdown
+            placeholder="Select document..."
+            fluid
+            search
+            selection
+            loading={docsLoading}
+            options={documentOptions}
+            value={selectedDocId ?? undefined}
+            onChange={(_, { value }) => setSelectedDocId(value as string)}
+          />
+          {isLimitExceeded && (
+            <InfoMessage>
+              Showing first {CORPUS_DOCUMENTS_TOC_LIMIT} of {totalCount}{" "}
+              documents. Use the search box above to filter.
+            </InfoMessage>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={running}
+            disabled={!selectedDocId || running}
+            onClick={handleRun}
+          >
+            Run
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };

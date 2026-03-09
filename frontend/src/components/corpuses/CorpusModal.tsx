@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import styled from "styled-components";
+import styled, { createGlobalStyle } from "styled-components";
 import {
   Modal,
   ModalHeader,
@@ -19,6 +19,10 @@ import { CategorySelector } from "./CategorySelector";
 import { CorpusType, LabelSetType } from "../../types/graphql-api";
 import { arraysEqualUnordered } from "../../utils/arrayUtils";
 import { MOBILE_VIEW_BREAKPOINT } from "../../assets/configurations/constants";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 
 // Types
 export type CorpusModalMode = "CREATE" | "EDIT" | "VIEW";
@@ -45,71 +49,47 @@ export interface CorpusModalProps {
   onClose: () => void;
 }
 
-// Breakpoints
-const TABLET_BREAKPOINT = 1024;
+// 1024px: point where the modal's two-column layout collapses to single-column
+// (wider than TABLET_BREAKPOINT in constants.ts because the modal content needs more room)
+const TWO_COLUMN_BREAKPOINT = 1024;
 
-// Styled Components - minimal overrides for @os-legal/ui components
-const StyledModalWrapper = styled.div`
-  /* Override modal sizing and mobile behavior */
-  .oc-modal-overlay {
-    padding: var(--oc-spacing-md);
+// Global styles for the corpus modal — Modal renders via portal outside the
+// React tree, so we must use createGlobalStyle instead of wrapper descendant selectors.
+// Scoped via .corpus-modal class to avoid leaking to other concurrent modals.
+// Injected unconditionally when CorpusModal is mounted, but scoping prevents side effects.
+const CorpusModalStyles = createGlobalStyle`
+  .corpus-modal .oc-modal-body {
+    background: var(--oc-bg-subtle, ${OS_LEGAL_COLORS.surfaceLight});
+  }
 
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+  /* Ensure dropdown menus appear above modal content (still needed for SUI Dropdown inside LabelSetSelector/EmbedderSelector) */
+  .corpus-modal .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+
+  .corpus-modal .oc-modal-footer {
+    border-top: 1px solid var(--oc-border-default);
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .corpus-modal-overlay {
       padding: 0;
       align-items: flex-end;
     }
-  }
 
-  .oc-modal {
-    width: 100%;
-    max-width: 640px;
-    /* Allow modal to scroll internally while dropdowns overflow */
-    overflow-y: auto;
-    overflow-x: visible;
-
-    @media (max-width: ${TABLET_BREAKPOINT}px) {
-      max-width: 90vw;
-    }
-
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .corpus-modal {
       max-width: 100%;
       max-height: 95vh;
       border-radius: var(--oc-radius-lg) var(--oc-radius-lg) 0 0;
       animation: oc-slide-up-fade 0.3s var(--oc-easing-spring);
     }
 
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) and (orientation: landscape) {
-      max-height: 100vh;
-      border-radius: 0;
-    }
-  }
-
-  /* Ensure Semantic UI dropdowns appear above modal content */
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
-  }
-
-  .oc-modal-body {
-    background: var(--oc-bg-subtle, #f1f5f9);
-    padding: var(--oc-spacing-lg);
-    /* Allow dropdowns to overflow the modal body */
-    overflow: visible;
-
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .corpus-modal .oc-modal-body {
       padding: var(--oc-spacing-md);
-      /* Extra padding for content to scroll above sticky footer */
       padding-bottom: calc(var(--oc-spacing-xl) + 80px);
-      -webkit-overflow-scrolling: touch;
-      /* On mobile, we need scrolling */
-      overflow-y: auto;
     }
-  }
 
-  .oc-modal-footer {
-    background: var(--oc-bg-surface);
-    border-top: 1px solid var(--oc-border-default);
-
-    @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    .corpus-modal .oc-modal-footer {
       position: sticky;
       bottom: 0;
       flex-direction: column-reverse;
@@ -122,6 +102,19 @@ const StyledModalWrapper = styled.div`
         width: 100%;
         justify-content: center;
       }
+    }
+  }
+
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) and (orientation: landscape) {
+    .corpus-modal {
+      max-height: 100vh;
+      border-radius: 0;
+    }
+  }
+
+  @media (max-width: ${TWO_COLUMN_BREAKPOINT}px) {
+    .corpus-modal {
+      max-width: 90vw;
     }
   }
 `;
@@ -167,7 +160,7 @@ const SectionTitle = styled.h3`
   }
 `;
 
-const FormField = styled.div`
+const CorpusFormField = styled.div`
   margin-bottom: var(--oc-spacing-md);
 
   &:last-child {
@@ -202,7 +195,7 @@ const FormRow = styled.div`
   grid-template-columns: 1fr 1fr;
   gap: var(--oc-spacing-md);
 
-  @media (max-width: ${TABLET_BREAKPOINT}px) {
+  @media (max-width: ${TWO_COLUMN_BREAKPOINT}px) {
     grid-template-columns: 1fr;
   }
 `;
@@ -232,7 +225,8 @@ const IconPreview = styled.div`
 
   &:hover {
     border-color: var(--oc-accent);
-    background: rgba(15, 118, 110, 0.03);
+    /* Very subtle accent tint on hover — intentionally lighter than accentLight (0.1) */
+    background: ${accentAlpha(0.03)};
   }
 
   /* Completely restyle the FilePreviewAndUpload component */
@@ -617,8 +611,15 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
   );
 
   return (
-    <StyledModalWrapper>
-      <Modal open={open} onClose={onClose} size="lg" closeOnEscape={!loading}>
+    <>
+      <CorpusModalStyles />
+      <Modal
+        open={open}
+        onClose={onClose}
+        size="lg"
+        closeOnEscape={!loading}
+        className="corpus-modal"
+      >
         <ModalHeader
           title={headerTitle}
           subtitle={getSubtitle()}
@@ -639,7 +640,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
             </SectionTitle>
 
             <FormRow>
-              <FormField>
+              <CorpusFormField>
                 <Input
                   id="corpus-title"
                   label="Title *"
@@ -650,9 +651,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                   size="lg"
                   fullWidth
                 />
-              </FormField>
+              </CorpusFormField>
 
-              <FormField>
+              <CorpusFormField>
                 <Input
                   id="corpus-slug"
                   label="Slug"
@@ -664,10 +665,10 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                   size="lg"
                   fullWidth
                 />
-              </FormField>
+              </CorpusFormField>
             </FormRow>
 
-            <FormField>
+            <CorpusFormField>
               <Textarea
                 id="corpus-description"
                 label="Description *"
@@ -679,7 +680,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 autoResize
                 maxRows={6}
               />
-            </FormField>
+            </CorpusFormField>
           </FormSection>
 
           {/* Icon Section */}
@@ -716,16 +717,16 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
               License
             </SectionTitle>
 
-            <FormField>
+            <CorpusFormField>
               <LicenseSelector
                 license={license}
                 onChange={setLicense}
                 disabled={isReadOnly || loading}
               />
-            </FormField>
+            </CorpusFormField>
 
             {license === "CUSTOM" && (
-              <FormField>
+              <CorpusFormField>
                 <Input
                   id="corpus-license-link"
                   label="License URL *"
@@ -739,7 +740,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                   size="lg"
                   fullWidth
                 />
-              </FormField>
+              </CorpusFormField>
             )}
           </FormSection>
 
@@ -750,15 +751,15 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
               Settings
             </SectionTitle>
 
-            <FormField>
+            <CorpusFormField>
               <CategorySelector
                 selectedIds={categories}
                 onChange={setCategories}
                 disabled={isReadOnly || loading}
               />
-            </FormField>
+            </CorpusFormField>
 
-            <FormField>
+            <CorpusFormField>
               <LabelSetSelector
                 read_only={isReadOnly || loading}
                 labelSet={labelSetObj}
@@ -766,9 +767,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 upward
                 scrolling
               />
-            </FormField>
+            </CorpusFormField>
 
-            <FormField>
+            <CorpusFormField>
               <EmbedderSelector
                 read_only={isReadOnly || loading}
                 preferredEmbedder={preferredEmbedder || undefined}
@@ -776,7 +777,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 upward
                 scrolling
               />
-            </FormField>
+            </CorpusFormField>
           </FormSection>
         </ModalBody>
 
@@ -796,7 +797,7 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
           )}
         </ModalFooter>
       </Modal>
-    </StyledModalWrapper>
+    </>
   );
 };
 

@@ -4,7 +4,8 @@ import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { useMutation } from "@apollo/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Button, Card, Image, Popup } from "semantic-ui-react";
+import { IconButton } from "@os-legal/ui";
+import { Trash2 } from "lucide-react";
 import { Settings, Tags, Pencil } from "lucide-react";
 import { Spinner } from "@os-legal/ui";
 import {
@@ -31,52 +32,59 @@ interface AnalysisItemProps {
   corpus?: CorpusType | null | undefined;
 }
 
-const StyledCard = styled(Card).withConfig({
-  shouldForwardProp: (prop) => !["useMobileLayout", "selected"].includes(prop),
-})`
-  display: flex !important;
-  flex-direction: column !important;
-  padding: 0.5em !important;
-  margin: 0.75em !important;
-  width: ${(props) => (props.useMobileLayout ? "200px" : "300px")} !important;
-  min-width: ${(props) =>
-    props.useMobileLayout ? "200px" : "300px"} !important;
+const StyledCard = styled.div<{
+  $useMobileLayout?: boolean;
+  $selected?: boolean;
+}>`
+  display: flex;
+  flex-direction: column;
+  padding: 0.5em;
+  margin: 0.75em;
+  width: ${(props) => (props.$useMobileLayout ? "200px" : "300px")};
+  min-width: ${(props) => (props.$useMobileLayout ? "200px" : "300px")};
   background-color: ${(props) =>
-    props.selected ? "#e2ffdb" : "white"} !important;
+    props.$selected ? OS_LEGAL_COLORS.successSurface : "white"};
   transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  position: relative;
+  cursor: pointer;
 
   &:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     transform: translateY(-2px);
   }
 `;
 
-const CardContent = styled(Card.Content)`
-  flex: 1 !important;
-  overflow: hidden !important;
+const CardContent = styled.div`
+  flex: 1;
+  overflow: hidden;
+  position: relative;
 `;
 
-const CardHeader = styled(Card.Header)`
-  font-size: 1.1em !important;
-  word-break: break-word !important;
-  margin-bottom: 0.5em !important;
+const CardHeader = styled.div`
+  font-size: 1.1em;
+  font-weight: 700;
+  word-break: break-word;
+  margin-bottom: 0.5em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
 
-const CardMeta = styled(Card.Meta)`
-  font-size: 0.9em !important;
-  margin-bottom: 0.5em !important;
+const CardMeta = styled.div`
+  font-size: 0.9em;
+  color: rgba(0, 0, 0, 0.4);
+  margin-bottom: 0.5em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
 
-const ExtraContent = styled(Card.Content)`
-  padding-top: 0.5em !important;
-  border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
+const ExtraContent = styled.div`
+  padding-top: 0.5em;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
 `;
 
 const LabelContainer = styled.div`
@@ -99,11 +107,10 @@ const StyledLabel = styled.span`
   color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
-const DeleteButton = styled(Button)`
-  position: absolute !important;
-  top: 0.5em !important;
-  right: 0.5em !important;
-  padding: 0.5em !important;
+const DeleteButtonWrapper = styled.div`
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
   opacity: 0.7;
   transition: opacity 0.3s ease;
 
@@ -112,7 +119,7 @@ const DeleteButton = styled(Button)`
   }
 `;
 
-const CardDescription = styled(Card.Description)`
+const CardDescription = styled.div`
   max-height: 3.6em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -120,6 +127,8 @@ const CardDescription = styled(Card.Description)`
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   position: relative;
+  color: rgba(0, 0, 0, 0.68);
+  font-size: 0.9em;
 `;
 
 const ReadMoreLink = styled.span`
@@ -218,12 +227,11 @@ export const AnalysisItem = ({
 
   return (
     <StyledCard
-      raised
       onClick={
         onSelect && analysis.analysisCompleted ? () => onSelect() : () => {}
       }
-      useMobileLayout={use_mobile_layout}
-      selected={selected}
+      $useMobileLayout={use_mobile_layout}
+      $selected={selected}
     >
       {analysis.corpusAction && (
         <div
@@ -249,15 +257,19 @@ export const AnalysisItem = ({
       )}
       <CardContent>
         {!read_only && can_delete && (
-          <DeleteButton
-            circular
-            icon="trash"
-            color="red"
-            size="tiny"
-            onClick={handleDelete}
-            disabled={!selectedCorpus}
-            title={!selectedCorpus ? "No corpus selected" : "Delete analysis"}
-          />
+          <DeleteButtonWrapper>
+            <IconButton
+              aria-label={
+                !selectedCorpus ? "No corpus selected" : "Delete analysis"
+              }
+              size="sm"
+              variant="danger"
+              onClick={handleDelete}
+              disabled={!selectedCorpus}
+            >
+              <Trash2 size={14} />
+            </IconButton>
+          </DeleteButtonWrapper>
         )}
         {!analysis.analysisCompleted && (
           <div
@@ -285,10 +297,15 @@ export const AnalysisItem = ({
           </div>
         )}
         {analysis.analyzer.manifest?.label_set?.icon_data && (
-          <Image
+          <img
             src={`data:image/png;base64,${analysis.analyzer.manifest.label_set.icon_data}`}
-            floated="right"
-            size="mini"
+            alt="Label set icon"
+            style={{
+              float: "right",
+              width: "35px",
+              height: "35px",
+              objectFit: "contain",
+            }}
           />
         )}
         <CardHeader>{analysis.analyzer.analyzerId}</CardHeader>
@@ -318,18 +335,31 @@ export const AnalysisItem = ({
           </CardDescription>
         )}
         {showFullDescription && (
-          <Popup
-            wide
-            trigger={<span style={{ display: "none" }}></span>}
-            content={analysis.analyzer.description}
-            on="click"
-            open={true}
-            onClose={() => setShowFullDescription(false)}
-            position="bottom center"
-          />
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              background: "white",
+              border: `1px solid ${OS_LEGAL_COLORS.border}`,
+              borderRadius: "8px",
+              padding: "1em",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+              zIndex: 10,
+              fontSize: "0.9em",
+              color: "rgba(0, 0, 0, 0.68)",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFullDescription(false);
+            }}
+          >
+            {analysis.analyzer.description}
+          </div>
         )}
       </CardContent>
-      <ExtraContent extra>
+      <ExtraContent>
         <LabelContainer>
           <StyledLabel>
             <Tags size={12} />

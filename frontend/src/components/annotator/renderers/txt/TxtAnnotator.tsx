@@ -17,7 +17,14 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import styled, { keyframes, css } from "styled-components";
-import { Modal, Button, Dropdown } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
+import {
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 
 import { AnnotationLabelType } from "../../../../types/graphql-api";
 import { ServerSpanAnnotation } from "../../types/annotations";
@@ -40,6 +47,12 @@ import {
   HelpText,
 } from "../../components/SelectionActionMenu";
 import { clampMenuPosition } from "../../../../utils/layout";
+import {
+  OS_LEGAL_COLORS,
+  chatSourceBlueAlpha,
+  successGlowAlpha,
+  dangerGlowAlpha,
+} from "../../../../assets/configurations/osLegalStyles";
 
 /**
  * Shape of an individual text chunk used to render text spans.
@@ -91,14 +104,8 @@ interface TxtAnnotatorProps {
   selectedLabelTypeId: string | null;
   /** Read-only mode disables annotation editing. */
   read_only: boolean;
-  /** Indicates background data is loading. */
-  data_loading?: boolean;
-  /** Optional loading message. */
-  loading_message?: string;
   /** Whether user can add new annotations. */
   allowInput: boolean;
-  /** Zoom level (unused, but retained for future scaling logic). */
-  zoom_level: number;
   /** Creates a new annotation in upstream data. */
   createAnnotation: (added_annotation_obj: ServerSpanAnnotation) => void;
   /** Updates an existing annotation in upstream data. */
@@ -145,25 +152,25 @@ interface LabelRenderData {
 /* Keyframes for glowing animations. */
 const glowGreen = keyframes`
   0% {
-    box-shadow: 0 0 5px rgba(0, 255, 0, 0.8);
+    box-shadow: 0 0 5px ${successGlowAlpha(0.8)};
   }
   50% {
-    box-shadow: 0 0 15px rgba(0, 255, 0, 0.8);
+    box-shadow: 0 0 15px ${successGlowAlpha(0.8)};
   }
   100% {
-    box-shadow: 0 0 5px rgba(0, 255, 0, 0.8);
+    box-shadow: 0 0 5px ${successGlowAlpha(0.8)};
   }
 `;
 
 const glowRed = keyframes`
   0% {
-    box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
+    box-shadow: 0 0 5px ${dangerGlowAlpha(0.8)};
   }
   50% {
-    box-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+    box-shadow: 0 0 15px ${dangerGlowAlpha(0.8)};
   }
   100% {
-    box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
+    box-shadow: 0 0 5px ${dangerGlowAlpha(0.8)};
   }
 `;
 
@@ -229,7 +236,7 @@ const ChatSourceIcon = styled.div<{ isSelected: boolean }>`
   align-items: center;
   justify-content: center;
   background: ${(props) =>
-    props.isSelected ? "rgba(92, 124, 157, 0.25)" : "rgba(92, 124, 157, 0.15)"};
+    props.isSelected ? chatSourceBlueAlpha(0.25) : chatSourceBlueAlpha(0.15)};
   border-radius: 50%;
   transition: all 0.2s ease;
 
@@ -241,30 +248,29 @@ const ChatSourceIcon = styled.div<{ isSelected: boolean }>`
     height: 2px;
     width: 8px;
     background: ${(props) =>
-      props.isSelected
-        ? "rgba(92, 124, 157, 0.25)"
-        : "rgba(92, 124, 157, 0.15)"};
+      props.isSelected ? chatSourceBlueAlpha(0.25) : chatSourceBlueAlpha(0.15)};
     transform: translateY(-50%);
   }
 
   &:hover {
-    background: rgba(92, 124, 157, 0.35);
+    background: ${chatSourceBlueAlpha(0.35)};
     transform: translateY(-50%) scale(1.1);
 
     &::before {
-      background: rgba(92, 124, 157, 0.35);
+      background: ${chatSourceBlueAlpha(0.35)};
     }
   }
 
   svg {
     width: 16px;
     height: 16px;
-    fill: rgba(92, 124, 157, ${(props) => (props.isSelected ? "0.9" : "0.7")});
+    fill: ${(props) =>
+      props.isSelected ? chatSourceBlueAlpha(0.9) : chatSourceBlueAlpha(0.7)};
     transition: fill 0.2s ease;
   }
 
   &:hover svg {
-    fill: rgba(92, 124, 157, 1);
+    fill: ${chatSourceBlueAlpha(1)};
   }
 `;
 
@@ -326,6 +332,17 @@ function buildCombinedBackgroundStyle(
     };
   }
 }
+
+const StyledModalWrapper = styled.div`
+  .oc-modal-body {
+    overflow: visible;
+  }
+
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+`;
 
 const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
   text,
@@ -980,13 +997,19 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           // If we have a search highlight (but not when chat sources are displayed)
           if (isSearchResult && chatSources.length === 0) {
             highlightColors.push(
-              isSelectedSearchResult ? "#FFFF00" : "#FFFF99"
+              isSelectedSearchResult
+                ? OS_LEGAL_COLORS.searchHighlightActive
+                : OS_LEGAL_COLORS.searchHighlight
             );
           }
 
           // If we have a chat source highlight
           if (isChatSource) {
-            highlightColors.push(isSelectedChatSource ? "#A8FFA8" : "#D2FFD2");
+            highlightColors.push(
+              isSelectedChatSource
+                ? OS_LEGAL_COLORS.chatSourceHighlightActive
+                : OS_LEGAL_COLORS.chatSourceHighlight
+            );
           }
 
           // Merge them into a single span style
@@ -1222,51 +1245,60 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
         </SelectionActionMenu>
       )}
 
-      <Modal
-        open={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setAnnotationToEdit(null);
-        }}
-      >
-        <Modal.Header>Edit Annotation Label</Modal.Header>
-        <Modal.Content>
-          {annotationToEdit && (
-            <Dropdown
-              selection
-              options={availableLabels.map((label) => ({
-                key: label.id,
-                text: label.text,
-                value: label.id,
-              }))}
-              value={annotationToEdit.annotationLabel.id}
-              onChange={(e, { value }) => {
-                const newLabel = availableLabels.find(
-                  (lbl) => lbl.id === value
-                );
-                if (newLabel) {
-                  const updatedAnnotation = annotationToEdit.update({
-                    annotationLabel: newLabel,
-                  });
-                  updateAnnotation(updatedAnnotation);
-                }
-                setEditModalOpen(false);
-                setAnnotationToEdit(null);
-              }}
-            />
-          )}
-        </Modal.Content>
-        <Modal.Actions>
-          <Button
-            onClick={() => {
+      <StyledModalWrapper>
+        <Modal
+          open={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setAnnotationToEdit(null);
+          }}
+        >
+          <ModalHeader
+            title="Edit Annotation Label"
+            onClose={() => {
               setEditModalOpen(false);
               setAnnotationToEdit(null);
             }}
-          >
-            Cancel
-          </Button>
-        </Modal.Actions>
-      </Modal>
+          />
+          <ModalBody>
+            {annotationToEdit && (
+              <Dropdown
+                selection
+                options={availableLabels.map((label) => ({
+                  key: label.id,
+                  text: label.text,
+                  value: label.id,
+                }))}
+                value={annotationToEdit.annotationLabel.id}
+                onChange={(e, { value }) => {
+                  const newLabel = availableLabels.find(
+                    (lbl) => lbl.id === value
+                  );
+                  if (newLabel) {
+                    const updatedAnnotation = annotationToEdit.update({
+                      annotationLabel: newLabel,
+                    });
+                    updateAnnotation(updatedAnnotation);
+                  }
+                  setEditModalOpen(false);
+                  setAnnotationToEdit(null);
+                }}
+              />
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setEditModalOpen(false);
+                setAnnotationToEdit(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </ModalFooter>
+        </Modal>
+      </StyledModalWrapper>
     </>
   );
 };

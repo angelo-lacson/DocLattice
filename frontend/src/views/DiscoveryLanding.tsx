@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../assets/configurations/osLegalStyles";
 import { gql, useQuery, useReactiveVar } from "@apollo/client";
 import { RefreshCw, X, AlertCircle } from "lucide-react";
 import { userObj } from "../graphql/cache";
@@ -53,7 +54,7 @@ interface UserPreferencesData {
 
 const PageContainer = styled.div`
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-y: auto;
   overflow-x: hidden;
@@ -80,14 +81,14 @@ const SectionTitle = styled.h2`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 24px;
   font-weight: 400;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   margin: 0;
 `;
 
 const SectionLink = styled.a`
   font-size: 14px;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -95,7 +96,7 @@ const SectionLink = styled.a`
   cursor: pointer;
 
   &:hover {
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   svg {
@@ -114,8 +115,12 @@ const ErrorBanner = styled.div`
   justify-content: center;
   gap: 1rem;
   padding: 1rem 2rem;
-  background: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
-  border-bottom: 1px solid #fecaca;
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.dangerSurfaceHover} 0%,
+    ${OS_LEGAL_COLORS.dangerSurface} 100%
+  );
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   font-size: 0.9375rem;
 
   @media (max-width: 640px) {
@@ -129,7 +134,7 @@ const ErrorContent = styled.div`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: #991b1b;
+  color: ${OS_LEGAL_COLORS.dangerText};
 
   svg {
     flex-shrink: 0;
@@ -156,12 +161,12 @@ const ErrorButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   ${(props) =>
     props.$variant === "primary"
       ? `
-    background: #dc2626;
+    background: ${OS_LEGAL_COLORS.danger};
     color: white;
     border: none;
 
     &:hover {
-      background: #b91c1c;
+      background: ${OS_LEGAL_COLORS.dangerHover};
     }
 
     &:disabled {
@@ -171,11 +176,11 @@ const ErrorButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   `
       : `
     background: transparent;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
+    color: ${OS_LEGAL_COLORS.dangerHover};
+    border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
 
     &:hover {
-      background: #fee2e2;
+      background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
     }
   `}
 

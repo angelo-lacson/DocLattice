@@ -1,22 +1,25 @@
-import React from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
-import { Popup } from "semantic-ui-react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Badge container with conditional styling based on version state
+const BadgeWrapper = styled.div`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+`;
+
 const BadgeContainer = styled.div<{
   $hasHistory: boolean;
   $isOutdated: boolean;
 }>`
-  position: absolute;
-  top: 8px;
-  right: 8px;
   font-size: 11px;
   font-weight: 600;
   padding: 3px 8px;
   border-radius: 12px;
   cursor: ${(props) => (props.$hasHistory ? "pointer" : "default")};
   user-select: none;
-  z-index: 10;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   backdrop-filter: blur(4px);
 
@@ -35,9 +38,9 @@ const BadgeContainer = styled.div<{
     if (props.$isOutdated) {
       return "#c2410c";
     } else if (props.$hasHistory) {
-      return "#1d4ed8";
+      return OS_LEGAL_COLORS.primaryBlueHover;
     } else {
-      return "#64748b";
+      return OS_LEGAL_COLORS.textSecondary;
     }
   }};
 
@@ -85,27 +88,31 @@ const HistoryIndicator = styled.span`
   opacity: 0.8;
 `;
 
-const TooltipContent = styled.div`
+const Tooltip = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  padding: 10px 12px;
+  background: ${OS_LEGAL_COLORS.textPrimary};
+  color: ${OS_LEGAL_COLORS.surfaceLight};
+  border-radius: 8px;
   font-size: 12px;
-  line-height: 1.4;
+  font-weight: 400;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  pointer-events: none;
+  white-space: normal;
+`;
 
-  .tooltip-title {
-    font-weight: 600;
-    margin-bottom: 4px;
-    color: #0f172a;
-  }
+const TooltipTitle = styled.div`
+  font-weight: 600;
+  margin-bottom: 4px;
+`;
 
-  .tooltip-info {
-    color: #475569;
-    margin-bottom: 2px;
-  }
-
-  .tooltip-action {
-    margin-top: 6px;
-    font-style: italic;
-    color: #3b82f6;
-    font-size: 11px;
-  }
+const TooltipLine = styled.div`
+  color: ${OS_LEGAL_COLORS.borderHover};
 `;
 
 export interface VersionBadgeProps {
@@ -135,6 +142,7 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
   onClick,
   className,
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
   const isOutdated = hasHistory && !isLatest;
 
   const handleClick = (e: React.MouseEvent) => {
@@ -152,66 +160,52 @@ export const VersionBadge: React.FC<VersionBadgeProps> = ({
     }
   };
 
-  const tooltipContent = (
-    <TooltipContent>
-      <div className="tooltip-title">
-        {isOutdated ? "Outdated Version" : "Version Information"}
-      </div>
-      <div className="tooltip-info">Current: v{versionNumber}</div>
-      {hasHistory && (
-        <div className="tooltip-info">Total versions: {versionCount}</div>
-      )}
-      {isOutdated && (
-        <div className="tooltip-info">
-          A newer version is available (you are viewing v{versionNumber} of{" "}
-          {versionCount})
-        </div>
-      )}
-      {hasHistory && (
-        <div className="tooltip-action">Click to view version history</div>
-      )}
-    </TooltipContent>
-  );
+  const showTooltip = isHovered && hasHistory;
 
-  const badge = (
-    <BadgeContainer
-      $hasHistory={hasHistory}
-      $isOutdated={isOutdated}
-      onClick={handleClick}
-      className={className}
-      role={hasHistory ? "button" : undefined}
-      aria-label={`Version ${versionNumber}${
-        hasHistory ? `, click to view history` : ""
-      }`}
-      tabIndex={hasHistory ? 0 : undefined}
-      onKeyDown={hasHistory ? handleKeyDown : undefined}
+  return (
+    <BadgeWrapper
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <VersionText>v{versionNumber}</VersionText>
-      {hasHistory && (
-        <HistoryIndicator>&#8226; {versionCount}</HistoryIndicator>
+      <BadgeContainer
+        $hasHistory={hasHistory}
+        $isOutdated={isOutdated}
+        onClick={handleClick}
+        className={className}
+        role={hasHistory ? "button" : undefined}
+        aria-label={`Version ${versionNumber}${
+          hasHistory ? `, click to view history` : ""
+        }`}
+        tabIndex={hasHistory ? 0 : undefined}
+        onKeyDown={hasHistory ? handleKeyDown : undefined}
+      >
+        <VersionText>v{versionNumber}</VersionText>
+        {hasHistory && (
+          <HistoryIndicator>&#8226; {versionCount}</HistoryIndicator>
+        )}
+      </BadgeContainer>
+      {showTooltip && (
+        <Tooltip>
+          {isOutdated ? (
+            <>
+              <TooltipTitle>Outdated Version</TooltipTitle>
+              <TooltipLine>
+                A newer version is available (you are viewing v{versionNumber}{" "}
+                of {versionCount})
+              </TooltipLine>
+            </>
+          ) : (
+            <>
+              <TooltipTitle>Version Information</TooltipTitle>
+              <TooltipLine>Current: v{versionNumber}</TooltipLine>
+              <TooltipLine>Total versions: {versionCount}</TooltipLine>
+              <TooltipLine>Click to view version history</TooltipLine>
+            </>
+          )}
+        </Tooltip>
       )}
-    </BadgeContainer>
+    </BadgeWrapper>
   );
-
-  // Wrap in tooltip if there's useful information to show
-  if (hasHistory || versionNumber > 1) {
-    return (
-      <Popup
-        trigger={badge}
-        content={tooltipContent}
-        position="bottom right"
-        size="small"
-        inverted={false}
-        style={{
-          padding: "10px 12px",
-          borderRadius: "8px",
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-        }}
-      />
-    );
-  }
-
-  return badge;
 };
 
 export default VersionBadge;

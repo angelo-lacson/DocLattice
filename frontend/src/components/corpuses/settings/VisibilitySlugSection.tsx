@@ -6,8 +6,8 @@
  * - #corpus-slug-input
  */
 import React from "react";
-import { Button } from "semantic-ui-react";
 import { Save, AlertTriangle } from "lucide-react";
+import { Button } from "@os-legal/ui";
 import {
   SettingsCard,
   SettingsCardHeader,
@@ -109,16 +109,17 @@ export const VisibilitySlugSection: React.FC<VisibilitySlugSectionProps> = ({
 
         <div style={{ marginTop: "1.5rem" }}>
           <Button
-            primary
+            variant="primary"
             loading={loading}
             disabled={hasNoPermissions || !hasChanges}
             onClick={onSave}
+            leftIcon={<Save size={16} />}
             style={{
               background: hasNoPermissions ? OS_LEGAL_COLORS.border : undefined,
               cursor: hasNoPermissions ? "not-allowed" : undefined,
             }}
           >
-            <Save size={16} /> Save Changes
+            Save Changes
           </Button>
         </div>
       </SettingsCardContent>

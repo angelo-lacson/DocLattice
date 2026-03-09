@@ -7,6 +7,7 @@ import React, {
 import styled from "styled-components";
 import { User, Database, FileText, Tag, Bot } from "lucide-react";
 import { color } from "../../theme/colors";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { spacing } from "../../theme/spacing";
 import { UnifiedMentionResource } from "./hooks/useUnifiedMentionSearch";
 
@@ -125,7 +126,7 @@ const IconContainer = styled.div<{
       case "annotation":
         return "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)";
       case "agent":
-        return "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)";
+        return `linear-gradient(135deg, ${OS_LEGAL_COLORS.primaryBlue} 0%, #8b5cf6 100%)`;
     }
   }};
   display: flex;

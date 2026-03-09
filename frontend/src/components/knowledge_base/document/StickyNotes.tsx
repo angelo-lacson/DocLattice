@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
-import { Modal } from "semantic-ui-react";
 import styled from "styled-components";
-import { Edit3 } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 export const PostItNote = styled(motion.button)<{ $readOnly?: boolean }>`
   background: #fff7b1;
@@ -44,7 +43,7 @@ export const PostItNote = styled(motion.button)<{ $readOnly?: boolean }>`
     right: 8px;
     opacity: 0;
     transition: opacity 0.2s ease;
-    color: #666;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     background: rgba(255, 255, 255, 0.8);
     padding: 4px;
     border-radius: 4px;
@@ -94,7 +93,7 @@ export const PostItNote = styled(motion.button)<{ $readOnly?: boolean }>`
   .meta {
     margin-top: 1rem;
     font-size: 0.75rem;
-    color: #666;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   }
   &:hover {
@@ -124,8 +123,12 @@ export const NotesGrid = styled.div`
   }
 `;
 
-export const NoteModal = styled(Modal)`
-  &&& {
+/**
+ * Styled wrapper for note view modals. Apply this around an @os-legal/ui Modal
+ * to get the NoteModal styling.
+ */
+export const NoteModalWrapper = styled.div`
+  .oc-modal {
     max-width: 90vw;
     margin: 2rem auto;
     border-radius: 12px;
@@ -137,24 +140,26 @@ export const NoteModal = styled(Modal)`
     @media (min-width: 1024px) {
       max-width: 60vw;
     }
-    .content {
-      padding: 1.5rem;
-      font-family: "Kalam", cursive;
-      line-height: 1.6;
-      color: #2c3e50;
-      @media (min-width: 768px) {
-        padding: 2rem;
-      }
+  }
+
+  .oc-modal-body {
+    padding: 1.5rem;
+    font-family: "Kalam", cursive;
+    line-height: 1.6;
+    color: #2c3e50;
+    @media (min-width: 768px) {
+      padding: 2rem;
     }
-    .meta {
-      padding: 1rem 1.5rem;
-      background: #f8f9fa;
-      border-top: 1px solid #eee;
-      font-size: 0.875rem;
-      color: #666;
-      @media (min-width: 768px) {
-        padding: 1rem 2rem;
-      }
+  }
+
+  .meta {
+    padding: 1rem 1.5rem;
+    background: ${OS_LEGAL_COLORS.gray50};
+    border-top: 1px solid ${OS_LEGAL_COLORS.border};
+    font-size: 0.875rem;
+    color: ${OS_LEGAL_COLORS.textSecondary};
+    @media (min-width: 768px) {
+      padding: 1rem 2rem;
     }
   }
 `;

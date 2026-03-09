@@ -10,7 +10,10 @@ import {
   Archive,
 } from "lucide-react";
 import { color } from "../../theme/colors";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 import osLegalLogo from "../../assets/images/os_legal_FullColor.png";
 
 interface ModernLoadingDisplayProps {
@@ -87,7 +90,7 @@ const Container = styled(motion.div)<{ $fullScreen?: boolean; $size?: string }>`
     right: 0;
     bottom: 0;
     transform: none;
-    background: linear-gradient(135deg, #fafafa 0%, #f0fdfa 100%);
+    background: linear-gradient(135deg, ${OS_LEGAL_COLORS.background} 0%, #f0fdfa 100%);
     backdrop-filter: blur(12px);
   `}
 `;
@@ -106,7 +109,7 @@ const IconContainer = styled(motion.div)<{ $type?: string }>`
     background: radial-gradient(
       circle,
       ${OS_LEGAL_COLORS.accent} 0%,
-      rgba(15, 118, 110, 0.4) 40%,
+      ${accentAlpha(0.4)} 40%,
       transparent 70%
     );
     border-radius: 50%;
@@ -127,10 +130,10 @@ const IconWrapper = styled(motion.div)<{ $type?: string }>`
   background: linear-gradient(145deg, ${color.white} 0%, #f0fdfa 100%);
   /* Squircle-like border radius for more organic feel */
   border-radius: 28px;
-  box-shadow: 0 12px 40px rgba(15, 118, 110, 0.12),
-    0 4px 12px rgba(15, 118, 110, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 12px 40px ${accentAlpha(0.12)}, 0 4px 12px ${accentAlpha(0.06)},
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   animation: ${float} 3.5s ease-in-out infinite;
-  border: 1px solid rgba(15, 118, 110, 0.12);
+  border: 1px solid ${accentAlpha(0.12)};
   overflow: hidden;
 
   /* Subtle inner highlight */

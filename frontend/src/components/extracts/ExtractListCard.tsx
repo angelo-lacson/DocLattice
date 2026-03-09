@@ -7,6 +7,7 @@ import { ExtractType } from "../../types/graphql-api";
 import { getPermissions } from "../../utils/transform";
 import { PermissionTypes } from "../types";
 import { getExtractStatus, formatExtractDate } from "../../utils/extractUtils";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Styled Components
 
@@ -18,7 +19,7 @@ const CardWrapper = styled.div<{ $isSelected?: boolean }>`
   ${(props) =>
     props.$isSelected &&
     `
-    box-shadow: 0 0 0 2px #0f766e;
+    box-shadow: 0 0 0 2px ${OS_LEGAL_COLORS.accent};
     background: #f0fdfa;
   `}
 `;
@@ -33,12 +34,12 @@ const MenuButton = styled.button`
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     cursor: pointer;
     transition: all 0.15s;
 
     &:hover {
-      background: #f1f5f9;
+      background: ${OS_LEGAL_COLORS.surfaceLight};
       color: #334155;
     }
   }
@@ -51,7 +52,7 @@ const FloatingMenu = styled(Menu)`
     min-width: 180px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     padding: 4px 0;
 
     .item {
@@ -64,16 +65,16 @@ const FloatingMenu = styled(Menu)`
 
       &:hover,
       &:focus {
-        background: #f1f5f9 !important;
+        background: ${OS_LEGAL_COLORS.surfaceLight} !important;
         outline: none;
       }
 
       &.danger {
-        color: #dc2626 !important;
+        color: ${OS_LEGAL_COLORS.danger} !important;
 
         &:hover,
         &:focus {
-          background: #fef2f2 !important;
+          background: ${OS_LEGAL_COLORS.dangerSurface} !important;
         }
       }
 

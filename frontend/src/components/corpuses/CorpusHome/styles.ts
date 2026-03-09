@@ -13,6 +13,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "../styles/corpusDesignTokens";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // ============================================================================
 // SHARED CONTAINERS
@@ -23,7 +24,7 @@ export const BaseContainer = styled.div`
   display: flex;
   flex-direction: column;
   flex: 1;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   overflow: hidden;
   position: relative;
   height: 100%;

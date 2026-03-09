@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const ControlButtonGroupLeft = styled.div`
   position: absolute;
@@ -21,7 +22,8 @@ export const ConnectionStatus = styled(motion.div)<ConnectionStatusProps>`
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: ${(props) => (props.$isConnected ? "#10B981" : "#EF4444")};
+  background: ${(props) =>
+    props.$isConnected ? OS_LEGAL_COLORS.greenMedium : OS_LEGAL_COLORS.danger};
 
   /* Flash animation for disconnected state */
   animation: ${(props) =>
@@ -311,7 +313,7 @@ export const ChatIndicator = styled(motion.button)`
   transform: translateY(-50%);
   width: 48px;
   height: 80px;
-  background: #4299e1;
+  background: ${OS_LEGAL_COLORS.primaryBlue};
   border: none;
   border-radius: 24px 0 0 24px;
   display: flex;
@@ -327,7 +329,11 @@ export const ChatIndicator = styled(motion.button)`
     position: absolute;
     inset: 2px;
     right: 0;
-    background: linear-gradient(135deg, #5ba3eb 0%, #4299e1 100%);
+    background: linear-gradient(
+      135deg,
+      #5ba3eb 0%,
+      ${OS_LEGAL_COLORS.primaryBlue} 100%
+    );
     border-radius: 22px 0 0 22px;
   }
 
@@ -354,7 +360,7 @@ export const ChatIndicator = styled(motion.button)`
     position: absolute;
     inset: -8px;
     right: -4px;
-    background: #4299e1;
+    background: ${OS_LEGAL_COLORS.primaryBlue};
     border-radius: 28px 0 0 28px;
     opacity: 0;
     animation: chatPulse 2s ease-out infinite;

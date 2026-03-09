@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Minimize2, Database, ArrowLeft } from "lucide-react";
 import ExtractTraySelector from "../../analyses/ExtractTraySelector";
@@ -117,18 +118,22 @@ const ExpandedPanel = styled(motion.div)`
 
 const Header = styled.div`
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(180deg, #fafbfc 0%, rgba(250, 251, 252, 0) 100%);
+  background: linear-gradient(
+    180deg,
+    ${OS_LEGAL_COLORS.surfaceHover} 0%,
+    rgba(250, 251, 252, 0) 100%
+  );
 `;
 
 const Title = styled.h3`
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -147,7 +152,7 @@ const ActionButton = styled(motion.button)`
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   background: white;
   display: flex;
   align-items: center;
@@ -158,15 +163,15 @@ const ActionButton = styled(motion.button)`
   svg {
     width: 18px;
     height: 18px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
 
     svg {
-      color: #475569;
+      color: ${OS_LEGAL_COLORS.textTertiary};
     }
   }
 `;
@@ -198,8 +203,8 @@ const Badge = styled.span`
 
 const BackBar = styled.div`
   padding: 1rem 1.5rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -211,9 +216,9 @@ const BackButton = styled(motion.button)`
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -225,16 +230,16 @@ const BackButton = styled(motion.button)`
   }
 
   &:hover {
-    background: #f8fafc;
-    color: #475569;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textTertiary};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
 const ExtractTitle = styled.div`
   flex: 1;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 export const FloatingExtractsPanel: React.FC<FloatingExtractsPanelProps> = ({

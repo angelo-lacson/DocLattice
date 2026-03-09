@@ -101,7 +101,7 @@ class TestAnalysisUtils(TestCase):
             doc_ids=doc_ids,
         )
         self.assertIsInstance(analysis, Analysis)
-        self.assertEqual(
+        self.assertCountEqual(
             list(analysis.analyzed_documents.values_list("id", flat=True)), doc_ids
         )
 

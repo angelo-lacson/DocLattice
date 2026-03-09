@@ -15,6 +15,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import {
@@ -91,20 +92,20 @@ const DataHeader = styled.div`
 const DataTitle = styled.span`
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `;
 
 const DataCount = styled.span`
   font-size: 13px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const GridContainer = styled.div<{ $compact?: boolean }>`
   min-height: ${(props) => (props.$compact ? "300px" : "400px")};
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
 `;
@@ -121,12 +122,12 @@ const DocumentItem = styled.div`
   gap: 12px;
   padding: 12px 14px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   transition: border-color 0.15s;
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -137,8 +138,8 @@ const DocumentIcon = styled.div`
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textSecondary};
   flex-shrink: 0;
 `;
 
@@ -150,7 +151,7 @@ const DocumentInfo = styled.div`
 const DocumentName = styled.div`
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -158,7 +159,7 @@ const DocumentName = styled.div`
 
 const DocumentMeta = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   display: flex;
   align-items: center;
   gap: 8px;
@@ -177,7 +178,7 @@ const SchemaColumn = styled.div`
   gap: 12px;
   padding: 10px 14px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 `;
 
@@ -188,8 +189,8 @@ const SchemaColumnIcon = styled.div`
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const SchemaColumnInfo = styled.div`
@@ -199,12 +200,12 @@ const SchemaColumnInfo = styled.div`
 const SchemaColumnName = styled.div`
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const SchemaColumnType = styled.div`
   font-size: 11px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 2px;
 `;
 
@@ -221,16 +222,16 @@ const IconButton = styled.button`
   height: 28px;
   padding: 0;
   background: transparent;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
-    background: #f1f5f9;
-    color: #1e293b;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 
   &:disabled {
@@ -243,7 +244,7 @@ const RunningState = styled.div`
   padding: 40px 20px;
   text-align: center;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
 `;
 
@@ -252,8 +253,8 @@ const Spinner = styled.div`
   height: 40px;
   margin: 0 auto 12px;
   border-radius: 50%;
-  border: 3px solid #e2e8f0;
-  border-top-color: #0f766e;
+  border: 3px solid ${OS_LEGAL_COLORS.border};
+  border-top-color: ${OS_LEGAL_COLORS.accent};
   animation: spin 1s linear infinite;
 
   @keyframes spin {
@@ -267,19 +268,19 @@ const RunningTitle = styled.h3`
   margin: 0 0 6px;
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const RunningDescription = styled.p`
   margin: 0;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 13px;
 `;
 
 const EmptyWrapper = styled.div`
   padding: 40px 20px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
 `;
 

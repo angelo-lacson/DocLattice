@@ -7,6 +7,7 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
+  OS_LEGAL_SHADOWS,
 } from "../../../assets/configurations/osLegalStyles";
 
 // ============================================================================
@@ -65,13 +66,13 @@ export const SettingsCard = styled.section`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+  box-shadow: ${OS_LEGAL_SHADOWS.card};
   margin-bottom: 1.5rem;
   overflow: hidden;
   transition: box-shadow 0.2s ease;
 
   &:hover {
-    box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+    box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
   }
 
   @media (max-width: 768px) {
@@ -133,7 +134,7 @@ export const CorpusHeaderContainer = styled.div`
   background: ${OS_LEGAL_COLORS.surface};
   border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   border: 1px solid ${OS_LEGAL_COLORS.border};
-  box-shadow: ${OS_LEGAL_SPACING.shadowCard};
+  box-shadow: ${OS_LEGAL_SHADOWS.card};
   position: relative;
   overflow: hidden;
 
@@ -419,7 +420,7 @@ export const ActionCard = styled.div`
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 
   &:hover {
-    box-shadow: ${OS_LEGAL_SPACING.shadowCardHover};
+    box-shadow: ${OS_LEGAL_SHADOWS.cardHover};
     border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 
@@ -432,8 +433,10 @@ export const ActionCard = styled.div`
   }
 `;
 
-/** Badge indicating trigger type (add/edit) */
-export const TriggerBadge = styled.span<{ type: "add" | "edit" }>`
+/** Badge indicating trigger type (add/edit/chat) */
+export const TriggerBadge = styled.span<{
+  type: "add" | "edit" | "chat";
+}>`
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -445,9 +448,15 @@ export const TriggerBadge = styled.span<{ type: "add" | "edit" }>`
   background: ${(props) =>
     props.type === "add"
       ? OS_LEGAL_COLORS.successLight
+      : props.type === "chat"
+      ? OS_LEGAL_COLORS.infoSurface
       : OS_LEGAL_COLORS.accentLight};
   color: ${(props) =>
-    props.type === "add" ? OS_LEGAL_COLORS.success : OS_LEGAL_COLORS.accent};
+    props.type === "add"
+      ? OS_LEGAL_COLORS.success
+      : props.type === "chat"
+      ? OS_LEGAL_COLORS.infoText
+      : OS_LEGAL_COLORS.accent};
 `;
 
 /** Status badge for active/disabled */

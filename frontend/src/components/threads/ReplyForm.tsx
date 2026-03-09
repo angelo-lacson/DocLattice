@@ -18,6 +18,7 @@ import {
   CORPUS_RADII,
   CORPUS_TRANSITIONS,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 const Container = styled.div`
   border-radius: ${CORPUS_RADII.lg};
@@ -90,11 +91,11 @@ const CancelReplyButton = styled.button`
 const ErrorMessage = styled.div`
   padding: 0.5rem 0.75rem;
   margin-bottom: 0.375rem;
-  background: #fee2e2;
+  background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
   border: 1px solid #fca5a5;
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   font-size: 0.8125rem;
 `;
 

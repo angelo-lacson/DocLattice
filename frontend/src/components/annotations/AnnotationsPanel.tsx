@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import styled from "styled-components";
 import _ from "lodash";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { useReactiveVar } from "@apollo/client";
 import { SearchBox, FilterTabs } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
@@ -79,7 +80,7 @@ const Container = styled.div`
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const FiltersSection = styled.div`
@@ -88,7 +89,7 @@ const FiltersSection = styled.div`
   flex-direction: column;
   gap: 16px;
   padding: 1rem 1rem 0;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const FiltersRow = styled.div`
@@ -135,7 +136,7 @@ const EmptyStateWrapper = styled.div`
   padding: 80px 24px;
   text-align: center;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
 `;
 
@@ -145,21 +146,21 @@ const AnnotationIconWrapper = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 16px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const EmptyTitle = styled.h3`
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 24px 0 8px;
 `;
 
 const EmptyDescription = styled.p`
   font-size: 14px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0;
   max-width: 300px;
 `;
@@ -167,10 +168,10 @@ const EmptyDescription = styled.p`
 const ErrorBanner = styled.div`
   padding: 16px 24px;
   margin-bottom: 16px;
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
+  background-color: ${OS_LEGAL_COLORS.dangerSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 8px;
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   font-size: 14px;
 `;
 
@@ -180,7 +181,7 @@ const LoadingMoreIndicator = styled.div`
   justify-content: center;
   gap: 12px;
   padding: 24px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 14px;
 
   svg {

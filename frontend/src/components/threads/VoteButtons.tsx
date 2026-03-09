@@ -8,6 +8,7 @@ import {
   CORPUS_RADII,
   CORPUS_TRANSITIONS,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   UPVOTE_MESSAGE,
   DOWNVOTE_MESSAGE,
@@ -42,12 +43,13 @@ const VoteButton = styled.button<{
   border-radius: ${CORPUS_RADII.sm};
   background: ${({ $isActive, $variant }) => {
     if ($isActive && $variant === "up") return CORPUS_COLORS.teal[50];
-    if ($isActive && $variant === "down") return "#fee2e2";
+    if ($isActive && $variant === "down")
+      return OS_LEGAL_COLORS.dangerSurfaceHover;
     return "transparent";
   }};
   color: ${({ $isActive, $variant }) => {
     if ($isActive && $variant === "up") return CORPUS_COLORS.teal[700];
-    if ($isActive && $variant === "down") return "#dc2626";
+    if ($isActive && $variant === "down") return OS_LEGAL_COLORS.danger;
     return CORPUS_COLORS.slate[400];
   }};
   cursor: pointer;
@@ -55,9 +57,11 @@ const VoteButton = styled.button<{
 
   &:hover:not(:disabled) {
     background: ${({ $variant }) =>
-      $variant === "up" ? CORPUS_COLORS.teal[50] : "#fee2e2"};
+      $variant === "up"
+        ? CORPUS_COLORS.teal[50]
+        : OS_LEGAL_COLORS.dangerSurfaceHover};
     color: ${({ $variant }) =>
-      $variant === "up" ? CORPUS_COLORS.teal[700] : "#dc2626"};
+      $variant === "up" ? CORPUS_COLORS.teal[700] : OS_LEGAL_COLORS.danger};
   }
 
   &:disabled {
@@ -77,7 +81,7 @@ const VoteCount = styled.div<{ $score: number; $compact?: boolean }>`
   font-weight: 600;
   color: ${({ $score }) => {
     if ($score > 0) return CORPUS_COLORS.teal[700];
-    if ($score < 0) return "#dc2626";
+    if ($score < 0) return OS_LEGAL_COLORS.danger;
     return CORPUS_COLORS.slate[500];
   }};
   padding: ${({ $compact }) => ($compact ? "0 0.25rem" : "0.125rem 0")};
@@ -92,7 +96,7 @@ const ErrorMessage = styled.div`
   transform: translateX(-50%);
   margin-top: 0.25rem;
   padding: 0.375rem 0.625rem;
-  background: #dc2626;
+  background: ${OS_LEGAL_COLORS.danger};
   color: white;
   font-family: ${CORPUS_FONTS.sans};
   font-size: 0.75rem;
@@ -108,7 +112,7 @@ const ErrorMessage = styled.div`
     left: 50%;
     transform: translateX(-50%);
     border: 4px solid transparent;
-    border-bottom-color: #dc2626;
+    border-bottom-color: ${OS_LEGAL_COLORS.danger};
   }
 `;
 

@@ -1,7 +1,17 @@
 import React, { useMemo, useState, useCallback } from "react";
-import { Modal, Form, Button, Dropdown, Menu } from "semantic-ui-react";
+// TODO: migrate to @os-legal/ui once Dropdown and Menu components are available
+import { Dropdown, Menu } from "semantic-ui-react";
 import { Info, Settings, Cpu, FileText } from "lucide-react";
-import { Spinner } from "@os-legal/ui";
+import {
+  Button,
+  Input,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Spinner,
+} from "@os-legal/ui";
+import styled from "styled-components";
 import { useMutation, useQuery } from "@apollo/client";
 import { InfoMessage } from "../widgets/feedback";
 import { StyledTextArea } from "../widgets/modals/styled";
@@ -9,6 +19,7 @@ import { toast } from "react-toastify";
 import _ from "lodash";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { InlineBadge } from "../agents/AgentBadges";
+import { FormField } from "../widgets/form/FormField";
 
 import {
   CREATE_CORPUS_ACTION,
@@ -34,6 +45,18 @@ import {
   GetAvailableDocumentToolsOutput,
   AvailableTool,
 } from "../../graphql/queries";
+
+const StyledModal = styled(Modal)`
+  &.oc-modal {
+    max-width: 640px;
+    width: 100%;
+  }
+
+  /* Ensure Semantic UI dropdowns appear above modal content */
+  .ui.dropdown .menu {
+    z-index: 1000 !important;
+  }
+`;
 
 /**
  * Default moderation tools (fallback when backend query fails or returns no data).
@@ -573,693 +596,697 @@ export const CreateCorpusActionModal: React.FC<
   }, [selectedAgentConfig]);
 
   return (
-    <Modal open={open} onClose={onClose} size="small">
-      <Modal.Header>
-        {isEditMode ? "Edit Corpus Action" : "Create New Corpus Action"}
-      </Modal.Header>
-      <Modal.Content>
-        <Form loading={isSubmitting}>
-          <Form.Field required>
-            <label>Name</label>
-            <Form.Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter action name"
-            />
-          </Form.Field>
+    <StyledModal open={open} onClose={onClose} size="md">
+      <ModalHeader
+        title={isEditMode ? "Edit Corpus Action" : "Create New Corpus Action"}
+        onClose={onClose}
+      />
+      <ModalBody>
+        <FormField>
+          <label>Name</label>
+          <Input
+            fullWidth
+            value={name}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setName(e.target.value)
+            }
+            placeholder="Enter action name"
+          />
+        </FormField>
 
-          <Form.Field required>
-            <label>Trigger</label>
-            <Dropdown
-              selection
-              options={triggerOptions}
-              value={trigger}
-              onChange={(_, data) => {
-                const newTrigger = data.value as
-                  | "add_document"
-                  | "edit_document"
-                  | "new_thread"
-                  | "new_message";
-                setTrigger(newTrigger);
-                // Thread/message triggers only support agent-based actions
-                if (
-                  newTrigger === "new_thread" ||
-                  newTrigger === "new_message"
-                ) {
-                  setActionType("agent");
-                  setSelectedFieldsetId(null);
-                  setSelectedAnalyzerId(null);
-                  // Default to inline agent creation for thread triggers
-                  setUseInlineAgent(true);
-                  // Pre-fill inline agent name based on action name
-                  setInlineAgentName(`${name || "Moderator"} Agent`);
-                  setInlineAgentInstructions(DEFAULT_MODERATOR_INSTRUCTIONS);
-                  setSelectedModerationTools(
-                    DEFAULT_MODERATION_TOOLS.map((t) => t.name)
-                  );
-                } else {
-                  // For document triggers, default to inline agent mode
-                  setUseInlineAgent(true);
-                  setInlineAgentName("");
-                  setInlineAgentInstructions(
-                    DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS
-                  );
-                  if (documentTools.length > 0) {
-                    setSelectedDocumentTools(documentTools.map((t) => t.name));
-                  }
-                }
-              }}
-            />
-          </Form.Field>
-
-          <Form.Field required>
-            <label>Action Type</label>
-            <Dropdown
-              selection
-              disabled={isThreadTrigger}
-              options={actionTypeOptions}
-              value={actionType}
-              onChange={(_, data) => {
-                setActionType(data.value as ActionType);
-                // Clear selections when changing type
+        <FormField>
+          <label>Trigger</label>
+          <Dropdown
+            selection
+            options={triggerOptions}
+            value={trigger}
+            onChange={(_, data) => {
+              const newTrigger = data.value as
+                | "add_document"
+                | "edit_document"
+                | "new_thread"
+                | "new_message";
+              setTrigger(newTrigger);
+              // Thread/message triggers only support agent-based actions
+              if (newTrigger === "new_thread" || newTrigger === "new_message") {
+                setActionType("agent");
                 setSelectedFieldsetId(null);
                 setSelectedAnalyzerId(null);
-                setSelectedAgentConfigId(null);
-                setTaskInstructions("");
-                setPreAuthorizedTools([]);
-              }}
-            />
-            {isThreadTrigger && (
-              <small
-                style={{ color: "#666", marginTop: "0.5em", display: "block" }}
-              >
-                Thread/message triggers only support agent-based actions.
-              </small>
-            )}
-          </Form.Field>
+                // Default to inline agent creation for thread triggers
+                setUseInlineAgent(true);
+                // Pre-fill inline agent name based on action name
+                setInlineAgentName(`${name || "Moderator"} Agent`);
+                setInlineAgentInstructions(DEFAULT_MODERATOR_INSTRUCTIONS);
+                setSelectedModerationTools(
+                  DEFAULT_MODERATION_TOOLS.map((t) => t.name)
+                );
+              } else {
+                // For document triggers, default to inline agent mode
+                setUseInlineAgent(true);
+                setInlineAgentName("");
+                setInlineAgentInstructions(DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS);
+                if (documentTools.length > 0) {
+                  setSelectedDocumentTools(documentTools.map((t) => t.name));
+                }
+              }
+            }}
+          />
+        </FormField>
 
-          {actionType === "fieldset" && (
-            <div
+        <FormField>
+          <label>Action Type</label>
+          <Dropdown
+            selection
+            disabled={isThreadTrigger}
+            options={actionTypeOptions}
+            value={actionType}
+            onChange={(_, data) => {
+              setActionType(data.value as ActionType);
+              // Clear selections when changing type
+              setSelectedFieldsetId(null);
+              setSelectedAnalyzerId(null);
+              setSelectedAgentConfigId(null);
+              setTaskInstructions("");
+              setPreAuthorizedTools([]);
+            }}
+          />
+          {isThreadTrigger && (
+            <small
               style={{
-                padding: "1rem",
-                border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                borderRadius: "8px",
-                background: OS_LEGAL_COLORS.surfaceHover,
+                color: OS_LEGAL_COLORS.textSecondary,
+                marginTop: "0.5em",
+                display: "block",
               }}
             >
-              <h4
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  margin: "0 0 0.5rem 0",
-                }}
-              >
-                <FileText size={16} />
-                Fieldset Configuration
-              </h4>
-              <InfoMessage style={{ marginBottom: "0.75rem" }}>
-                Select a fieldset to automatically extract data from documents
-                when they are {trigger === "add_document" ? "added" : "edited"}.
-              </InfoMessage>
-              <Form.Field required>
-                <label>Fieldset</label>
-                <Dropdown
-                  selection
-                  clearable
-                  search
-                  options={fieldsetOptions}
-                  value={selectedFieldsetId || undefined}
-                  onChange={(_, data) =>
-                    setSelectedFieldsetId(data.value as string)
-                  }
-                  placeholder="Select fieldset"
-                />
-              </Form.Field>
-            </div>
+              Thread/message triggers only support agent-based actions.
+            </small>
           )}
+        </FormField>
 
-          {actionType === "analyzer" && (
-            <div
+        {actionType === "fieldset" && (
+          <div
+            style={{
+              padding: "1rem",
+              border: `1px solid ${OS_LEGAL_COLORS.border}`,
+              borderRadius: "8px",
+              background: OS_LEGAL_COLORS.surfaceHover,
+            }}
+          >
+            <h4
               style={{
-                padding: "1rem",
-                border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                borderRadius: "8px",
-                background: OS_LEGAL_COLORS.surfaceHover,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                margin: "0 0 0.5rem 0",
               }}
             >
-              <h4
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  margin: "0 0 0.5rem 0",
-                }}
-              >
-                <Settings size={16} />
-                Analyzer Configuration
-              </h4>
-              <InfoMessage style={{ marginBottom: "0.75rem" }}>
-                Select an analyzer to automatically run analysis on documents
-                when they are {trigger === "add_document" ? "added" : "edited"}.
-              </InfoMessage>
-              <Form.Field required>
-                <label>Analyzer</label>
-                <Dropdown
-                  selection
-                  clearable
-                  search
-                  options={analyzerOptions}
-                  value={selectedAnalyzerId || undefined}
-                  onChange={(_, data) =>
-                    setSelectedAnalyzerId(data.value as string)
-                  }
-                  placeholder="Select analyzer"
-                />
-              </Form.Field>
-            </div>
-          )}
+              <FileText size={16} />
+              Fieldset Configuration
+            </h4>
+            <InfoMessage style={{ marginBottom: "0.75rem" }}>
+              Select a fieldset to automatically extract data from documents
+              when they are {trigger === "add_document" ? "added" : "edited"}.
+            </InfoMessage>
+            <FormField>
+              <label>Fieldset</label>
+              <Dropdown
+                selection
+                clearable
+                search
+                options={fieldsetOptions}
+                value={selectedFieldsetId || undefined}
+                onChange={(_, data) =>
+                  setSelectedFieldsetId(data.value as string)
+                }
+                placeholder="Select fieldset"
+              />
+            </FormField>
+          </div>
+        )}
 
-          {actionType === "agent" && (
-            <div
+        {actionType === "analyzer" && (
+          <div
+            style={{
+              padding: "1rem",
+              border: `1px solid ${OS_LEGAL_COLORS.border}`,
+              borderRadius: "8px",
+              background: OS_LEGAL_COLORS.surfaceHover,
+            }}
+          >
+            <h4
               style={{
-                padding: "1rem",
-                border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                borderRadius: "8px",
-                background: OS_LEGAL_COLORS.surfaceHover,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                margin: "0 0 0.5rem 0",
               }}
             >
-              <h4
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  margin: "0 0 0.5rem 0",
-                }}
-              >
-                <Cpu size={16} />
-                Agent Configuration
-              </h4>
+              <Settings size={16} />
+              Analyzer Configuration
+            </h4>
+            <InfoMessage style={{ marginBottom: "0.75rem" }}>
+              Select an analyzer to automatically run analysis on documents when
+              they are {trigger === "add_document" ? "added" : "edited"}.
+            </InfoMessage>
+            <FormField>
+              <label>Analyzer</label>
+              <Dropdown
+                selection
+                clearable
+                search
+                options={analyzerOptions}
+                value={selectedAnalyzerId || undefined}
+                onChange={(_, data) =>
+                  setSelectedAnalyzerId(data.value as string)
+                }
+                placeholder="Select analyzer"
+              />
+            </FormField>
+          </div>
+        )}
 
-              {/* Create mode: Show mode toggle for inline vs existing agent */}
-              {!isEditMode && (
-                <>
-                  <InfoMessage style={{ marginBottom: "0.75rem" }}>
-                    <>
-                      <Info
-                        size={14}
-                        style={{
-                          display: "inline",
-                          verticalAlign: "middle",
-                          marginRight: "0.5rem",
-                        }}
+        {actionType === "agent" && (
+          <div
+            style={{
+              padding: "1rem",
+              border: `1px solid ${OS_LEGAL_COLORS.border}`,
+              borderRadius: "8px",
+              background: OS_LEGAL_COLORS.surfaceHover,
+            }}
+          >
+            <h4
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                margin: "0 0 0.5rem 0",
+              }}
+            >
+              <Cpu size={16} />
+              Agent Configuration
+            </h4>
+
+            {/* Create mode: Show mode toggle for inline vs existing agent */}
+            {!isEditMode && (
+              <>
+                <InfoMessage style={{ marginBottom: "0.75rem" }}>
+                  <>
+                    <Info
+                      size={14}
+                      style={{
+                        display: "inline",
+                        verticalAlign: "middle",
+                        marginRight: "0.5rem",
+                      }}
+                    />
+                    Configure an AI agent for{" "}
+                    <strong>
+                      {isThreadTrigger
+                        ? "automated moderation"
+                        : "document processing"}
+                    </strong>
+                    . The agent will execute automatically when{" "}
+                    {trigger === "new_thread"
+                      ? "a new discussion thread is created"
+                      : trigger === "new_message"
+                      ? "a new message is posted to a thread"
+                      : trigger === "add_document"
+                      ? "a document is added to this corpus"
+                      : "a document is edited in this corpus"}
+                    .
+                  </>
+                </InfoMessage>
+
+                <Menu pointing secondary size="small">
+                  <Menu.Item
+                    name={
+                      isThreadTrigger
+                        ? "Quick Create Moderator"
+                        : "Quick Create Agent"
+                    }
+                    active={useInlineAgent}
+                    onClick={() => setUseInlineAgent(true)}
+                    icon="magic"
+                  />
+                  <Menu.Item
+                    name="Use Existing Agent"
+                    active={!useInlineAgent}
+                    onClick={() => setUseInlineAgent(false)}
+                    icon="linkify"
+                  />
+                </Menu>
+
+                {/* Inline Agent Creation Mode */}
+                {useInlineAgent && (
+                  <>
+                    <div
+                      style={{
+                        padding: "0.5rem 0.75rem",
+                        background: OS_LEGAL_COLORS.successSurface,
+                        border: `1px solid ${OS_LEGAL_COLORS.successBorder}`,
+                        borderRadius: "6px",
+                        color: OS_LEGAL_COLORS.successText,
+                        fontSize: "0.875rem",
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      <strong>Quick Create:</strong>{" "}
+                      {isThreadTrigger
+                        ? "Creates a new moderator agent with all moderation tools enabled."
+                        : "Creates a new agent with document processing tools enabled."}
+                    </div>
+
+                    <FormField>
+                      <label>Agent Name</label>
+                      <Input
+                        fullWidth
+                        value={inlineAgentName}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setInlineAgentName(e.target.value)
+                        }
+                        placeholder={
+                          isThreadTrigger
+                            ? "e.g., Discussion Moderator"
+                            : "e.g., Document Summarizer"
+                        }
                       />
-                      Configure an AI agent for{" "}
-                      <strong>
-                        {isThreadTrigger
-                          ? "automated moderation"
-                          : "document processing"}
-                      </strong>
-                      . The agent will execute automatically when{" "}
-                      {trigger === "new_thread"
-                        ? "a new discussion thread is created"
-                        : trigger === "new_message"
-                        ? "a new message is posted to a thread"
-                        : trigger === "add_document"
-                        ? "a document is added to this corpus"
-                        : "a document is edited in this corpus"}
-                      .
-                    </>
-                  </InfoMessage>
+                    </FormField>
 
-                  <Menu pointing secondary size="small">
-                    <Menu.Item
-                      name={
-                        isThreadTrigger
-                          ? "Quick Create Moderator"
-                          : "Quick Create Agent"
-                      }
-                      active={useInlineAgent}
-                      onClick={() => setUseInlineAgent(true)}
-                      icon="magic"
-                    />
-                    <Menu.Item
-                      name="Use Existing Agent"
-                      active={!useInlineAgent}
-                      onClick={() => setUseInlineAgent(false)}
-                      icon="linkify"
-                    />
-                  </Menu>
+                    <FormField>
+                      <label>
+                        Agent Description <InlineBadge>Optional</InlineBadge>
+                      </label>
+                      <Input
+                        fullWidth
+                        value={inlineAgentDescription}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setInlineAgentDescription(e.target.value)
+                        }
+                        placeholder={
+                          isThreadTrigger
+                            ? "Brief description of this moderator's purpose"
+                            : "Brief description of what this agent does"
+                        }
+                      />
+                    </FormField>
 
-                  {/* Inline Agent Creation Mode */}
-                  {useInlineAgent && (
-                    <>
-                      <div
+                    <FormField>
+                      <label>
+                        {isThreadTrigger ? "System Instructions" : "Agent Role"}
+                      </label>
+                      <StyledTextArea
+                        value={inlineAgentInstructions}
+                        onChange={(e) =>
+                          setInlineAgentInstructions(e.target.value)
+                        }
+                        placeholder={
+                          isThreadTrigger
+                            ? "Instructions that define the agent's behavior and policies"
+                            : "Brief role description (e.g., 'You are a document summarizer')"
+                        }
+                        rows={isThreadTrigger ? 4 : 2}
+                      />
+                      <small
                         style={{
-                          padding: "0.5rem 0.75rem",
-                          background: OS_LEGAL_COLORS.successSurface,
-                          border: `1px solid ${OS_LEGAL_COLORS.successBorder}`,
-                          borderRadius: "6px",
-                          color: OS_LEGAL_COLORS.successText,
-                          fontSize: "0.875rem",
-                          marginBottom: "0.75rem",
+                          color: OS_LEGAL_COLORS.textSecondary,
+                          marginTop: "0.5em",
+                          display: "block",
                         }}
                       >
-                        <strong>Quick Create:</strong>{" "}
                         {isThreadTrigger
-                          ? "Creates a new moderator agent with all moderation tools enabled."
-                          : "Creates a new agent with document processing tools enabled."}
-                      </div>
+                          ? "These instructions define how the agent behaves and what moderation policies it follows."
+                          : "Optional persona guidelines. The main instructions go in the Task Instructions field below."}
+                      </small>
+                    </FormField>
 
-                      <Form.Field required>
-                        <label>Agent Name</label>
-                        <Form.Input
-                          value={inlineAgentName}
-                          onChange={(e) => setInlineAgentName(e.target.value)}
-                          placeholder={
-                            isThreadTrigger
-                              ? "e.g., Discussion Moderator"
-                              : "e.g., Document Summarizer"
-                          }
-                        />
-                      </Form.Field>
+                    <FormField>
+                      <label>Task Instructions</label>
+                      <StyledTextArea
+                        value={taskInstructions}
+                        onChange={(e) => setTaskInstructions(e.target.value)}
+                        placeholder={
+                          isThreadTrigger
+                            ? "e.g., 'Review this thread/message for policy compliance and take appropriate action'"
+                            : "e.g., 'Summarize this document and update its description'"
+                        }
+                        rows={3}
+                      />
+                      <small
+                        style={{
+                          color: OS_LEGAL_COLORS.textSecondary,
+                          marginTop: "0.5em",
+                          display: "block",
+                        }}
+                      >
+                        This prompt is sent to the agent each time the action
+                        triggers.
+                      </small>
+                    </FormField>
 
-                      <Form.Field>
-                        <label>
-                          Agent Description <InlineBadge>Optional</InlineBadge>
-                        </label>
-                        <Form.Input
-                          value={inlineAgentDescription}
-                          onChange={(e) =>
-                            setInlineAgentDescription(e.target.value)
-                          }
-                          placeholder={
-                            isThreadTrigger
-                              ? "Brief description of this moderator's purpose"
-                              : "Brief description of what this agent does"
-                          }
-                        />
-                      </Form.Field>
-
-                      <Form.Field required>
-                        <label>
+                    <FormField>
+                      <label>
+                        {isThreadTrigger
+                          ? "Moderation Tools"
+                          : "Document Tools"}{" "}
+                        <InlineBadge $variant="success">
                           {isThreadTrigger
-                            ? "System Instructions"
-                            : "Agent Role"}
-                        </label>
-                        <StyledTextArea
-                          value={inlineAgentInstructions}
-                          onChange={(e) =>
-                            setInlineAgentInstructions(e.target.value)
-                          }
-                          placeholder={
-                            isThreadTrigger
-                              ? "Instructions that define the agent's behavior and policies"
-                              : "Brief role description (e.g., 'You are a document summarizer')"
-                          }
-                          rows={isThreadTrigger ? 4 : 2}
-                        />
-                        <small
-                          style={{
-                            color: "#666",
-                            marginTop: "0.5em",
-                            display: "block",
-                          }}
-                        >
-                          {isThreadTrigger
-                            ? "These instructions define how the agent behaves and what moderation policies it follows."
-                            : "Optional persona guidelines. The main instructions go in the Task Instructions field below."}
-                        </small>
-                      </Form.Field>
-
-                      <Form.Field required>
-                        <label>Task Instructions</label>
-                        <StyledTextArea
-                          value={taskInstructions}
-                          onChange={(e) => setTaskInstructions(e.target.value)}
-                          placeholder={
-                            isThreadTrigger
-                              ? "e.g., 'Review this thread/message for policy compliance and take appropriate action'"
-                              : "e.g., 'Summarize this document and update its description'"
-                          }
-                          rows={3}
-                        />
-                        <small
-                          style={{
-                            color: "#666",
-                            marginTop: "0.5em",
-                            display: "block",
-                          }}
-                        >
-                          This prompt is sent to the agent each time the action
-                          triggers.
-                        </small>
-                      </Form.Field>
-
-                      <Form.Field required>
-                        <label>
-                          {isThreadTrigger
-                            ? "Moderation Tools"
-                            : "Document Tools"}{" "}
-                          <InlineBadge $variant="success">
-                            {isThreadTrigger
-                              ? selectedModerationTools.length
-                              : selectedDocumentTools.length}{" "}
-                            selected
-                          </InlineBadge>
-                          {(isThreadTrigger
-                            ? toolsLoading
-                            : documentToolsLoading) && <Spinner size="sm" />}
-                        </label>
-                        <div
-                          style={{
-                            background: "#f8f9fa",
-                            borderRadius: "8px",
-                            padding: "1rem",
-                            border: "1px solid #e9ecef",
-                          }}
-                        >
-                          {(isThreadTrigger
-                            ? moderationTools
-                            : documentTools
-                          ).map((tool) => (
-                            <div
-                              key={tool.name}
+                            ? selectedModerationTools.length
+                            : selectedDocumentTools.length}{" "}
+                          selected
+                        </InlineBadge>
+                        {(isThreadTrigger
+                          ? toolsLoading
+                          : documentToolsLoading) && <Spinner size="sm" />}
+                      </label>
+                      <div
+                        style={{
+                          background: OS_LEGAL_COLORS.gray50,
+                          borderRadius: "8px",
+                          padding: "1rem",
+                          border: `1px solid ${OS_LEGAL_COLORS.gray200}`,
+                        }}
+                      >
+                        {(isThreadTrigger
+                          ? moderationTools
+                          : documentTools
+                        ).map((tool) => (
+                          <div
+                            key={tool.name}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              padding: "0.5rem 0",
+                              borderBottom: `1px solid ${OS_LEGAL_COLORS.gray200}`,
+                            }}
+                          >
+                            <label
                               style={{
                                 display: "flex",
                                 alignItems: "center",
-                                padding: "0.5rem 0",
-                                borderBottom: "1px solid #e9ecef",
+                                gap: "0.5rem",
+                                fontWeight: 500,
+                                cursor: "pointer",
                               }}
                             >
-                              <label
+                              <input
+                                type="checkbox"
+                                checked={(isThreadTrigger
+                                  ? selectedModerationTools
+                                  : selectedDocumentTools
+                                ).includes(tool.name)}
+                                onChange={(e) => {
+                                  const setter = isThreadTrigger
+                                    ? setSelectedModerationTools
+                                    : setSelectedDocumentTools;
+                                  if (e.target.checked) {
+                                    setter((prev) => [...prev, tool.name]);
+                                  } else {
+                                    setter((prev) =>
+                                      prev.filter((t) => t !== tool.name)
+                                    );
+                                  }
+                                }}
+                              />
+                              {tool.name.replace(/_/g, " ")}
+                              <span
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.5rem",
-                                  fontWeight: 500,
-                                  cursor: "pointer",
+                                  color: OS_LEGAL_COLORS.textSecondary,
+                                  fontWeight: 400,
+                                  marginLeft: "0.5rem",
                                 }}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={(isThreadTrigger
-                                    ? selectedModerationTools
-                                    : selectedDocumentTools
-                                  ).includes(tool.name)}
-                                  onChange={(e) => {
-                                    const setter = isThreadTrigger
-                                      ? setSelectedModerationTools
-                                      : setSelectedDocumentTools;
-                                    if (e.target.checked) {
-                                      setter((prev) => [...prev, tool.name]);
-                                    } else {
-                                      setter((prev) =>
-                                        prev.filter((t) => t !== tool.name)
-                                      );
-                                    }
-                                  }}
-                                />
-                                {tool.name.replace(/_/g, " ")}
-                                <span
-                                  style={{
-                                    color: "#666",
-                                    fontWeight: 400,
-                                    marginLeft: "0.5rem",
-                                  }}
-                                >
-                                  - {tool.description}
-                                </span>
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{ marginTop: "0.5rem" }}>
-                          <Button
-                            type="button"
-                            size="tiny"
-                            onClick={() => {
-                              const tools = isThreadTrigger
-                                ? moderationTools
-                                : documentTools;
-                              const setter = isThreadTrigger
-                                ? setSelectedModerationTools
-                                : setSelectedDocumentTools;
-                              setter(tools.map((t) => t.name));
-                            }}
-                          >
-                            Select All
-                          </Button>
-                          <Button
-                            type="button"
-                            size="tiny"
-                            onClick={() => {
-                              const setter = isThreadTrigger
-                                ? setSelectedModerationTools
-                                : setSelectedDocumentTools;
-                              setter([]);
-                            }}
-                          >
-                            Clear All
-                          </Button>
-                        </div>
-                      </Form.Field>
-                    </>
-                  )}
+                                - {tool.description}
+                              </span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            const tools = isThreadTrigger
+                              ? moderationTools
+                              : documentTools;
+                            const setter = isThreadTrigger
+                              ? setSelectedModerationTools
+                              : setSelectedDocumentTools;
+                            setter(tools.map((t) => t.name));
+                          }}
+                        >
+                          Select All
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            const setter = isThreadTrigger
+                              ? setSelectedModerationTools
+                              : setSelectedDocumentTools;
+                            setter([]);
+                          }}
+                        >
+                          Clear All
+                        </Button>
+                      </div>
+                    </FormField>
+                  </>
+                )}
 
-                  {/* Existing Agent Mode */}
-                  {!useInlineAgent && (
-                    <>
-                      <Form.Field required>
-                        <label>Agent</label>
+                {/* Existing Agent Mode */}
+                {!useInlineAgent && (
+                  <>
+                    <FormField>
+                      <label>Agent</label>
+                      <Dropdown
+                        selection
+                        clearable
+                        search
+                        options={agentConfigOptions}
+                        value={selectedAgentConfigId || undefined}
+                        onChange={(_, data) => {
+                          setSelectedAgentConfigId(data.value as string);
+                          setPreAuthorizedTools([]);
+                        }}
+                        onSearchChange={handleAgentSearchChange}
+                        loading={agentConfigsLoading}
+                        placeholder="Select agent configuration"
+                        selectOnNavigation={false}
+                      />
+                    </FormField>
+
+                    {selectedAgentConfig && (
+                      <>
+                        <div
+                          style={{
+                            padding: "0.75rem 1rem",
+                            background: OS_LEGAL_COLORS.surfaceHover,
+                            border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                            borderRadius: "6px",
+                            marginBottom: "0.5em",
+                          }}
+                        >
+                          <strong
+                            style={{
+                              display: "block",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            {selectedAgentConfig.name}
+                          </strong>
+                          <p>{selectedAgentConfig.description}</p>
+                        </div>
+
+                        <FormField>
+                          <label>Task Instructions</label>
+                          <StyledTextArea
+                            value={taskInstructions}
+                            onChange={(e) =>
+                              setTaskInstructions(e.target.value)
+                            }
+                            placeholder="Enter the task prompt for the agent"
+                            rows={4}
+                          />
+                        </FormField>
+
+                        {toolOptions.length > 0 && (
+                          <FormField>
+                            <label>
+                              Pre-authorized Tools{" "}
+                              <InlineBadge $variant="info">
+                                Optional
+                              </InlineBadge>
+                            </label>
+                            <Dropdown
+                              selection
+                              multiple
+                              search
+                              options={toolOptions}
+                              value={preAuthorizedTools}
+                              onChange={(_, data) =>
+                                setPreAuthorizedTools(data.value as string[])
+                              }
+                              placeholder="Select tools to pre-authorize (optional)"
+                            />
+                          </FormField>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Edit mode: Show existing agent selection only */}
+            {isEditMode && (
+              <>
+                <InfoMessage style={{ marginBottom: "0.5em" }}>
+                  <>
+                    Select an AI agent to perform custom actions on{" "}
+                    <strong>individual documents</strong>. The agent will
+                    execute automatically when documents are{" "}
+                    {trigger === "add_document" ? "added" : "edited"}.
+                    <br />
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3em",
+                        marginTop: "0.5em",
+                      }}
+                    >
+                      <Info size={14} />
+                      The agent will have access to document-scoped tools
+                      (read/update description, summary, notes, annotations).
+                    </span>
+                  </>
+                </InfoMessage>
+
+                <FormField>
+                  <label>Agent</label>
+                  <Dropdown
+                    selection
+                    clearable
+                    search
+                    options={agentConfigOptions}
+                    value={selectedAgentConfigId || undefined}
+                    onChange={(_, data) => {
+                      setSelectedAgentConfigId(data.value as string);
+                      setPreAuthorizedTools([]);
+                    }}
+                    onSearchChange={handleAgentSearchChange}
+                    loading={agentConfigsLoading}
+                    placeholder="Select agent configuration"
+                    selectOnNavigation={false}
+                  />
+                </FormField>
+
+                {selectedAgentConfig && (
+                  <>
+                    <div
+                      style={{
+                        padding: "0.75rem 1rem",
+                        background: OS_LEGAL_COLORS.surfaceHover,
+                        border: `1px solid ${OS_LEGAL_COLORS.border}`,
+                        borderRadius: "6px",
+                        marginBottom: "0.5em",
+                      }}
+                    >
+                      <strong
+                        style={{ display: "block", marginBottom: "0.25rem" }}
+                      >
+                        {selectedAgentConfig.name}
+                      </strong>
+                      <p>{selectedAgentConfig.description}</p>
+                    </div>
+
+                    <FormField>
+                      <label>Task Instructions</label>
+                      <StyledTextArea
+                        value={taskInstructions}
+                        onChange={(e) => setTaskInstructions(e.target.value)}
+                        placeholder="Enter the task prompt for the agent (e.g., 'Summarize this document and update its description')"
+                        rows={4}
+                      />
+                    </FormField>
+
+                    {toolOptions.length > 0 && (
+                      <FormField>
+                        <label>
+                          Pre-authorized Tools{" "}
+                          <InlineBadge $variant="info">Optional</InlineBadge>
+                        </label>
                         <Dropdown
                           selection
-                          clearable
+                          multiple
                           search
-                          options={agentConfigOptions}
-                          value={selectedAgentConfigId || undefined}
-                          onChange={(_, data) => {
-                            setSelectedAgentConfigId(data.value as string);
-                            setPreAuthorizedTools([]);
+                          options={toolOptions}
+                          value={preAuthorizedTools}
+                          onChange={(_, data) =>
+                            setPreAuthorizedTools(data.value as string[])
+                          }
+                          placeholder="Select tools to pre-authorize (optional)"
+                        />
+                        <small
+                          style={{
+                            color: OS_LEGAL_COLORS.textSecondary,
+                            marginTop: "0.5em",
+                            display: "block",
                           }}
-                          onSearchChange={handleAgentSearchChange}
-                          loading={agentConfigsLoading}
-                          placeholder="Select agent configuration"
-                          selectOnNavigation={false}
-                        />
-                      </Form.Field>
-
-                      {selectedAgentConfig && (
-                        <>
-                          <div
-                            style={{
-                              padding: "0.75rem 1rem",
-                              background: OS_LEGAL_COLORS.surfaceHover,
-                              border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                              borderRadius: "6px",
-                              marginBottom: "0.5em",
-                            }}
-                          >
-                            <strong
-                              style={{
-                                display: "block",
-                                marginBottom: "0.25rem",
-                              }}
-                            >
-                              {selectedAgentConfig.name}
-                            </strong>
-                            <p>{selectedAgentConfig.description}</p>
-                          </div>
-
-                          <Form.Field required>
-                            <label>Task Instructions</label>
-                            <StyledTextArea
-                              value={taskInstructions}
-                              onChange={(e) =>
-                                setTaskInstructions(e.target.value)
-                              }
-                              placeholder="Enter the task prompt for the agent"
-                              rows={4}
-                            />
-                          </Form.Field>
-
-                          {toolOptions.length > 0 && (
-                            <Form.Field>
-                              <label>
-                                Pre-authorized Tools{" "}
-                                <InlineBadge $variant="info">
-                                  Optional
-                                </InlineBadge>
-                              </label>
-                              <Dropdown
-                                selection
-                                multiple
-                                search
-                                options={toolOptions}
-                                value={preAuthorizedTools}
-                                onChange={(_, data) =>
-                                  setPreAuthorizedTools(data.value as string[])
-                                }
-                                placeholder="Select tools to pre-authorize (optional)"
-                              />
-                            </Form.Field>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-
-              {/* Edit mode: Show existing agent selection only */}
-              {isEditMode && (
-                <>
-                  <InfoMessage style={{ marginBottom: "0.5em" }}>
-                    <>
-                      Select an AI agent to perform custom actions on{" "}
-                      <strong>individual documents</strong>. The agent will
-                      execute automatically when documents are{" "}
-                      {trigger === "add_document" ? "added" : "edited"}.
-                      <br />
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.3em",
-                          marginTop: "0.5em",
-                        }}
-                      >
-                        <Info size={14} />
-                        The agent will have access to document-scoped tools
-                        (read/update description, summary, notes, annotations).
-                      </span>
-                    </>
-                  </InfoMessage>
-
-                  <Form.Field required>
-                    <label>Agent</label>
-                    <Dropdown
-                      selection
-                      clearable
-                      search
-                      options={agentConfigOptions}
-                      value={selectedAgentConfigId || undefined}
-                      onChange={(_, data) => {
-                        setSelectedAgentConfigId(data.value as string);
-                        setPreAuthorizedTools([]);
-                      }}
-                      onSearchChange={handleAgentSearchChange}
-                      loading={agentConfigsLoading}
-                      placeholder="Select agent configuration"
-                      selectOnNavigation={false}
-                    />
-                  </Form.Field>
-
-                  {selectedAgentConfig && (
-                    <>
-                      <div
-                        style={{
-                          padding: "0.75rem 1rem",
-                          background: OS_LEGAL_COLORS.surfaceHover,
-                          border: `1px solid ${OS_LEGAL_COLORS.border}`,
-                          borderRadius: "6px",
-                          marginBottom: "0.5em",
-                        }}
-                      >
-                        <strong
-                          style={{ display: "block", marginBottom: "0.25rem" }}
                         >
-                          {selectedAgentConfig.name}
-                        </strong>
-                        <p>{selectedAgentConfig.description}</p>
-                      </div>
+                          Pre-authorized tools will execute without requiring
+                          approval. Leave empty to use all available tools with
+                          approval gates.
+                        </small>
+                      </FormField>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
-                      <Form.Field required>
-                        <label>Task Instructions</label>
-                        <StyledTextArea
-                          value={taskInstructions}
-                          onChange={(e) => setTaskInstructions(e.target.value)}
-                          placeholder="Enter the task prompt for the agent (e.g., 'Summarize this document and update its description')"
-                          rows={4}
-                        />
-                      </Form.Field>
+        <FormField>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5em",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={disabled}
+              onChange={(e) => setDisabled(e.target.checked)}
+            />
+            Initially Disabled
+          </label>
+        </FormField>
 
-                      {toolOptions.length > 0 && (
-                        <Form.Field>
-                          <label>
-                            Pre-authorized Tools{" "}
-                            <InlineBadge $variant="info">Optional</InlineBadge>
-                          </label>
-                          <Dropdown
-                            selection
-                            multiple
-                            search
-                            options={toolOptions}
-                            value={preAuthorizedTools}
-                            onChange={(_, data) =>
-                              setPreAuthorizedTools(data.value as string[])
-                            }
-                            placeholder="Select tools to pre-authorize (optional)"
-                          />
-                          <small
-                            style={{
-                              color: "#666",
-                              marginTop: "0.5em",
-                              display: "block",
-                            }}
-                          >
-                            Pre-authorized tools will execute without requiring
-                            approval. Leave empty to use all available tools
-                            with approval gates.
-                          </small>
-                        </Form.Field>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          <Form.Field>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5em",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={disabled}
-                onChange={(e) => setDisabled(e.target.checked)}
-              />
-              Initially Disabled
-            </label>
-          </Form.Field>
-
-          <Form.Field>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5em",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={runOnAllCorpuses}
-                onChange={(e) => setRunOnAllCorpuses(e.target.checked)}
-              />
-              Run on All Corpuses
-            </label>
-          </Form.Field>
-        </Form>
-      </Modal.Content>
-      <Modal.Actions>
+        <FormField>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5em",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={runOnAllCorpuses}
+              onChange={(e) => setRunOnAllCorpuses(e.target.checked)}
+            />
+            Run on All Corpuses
+          </label>
+        </FormField>
+      </ModalBody>
+      <ModalFooter>
         <Button
+          variant="secondary"
           onClick={() => {
             resetForm();
             onClose();
@@ -1267,10 +1294,10 @@ export const CreateCorpusActionModal: React.FC<
         >
           Cancel
         </Button>
-        <Button primary onClick={handleSubmit} loading={isSubmitting}>
+        <Button variant="primary" onClick={handleSubmit} loading={isSubmitting}>
           {isEditMode ? "Update Action" : "Create Action"}
         </Button>
-      </Modal.Actions>
-    </Modal>
+      </ModalFooter>
+    </StyledModal>
   );
 };

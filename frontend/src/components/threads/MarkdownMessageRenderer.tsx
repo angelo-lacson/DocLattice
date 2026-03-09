@@ -6,6 +6,7 @@ import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { Bot, Database, FileText, MapPin, Tag, User } from "lucide-react";
 import { color } from "../../theme/colors";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { MentionedResourceType } from "../../types/graphql-api";
 import { sanitizeForTooltip } from "../../utils/textSanitization";
 import {
@@ -72,7 +73,7 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
 
   background: ${(props) => {
     if (props.$type === "user")
-      return "linear-gradient(135deg, #06b6d415 0%, #10b98115 100%)";
+      return `linear-gradient(135deg, #06b6d415 0%, ${OS_LEGAL_COLORS.greenMedium}15 100%)`;
     if (props.$type === "corpus")
       return "linear-gradient(135deg, #667eea15 0%, #764ba215 100%)";
     if (props.$type === "document")
@@ -88,7 +89,7 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
 
   border: 1px solid
     ${(props) => {
-      if (props.$type === "user") return "#10b98160";
+      if (props.$type === "user") return `${OS_LEGAL_COLORS.greenMedium}60`;
       if (props.$type === "corpus") return color.P4;
       if (props.$type === "document") return "#f5576c40";
       if (props.$type === "annotation") return "#38f9d780";
@@ -98,10 +99,10 @@ const MentionLink = styled.a<{ $type: string; $navigable?: boolean }>`
     }};
 
   color: ${(props) => {
-    if (props.$type === "user") return "#0d9488";
+    if (props.$type === "user") return OS_LEGAL_COLORS.accent;
     if (props.$type === "corpus") return color.P8;
     if (props.$type === "document") return "#c41e3a";
-    if (props.$type === "annotation") return "#0d9488";
+    if (props.$type === "annotation") return OS_LEGAL_COLORS.accent;
     if (props.$type === "source") return "#0284c7";
     if (props.$type === "agent") return "#7c3aed";
     return color.N8;

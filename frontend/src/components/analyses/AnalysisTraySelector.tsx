@@ -6,7 +6,8 @@ import React, {
   useCallback,
 } from "react";
 import Fuse from "fuse.js";
-import { Form, Segment, Button } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
+import { Search, X } from "lucide-react";
 import { AnalysisType } from "../../types/graphql-api";
 import styled from "styled-components";
 import {
@@ -24,6 +25,11 @@ import {
   EyeOff,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
+import {
+  OS_LEGAL_COLORS,
+  primaryBlueAlpha,
+} from "../../assets/configurations/osLegalStyles";
 
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { useCorpusState } from "../annotator/context/CorpusAtom";
@@ -49,55 +55,30 @@ interface AnalysisTraySelectorProps {
   searchTerm?: string;
 }
 
-const TrayContainer = styled(Segment.Group)`
+const TrayContainer = styled.div`
   height: 100%;
-  display: flex !important;
-  flex-direction: column !important;
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  box-shadow: none;
+  background: transparent;
 `;
 
-const SearchSegment = styled(Segment)`
-  padding: 1rem !important;
-  background: white !important;
-  border: 1px solid #e2e8f0 !important;
-  border-bottom: none !important;
-  border-radius: 12px 12px 0 0 !important;
-
-  .input {
-    width: 100%;
-
-    input {
-      border-radius: 8px !important;
-      border: 1px solid #e2e8f0 !important;
-      padding: 0.6rem 1rem !important;
-      transition: all 0.2s ease-in-out !important;
-
-      &:focus {
-        border-color: #4a90e2 !important;
-        box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1) !important;
-      }
-    }
-
-    i.icon {
-      opacity: 0.5;
-      transition: opacity 0.2s ease-in-out;
-
-      &:hover {
-        opacity: 1;
-      }
-    }
-  }
+const SearchSegment = styled.div`
+  padding: 1rem;
+  background: white;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
 `;
 
-const AnalysisListSegment = styled(Segment)`
-  flex: 1 !important;
-  overflow-y: auto !important;
-  background: white !important;
-  border: 1px solid #e2e8f0 !important;
-  border-radius: 0 0 12px 12px !important;
-  padding: 0.75rem !important;
+const AnalysisListSegment = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 0 0 12px 12px;
+  padding: 0.75rem;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -105,11 +86,11 @@ const AnalysisListSegment = styled(Segment)`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(74, 144, 226, 0.15);
+    background: ${primaryBlueAlpha(0.15)};
     border-radius: 2px;
 
     &:hover {
-      background: rgba(74, 144, 226, 0.25);
+      background: ${primaryBlueAlpha(0.25)};
     }
   }
 `;
@@ -119,9 +100,13 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
   margin-bottom: ${(props) => (props.$compact ? "0.75rem" : "1.5rem")};
   background: ${(props) =>
     props.$selected
-      ? "linear-gradient(165deg, rgba(74, 144, 226, 0.03), rgba(255, 255, 255, 0.5))"
+      ? `linear-gradient(165deg, ${primaryBlueAlpha(
+          0.03
+        )}, rgba(255, 255, 255, 0.5))`
       : "#ffffff"};
-  border: 1px solid ${(props) => (props.$selected ? "#4a90e2" : "#edf2f7")};
+  border: 1px solid
+    ${(props) =>
+      props.$selected ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   border-radius: ${(props) => (props.$compact ? "12px" : "20px")};
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
@@ -129,7 +114,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
   overflow: hidden;
   box-shadow: ${(props) =>
     props.$selected
-      ? "0 8px 32px rgba(74, 144, 226, 0.06)"
+      ? `0 8px 32px ${primaryBlueAlpha(0.06)}`
       : "0 1px 3px rgba(0, 0, 0, 0.01)"};
 
   .timestamps {
@@ -138,7 +123,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     gap: 1.25rem;
     padding: 0.5rem;
     background: ${(props) =>
-      props.$selected ? "rgba(74, 144, 226, 0.02)" : "#fafbfc"};
+      props.$selected ? primaryBlueAlpha(0.02) : "#fafbfc"};
     border-radius: 16px;
 
     .timestamp-row {
@@ -148,12 +133,13 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
         props.$selected ? "rgba(255, 255, 255, 0.8)" : "#ffffff"};
       border-radius: 12px;
       border: 1px solid
-        ${(props) => (props.$selected ? "rgba(74, 144, 226, 0.1)" : "#edf2f7")};
+        ${(props) =>
+          props.$selected ? primaryBlueAlpha(0.1) : OS_LEGAL_COLORS.border};
 
       .label {
         font-size: 0.7rem;
         letter-spacing: 0.03em;
-        color: #94a3b8;
+        color: ${OS_LEGAL_COLORS.textMuted};
         margin-bottom: 0.5rem;
 
         svg {
@@ -165,7 +151,10 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
 
       .value {
         font-size: 0.8125rem;
-        color: ${(props) => (props.$selected ? "#2d3748" : "#4a5568")};
+        color: ${(props) =>
+          props.$selected
+            ? OS_LEGAL_COLORS.textPrimary
+            : OS_LEGAL_COLORS.textTertiary};
       }
     }
   }
@@ -174,7 +163,7 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     transform: translateY(${(props) => (props.$compact ? "-1px" : "-2px")});
     box-shadow: ${(props) =>
       props.$selected
-        ? "0 12px 32px rgba(74, 144, 226, 0.12)"
+        ? `0 12px 32px ${primaryBlueAlpha(0.12)}`
         : "0 8px 24px rgba(0, 0, 0, 0.04)"};
   }
 
@@ -186,14 +175,17 @@ const AnalysisCard = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     margin-top: ${(props) => (props.$compact ? "0.75rem" : "1.5rem")};
     padding-top: ${(props) => (props.$compact ? "0.75rem" : "1.5rem")};
     border-top: 1px solid
-      ${(props) => (props.$selected ? "rgba(74, 144, 226, 0.12)" : "#f1f5f9")};
+      ${(props) =>
+        props.$selected
+          ? primaryBlueAlpha(0.12)
+          : OS_LEGAL_COLORS.surfaceLight};
   }
 
   .annotations-container {
     margin-top: 1rem;
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 `;
@@ -206,7 +198,7 @@ const AnalysisHeader = styled.div<{ $selected?: boolean; $compact?: boolean }>`
   padding: ${(props) => (props.$compact ? "1rem" : "1.75rem")};
   background: ${(props) =>
     props.$selected
-      ? "linear-gradient(165deg, rgba(74, 144, 226, 0.04), transparent)"
+      ? `linear-gradient(165deg, ${primaryBlueAlpha(0.04)}, transparent)`
       : "transparent"};
 `;
 
@@ -224,15 +216,20 @@ const AnalysisTitle = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     justify-content: center;
     background: ${(props) =>
       props.$selected
-        ? "linear-gradient(135deg, rgba(74, 144, 226, 0.1), rgba(74, 144, 226, 0.05))"
-        : "#f8fafc"};
+        ? `linear-gradient(135deg, ${primaryBlueAlpha(0.1)}, ${primaryBlueAlpha(
+            0.05
+          )})`
+        : OS_LEGAL_COLORS.surfaceHover};
     border-radius: ${(props) => (props.$compact ? "8px" : "10px")};
     transition: all 0.3s ease;
 
     svg {
       width: ${(props) => (props.$compact ? "16px" : "18px")};
       height: ${(props) => (props.$compact ? "16px" : "18px")};
-      color: ${(props) => (props.$selected ? "#4a90e2" : "#94a3b8")};
+      color: ${(props) =>
+        props.$selected
+          ? OS_LEGAL_COLORS.primaryBlue
+          : OS_LEGAL_COLORS.textMuted};
     }
   }
 
@@ -240,13 +237,13 @@ const AnalysisTitle = styled.div<{ $selected?: boolean; $compact?: boolean }>`
     h4 {
       font-size: ${(props) => (props.$compact ? "1rem" : "1.125rem")};
       font-weight: 600;
-      color: #1a202c;
+      color: ${OS_LEGAL_COLORS.textPrimary};
       margin-bottom: ${(props) => (props.$compact ? "0" : "0.25rem")};
     }
 
     .id {
       font-size: 0.75rem;
-      color: #94a3b8;
+      color: ${OS_LEGAL_COLORS.textMuted};
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
         monospace;
       display: ${(props) => (props.$compact ? "none" : "block")};
@@ -272,16 +269,19 @@ const Badge = styled.div<{
     props.$compact ? "0.375rem 0.625rem" : "0.625rem 0.875rem"};
   background: ${(props) =>
     props.$variant === "primary"
-      ? "rgba(74, 144, 226, 0.04)"
+      ? primaryBlueAlpha(0.04)
       : "rgba(255, 255, 255, 0.8)"};
   border: 1px solid
     ${(props) =>
       props.$variant === "primary"
-        ? "rgba(74, 144, 226, 0.15)"
+        ? primaryBlueAlpha(0.15)
         : "rgba(226, 232, 240, 0.8)"};
   border-radius: ${(props) => (props.$compact ? "6px" : "10px")};
   font-size: ${(props) => (props.$compact ? "0.75rem" : "0.8125rem")};
-  color: ${(props) => (props.$variant === "primary" ? "#4a90e2" : "#64748b")};
+  color: ${(props) =>
+    props.$variant === "primary"
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   backdrop-filter: blur(8px);
 
   svg {
@@ -298,27 +298,31 @@ const NoAnalysesMessage = styled.div`
   justify-content: center;
   padding: 2rem;
   text-align: center;
-  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.surfaceHover},
+    ${OS_LEGAL_COLORS.surfaceLight}
+  );
   border-radius: 12px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
 
   h4 {
     margin: 0 0 0.5rem 0;
     font-size: 1rem;
-    color: #1a202c;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-weight: 600;
   }
 
   p {
     margin: 0;
     font-size: 0.875rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     max-width: 280px;
     line-height: 1.5;
   }
 
   svg {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
     margin-bottom: 1rem;
   }
 `;
@@ -334,9 +338,9 @@ const DescriptionContainer = styled.div<{
   max-height: ${(props) => (props.$expanded ? "400px" : "120px")};
   overflow-y: ${(props) => (props.$expanded ? "auto" : "hidden")};
   padding: 1rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 12px;
-  border: 1px solid #e8edf5;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   display: ${(props) => (props.$compact ? "none" : "block")};
 
   &::-webkit-scrollbar {
@@ -345,10 +349,10 @@ const DescriptionContainer = styled.div<{
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(74, 144, 226, 0.15);
+    background: ${primaryBlueAlpha(0.15)};
     border-radius: 4px;
     &:hover {
-      background: rgba(74, 144, 226, 0.25);
+      background: ${primaryBlueAlpha(0.25)};
     }
   }
 `;
@@ -356,7 +360,7 @@ const DescriptionContainer = styled.div<{
 const AnalyzerDescriptionHeader = styled.div<{ $compact?: boolean }>`
   font-size: 0.8rem;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 1rem 0 0.5rem 0;
@@ -368,13 +372,13 @@ const AnalyzerDescriptionHeader = styled.div<{ $compact?: boolean }>`
   svg {
     width: 14px;
     height: 14px;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
 const MarkdownContent = styled(ReactMarkdown)`
   font-size: 0.9rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   line-height: 1.6;
   height: 100%;
 
@@ -383,7 +387,7 @@ const MarkdownContent = styled(ReactMarkdown)`
   }
 
   code {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
     font-size: 0.85em;
@@ -397,7 +401,7 @@ const MarkdownContent = styled(ReactMarkdown)`
   }
 `;
 
-const ExpandButton = styled.button<{ $visible?: boolean }>`
+const ExpandButton = styled.button`
   position: absolute;
   bottom: 0;
   left: 0;
@@ -409,14 +413,12 @@ const ExpandButton = styled.button<{ $visible?: boolean }>`
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #4a90e2;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   font-size: 0.8rem;
   font-weight: 500;
-  opacity: ${(props) => (props.$visible ? 1 : 0)};
-  transition: opacity 0.2s ease;
 
   &:hover {
-    color: #2563eb;
+    color: ${OS_LEGAL_COLORS.primaryBlueHover};
   }
 
   svg {
@@ -428,16 +430,16 @@ const EmptyDescription = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-size: 0.9rem;
   font-style: italic;
   padding: 0.75rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 6px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
 
   svg {
-    color: #cbd5e1;
+    color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -452,12 +454,18 @@ const AnnotationsToggle = styled.button<{
     props.$compact ? "0.5rem 0.875rem" : "0.75rem 1.25rem"};
   background: ${(props) =>
     props.$isVisible
-      ? "linear-gradient(135deg, rgba(74, 144, 226, 0.08), rgba(74, 144, 226, 0.04))"
+      ? `linear-gradient(135deg, ${primaryBlueAlpha(0.08)}, ${primaryBlueAlpha(
+          0.04
+        )})`
       : "#ffffff"};
   border: 1px solid
-    ${(props) => (props.$isVisible ? "rgba(74, 144, 226, 0.2)" : "#e2e8f0")};
+    ${(props) =>
+      props.$isVisible ? primaryBlueAlpha(0.2) : OS_LEGAL_COLORS.border};
   border-radius: ${(props) => (props.$compact ? "8px" : "12px")};
-  color: ${(props) => (props.$isVisible ? "#4a90e2" : "#64748b")};
+  color: ${(props) =>
+    props.$isVisible
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textSecondary};
   font-size: ${(props) => (props.$compact ? "0.8125rem" : "0.875rem")};
   font-weight: 500;
   cursor: pointer;
@@ -474,7 +482,7 @@ const AnnotationsToggle = styled.button<{
     height: 100%;
     background: ${(props) =>
       props.$isVisible
-        ? "linear-gradient(135deg, rgba(74, 144, 226, 0.1), transparent)"
+        ? `linear-gradient(135deg, ${primaryBlueAlpha(0.1)}, transparent)`
         : "linear-gradient(135deg, rgba(226, 232, 240, 0.5), transparent)"};
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -484,7 +492,7 @@ const AnnotationsToggle = styled.button<{
     transform: translateY(-1px);
     box-shadow: ${(props) =>
       props.$isVisible
-        ? "0 4px 12px rgba(74, 144, 226, 0.1)"
+        ? `0 4px 12px ${primaryBlueAlpha(0.1)}`
         : "0 4px 12px rgba(0, 0, 0, 0.05)"};
 
     &::before {
@@ -503,9 +511,7 @@ const AnnotationsToggle = styled.button<{
     width: ${(props) => (props.$compact ? "20px" : "24px")};
     height: ${(props) => (props.$compact ? "20px" : "24px")};
     background: ${(props) =>
-      props.$isVisible
-        ? "rgba(74, 144, 226, 0.1)"
-        : "rgba(226, 232, 240, 0.5)"};
+      props.$isVisible ? primaryBlueAlpha(0.1) : "rgba(226, 232, 240, 0.5)"};
     border-radius: ${(props) => (props.$compact ? "4px" : "6px")};
     transition: all 0.3s ease;
 
@@ -513,7 +519,10 @@ const AnnotationsToggle = styled.button<{
       width: ${(props) => (props.$compact ? "12px" : "14px")};
       height: ${(props) => (props.$compact ? "12px" : "14px")};
       transition: all 0.3s ease;
-      color: ${(props) => (props.$isVisible ? "#4a90e2" : "#94a3b8")};
+      color: ${(props) =>
+        props.$isVisible
+          ? OS_LEGAL_COLORS.primaryBlue
+          : OS_LEGAL_COLORS.textMuted};
     }
   }
 
@@ -524,13 +533,14 @@ const AnnotationsToggle = styled.button<{
     padding: ${(props) =>
       props.$compact ? "0.125rem 0.375rem" : "0.25rem 0.5rem"};
     background: ${(props) =>
-      props.$isVisible
-        ? "rgba(74, 144, 226, 0.1)"
-        : "rgba(226, 232, 240, 0.5)"};
+      props.$isVisible ? primaryBlueAlpha(0.1) : "rgba(226, 232, 240, 0.5)"};
     border-radius: ${(props) => (props.$compact ? "4px" : "6px")};
     font-size: ${(props) => (props.$compact ? "0.7rem" : "0.75rem")};
     font-weight: 600;
-    color: ${(props) => (props.$isVisible ? "#4a90e2" : "#64748b")};
+    color: ${(props) =>
+      props.$isVisible
+        ? OS_LEGAL_COLORS.primaryBlue
+        : OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -608,10 +618,8 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
 
   const filteredItems = useMemo((): AnalysisType[] => {
     if (!searchTerm) return analyses;
-    return fuseOptions
-      ? analysesFuse.search(searchTerm).map((result) => result.item)
-      : analyses;
-  }, [analyses, searchTerm, analysesFuse, fuseOptions]);
+    return analysesFuse.search(searchTerm).map((result) => result.item);
+  }, [analyses, searchTerm, analysesFuse]);
 
   const handleSearchChange = (value: string) => {
     if (externalSearchTerm === undefined) {
@@ -619,56 +627,61 @@ const AnalysisTraySelector: React.FC<AnalysisTraySelectorProps> = ({
     }
   };
 
-  const mountedRef = useRef<boolean>(false);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
   // Memoized calculation of unique labels for each analysis
   const analysisLabelsCount = useMemo(() => {
-    return analyses.reduce((acc, item) => {
-      const uniqueLabels =
-        item.fullAnnotationList?.reduce(
-          (labelAcc: string[], curr) =>
-            curr.annotationLabel?.text
-              ? [...new Set([...labelAcc, curr.annotationLabel.text])]
-              : labelAcc,
-          []
-        ) || [];
-
-      return {
-        ...acc,
-        [item.id]: uniqueLabels.length,
-      };
-    }, {} as Record<string, number>);
+    const result: Record<string, number> = {};
+    for (const item of analyses) {
+      const labels = new Set<string>();
+      for (const ann of item.fullAnnotationList ?? []) {
+        if (ann.annotationLabel?.text) {
+          labels.add(ann.annotationLabel.text);
+        }
+      }
+      result[item.id] = labels.size;
+    }
+    return result;
   }, [analyses]);
 
   return (
     <TrayContainer>
       {externalSearchTerm === undefined && (
-        <SearchSegment attached="top">
-          <Form>
-            <Form.Input
-              icon={{
-                name: searchTerm ? "cancel" : "search",
-                link: true,
-                onClick: searchTerm ? () => handleSearchChange("") : undefined,
-              }}
+        <SearchSegment>
+          <div style={{ position: "relative" }}>
+            <Input
               placeholder="Search analyses..."
-              onChange={(e) => handleSearchChange(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handleSearchChange(e.target.value)
+              }
               value={searchTerm}
+              fullWidth
+              aria-label="Search analyses"
             />
-          </Form>
+            <button
+              type="button"
+              onClick={searchTerm ? () => handleSearchChange("") : undefined}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                cursor: searchTerm ? "pointer" : "default",
+                padding: "4px",
+                display: "flex",
+                alignItems: "center",
+                color: OS_LEGAL_COLORS.textMuted,
+              }}
+              aria-label={searchTerm ? "Clear search" : "Search"}
+            >
+              {searchTerm ? <X size={16} /> : <Search size={16} />}
+            </button>
+          </div>
         </SearchSegment>
       )}
 
-      <AnalysisListSegment
-        attached={externalSearchTerm === undefined ? "bottom" : undefined}
-      >
-        {mountedRef.current && filteredItems.length === 0 ? (
+      <AnalysisListSegment>
+        {filteredItems.length === 0 ? (
           <NoAnalysesMessage>
             <ChartNetwork size={32} />
             <h4>No Analyses Available</h4>
@@ -848,14 +861,15 @@ const DescriptionExpander: React.FC<DescriptionExpanderProps> = ({
           $compact={isCompact}
           ref={contentRef}
         >
-          <MarkdownContent>{description}</MarkdownContent>
+          <MarkdownContent rehypePlugins={[rehypeSanitize]}>
+            {description}
+          </MarkdownContent>
           {needsExpansion && (
             <ExpandButton
               onClick={(e) => {
                 e.stopPropagation();
                 setExpanded(!expanded);
               }}
-              $visible={needsExpansion}
             >
               {expanded ? (
                 <>

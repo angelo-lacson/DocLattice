@@ -5,7 +5,9 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { Table, Button, Popup } from "semantic-ui-react";
+// TODO: migrate to @os-legal/ui once Table component is available
+import { Table } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 import { Loader2, Circle } from "lucide-react";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -150,33 +152,45 @@ const EditableCell = styled.div.attrs<{
   display: flex;
   align-items: center;
   background: ${(props) =>
-    props.isEditing ? "#f0f9ff" : props.hasError ? "#fef2f2" : "transparent"};
+    props.isEditing
+      ? OS_LEGAL_COLORS.infoSurface
+      : props.hasError
+      ? OS_LEGAL_COLORS.dangerSurface
+      : "transparent"};
   border: 1px solid
     ${(props) =>
       props.isEditing
         ? OS_LEGAL_COLORS.primaryBlue
         : props.hasError
-        ? "#ef4444"
+        ? OS_LEGAL_COLORS.danger
         : "transparent"};
 
   &:hover {
     background: ${(props) =>
-      props.isEditing ? "#f0f9ff" : OS_LEGAL_COLORS.surfaceHover};
+      props.isEditing
+        ? OS_LEGAL_COLORS.infoSurface
+        : OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
 const EmptyValue = styled.span`
-  color: #cbd5e1;
+  color: ${OS_LEGAL_COLORS.borderHover};
   font-style: italic;
 `;
 
 const ErrorTooltip = styled.div`
-  background: #dc2626;
+  position: absolute;
+  bottom: -2rem;
+  left: 0.5rem;
+  z-index: 10;
+  background: ${OS_LEGAL_COLORS.danger};
   color: white;
-  padding: 0.5rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   max-width: 200px;
+  white-space: nowrap;
+  pointer-events: none;
 `;
 
 const PaginationFooter = styled.div`
@@ -555,7 +569,12 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                 <Table.HeaderCell key={column.id}>
                   {column.name}
                   {column.validationConfig?.required && (
-                    <span style={{ color: "#ef4444", marginLeft: "0.25rem" }}>
+                    <span
+                      style={{
+                        color: OS_LEGAL_COLORS.danger,
+                        marginLeft: "0.25rem",
+                      }}
+                    >
                       *
                     </span>
                   )}
@@ -595,7 +614,7 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                           autoFocus
                         />
                       ) : (
-                        <>
+                        <div style={{ position: "relative" }}>
                           <EditableCell
                             isEditing={false}
                             hasError={hasError}
@@ -635,18 +654,11 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                             )}
                           </EditableCell>
                           {hasError && (
-                            <Popup
-                              content={
-                                <ErrorTooltip>
-                                  {validationErrors[cellKey]}
-                                </ErrorTooltip>
-                              }
-                              open
-                              position="top center"
-                              trigger={<span />}
-                            />
+                            <ErrorTooltip>
+                              {validationErrors[cellKey]}
+                            </ErrorTooltip>
                           )}
-                        </>
+                        </div>
                       )}
                     </Table.Cell>
                   );
@@ -661,8 +673,8 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
               Showing {documents.length} of many documents
             </PaginationInfo>
             <Button
-              primary
-              size="small"
+              variant="primary"
+              size="sm"
               onClick={() => {
                 if (!documentsLoading && pageInfo?.hasNextPage && fetchMore) {
                   fetchMore({
