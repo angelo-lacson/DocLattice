@@ -42,10 +42,10 @@ export const StyledModalWrapper = styled.div`
 
   .oc-modal {
     width: 100%;
-    max-width: 700px;
+    max-width: 640px;
     overflow-y: auto;
     overflow-x: visible;
-    animation: ${fadeIn} 0.3s ease-out;
+    animation: ${fadeIn} 0.25s ease-out;
 
     @media (max-width: ${TABLET_BREAKPOINT}px) {
       max-width: 95vw;
@@ -64,7 +64,7 @@ export const StyledModalWrapper = styled.div`
   }
 
   .oc-modal-body {
-    background: var(--oc-bg-subtle);
+    background: var(--oc-bg-surface);
     padding: var(--oc-spacing-lg);
     overflow: visible;
 
@@ -102,36 +102,27 @@ export const HeaderIcon = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--oc-radius-md);
-  background: linear-gradient(
-    135deg,
-    var(--oc-accent) 0%,
-    var(--oc-accent-hover) 100%
-  );
+  background: var(--oc-accent);
   color: white;
-  margin-right: var(--oc-spacing-sm);
+  margin-right: var(--oc-spacing-xs);
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
   }
 `;
 
 // Form sections
 export const FormSection = styled.div`
-  background: var(--oc-bg-surface);
   border-radius: var(--oc-radius-lg);
-  padding: var(--oc-spacing-lg);
+  padding: 0;
   margin-bottom: var(--oc-spacing-md);
-  box-shadow: var(--oc-shadow-sm);
-  border: 1px solid var(--oc-border-default);
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    padding: var(--oc-spacing-md);
     margin-bottom: var(--oc-spacing-sm);
-    border-radius: var(--oc-radius-md);
   }
 
   &:last-child {
@@ -140,15 +131,13 @@ export const FormSection = styled.div`
 `;
 
 export const SectionTitle = styled.h3`
-  font-size: var(--oc-font-size-xs);
-  font-weight: 600;
-  color: var(--oc-fg-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0 0 var(--oc-spacing-md) 0;
+  font-size: var(--oc-font-size-sm);
+  font-weight: 500;
+  color: var(--oc-fg-secondary);
+  margin: 0 0 var(--oc-spacing-sm) 0;
   display: flex;
   align-items: center;
-  gap: var(--oc-spacing-sm);
+  gap: var(--oc-spacing-xs);
 
   svg {
     width: 14px;
@@ -156,8 +145,8 @@ export const SectionTitle = styled.h3`
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    font-size: 11px;
-    margin-bottom: var(--oc-spacing-sm);
+    font-size: var(--oc-font-size-xs);
+    margin-bottom: var(--oc-spacing-xs);
   }
 `;
 
@@ -205,26 +194,26 @@ export const DropZone = styled.div<{
   $isDragActive?: boolean;
   $hasFiles?: boolean;
 }>`
-  border: 2px dashed
+  border: 1.5px dashed
     ${({ $isDragActive }) =>
       $isDragActive ? "var(--oc-accent)" : "var(--oc-border-default)"};
   border-radius: var(--oc-radius-lg);
   background: ${({ $isDragActive }) =>
-    $isDragActive ? accentAlpha(0.05) : "var(--oc-bg-surface-hover, #f8fafc)"};
-  min-height: 200px;
+    $isDragActive ? accentAlpha(0.05) : "var(--oc-bg-subtle)"};
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--oc-spacing-xl);
+  padding: var(--oc-spacing-lg);
   cursor: ${({ $hasFiles }) => ($hasFiles ? "default" : "pointer")};
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    min-height: 180px;
-    padding: var(--oc-spacing-lg) var(--oc-spacing-md);
+    min-height: 140px;
+    padding: var(--oc-spacing-md);
   }
 
   &:hover {
@@ -242,22 +231,21 @@ export const DropZone = styled.div<{
 `;
 
 export const DropZoneIcon = styled.div`
-  font-size: 2.5rem;
   color: var(--oc-accent);
-  margin-bottom: var(--oc-spacing-md);
-  opacity: 0.8;
+  margin-bottom: var(--oc-spacing-sm);
+  opacity: 0.6;
 
   svg {
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     svg {
-      width: 40px;
-      height: 40px;
+      width: 32px;
+      height: 32px;
     }
-    margin-bottom: var(--oc-spacing-sm);
+    margin-bottom: var(--oc-spacing-xs);
   }
 `;
 
@@ -323,19 +311,19 @@ export const FileItem = styled.div<{
   $selected?: boolean;
   $status?: "pending" | "uploading" | "success" | "failed";
 }>`
-  padding: var(--oc-spacing-sm) var(--oc-spacing-md);
-  margin: var(--oc-spacing-xs) 0;
+  padding: var(--oc-spacing-xs) var(--oc-spacing-sm);
+  margin: 2px 0;
   border-radius: var(--oc-radius-md);
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
-  min-height: 56px;
+  min-height: 44px;
   border: 1px solid transparent;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    padding: var(--oc-spacing-md);
-    min-height: 64px;
+    padding: var(--oc-spacing-sm);
+    min-height: 48px;
   }
 
   ${({ $selected }) =>
@@ -385,11 +373,11 @@ export const FileItemIcon = styled.div<{
       ? "var(--oc-success)"
       : $status === "failed"
       ? "var(--oc-error)"
-      : "var(--oc-accent)"};
+      : "var(--oc-fg-tertiary)"};
 
   svg {
-    width: 24px;
-    height: 24px;
+    width: 18px;
+    height: 18px;
   }
 `;
 
@@ -451,11 +439,11 @@ export const EditPanel = styled.div`
 
 export const EditPanelHeader = styled.h4`
   font-size: var(--oc-font-size-sm);
-  font-weight: 600;
-  color: var(--oc-fg-primary);
+  font-weight: 500;
+  color: var(--oc-fg-secondary);
   margin: 0 0 var(--oc-spacing-sm) 0;
   padding-bottom: var(--oc-spacing-xs);
-  border-bottom: 2px solid var(--oc-accent);
+  border-bottom: 1px solid var(--oc-border-default);
 `;
 
 // Step indicator
@@ -464,12 +452,11 @@ export const StepIndicatorContainer = styled.div`
   justify-content: center;
   align-items: center;
   gap: var(--oc-spacing-sm);
-  margin-bottom: var(--oc-spacing-lg);
-  padding: 0 var(--oc-spacing-md);
+  margin-bottom: var(--oc-spacing-md);
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     gap: var(--oc-spacing-xs);
-    margin-bottom: var(--oc-spacing-md);
+    margin-bottom: var(--oc-spacing-sm);
   }
 `;
 
@@ -480,40 +467,36 @@ export const StepChip = styled.div<{
   display: flex;
   align-items: center;
   gap: var(--oc-spacing-xs);
-  padding: var(--oc-spacing-xs) var(--oc-spacing-md);
+  padding: 6px var(--oc-spacing-sm);
   border-radius: var(--oc-radius-full);
-  font-size: var(--oc-font-size-sm);
+  font-size: var(--oc-font-size-xs);
   font-weight: 500;
   transition: all 0.2s ease;
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    padding: var(--oc-spacing-xs) var(--oc-spacing-sm);
-    font-size: var(--oc-font-size-xs);
+    padding: 4px var(--oc-spacing-xs);
+    font-size: 11px;
 
     svg {
-      width: 12px;
-      height: 12px;
+      width: 11px;
+      height: 11px;
     }
   }
 
   ${({ $active, $completed }) =>
     $active
       ? css`
-          background: linear-gradient(
-            135deg,
-            var(--oc-accent) 0%,
-            var(--oc-accent-hover) 100%
-          );
+          background: var(--oc-accent);
           color: white;
         `
       : $completed
       ? css`
-          background: var(--oc-success-bg);
+          background: var(--oc-success-bg, #f0fdf4);
           color: var(--oc-success);
         `
       : css`
@@ -541,22 +524,21 @@ export const CorpusCard = styled.div<{ $selected?: boolean }>`
   border: 1px solid
     ${({ $selected }) =>
       $selected ? "var(--oc-accent)" : "var(--oc-border-default)"};
-  padding: var(--oc-spacing-md);
+  padding: var(--oc-spacing-sm) var(--oc-spacing-md);
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: var(--oc-spacing-sm);
+  transition: all 0.15s ease;
+  margin-bottom: var(--oc-spacing-xs);
 
   ${({ $selected }) =>
     $selected &&
     css`
-      background: ${accentAlpha(0.05)};
-      box-shadow: 0 0 0 2px ${accentAlpha(0.2)};
+      background: ${accentAlpha(0.04)};
     `}
 
   &:hover {
     border-color: var(--oc-accent);
-    transform: translateY(-1px);
-    box-shadow: var(--oc-shadow-sm);
+    background: ${({ $selected }) =>
+      $selected ? accentAlpha(0.06) : "var(--oc-bg-subtle)"};
   }
 
   &:last-child {
@@ -621,20 +603,20 @@ export const CorpusCardMeta = styled.div`
 
 // Error message
 export const ErrorMessage = styled.div`
-  background: var(--oc-error-bg);
-  border: 1px solid var(--oc-error);
+  background: var(--oc-error-bg, #fef2f2);
+  border: 1px solid var(--oc-error, #ef4444);
   border-radius: var(--oc-radius-md);
-  padding: var(--oc-spacing-md);
+  padding: var(--oc-spacing-sm) var(--oc-spacing-md);
   margin-bottom: var(--oc-spacing-md);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--oc-spacing-sm);
 
   svg {
-    color: var(--oc-error);
+    color: var(--oc-error, #ef4444);
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
   .content {
@@ -642,13 +624,12 @@ export const ErrorMessage = styled.div`
 
     .header {
       font-weight: 600;
-      color: var(--oc-error);
-      margin-bottom: var(--oc-spacing-xs);
-      font-size: var(--oc-font-size-sm);
+      color: var(--oc-error, #ef4444);
+      font-size: var(--oc-font-size-xs);
     }
 
     .message {
-      font-size: var(--oc-font-size-sm);
+      font-size: var(--oc-font-size-xs);
       color: var(--oc-fg-secondary);
     }
   }
@@ -673,47 +654,48 @@ export const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--oc-spacing-xl);
+  padding: var(--oc-spacing-lg);
   text-align: center;
   color: var(--oc-fg-tertiary);
 
   svg {
-    width: 48px;
-    height: 48px;
-    margin-bottom: var(--oc-spacing-md);
-    opacity: 0.5;
+    width: 32px;
+    height: 32px;
+    margin-bottom: var(--oc-spacing-sm);
+    opacity: 0.4;
   }
 
   .title {
-    font-size: var(--oc-font-size-md);
+    font-size: var(--oc-font-size-sm);
     font-weight: 500;
     color: var(--oc-fg-secondary);
-    margin-bottom: var(--oc-spacing-xs);
+    margin-bottom: 2px;
   }
 
   .description {
-    font-size: var(--oc-font-size-sm);
+    font-size: var(--oc-font-size-xs);
   }
 `;
 
 // Inline corpus item for bulk mode selector (simpler than CorpusCard)
 export const InlineCorpusItem = styled.div<{ $selected?: boolean }>`
-  padding: var(--oc-spacing-sm);
+  padding: var(--oc-spacing-xs) var(--oc-spacing-sm);
   cursor: pointer;
   border-radius: var(--oc-radius-md);
   background: ${(props) =>
-    props.$selected ? accentAlpha(0.1) : "transparent"};
+    props.$selected ? accentAlpha(0.08) : "transparent"};
   border: 1px solid
     ${(props) => (props.$selected ? "var(--oc-accent)" : "transparent")};
-  margin-bottom: var(--oc-spacing-xs);
+  margin-bottom: 2px;
   transition: all 0.15s ease;
 
   &:hover {
     background: ${(props) =>
-      props.$selected ? accentAlpha(0.15) : "var(--oc-bg-subtle)"};
+      props.$selected ? accentAlpha(0.12) : "var(--oc-bg-subtle)"};
   }
 
   .corpus-title {
+    font-size: var(--oc-font-size-sm);
     font-weight: 500;
     color: var(--oc-fg-primary);
   }

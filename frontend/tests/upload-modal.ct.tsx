@@ -157,6 +157,11 @@ test.describe("UploadModal - Bulk Mode", () => {
     // Drop zone should indicate ZIP files
     await expect(page.locator("text=Click to select a ZIP file")).toBeVisible();
 
+    // Wait for corpus list to load
+    await page.waitForTimeout(500);
+
+    await docScreenshot(page, "corpus--bulk-upload-modal--initial");
+
     await component.unmount();
   });
 
