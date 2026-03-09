@@ -538,8 +538,15 @@ SECURE_CSP_DIRECTIVES = {
 
 # When Auth0 is enabled, the browser must be able to load scripts from and
 # connect to the Auth0 tenant domain for authentication flows.
-# The admin login page loads the Auth0 SPA SDK from cdn.jsdelivr.net,
-# so that origin must also be allowed in script-src.
+#
+# The admin login page loads the Auth0 SPA SDK from cdn.jsdelivr.net, so that
+# origin must also be allowed in script-src.  NOTE: this allowlists the entire
+# cdn.jsdelivr.net origin app-wide (CSP is not page-scoped).  The actual Auth0
+# script tag in auth0_login.html is pinned with an SRI integrity hash, but SRI
+# only protects that specific <script> element — other pages could still load
+# arbitrary jsDelivr-hosted scripts if an XSS vector existed.  This is an
+# accepted trade-off for CDN-hosted dependencies; keep it in mind when auditing
+# script injection surface area.
 if USE_AUTH0:
     from config.middleware import validate_csp_domain
 
