@@ -49,7 +49,7 @@ export const ViewLabelSelector: React.FC = () => {
 
   const handleChange = (value: string | string[] | null) => {
     const selectedLabels = allLabelChoices.filter((l) =>
-      Array.isArray(value) ? value.includes(l.id) : []
+      Array.isArray(value) ? value.includes(l.id) : false
     );
     setSpanLabelsToView(selectedLabels);
   };
