@@ -336,10 +336,10 @@
             }
             try {
                 auth0Client = await auth0.createAuth0Client({
-                    domain: '{{ auth0_domain }}',
-                    clientId: '{{ auth0_client_id }}',
+                    domain: '{{ auth0_domain|escapejs }}',
+                    clientId: '{{ auth0_client_id|escapejs }}',
                     authorizationParams: {
-                        audience: '{{ auth0_audience }}',
+                        audience: '{{ auth0_audience|escapejs }}',
                         redirect_uri: window.location.origin + window.location.pathname
                     },
                     cacheLocation: 'memory'
