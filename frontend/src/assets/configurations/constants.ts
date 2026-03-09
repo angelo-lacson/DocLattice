@@ -326,6 +326,10 @@ export const KNOWN_ACRONYMS: Record<string, string> = {
   nlm: "NLM",
 };
 
+// PAWLs coordinate normalization
+/** Half a PDF point tolerance for comparing PAWLs vs PDF.js page dimensions */
+export const PAWLS_COORDINATE_EPSILON = 0.5;
+
 // Corpus action trigger display labels
 // Maps backend trigger enum values (lowercase) to user-facing short labels
 export const TRIGGER_LABELS: Record<string, string> = {

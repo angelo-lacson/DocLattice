@@ -50,7 +50,7 @@ import { PDFDocumentLoadingTask } from "pdfjs-dist";
 import { useUISettings } from "../../annotator/hooks/useUISettings";
 import useWindowDimensions from "../../hooks/WindowDimensionHook";
 import { PDFPageInfo } from "../../annotator/types/pdf";
-import { Token, ViewState, PermissionTypes } from "../../types";
+import { ViewState, PermissionTypes } from "../../types";
 import { toast } from "react-toastify";
 import {
   useDocText,
@@ -68,6 +68,7 @@ import {
   convertToDocTypeAnnotations,
   convertToServerAnnotation,
   getPermissions,
+  resolvePageTokens,
 } from "../../../utils/transform";
 import {
   PdfAnnotations,
@@ -836,34 +837,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               const pageNum = i; // Capture page number for logging
               loadPagesPromises.push(
                 pdfDocProxy.getPage(pageNum).then((p) => {
-                  let pageTokens: Token[] = [];
-                  const pageIndex = p.pageNumber - 1;
-
-                  if (
-                    !pawlsData ||
-                    !Array.isArray(pawlsData) ||
-                    pageIndex >= pawlsData.length
-                  ) {
-                    console.warn(
-                      `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${pawlsData.length}`
-                    );
-                    pageTokens = [];
-                  } else {
-                    const pageData = pawlsData[pageIndex];
-
-                    if (!pageData) {
-                      pageTokens = [];
-                    } else if (typeof pageData.tokens === "undefined") {
-                      pageTokens = [];
-                    } else if (!Array.isArray(pageData.tokens)) {
-                      console.error(
-                        `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
-                      );
-                      pageTokens = [];
-                    } else {
-                      pageTokens = pageData.tokens;
-                    }
-                  }
+                  const viewport = p.getViewport({ scale: 1 });
+                  const pageTokens = resolvePageTokens(
+                    pawlsData,
+                    p.pageNumber - 1,
+                    viewport.width,
+                    viewport.height,
+                    pageNum
+                  );
                   return new PDFPageInfo(p, pageTokens, zoomLevel);
                 }) as unknown as Promise<PDFPageInfo>
               );
@@ -1055,34 +1036,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 const pageNum = i;
                 loadPagesPromises.push(
                   pdfDocProxy.getPage(pageNum).then((p) => {
-                    let pageTokens: Token[] = [];
-                    const pageIndex = p.pageNumber - 1;
-
-                    if (
-                      !pawlsData ||
-                      !Array.isArray(pawlsData) ||
-                      pageIndex >= pawlsData.length
-                    ) {
-                      console.warn(
-                        `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${pawlsData.length}`
-                      );
-                      pageTokens = [];
-                    } else {
-                      const pageData = pawlsData[pageIndex];
-
-                      if (!pageData) {
-                        pageTokens = [];
-                      } else if (typeof pageData.tokens === "undefined") {
-                        pageTokens = [];
-                      } else if (!Array.isArray(pageData.tokens)) {
-                        console.error(
-                          `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
-                        );
-                        pageTokens = [];
-                      } else {
-                        pageTokens = pageData.tokens;
-                      }
-                    }
+                    const viewport = p.getViewport({ scale: 1 });
+                    const pageTokens = resolvePageTokens(
+                      pawlsData,
+                      p.pageNumber - 1,
+                      viewport.width,
+                      viewport.height,
+                      pageNum
+                    );
                     return new PDFPageInfo(p, pageTokens, zoomLevel);
                   }) as unknown as Promise<PDFPageInfo>
                 );
