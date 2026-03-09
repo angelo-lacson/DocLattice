@@ -370,10 +370,14 @@ test.describe("DocumentMetadataGrid", () => {
     const dropdown = page.locator(".oc-dropdown").first();
     await expect(dropdown).toBeVisible({ timeout: 2000 });
 
-    // Type to search and select - @os-legal/ui uses a standard input inside the dropdown
-    const searchInput = dropdown.locator("input").first();
-    await searchInput.type("Completed");
-    await page.waitForTimeout(100);
+    // Click the dropdown trigger to open it and reveal the search input
+    await dropdown.locator(".oc-select-trigger").click();
+    await page.waitForTimeout(200);
+
+    // Type to search and select - @os-legal/ui shows search input when open
+    const searchInput = dropdown.locator(".oc-select-search");
+    await searchInput.fill("Completed");
+    await page.waitForTimeout(200);
 
     // Press Enter to select the highlighted option
     await page.keyboard.press("Enter");

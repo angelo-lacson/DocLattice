@@ -13,6 +13,7 @@ import {
   ChartNetwork,
   Notebook,
   Eye,
+  ArrowUpDown,
 } from "lucide-react";
 import { Dropdown } from "@os-legal/ui";
 import {
@@ -475,6 +476,18 @@ export const SidebarControlBar: React.FC<SidebarControlBarProps> = memo(
               value={sortBy}
               onChange={(value) => onSortChange(value as SortOption)}
               placeholder="Sort by..."
+              trigger={(state) => (
+                <DropdownHeader>
+                  <DropdownLabel>
+                    <ArrowUpDown />
+                    {state.selectedOption &&
+                    !Array.isArray(state.selectedOption)
+                      ? state.selectedOption.label
+                      : state.placeholder}
+                  </DropdownLabel>
+                  <ChevronIcon $isOpen={state.isOpen} />
+                </DropdownHeader>
+              )}
             />
           </FilterRow>
 

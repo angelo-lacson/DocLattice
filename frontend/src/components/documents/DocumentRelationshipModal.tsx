@@ -1013,31 +1013,41 @@ export const DocumentRelationshipModal: React.FC<
                               {option.label}
                             </span>
                           )}
-                          renderEmpty={() => (
-                            <span
-                              style={{
-                                cursor: labelSearchTerm ? "pointer" : "default",
-                                color: labelSearchTerm
-                                  ? OS_LEGAL_COLORS.primaryBlue
-                                  : OS_LEGAL_COLORS.textSecondary,
-                                padding: "0.25rem 0",
-                                display: "block",
-                              }}
-                              onClick={
-                                labelSearchTerm
-                                  ? (e) => {
-                                      e.stopPropagation();
-                                      setNewLabelText(labelSearchTerm);
-                                      setShowCreateLabel(true);
-                                    }
-                                  : undefined
-                              }
-                            >
-                              {labelSearchTerm
-                                ? `Create label: "${labelSearchTerm}"`
-                                : "Type to create a new label"}
-                            </span>
-                          )}
+                          renderEmpty={() =>
+                            labelSearchTerm ? (
+                              <button
+                                type="button"
+                                style={{
+                                  cursor: "pointer",
+                                  color: OS_LEGAL_COLORS.primaryBlue,
+                                  padding: "0.25rem 0.5rem",
+                                  display: "block",
+                                  width: "100%",
+                                  textAlign: "left",
+                                  background: "none",
+                                  border: "none",
+                                  font: "inherit",
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setNewLabelText(labelSearchTerm);
+                                  setShowCreateLabel(true);
+                                }}
+                              >
+                                Create label: &ldquo;{labelSearchTerm}&rdquo;
+                              </button>
+                            ) : (
+                              <span
+                                style={{
+                                  color: OS_LEGAL_COLORS.textSecondary,
+                                  padding: "0.25rem 0",
+                                  display: "block",
+                                }}
+                              >
+                                Type to create a new label
+                              </span>
+                            )
+                          }
                           value={selectedLabelId ?? null}
                           onSearchChange={(query) => setLabelSearchTerm(query)}
                           onChange={(value) => {

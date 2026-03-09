@@ -76,6 +76,7 @@ export const LabelSetSelector = ({
       value: node.id,
       label: node.title || "",
       description: node.description || undefined,
+      icon: node.icon || undefined,
     };
   });
 

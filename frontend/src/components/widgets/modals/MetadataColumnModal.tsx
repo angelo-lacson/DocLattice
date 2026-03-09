@@ -385,7 +385,7 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
 
           <div>
             <label
-              htmlFor="metadata-data-type"
+              id="metadata-data-type-label"
               style={{
                 display: "block",
                 marginBottom: "0.5rem",
@@ -402,6 +402,7 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
               onChange={(value) => setDataType(value as MetadataDataType)}
               disabled={!!column}
               clearable={false}
+              aria-labelledby="metadata-data-type-label"
             />
           </div>
 

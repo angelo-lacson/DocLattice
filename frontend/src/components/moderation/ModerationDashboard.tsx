@@ -322,7 +322,7 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
         >
           <BarChart3 size={16} />
           Moderation Metrics
-          <Dropdown
+          <Dropdown<number>
             mode="select"
             clearable={false}
             options={TIME_RANGE_OPTIONS}
