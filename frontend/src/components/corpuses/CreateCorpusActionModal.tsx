@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from "react";
-// TODO: migrate to @os-legal/ui once Dropdown and Menu components are available
-import { Dropdown, Menu } from "semantic-ui-react";
+import { Dropdown, DropdownOption } from "@os-legal/ui";
+import { Menu } from "semantic-ui-react";
 import { Info, Settings, Cpu, FileText } from "lucide-react";
 import {
   Button,
@@ -50,11 +50,6 @@ const StyledModal = styled(Modal)`
   &.oc-modal {
     max-width: 640px;
     width: 100%;
-  }
-
-  /* Ensure Semantic UI dropdowns appear above modal content */
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
   }
 `;
 
@@ -311,11 +306,8 @@ export const CreateCorpusActionModal: React.FC<
     []
   );
 
-  const handleAgentSearchChange = (
-    _event: React.SyntheticEvent<HTMLElement>,
-    { searchQuery }: { searchQuery: string }
-  ) => {
-    debouncedSetAgentSearch(searchQuery);
+  const handleAgentSearchChange = (query: string) => {
+    debouncedSetAgentSearch(query);
   };
 
   // Fetch moderation tools dynamically from backend
@@ -518,48 +510,26 @@ export const CreateCorpusActionModal: React.FC<
   };
 
   const triggerOptions = [
-    { key: "add", text: "On Document Add", value: "add_document" },
-    { key: "edit", text: "On Document Edit", value: "edit_document" },
-    { key: "new_thread", text: "On New Thread", value: "new_thread" },
-    { key: "new_message", text: "On New Message", value: "new_message" },
+    { value: "add_document", label: "On Document Add" },
+    { value: "edit_document", label: "On Document Edit" },
+    { value: "new_thread", label: "On New Thread" },
+    { value: "new_message", label: "On New Message" },
   ];
 
   // Thread/message triggers only support agent-based actions
   // (isThreadTrigger is defined earlier with the useQuery hooks)
 
   const actionTypeOptions = [
-    {
-      key: "fieldset",
-      text: "Fieldset (Extract data)",
-      value: "fieldset",
-      icon: "table",
-    },
-    {
-      key: "analyzer",
-      text: "Analyzer (Run analysis)",
-      value: "analyzer",
-      icon: "cogs",
-    },
-    {
-      key: "agent",
-      text: "Agent (AI-powered action)",
-      value: "agent",
-      icon: "microchip",
-    },
+    { value: "fieldset", label: "Fieldset (Extract data)" },
+    { value: "analyzer", label: "Analyzer (Run analysis)" },
+    { value: "agent", label: "Agent (AI-powered action)" },
   ];
-
-  interface DropdownOption {
-    key: string;
-    text: string;
-    value: string;
-  }
 
   const fieldsetOptions: DropdownOption[] = React.useMemo(
     () =>
       fieldsetsData?.fieldsets.edges.map((fieldset) => ({
-        key: fieldset.node.id,
-        text: fieldset.node.name,
         value: fieldset.node.id,
+        label: fieldset.node.name,
       })) || [],
     [fieldsetsData]
   );
@@ -567,9 +537,8 @@ export const CreateCorpusActionModal: React.FC<
   const analyzerOptions: DropdownOption[] = React.useMemo(
     () =>
       analyzersData?.analyzers.edges.map((analyzer) => ({
-        key: analyzer.node.id,
-        text: analyzer.node.analyzerId || analyzer.node.id,
         value: analyzer.node.id,
+        label: analyzer.node.analyzerId || analyzer.node.id,
       })) || [],
     [analyzersData]
   );
@@ -577,11 +546,10 @@ export const CreateCorpusActionModal: React.FC<
   const agentConfigOptions: DropdownOption[] = React.useMemo(
     () =>
       agentConfigsData?.agentConfigurations.edges.map((config) => ({
-        key: config.node.id,
-        text: `${config.node.name}${
+        value: config.node.id,
+        label: `${config.node.name}${
           config.node.scope === "CORPUS" ? " (Corpus)" : " (Global)"
         }`,
-        value: config.node.id,
       })) || [],
     [agentConfigsData]
   );
@@ -589,9 +557,8 @@ export const CreateCorpusActionModal: React.FC<
   const toolOptions: DropdownOption[] = React.useMemo(() => {
     if (!selectedAgentConfig?.availableTools) return [];
     return selectedAgentConfig.availableTools.map((tool) => ({
-      key: tool,
-      text: tool.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
       value: tool,
+      label: tool.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
     }));
   }, [selectedAgentConfig]);
 
@@ -617,11 +584,11 @@ export const CreateCorpusActionModal: React.FC<
         <FormField>
           <label>Trigger</label>
           <Dropdown
-            selection
+            mode="select"
             options={triggerOptions}
             value={trigger}
-            onChange={(_, data) => {
-              const newTrigger = data.value as
+            onChange={(value) => {
+              const newTrigger = value as
                 | "add_document"
                 | "edit_document"
                 | "new_thread"
@@ -656,12 +623,12 @@ export const CreateCorpusActionModal: React.FC<
         <FormField>
           <label>Action Type</label>
           <Dropdown
-            selection
+            mode="select"
             disabled={isThreadTrigger}
             options={actionTypeOptions}
             value={actionType}
-            onChange={(_, data) => {
-              setActionType(data.value as ActionType);
+            onChange={(value) => {
+              setActionType(value as ActionType);
               // Clear selections when changing type
               setSelectedFieldsetId(null);
               setSelectedAnalyzerId(null);
@@ -710,14 +677,12 @@ export const CreateCorpusActionModal: React.FC<
             <FormField>
               <label>Fieldset</label>
               <Dropdown
-                selection
+                mode="select"
                 clearable
-                search
+                searchable="local"
                 options={fieldsetOptions}
-                value={selectedFieldsetId || undefined}
-                onChange={(_, data) =>
-                  setSelectedFieldsetId(data.value as string)
-                }
+                value={selectedFieldsetId ?? null}
+                onChange={(value) => setSelectedFieldsetId(value as string)}
                 placeholder="Select fieldset"
               />
             </FormField>
@@ -751,14 +716,12 @@ export const CreateCorpusActionModal: React.FC<
             <FormField>
               <label>Analyzer</label>
               <Dropdown
-                selection
+                mode="select"
                 clearable
-                search
+                searchable="local"
                 options={analyzerOptions}
-                value={selectedAnalyzerId || undefined}
-                onChange={(_, data) =>
-                  setSelectedAnalyzerId(data.value as string)
-                }
+                value={selectedAnalyzerId ?? null}
+                onChange={(value) => setSelectedAnalyzerId(value as string)}
                 placeholder="Select analyzer"
               />
             </FormField>
@@ -1060,19 +1023,18 @@ export const CreateCorpusActionModal: React.FC<
                     <FormField>
                       <label>Agent</label>
                       <Dropdown
-                        selection
+                        mode="select"
                         clearable
-                        search
+                        searchable="async"
                         options={agentConfigOptions}
-                        value={selectedAgentConfigId || undefined}
-                        onChange={(_, data) => {
-                          setSelectedAgentConfigId(data.value as string);
+                        value={selectedAgentConfigId ?? null}
+                        onChange={(value) => {
+                          setSelectedAgentConfigId(value as string);
                           setPreAuthorizedTools([]);
                         }}
                         onSearchChange={handleAgentSearchChange}
                         loading={agentConfigsLoading}
                         placeholder="Select agent configuration"
-                        selectOnNavigation={false}
                       />
                     </FormField>
 
@@ -1119,13 +1081,12 @@ export const CreateCorpusActionModal: React.FC<
                               </InlineBadge>
                             </label>
                             <Dropdown
-                              selection
-                              multiple
-                              search
+                              mode="multiselect"
+                              searchable="local"
                               options={toolOptions}
                               value={preAuthorizedTools}
-                              onChange={(_, data) =>
-                                setPreAuthorizedTools(data.value as string[])
+                              onChange={(value) =>
+                                setPreAuthorizedTools(value as string[])
                               }
                               placeholder="Select tools to pre-authorize (optional)"
                             />
@@ -1166,19 +1127,18 @@ export const CreateCorpusActionModal: React.FC<
                 <FormField>
                   <label>Agent</label>
                   <Dropdown
-                    selection
+                    mode="select"
                     clearable
-                    search
+                    searchable="async"
                     options={agentConfigOptions}
-                    value={selectedAgentConfigId || undefined}
-                    onChange={(_, data) => {
-                      setSelectedAgentConfigId(data.value as string);
+                    value={selectedAgentConfigId ?? null}
+                    onChange={(value) => {
+                      setSelectedAgentConfigId(value as string);
                       setPreAuthorizedTools([]);
                     }}
                     onSearchChange={handleAgentSearchChange}
                     loading={agentConfigsLoading}
                     placeholder="Select agent configuration"
-                    selectOnNavigation={false}
                   />
                 </FormField>
 
@@ -1218,13 +1178,12 @@ export const CreateCorpusActionModal: React.FC<
                           <InlineBadge $variant="info">Optional</InlineBadge>
                         </label>
                         <Dropdown
-                          selection
-                          multiple
-                          search
+                          mode="multiselect"
+                          searchable="local"
                           options={toolOptions}
                           value={preAuthorizedTools}
-                          onChange={(_, data) =>
-                            setPreAuthorizedTools(data.value as string[])
+                          onChange={(value) =>
+                            setPreAuthorizedTools(value as string[])
                           }
                           placeholder="Select tools to pre-authorize (optional)"
                         />

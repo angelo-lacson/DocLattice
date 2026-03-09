@@ -1,7 +1,7 @@
 import React, { memo, useCallback } from "react";
 import styled, { css } from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
-import { Dropdown } from "semantic-ui-react";
+import { Dropdown } from "@os-legal/ui";
 import { User, Square, Layers, Eye, Tags } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAnnotationDisplay } from "../context/UISettingsAtom";
@@ -88,37 +88,6 @@ const SectionHeader = styled.div<{ $compact?: boolean }>`
   }
 `;
 
-const LabelDisplayDropdown = styled(Dropdown)`
-  &&& {
-    font-size: 0.875rem;
-    min-width: 100%;
-
-    &.ui.dropdown {
-      border: 1px solid ${OS_LEGAL_COLORS.border};
-      border-radius: 6px;
-      padding: 0.625rem 0.875rem;
-      background: white;
-      font-weight: 500;
-      color: ${OS_LEGAL_COLORS.textPrimary};
-
-      &:hover {
-        border-color: ${OS_LEGAL_COLORS.borderHover};
-      }
-    }
-
-    .menu {
-      border-radius: 6px;
-      border: 1px solid ${OS_LEGAL_COLORS.border};
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-
-    .item {
-      font-size: 0.875rem;
-      padding: 0.625rem 0.875rem !important;
-    }
-  }
-`;
-
 const FilterHeader = styled.div`
   display: flex;
   align-items: center;
@@ -137,17 +106,6 @@ const FilterHeader = styled.div`
 
 const LabelSelectorWrapper = styled.div`
   margin-top: 0.75rem;
-
-  /* Override ViewLabelSelector styles for better integration */
-  .ui.multiple.dropdown {
-    font-size: 0.875rem !important;
-    min-height: 40px !important;
-
-    > .label {
-      font-size: 0.75rem !important;
-      padding: 0.375rem 0.5rem !important;
-    }
-  }
 `;
 
 /**
@@ -208,22 +166,16 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
 
     const labelDisplayOptions = [
       {
-        key: LabelDisplayBehavior.ALWAYS,
-        text: "Always Show",
         value: LabelDisplayBehavior.ALWAYS,
-        icon: "eye",
+        label: "Always Show",
       },
       {
-        key: LabelDisplayBehavior.ON_HOVER,
-        text: "On Hover",
         value: LabelDisplayBehavior.ON_HOVER,
-        icon: "mouse pointer",
+        label: "On Hover",
       },
       {
-        key: LabelDisplayBehavior.HIDE,
-        text: "Hide",
         value: LabelDisplayBehavior.HIDE,
-        icon: "eye slash",
+        label: "Hide",
       },
     ];
 
@@ -290,13 +242,13 @@ export const AnnotationControls: React.FC<AnnotationControlsProps> = memo(
             <Eye />
             Label Display
           </ControlLabel>
-          <LabelDisplayDropdown
-            selection
-            compact
+          <Dropdown
+            mode="select"
+            clearable={false}
             options={labelDisplayOptions}
             value={showLabels}
-            onChange={(_: any, data: any) =>
-              handleLabelBehaviorChange(data.value as LabelDisplayBehavior)
+            onChange={(value) =>
+              handleLabelBehaviorChange(value as LabelDisplayBehavior)
             }
           />
         </ControlItem>

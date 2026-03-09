@@ -156,10 +156,12 @@ test.describe("CorpusMetadataSettings", () => {
     // Fill form
     await page.getByLabel("Field Name").fill("Status");
 
-    // Select data type
-    const dropdown = page.locator("#metadata-data-type").first();
-    await dropdown.click();
-    await page.getByRole("option", { name: "Short Text" }).click();
+    // Select data type - find the oc-dropdown near the "Data Type" label
+    const dataTypeSection = page.locator("div", {
+      has: page.locator('label:has-text("Data Type")'),
+    });
+    await dataTypeSection.locator(".oc-dropdown__trigger").click();
+    await page.locator('[role="option"]:has-text("Short Text")').click();
 
     await page.waitForTimeout(500); // Allow state to settle
 
@@ -233,10 +235,12 @@ test.describe("CorpusMetadataSettings", () => {
 
     await page.getByLabel("Field Name").fill("Priority");
 
-    // Select dropdown type
-    const typeDropdown = page.locator("#metadata-data-type").first();
-    await typeDropdown.click();
-    await page.getByRole("option", { name: "Single Choice" }).click();
+    // Select dropdown type - find the oc-dropdown near the "Data Type" label
+    const dataTypeSection = page.locator("div", {
+      has: page.locator('label:has-text("Data Type")'),
+    });
+    await dataTypeSection.locator(".oc-dropdown__trigger").click();
+    await page.locator('[role="option"]:has-text("Single Choice")').click();
 
     await page.waitForTimeout(500); // Allow state to settle
 

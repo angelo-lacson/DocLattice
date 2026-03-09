@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { IconButton } from "@os-legal/ui";
-import { Dropdown } from "semantic-ui-react";
+import { Dropdown, IconButton } from "@os-legal/ui";
 import { Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import styled from "styled-components";
@@ -166,16 +165,17 @@ export const ModelFieldBuilder: React.FC<ModelFieldBuilderProps> = ({
                     placeholder="Field Type"
                     value={field.fieldType}
                     options={[
-                      { key: "int", text: "Integer", value: "int" },
-                      { key: "float", text: "Float", value: "float" },
-                      { key: "str", text: "String", value: "str" },
-                      { key: "bool", text: "Boolean", value: "bool" },
+                      { value: "int", label: "Integer" },
+                      { value: "float", label: "Float" },
+                      { value: "str", label: "String" },
+                      { value: "bool", label: "Boolean" },
                     ]}
-                    onChange={(_e, data) =>
-                      updateField(index, "fieldType", data.value as string)
+                    onChange={(value) =>
+                      updateField(index, "fieldType", value as string)
                     }
-                    selection
+                    mode="select"
                     fluid
+                    clearable={false}
                   />
                 </div>
                 <div style={{ textAlign: "center" }}>

@@ -155,6 +155,8 @@ test.describe("MoveFolderModal", () => {
     await expect(page.getByText("Move to:")).toBeVisible({ timeout: 5000 });
 
     // Default selection should be "Corpus Root"
-    await expect(page.locator(".ui.dropdown")).toBeVisible();
+    await expect(page.locator(".oc-dropdown")).toBeVisible();
+
+    await docScreenshot(page, "folders--move-folder-modal--dropdown");
   });
 });
