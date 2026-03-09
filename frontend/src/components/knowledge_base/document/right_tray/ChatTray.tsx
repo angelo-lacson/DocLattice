@@ -18,7 +18,7 @@ import {
 } from "../ChatContainers";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Send } from "lucide-react";
-import { Button } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChatMessage,
@@ -44,6 +44,7 @@ import {
   ChatInputWrapper,
   CharacterCount,
 } from "../ChatContainers";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import {
   useChatSourceState,
   mapWebSocketSourcesToChatMessageSources,
@@ -1417,17 +1418,15 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
               >
                 {!readOnly && user_obj && (
                   <Button
-                    size="small"
+                    size="sm"
+                    variant="secondary"
+                    leftIcon={<ArrowLeft size={16} />}
                     onClick={exitConversation}
                     style={{
                       background: "transparent",
                       padding: "0.5rem",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
                     }}
                   >
-                    <ArrowLeft size={16} />
                     Back to Conversations
                   </Button>
                 )}
@@ -1540,14 +1539,13 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                   data-testid="compaction-banner"
                   style={{
                     padding: "0.5rem 1rem",
-                    borderTop: "1px solid #bfdbfe",
-                    background:
-                      "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                    borderTop: `1px solid ${OS_LEGAL_COLORS.blueBorder}`,
+                    background: `linear-gradient(135deg, ${OS_LEGAL_COLORS.blueSurface} 0%, ${OS_LEGAL_COLORS.blueBorder} 100%)`,
                     display: "flex",
                     alignItems: "center",
                     gap: "0.5rem",
                     fontSize: "0.8125rem",
-                    color: "#1e40af",
+                    color: OS_LEGAL_COLORS.blueDark,
                     flexShrink: 0,
                     animation: "compaction-pulse 2s ease-in-out infinite",
                   }}
@@ -1557,7 +1555,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#2563eb"
+                    stroke={OS_LEGAL_COLORS.primaryBlueHover}
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1593,7 +1591,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                     alignItems: "center",
                     gap: "0.5rem",
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: OS_LEGAL_COLORS.textSecondary,
                     flexShrink: 0,
                   }}
                 >
@@ -1603,7 +1601,7 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                       flex: 1,
                       height: 4,
                       borderRadius: 2,
-                      background: "#e2e8f0",
+                      background: OS_LEGAL_COLORS.border,
                       overflow: "hidden",
                     }}
                   >
@@ -1622,12 +1620,12 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                           contextStatus.used_tokens /
                             contextStatus.context_window >
                           0.85
-                            ? "#ef4444"
+                            ? OS_LEGAL_COLORS.danger
                             : contextStatus.used_tokens /
                                 contextStatus.context_window >
                               0.6
-                            ? "#f59e0b"
-                            : "#22c55e",
+                            ? OS_LEGAL_COLORS.folderIcon
+                            : OS_LEGAL_COLORS.green,
                         transition: "width 0.3s ease, background 0.3s ease",
                       }}
                     />
@@ -1647,8 +1645,8 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                     <span
                       data-testid="context-meter-compacted"
                       style={{
-                        background: "#dbeafe",
-                        color: "#2563eb",
+                        background: OS_LEGAL_COLORS.blueBorder,
+                        color: OS_LEGAL_COLORS.primaryBlueHover,
                         padding: "0.125rem 0.375rem",
                         borderRadius: 4,
                         fontSize: "0.6875rem",
@@ -1680,11 +1678,12 @@ export const ChatTray: React.FC<ChatTrayProps> = ({
                     >
                       {wsError}
                       <Button
-                        size="small"
+                        size="sm"
+                        variant="secondary"
                         onClick={() => window.location.reload()}
                         style={{
                           marginLeft: "0.75rem",
-                          background: "#dc3545",
+                          background: OS_LEGAL_COLORS.danger,
                           color: "white",
                           border: "none",
                           boxShadow: "0 2px 4px rgba(220,53,69,0.2)",

@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation } from "@apollo/client";
 import { gql } from "@apollo/client";
 import { X, Upload, Users, FolderPlus, BookOpen } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // GraphQL mutation to dismiss Getting Started
 export const DISMISS_GETTING_STARTED = gql`
@@ -35,14 +36,14 @@ const Container = styled.div`
 const Title = styled.h3`
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 16px 0;
 `;
 
 const Card = styled.div`
   background: white;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 `;
@@ -60,13 +61,13 @@ const DismissButton = styled.button`
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #64748b;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -88,7 +89,7 @@ const ActionItem = styled.button`
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
@@ -96,7 +97,7 @@ const ActionIcon = styled.span`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
 
   svg {
     width: 18px;
@@ -107,7 +108,7 @@ const ActionIcon = styled.span`
 const ActionLabel = styled.span`
   font-size: 14px;
   font-weight: 500;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
 `;
 
 // Get Started action items

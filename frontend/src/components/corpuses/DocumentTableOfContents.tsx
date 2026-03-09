@@ -1,7 +1,7 @@
 import React, { useMemo, useEffect, useRef } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
-import { Icon } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   FileText,
@@ -161,7 +161,7 @@ const TreeNode = styled.div<{ $depth: number }>`
   ${(props) =>
     props.$depth > 0 &&
     `
-    border-left: 1px solid #e2e8f0;
+    border-left: 1px solid ${OS_LEGAL_COLORS.border};
     margin-left: ${props.$depth * 16 - 1}px;
     padding-left: 1px;
   `}
@@ -190,7 +190,7 @@ const NodeItem = styled.div<{
   transition: background 0.15s ease;
 
   &:hover {
-    background: #f1f5f9;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
   }
 
   &:focus {
@@ -216,14 +216,16 @@ const ChevronContainer = styled.span<{ $visible: boolean }>`
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   opacity: ${(props) => (props.$visible ? 1 : 0)};
   cursor: ${(props) => (props.$visible ? "pointer" : "default")};
   border-radius: 3px;
 
   &:hover {
-    background: ${(props) => (props.$visible ? "#e2e8f0" : "transparent")};
-    color: ${(props) => (props.$visible ? "#0f766e" : "#94a3b8")};
+    background: ${(props) =>
+      props.$visible ? OS_LEGAL_COLORS.border : "transparent"};
+    color: ${(props) =>
+      props.$visible ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -234,7 +236,7 @@ const IconContainer = styled.div<{ $fileType?: string }>`
   width: 22px;
   height: 22px;
   flex-shrink: 0;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   ${mediaQuery.tablet} {
     width: 18px;
@@ -256,7 +258,7 @@ const NodeTitle = styled.div`
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 1.1875rem;
   font-weight: 500;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1.5;
 
   /* Single line with ellipsis */
@@ -266,7 +268,7 @@ const NodeTitle = styled.div`
 
   /* Hover state shows teal */
   ${NodeItem}:hover & {
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   ${mediaQuery.tablet} {
@@ -277,7 +279,7 @@ const NodeTitle = styled.div`
 
 const NodeDescription = styled.div`
   font-size: 1.0625rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.55;
   margin-top: 4px;
 
@@ -879,7 +881,7 @@ export const DocumentTableOfContents: React.FC<
     return (
       <Wrapper>
         <LoadingState>
-          <Icon name="spinner" loading size="big" />
+          <Spinner size="lg" />
           <span>Loading document structure...</span>
         </LoadingState>
       </Wrapper>
@@ -890,7 +892,7 @@ export const DocumentTableOfContents: React.FC<
     return (
       <Wrapper>
         <ErrorState>
-          <Icon name="warning circle" size="big" className="error-icon" />
+          <AlertTriangle size={32} className="error-icon" />
           <div>Failed to load document structure</div>
         </ErrorState>
       </Wrapper>

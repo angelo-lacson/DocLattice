@@ -6,7 +6,8 @@ import React, {
   useState,
 } from "react";
 import Fuse from "fuse.js";
-import { Form, Segment } from "semantic-ui-react";
+import { Input } from "@os-legal/ui";
+import { Search, X } from "lucide-react";
 import { ExtractType } from "../../types/graphql-api";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { useCorpusState } from "../annotator/context/CorpusAtom";
@@ -16,6 +17,7 @@ import {
 } from "../annotator/hooks/AnalysisHooks";
 import { ExtractItem } from "../extracts/ExtractItem";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 /**
  * Props for ExtractTraySelector.
@@ -27,67 +29,34 @@ interface ExtractTraySelectorProps {
   extracts: ExtractType[];
 }
 
-const TrayContainer = styled(Segment.Group)`
+const TrayContainer = styled.div`
   height: 100%;
-  display: flex !important;
-  flex-direction: column !important;
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  box-shadow: none;
+  background: transparent;
   overflow: hidden;
 `;
 
-const SearchSegment = styled(Segment)`
-  flex: 0 0 auto !important;
-  padding: 1.25rem !important;
-  background: white !important;
-  border: 1px solid #e2e8f0 !important;
-  border-bottom: none !important;
-  border-radius: 12px 12px 0 0 !important;
+const SearchSegment = styled.div`
+  flex: 0 0 auto;
+  padding: 1.25rem;
+  background: white;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
   z-index: 1;
-
-  .ui.input {
-    width: 100%;
-
-    input {
-      border-radius: 10px !important;
-      border: 1px solid #e2e8f0 !important;
-      padding: 0.75rem 1rem !important;
-      font-size: 0.875rem;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-
-      &::placeholder {
-        color: #94a3b8;
-      }
-
-      &:focus {
-        border-color: #4a90e2 !important;
-        box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.08) !important;
-      }
-    }
-
-    i.icon {
-      font-size: 1rem;
-      color: #64748b;
-      opacity: 0.7;
-      transition: all 0.2s ease;
-
-      &:hover {
-        opacity: 1;
-        color: #4a90e2;
-      }
-    }
-  }
 `;
 
-const ExtractListSegment = styled(Segment)`
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  background: white !important;
-  border: 1px solid #e2e8f0 !important;
-  border-radius: 0 0 12px 12px !important;
-  padding: 1rem !important;
+const ExtractListSegment = styled.div`
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 0 0 12px 12px;
+  padding: 1rem;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -104,24 +73,24 @@ const ExtractListSegment = styled(Segment)`
   }
 `;
 
-const EmptyState = styled(Segment)`
-  margin: 2rem 0 !important;
-  padding: 2.5rem !important;
-  text-align: center !important;
-  background: linear-gradient(165deg, #f8fafc, #fff) !important;
-  border: 1px dashed #e2e8f0 !important;
-  border-radius: 16px !important;
-  box-shadow: none !important;
+const EmptyState = styled.div`
+  margin: 2rem 0;
+  padding: 2.5rem;
+  text-align: center;
+  background: linear-gradient(165deg, ${OS_LEGAL_COLORS.surfaceHover}, #fff);
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
+  border-radius: 16px;
+  box-shadow: none;
 
   h4 {
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
     font-size: 1.125rem;
     font-weight: 600;
     margin-bottom: 0.75rem;
   }
 
   p {
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     font-size: 0.875rem;
     line-height: 1.5;
     max-width: 24rem;
@@ -213,18 +182,36 @@ const ExtractTraySelector: React.FC<ExtractTraySelectorProps> = ({
   return (
     <TrayContainer>
       <SearchSegment>
-        <Form>
-          <Form.Input
-            icon={{
-              name: searchTerm ? "cancel" : "search",
-              link: true,
-              onClick: searchTerm ? () => handleSearchChange("") : undefined,
-            }}
+        <div style={{ position: "relative" }}>
+          <Input
             placeholder="Search for extracts..."
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              handleSearchChange(e.target.value)
+            }
             value={searchTerm}
+            fullWidth
           />
-        </Form>
+          <button
+            type="button"
+            onClick={searchTerm ? () => handleSearchChange("") : undefined}
+            style={{
+              position: "absolute",
+              right: "8px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "none",
+              border: "none",
+              cursor: searchTerm ? "pointer" : "default",
+              padding: "4px",
+              display: "flex",
+              alignItems: "center",
+              color: OS_LEGAL_COLORS.textMuted,
+            }}
+            aria-label={searchTerm ? "Clear search" : "Search"}
+          >
+            {searchTerm ? <X size={16} /> : <Search size={16} />}
+          </button>
+        </div>
       </SearchSegment>
       <ExtractListSegment>
         {mountedRef.current && renderItems()}

@@ -73,6 +73,7 @@ from config.graphql.corpus_folder_mutations import (
 # Import corpus mutations
 from config.graphql.corpus_mutations import (
     AddDocumentsToCorpus,
+    AddTemplateToCorpus,
     CreateCorpusAction,
     CreateCorpusMutation,
     DeleteCorpusAction,
@@ -293,6 +294,7 @@ class Mutation(graphene.ObjectType):
     update_corpus_action = UpdateCorpusAction.Field()
     delete_corpus_action = DeleteCorpusAction.Field()
     run_corpus_action = RunCorpusAction.Field()
+    add_template_to_corpus = AddTemplateToCorpus.Field()
 
     # CORPUS FOLDER MUTATIONS ##################################################
     create_corpus_folder = CreateCorpusFolderMutation.Field()

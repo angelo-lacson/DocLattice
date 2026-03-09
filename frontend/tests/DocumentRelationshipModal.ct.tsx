@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { DocumentRelationshipModalTestWrapper } from "./DocumentRelationshipModalTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("DocumentRelationshipModal", () => {
   test("renders modal header", async ({ mount, page }) => {
@@ -8,6 +9,8 @@ test.describe("DocumentRelationshipModal", () => {
     await expect(page.getByText("Link Documents")).toBeVisible({
       timeout: 10000,
     });
+
+    await docScreenshot(page, "corpus--document-relationship-modal--initial");
   });
 
   test("shows source documents column", async ({ mount, page }) => {
@@ -161,8 +164,8 @@ test.describe("DocumentRelationshipModal", () => {
 
     await page.waitForSelector('text="Link Documents"', { timeout: 10000 });
 
-    // Modal should be visible and have proper structure
-    const modal = page.locator(".ui.modal");
+    // Modal should be visible and have proper structure (role="dialog" from @os-legal/ui)
+    const modal = page.locator('[role="dialog"]');
     await expect(modal).toBeVisible();
   });
 

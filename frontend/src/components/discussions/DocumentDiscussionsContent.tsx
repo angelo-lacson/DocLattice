@@ -2,6 +2,7 @@ import React from "react";
 import { useReactiveVar } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { ArrowLeft } from "lucide-react";
 import { ThreadList } from "../threads/ThreadList";
 import { ThreadDetail } from "../threads/ThreadDetail";
@@ -18,18 +19,18 @@ const Container = styled.div`
 
 const Header = styled.div`
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 const Title = styled.h3`
   font-size: 1rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
 `;
 
@@ -38,19 +39,19 @@ const BackButton = styled.button`
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
   background: white;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #4a90e2;
-    color: #0f172a;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 

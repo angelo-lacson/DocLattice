@@ -1,3 +1,4 @@
+// TODO: migrate Modal and Button from semantic-ui-react to @os-legal/ui equivalents
 /**
  * EditMessageModal - Mobile-responsive modal for editing thread messages
  *
@@ -27,6 +28,10 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
 import { spacing } from "../../theme/spacing";
 import { MessageComposer } from "./MessageComposer";
 import {
@@ -203,15 +208,19 @@ const ActionButton = styled(Button)<{ $variant?: "primary" | "secondary" }>`
     ${(props) =>
       props.$variant === "primary" &&
       `
-      background: linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[700]} 100%);
+      background: linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${
+        CORPUS_COLORS.teal[700]
+      } 100%);
       color: white;
       border: none;
-      box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+      box-shadow: 0 4px 12px ${accentAlpha(0.35)};
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, ${CORPUS_COLORS.teal[500]} 0%, ${CORPUS_COLORS.teal[600]} 100%);
+        background: linear-gradient(135deg, ${CORPUS_COLORS.teal[500]} 0%, ${
+        CORPUS_COLORS.teal[600]
+      } 100%);
         transform: translateY(-1px);
-        box-shadow: 0 6px 16px rgba(15, 118, 110, 0.45);
+        box-shadow: 0 6px 16px ${accentAlpha(0.45)};
       }
 
       &:active:not(:disabled) {
@@ -245,8 +254,8 @@ const ErrorMessage = styled.div`
   align-items: center;
   gap: 0.375rem;
   padding: 0.625rem 0.875rem;
-  background: #fee2e2;
-  color: #dc2626;
+  background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+  color: ${OS_LEGAL_COLORS.danger};
   border: 1px solid #fca5a5;
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
@@ -344,11 +353,11 @@ const UnsavedWarningButton = styled.button<{ $variant: "cancel" | "discard" }>`
   ${(props) =>
     props.$variant === "discard" &&
     `
-    background: #dc2626;
+    background: ${OS_LEGAL_COLORS.danger};
     color: white;
 
     &:hover {
-      background: #b91c1c;
+      background: ${OS_LEGAL_COLORS.dangerHover};
     }
   `}
 `;

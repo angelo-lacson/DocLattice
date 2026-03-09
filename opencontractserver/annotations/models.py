@@ -937,6 +937,16 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         help_text="If set, this annotation is private to the extract that created it",
     )
 
+    # If this annotation was created by a corpus action agent
+    corpus_action = django.db.models.ForeignKey(
+        "corpuses.CorpusAction",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="created_annotations",
+        help_text="If set, this annotation was created by a corpus action agent",
+    )
+
     # Mark structural / layout annotations explicitly.
     structural = django.db.models.BooleanField(default=False)
 
@@ -1144,6 +1154,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             django.db.models.Index(fields=["analysis"]),
             django.db.models.Index(fields=["created_by_analysis"]),
             django.db.models.Index(fields=["created_by_extract"]),
+            django.db.models.Index(fields=["corpus_action"]),
             django.db.models.Index(fields=["structural_set"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),

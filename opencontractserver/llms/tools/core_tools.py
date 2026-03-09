@@ -6,6 +6,8 @@ from functools import partial
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import uuid4
 
+from typing_extensions import TypedDict
+
 if TYPE_CHECKING:
     from opencontractserver.llms.agents.core_agents import SourceNode
 
@@ -1519,14 +1521,32 @@ async def aduplicate_annotations_with_label(
 # --------------------------------------------------------------------------- #
 
 
+class AnnotationItem(TypedDict):
+    """Single annotation request for exact-string matching."""
+
+    label_text: str
+    exact_string: str
+
+
 def add_annotations_from_exact_strings(
-    items: list[tuple[str, str, int, int]],
+    items: list[AnnotationItem],
     *,
+    document_id: int,
+    corpus_id: int,
     creator_id: int,
+    corpus_action_id: int | None = None,
 ) -> list[int]:
     """Create annotations for exact string matches in documents.
 
-    Each *item* is ``(label_text, exact_string, document_id, corpus_id)``.
+    Each *item* is a dict with keys:
+    - ``label_text`` (str): The label to apply.
+    - ``exact_string`` (str): The exact text to find in the document.
+
+    Args:
+        document_id: The document to annotate (injected from context).
+        corpus_id: The corpus the document belongs to (injected from context).
+        creator_id: The user creating annotations (injected from context).
+        corpus_action_id: Optional corpus action that triggered this (injected from context).
 
     • PDF (application/pdf): builds token‐level annotations (TOKEN_LABEL) via PlasmaPDF.
     • Plain-text (application/txt, text/plain): builds span annotations (SPAN_LABEL).
@@ -1535,7 +1555,6 @@ def add_annotations_from_exact_strings(
     """
 
     import json
-    from collections import defaultdict
 
     from django.db import transaction
     from plasmapdf.models.PdfDataLayer import build_translation_layer
@@ -1549,139 +1568,145 @@ def add_annotations_from_exact_strings(
     from opencontractserver.corpuses.models import Corpus
     from opencontractserver.documents.models import Document
 
-    # Group items by (doc_id, corpus_id) to avoid loading the same PAWLS layer multiple times.
-    grouped: dict[tuple[int, int], list[tuple[str, str]]] = defaultdict(list)
-    for label_text, exact_str, doc_id, corpus_id in items:
-        grouped[(doc_id, corpus_id)].append((label_text, exact_str))
+    # Collect (label_text, exact_string) pairs for the single doc/corpus.
+    tuples: list[tuple[str, str]] = []
+    for item in items:
+        tuples.append((str(item["label_text"]), str(item["exact_string"])))
 
     created_ids: list[int] = []
 
-    for (doc_id, corpus_id), tuples in grouped.items():
-        # Validate document & corpus linkage.
-        try:
-            doc = Document.objects.get(pk=doc_id)
-        except Document.DoesNotExist as exc:
-            raise ValueError(f"Document id={doc_id} does not exist") from exc
+    doc_id = document_id
 
-        try:
-            corpus = Corpus.objects.get(pk=corpus_id)
-        except Corpus.DoesNotExist as exc:
-            raise ValueError(f"Corpus id={corpus_id} does not exist") from exc
+    # Validate document & corpus linkage.
+    try:
+        doc = Document.objects.get(pk=doc_id)
+    except Document.DoesNotExist as exc:
+        raise ValueError(f"Document id={doc_id} does not exist") from exc
 
-        if not corpus.get_documents().filter(pk=doc_id).exists():
+    try:
+        corpus = Corpus.objects.get(pk=corpus_id)
+    except Corpus.DoesNotExist as exc:
+        raise ValueError(f"Corpus id={corpus_id} does not exist") from exc
+
+    if not corpus.get_documents().filter(pk=doc_id).exists():
+        raise ValueError(
+            f"Document id={doc_id} is not linked to corpus id={corpus_id}."
+        )
+
+    file_type = doc.file_type.lower()
+
+    if file_type == "application/pdf":
+        if not doc.pawls_parse_file:
             raise ValueError(
-                f"Document id={doc_id} is not linked to corpus id={corpus_id}."
+                f"PDF document id={doc_id} lacks a PAWLS layer; cannot annotate."
             )
 
-        file_type = doc.file_type.lower()
+        # Load PAWLS tokens once per document.
+        doc.pawls_parse_file.open("r")
+        try:
+            pawls_tokens = json.load(doc.pawls_parse_file)
+        finally:
+            doc.pawls_parse_file.close()
 
-        if file_type == "application/pdf":
-            if not doc.pawls_parse_file:
-                raise ValueError(
-                    f"PDF document id={doc_id} lacks a PAWLS layer; cannot annotate."
-                )
+        pdf_layer = build_translation_layer(pawls_tokens)
+        doc_text = pdf_layer.doc_text
 
-            # Load PAWLS tokens once per document.
-            doc.pawls_parse_file.open("r")
-            try:
-                pawls_tokens = json.load(doc.pawls_parse_file)
-            finally:
-                doc.pawls_parse_file.close()
+        label_type_const = TOKEN_LABEL
 
-            pdf_layer = build_translation_layer(pawls_tokens)
-            doc_text = pdf_layer.doc_text
+        def _create_annotation(pos: int, end_idx: int, label_obj):
+            span = TextSpan(
+                id=str(uuid4()), start=pos, end=end_idx, text=doc_text[pos:end_idx]
+            )
+            span_annotation = SpanAnnotation(span=span, annotation_label=label_obj.text)
+            oc_ann = pdf_layer.create_opencontract_annotation_from_span(span_annotation)
 
-            label_type_const = TOKEN_LABEL
-
-            def _create_annotation(pos: int, end_idx: int, label_obj):
-                span = TextSpan(
-                    id=str(uuid4()), start=pos, end=end_idx, text=doc_text[pos:end_idx]
-                )
-                span_annotation = SpanAnnotation(
-                    span=span, annotation_label=label_obj.text
-                )
-                oc_ann = pdf_layer.create_opencontract_annotation_from_span(
-                    span_annotation
-                )
-
-                return Annotation(
-                    raw_text=oc_ann["rawText"],
-                    page=oc_ann.get("page", 1),
-                    json=oc_ann["annotation_json"],
-                    annotation_label=label_obj,
-                    document=doc,
-                    corpus=corpus,
-                    creator_id=creator_id,
-                    annotation_type=TOKEN_LABEL,
-                    structural=False,
-                )
-
-        elif file_type in {"application/txt", "text/plain"}:
-            if not doc.txt_extract_file:
-                raise ValueError(
-                    f"Text document id={doc_id} lacks txt_extract_file; cannot annotate."
-                )
-            doc.txt_extract_file.open("r")
-            try:
-                doc_text = doc.txt_extract_file.read()
-            finally:
-                doc.txt_extract_file.close()
-
-            label_type_const = SPAN_LABEL
-
-            def _create_annotation(pos: int, end_idx: int, label_obj):
-                return Annotation(
-                    raw_text=doc_text[pos:end_idx],
-                    page=1,
-                    json={"start": pos, "end": end_idx},
-                    annotation_label=label_obj,
-                    document=doc,
-                    corpus=corpus,
-                    creator_id=creator_id,
-                    annotation_type=SPAN_LABEL,
-                    structural=False,
-                )
-
-        else:
-            raise ValueError(
-                f"Unsupported file_type {doc.file_type} for document id={doc_id}"
+            return Annotation(
+                raw_text=oc_ann["rawText"],
+                page=oc_ann.get("page", 1),
+                json=oc_ann["annotation_json"],
+                annotation_label=label_obj,
+                document=doc,
+                corpus=corpus,
+                creator_id=creator_id,
+                corpus_action_id=corpus_action_id,
+                annotation_type=TOKEN_LABEL,
+                structural=False,
             )
 
-        # Common creation loop (works for both PDF and text).
-        with transaction.atomic():
-            for label_text, exact_str in tuples:
-                label_obj = corpus.ensure_label_and_labelset(
-                    label_text=label_text,
-                    creator_id=creator_id,
-                    label_type=label_type_const,
-                )
+    elif file_type in {"application/txt", "text/plain"}:
+        if not doc.txt_extract_file:
+            raise ValueError(
+                f"Text document id={doc_id} lacks txt_extract_file; cannot annotate."
+            )
+        doc.txt_extract_file.open("r")
+        try:
+            doc_text = doc.txt_extract_file.read()
+        finally:
+            doc.txt_extract_file.close()
 
-                start_idx = 0
-                while True:
-                    pos = doc_text.find(exact_str, start_idx)
-                    if pos == -1:
-                        break
+        label_type_const = SPAN_LABEL
 
-                    end_idx = pos + len(exact_str)
+        def _create_annotation(pos: int, end_idx: int, label_obj):
+            return Annotation(
+                raw_text=doc_text[pos:end_idx],
+                page=1,
+                json={"start": pos, "end": end_idx},
+                annotation_label=label_obj,
+                document=doc,
+                corpus=corpus,
+                creator_id=creator_id,
+                corpus_action_id=corpus_action_id,
+                annotation_type=SPAN_LABEL,
+                structural=False,
+            )
 
-                    annot_obj = _create_annotation(pos, end_idx, label_obj)
-                    annot_obj.save()
+    else:
+        raise ValueError(
+            f"Unsupported file_type {doc.file_type} for document id={doc_id}"
+        )
 
-                    created_ids.append(annot_obj.pk)
+    # Common creation loop (works for both PDF and text).
+    with transaction.atomic():
+        for label_text, exact_str in tuples:
+            label_obj = corpus.ensure_label_and_labelset(
+                label_text=label_text,
+                creator_id=creator_id,
+                label_type=label_type_const,
+            )
 
-                    start_idx = end_idx
+            start_idx = 0
+            while True:
+                pos = doc_text.find(exact_str, start_idx)
+                if pos == -1:
+                    break
+
+                end_idx = pos + len(exact_str)
+
+                annot_obj = _create_annotation(pos, end_idx, label_obj)
+                annot_obj.save()
+
+                created_ids.append(annot_obj.pk)
+
+                start_idx = end_idx
 
     return created_ids
 
 
 async def aadd_annotations_from_exact_strings(
-    items: list[tuple[str, str, int, int]],
+    items: list[AnnotationItem],
     *,
+    document_id: int,
+    corpus_id: int,
     creator_id: int,
+    corpus_action_id: int | None = None,
 ):
     """Async wrapper around :func:`add_annotations_from_exact_strings`."""
     return await _db_sync_to_async(add_annotations_from_exact_strings)(
-        items, creator_id=creator_id
+        items,
+        document_id=document_id,
+        corpus_id=corpus_id,
+        creator_id=creator_id,
+        corpus_action_id=corpus_action_id,
     )
 
 

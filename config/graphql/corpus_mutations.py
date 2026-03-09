@@ -6,7 +6,7 @@ import logging
 
 import graphene
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 from graphql import GraphQLError
 from graphql_jwt.decorators import login_required, user_passes_test
@@ -22,7 +22,11 @@ from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from config.graphql.serializers import CorpusSerializer
 from config.telemetry import record_event
 from opencontractserver.analyzer.models import Analyzer
-from opencontractserver.corpuses.models import Corpus, CorpusAction
+from opencontractserver.corpuses.models import (
+    Corpus,
+    CorpusAction,
+    CorpusActionTemplate,
+)
 from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Fieldset
 from opencontractserver.tasks import fork_corpus
@@ -782,10 +786,16 @@ class CreateCorpusAction(graphene.Mutation):
             corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             # Check if user has update permission on the corpus
-            if corpus.creator.id != user.id:
+            if not (
+                user.is_superuser
+                or corpus.creator_id == user.id
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                )
+            ):
                 return CreateCorpusAction(
                     ok=False,
-                    message="You can only create actions for your own corpuses",
+                    message="You don't have permission to create actions on this corpus",
                     obj=None,
                 )
 
@@ -1303,3 +1313,106 @@ class RunCorpusAction(graphene.Mutation):
             message="Action queued successfully.",
             obj=execution,
         )
+
+
+class AddTemplateToCorpus(graphene.Mutation):
+    """
+    Add an action template to a corpus by cloning it into a CorpusAction.
+
+    This is the core of the Action Library feature: users browse available
+    templates and opt-in per corpus. Once cloned, the action is a regular
+    CorpusAction that can be edited/toggled/deleted like any other.
+
+    Prevents duplicates: the same template cannot be added twice to the same
+    corpus (checked via source_template FK).
+
+    Requires the user to be the corpus creator or have CRUD permission.
+    """
+
+    class Arguments:
+        template_id = graphene.ID(
+            required=True, description="ID of the CorpusActionTemplate to clone"
+        )
+        corpus_id = graphene.ID(
+            required=True, description="ID of the corpus to add the template to"
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    obj = graphene.Field(CorpusActionType)
+
+    @login_required
+    def mutate(root, info, template_id: str, corpus_id: str):
+        try:
+            user = info.context.user
+            corpus_pk = from_global_id(corpus_id)[1]
+            template_pk = from_global_id(template_id)[1]
+
+            # Get corpus with visibility filter to prevent IDOR
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+
+            # Check if user has update permission on the corpus
+            if not (
+                user.is_superuser
+                or corpus.creator_id == user.id
+                or user_has_permission_for_obj(
+                    user, corpus, PermissionTypes.CRUD, include_group_permissions=True
+                )
+            ):
+                return AddTemplateToCorpus(
+                    ok=False,
+                    message="You don't have permission to add templates to this corpus",
+                    obj=None,
+                )
+
+            # Get the template (templates are global, no user filter needed)
+            template = CorpusActionTemplate.objects.get(pk=template_pk, is_active=True)
+
+            # Fast-path duplicate check (avoids wasted clone + rollback).
+            # The unique constraint + IntegrityError catch below handles the
+            # race-condition window between this check and the insert.
+            if CorpusAction.objects.filter(
+                corpus=corpus, source_template=template
+            ).exists():
+                return AddTemplateToCorpus(
+                    ok=False,
+                    message="This template has already been added to the corpus",
+                    obj=None,
+                )
+
+            # Clone the template into a CorpusAction.
+            # Wrap in a savepoint so that a race-condition IntegrityError
+            # does not abort the outer transaction (PostgreSQL requirement).
+            try:
+                with transaction.atomic():
+                    action = template.clone_to_corpus(corpus, creator=user)
+            except IntegrityError:
+                return AddTemplateToCorpus(
+                    ok=False,
+                    message="This template has already been added to the corpus",
+                    obj=None,
+                )
+
+            set_permissions_for_obj_to_user(user, action, [PermissionTypes.CRUD])
+
+            return AddTemplateToCorpus(
+                ok=True,
+                message="Template added to corpus successfully",
+                obj=action,
+            )
+
+        except Corpus.DoesNotExist:
+            return AddTemplateToCorpus(ok=False, message="Corpus not found", obj=None)
+
+        except CorpusActionTemplate.DoesNotExist:
+            return AddTemplateToCorpus(
+                ok=False, message="Template not found or inactive", obj=None
+            )
+
+        except DatabaseError:
+            logger.exception("Database error adding template to corpus")
+            return AddTemplateToCorpus(
+                ok=False,
+                message="Failed to add template. Please try again.",
+                obj=None,
+            )

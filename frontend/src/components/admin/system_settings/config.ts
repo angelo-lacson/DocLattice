@@ -1,6 +1,7 @@
 import React from "react";
 import { FileText, Cpu, Image } from "lucide-react";
 import { StageType, PipelineMappingKey } from "./types";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 /** Stage configuration with properly typed settings keys */
 export const STAGE_CONFIG: Record<
@@ -14,7 +15,7 @@ export const STAGE_CONFIG: Record<
   }
 > = {
   parsers: {
-    color: "#3B82F6",
+    color: OS_LEGAL_COLORS.primaryBlue,
     icon: FileText,
     title: "Parser",
     subtitle: "Extract text and structure",
@@ -28,7 +29,7 @@ export const STAGE_CONFIG: Record<
     settingsKey: "preferredThumbnailers",
   },
   embedders: {
-    color: "#10B981",
+    color: OS_LEGAL_COLORS.greenMedium,
     icon: Cpu,
     title: "Embedder",
     subtitle: "Create vector embeddings",

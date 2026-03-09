@@ -49,6 +49,7 @@ import {
 } from "../../graphql/mutations";
 import { DEFAULT_AGENT_COLOR } from "../../assets/configurations/constants";
 import { hexToRgba, isValidHexColor } from "../../utils/colorUtils";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 /**
  * Validates that a value is a string
@@ -141,7 +142,7 @@ const MessageContainer = styled.div<
   gap: 0.5rem;
   padding: 1.25rem 1.5rem;
   background: ${(props) => {
-    if (props.$isDeleted) return "#f8fafc";
+    if (props.$isDeleted) return OS_LEGAL_COLORS.surfaceHover;
     if (props.$isHighlighted) return "#f0fdfa";
     if (props.$isAgent && props.$agentBgStart && props.$agentBgEnd) {
       return `linear-gradient(135deg, ${props.$agentBgStart} 0%, ${props.$agentBgEnd} 100%)`;
@@ -159,7 +160,7 @@ const MessageContainer = styled.div<
     `
     margin-left: ${Math.min(props.$depth * 1.5, 4)}rem;
     padding-left: 1rem;
-    border-left: 2px solid #e2e8f0;
+    border-left: 2px solid ${OS_LEGAL_COLORS.border};
   `}
 
   /* Accent strip for highlighted messages */
@@ -167,7 +168,7 @@ const MessageContainer = styled.div<
     props.$isHighlighted &&
     `
     background: #f0fdfa;
-    border-left: 3px solid #14b8a6;
+    border-left: 3px solid ${OS_LEGAL_COLORS.accent};
   `}
 
   /* Accent strip for agent messages */
@@ -175,7 +176,7 @@ const MessageContainer = styled.div<
     props.$isAgent &&
     !props.$isHighlighted &&
     `
-    border-left: 3px solid ${props.$agentColor || "#0f766e"};
+    border-left: 3px solid ${props.$agentColor || OS_LEGAL_COLORS.accent};
     background: ${props.$agentBgStart || "transparent"};
   `}
 
@@ -183,8 +184,9 @@ const MessageContainer = styled.div<
   &:hover {
     background: ${(props) => {
       if (props.$isHighlighted) return "#f0fdfa";
-      if (props.$isAgent) return props.$agentBgStart || "#fafafa";
-      return "#fafafa";
+      if (props.$isAgent)
+        return props.$agentBgStart || OS_LEGAL_COLORS.background;
+      return OS_LEGAL_COLORS.background;
     }};
   }
 
@@ -238,9 +240,9 @@ const UserAvatar = styled.div<{ $isAgent?: boolean } & AgentColorProps>`
   border-radius: 50%;
   background: ${(props) =>
     props.$isAgent
-      ? `linear-gradient(135deg, ${props.$agentColor || "#4A90E2"} 0%, ${
-          props.$agentColor || "#4A90E2"
-        }dd 100%)`
+      ? `linear-gradient(135deg, ${
+          props.$agentColor || OS_LEGAL_COLORS.primaryBlue
+        } 0%, ${props.$agentColor || OS_LEGAL_COLORS.primaryBlue}dd 100%)`
       : `linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[700]} 100%)`};
   display: flex;
   align-items: center;
@@ -299,7 +301,7 @@ const UserInfo = styled.div`
 const Username = styled.span`
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   font-size: 15px;
 `;
 
@@ -401,7 +403,9 @@ const DropdownItem = styled.button<{ $variant?: "danger" }>`
   background: transparent;
   font-family: ${CORPUS_FONTS.sans};
   color: ${(props) =>
-    props.$variant === "danger" ? "#dc2626" : CORPUS_COLORS.slate[700]};
+    props.$variant === "danger"
+      ? OS_LEGAL_COLORS.danger
+      : CORPUS_COLORS.slate[700]};
   font-size: 0.875rem;
   text-align: left;
   cursor: pointer;
@@ -428,9 +432,13 @@ const DropdownItem = styled.button<{ $variant?: "danger" }>`
 
   &:hover {
     background: ${(props) =>
-      props.$variant === "danger" ? "#fee2e2" : CORPUS_COLORS.teal[50]};
+      props.$variant === "danger"
+        ? OS_LEGAL_COLORS.dangerSurfaceHover
+        : CORPUS_COLORS.teal[50]};
     color: ${(props) =>
-      props.$variant === "danger" ? "#dc2626" : CORPUS_COLORS.teal[700]};
+      props.$variant === "danger"
+        ? OS_LEGAL_COLORS.danger
+        : CORPUS_COLORS.teal[700]};
   }
 
   svg {
@@ -520,19 +528,19 @@ const ConfirmButton = styled.button<{ $variant: "cancel" | "delete" }>`
   ${(props) =>
     props.$variant === "delete" &&
     `
-    background: #dc2626;
+    background: ${OS_LEGAL_COLORS.danger};
     border: none;
     color: white;
 
     &:hover:not(:disabled) {
-      background: #b91c1c;
+      background: ${OS_LEGAL_COLORS.dangerHover};
     }
   `}
 `;
 
 const MessageContent = styled.div<{ $isDeleted?: boolean }>`
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   line-height: 1.7;
   font-size: 16px;
   word-wrap: break-word;
@@ -541,7 +549,7 @@ const MessageContent = styled.div<{ $isDeleted?: boolean }>`
     props.$isDeleted &&
     `
     font-style: italic;
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   `}
 
   p {
@@ -554,18 +562,18 @@ const MessageContent = styled.div<{ $isDeleted?: boolean }>`
   }
 
   code {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 0.9em;
     font-family: "SF Mono", Monaco, monospace;
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   pre {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border: 1px solid ${OS_LEGAL_COLORS.border};
     padding: 16px;
     border-radius: 8px;
     overflow-x: auto;
@@ -576,7 +584,7 @@ const MessageContent = styled.div<{ $isDeleted?: boolean }>`
     border-left: 3px solid #5eead4;
     padding-left: 16px;
     margin: 12px 0;
-    color: #475569;
+    color: ${OS_LEGAL_COLORS.textTertiary};
   }
 `;
 
@@ -598,7 +606,7 @@ const FooterActions = styled.div`
 const FooterButton = styled.button`
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   cursor: pointer;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 0.8125rem;
@@ -612,7 +620,7 @@ const FooterButton = styled.button`
 
   &:hover {
     background: #f0fdfa;
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   svg {
@@ -624,7 +632,7 @@ const FooterButton = styled.button`
 const FooterDivider = styled.span`
   width: 1px;
   height: 1rem;
-  background: #e2e8f0;
+  background: ${OS_LEGAL_COLORS.border};
   margin: 0 0.25rem;
 `;
 

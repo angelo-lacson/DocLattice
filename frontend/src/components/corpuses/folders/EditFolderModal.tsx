@@ -1,9 +1,17 @@
 import React, { useCallback, useState, useEffect } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Form, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X } from "lucide-react";
+import {
+  Button,
+  Input,
+  Textarea,
+  Modal,
+  ModalHeader as OcModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import {
   showEditFolderModalAtom,
   activeFolderModalIdAtom,
@@ -32,18 +40,11 @@ import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
  * - Optimistic update + refetch
  */
 
-const StyledModal = styled(Modal)`
-  &.ui.modal {
+const StyledModalWrapper = styled.div`
+  .oc-modal {
     max-width: 500px;
+    width: 100%;
   }
-`;
-
-const ModalHeader = styled(Modal.Header)`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: ${OS_LEGAL_COLORS.surfaceHover};
-  border-bottom: 2px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const CloseButton = styled.button`
@@ -84,14 +85,14 @@ const ColorPreview = styled.div<{ $color: string }>`
 
   &:hover {
     transform: scale(1.05);
-    border-color: #cbd5e1;
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
 const ColorInput = styled.input`
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid ${OS_LEGAL_COLORS.borderHover};
   border-radius: 6px;
   font-size: 14px;
   font-family: monospace;
@@ -220,38 +221,39 @@ export const EditFolderModal: React.FC = () => {
   if (!showModal || !folder) return null;
 
   return (
-    <StyledModal open={showModal} onClose={handleClose}>
-      <ModalHeader>
-        <span>Edit Folder</span>
-        <CloseButton onClick={handleClose} aria-label="Close">
-          <X size={20} />
-        </CloseButton>
-      </ModalHeader>
+    <StyledModalWrapper>
+      <Modal open={showModal} onClose={handleClose} size="sm">
+        <OcModalHeader title="Edit Folder" onClose={handleClose} />
 
-      <Modal.Content>
-        <Form onSubmit={handleSubmit} error={!!validationError || !!error}>
-          <Form.Field required>
+        <ModalBody>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Folder Name</label>
-            <Form.Input
+            <Input
+              fullWidth
               placeholder="Enter folder name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setName(e.target.value)
+              }
               autoFocus
               maxLength={255}
             />
-          </Form.Field>
+          </div>
 
-          <Form.Field>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Description</label>
-            <Form.TextArea
+            <Textarea
+              fullWidth
               placeholder="Optional description"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setDescription(e.target.value)
+              }
               rows={3}
             />
-          </Form.Field>
+          </div>
 
-          <Form.Field>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Color</label>
             <ColorPickerWrapper>
               <ColorPreview
@@ -276,14 +278,17 @@ export const EditFolderModal: React.FC = () => {
                 maxLength={7}
               />
             </ColorPickerWrapper>
-          </Form.Field>
+          </div>
 
-          <Form.Field>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Icon</label>
-            <Form.Input
+            <Input
+              fullWidth
               placeholder="folder"
               value={icon}
-              onChange={(e) => setIcon(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setIcon(e.target.value)
+              }
               maxLength={50}
             />
             <div
@@ -295,14 +300,17 @@ export const EditFolderModal: React.FC = () => {
             >
               Use Lucide React icon names (e.g., folder, file-text, star)
             </div>
-          </Form.Field>
+          </div>
 
-          <Form.Field>
+          <div style={{ marginBottom: "1rem" }}>
             <label>Tags</label>
-            <Form.Input
+            <Input
+              fullWidth
               placeholder="tag1, tag2, tag3"
               value={tags}
-              onChange={(e) => setTags(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setTags(e.target.value)
+              }
             />
             <div
               style={{
@@ -313,7 +321,7 @@ export const EditFolderModal: React.FC = () => {
             >
               Comma-separated tags for organization
             </div>
-          </Form.Field>
+          </div>
 
           {validationError && (
             <ErrorMessage title="Validation Error">
@@ -326,22 +334,22 @@ export const EditFolderModal: React.FC = () => {
               {error.message}
             </ErrorMessage>
           )}
-        </Form>
-      </Modal.Content>
+        </ModalBody>
 
-      <Modal.Actions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          primary
-          onClick={handleSubmit}
-          loading={loading}
-          disabled={loading || !name.trim()}
-        >
-          Save Changes
-        </Button>
-      </Modal.Actions>
-    </StyledModal>
+        <ModalFooter>
+          <Button variant="secondary" onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            loading={loading}
+            disabled={loading || !name.trim()}
+          >
+            Save Changes
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };

@@ -25,6 +25,7 @@ import {
   CORPUS_TRANSITIONS,
   mediaQuery,
 } from "./styles/discussionStyles";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   selectedMessageIdAtom,
   replyingToMessageIdAtom,
@@ -61,7 +62,7 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const Header = styled.div`
@@ -191,7 +192,7 @@ const Title = styled.h1`
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 1.25rem;
   font-weight: 400;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0;
   white-space: nowrap;
   overflow: hidden;

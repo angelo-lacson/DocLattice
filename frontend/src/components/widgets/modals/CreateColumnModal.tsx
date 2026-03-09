@@ -1,12 +1,14 @@
 import React, { useState, useCallback, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { Modal, Form, Button } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
+import { Check } from "lucide-react";
 import { BasicConfigSection } from "./sections/BasicConfigSection";
 import { OutputTypeSection } from "./sections/OutputTypeSection";
 import { ExtractionConfigSection } from "./sections/ExtractionConfigSection";
 import { AdvancedOptionsSection } from "./sections/AdvancedOptionsSection";
 import { LooseObject } from "../../types";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { ColumnType } from "../../../types/graphql-api";
 import { parsePydanticModel } from "../../../utils/parseOutputType";
 import { FieldType } from "../ModelFieldBuilder";
@@ -56,9 +58,9 @@ const ModalDialog = styled.div`
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
 `;
 
-const ModalHeader = styled.div`
+const ModalHeaderStyled = styled.div`
   padding: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -66,15 +68,15 @@ const ModalHeader = styled.div`
   font-weight: 600;
 `;
 
-const ModalBody = styled.div`
+const ModalBodyStyled = styled.div`
   padding: 1.5rem;
   overflow-y: auto;
   flex: 1;
 `;
 
-const ModalFooter = styled.div`
+const ModalFooterStyled = styled.div`
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
@@ -259,12 +261,12 @@ export const CreateColumnModal: React.FC<CreateColumnModalProps> = ({
   return ReactDOM.createPortal(
     <ModalWrapper onClick={handleClose}>
       <ModalDialog onClick={(e) => e.stopPropagation()}>
-        <ModalHeader>
+        <ModalHeaderStyled>
           {existing_column ? "Edit Column" : "Create a New Data Extract Column"}
           <CloseButton onClick={handleClose}>&times;</CloseButton>
-        </ModalHeader>
-        <ModalBody>
-          <Form>
+        </ModalHeaderStyled>
+        <ModalBodyStyled>
+          <div>
             <StyledGrid>
               <BasicConfigSection
                 name={formData.name || ""}
@@ -294,22 +296,26 @@ export const CreateColumnModal: React.FC<CreateColumnModalProps> = ({
                 handleChange={handleChange}
               />
             </StyledGrid>
-          </Form>
-        </ModalBody>
-        <ModalFooter>
-          <Button color="black" onClick={handleClose} disabled={isSubmitting}>
+          </div>
+        </ModalBodyStyled>
+        <ModalFooterStyled>
+          <Button
+            variant="secondary"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
             Cancel
           </Button>
           <Button
-            content="Submit"
-            labelPosition="right"
-            icon="checkmark"
+            variant="primary"
             onClick={handleSubmit}
-            positive
             loading={isSubmitting}
             disabled={isSubmitting || !isFormValid()}
-          />
-        </ModalFooter>
+            leftIcon={<Check size={16} />}
+          >
+            Submit
+          </Button>
+        </ModalFooterStyled>
       </ModalDialog>
     </ModalWrapper>,
     document.body

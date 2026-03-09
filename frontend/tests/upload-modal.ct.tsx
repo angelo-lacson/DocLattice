@@ -11,6 +11,7 @@ import { MockedProvider } from "@apollo/client/testing";
 import { UploadModal } from "../src/components/widgets/modals/UploadModal";
 import { GET_CORPUSES } from "../src/graphql/queries";
 import { CorpusType } from "../src/types/graphql-api";
+import { docScreenshot } from "./utils/docScreenshot";
 
 // Mock corpus data for testing
 const mockCorpus: CorpusType = {
@@ -109,6 +110,8 @@ test.describe("UploadModal - Single Mode", () => {
 
     // Drop zone should be present
     await expect(page.locator("text=Drag & drop PDF files here")).toBeVisible();
+
+    await docScreenshot(page, "corpus--upload-modal--initial");
 
     await component.unmount();
   });

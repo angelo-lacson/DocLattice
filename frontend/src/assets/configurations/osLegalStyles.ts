@@ -48,10 +48,16 @@ export const OS_LEGAL_COLORS = {
   accentHover: "#0d6860",
   /** Light accent background. Use for selected items and subtle highlights. */
   accentLight: "rgba(15, 118, 110, 0.1)",
+  /** Medium accent opacity. Use for focus rings and selected outlines. */
+  accentMedium: "rgba(15, 118, 110, 0.2)",
+  /** Light accent surface (teal-50). Use for selected item backgrounds. */
+  accentSurface: "#f0fdfa",
 
   // Interactive colors - blue theme
   /** Primary interactive blue - buttons, focus rings, toggles, active states. */
   primaryBlue: "#3b82f6",
+  /** Hover/active state for primary blue. Slightly darker for visual feedback. */
+  primaryBlueHover: "#2563eb",
 
   // Text colors - slate scale
   /** Primary text color - dark slate. Use for headings and main content. */
@@ -145,7 +151,106 @@ export const OS_LEGAL_COLORS = {
   warningBorder: "#fde68a",
   /** Warning text color - dark amber. */
   warningText: "#854d0e",
+
+  // Extended blue palette
+  /** Dark blue - headings and strong emphasis on info surfaces. */
+  blueDark: "#1e40af",
+  /** Light blue surface - subtle blue backgrounds. */
+  blueSurface: "#eff6ff",
+  /** Light blue border - borders on blue surfaces. */
+  blueBorder: "#bfdbfe",
+
+  // Extended green palette
+  /** Bright green - positive indicators, online status. */
+  green: "#22c55e",
+  /** Medium green - success accents. */
+  greenMedium: "#10b981",
+  /** Dark green - success accents on dark backgrounds. */
+  greenDark: "#059669",
+
+  // Dark surface colors (for dark-themed panels like cookie consent)
+  /** Dark surface background - slate. */
+  darkSurface: "#1e293b",
+  /** Dark surface text - light gray for readability on dark backgrounds. */
+  darkSurfaceText: "#e2e8f0",
+  /** Dark surface border - muted separator on dark backgrounds. */
+  darkSurfaceBorder: "#475569",
+
+  // Neutral gray palette
+  /** Near-white surface - barely visible gray backgrounds. */
+  gray50: "#f9fafb",
+  /** Light gray border - input borders, dividers. */
+  gray200: "#e9ecef",
+  /** Medium gray text - labels and secondary content. */
+  gray500: "#868e96",
+  /** Dark gray text - stronger secondary text. */
+  gray700: "#495057",
+
+  // Chart accent colors - for data visualizations
+  /** Chart purple - vivid violet for chart series and data points. */
+  chartPurple: "#8b5cf6",
+  /** Chart pink - vivid pink for chart series and data points. */
+  chartPink: "#ec4899",
+  /** Chart teal - vivid teal for chart series and data points. */
+  chartTeal: "#14b8a6",
+
+  // Annotation source badge colors
+  /** Agent badge color - purple for AI-generated annotations. */
+  agentPurple: "#7c3aed",
+  /** Agent badge background - light purple (violet-100). */
+  agentPurpleLight: "#ede9fe",
+  /** Structural badge background - light amber (amber-100). */
+  structuralLight: "#fef3c7",
+
+  // Extended yellow palette
+  /** Light yellow surface - medium score indicators (yellow-100). */
+  yellowLight: "#fef9c3",
+
+  // Search and chat source highlight colors
+  /** Active/selected search result highlight. */
+  searchHighlightActive: "#FFFF00",
+  /** Inactive search result highlight. */
+  searchHighlight: "#FFFF99",
+  /** Active/selected chat source highlight. */
+  chatSourceHighlightActive: "#A8FFA8",
+  /** Inactive chat source highlight. */
+  chatSourceHighlight: "#D2FFD2",
 } as const;
+
+/**
+ * Create an rgba color string from the accent color (#0f766e = rgb(15, 118, 110))
+ * with a given opacity. Use instead of hardcoded rgba(15, 118, 110, ...) values.
+ */
+export const accentAlpha = (opacity: number): string =>
+  `rgba(15, 118, 110, ${opacity})`;
+
+/**
+ * Create an rgba color string from primaryBlue (#3b82f6 = rgb(59, 130, 246))
+ * with a given opacity. Use instead of hardcoded rgba(74, 144, 226, ...) values.
+ */
+export const primaryBlueAlpha = (opacity: number): string =>
+  `rgba(59, 130, 246, ${opacity})`;
+
+/**
+ * Create an rgba color string from the chat-source blue-gray (#5c7c9d = rgb(92, 124, 157))
+ * with a given opacity. Use instead of hardcoded rgba(92, 124, 157, ...) values.
+ */
+export const chatSourceBlueAlpha = (opacity: number): string =>
+  `rgba(92, 124, 157, ${opacity})`;
+
+/**
+ * Create an rgba color string for success glow effects (rgb(0, 255, 0))
+ * with a given opacity. Use instead of hardcoded rgba(0, 255, 0, ...) values.
+ */
+export const successGlowAlpha = (opacity: number): string =>
+  `rgba(0, 255, 0, ${opacity})`;
+
+/**
+ * Create an rgba color string for danger glow effects (rgb(255, 0, 0))
+ * with a given opacity. Use instead of hardcoded rgba(255, 0, 0, ...) values.
+ */
+export const dangerGlowAlpha = (opacity: number): string =>
+  `rgba(255, 0, 0, ${opacity})`;
 
 /**
  * Typography definitions for the OS Legal design system.
@@ -165,8 +270,15 @@ export const OS_LEGAL_SPACING = {
   borderRadiusCard: "12px",
   /** Border radius for buttons and smaller elements. */
   borderRadiusButton: "8px",
+} as const;
+
+/**
+ * Shadow constants for the OS Legal design system.
+ * Separated from spacing for semantic clarity.
+ */
+export const OS_LEGAL_SHADOWS = {
   /** Default card shadow - subtle elevation. */
-  shadowCard: "0 4px 12px rgba(0, 0, 0, 0.04)",
+  card: "0 4px 12px rgba(0, 0, 0, 0.04)",
   /** Hover card shadow - more prominent elevation. */
-  shadowCardHover: "0 8px 24px rgba(0, 0, 0, 0.08)",
+  cardHover: "0 8px 24px rgba(0, 0, 0, 0.08)",
 } as const;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Minimize2,
@@ -47,7 +48,11 @@ const BaseButton = styled(motion.button)`
   width: 72px;
   height: 72px;
   border-radius: 24px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(
+    135deg,
+    #ffffff 0%,
+    ${OS_LEGAL_COLORS.surfaceHover} 100%
+  );
   backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.3);
   display: flex;
@@ -122,7 +127,7 @@ const BackButton = styled(BaseButton)`
 `;
 
 const IconWrapper = styled(motion.div)`
-  color: #3b82f6;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
   position: relative;
   display: flex;
   flex-direction: column;
@@ -136,7 +141,11 @@ const IconLabel = styled.span`
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.primaryBlue} 0%,
+    ${OS_LEGAL_COLORS.primaryBlueHover} 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -146,7 +155,11 @@ const VersionBadge = styled(motion.div)`
   position: absolute;
   top: -8px;
   right: -8px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.primaryBlue} 0%,
+    ${OS_LEGAL_COLORS.primaryBlueHover} 100%
+  );
   color: white;
   padding: 5px 10px;
   border-radius: 12px;
@@ -261,7 +274,7 @@ const Title = styled.h3`
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -269,7 +282,7 @@ const Title = styled.h3`
   svg {
     width: 18px;
     height: 18px;
-    color: #3b82f6;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
   }
 
   @media (max-width: 480px) {
@@ -298,7 +311,7 @@ const ActionButton = styled(motion.button)`
   border-radius: 12px;
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.8);
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
@@ -330,8 +343,12 @@ const ActionButton = styled(motion.button)`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    color: #3b82f6;
+    background: linear-gradient(
+      135deg,
+      ${OS_LEGAL_COLORS.surfaceHover} 0%,
+      ${OS_LEGAL_COLORS.surfaceLight} 100%
+    );
+    color: ${OS_LEGAL_COLORS.primaryBlue};
     border-color: rgba(147, 197, 253, 0.3);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1),
@@ -369,7 +386,11 @@ const ActionButton = styled(motion.button)`
 `;
 
 const ViewFullButton = styled(ActionButton)`
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.primaryBlue} 0%,
+    ${OS_LEGAL_COLORS.primaryBlueHover} 100%
+  );
   color: white;
   border-color: transparent;
   position: relative;
@@ -403,7 +424,11 @@ const ViewFullButton = styled(ActionButton)`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    background: linear-gradient(
+      135deg,
+      ${OS_LEGAL_COLORS.primaryBlueHover} 0%,
+      ${OS_LEGAL_COLORS.blueDark} 100%
+    );
     border-color: transparent;
     color: white;
     box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3),
@@ -420,8 +445,12 @@ const MinimizeButton = styled(ActionButton)`
   background: rgba(255, 255, 255, 0.6);
 
   &:hover {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    color: #d97706;
+    background: linear-gradient(
+      135deg,
+      #fef3c7 0%,
+      ${OS_LEGAL_COLORS.warningBorder} 100%
+    );
+    color: ${OS_LEGAL_COLORS.folderIcon};
     border-color: rgba(251, 191, 36, 0.3);
 
     svg {
@@ -468,7 +497,7 @@ const PiPContentPreview = styled.div`
   /* Markdown styling */
   font-size: 0.875rem;
   line-height: 1.6;
-  color: #334155;
+  color: ${OS_LEGAL_COLORS.textTertiary};
 
   h1,
   h2,
@@ -478,7 +507,7 @@ const PiPContentPreview = styled.div`
   h6 {
     margin-top: 1rem;
     margin-bottom: 0.5rem;
-    color: #1e293b;
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   h1 {
@@ -521,7 +550,7 @@ const PiPContentPreview = styled.div`
     padding-left: 1rem;
     margin: 0.75rem 0;
     font-style: italic;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
   }
 `;
 

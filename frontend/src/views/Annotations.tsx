@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../assets/configurations/osLegalStyles";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import _ from "lodash";
@@ -62,7 +63,7 @@ interface LooseObject {
 
 const PageContainer = styled.div`
   height: 100%;
-  background: #fafafa;
+  background: ${OS_LEGAL_COLORS.background};
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-y: auto;
   overflow-x: hidden;
@@ -99,11 +100,11 @@ const HeroTitle = styled.h1`
   font-size: 42px;
   font-weight: 400;
   line-height: 1.2;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 12px;
 
   span {
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 
   @media (max-width: 768px) {
@@ -114,7 +115,7 @@ const HeroTitle = styled.h1`
 const HeroSubtitle = styled.p`
   font-size: 17px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0;
   max-width: 500px;
 `;
@@ -123,7 +124,7 @@ const StatsContainer = styled.div`
   margin-bottom: 32px;
   padding: 20px 24px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
 `;
 
@@ -147,7 +148,7 @@ const StatItem = styled.div`
 
   @media (max-width: 768px) {
     padding: 12px;
-    background: #f8fafc;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
     border-radius: 8px;
   }
 `;
@@ -158,9 +159,9 @@ const StatIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0fdfa;
+  background: ${OS_LEGAL_COLORS.successSurface};
   border-radius: 10px;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
 `;
 
 const StatContent = styled.div`
@@ -172,19 +173,19 @@ const StatContent = styled.div`
 const StatValue = styled.div`
   font-size: 24px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   line-height: 1;
 `;
 
 const StatLabel = styled.div`
   font-size: 13px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const StatDivider = styled.div`
   width: 1px;
   height: 40px;
-  background: #e2e8f0;
+  background: ${OS_LEGAL_COLORS.border};
 
   @media (max-width: 768px) {
     display: none;
@@ -205,17 +206,23 @@ const FilterDropdown = styled.button<{ $active?: boolean }>`
   padding: 10px 12px;
   font-size: 13px;
   font-weight: 500;
-  color: ${(props) => (props.$active ? "#0f766e" : "#64748b")};
-  background: ${(props) => (props.$active ? "#f0fdfa" : "white")};
-  border: 1px solid ${(props) => (props.$active ? "#0f766e" : "#e2e8f0")};
+  color: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
+  background: ${(props) =>
+    props.$active ? OS_LEGAL_COLORS.successSurface : "white"};
+  border: 1px solid
+    ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.border};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 
   &:hover {
-    border-color: ${(props) => (props.$active ? "#0f766e" : "#cbd5e1")};
-    color: ${(props) => (props.$active ? "#0f766e" : "#1e293b")};
+    border-color: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.borderHover};
+    color: ${(props) =>
+      props.$active ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -225,8 +232,8 @@ const AdvancedFiltersContainer = styled.div`
   gap: 12px;
   padding: 16px;
   margin-bottom: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
 `;
 

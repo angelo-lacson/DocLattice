@@ -60,7 +60,7 @@ test("renders loading state", async ({ mount, page }) => {
   // The loader should exist while in loading state – rely on presence rather
   // than visibility which depends on runtime-injected CSS that may fluctuate
   // when tests run in parallel.
-  await expect(page.locator(".ui.active.loader")).toHaveCount(1);
+  await expect(page.locator(".oc-spinner")).toHaveCount(1);
 
   await component.unmount();
 });

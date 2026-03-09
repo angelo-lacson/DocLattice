@@ -1,7 +1,11 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
-import { Icon, Dropdown, Button, Confirm } from "semantic-ui-react";
+// TODO: Migrate Dropdown to @os-legal/ui when available
+import { Dropdown } from "semantic-ui-react";
+import { Button, IconButton, Spinner } from "@os-legal/ui";
+import { AlertCircle, StickyNote } from "lucide-react";
+import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { toast } from "react-toastify";
 import {
   Link2,
@@ -199,8 +203,9 @@ const TypeBadge = styled.span<{ $type: "RELATIONSHIP" | "NOTES" }>`
   font-size: 0.75rem;
   font-weight: 500;
   background: ${(props) =>
-    props.$type === "RELATIONSHIP" ? "#dbeafe" : "#fef3c7"};
-  color: ${(props) => (props.$type === "RELATIONSHIP" ? "#1e40af" : "#92400e")};
+    props.$type === "RELATIONSHIP" ? OS_LEGAL_COLORS.blueBorder : "#fef3c7"};
+  color: ${(props) =>
+    props.$type === "RELATIONSHIP" ? OS_LEGAL_COLORS.blueDark : "#92400e"};
 `;
 
 const LabelBadge = styled.span<{ $color: string }>`
@@ -241,7 +246,7 @@ const ActionButton = styled.button`
 
   &:hover {
     background: ${OS_LEGAL_COLORS.surfaceHover};
-    color: #ef4444;
+    color: ${OS_LEGAL_COLORS.dangerBorderHover};
   }
 
   &:disabled {
@@ -419,16 +424,15 @@ export const CorpusDocumentRelationships: React.FC<
     return (
       <Container>
         <EmptyState>
-          <Icon name="warning circle" size="huge" />
+          <AlertCircle size={48} strokeWidth={1.5} />
           <h3>Error Loading Relationships</h3>
           <p>{error.message}</p>
           <Button
             onClick={() => refetch()}
             style={{ marginTop: 16 }}
-            icon
-            labelPosition="left"
+            variant="secondary"
+            leftIcon={<RefreshCw size={14} />}
           >
-            <Icon name="refresh" />
             Retry
           </Button>
         </EmptyState>
@@ -451,22 +455,21 @@ export const CorpusDocumentRelationships: React.FC<
             value={filterType}
             onChange={(_, { value }) => setFilterType(value as FilterType)}
           />
-          <Button
-            icon
-            basic
+          <IconButton
+            variant="ghost"
             onClick={() => refetch()}
             loading={loading}
-            title="Refresh"
+            aria-label="Refresh"
           >
             <RefreshCw size={16} />
-          </Button>
+          </IconButton>
         </FilterBar>
       </Header>
 
       <TableContainer>
         {loading && !data ? (
           <LoadingState>
-            <Icon name="spinner" loading />
+            <Spinner size="sm" />
             Loading relationships...
           </LoadingState>
         ) : relationships.length === 0 ? (
@@ -534,7 +537,7 @@ export const CorpusDocumentRelationships: React.FC<
                         </>
                       ) : (
                         <>
-                          <Icon name="sticky note outline" size="small" />
+                          <StickyNote size={12} />
                           Notes
                         </>
                       )}
@@ -590,14 +593,12 @@ export const CorpusDocumentRelationships: React.FC<
         </TotalCount>
       )}
 
-      <Confirm
-        open={deleteConfirm !== null}
-        onCancel={() => setDeleteConfirm(null)}
-        onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
-        header="Delete Relationship"
-        content="Are you sure you want to delete this document relationship? This action cannot be undone."
-        confirmButton={{ content: "Delete", negative: true }}
-        cancelButton="Cancel"
+      <ConfirmModal
+        visible={deleteConfirm !== null}
+        message="Are you sure you want to delete this document relationship? This action cannot be undone."
+        yesAction={() => deleteConfirm && handleDelete(deleteConfirm)}
+        noAction={() => setDeleteConfirm(null)}
+        toggleModal={() => setDeleteConfirm(null)}
       />
     </Container>
   );

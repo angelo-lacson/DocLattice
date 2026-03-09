@@ -7,6 +7,9 @@ import {
   ViewMode,
 } from "../../../src/components/corpuses/folders/FolderToolbar";
 import { RemoveDocumentsModal } from "../../../src/components/corpuses/folders/RemoveDocumentsModal";
+import { DeleteFolderModal } from "../../../src/components/corpuses/folders/DeleteFolderModal";
+import { EditFolderModal } from "../../../src/components/corpuses/folders/EditFolderModal";
+import { MoveFolderModal } from "../../../src/components/corpuses/folders/MoveFolderModal";
 import {
   selectedFolderIdAtom,
   folderListAtom,
@@ -17,7 +20,12 @@ import {
   corpusPermissionsAtom,
   showRemoveDocumentsModalAtom,
   removeDocumentsIdsAtom,
+  showDeleteFolderModalAtom,
+  showEditFolderModalAtom,
+  showMoveFolderModalAtom,
+  activeFolderModalIdAtom,
 } from "../../../src/atoms/folderAtoms";
+import { CorpusFolderType } from "../../../src/graphql/queries/folders";
 
 /**
  * Test fixtures for folder components
@@ -170,4 +178,85 @@ export function RemoveDocumentsModalFixture({
   ] as const);
 
   return <RemoveDocumentsModal />;
+}
+
+// ============================================================================
+// Delete Folder Modal Fixture
+// ============================================================================
+
+interface DeleteFolderModalFixtureProps {
+  showModal?: boolean;
+  folderId?: string | null;
+  folders?: CorpusFolderType[];
+  corpusId?: string;
+}
+
+export function DeleteFolderModalFixture({
+  showModal = true,
+  folderId = "folder-1",
+  folders = [],
+  corpusId = "corpus-1",
+}: DeleteFolderModalFixtureProps) {
+  useHydrateAtoms([
+    [showDeleteFolderModalAtom, showModal],
+    [activeFolderModalIdAtom, folderId],
+    [folderListAtom, folders],
+    [folderCorpusIdAtom, corpusId],
+  ] as const);
+
+  return <DeleteFolderModal />;
+}
+
+// ============================================================================
+// Edit Folder Modal Fixture
+// ============================================================================
+
+interface EditFolderModalFixtureProps {
+  showModal?: boolean;
+  folderId?: string | null;
+  folders?: CorpusFolderType[];
+  corpusId?: string;
+}
+
+export function EditFolderModalFixture({
+  showModal = true,
+  folderId = "folder-1",
+  folders = [],
+  corpusId = "corpus-1",
+}: EditFolderModalFixtureProps) {
+  useHydrateAtoms([
+    [showEditFolderModalAtom, showModal],
+    [activeFolderModalIdAtom, folderId],
+    [folderListAtom, folders],
+    [folderCorpusIdAtom, corpusId],
+  ] as const);
+
+  return <EditFolderModal />;
+}
+
+// ============================================================================
+// Move Folder Modal Fixture
+// ============================================================================
+
+interface MoveFolderModalFixtureProps {
+  showModal?: boolean;
+  folderId?: string | null;
+  folders?: CorpusFolderType[];
+  corpusId?: string;
+}
+
+export function MoveFolderModalFixture({
+  showModal = true,
+  folderId = "folder-1",
+  folders = [],
+  corpusId = "corpus-1",
+}: MoveFolderModalFixtureProps) {
+  useHydrateAtoms([
+    [showMoveFolderModalAtom, showModal],
+    [activeFolderModalIdAtom, folderId],
+    [folderListAtom, folders],
+    [folderCorpusIdAtom, corpusId],
+  ] as const);
+
+  return <MoveFolderModal />;
 }

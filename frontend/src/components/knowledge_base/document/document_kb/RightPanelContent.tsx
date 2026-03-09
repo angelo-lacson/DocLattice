@@ -28,6 +28,7 @@ import {
   SortOption,
   SidebarViewMode,
 } from "../unified_feed";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { ChatTray } from "../right_tray/ChatTray";
 import { SafeMarkdown } from "../../markdown/SafeMarkdown";
 import { SingleDocumentExtractResults } from "../../../annotator/sidebar/SingleDocumentExtractResults";
@@ -150,7 +151,7 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
     return (
       <FlexColumnPanel>
         <SidebarHeader>
-          <BarChart3 size={20} style={{ color: "#f59e0b" }} />
+          <BarChart3 size={20} style={{ color: OS_LEGAL_COLORS.folderIcon }} />
           <SidebarHeaderContent>
             <SidebarHeaderTitle>
               <SafeMarkdown>

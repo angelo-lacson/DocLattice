@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import styled, { keyframes } from "styled-components";
 import { Loader, Image as ImageIcon } from "lucide-react";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface ContainerProps {
   $compact?: boolean;
@@ -25,13 +26,13 @@ const ThumbnailWrapper = styled.div<ThumbnailProps>`
   max-height: ${(props) => (props.$compact ? "56px" : "200px")};
   border-radius: 8px;
   overflow: hidden;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
   cursor: pointer;
   transition: all 0.2s ease;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
 
   &:hover {
-    border-color: #3b82f6;
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
   }
 `;
@@ -73,15 +74,15 @@ const ImagePlaceholder = styled.div<ThumbnailProps>`
   gap: 0.5rem;
   background: linear-gradient(
     90deg,
-    #f1f5f9 0%,
-    #e2e8f0 20%,
-    #f8fafc 40%,
-    #e2e8f0 60%,
-    #f1f5f9 100%
+    ${OS_LEGAL_COLORS.surfaceLight} 0%,
+    ${OS_LEGAL_COLORS.border} 20%,
+    ${OS_LEGAL_COLORS.surfaceHover} 40%,
+    ${OS_LEGAL_COLORS.border} 60%,
+    ${OS_LEGAL_COLORS.surfaceLight} 100%
   );
   background-size: 200% 100%;
   animation: ${shimmer} 1.5s ease-in-out infinite;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const LoadingState = styled.div<ThumbnailProps>`
@@ -90,10 +91,10 @@ const LoadingState = styled.div<ThumbnailProps>`
   justify-content: center;
   width: ${(props) => (props.$compact ? "56px" : "100%")};
   height: ${(props) => (props.$compact ? "56px" : "120px")};
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 8px;
-  border: 2px solid #e2e8f0;
-  color: #94a3b8;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const ErrorState = styled(LoadingState)`

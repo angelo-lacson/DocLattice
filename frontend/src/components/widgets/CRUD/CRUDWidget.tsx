@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo } from "react";
-import { Header, Icon, Segment, Label, Grid } from "semantic-ui-react";
+import { Box } from "lucide-react";
 import Form from "@rjsf/semantic-ui";
 import validator from "@rjsf/validator-ajv8";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   HorizontallyCenteredDiv,
   VerticallyCenteredDiv,
@@ -101,82 +102,93 @@ export const CRUDWidget = <T extends Record<string, any>>({
       {showHeader && (
         <HorizontallyCenteredDiv>
           <div style={{ marginTop: "1rem", textAlign: "left", width: "100%" }}>
-            <Header as="h2" textAlign="center">
-              <Icon
-                name="box"
-                size="large"
-                style={{ maxWidth: "50px", height: "auto", margin: "0 auto" }}
-                className="responsive-icon"
+            <h2 style={{ textAlign: "center", margin: 0 }}>
+              <Box
+                size={24}
+                style={{
+                  maxWidth: "50px",
+                  height: "auto",
+                  margin: "0 auto",
+                  display: "inline-block",
+                  verticalAlign: "middle",
+                }}
               />
-              <Header.Content>
+              <span style={{ marginLeft: "0.5rem" }}>
                 {headerText}
-                <Header.Subheader>{`Values for: ${descriptiveName}`}</Header.Subheader>
-              </Header.Content>
-            </Header>
+                <div
+                  style={{
+                    fontSize: "0.875rem",
+                    color: OS_LEGAL_COLORS.textSecondary,
+                  }}
+                >{`Values for: ${descriptiveName}`}</div>
+              </span>
+            </h2>
           </div>
         </HorizontallyCenteredDiv>
       )}
       <HorizontallyCenteredDiv>
         <VerticallyCenteredDiv>
-          <Segment
-            raised
+          <div
             style={{
               width: "100%",
               padding: "1.5rem",
               boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
               borderRadius: "8px",
+              border: "1px solid rgba(34,36,38,.15)",
+              background: OS_LEGAL_COLORS.surface,
             }}
           >
-            <Grid stackable>
+            <div>
               {hasFile && (
-                <Grid.Row>
-                  <Grid.Column width={16}>
-                    <Label>{fileLabel}</Label>
-                    <FilePreviewAndUpload
-                      readOnly={!canWrite}
-                      isImage={fileIsImage}
-                      acceptedTypes={acceptedFileTypes}
-                      disabled={!canWrite}
-                      file={instance?.[fileField] || null}
-                      onChange={({ data, filename }) =>
-                        handleInstanceChange({
-                          ...instance,
-                          [fileField]: data,
-                          filename,
-                        } as T)
-                      }
-                    />
-                  </Grid.Column>
-                </Grid.Row>
-              )}
-              <Grid.Row>
-                <Grid.Column width={16}>
-                  <Form
-                    schema={dataSchema}
-                    uiSchema={uiSchema}
-                    validator={validator}
-                    onChange={handleChange}
-                    formData={formData}
-                    noHtml5Validate
-                    liveValidate
-                    showErrorList={false}
-                    className="responsive-form"
+                <div style={{ marginBottom: "1rem" }}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "0.35em 0.65em",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      borderRadius: "4px",
+                      border: "1px solid rgba(34,36,38,.15)",
+                      background: OS_LEGAL_COLORS.gray50,
+                      marginBottom: "0.5rem",
+                    }}
                   >
-                    <Grid columns={2} stackable>
-                      <Grid.Row>
-                        <Grid.Column>
-                          <></>
-                        </Grid.Column>
-                        <Grid.Column>
-                          <></>
-                        </Grid.Column>
-                      </Grid.Row>
-                    </Grid>
-                  </Form>
-                </Grid.Column>
-              </Grid.Row>
-            </Grid>
-          </Segment>
+                    {fileLabel}
+                  </span>
+                  <FilePreviewAndUpload
+                    readOnly={!canWrite}
+                    isImage={fileIsImage}
+                    acceptedTypes={acceptedFileTypes}
+                    disabled={!canWrite}
+                    file={instance?.[fileField] || null}
+                    onChange={({ data, filename }) =>
+                      handleInstanceChange({
+                        ...instance,
+                        [fileField]: data,
+                        filename,
+                      } as T)
+                    }
+                  />
+                </div>
+              )}
+              <div>
+                <Form
+                  schema={dataSchema}
+                  uiSchema={uiSchema}
+                  validator={validator}
+                  onChange={handleChange}
+                  formData={formData}
+                  noHtml5Validate
+                  liveValidate
+                  showErrorList={false}
+                  className="responsive-form"
+                >
+                  {/* Empty child suppresses rjsf's default submit button */}
+                  <div />
+                </Form>
+              </div>
+            </div>
+          </div>
         </VerticallyCenteredDiv>
       </HorizontallyCenteredDiv>
     </div>

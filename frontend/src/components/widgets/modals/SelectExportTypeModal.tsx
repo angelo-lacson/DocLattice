@@ -58,6 +58,7 @@ import open_contracts_icon from "../../../assets/icons/oc_45_dark.png";
 import { ExportTypes } from "../../types";
 import { PipelineComponentType } from "../../../types/graphql-api";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
+import { accentAlpha } from "../../../assets/configurations/osLegalStyles";
 
 // -- Styled Components --
 
@@ -183,13 +184,13 @@ const FormatOption = styled.div<{ $isSelected: boolean }>`
         ? "var(--oc-accent, #0f766e)"
         : "var(--oc-border-default)"};
   background: ${(props) =>
-    props.$isSelected ? "rgba(15, 118, 110, 0.05)" : "var(--oc-bg-surface)"};
+    props.$isSelected ? accentAlpha(0.05) : "var(--oc-bg-surface)"};
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
     border-color: var(--oc-accent, #0f766e);
-    background: rgba(15, 118, 110, 0.03);
+    background: ${accentAlpha(0.03)};
   }
 `;
 

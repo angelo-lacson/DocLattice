@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("corpuses", "0044_rename_placeholder_indexes"),
+        ("corpuses", "0046_corpusactiontemplate_nonempty_task_instructions"),
     ]
 
     operations = [

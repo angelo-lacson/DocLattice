@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
-import { Header, Segment, Dropdown } from "semantic-ui-react";
+import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import _ from "lodash";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { labelsetSearchTerm } from "../../../graphql/cache";
 import { LoadingOverlay } from "../../common/LoadingOverlay";
 import {
@@ -24,14 +25,8 @@ const MobileFriendlyWrapper = styled.div`
       font-size: 16px; /* Prevents iOS zoom on focus */
     }
 
-    /* Make header text readable on mobile */
-    h5.ui.header {
-      font-size: 1rem;
-      padding: 0.75rem 1rem;
-    }
-
-    /* Add padding to segment for better mobile spacing */
-    .ui.segment {
+    /* Add padding for better mobile spacing */
+    > div:last-child {
       padding: 1rem;
     }
 
@@ -98,22 +93,59 @@ export const LabelSetSelector = ({
       text: node.title,
       value: node.id,
       content: (
-        <Header
-          key={index}
-          image={node.icon}
-          content={node.title}
-          subheader={node.description}
-        />
+        <div key={index}>
+          <div style={{ fontWeight: 600 }}>
+            {node.icon && (
+              <img
+                src={node.icon}
+                alt=""
+                style={{
+                  width: 20,
+                  height: 20,
+                  marginRight: 8,
+                  verticalAlign: "middle",
+                }}
+              />
+            )}
+            {node.title}
+          </div>
+          <div
+            style={{
+              fontSize: "0.85rem",
+              color: OS_LEGAL_COLORS.textSecondary,
+            }}
+          >
+            {node.description}
+          </div>
+        </div>
       ),
     };
   });
 
   return (
     <MobileFriendlyWrapper>
-      <Header as="h5" attached="top">
+      <h5
+        style={{
+          margin: 0,
+          padding: "0.75rem 1rem",
+          background: OS_LEGAL_COLORS.gray50,
+          border: "1px solid rgba(34,36,38,.15)",
+          borderBottom: "none",
+          borderRadius: "4px 4px 0 0",
+          fontSize: "0.9rem",
+          fontWeight: 600,
+        }}
+      >
         Label Set:
-      </Header>
-      <Segment attached style={{ position: "relative" }}>
+      </h5>
+      <div
+        style={{
+          padding: "1rem",
+          border: "1px solid rgba(34,36,38,.15)",
+          borderRadius: "0 0 4px 4px",
+          position: "relative",
+        }}
+      >
         <LoadingOverlay active={loading} content="Loading Label Sets..." />
         <Dropdown
           disabled={read_only}
@@ -128,7 +160,7 @@ export const LabelSetSelector = ({
           placeholder="Choose a label set"
           value={labelSet?.id}
         />
-      </Segment>
+      </div>
     </MobileFriendlyWrapper>
   );
 };

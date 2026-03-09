@@ -388,7 +388,7 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         parameters=(
             (
                 "items",
-                "List of (label_text, exact_string, document_id, corpus_id) tuples",
+                "List of objects with keys: label_text (str), exact_string (str)",
                 True,
             ),
         ),

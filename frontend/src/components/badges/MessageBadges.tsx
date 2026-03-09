@@ -1,12 +1,13 @@
 import React from "react";
 import styled from "styled-components";
 import * as LucideIcons from "lucide-react";
-import { Popup } from "semantic-ui-react";
+import { useState, useRef } from "react";
 import {
   ChatMessageType,
   UserBadgeType,
   AgentConfigurationType,
 } from "../../types/graphql-api";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 const BadgeContainer = styled.div`
   display: inline-flex;
@@ -47,21 +48,51 @@ const BadgeContent = styled.div`
 const BadgeTitle = styled.div`
   font-weight: 700;
   font-size: 1em;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const BadgeDescription = styled.div`
   font-size: 0.85em;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.4;
 `;
 
 const BadgeMetadata = styled.div`
   font-size: 0.75em;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 0.3em;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
   padding-top: 0.5em;
+`;
+
+const TooltipWrapper = styled.div`
+  position: relative;
+  display: inline-flex;
+`;
+
+const TooltipPopup = styled.div`
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 0.75em;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 3px 15px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  max-width: 220px;
+  pointer-events: auto;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: white;
+  }
 `;
 
 interface BadgeDisplayData {
@@ -113,7 +144,7 @@ function getAgentBadgeData(
     name: agentConfig.name,
     description: agentConfig.description || undefined,
     icon: badgeConfig.icon || "Bot",
-    color: badgeConfig.color || "#4A90E2",
+    color: badgeConfig.color || OS_LEGAL_COLORS.primaryBlue,
     label: badgeConfig.label || agentConfig.name,
   };
 }
@@ -128,6 +159,7 @@ function BadgeItem({
   badge: BadgeDisplayData | AgentBadgeDisplayData;
   showTooltip: boolean;
 }) {
+  const [isHovered, setIsHovered] = useState(false);
   // Dynamically get the icon component from lucide-react
   const IconComponent = (LucideIcons[badge.icon as keyof typeof LucideIcons] ||
     LucideIcons.Award) as React.ComponentType<{ size: number }>;
@@ -143,40 +175,36 @@ function BadgeItem({
     return badgeElement;
   }
 
-  // Create detailed popup content
-  const popupContent = (
-    <BadgeContent>
-      <BadgeTitle>{badge.name}</BadgeTitle>
-      <BadgeDescription>{badge.description}</BadgeDescription>
-      {"badgeType" in badge && (
-        <BadgeMetadata>
-          {badge.badgeType === "CORPUS" && badge.corpus && (
-            <div>Corpus: {badge.corpus.title}</div>
-          )}
-          {badge.badgeType === "GLOBAL" && <div>Global Badge</div>}
-          {badge.isAutoAwarded && <div>Auto-awarded</div>}
-          {badge.awardedAt && (
-            <div>Awarded: {new Date(badge.awardedAt).toLocaleDateString()}</div>
-          )}
-          {badge.awardedBy && <div>By: {badge.awardedBy.username}</div>}
-        </BadgeMetadata>
-      )}
-    </BadgeContent>
-  );
-
   return (
-    <Popup
-      trigger={badgeElement}
-      content={popupContent}
-      position="top center"
-      hoverable
-      inverted={false}
-      style={{
-        padding: "0.75em",
-        borderRadius: "10px",
-        boxShadow: "0 3px 15px rgba(0, 0, 0, 0.15)",
-      }}
-    />
+    <TooltipWrapper
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {badgeElement}
+      {isHovered && (
+        <TooltipPopup>
+          <BadgeContent>
+            <BadgeTitle>{badge.name}</BadgeTitle>
+            <BadgeDescription>{badge.description}</BadgeDescription>
+            {"badgeType" in badge && (
+              <BadgeMetadata>
+                {badge.badgeType === "CORPUS" && badge.corpus && (
+                  <div>Corpus: {badge.corpus.title}</div>
+                )}
+                {badge.badgeType === "GLOBAL" && <div>Global Badge</div>}
+                {badge.isAutoAwarded && <div>Auto-awarded</div>}
+                {badge.awardedAt && (
+                  <div>
+                    Awarded: {new Date(badge.awardedAt).toLocaleDateString()}
+                  </div>
+                )}
+                {badge.awardedBy && <div>By: {badge.awardedBy.username}</div>}
+              </BadgeMetadata>
+            )}
+          </BadgeContent>
+        </TooltipPopup>
+      )}
+    </TooltipWrapper>
   );
 }
 
@@ -231,7 +259,10 @@ export const MessageBadges: React.FC<MessageBadgesProps> = ({
 
       {/* Show "+X more" if there are more badges */}
       {userBadges.length > maxBadges && (
-        <MiniStyledBadge $badgeColor="#6b7280" title="More badges available">
+        <MiniStyledBadge
+          $badgeColor={OS_LEGAL_COLORS.textSecondary}
+          title="More badges available"
+        >
           +{userBadges.length - maxBadges} more
         </MiniStyledBadge>
       )}

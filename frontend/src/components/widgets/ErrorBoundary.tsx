@@ -1,6 +1,7 @@
 import React, { Component, ReactNode } from "react";
-import { Message, Button, Container } from "semantic-ui-react";
+import { Button } from "@os-legal/ui";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -14,9 +15,12 @@ interface ErrorBoundaryState {
   errorInfo: React.ErrorInfo | null;
 }
 
-const ErrorContainer = styled(Container)`
+const ErrorContainer = styled.div`
   padding: 2rem;
   margin-top: 2rem;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
 `;
 
 const ErrorDetails = styled.pre`
@@ -26,6 +30,14 @@ const ErrorDetails = styled.pre`
   overflow-x: auto;
   margin-top: 1rem;
   font-size: 0.875rem;
+`;
+
+const ErrorAlert = styled.div`
+  background: ${OS_LEGAL_COLORS.dangerSurface};
+  color: ${OS_LEGAL_COLORS.dangerText};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
+  border-radius: 4px;
+  padding: 1.5rem;
 `;
 
 /**
@@ -82,8 +94,8 @@ export class ErrorBoundary extends Component<
       // Default error UI
       return (
         <ErrorContainer>
-          <Message negative>
-            <Message.Header>Something went wrong</Message.Header>
+          <ErrorAlert>
+            <h3 style={{ margin: "0 0 0.5rem" }}>Something went wrong</h3>
             <p>{this.state.error.message}</p>
 
             {process.env.NODE_ENV === "development" && this.state.errorInfo && (
@@ -95,13 +107,13 @@ export class ErrorBoundary extends Component<
             )}
 
             <Button
-              primary
+              variant="primary"
               onClick={this.resetError}
               style={{ marginTop: "1rem" }}
             >
               Try Again
             </Button>
-          </Message>
+          </ErrorAlert>
         </ErrorContainer>
       );
     }

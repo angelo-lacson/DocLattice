@@ -9,12 +9,17 @@ from config.graphql.permissioning.permission_annotator.mixins import (
     AnnotatePermissionsForReadMixin,
 )
 from opencontractserver.agents.models import AgentActionResult, AgentConfiguration
-from opencontractserver.corpuses.models import CorpusAction, CorpusActionExecution
+from opencontractserver.corpuses.models import (
+    CorpusAction,
+    CorpusActionExecution,
+    CorpusActionTemplate,
+)
 
 
 class CorpusActionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     # Expose agent-related fields explicitly
     pre_authorized_tools = graphene.List(graphene.String)
+    source_template = graphene.Field(lambda: CorpusActionTemplateType)
 
     class Meta:
         model = CorpusAction
@@ -29,6 +34,7 @@ class CorpusActionType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "agent_config__id": ["exact"],
             "trigger": ["exact"],
             "creator__id": ["exact"],
+            "source_template__id": ["exact"],
         }
 
     def resolve_pre_authorized_tools(self, info):
@@ -231,3 +237,29 @@ class AvailableToolType(graphene.ObjectType):
         required=True,
         description="List of parameters accepted by this tool",
     )
+
+
+class CorpusActionTemplateType(DjangoObjectType):
+    """GraphQL type for CorpusActionTemplate — read-only, system-level."""
+
+    pre_authorized_tools = graphene.List(graphene.String)
+
+    class Meta:
+        model = CorpusActionTemplate
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        fields = (
+            "id",
+            "name",
+            "description",
+            "trigger",
+            "is_active",
+            "disabled_on_clone",
+            "sort_order",
+            "agent_config",
+            "pre_authorized_tools",
+            "created",
+        )
+
+    def resolve_pre_authorized_tools(self, info):
+        return self.pre_authorized_tools or []

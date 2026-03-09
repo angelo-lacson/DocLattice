@@ -5,21 +5,27 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-07
+## [Unreleased] - 2026-03-08
 
 ### Added
 
 - **Creative Commons license support for corpuses**: Corpuses can now have a license applied, choosing from standard Creative Commons licenses (CC BY, CC BY-SA, CC BY-NC, CC BY-NC-SA, CC BY-ND, CC BY-NC-ND, CC0) or a custom license with a URL. Changes include:
   - New `license` (CharField with SPDX identifiers) and `license_link` (URLField) fields on the Corpus model (`opencontractserver/corpuses/models.py`)
   - License constants in `opencontractserver/constants/licenses.py` and `frontend/src/assets/configurations/constants.ts`
-  - Database migration `0045_corpus_license_fields`
+  - Database migration `0047_corpus_license_fields`
   - GraphQL create/update mutations accept `license` and `licenseLink` arguments
   - New `LicenseSelector` frontend component (`frontend/src/components/widgets/CRUD/LicenseSelector.tsx`)
   - CorpusModal updated with License section for create/edit flows
   - CorpusInfoSection displays the selected license in corpus settings
 
+### Fixed
+
+- **PostgreSQL HNSW config warning on startup** (Closes #1074): Fixed `invalid configuration parameter name 'hnsw.iterative_scan', removing it` warning caused by database-level GUC settings being applied before the pgvector extension loaded. Added `shared_preload_libraries=vector` to all Docker Compose postgres commands so pgvector registers its GUC variables at server startup, before database-level settings are applied. Also upgraded pgvector from v0.8.0 to v0.8.2. (`local.yml`, `production.yml`, `test.yml`, `compose/production/postgres/Dockerfile`)
+
 ### Changed
 
+- **Migrated frontend from Semantic UI React to @os-legal/ui design system**: Replaced Modal, Button, Input, and other UI components across the entire frontend with `@os-legal/ui` equivalents. Updated icon system from Semantic UI icons to lucide-react. Introduced `OS_LEGAL_COLORS`, `OS_LEGAL_TYPOGRAPHY`, and `OS_LEGAL_SPACING` design tokens for consistent styling. Upgraded `@os-legal/ui` from 0.1.8 to 0.1.12.
+- **Replaced hardcoded hex colors with design system tokens**: Consolidated ~50 color tokens and replaced hardcoded hex color literals across 150+ files with `OS_LEGAL_COLORS` constants from `osLegalStyles.ts`.
 - **Extracted shared corpus object collection logic** into `opencontractserver/utils/corpus_collector.py`: New `collect_corpus_objects()` utility and `CorpusObjectCollection` dataclass consolidate duplicated corpus forking/export collection logic (Issue #816)
 
 ### Added
@@ -65,7 +71,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Backend mutation test for the all-enabled-to-explicit toggle transition, verifying the mutation succeeds and the query reflects the change (issue #1036 item 7). (`opencontractserver/tests/test_pipeline_settings.py`)
 
+### Changed
+
+- **`add_annotations_from_exact_strings` API simplified to single-document** (breaking): Replaced per-item `(label, text, doc_id, corpus_id)` tuples with a flat `document_id`/`corpus_id` pair plus `AnnotationItem` TypedDict items containing only `label_text` and `exact_string`. Callers that previously annotated multiple documents in one call must now make separate calls per document. (`opencontractserver/llms/tools/core_tools.py`)
+
 ### Added
+
+#### Action Library (Corpus Action Templates)
+- **CorpusActionTemplate model** for reusable, agent-based action definitions that users can browse and add to individual corpuses (`opencontractserver/corpuses/models.py`)
+- **5 default action templates** seeded via data migration: Document Description Updater, Corpus Description Updater, Document Summary Generator, Key Terms Annotator, Document Notes Generator — each with a dedicated `AgentConfiguration` and curated tool set (`opencontractserver/agents/migrations/0010_create_default_action_templates.py`)
+- **Action Library UI**: "Add from Library" picker in Corpus Settings lets users browse available templates and add them to a corpus on demand. New corpora start empty — no auto-cloning (`frontend/src/components/corpuses/settings/CorpusActionsSection.tsx`)
+- **`addTemplateToCorpus` mutation**: Clones a template into a `CorpusAction` for a given corpus with duplicate prevention (`config/graphql/corpus_mutations.py`)
+- **`source_template` FK on CorpusAction**: Links cloned actions back to their source template for provenance tracking (`opencontractserver/corpuses/models.py`)
+- **GraphQL query `corpusActionTemplates`**: Read-only query exposing available templates with optional `isActive` filter (`config/graphql/action_queries.py`)
+- **`sourceTemplate` field on CorpusActionType**: Exposes template provenance in the existing corpus actions GraphQL type (`config/graphql/agent_types.py`)
+- **`seed_action_templates` management command**: Idempotent command for seeding default templates on fresh databases (`opencontractserver/corpuses/management/commands/seed_action_templates.py`)
 
 #### Optimize Vector Search and Index Scalability for Million-Scale Corpora
 - **HNSW indexes on all Embedding vector columns** (384–4096 dimensions): Approximate nearest neighbor search reduces vector queries from O(n) sequential scan to O(log n). Created via `AddIndexConcurrently` to avoid table locks during index creation (`opencontractserver/annotations/models.py`, `opencontractserver/annotations/migrations/0063_add_hnsw_indexes_and_search_vector.py`)

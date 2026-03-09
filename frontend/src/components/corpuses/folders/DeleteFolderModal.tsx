@@ -1,9 +1,15 @@
 import React, { useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Modal, Button } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, AlertTriangle } from "lucide-react";
+import {
+  Button,
+  Modal,
+  ModalHeader as OcModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 import {
   showDeleteFolderModalAtom,
   activeFolderModalIdAtom,
@@ -33,19 +39,11 @@ import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
  * - Optimistic update + refetch
  */
 
-const StyledModal = styled(Modal)`
-  &.ui.modal {
+const StyledModalWrapper = styled.div`
+  .oc-modal {
     max-width: 500px;
+    width: 100%;
   }
-`;
-
-const ModalHeader = styled(Modal.Header)`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fef2f2;
-  border-bottom: 2px solid #fecaca;
-  color: #991b1b;
 `;
 
 const CloseButton = styled.button`
@@ -59,12 +57,12 @@ const CloseButton = styled.button`
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #dc2626;
+  color: ${OS_LEGAL_COLORS.danger};
   transition: all 0.15s ease;
 
   &:hover {
-    background: #fecaca;
-    color: #991b1b;
+    background: ${OS_LEGAL_COLORS.dangerBorder};
+    color: ${OS_LEGAL_COLORS.dangerText};
   }
 `;
 
@@ -72,11 +70,11 @@ const WarningBox = styled.div`
   display: flex;
   gap: 12px;
   padding: 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: ${OS_LEGAL_COLORS.dangerSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 8px;
   margin-bottom: 16px;
-  color: #991b1b;
+  color: ${OS_LEGAL_COLORS.dangerText};
 `;
 
 const WarningIcon = styled(AlertTriangle)`
@@ -190,81 +188,78 @@ export const DeleteFolderModal: React.FC = () => {
   const parentName = folder.parent ? folder.parent.name : "Corpus Root";
 
   return (
-    <StyledModal open={showModal} onClose={handleClose} size="small">
-      <ModalHeader>
-        <span>Delete Folder</span>
-        <CloseButton onClick={handleClose} aria-label="Close">
-          <X size={20} />
-        </CloseButton>
-      </ModalHeader>
+    <StyledModalWrapper>
+      <Modal open={showModal} onClose={handleClose} size="sm">
+        <OcModalHeader title="Delete Folder" onClose={handleClose} />
 
-      <Modal.Content>
-        <WarningBox>
-          <WarningIcon size={24} />
-          <WarningContent>
-            <h4>This action cannot be undone</h4>
-            <p>
-              You are about to permanently delete the folder{" "}
-              <strong>"{folder.name}"</strong>.
-            </p>
-            {(childCount > 0 || documentCount > 0) && (
-              <ul>
-                {childCount > 0 && (
-                  <li>
-                    <strong>{childCount}</strong> subfolder
-                    {childCount !== 1 ? "s" : ""} will be moved to{" "}
-                    <strong>{parentName}</strong>
-                  </li>
-                )}
-                {documentCount > 0 && (
-                  <li>
-                    <strong>{documentCount}</strong> document
-                    {documentCount !== 1 ? "s" : ""} will be moved to{" "}
-                    <strong>{parentName}</strong>
-                  </li>
-                )}
-              </ul>
-            )}
-          </WarningContent>
-        </WarningBox>
+        <ModalBody>
+          <WarningBox>
+            <WarningIcon size={24} />
+            <WarningContent>
+              <h4>This action cannot be undone</h4>
+              <p>
+                You are about to permanently delete the folder{" "}
+                <strong>"{folder.name}"</strong>.
+              </p>
+              {(childCount > 0 || documentCount > 0) && (
+                <ul>
+                  {childCount > 0 && (
+                    <li>
+                      <strong>{childCount}</strong> subfolder
+                      {childCount !== 1 ? "s" : ""} will be moved to{" "}
+                      <strong>{parentName}</strong>
+                    </li>
+                  )}
+                  {documentCount > 0 && (
+                    <li>
+                      <strong>{documentCount}</strong> document
+                      {documentCount !== 1 ? "s" : ""} will be moved to{" "}
+                      <strong>{parentName}</strong>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </WarningContent>
+          </WarningBox>
 
-        <FolderInfo>
-          <div style={{ marginBottom: "8px" }}>
-            <strong>Folder:</strong> {folder.path || folder.name}
-          </div>
-          <div style={{ marginBottom: "8px" }}>
-            <strong>Documents in folder:</strong> {documentCount}
-          </div>
-          <div style={{ marginBottom: "8px" }}>
-            <strong>Subfolders:</strong> {childCount}
-          </div>
-          {descendantDocCount > 0 && (
-            <div>
-              <strong>Documents in subfolders:</strong> {descendantDocCount}
+          <FolderInfo>
+            <div style={{ marginBottom: "8px" }}>
+              <strong>Folder:</strong> {folder.path || folder.name}
             </div>
+            <div style={{ marginBottom: "8px" }}>
+              <strong>Documents in folder:</strong> {documentCount}
+            </div>
+            <div style={{ marginBottom: "8px" }}>
+              <strong>Subfolders:</strong> {childCount}
+            </div>
+            {descendantDocCount > 0 && (
+              <div>
+                <strong>Documents in subfolders:</strong> {descendantDocCount}
+              </div>
+            )}
+          </FolderInfo>
+
+          {error && (
+            <ErrorMessage title="Error Deleting Folder">
+              {error.message}
+            </ErrorMessage>
           )}
-        </FolderInfo>
+        </ModalBody>
 
-        {error && (
-          <ErrorMessage title="Error Deleting Folder">
-            {error.message}
-          </ErrorMessage>
-        )}
-      </Modal.Content>
-
-      <Modal.Actions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          negative
-          onClick={handleConfirmDelete}
-          loading={loading}
-          disabled={loading}
-        >
-          Delete Folder
-        </Button>
-      </Modal.Actions>
-    </StyledModal>
+        <ModalFooter>
+          <Button variant="secondary" onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleConfirmDelete}
+            loading={loading}
+            disabled={loading}
+          >
+            Delete Folder
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </StyledModalWrapper>
   );
 };

@@ -6,6 +6,7 @@ import {
   CREATE_CORPUS_FOLDER,
   GET_CORPUS_FOLDERS,
 } from "../../src/graphql/queries/folders";
+import { docScreenshot } from "../utils/docScreenshot";
 
 test.describe("CreateFolderModal", () => {
   test("renders modal when open", async ({ mount, page }) => {
@@ -44,6 +45,8 @@ test.describe("CreateFolderModal", () => {
     // Icon field - check for helper text which is unique
     await expect(page.getByText("Use Lucide React icon names")).toBeVisible();
     await expect(page.getByText("Comma-separated tags")).toBeVisible();
+
+    await docScreenshot(page, "folders--create-folder-modal--initial");
   });
 
   test("shows parent folder info when creating subfolder", async ({

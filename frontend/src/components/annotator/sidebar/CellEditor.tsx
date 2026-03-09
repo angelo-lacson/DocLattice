@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import ReactJson from "react-json-view";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface CellEditorProps {
   value: any;
@@ -133,13 +134,15 @@ const Button = styled.button<{ primary?: boolean; disabled?: boolean }>`
   border-radius: 4px;
   cursor: pointer;
   border: none;
-  background-color: ${({ primary }) => (primary ? "#3b82f6" : "#e5e7eb")};
+  background-color: ${({ primary }) =>
+    primary ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
   color: ${({ primary }) => (primary ? "#fff" : "#111827")};
   opacity: ${({ disabled }) => (disabled ? 0.6 : 1)};
   pointer-events: ${({ disabled }) => (disabled ? "none" : "auto")};
 
   &:hover {
-    background-color: ${({ primary }) => (primary ? "#2563eb" : "#d1d5db")};
+    background-color: ${({ primary }) =>
+      primary ? OS_LEGAL_COLORS.primaryBlueHover : OS_LEGAL_COLORS.borderHover};
   }
 `;
 
@@ -158,8 +161,8 @@ const LoaderOverlay = styled.div`
 
 // Loader Spinner
 const Loader = styled.div`
-  border: 4px solid #e5e7eb;
-  border-top: 4px solid #3b82f6;
+  border: 4px solid ${OS_LEGAL_COLORS.border};
+  border-top: 4px solid ${OS_LEGAL_COLORS.primaryBlue};
   border-radius: 50%;
   width: 36px;
   height: 36px;
@@ -177,7 +180,7 @@ const InputField = styled.input`
   width: 100%;
   padding: 8px;
   font-size: 1rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid ${OS_LEGAL_COLORS.borderHover};
   border-radius: 4px;
   margin-top: 8px;
 `;

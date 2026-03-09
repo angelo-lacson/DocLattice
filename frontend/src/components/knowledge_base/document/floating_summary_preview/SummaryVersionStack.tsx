@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import { SummaryPreviewCard } from "./SummaryPreviewCard";
 import { DocumentSummaryRevision } from "./graphql/documentSummaryQueries";
-import { Loader } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import { Layers, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface SummaryVersionStackProps {
@@ -30,12 +31,12 @@ const EmptyState = styled.div`
   justify-content: center;
   width: 100%;
   height: 180px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   text-align: center;
   padding: 2rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 16px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${OS_LEGAL_COLORS.border};
 
   svg {
     margin-bottom: 1rem;
@@ -81,10 +82,10 @@ const FanToggle = styled(motion.button)`
   right: 1rem;
   padding: 0.375rem 0.75rem;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 20px;
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -93,9 +94,9 @@ const FanToggle = styled(motion.button)`
   z-index: 500;
 
   &:hover {
-    background: #f8fafc;
-    color: #3b82f6;
-    border-color: #dbeafe;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.primaryBlue};
+    border-color: ${OS_LEGAL_COLORS.blueBorder};
   }
 
   svg {
@@ -114,7 +115,7 @@ const NavigationButton = styled(motion.button)<{ $position: "left" | "right" }>`
   height: 36px;
   border-radius: 50%;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -124,12 +125,12 @@ const NavigationButton = styled(motion.button)<{ $position: "left" | "right" }>`
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 
   &:hover:not(:disabled) {
-    background: #f8fafc;
-    border-color: #3b82f6;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.primaryBlue};
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 
     svg {
-      color: #3b82f6;
+      color: ${OS_LEGAL_COLORS.primaryBlue};
     }
   }
 
@@ -141,7 +142,7 @@ const NavigationButton = styled(motion.button)<{ $position: "left" | "right" }>`
   svg {
     width: 18px;
     height: 18px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     transition: color 0.2s ease;
   }
 `;
@@ -157,7 +158,7 @@ const VersionIndicator = styled.div`
   background: rgba(255, 255, 255, 0.9);
   border-radius: 12px;
   font-size: 11px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-weight: 600;
   z-index: 10;
 `;
@@ -220,7 +221,7 @@ export const SummaryVersionStack: React.FC<SummaryVersionStackProps> = ({
     return (
       <StackContainer>
         <LoaderContainer>
-          <Loader active inline size="small" />
+          <Spinner size="sm" />
         </LoaderContainer>
       </StackContainer>
     );

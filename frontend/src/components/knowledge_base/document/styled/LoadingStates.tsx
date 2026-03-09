@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import styled, { keyframes } from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 const shimmerAnimation = keyframes`
   0% {
@@ -18,9 +19,9 @@ export const PlaceholderBase = styled.div`
   background: linear-gradient(
     90deg,
     #f0f0f0 0%,
-    #f8f9fa 20%,
-    #e9ecef 40%,
-    #f8f9fa 60%,
+    ${OS_LEGAL_COLORS.gray50} 20%,
+    ${OS_LEGAL_COLORS.gray200} 40%,
+    ${OS_LEGAL_COLORS.gray50} 60%,
     #f0f0f0 80%
   );
   background-size: 1000px 100%;
@@ -69,7 +70,7 @@ export const DocumentLoadingContainer = styled.div`
   max-width: 600px;
 
   .progress-text {
-    color: #2185d0;
+    color: ${OS_LEGAL_COLORS.primaryBlue};
     font-size: 1.1rem;
     font-weight: 500;
     margin-top: 1rem;
@@ -79,14 +80,14 @@ export const DocumentLoadingContainer = styled.div`
   .progress-bar {
     width: 100%;
     height: 4px;
-    background: #e9ecef;
+    background: ${OS_LEGAL_COLORS.gray200};
     border-radius: 2px;
     overflow: hidden;
     margin-top: 0.5rem;
 
     .progress-fill {
       height: 100%;
-      background: #2185d0;
+      background: ${OS_LEGAL_COLORS.primaryBlue};
       border-radius: 2px;
       transition: width 0.3s ease;
       position: relative;

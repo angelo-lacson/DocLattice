@@ -24,6 +24,10 @@ import {
   CORPUS_BREAKPOINTS,
   mediaQuery,
 } from "../../corpuses/styles/corpusDesignTokens";
+import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../../assets/configurations/osLegalStyles";
 
 // Re-export for external use
 export {
@@ -138,8 +142,8 @@ export const DiscussionBadge = styled.span<{
     switch ($variant) {
       case "green":
         return `
-          background: #dcfce7;
-          color: #166534;
+          background: ${OS_LEGAL_COLORS.successSurface};
+          color: ${OS_LEGAL_COLORS.successText};
           border: 1px solid #86efac;
         `;
       case "amber":
@@ -150,9 +154,9 @@ export const DiscussionBadge = styled.span<{
         `;
       case "red":
         return `
-          background: #fee2e2;
-          color: #991b1b;
-          border: 1px solid #fca5a5;
+          background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
+          color: ${OS_LEGAL_COLORS.dangerText};
+          border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
         `;
       case "slate":
         return `
@@ -424,9 +428,9 @@ export const UserAvatar = styled.div<{
 
   ${({ $isAgent, $agentColor }) =>
     $isAgent
-      ? `background: linear-gradient(135deg, ${$agentColor || "#4A90E2"} 0%, ${
-          $agentColor || "#4A90E2"
-        }dd 100%);`
+      ? `background: linear-gradient(135deg, ${
+          $agentColor || OS_LEGAL_COLORS.primaryBlue
+        } 0%, ${$agentColor || OS_LEGAL_COLORS.primaryBlue}dd 100%);`
       : `background: linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[700]} 100%);`}
 
   svg {
@@ -469,11 +473,11 @@ export const PrimaryButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all ${CORPUS_TRANSITIONS.normal};
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35);
+  box-shadow: 0 4px 12px ${accentAlpha(0.35)};
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(15, 118, 110, 0.45);
+    box-shadow: 0 6px 20px ${accentAlpha(0.45)};
     background: linear-gradient(
       135deg,
       ${CORPUS_COLORS.teal[500]} 0%,
@@ -483,7 +487,7 @@ export const PrimaryButton = styled.button`
 
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
+    box-shadow: 0 2px 8px ${accentAlpha(0.3)};
   }
 
   &:disabled {
@@ -588,12 +592,13 @@ export const VoteButton = styled.button<{
   border-radius: ${CORPUS_RADII.sm};
   background: ${({ $isActive, $variant }) => {
     if ($isActive && $variant === "up") return CORPUS_COLORS.teal[50];
-    if ($isActive && $variant === "down") return "#fee2e2";
+    if ($isActive && $variant === "down")
+      return OS_LEGAL_COLORS.dangerSurfaceHover;
     return "transparent";
   }};
   color: ${({ $isActive, $variant }) => {
     if ($isActive && $variant === "up") return CORPUS_COLORS.teal[700];
-    if ($isActive && $variant === "down") return "#dc2626";
+    if ($isActive && $variant === "down") return OS_LEGAL_COLORS.danger;
     return CORPUS_COLORS.slate[500];
   }};
   cursor: pointer;
@@ -601,9 +606,11 @@ export const VoteButton = styled.button<{
 
   &:hover:not(:disabled) {
     background: ${({ $variant }) =>
-      $variant === "up" ? CORPUS_COLORS.teal[50] : "#fee2e2"};
+      $variant === "up"
+        ? CORPUS_COLORS.teal[50]
+        : OS_LEGAL_COLORS.dangerSurfaceHover};
     color: ${({ $variant }) =>
-      $variant === "up" ? CORPUS_COLORS.teal[700] : "#dc2626"};
+      $variant === "up" ? CORPUS_COLORS.teal[700] : OS_LEGAL_COLORS.danger};
   }
 
   &:disabled {
@@ -628,7 +635,7 @@ export const VoteCount = styled.span<{ $score: number }>`
   text-align: center;
   color: ${({ $score }) => {
     if ($score > 0) return CORPUS_COLORS.teal[700];
-    if ($score < 0) return "#dc2626";
+    if ($score < 0) return OS_LEGAL_COLORS.danger;
     return CORPUS_COLORS.slate[500];
   }};
 `;

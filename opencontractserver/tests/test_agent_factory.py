@@ -132,6 +132,7 @@ class TestUnifiedAgentFactory(TestAgentFactorySetup):
             document_id=self.doc1.id,
             corpus_id=self.corpus1.id,
             user_id=None,
+            corpus_action_id=None,
         )
         mock_pydantic_agent_class.create.assert_called_once()
         self.assertIs(agent, mock_agent_instance)

@@ -27,6 +27,7 @@ import {
   getDocumentUrl,
   updateAnnotationDisplayParams,
 } from "../../../utils/navigationUtils";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 const StatusDot = styled.div<{ statusColor: string }>`
   width: 12px;
@@ -44,7 +45,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
         return "0 0 0 3px rgba(16, 185, 129, 0.15)";
       case "#ef4444":
         return "0 0 0 3px rgba(239, 68, 68, 0.15)";
-      case "#f59e0b":
+      case OS_LEGAL_COLORS.folderIcon:
         return "0 0 0 3px rgba(245, 158, 11, 0.15)";
       default:
         return "0 0 0 3px rgba(148, 163, 184, 0.15)";
@@ -59,7 +60,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
           return "0 0 0 4px rgba(16, 185, 129, 0.25)";
         case "#ef4444":
           return "0 0 0 4px rgba(239, 68, 68, 0.25)";
-        case "#f59e0b":
+        case OS_LEGAL_COLORS.folderIcon:
           return "0 0 0 4px rgba(245, 158, 11, 0.25)";
         default:
           return "0 0 0 4px rgba(148, 163, 184, 0.25)";
@@ -88,7 +89,7 @@ const ButtonContainer = styled.div`
 
   .status-message {
     font-size: 0.75rem;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     text-align: center;
     margin-top: 4px;
     font-weight: 500;
@@ -115,18 +116,34 @@ const ButtonContainer = styled.div`
     }
 
     &.green {
-      background: linear-gradient(135deg, #22c55e, #16a34a);
+      background: linear-gradient(
+        135deg,
+        ${OS_LEGAL_COLORS.green},
+        ${OS_LEGAL_COLORS.success}
+      );
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #16a34a, #15803d);
+        background: linear-gradient(
+          135deg,
+          ${OS_LEGAL_COLORS.success},
+          ${OS_LEGAL_COLORS.successHover}
+        );
       }
     }
 
     &.red {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
+      background: linear-gradient(
+        135deg,
+        ${OS_LEGAL_COLORS.dangerBorderHover},
+        ${OS_LEGAL_COLORS.danger}
+      );
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        background: linear-gradient(
+          135deg,
+          ${OS_LEGAL_COLORS.danger},
+          ${OS_LEGAL_COLORS.dangerHover}
+        );
       }
     }
 
@@ -158,7 +175,7 @@ const CellContainer = styled.div`
     top: 2px;
     right: 2px;
     font-size: 10px;
-    color: #64748b;
+    color: ${OS_LEGAL_COLORS.textSecondary};
     font-style: italic;
   }
 
@@ -236,10 +253,10 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
   }, [cellRef]);
 
   const statusColor = () => {
-    if (cellStatus?.isApproved) return "#10b981"; // Modern green
-    if (cellStatus?.isRejected) return "#ef4444"; // Modern red
-    if (cellStatus?.isEdited) return "#f59e0b"; // Modern amber
-    return "#94a3b8"; // Modern gray
+    if (cellStatus?.isApproved) return OS_LEGAL_COLORS.greenMedium; // Modern green
+    if (cellStatus?.isRejected) return OS_LEGAL_COLORS.dangerBorderHover; // Modern red
+    if (cellStatus?.isEdited) return OS_LEGAL_COLORS.folderIcon; // Modern amber
+    return OS_LEGAL_COLORS.textMuted; // Modern gray
   };
 
   const getCellBackground = () => {

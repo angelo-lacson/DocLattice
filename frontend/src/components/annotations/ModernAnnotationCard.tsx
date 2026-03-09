@@ -2,6 +2,10 @@ import React from "react";
 import styled from "styled-components";
 import { Avatar } from "@os-legal/ui";
 import {
+  OS_LEGAL_COLORS,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
+import {
   FileText,
   User,
   Bot,
@@ -44,7 +48,9 @@ export interface ModernAnnotationCardProps {
 
 const CardContainer = styled.div<{ $isSelected?: boolean }>`
   background: white;
-  border: 1px solid ${(props) => (props.$isSelected ? "#0f766e" : "#e2e8f0")};
+  border: 1px solid
+    ${(props) =>
+      props.$isSelected ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.border};
   border-radius: 12px;
   padding: 20px;
   transition: all 0.15s ease;
@@ -53,12 +59,13 @@ const CardContainer = styled.div<{ $isSelected?: boolean }>`
   ${(props) =>
     props.$isSelected &&
     `
-    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2);
-    background: #f0fdfa;
+    box-shadow: 0 0 0 2px ${OS_LEGAL_COLORS.accentMedium};
+    background: ${OS_LEGAL_COLORS.accentSurface};
   `}
 
   &:hover {
-    border-color: ${(props) => (props.$isSelected ? "#0f766e" : "#cbd5e1")};
+    border-color: ${(props) =>
+      props.$isSelected ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   }
 `;
@@ -88,7 +95,7 @@ const LabelColor = styled.div<{ $color: string }>`
 const LabelName = styled.span`
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
 `;
 
 const BadgesContainer = styled.div`
@@ -107,25 +114,25 @@ const SourceBadge = styled.div<{ $variant: AnnotationSourceType }>`
   background: ${(props) => {
     switch (props.$variant) {
       case "human":
-        return "#dbeafe";
+        return OS_LEGAL_COLORS.blueBorder;
       case "agent":
-        return "#ede9fe";
+        return OS_LEGAL_COLORS.agentPurpleLight;
       case "structural":
-        return "#fef3c7";
+        return OS_LEGAL_COLORS.structuralLight;
       default:
-        return "#f1f5f9";
+        return OS_LEGAL_COLORS.surfaceLight;
     }
   }};
   color: ${(props) => {
     switch (props.$variant) {
       case "human":
-        return "#2563eb";
+        return OS_LEGAL_COLORS.primaryBlueHover;
       case "agent":
-        return "#7c3aed";
+        return OS_LEGAL_COLORS.agentPurple;
       case "structural":
-        return "#d97706";
+        return OS_LEGAL_COLORS.folderIcon;
       default:
-        return "#64748b";
+        return OS_LEGAL_COLORS.textSecondary;
     }
   }};
 `;
@@ -140,8 +147,14 @@ const TypeBadge = styled.div<{ $type: "doc" | "text" }>`
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-radius: 4px;
-  background: ${(props) => (props.$type === "doc" ? "#dbeafe" : "#f0fdfa")};
-  color: ${(props) => (props.$type === "doc" ? "#2563eb" : "#0f766e")};
+  background: ${(props) =>
+    props.$type === "doc"
+      ? OS_LEGAL_COLORS.blueBorder
+      : OS_LEGAL_COLORS.accentSurface};
+  color: ${(props) =>
+    props.$type === "doc"
+      ? OS_LEGAL_COLORS.primaryBlueHover
+      : OS_LEGAL_COLORS.accent};
 `;
 
 const SimilarityBadge = styled.div<{ $score: number }>`
@@ -154,14 +167,14 @@ const SimilarityBadge = styled.div<{ $score: number }>`
   border-radius: 4px;
   background: ${(props) => {
     // Color gradient based on score: green for high, yellow for medium, gray for low
-    if (props.$score >= 0.8) return "#dcfce7"; // green
-    if (props.$score >= 0.6) return "#fef9c3"; // yellow
-    return "#f1f5f9"; // gray
+    if (props.$score >= 0.8) return OS_LEGAL_COLORS.successSurface; // green
+    if (props.$score >= 0.6) return OS_LEGAL_COLORS.yellowLight;
+    return OS_LEGAL_COLORS.surfaceLight; // gray
   }};
   color: ${(props) => {
-    if (props.$score >= 0.8) return "#166534"; // green
-    if (props.$score >= 0.6) return "#854d0e"; // yellow
-    return "#64748b"; // gray
+    if (props.$score >= 0.8) return OS_LEGAL_COLORS.successText; // green
+    if (props.$score >= 0.6) return OS_LEGAL_COLORS.warningText; // yellow
+    return OS_LEGAL_COLORS.textSecondary; // gray
   }};
 `;
 
@@ -172,8 +185,8 @@ const LabelsetTag = styled.div`
   padding: 3px 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
-  background: #f1f5f9;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 4px;
   margin-bottom: 12px;
 `;
@@ -181,7 +194,7 @@ const LabelsetTag = styled.div`
 const TaggedText = styled.p`
   font-size: 14px;
   line-height: 1.6;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin-bottom: 16px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -193,7 +206,7 @@ const HighlightedText = styled.span`
   background: linear-gradient(
     to bottom,
     transparent 60%,
-    rgba(15, 118, 110, 0.15) 60%
+    ${accentAlpha(0.15)} 60%
   );
 `;
 
@@ -202,11 +215,11 @@ const DocLabelPlaceholder = styled.div`
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 13px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const CardFooter = styled.div`
@@ -214,7 +227,7 @@ const CardFooter = styled.div`
   align-items: center;
   justify-content: space-between;
   padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
   flex-wrap: wrap;
   gap: 12px;
 `;
@@ -224,17 +237,17 @@ const DocumentLink = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-decoration: none;
   transition: color 0.15s ease;
 
   &:hover {
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
   }
 `;
 
 const DocumentIcon = styled.span`
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   display: flex;
   align-items: center;
 `;
@@ -261,7 +274,7 @@ const CreatorInfo = styled.div`
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const TimeInfo = styled.div`
@@ -269,7 +282,7 @@ const TimeInfo = styled.div`
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 const VisibilityIndicator = styled.div<{
@@ -281,13 +294,13 @@ const VisibilityIndicator = styled.div<{
   color: ${(props) => {
     switch (props.$visibility) {
       case "public":
-        return "#059669";
+        return OS_LEGAL_COLORS.greenDark;
       case "shared":
-        return "#2563eb";
+        return OS_LEGAL_COLORS.primaryBlueHover;
       case "private":
-        return "#64748b";
+        return OS_LEGAL_COLORS.textSecondary;
       default:
-        return "#94a3b8";
+        return OS_LEGAL_COLORS.textMuted;
     }
   }};
 `;
@@ -306,7 +319,7 @@ export function getAnnotationSource(
     return "structural";
   }
 
-  // Check if it was created by an analyzer (agent)
+  // Check if it was created by an analyzer (analysis) or a corpus action (agent)
   if (annotation.analysis) {
     const analyzerId =
       annotation.analysis?.analyzer?.analyzerId?.toLowerCase() || "";
@@ -317,7 +330,11 @@ export function getAnnotationSource(
     return "agent";
   }
 
-  // No analysis means manually created
+  if (annotation.corpusAction) {
+    return "agent";
+  }
+
+  // No analysis or corpus action means manually created
   return "human";
 }
 
@@ -455,7 +472,8 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
     error: imagesError,
   } = useAnnotationImages(annotation.id, contentModalities);
 
-  const labelColor = annotation.annotationLabel?.color || "#94a3b8";
+  const labelColor =
+    annotation.annotationLabel?.color || OS_LEGAL_COLORS.textMuted;
   const labelName = annotation.annotationLabel?.text || "Unknown Label";
   const creatorName =
     annotation.creator?.email?.split("@")[0] ||
@@ -551,7 +569,7 @@ export const ModernAnnotationCard: React.FC<ModernAnnotationCardProps> = ({
         // Doc label placeholder
         return (
           <DocLabelPlaceholder>
-            <FileText size={16} color="#2563eb" />
+            <FileText size={16} color={OS_LEGAL_COLORS.primaryBlueHover} />
             Applies to entire document
           </DocLabelPlaceholder>
         );

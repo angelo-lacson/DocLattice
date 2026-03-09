@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 // Add this styled component with your other styled components
 export const FilterContainer = styled.div`
@@ -23,7 +24,10 @@ export const IconButton = styled(motion.button)<{ $isActive?: boolean }>`
   border-radius: 8px;
   border: none;
   background: ${(props) => (props.$isActive ? "#EBF8FF" : "#F7FAFC")};
-  color: ${(props) => (props.$isActive ? "#3182CE" : "#4A5568")};
+  color: ${(props) =>
+    props.$isActive
+      ? OS_LEGAL_COLORS.primaryBlue
+      : OS_LEGAL_COLORS.textTertiary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -31,7 +35,8 @@ export const IconButton = styled(motion.button)<{ $isActive?: boolean }>`
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${(props) => (props.$isActive ? "#BEE3F8" : "#EDF2F7")};
+    background: ${(props) =>
+      props.$isActive ? "#BEE3F8" : OS_LEGAL_COLORS.border};
   }
 
   svg {
@@ -48,7 +53,7 @@ export const ExpandingInput = styled(motion.div)`
   input {
     width: 250px;
     padding: 0.5rem 1rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid ${OS_LEGAL_COLORS.border};
     border-radius: 8px;
     font-size: 0.875rem;
     background: #f7fafc;
@@ -56,7 +61,7 @@ export const ExpandingInput = styled(motion.div)`
 
     &:focus {
       outline: none;
-      border-color: #4299e1;
+      border-color: ${OS_LEGAL_COLORS.primaryBlue};
       background: white;
       box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
     }
@@ -87,13 +92,13 @@ export const DatePickerExpanded = styled(motion.div)`
 
     input {
       padding: 0.5rem;
-      border: 2px solid #e2e8f0;
+      border: 2px solid ${OS_LEGAL_COLORS.border};
       border-radius: 6px;
       font-size: 0.875rem;
 
       &:focus {
         outline: none;
-        border-color: #4299e1;
+        border-color: ${OS_LEGAL_COLORS.primaryBlue};
       }
     }
   }
@@ -116,12 +121,12 @@ export const DatePickerExpanded = styled(motion.div)`
         color: #4a5568;
 
         &:hover {
-          background: #e2e8f0;
+          background: ${OS_LEGAL_COLORS.border};
         }
       }
 
       &.apply {
-        background: #4299e1;
+        background: ${OS_LEGAL_COLORS.primaryBlue};
         color: white;
 
         &:hover {
